@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>XHS Audit Agent Demo</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app">
+    <section class="toolbar">
+      <div>
+        <h1>社交平台内容审核 Demo</h1>
+        <p>采集或上传内容，提取文本、图片、视频语音和关键帧证据，再输出审核结论。</p>
+      </div>
+
+      <form id="job-form">
+        <label>
+          平台
+          <select id="platform">
+            <option value="xhs">小红书</option>
+          </select>
+        </label>
+        <label>
+          关键词
+          <input id="keyword" value="宗教" />
+        </label>
+        <label>
+          起始页
+          <input id="start-page" type="number" min="1" max="50" value="1" />
+        </label>
+        <label>
+          最大笔记数
+          <input id="max-notes" type="number" min="1" max="100" value="1" />
+        </label>
+        <label>
+          单笔记最大评论数
+          <input id="max-comments" type="number" min="0" max="200" value="1" />
+        </label>
+        <label>
+          爬取并发数
+          <input id="max-concurrency" type="number" min="1" max="5" value="1" />
+        </label>
+        <label class="check-label">
+          <span>二级评论</span>
+          <input id="get-sub-comment" type="checkbox" />
+        </label>
+        <label>
+          分析条数
+          <input id="analyze-limit" type="number" min="1" max="50" value="1" />
+        </label>
+        <label class="check-label">
+          <span>重新爬取</span>
+          <input id="run-crawler" type="checkbox" checked />
+        </label>
+        <label class="wide-field">
+          已有输出
+          <select id="source-output">
+            <option value="">正在读取 outputs...</option>
+          </select>
+        </label>
+        <label hidden>
+          每批分析数
+          <input id="analysis-batch-size" type="number" min="1" max="20" value="5" />
+        </label>
+        <button type="submit">开始审核</button>
+      </form>
+
+      <form id="local-video-form" class="sub-form">
+        <label>
+          本地视频
+          <input id="local-video-file" type="file" accept="video/*" />
+        </label>
+        <label>
+          标题
+          <input id="local-video-title" value="本地测试视频" />
+        </label>
+        <label class="wide-field">
+          描述
+          <input id="local-video-desc" value="上传视频完整审核" />
+        </label>
+        <button type="submit">上传视频审核</button>
+      </form>
+    </section>
+
+    <section class="status-panel">
+      <div>
+        <strong>当前任务</strong>
+        <span id="job-status">未开始</span>
+      </div>
+      <pre id="logs"></pre>
+    </section>
+
+    <section class="content">
+      <aside>
+        <h2>URL 列表</h2>
+        <div id="item-list" class="item-list"></div>
+      </aside>
+      <article>
+        <h2>审核详情</h2>
+        <div id="detail" class="detail-empty">选择左侧内容查看详情</div>
+      </article>
+    </section>
+  </main>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
