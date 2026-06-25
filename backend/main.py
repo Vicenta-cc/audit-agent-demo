@@ -29,7 +29,7 @@ app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 class CrawlRequest(BaseModel):
     platform: str = "xhs"
-    keyword: str = "宗教"
+    keyword: str = "泳装"
     start_page: int = 1
     max_notes: int = 20
     max_comments: int = 20
@@ -50,7 +50,7 @@ def index():
 def get_config():
     return {
         "supported_platforms": ["xhs"],
-        "default_keyword": "宗教",
+        "default_keyword": "泳装",
         "has_api_key": bool(settings.dashscope_api_key),
         "model_base_url": settings.dashscope_base_url,
         "qwen_text_model": settings.qwen_text_model,
@@ -169,3 +169,20 @@ def get_job_items(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return {"items": job.get("items", [])}
+
+
+@app.get("/api/jobs/{job_id}/assets")
+def get_job_asset(job_id: str, path: str):
+    job = job_store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    job_root = (settings.outputs_dir / job_id).resolve()
+    target = (job_root / path).resolve()
+    try:
+        target.relative_to(job_root)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid asset path")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return FileResponse(target)

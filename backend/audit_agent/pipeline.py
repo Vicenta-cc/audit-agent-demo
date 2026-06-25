@@ -15,6 +15,10 @@ from .qwen_client import QwenClient
 from .video_processor import DemoAudioProcessor, DemoFrameExtractor
 
 
+def _severity_rank(severity) -> int:
+    return {"high": 3, "medium": 2, "low": 1}.get(str(severity).lower(), 0)
+
+
 class AuditPipeline:
     def __init__(self, job_id: str):
         self.job_id = job_id
@@ -201,21 +205,104 @@ class AuditPipeline:
         elapsed = perf_counter() - started_at
         job_store.log(self.job_id, f"笔记 {subject.note_id}：融合审核完成，耗时 {elapsed:.1f}s")
 
+        job_root = settings.outputs_dir / self.job_id
+        risk_evidence = self._normalize_fusion_evidence(audit)
+        risk_frames = self._collect_risk_frames(video_results, job_root)
+        risk_images = self._collect_risk_images(image_analyses, job_root)
+        decision = audit.get("decision", "review")
+        has_risk = bool(risk_evidence) or bool(risk_frames) or bool(risk_images) or decision in ("review", "reject")
+
         return {
             "note_id": subject.note_id,
             "url": subject.url,
             "title": subject.title,
             "desc": subject.desc,
             "summary": audit.get("summary", ""),
-            "decision": audit.get("decision", "review"),
+            "decision": decision,
             "risk_level": audit.get("risk_level", "unknown"),
             "categories": audit.get("categories", []),
             "evidence": audit.get("evidence", []),
+            "risk_evidence": risk_evidence,
+            "risk_frames": risk_frames,
+            "risk_images": risk_images,
+            "has_risk": has_risk,
             "image_analyses": image_analyses,
             "video_results": video_results,
             "comments_count": len(subject.comments),
             "raw_audit": audit,
         }
+
+    def _to_job_rel(self, path_str: str | None, job_root: Path) -> str | None:
+        if not path_str:
+            return None
+        try:
+            return Path(path_str).resolve().relative_to(job_root.resolve()).as_posix()
+        except (ValueError, OSError):
+            return None
+
+    def _normalize_fusion_evidence(self, audit: dict) -> list[dict]:
+        out: list[dict] = []
+        for ev in audit.get("evidence", []) or []:
+            source = str(ev.get("source", ""))
+            if source.startswith("comment"):
+                kind = "comment"
+            elif source.startswith("video_audio"):
+                kind = "audio"
+            elif source.startswith("video_frame"):
+                kind = "frame_ref"
+            elif source.startswith("image"):
+                kind = "image_ref"
+            else:
+                kind = "text"
+            out.append({
+                "kind": kind,
+                "source": source,
+                "severity": ev.get("severity", ""),
+                "text": ev.get("text", ""),
+                "reason": ev.get("reason", ""),
+                "start": ev.get("start"),
+                "end": ev.get("end"),
+            })
+        return out
+
+    def _collect_risk_frames(self, video_results: list[dict], job_root: Path) -> list[dict]:
+        frames_out: list[dict] = []
+        for video in video_results:
+            for frame in video.get("frames", []) or []:
+                risk_items = frame.get("risk_items") or []
+                if not risk_items:
+                    continue
+                top = max(risk_items, key=lambda r: _severity_rank(r.get("severity")))
+                frames_out.append({
+                    "timestamp": frame.get("timestamp"),
+                    "frame_number": frame.get("frame_number"),
+                    "severity": top.get("severity", ""),
+                    "risk_type": top.get("risk_type", ""),
+                    "evidence": top.get("evidence", ""),
+                    "reason": top.get("reason", ""),
+                    "ocr_text": frame.get("ocr_text", ""),
+                    "asset_rel": self._to_job_rel(frame.get("path"), job_root),
+                })
+        frames_out.sort(key=lambda f: _severity_rank(f.get("severity")), reverse=True)
+        return frames_out
+
+    def _collect_risk_images(self, image_analyses: list[dict], job_root: Path) -> list[dict]:
+        images_out: list[dict] = []
+        for img in image_analyses:
+            risk_items = img.get("risk_items") or []
+            if not risk_items:
+                continue
+            top = max(risk_items, key=lambda r: _severity_rank(r.get("severity")))
+            images_out.append({
+                "severity": top.get("severity", ""),
+                "risk_type": top.get("risk_type", ""),
+                "evidence": top.get("evidence", ""),
+                "reason": top.get("reason", ""),
+                "ocr_text": img.get("ocr_text", ""),
+                "asset_rel": self._to_job_rel(img.get("local_path"), job_root),
+            })
+        images_out.sort(key=lambda i: _severity_rank(i.get("severity")), reverse=True)
+        return images_out
 
     def _format_transcripts_for_prompt(self, video_results: list[dict]) -> str:
         """只把 segment 级文本与时间喂给融合模型，丢弃 word 级时间戳避免上下文爆炸。"""
@@ -425,6 +512,20 @@ class AuditPipeline:
             "transcript": transcript,
             "frames": frame_analyses,
         }
+
+        curve_png = video_dir / f"frames_{index:02d}" / "keyframe_curve.png"
+        curve_json = video_dir / f"frames_{index:02d}" / "keyframe_curve.json"
+        if curve_png.exists():
+            job_root = settings.outputs_dir / self.job_id
+            result["keyframe_curve_path"] = str(curve_png)
+            result["selected_frame_count"] = len(frame_analyses)
+            try:
+                result["keyframe_curve_rel"] = curve_png.relative_to(job_root).as_posix()
+                if curve_json.exists():
+                    result["keyframe_curve_json_rel"] = curve_json.relative_to(job_root).as_posix()
+            except ValueError:
+                pass
+
         if errors:
             result["errors"] = errors
         return result

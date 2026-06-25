@@ -36,7 +36,6 @@ form.addEventListener("submit", async (event) => {
     analyze_limit: Number(document.getElementById("analyze-limit").value),
     run_crawler: runCrawler,
     source_output_id: runCrawler ? null : sourceOutputEl.value,
-    analysis_batch_size: Number(document.getElementById("analysis-batch-size").value)
   };
 
   statusEl.textContent = "提交中...";
@@ -166,11 +165,15 @@ function renderList() {
   }
   listEl.innerHTML = currentItems.map((item, index) => {
     const decision = item.decision || "review";
+    const evCount = (item.risk_evidence || []).length
+      + (item.risk_frames || []).length
+      + (item.risk_images || []).length;
     return `
       <div class="item-card ${decision}" onclick="renderDetailByIndex(${index})">
         <div class="item-title">${escapeHtml(item.title || item.note_id)}</div>
         <div class="item-meta">${escapeHtml(item.url || item.local_path || "")}</div>
         <span class="badge ${decision}">${decision} · ${item.risk_level || "unknown"}</span>
+        ${evCount ? `<span class="ev-count">证据 ${evCount}</span>` : ""}
       </div>
     `;
   }).join("");
@@ -187,6 +190,10 @@ function renderDetail(item) {
     return;
   }
   detailEl.className = "";
+  const riskEvidence = item.risk_evidence || [];
+  const riskFrames = item.risk_frames || [];
+  const riskImages = item.risk_images || [];
+  const curves = renderVideoCurves(item.video_results || []);
   detailEl.innerHTML = `
     <h3>${escapeHtml(item.title || item.note_id)}</h3>
     <p><a href="${escapeAttr(item.url)}" target="_blank">打开原文</a></p>
@@ -198,21 +205,101 @@ function renderDetail(item) {
     </div>
     <div class="detail-section">
       <strong>违规/疑似违规证据</strong>
-      ${renderEvidence(item.evidence || [])}
+      ${renderRiskEvidence(riskEvidence)}
     </div>
-    <div class="detail-section">
-      <strong>正文</strong>
-      <p>${escapeHtml(item.desc || "")}</p>
-    </div>
-    <div class="detail-section">
-      <strong>图片分析</strong>
-      <pre class="json">${escapeHtml(JSON.stringify(item.image_analyses || [], null, 2))}</pre>
-    </div>
-    <div class="detail-section">
-      <strong>视频分析</strong>
-      <pre class="json">${escapeHtml(JSON.stringify(item.video_results || [], null, 2))}</pre>
-    </div>
+    ${riskFrames.length ? `<div class="detail-section"><strong>风险关键帧</strong>${renderRiskFrames(riskFrames)}</div>` : ""}
+    ${riskImages.length ? `<div class="detail-section"><strong>风险图片</strong>${renderRiskImages(riskImages)}</div>` : ""}
+    ${curves ? `<div class="detail-section"><strong>视频关键帧心跳图</strong>${curves}</div>` : ""}
   `;
+}
+
+function assetUrl(rel) {
+  return `${apiBase}/api/jobs/${currentJobId}/assets?path=${encodeURIComponent(rel)}`;
+}
+
+const KIND_LABELS = {
+  comment: "评论",
+  audio: "语音",
+  frame_ref: "关键帧",
+  image_ref: "图片",
+  text: "文本",
+};
+
+function renderRiskEvidence(list) {
+  if (!list.length) return `<p class="detail-empty">暂无明确风险证据</p>`;
+  return list.map(ev => {
+    const kindLabel = KIND_LABELS[ev.kind] || "文本";
+    const time = (ev.start || ev.end)
+      ? `<div class="ev-time">时间：${escapeHtml(ev.start || "")} - ${escapeHtml(ev.end || "")}</div>`
+      : "";
+    return `
+      <div class="evidence sev-${escapeAttr(ev.severity || "")}">
+        <div class="ev-head">
+          <span class="ev-kind">${kindLabel}</span>
+          <span class="risk-text">${escapeHtml(ev.severity || "")}</span>
+          <span class="ev-src">${escapeHtml(ev.source || "")}</span>
+        </div>
+        <div class="ev-text">${escapeHtml(ev.text || "")}</div>
+        <div class="ev-reason">${escapeHtml(ev.reason || "")}</div>
+        ${time}
+      </div>
+    `;
+  }).join("");
+}
+
+function renderRiskFrames(frames) {
+  if (!frames.length) return "";
+  const cards = frames.map(frame => {
+    const img = frame.asset_rel
+      ? `<img class="thumb" src="${escapeAttr(assetUrl(frame.asset_rel))}" alt="risk frame" loading="lazy" />`
+      : "";
+    const ts = typeof frame.timestamp === "number" ? `${frame.timestamp.toFixed(1)}s` : "";
+    return `
+      <figure class="risk-frame sev-${escapeAttr(frame.severity || "")}">
+        ${img}
+        <figcaption>
+          <div><strong>${escapeHtml(frame.risk_type || "风险帧")}</strong> · ${escapeHtml(frame.severity || "")}${ts ? " · " + ts : ""}</div>
+          <div>${escapeHtml(frame.reason || frame.evidence || "")}</div>
+        </figcaption>
+      </figure>
+    `;
+  }).join("");
+  return `<div class="thumb-grid">${cards}</div>`;
+}
+
+function renderRiskImages(images) {
+  if (!images.length) return "";
+  const cards = images.map(image => {
+    const img = image.asset_rel
+      ? `<img class="thumb" src="${escapeAttr(assetUrl(image.asset_rel))}" alt="risk image" loading="lazy" />`
+      : "";
+    return `
+      <figure class="risk-frame sev-${escapeAttr(image.severity || "")}">
+        ${img}
+        <figcaption>
+          <div><strong>${escapeHtml(image.risk_type || "风险图片")}</strong> · ${escapeHtml(image.severity || "")}</div>
+          <div>${escapeHtml(image.reason || image.evidence || "")}</div>
+        </figcaption>
+      </figure>
+    `;
+  }).join("");
+  return `<div class="thumb-grid">${cards}</div>`;
+}
+
+function renderVideoCurves(videoResults) {
+  const parts = [];
+  videoResults.forEach((video, i) => {
+    if (!video.keyframe_curve_rel || !currentJobId) return;
+    const url = `${apiBase}/api/jobs/${currentJobId}/assets?path=${encodeURIComponent(video.keyframe_curve_rel)}`;
+    const count = video.selected_frame_count || (video.frames || []).length || 0;
+    parts.push(`
+      <figure class="curve-block">
+        <figcaption>视频 ${i + 1} 关键帧心跳图（红点 = 选中帧，共 ${count} 帧）</figcaption>
+        <img class="curve-img" src="${escapeAttr(url)}" alt="keyframe curve" loading="lazy" />
+      </figure>
+    `);
+  });
+  return parts.join("");
 }
 
 function renderEvidence(evidence) {
