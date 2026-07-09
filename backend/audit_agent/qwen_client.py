@@ -8,6 +8,7 @@ from pathlib import Path
 import requests
 
 from .config import settings
+from .remote_inference import RemoteInferenceClient
 
 
 class QwenClient:
@@ -15,12 +16,20 @@ class QwenClient:
         self.api_key = settings.dashscope_api_key
         self.base_url = settings.dashscope_base_url
         self.chat_url = f"{self.base_url}/chat/completions"
+        self.remote = RemoteInferenceClient()
 
     @property
     def enabled(self) -> bool:
         return bool(self.api_key)
 
-    def analyze_image(self, image_path: Path | str, prompt: str) -> dict:
+    def analyze_image(self, image_path: Path | str, prompt: str, *, max_tokens: int | None = None) -> dict:
+        if settings.use_remote_vlm:
+            if not self.remote.enabled:
+                raise RuntimeError("USE_REMOTE_VLM=true but REMOTE_INFERENCE_BASE_URL is empty")
+            path = Path(str(image_path))
+            image_bytes = self._compressed_image_bytes(path) if path.exists() else requests.get(str(image_path), timeout=settings.request_timeout).content
+            return self.remote.analyze_image(image_bytes, prompt, filename=path.name or "image.jpg")
+
         if not self.enabled:
             return self._mock_image_result(str(image_path))
 
@@ -37,20 +46,25 @@ class QwenClient:
                 }
             ],
             "temperature": 0.0,
-            "max_tokens": settings.qwen_max_tokens,
+            "max_tokens": max_tokens or settings.qwen_max_tokens,
         }
         text = self._post_chat(payload)
         return self._parse_json_object(text, fallback={"raw_response": text})
 
-    def audit_text(self, prompt: str) -> dict:
+    def audit_text(self, prompt: str, *, max_tokens: int | None = None, model: str | None = None) -> dict:
+        if settings.use_remote_llm:
+            if not self.remote.enabled:
+                raise RuntimeError("USE_REMOTE_LLM=true but REMOTE_INFERENCE_BASE_URL is empty")
+            return self.remote.audit_text(prompt)
+
         if not self.enabled:
             return self._mock_audit_result()
 
         payload = {
-            "model": settings.qwen_text_model,
+            "model": model or settings.qwen_text_model,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.0,
-            "max_tokens": settings.qwen_max_tokens,
+            "max_tokens": max_tokens or settings.qwen_max_tokens,
         }
         if settings.qwen_use_response_format:
             payload["response_format"] = {"type": "json_object"}

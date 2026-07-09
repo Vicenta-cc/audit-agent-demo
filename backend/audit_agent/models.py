@@ -38,6 +38,7 @@ class AuditSubject:
     url: str
     title: str
     desc: str
+    author: dict
     image_urls: list[str]
     video_urls: list[str]
     comments: list[dict]

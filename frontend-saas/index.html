@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>监控任务 · 审核 Agent</title>
+    <link rel="stylesheet" href="/saas-static/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">A</span>
+          <div>
+            <strong>审核 Agent</strong>
+            <small>多知识库监控</small>
+          </div>
+        </div>
+        <nav class="nav" aria-label="主导航">
+          <button class="nav-item is-active" data-view="tasks">监控任务</button>
+          <button class="nav-item" data-view="risk">风险研判</button>
+          <button class="nav-item" data-view="users">重点用户</button>
+          <button class="nav-item" data-view="config">配置底座</button>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1 id="pageTitle">监控任务</h1>
+            <p id="pageSub">创建和查看多知识库综合审核任务</p>
+          </div>
+          <div class="top-actions">
+            <button class="btn ghost" id="refreshBtn" type="button">刷新</button>
+            <button class="btn primary" id="newTaskBtn" type="button">+ 新建任务</button>
+          </div>
+        </header>
+
+        <section id="tasksView" class="view is-active">
+          <div class="split">
+            <section class="panel list-panel">
+              <div class="panel-head">
+                <h2>任务列表</h2>
+                <span id="taskCount" class="muted">0 个任务</span>
+              </div>
+              <div id="taskList" class="task-list"></div>
+            </section>
+
+            <section class="panel detail-panel" id="detailPanel">
+              <div class="empty-state">选择一个任务查看详情，或新建监控任务</div>
+            </section>
+          </div>
+        </section>
+
+        <section id="formView" class="view">
+          <form class="form-layout" id="taskForm">
+            <section class="panel">
+              <div class="step-head">
+                <span>1</span>
+                <h2>基本信息</h2>
+              </div>
+              <div class="grid two">
+                <label class="field">
+                  <span>任务名称</span>
+                  <input id="displayName" name="display_name" placeholder="例如 暴恐涉毒综合监控" />
+                </label>
+                <label class="field">
+                  <span>平台</span>
+                  <select id="platform" name="platform">
+                    <option value="xhs">小红书</option>
+                    <option value="dy">抖音</option>
+                    <option value="ks">快手</option>
+                  </select>
+                </label>
+              </div>
+              <div class="grid three">
+                <label class="field">
+                  <span>采集方式</span>
+                  <select id="sourceMode">
+                    <option value="search">关键词搜索</option>
+                    <option value="creator">创作者主页</option>
+                    <option value="existing">已有输出</option>
+                  </select>
+                </label>
+                <label class="field search-only">
+                  <span>搜索来源</span>
+                  <select id="keywordSource">
+                    <option value="keyword">手动关键词</option>
+                    <option value="lexicon">所选知识库关键词</option>
+                  </select>
+                </label>
+                <label class="field search-only">
+                  <span>关键词</span>
+                  <input id="keyword" placeholder="例如 泳装" />
+                </label>
+                <label class="field creator-only is-hidden">
+                  <span>主页 URL</span>
+                  <input id="creatorUrl" placeholder="粘贴完整创作者主页 URL" />
+                </label>
+                <label class="field existing-only is-hidden">
+                  <span>已有输出</span>
+                  <select id="sourceOutput"></select>
+                </label>
+              </div>
+              <div class="grid three compact">
+                <label class="field">
+                  <span>抓取页码</span>
+                  <input id="startPage" type="number" min="1" value="1" />
+                </label>
+                <label class="field">
+                  <span>最大内容数</span>
+                  <input id="maxNotes" type="number" min="1" value="20" />
+                </label>
+                <label class="field">
+                  <span>分析上限</span>
+                  <input id="analyzeLimit" type="number" min="1" value="20" />
+                </label>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="step-head">
+                <span>2</span>
+                <h2>检测范围</h2>
+              </div>
+              <h3>知识库</h3>
+              <div id="libraryGrid" class="choice-grid"></div>
+              <h3>检测能力</h3>
+              <div id="capabilityGrid" class="segment-row"></div>
+            </section>
+
+            <section class="panel">
+              <div class="step-head">
+                <span>3</span>
+                <h2>风险评分规则</h2>
+              </div>
+              <div class="grid two">
+                <label class="field">
+                  <span>规则模板</span>
+                  <select id="scoringTemplate">
+                    <option value="balanced">均衡</option>
+                    <option value="strict">严格</option>
+                    <option value="ocr_first">OCR 优先</option>
+                    <option value="vision_first">视觉优先</option>
+                  </select>
+                </label>
+              </div>
+              <div id="rulesTable" class="rules-table"></div>
+            </section>
+
+            <section class="panel">
+              <div class="step-head">
+                <span>4</span>
+                <h2>风险等级</h2>
+              </div>
+              <div class="grid three compact">
+                <label class="field">
+                  <span>高危阈值</span>
+                  <input id="thresholdHigh" type="number" min="0" max="100" value="80" />
+                </label>
+                <label class="field">
+                  <span>中危阈值</span>
+                  <input id="thresholdMedium" type="number" min="0" max="100" value="60" />
+                </label>
+                <label class="field">
+                  <span>待复核阈值</span>
+                  <input id="thresholdReview" type="number" min="0" max="100" value="40" />
+                </label>
+              </div>
+              <div class="form-actions">
+                <button class="btn ghost" id="cancelFormBtn" type="button">取消</button>
+                <button class="btn primary" type="submit">创建任务</button>
+              </div>
+            </section>
+          </form>
+        </section>
+
+        <section id="placeholderView" class="view">
+          <section class="panel placeholder">
+            <h2 id="placeholderTitle">暂未开放</h2>
+            <p>当前版本先处理监控任务入口。</p>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="/saas-static/app.js"></script>
+  </body>
+</html>

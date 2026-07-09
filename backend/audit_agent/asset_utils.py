@@ -33,17 +33,38 @@ def download_url(url: str, output_path: Path, timeout: int = 30) -> Path | None:
     return download_url_with_error(url, output_path, timeout).path
 
 
-def download_url_with_error(url: str, output_path: Path, timeout: int = 30) -> DownloadResult:
+def media_headers(platform: str = "xhs", referer: str = "") -> dict[str, str]:
+    platform_referers = {
+        "xhs": "https://www.xiaohongshu.com/",
+        "dy": "https://www.douyin.com/",
+        "ks": "https://www.kuaishou.com/",
+    }
+    return {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/126.0.0.0 Safari/537.36"
+        ),
+        "Accept": "*/*",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Referer": referer or platform_referers.get(platform, platform_referers["xhs"]),
+    }
+
+
+def download_url_with_error(
+    url: str,
+    output_path: Path,
+    timeout: int = 30,
+    platform: str = "xhs",
+    referer: str = "",
+) -> DownloadResult:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         response = requests.get(
             url,
             timeout=timeout,
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "*/*",
-                "Referer": "https://www.xiaohongshu.com/",
-            },
+            headers=media_headers(platform, referer),
+            allow_redirects=True,
         )
         response.raise_for_status()
         output_path.write_bytes(response.content)

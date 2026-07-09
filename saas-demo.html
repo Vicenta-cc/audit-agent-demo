@@ -1,0 +1,1885 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>内容巡查研判平台 · 浅色 SaaS 可点击 Demo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232563eb'/%3E%3Cpath d='M8 11h16v3H8zm0 7h16v3H8z' fill='white'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.31.0/dist/tabler-icons.min.css" />
+<style>
+:root{
+ --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+ --surface-0:#f5f6f8;--surface-1:#eceef1;--surface-2:#ffffff;
+ --border:rgba(15,18,25,0.10);--border-strong:rgba(15,18,25,0.18);--border-accent:#9ec0ea;
+ --text-primary:#1b1d22;--text-secondary:#5b5f67;--text-muted:#8a8e96;
+ --text-accent:#185fa5;--text-danger:#a32d2d;--text-warning:#854f0b;--text-success:#0f6e56;
+ --bg-accent:#e6f1fb;--bg-danger:#fcebeb;--bg-warning:#faeeda;--bg-success:#e1f5ee;
+ --fill-accent:#2563eb;--radius:8px;
+}
+@media (prefers-color-scheme:dark){:root{
+ --surface-0:#16181c;--surface-1:#1f2228;--surface-2:#23262d;
+ --border:rgba(255,255,255,0.10);--border-strong:rgba(255,255,255,0.18);--border-accent:#2f5a87;
+ --text-primary:#e9eaed;--text-secondary:#a7abb3;--text-muted:#7c8088;
+ --text-accent:#85b7eb;--text-danger:#f09595;--text-warning:#efc785;--text-success:#9fe1cb;
+ --bg-accent:#0c2740;--bg-danger:#3a1717;--bg-warning:#3a2a0d;--bg-success:#0c2c25;
+ --fill-accent:#3b82f6;
+}}
+html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-family:var(--font-sans)}
+.page-wrap{max-width:1220px;margin:24px auto;padding:0 16px}
+.cmapp{font-family:var(--font-sans);color:var(--text-primary);background:var(--surface-0);border:0.5px solid var(--border);border-radius:12px;position:relative;overflow:hidden;box-shadow:0 6px 24px rgba(15,18,25,0.08)}
+.cmapp *{box-sizing:border-box}
+.cm-top{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:0.5px solid var(--border);background:var(--surface-2);flex-wrap:wrap}
+.cm-brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.cm-mark{width:30px;height:30px;border-radius:8px;background:var(--bg-accent);color:var(--text-accent);display:flex;align-items:center;justify-content:center;font-size:17px}
+.cm-brand b{font-weight:500;font-size:14px;display:block;line-height:1.2}
+.cm-brand small{color:var(--text-muted);font-size:11px}
+.cm-nav{display:flex;gap:4px;flex-wrap:wrap}
+.cm-tab{font:inherit;font-size:13px;padding:6px 12px;border-radius:var(--radius);border:0.5px solid transparent;background:transparent;color:var(--text-secondary);cursor:pointer}
+.cm-tab:hover{background:var(--surface-1)}
+.cm-tab.on{background:var(--bg-accent);color:var(--text-accent);border-color:var(--border-accent)}
+.cm-body{padding:18px 20px}
+.cm-ph{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.cm-ph h1{font-size:20px;font-weight:500;margin:0}
+.cm-ph p{font-size:13px;color:var(--text-secondary);margin:4px 0 0}
+.cm-acts{display:flex;gap:8px;flex-wrap:wrap}
+.cm-btn{font:inherit;font-size:13px;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border-strong);background:var(--surface-2);color:var(--text-primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.cm-btn:hover{background:var(--surface-1)}
+.cm-btn.pri{background:var(--fill-accent);color:#fff;border-color:transparent}
+.cm-btn.sm{padding:4px 10px;font-size:12px}
+.cm-bd{display:inline-flex;align-items:center;font-size:11px;padding:2px 8px;border-radius:6px;background:var(--surface-1);color:var(--text-secondary);font-weight:500}
+.cm-bd.dang{background:var(--bg-danger);color:var(--text-danger)}
+.cm-bd.warn{background:var(--bg-warning);color:var(--text-warning)}
+.cm-bd.ok{background:var(--bg-success);color:var(--text-success)}
+.cm-bd.info{background:var(--bg-accent);color:var(--text-accent)}
+.cm-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:16px}
+.cm-stat{background:var(--surface-1);border-radius:var(--radius);padding:12px 14px}
+.cm-stat span{font-size:12px;color:var(--text-secondary);display:block}
+.cm-stat b{font-size:24px;font-weight:500;display:block;margin:2px 0}
+.cm-stat small{font-size:11px;color:var(--text-muted)}
+.cm-stat.dang b{color:var(--text-danger)}
+.cm-stat.warn b{color:var(--text-warning)}
+.cm-stat.ok b{color:var(--text-success)}
+.cm-filters{display:flex;flex-wrap:wrap;gap:10px 16px;margin-bottom:16px;align-items:center}
+.cm-fg{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.cm-fg>em{font-style:normal;font-size:11px;color:var(--text-muted)}
+.cm-chip{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:0.5px solid var(--border);background:var(--surface-2);color:var(--text-secondary);cursor:pointer}
+.cm-chip.on{background:var(--bg-accent);color:var(--text-accent);border-color:var(--border-accent)}
+.cm-card{background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:13px 16px;margin-bottom:10px}
+.cm-card.clk{cursor:pointer}
+.cm-card.clk:hover{border-color:var(--border-strong)}
+.cm-card-top{display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap}
+.cm-card-top .t{color:var(--text-muted);font-size:11px;margin-left:auto}
+.cm-card h3{font-size:16px;font-weight:500;margin:0 0 4px}
+.cm-card .desc{font-size:13px;color:var(--text-secondary);margin:0 0 9px;line-height:1.5}
+.cm-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+.cm-tag{font-size:11px;color:var(--text-secondary);background:var(--surface-1);padding:2px 8px;border-radius:6px}
+.cm-tag i{font-size:12px;margin-right:3px;vertical-align:-1px}
+.cm-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:0.5px solid var(--border);padding-top:9px;flex-wrap:wrap}
+.cm-acct{font-size:12px;color:var(--text-secondary)}
+.cm-acct b{color:var(--text-primary);font-weight:500}
+.cm-mini{display:flex;gap:6px;flex-wrap:wrap}
+.cm-panel{background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:12px}
+.cm-panel h2{font-size:15px;font-weight:500;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.cm-panel .sub{font-size:12px;color:var(--text-secondary);margin:0 0 10px}
+.cm-panel h3{font-size:13px;font-weight:500;margin:14px 0 8px;color:var(--text-secondary)}
+.cm-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.cm-kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px}
+.cm-kv:last-child{border-bottom:none}
+.cm-kv span{color:var(--text-secondary)}
+.cm-kv b{font-weight:500;text-align:right;overflow-wrap:anywhere}
+.cm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px}
+.cm-tile{background:var(--surface-1);border-radius:var(--radius);padding:12px 8px;text-align:center;font-size:11px;color:var(--text-secondary);border:0.5px solid var(--border)}
+.cm-tile i{display:block;font-size:19px;margin-bottom:5px;color:var(--text-muted)}
+.cm-frame{background:var(--surface-1);border:0.5px dashed var(--border-strong);border-radius:var(--radius);height:130px;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;margin-bottom:10px;flex-direction:column;gap:6px}
+.cm-frame i{font-size:28px}
+.cm-original-media{margin-bottom:10px}
+.cm-original-cover{border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface-1);margin-bottom:10px}
+.cm-original-cover img{display:block;width:100%;max-height:320px;object-fit:contain;background:var(--surface-0)}
+.cm-original-cover figcaption{padding:6px 8px;font-size:11px;color:var(--text-muted);line-height:1.35}
+.cm-original-video{border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface-1);margin-bottom:10px}
+.cm-original-video video{display:block;width:100%;max-height:560px;background:#000}
+.cm-original-video figcaption{padding:8px 10px;font-size:11px;color:var(--text-muted);line-height:1.35}
+.cm-original-gallery{border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface-1);margin-bottom:10px}
+.cm-gallery-stage{position:relative;background:var(--surface-0);min-height:340px;display:flex;align-items:center;justify-content:center}
+.cm-gallery-stage img{display:block;width:100%;max-height:520px;object-fit:contain}
+.cm-gallery-nav{position:absolute;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;border:0.5px solid rgba(15,18,25,0.18);background:rgba(255,255,255,0.86);color:var(--text-primary);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.cm-gallery-nav:hover{background:#fff}
+.cm-gallery-nav.prev{left:10px}
+.cm-gallery-nav.next{right:10px}
+.cm-gallery-nav i{font-size:18px}
+.cm-gallery-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;color:var(--text-secondary);font-size:12px}
+.cm-gallery-dots{display:flex;gap:5px;align-items:center;overflow:hidden}
+.cm-gallery-dot{width:7px;height:7px;border-radius:50%;border:0;background:var(--border-strong);padding:0;cursor:pointer}
+.cm-gallery-dot.on{background:var(--fill-accent)}
+.cm-original-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;max-height:360px;overflow:auto;padding-right:2px}
+.cm-original-image{border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface-1)}
+.cm-original-image img{display:block;width:100%;height:180px;object-fit:contain;background:var(--surface-0)}
+.cm-original-image figcaption{padding:6px 8px;font-size:11px;color:var(--text-muted);line-height:1.35}
+.cm-original-text{font-size:12px;line-height:1.5;color:var(--text-secondary);background:var(--surface-1);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px;white-space:pre-wrap}
+.cm-video-sheets{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:6px 0 10px}
+.cm-video-sheet{border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface-1)}
+.cm-video-sheet img{display:block;width:100%;height:auto;background:var(--surface-1)}
+.cm-video-sheet span{display:block;padding:6px 8px;font-size:11px;color:var(--text-muted)}
+.cm-video-sheet p{margin:0;padding:0 8px 8px;font-size:11px;line-height:1.45;color:var(--text-secondary)}
+.cm-video-summary{font-size:12px;color:var(--text-secondary);padding:8px 10px;border-radius:var(--radius);background:var(--surface-1);line-height:1.5;margin-bottom:8px}
+.cm-cmt{font-size:12px;color:var(--text-secondary);padding:7px 10px;border-radius:var(--radius);background:var(--surface-1);margin-bottom:6px}
+.cm-cmt b{color:var(--text-primary);font-weight:500}
+.cm-cmt.hit{background:var(--bg-danger);color:var(--text-danger)}
+.cm-cmt.hit b{color:var(--text-danger)}
+.cm-comment-pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 6px;color:var(--text-secondary);font-size:12px}
+.cm-comment-pager .cm-mini{margin-left:auto}
+.cm-comment-list{max-height:520px;overflow:auto;padding-right:2px}
+.cm-cmt p{margin:3px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.cm-cond{display:flex;align-items:center;gap:8px;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--radius);margin-bottom:6px;font-size:12px}
+.cm-cond b{font-weight:500;color:var(--text-primary);margin-right:auto}
+.cm-cond .w{color:var(--text-muted)}
+.cm-task{display:grid;grid-template-columns:1fr auto;gap:8px 14px;align-items:start;padding:14px 16px;border:0.5px solid var(--border);border-radius:12px;margin-bottom:10px;background:var(--surface-2)}
+.cm-task .tm b{font-size:14px;font-weight:500;display:block}
+.cm-task .tm span{font-size:12px;color:var(--text-secondary)}
+.cm-task .tm small{font-size:11px;color:var(--text-muted);display:block;margin-top:2px}
+.cm-task .ts{text-align:right;display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.cm-task .ts b{font-size:12px;font-weight:500}
+.cm-task .ts b.d{color:var(--text-danger)}
+.cm-task-acts{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;border-top:0.5px solid var(--border);padding-top:9px}
+.cm-types{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:6px}
+.cm-type{text-align:left;font:inherit;cursor:pointer;background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:14px;color:var(--text-primary)}
+.cm-type:hover{border-color:var(--border-strong)}
+.cm-type.on{border-color:var(--border-accent);background:var(--bg-accent)}
+.cm-type i{font-size:22px;color:var(--text-accent)}
+.cm-type b{display:block;font-weight:500;font-size:14px;margin:8px 0 3px}
+.cm-type span{font-size:12px;color:var(--text-secondary);line-height:1.4}
+.cm-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:10px 0}
+.cm-choice{display:flex;gap:9px;align-items:flex-start;padding:11px;border:0.5px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12px;background:var(--surface-2)}
+.cm-choice.on{border-color:var(--border-accent);background:var(--bg-accent)}
+.cm-choice i{font-size:16px;margin-top:1px;color:var(--text-accent)}
+.cm-choice b{display:block;font-weight:500}
+.cm-choice small{color:var(--text-secondary)}
+.cm-pills{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.cm-pill{font:inherit;font-size:12px;padding:6px 12px;border-radius:999px;border:0.5px solid var(--border);background:var(--surface-2);color:var(--text-secondary);cursor:pointer}
+.cm-pill.on{background:var(--bg-accent);color:var(--text-accent);border-color:var(--border-accent)}
+.cm-field{display:block;margin-top:12px;max-width:720px}
+.cm-field span{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:5px}
+.cm-field input{width:100%;height:36px;padding:0 11px;border:0.5px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--text-primary);font:inherit;font-size:13px}
+.cm-field input:focus{outline:none;box-shadow:0 0 0 2px var(--bg-accent);border-color:var(--border-accent)}
+.cm-scheme{text-align:left;font:inherit;cursor:pointer;background:var(--surface-2);border:0.5px solid var(--border);border-radius:var(--radius);padding:11px 13px;color:var(--text-primary);width:100%;margin-bottom:8px}
+.cm-scheme.on{border-color:var(--border-accent);background:var(--bg-accent)}
+.cm-scheme b{display:block;font-weight:500;font-size:13px}
+.cm-scheme small{font-size:11px;color:var(--text-secondary)}
+.cm-user{text-align:left;font:inherit;cursor:pointer;background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;padding:12px 14px;color:var(--text-primary);width:100%;margin-bottom:8px}
+.cm-user:hover{border-color:var(--border-strong)}
+.cm-user.on{border-color:var(--border-accent);background:var(--bg-accent)}
+.cm-user b{font-weight:500;display:flex;justify-content:space-between;align-items:center}
+.cm-user span{font-size:12px;color:var(--text-secondary)}
+.cm-user small{font-size:11px;color:var(--text-muted);display:block;margin-top:2px}
+.cm-tl-item{display:flex;gap:10px;font-size:12px;padding:7px 0;border-bottom:0.5px solid var(--border)}
+.cm-tl-item:last-child{border-bottom:none}
+.cm-tl-item em{font-style:normal;color:var(--text-muted);min-width:42px}
+.cm-rel-node{padding:9px 11px;border:0.5px solid var(--border);border-radius:var(--radius);font-size:12px;background:var(--surface-1);margin-bottom:6px}
+.cm-rel-node b{display:block;font-weight:500}
+.cm-rel-node span{color:var(--text-secondary)}
+.cm-flow-step{padding:9px 11px;border-left:2px solid var(--border-accent);background:var(--surface-1);font-size:12px;margin-bottom:7px}
+.cm-flow-step b{display:block;font-weight:500}
+.cm-flow-step span{color:var(--text-secondary)}
+.cm-table{width:100%;border-collapse:collapse;font-size:12px}
+.cm-table th{text-align:left;color:var(--text-muted);font-weight:500;padding:6px 8px;border-bottom:0.5px solid var(--border)}
+.cm-table td{padding:6px 8px;border-bottom:0.5px solid var(--border);color:var(--text-secondary);word-break:break-word}
+.cm-cats{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.cm-cat{text-align:left;font:inherit;cursor:pointer;padding:11px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-2);color:var(--text-primary)}
+.cm-cat.on{border-color:var(--border-accent);background:var(--bg-accent)}
+.cm-cat b{display:block;font-weight:500;font-size:13px}
+.cm-cat span{font-size:12px;color:var(--text-secondary)}
+.cm-subtabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.cm-chain{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:4px}
+.cm-chain-node{padding:11px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-1);font-size:12px}
+.cm-chain-node em{font-style:normal;color:var(--text-accent);font-size:11px;display:block;margin-bottom:4px}
+.cm-chain-node b{display:block;font-weight:500;margin-bottom:2px}
+.cm-chain-node small{color:var(--text-secondary)}
+.cm-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(8px);background:var(--text-primary);color:var(--surface-2);padding:11px 18px;border-radius:var(--radius);font-size:13px;display:flex;flex-direction:column;gap:2px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;max-width:90%;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,0.18)}
+.cm-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.cm-toast b{font-weight:500}
+.cm-toast small{font-size:11px;opacity:.8}
+.cm-empty{padding:24px;text-align:center;color:var(--text-muted);font-size:13px;border:0.5px dashed var(--border);border-radius:12px}
+.cm-modal-bg{position:fixed;inset:0;background:rgba(15,18,25,0.45);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px}
+.cm-modal{background:var(--surface-2);border:0.5px solid var(--border);border-radius:12px;max-width:640px;width:100%;max-height:82vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,0.25)}
+.cm-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:0.5px solid var(--border);position:sticky;top:0;background:var(--surface-2)}
+.cm-modal-head h2{font-size:16px;font-weight:500;margin:0}
+.cm-modal-head p{font-size:12px;color:var(--text-secondary);margin:3px 0 0}
+.cm-modal-body{padding:16px 18px}
+.cm-x{cursor:pointer;background:transparent;border:none;color:var(--text-muted);font-size:20px;line-height:1;padding:2px}
+.cm-list-row{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--border);font-size:13px}
+.cm-list-row:last-child{border-bottom:none}
+.cm-list-row .g{margin-left:auto;color:var(--text-muted);font-size:12px}
+.cm-ta{width:100%;min-height:96px;padding:10px;border:0.5px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--text-primary);font:inherit;font-size:13px;resize:vertical}
+.cm-mini-select{height:32px;padding:0 28px 0 10px;border:0.5px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--text-primary);font:inherit;font-size:12px}
+.cm-num-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.cm-num-card{display:block;border:0.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;background:var(--surface-2)}
+.cm-num-card span{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:6px}
+.cm-num-card input{width:100%;border:none;outline:none;background:transparent;color:var(--text-primary);font:inherit;font-size:18px;font-weight:500}
+.cm-log-item{display:flex;gap:12px;font-size:12px;padding:8px 0;border-bottom:0.5px solid var(--border)}
+.cm-log-item:last-child{border-bottom:none}
+.cm-log-item em{font-style:normal;color:var(--text-muted);min-width:44px}
+.cm-log-scroll{max-height:360px;overflow:auto;padding-right:6px;border-top:0.5px solid var(--border)}
+.cm-log-scroll::-webkit-scrollbar{width:8px}
+.cm-log-scroll::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:999px}
+.cm-config-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.cm-config-meta{margin:8px 0 14px}
+.cm-kp-list,.cm-rule-list{height:324px;overflow:auto;padding-right:6px}
+.cm-kp-list::-webkit-scrollbar,.cm-rule-list::-webkit-scrollbar{width:8px}
+.cm-kp-list::-webkit-scrollbar-thumb,.cm-rule-list::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:999px}
+.cm-lib-card{display:block;width:100%;padding:12px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-1);margin-bottom:8px;font-size:12px}
+.cm-lib-card b{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:500}
+.cm-lib-row{margin-top:10px}
+.cm-lib-row span{display:block;color:var(--text-secondary);margin-bottom:5px}
+.cm-lib-meta{display:flex;gap:6px;flex-wrap:wrap}
+.cm-rule-row{display:grid;grid-template-columns:1fr 72px auto;gap:10px;align-items:center;padding:10px 12px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-2);margin-bottom:8px;font-size:12px}
+.cm-rule-row b{font-weight:500}
+.cm-rule-row span{color:var(--text-secondary);text-align:right}
+.cm-tag.new{background:var(--bg-success);color:var(--text-success)}
+.cm-taginput{display:flex;flex-wrap:wrap;gap:6px;align-items:center;width:100%;min-height:36px;padding:5px 8px;border:0.5px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);cursor:text}
+.cm-taginput:focus-within{box-shadow:0 0 0 2px var(--bg-accent);border-color:var(--border-accent)}
+.cm-chip-tag{display:inline-flex;align-items:center;gap:4px;background:var(--bg-accent);color:var(--text-accent);border-radius:6px;padding:3px 5px 3px 9px;font-size:12px}
+.cm-chip-tag button{background:transparent;border:none;color:var(--text-accent);cursor:pointer;font-size:13px;line-height:1;padding:0;display:flex;opacity:.7}
+.cm-chip-tag button:hover{opacity:1}
+.cm-taginput input.cm-tagfield{flex:1;min-width:90px;border:none;outline:none;background:transparent;color:var(--text-primary);font:inherit;font-size:13px;height:26px;padding:0;box-shadow:none}
+.cm-evg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:8px;margin-bottom:10px}
+.cm-evg-card{border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-2);padding:10px;text-align:left;color:var(--text-primary);font:inherit;cursor:pointer;min-height:72px}
+.cm-evg-card.on{border-color:var(--border-accent);background:var(--bg-accent)}
+.cm-evg-card b{display:block;font-size:13px;font-weight:500;margin-bottom:4px}
+.cm-evg-card span{font-size:18px;font-weight:500}
+.cm-evg-card small{display:block;margin-top:3px;color:var(--text-muted);font-size:11px;line-height:1.35}
+.cm-evg-detail{border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-0);padding:10px;max-height:420px;overflow:auto}
+.cm-evi-item{padding:9px 10px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-2);font-size:12px;margin-bottom:8px}
+.cm-evi-item b{font-weight:500}
+.cm-evi-item p{margin:5px 0 0;color:var(--text-secondary);line-height:1.5}
+.cm-evi-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.cm-evi-head b{margin-right:auto}
+.cm-evi-meta{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}
+.cm-evi-media{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:8px 0}
+.cm-evi-media figure{margin:0;border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface-1)}
+.cm-evi-media img{display:block;width:100%;height:120px;object-fit:contain;background:var(--surface-0)}
+.cm-evi-media figcaption{padding:5px 7px;font-size:11px;color:var(--text-muted)}
+.cm-evi-text{border-top:0.5px solid var(--border);padding-top:7px;margin-top:7px}
+.cm-evi-text span{display:block;font-size:11px;color:var(--text-muted);margin-bottom:3px}
+.cm-evi-text p{white-space:pre-wrap;color:var(--text-secondary)}
+@media(max-width:760px){
+ .cm-config-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="page-wrap"><div class="cmapp" id="cmapp"><div id="cmshell"></div></div></div>
+<div id="cmtoast" class="cm-toast"></div>
+<script>
+(function(){
+var root=document.getElementById("cmapp");
+var shell=document.getElementById("cmshell");
+	var toastEl=document.getElementById("cmtoast");
+	var tmr;
+	var API_BASE=location.protocol==="file:"?"http://127.0.0.1:8000":"";
+	var DEFAULT_START_PAGE=1;
+	var DEFAULT_MAX_NOTES=10000;
+	var DEFAULT_MAX_COMMENTS=1000;
+	var DEFAULT_MAX_CONCURRENCY=1;
+	var DEFAULT_ANALYZE_LIMIT=DEFAULT_MAX_NOTES;
+
+	var typeTitle={platform:"平台内容抓取",live:"直播监控",user:"重点用户监控",video:"本地视频分析"};
+var typeIcon={platform:"ti-search",live:"ti-broadcast",user:"ti-user-search",video:"ti-device-tv"};
+var typeDesc={platform:"按黑话词与标签抓取笔记、视频、图片、评论、弹幕。",live:"接入实时流、回放流、弹幕流、评论流做分析。",user:"按账号监控主页、发布、互动、直播与跨平台关联。",video:"上传本地视频做逐帧、OCR、ASR、关键帧分析。"};
+
+var risks=[
+ {id:"R-2041",title:"夜间私域引流短视频",desc:"视频用谐音暗号引导添加站外联系方式，评论区出现高频跳转话术和私域口令。",platform:"抖音",source:"平台内容",category:"违规引流",library:"违规引流词库 v1.8",terms:["夜间","加V","私域口令"],level:"高危",status:"待复核",account:"User_88**42",linked:"SL-20240629-001",conf:92,evi:6,task:"抖音违规引流抓取",scheme:"违规引流研判方案",strategy:"多模态引流识别策略",hash:"a1f3··9c2e",
+  comments:[["14:50","User_57**19 重复暗语并引导关注",false],["14:51","User_73**41 与发布账号高频互动",false],["14:52","User_88**42 命中私域口令",true]],
+  hits:[["文本：谐音暗号命中","命中"],["OCR：画面联系方式遮挡","命中"],["评论：跳转话术聚集","命中"],["ASR：口播暗号","待确认"]]},
+ {id:"R-2042",title:"直播间口播暗号软色情导流",platform:"抖音直播",source:"直播",category:"软色情",library:"软色情词库 v2.1",terms:["擦边","资源","私聊"],level:"高危",status:"已固证",account:"Anchor_31**08",linked:"SL-20240629-002",conf:88,evi:9,task:"重点直播间实时监控",scheme:"软色情研判方案",strategy:"软色情综合判定策略",hash:"7b22··de10",
+  desc:"主播口播暗号配合弹幕引导跳转私域，画面命中软色情视觉特征，回放已自动补证。",
+  comments:[["21:14","弹幕 引导加群",false],["21:16","主播口播暗号",true],["21:20","评论留联系方式",false]],
+  hits:[["ASR：口播暗号命中","命中"],["关键帧：软色情视觉特征","命中"],["弹幕：跳转引导","命中"],["文本：标题擦边词","命中"]]},
+ {id:"R-2043",title:"本地视频暴恐画面与字幕",platform:"本地上传",source:"本地上传",category:"暴恐",library:"暴恐词库 v1.2",terms:["武器","火光","集结"],level:"高危",status:"待复核",account:"本地文件 · 无归属",linked:"未归并",conf:90,evi:5,task:"本地视频暴恐分析",scheme:"暴恐研判方案",strategy:"暴恐视觉判定策略",hash:"c0a4··11f8",
+  desc:"上传视频逐帧命中武器与火光视觉特征，OCR 字幕出现集结相关表述，仅形成内容证据不强制归属用户。",
+  comments:[["00:12","关键帧 武器特征",true],["00:31","OCR 字幕命中",false],["01:02","背景音 ASR 命中",false]],
+  hits:[["关键帧：武器/火光特征","命中"],["OCR：字幕文字命中","命中"],["ASR：背景音命中","待确认"],["关系：暂无用户关联","不适用"]]},
+ {id:"R-2044",title:"同城涉毒交易隐喻贴文",platform:"快手",source:"平台内容",category:"涉毒",library:"涉毒词库 v1.0",terms:["同城","暗号","上岸"],level:"中危",status:"待复核",account:"User_44**07",linked:"待确认",conf:71,evi:3,task:"抖音违规引流抓取",scheme:"违规引流研判方案",strategy:"多模态引流识别策略",hash:"d9e1··6a73",
+  desc:"贴文使用交易隐喻和同城暗号，评论区出现疑似对接话术，置信度中等需人工复核。",
+  comments:[["10:02","评论 同城对接",false],["10:09","回复 暗号确认",true]],
+  hits:[["文本：交易隐喻命中","命中"],["评论：对接话术","命中"],["OCR：无","未命中"]]},
+ {id:"R-2045",title:"图文笔记封面二维码引流",platform:"小红书",source:"平台内容",category:"违规引流",library:"违规引流词库 v1.8",terms:["夜间","跳转码"],level:"中危",status:"已加入证据链",account:"XHS_57**",linked:"SL-20240629-001",conf:67,evi:4,task:"抖音违规引流抓取",scheme:"违规引流研判方案",strategy:"多模态引流识别策略",hash:"f3c8··2b40",
+  desc:"笔记封面用贴纸遮挡二维码，正文与评论引导跳转，已与重点用户 SL-20240629-001 形成关联证据。",
+  comments:[["18:40","评论 留联系方式",false],["18:52","封面二维码遮挡",true]],
+  hits:[["OCR：封面二维码","命中"],["文本：跳转引导","命中"],["关系：跨平台关联","命中"]]}
+];
+
+var tasks=[
+ {id:"T-001",name:"抖音违规引流抓取",type:"平台内容抓取",target:"抖音 / 快手 · 违规引流分类",config:"违规引流研判方案 v1.8",status:"运行中",prog:72,riskN:126,hot:14,updated:"2 分钟前",
+  log:[["14:52","命中私域口令，生成风险内容 R-2041"],["14:31","批次 KW-TAG-0629-018 抓取 320 条"],["13:50","评论区跳转话术聚集，标记 R-2045"],["11:02","任务启动，引用违规引流研判方案 v1.8"]]},
+ {id:"T-002",name:"重点直播间实时监控",type:"直播监控",target:"直播间 live/Anchor_31**08",config:"软色情研判方案 v2.1",status:"运行中",prog:48,riskN:14,hot:3,updated:"刚刚",
+  log:[["21:20","口播暗号命中，回放自动补证 R-2042"],["21:14","弹幕跳转引导，实时告警"],["20:00","接入实时直播流 + 弹幕流"]]},
+ {id:"T-003",name:"重点账号持续观察",type:"重点用户监控",target:"User_88**42 等 48 个账号",config:"引流 + 软色情组合方案",status:"运行中",prog:90,riskN:5,hot:1,updated:"8 分钟前",
+  log:[["09:40","User_88**42 主页更新，触发补抓"],["08:12","跨平台关联到 XHS_57**"],["06:00","按每 2 小时频率轮询 48 个账号"]]},
+ {id:"T-004",name:"本地视频暴恐分析",type:"本地视频分析",target:"sample_clip_2026_0629.mp4",config:"暴恐研判方案 v1.2",status:"已完成",prog:100,riskN:3,hot:2,updated:"1 小时前",
+  log:[["00:31","OCR 字幕命中，生成 R-2043"],["00:12","关键帧武器特征命中"],["00:00","本地视频进入逐帧分析队列"]]}
+];
+
+var users=[
+ {id:"u1",account:"User_88**42",platforms:"抖音 / 快手",scope:"主页 · 发布 · 评论互动 · 直播",score:86,libraries:"违规引流 v1.8 / 软色情 v2.1",strategies:"多模态引流识别 / 软色情综合判定",freq:"每 2 小时",
+  latest:["夜间私域引流短视频 · 命中私域口令","直播间口播暗号高频出现","评论区跳转话术聚集"],
+  related:[["Anchor_31**08","直播间高频互动"],["XHS_57**","跨平台引流目标一致"],["User_73**41","评论话术重合"]]},
+ {id:"u2",account:"Anchor_31**08",platforms:"抖音直播",scope:"直播 · 弹幕 · 回放",score:74,libraries:"软色情 v2.1",strategies:"直播画面 + ASR 综合",freq:"实时",
+  latest:["直播画面命中软色情视觉特征","弹幕引导跳转私域","回放自动补证完成"],
+  related:[["User_88**42","直播互动高频"],["XHS_57**","引流目标相同"]]},
+ {id:"u3",account:"XHS_57**",platforms:"小红书",scope:"笔记 · 评论",score:61,libraries:"违规引流 v1.8",strategies:"图文 OCR 引流识别",freq:"每日",
+  latest:["笔记封面二维码遮挡","评论区留联系方式"],
+  related:[["User_88**42","相同引流目标"],["Anchor_31**08","跨平台关联"]]}
+];
+
+var libraries=[
+ {id:"kp_prohibited",backendId:"prohibited",category:"违禁引流",name:"违禁引流词库 v1.8",terms:["夜间","加V","私域口令","跳转码"],pk:["夜间兼职","一对一","加微"],pt:["#夜间","#私域","#兼职"]},
+ {id:"kp_soft",backendId:"soft",category:"软色情",name:"软色情词库 v2.1",terms:["擦边","资源","私聊"],pk:["福利","资源群","私聊"],pt:["#福利","#资源"]},
+ {id:"kp_terror",backendId:"terror",category:"暴恐",name:"暴恐词库 v1.2",terms:["武器","火光","集结"],pk:["改装","装备","集结"],pt:["#装备"]},
+ {id:"kp_drug",backendId:"drug",category:"涉毒",name:"涉毒词库 v1.0",terms:["同城","暗号","上岸"],pk:["同城","对接","出"],pt:["#同城"]}
+];
+
+var strategies=[
+ {id:"s1",libId:"lib1",name:"多模态引流识别策略",modal:"文本 / OCR / 评论 / ASR",th:"高危≥85 · 中危≥65 · 待复核≥45",conds:[["谐音暗号文本命中","24%","原文截图"],["画面二维码/联系方式","21%","OCR 截图"],["评论跳转话术聚集","18%","评论截图"],["口播暗号 ASR","15%","音频转写"]]},
+ {id:"s2",libId:"lib2",name:"软色情综合判定策略",modal:"关键帧 / ASR / 弹幕 / 文本",th:"高危≥85 · 中危≥65 · 待复核≥45",conds:[["关键帧软色情特征","26%","视频帧"],["口播暗号 ASR","20%","音频转写"],["弹幕跳转引导","17%","弹幕截图"],["标题擦边词","12%","原文截图"]]},
+ {id:"s3",libId:"lib3",name:"暴恐视觉判定策略",modal:"关键帧 / OCR / ASR",th:"高危≥85 · 中危≥60 · 待复核≥40",conds:[["武器/火光视觉特征","30%","关键帧"],["字幕 OCR 命中","22%","OCR 截图"],["背景音 ASR","14%","音频转写"]]}
+];
+
+var schemes=[
+ {id:"sc1",name:"违规引流研判方案",status:"已发布",libIds:["lib1"],modal:"文本 / OCR / 评论 / ASR",th:"高危≥85 · 中危≥65 · 待复核≥45",
+  conds:[["谐音暗号文本命中","24%","原文截图"],["画面二维码/联系方式","21%","OCR 截图"],["评论跳转话术聚集","18%","评论截图"],["口播暗号 ASR","15%","音频转写"]],
+  tasks:"平台内容 / 直播 / 重点用户",outputs:["风险内容","询证材料","关键截图","用户归并线索"]},
+ {id:"sc2",name:"软色情研判方案",status:"已发布",libIds:["lib2"],modal:"关键帧 / ASR / 弹幕 / 文本",th:"高危≥85 · 中危≥65 · 待复核≥45",
+  conds:[["关键帧软色情特征","26%","视频帧"],["口播暗号 ASR","20%","音频转写"],["弹幕跳转引导","17%","弹幕截图"],["标题擦边词","12%","原文截图"]],
+  tasks:"平台内容 / 直播",outputs:["风险内容","弹幕截图","关键帧"]},
+ {id:"sc3",name:"暴恐研判方案",status:"草稿",libIds:["lib3"],modal:"关键帧 / OCR / ASR",th:"高危≥85 · 中危≥60 · 待复核≥40",
+  conds:[["武器/火光视觉特征","30%","关键帧"],["字幕 OCR 命中","22%","OCR 截图"],["背景音 ASR","14%","音频转写"]],
+  tasks:"本地视频 / 平台内容",outputs:["风险内容","关键帧","OCR 截图"]}
+];
+
+var scopeDefs=[
+ {id:"title_body",label:"标题与正文",icon:"ti-file-text",desc:"笔记标题、正文、话题标签与简介"},
+ {id:"comment",label:"评论与弹幕",icon:"ti-message-circle",desc:"评论区、回复链、直播弹幕与互动聚集"},
+ {id:"image",label:"图片与封面",icon:"ti-photo",desc:"图文图片、视频封面、水印与截图"},
+ {id:"video",label:"视频画面",icon:"ti-movie",desc:"短视频、关键帧、直播画面与回放"},
+ {id:"audio",label:"语音内容",icon:"ti-volume",desc:"口播、背景音、直播语音与转写"}
+];
+
+var capabilityDefs=[
+ {id:"text",label:"文字语义识别",short:"文本",icon:"ti-file-description",desc:"理解标题、正文、评论、弹幕中的含义和黑话",rule:"文字内容命中",source:"标题/正文/评论"},
+ {id:"ocr",label:"画面文字识别",short:"画面文字",icon:"ti-text-recognition",desc:"读取图片、封面、视频字幕、水印里的文字（OCR）",rule:"画面文字命中",source:"图片/视频文字"},
+ {id:"asr",label:"语音内容识别",short:"语音",icon:"ti-wave-sine",desc:"把口播、背景音、直播语音转成文字再判断（ASR）",rule:"语音内容命中",source:"语音转写"},
+ {id:"vision",label:"图片/视频画面识别",short:"画面",icon:"ti-photo-search",desc:"识别二维码、武器、动作、场景等画面证据",rule:"画面特征命中",source:"图片/视频画面"},
+ {id:"comment",label:"评论聚集分析",short:"评论",icon:"ti-messages",desc:"识别求联系方式、接头暗号、高频互动和引流聚集",rule:"评论聚集命中",source:"评论/弹幕"}
+];
+
+var importanceScores={off:0,low:10,medium:15,high:20,very_high:30};
+var importanceLabels={off:"关闭",low:"较低",medium:"一般",high:"重要",very_high:"非常重要"};
+var COMMENT_PAGE_SIZE=10;
+var RESULT_PAGE_SIZE=5;
+var templateDefs=[
+ {id:"balanced",label:"均衡模式",desc:"多来源均衡判断，适合日常监控",weights:{text:"high",ocr:"high",asr:"medium",vision:"high",comment:"medium"}},
+ {id:"strict",label:"严格模式",desc:"高敏风险更容易上调，适合暴恐、涉毒等方案",weights:{text:"high",ocr:"high",asr:"high",vision:"very_high",comment:"high"}},
+ {id:"ocr_first",label:"画面文字优先",desc:"更重视封面、字幕、水印和截图文字",weights:{text:"medium",ocr:"very_high",asr:"medium",vision:"high",comment:"low"}},
+ {id:"vision_first",label:"图像视频优先",desc:"更重视图片、视频画面和关键帧证据",weights:{text:"medium",ocr:"high",asr:"medium",vision:"very_high",comment:"low"}}
+];
+
+var cnt=0;
+var st={screen:"workbench",riskId:"R-2041",taskId:"T-001",userId:"u1",libId:"lib1",cfgTab:"library",cfgMode:"view",strId:null,schemeId:null,
+ modal:null,userEdit:null,cfgVersion:3,pendingChanges:5,tags:{},focusKey:null,cfgView:"list",nsConds:[],libReturn:null,
+ filters:{category:"全部",source:"全部",level:"全部",status:"全部"},
+ nsScopes:["title_body","comment","image","video","audio"],nsCaps:["text","ocr","asr","vision","comment"],nsTemplate:"balanced",nsImportance:null,
+ nt:{type:"platform",name:"未命名监控任务",scheme:"sc1",platforms:["抖音"],methods:["keyword","tag"],userUrl:"",fileLoaded:false},
+ apiReady:false,apiLoading:false,policies:[],jobRevisions:{},loadingRevisions:{},resultDetails:{},openEvidenceGroups:{},moreEvidenceGroups:{},activeEvidenceGroup:{},originalGalleryIdx:{},originalVideoIdx:{},commentPage:{},riskPage:1,taskOutputPage:{}};
+
+for(var _u=0;_u<users.length;_u++)users[_u].watched=(users[_u].id==="u1");
+for(var _s2=0;_s2<schemes.length;_s2++)recomputeScheme(schemes[_s2]);
+for(var _r=0;_r<risks.length;_r++)risks[_r].decision="";
+function getRisk(id){for(var i=0;i<risks.length;i++)if(risks[i].id===id)return risks[i];return risks[0];}
+function getTask(id){for(var i=0;i<tasks.length;i++)if(tasks[i].id===id)return tasks[i];return tasks[0];}
+function getTaskOutputs(t){
+ if(!t)return [];
+ var jobId=String(t.apiJobId||"");
+ if(jobId)return risks.filter(function(r){return String(r.jobId||((r.raw||{}).job_id)||"")===jobId;});
+ if(t.type==="重点用户监控")return risks.filter(function(r){return r.linked&&r.linked.indexOf("SL-")===0;});
+ return risks.filter(function(r){return r.task===t.name;});
+}
+function userByAccount(acc){for(var i=0;i<users.length;i++)if(users[i].account===acc)return users[i];return null;}
+function nowStamp(){var arr=["刚刚","1 分钟前","2 分钟前"];return arr[(cnt++)%3];}
+function openModal(title,sub,body){st.modal={title:title,sub:sub,body:body};}
+function getUser(id){for(var i=0;i<users.length;i++)if(users[i].id===id)return users[i];return users[0];}
+function libraryUiId(id){var text=String(id||"");return text.indexOf("kp_")===0?text:"kp_"+text;}
+function libraryBackendId(id){var text=String(id||"");for(var i=0;i<libraries.length;i++)if(libraries[i].id===text)return libraries[i].backendId||text.replace(/^kp_/,"");return text.replace(/^kp_/,"");}
+function getLib(id){var wanted=String(id||"");var backend=wanted.replace(/^kp_/,"");for(var i=0;i<libraries.length;i++)if(libraries[i].id===wanted||libraries[i].backendId===backend)return libraries[i];return libraries[0];}
+function getScheme(id){for(var i=0;i<schemes.length;i++)if(schemes[i].id===id)return schemes[i];return schemes[0];}
+function filtered(){return risks.filter(function(r){var f=st.filters;return (f.category==="全部"||r.category===f.category)&&(f.source==="全部"||r.source===f.source)&&(f.level==="全部"||r.level===f.level)&&(f.status==="全部"||r.status===f.status);});}
+function lvlCls(l){return l==="高危"?"dang":l==="无风险"?"ok":"warn";}
+function stCls(s){return (s.indexOf("固证")>-1||s.indexOf("证据链")>-1)?"ok":"warn";}
+
+function apiUrl(path){return API_BASE+path;}
+function apiFetch(path,opts){
+ opts=opts||{};
+ opts.headers=Object.assign({"Content-Type":"application/json"},opts.headers||{});
+ return fetch(apiUrl(path),opts).then(function(res){
+   if(!res.ok)return res.text().then(function(t){throw new Error(t||res.statusText);});
+   return res.status===204?{}:res.json();
+ });
+}
+function apiForm(path,form){
+ return fetch(apiUrl(path),{method:"POST",body:form}).then(function(res){
+   if(!res.ok)return res.text().then(function(t){throw new Error(t||res.statusText);});
+   return res.json();
+ });
+}
+function platformCode(label){return {"抖音":"dy","小红书":"xhs","快手":"ks"}[label]||"xhs";}
+function platformLabel(code){return {dy:"抖音",xhs:"小红书",ks:"快手",local:"本地上传"}[code]||code||"未知平台";}
+function decisionLevel(level){return {high:"高危",medium:"中危",low:"待复核",none:"无风险",unknown:"待复核"}[level]||level||"待复核";}
+function jobStatusLabel(s){return {queued:"排队中",running:"运行中",completed:"已完成",failed:"失败",stopped:"已停止",interrupted:"已中断",analysis_running:"分析中",analysis_stopped:"已暂停",crawl_paused:"已暂停",analysis_paused:"已暂停"}[s]||s||"未知";}
+function safeArr(x){return Array.isArray(x)?x:[];}
+function knowledgeLabel(id){return {prohibited:"违禁引流",soft:"软色情",terror:"暴恐",drug:"涉毒",gambling:"赌博博彩",fraud:"诈骗",hate:"仇恨歧视"}[id]||id;}
+var riskLibraryIds={"违规引流":"prohibited","违禁引流":"prohibited","非法交易入口":"prohibited","管制物品":"prohibited","灰产服务":"prohibited","绕平台交易":"prohibited","软色情":"soft","色情低俗":"soft","隐私部位暴露":"soft","性暗示动作":"soft","色情资源导流":"soft","低俗互动":"soft","暴恐":"terror","暴恐极端":"terror","暴恐极端风险":"terror","涉毒":"drug","赌博":"gambling","赌博博彩":"gambling","诈骗":"fraud","仇恨":"hate","仇恨歧视":"hate"};
+var riskLibraryAliasRules=[
+ {id:"prohibited",words:["引流","导流","私域","绕平台","联系方式","私信","加群","二维码","外链","非法交易","交易入口","管制物品","灰产"]},
+ {id:"soft",words:["软色情","色情","低俗","性暗示","露肤","私密","穿着","身体","凸显","擦边","泳装","裸露","暴露","隐私部位","衣物"]},
+ {id:"terror",words:["暴恐","恐怖","爆炸","袭击","武器","行动号召","组织招募"]},
+ {id:"drug",words:["涉毒","毒品","吸毒","贩毒","违禁药","吸食","同城接头"]},
+ {id:"gambling",words:["赌博","博彩","盘口","投注","上分","提现","赔率"]},
+ {id:"fraud",words:["诈骗","刷单","返利","虚假投资","钓鱼","冒充","转账","认证金"]},
+ {id:"hate",words:["仇恨","歧视","排斥","贬损","群体攻击","暴力煽动","恶性谣言"]}
+];
+function canonicalRiskLibraryLabel(value){
+ var text=String(value||"").trim();if(!text)return "";
+ var id=riskLibraryIds[text]||({prohibited:1,soft:1,terror:1,drug:1,gambling:1,fraud:1,hate:1}[text]?text:"");
+ if(!id){for(var i=0;i<riskLibraryAliasRules.length;i++){var rule=riskLibraryAliasRules[i];for(var j=0;j<rule.words.length;j++)if(text.indexOf(rule.words[j])>-1){id=rule.id;break;}if(id)break;}}
+ return id?knowledgeLabel(id):"";
+}
+function canonicalRiskLibraryLabels(values){
+ var out=[],seen={};
+ function add(value){
+   if(value&&typeof value==="object"){add(value.id);add(value.label);return;}
+   var text=String(value||"").trim();if(!text)return;
+   var parts=text.split(/\s*[\/、,，]\s*/);
+   for(var i=0;i<parts.length;i++){var label=canonicalRiskLibraryLabel(parts[i]);if(label&&!seen[label]){seen[label]=1;out.push(label);}}
+ }
+ for(var i=0;i<safeArr(values).length;i++)add(values[i]);
+ return out;
+}
+function uniqueList(arr){var out=[],seen={};for(var i=0;i<safeArr(arr).length;i++){var v=String(arr[i]||"").trim();if(v&&!seen[v]){seen[v]=1;out.push(v);}}return out;}
+function lexiconToLibrary(c){
+ var rows=safeArr(c.keywords),terms=[],pk=[],pt=[];
+ for(var i=0;i<rows.length;i++){
+   var item=rows[i]||{},kw=String(item.keyword||"").trim(),mt=String(item.match_type||"");
+   if(!kw)continue;
+   if(mt==="平台搜索词")pk.push(kw);
+   else if(mt==="平台标签")pt.push(kw);
+   else terms.push(kw);
+ }
+ return {id:libraryUiId(c.id),backendId:c.id,category:c.risk_label||knowledgeLabel(c.id)||c.title||c.id,name:c.title||((c.risk_label||c.id)+"词库"),terms:uniqueList(terms),pk:uniqueList(pk),pt:uniqueList(pt),raw:c};
+}
+function ensureLibrary(id){
+ var lid=libraryUiId(id);
+ for(var i=0;i<libraries.length;i++)if(libraries[i].id===lid||libraries[i].backendId===id)return libraries[i].id;
+ libraries.push({id:lid,backendId:id,category:knowledgeLabel(id),name:knowledgeLabel(id)+"知识库",terms:[knowledgeLabel(id)],pk:[knowledgeLabel(id)],pt:["#"+knowledgeLabel(id)]});
+ return lid;
+}
+function policyToScheme(p){
+ var cfg=p.published_config&&Object.keys(p.published_config).length?p.published_config:p.config||{};
+ var kids=safeArr(cfg.library_ids);
+ var libIds=kids.map(ensureLibrary);
+ var caps=safeArr(cfg.capabilities);if(!caps.length)caps=["text","ocr","asr","vision","comment"];
+ var th=(cfg.rule_snapshot&&cfg.rule_snapshot.thresholds)||{high:80,medium:60,review:40};
+ var tmpl=cfg.scoring_template||"balanced";
+ var imp=(cfg.rule_snapshot&&cfg.rule_snapshot.rule_importance)||cfg.rule_importance||cloneMap(templateDef(tmpl).weights);
+ var scopes=safeArr(cfg.scopes);if(!scopes.length)scopes=["title_body","comment","image","video","audio"];
+ var s={id:p.id,name:p.name,status:p.status==="published"?"已发布":"草稿",libIds:libIds,caps:caps,template:tmpl,
+  thresholds:{high:th.high||80,medium:th.medium||60,review:th.review||40},policyId:p.id,policyVersion:p.published_version||p.draft_version||"draft",
+  sourcePolicy:p,ruleImportance:cloneMap(imp),scopes:scopes,tasks:"",outputs:cfg.outputs||[]};
+ recomputeScheme(s);
+ if(cfg.outputs&&cfg.outputs.length)s.outputs=cfg.outputs;
+ return s;
+}
+function jobToTask(j){
+ var cur=j.current_audit_config_revision||{};
+ var ac=cur.audit_config||{};
+ var type=j.input_type==="local_video"?"本地视频分析":j.crawl_mode==="creator"?"重点用户监控":"平台内容抓取";
+ var target=j.input_type==="local_video"?(j.input_filename||"本地视频"):j.crawl_mode==="creator"?(platformLabel(j.platform)+" · "+(j.creator_url||j.creator_id||"用户主页")):(platformLabel(j.platform)+" · "+(safeArr(ac.library_ids).map(knowledgeLabel).join(" / ")||j.keyword||"关键词"));
+ var stats=j.task_stats||{};
+ var log=safeArr(j.logs).slice().reverse().map(function(x){return [(x.time||"").slice(11,16)||"刚刚",x.message||""];});
+ if(!log.length)log=[[j.updated_at||"刚刚","任务已创建"]];
+ var progress=jobProgressInfo(j,stats);
+ return {id:j.id,name:j.display_name||j.keyword||j.id,type:type,target:target,config:(cur.source_policy_name||"自定义审核配置")+" "+(cur.source_policy_version||""),status:jobStatusLabel(j.status),prog:progress.percent,progressText:progress.text,taskStats:progress.stats,riskN:0,hot:0,updated:(j.updated_at||"").replace("T"," ").slice(5,16)||"刚刚",log:log,apiJob:j,apiJobId:j.id,revisions:[]};
+}
+function toNum(v){var n=Number(v||0);return Number.isFinite(n)?n:0;}
+function pct(done,total){if(!total)return 0;return Math.max(0,Math.min(100,Math.round(done*100/total)));}
+function jobProgressInfo(j,stats){
+ stats=stats||{};
+ var status=String(j.status||"");
+ var ingested=toNum(stats.ingested_count);
+ var batchProcessed=toNum(stats.batch_processed_count);
+ var batchItems=toNum(stats.batch_item_count);
+ var crawled=Math.max(ingested,batchProcessed,batchItems);
+ var analyzed=toNum(stats.completed_analysis_count);
+ var analyzing=toNum(stats.analyzing_count);
+ var queued=toNum(stats.queued_analysis_count);
+ var failed=toNum(stats.failed_analysis_count);
+ var pendingRaw=toNum(stats.pending_analysis_count);
+ if(!queued&&pendingRaw)queued=Math.max(0,pendingRaw-failed);
+ var waiting=queued+analyzing;
+ var text="已抓取 "+crawled+" · 已分析 "+analyzed+" · 待处理 "+waiting+" · 失败 "+failed;
+ var taskStats={crawled:crawled,analyzed:analyzed,waiting:waiting,failed:failed};
+ if(status==="completed")return {percent:100,text:text,stats:taskStats};
+ if(status==="failed"||status==="stopped"||status==="interrupted"||status==="analysis_stopped")return {percent:pct(analyzed,Math.max(1,crawled)),text:text,stats:taskStats};
+ if(j.input_type==="local_video"||!j.run_crawler){
+   var total=Math.max(1,crawled||analyzed+waiting+failed);
+   return {percent:pct(analyzed,total),text:text,stats:taskStats};
+ }
+ if(j.crawl_status==="completed"||status==="analysis_running"||waiting||failed){
+   var total2=Math.max(1,crawled||analyzed+waiting+failed);
+   return {percent:pct(analyzed,total2),text:text,stats:taskStats};
+ }
+ if(crawled>0){
+   return {percent:pct(crawled,maxNotes),text:text,stats:taskStats};
+ }
+ if(status==="running"||status==="queued"||j.crawl_status==="running")return {percent:0,text:text,stats:taskStats};
+ return {percent:0,text:text,stats:taskStats};
+}
+function tryParseJsonObject(v){
+ if(typeof v!=="string")return v;
+ var s=v.trim();
+ if(!s||s.charAt(0)!=="{")return v;
+ try{return JSON.parse(s);}catch(e){return v;}
+}
+function firstText(){
+ for(var i=0;i<arguments.length;i++){
+   var v=arguments[i];
+   if(v===undefined||v===null)continue;
+   var s=String(v).trim();
+   if(s)return s;
+ }
+ return "";
+}
+function commentDisplayText(c){
+ c=tryParseJsonObject(c);
+ if(Array.isArray(c))return String(c[1]||"").trim();
+ if(typeof c==="string")return c.trim();
+ if(!c||typeof c!=="object")return "";
+ var text=firstText(c.content,c.text,c.comment_text,c.reply_content,c.content_text,c.desc,c.raw_text);
+ if(text)return text;
+ if(c.pictures||c.image_list||c.image_url)return "（图片评论，无文本内容）";
+ return "（无文本内容，可能为表情或空评论）";
+}
+function commentDisplayLabel(c,i){
+ c=tryParseJsonObject(c);
+ if(Array.isArray(c))return String(c[0]||("评论 "+(i+1)));
+ if(!c||typeof c!=="object")return "评论 "+(i+1);
+ var who=firstText(c.nickname,c.user_unique_id,c.short_user_id,c.user_id,c.sec_uid);
+ var loc=firstText(c.ip_location);
+ return ["评论 "+(i+1),who,loc].filter(Boolean).join(" · ");
+}
+function commentIsRiskHit(c){
+ c=tryParseJsonObject(c);
+ if(Array.isArray(c))return Boolean(c[2]);
+ if(!c||typeof c!=="object")return false;
+ var level=String(c.risk_level||c.severity||"").toLowerCase();
+ return Boolean(c.hit||c.is_hit||c.matched||c.is_risk||c.risk_type||c.reason||level&&level!=="none"&&level!=="safe"&&level!=="pass");
+}
+function normalizeComments(comments){
+ return safeArr(comments).map(function(c,i){
+   return [commentDisplayLabel(c,i),commentDisplayText(c),commentIsRiskHit(c)];
+ }).filter(function(x){return x[1];});
+}
+function renderCommentContext(r,comments){
+ comments=comments||[];
+ var key=r.id||((r.raw||{}).audit_result_id)||"current";
+ if(!comments.length)return '<div class="cm-empty" style="padding:12px">暂无评论</div>';
+ var total=comments.length,pages=Math.max(1,Math.ceil(total/COMMENT_PAGE_SIZE));
+ var page=Number(st.commentPage[key]||1);
+ if(!Number.isFinite(page))page=1;
+ page=Math.max(1,Math.min(pages,page));
+ st.commentPage[key]=page;
+ var start=(page-1)*COMMENT_PAGE_SIZE,end=Math.min(total,start+COMMENT_PAGE_SIZE);
+ var html='<div class="cm-comment-pager"><span>共 '+total+' 条评论 · 第 '+page+' / '+pages+' 页 · 当前 '+(start+1)+'-'+end+'</span>';
+ if(pages>1){
+   html+='<span class="cm-mini"><button class="cm-btn sm" type="button" data-act="commentPrev" data-id="'+attr(key)+'" data-count="'+pages+'" '+(page<=1?"disabled":"")+'>上一页</button><button class="cm-btn sm" type="button" data-act="commentNext" data-id="'+attr(key)+'" data-count="'+pages+'" '+(page>=pages?"disabled":"")+'>下一页</button></span>';
+ }
+ html+='</div><div class="cm-comment-list">';
+ for(var i=start;i<end;i++){
+   var c=comments[i];
+   html+='<div class="cm-cmt '+(c[2]?"hit":"")+'"><b>'+attr(c[0])+'</b><p>'+attr(c[1])+'</p></div>';
+ }
+ html+='</div>';
+ return html;
+}
+function pageInfo(total,page,size){
+ total=Number(total||0);
+ size=Number(size||RESULT_PAGE_SIZE);
+ var pages=Math.max(1,Math.ceil(total/size));
+ page=Number(page||1);
+ if(!Number.isFinite(page))page=1;
+ page=Math.max(1,Math.min(pages,page));
+ var start=total?(page-1)*size:0;
+ var end=Math.min(total,start+size);
+ return {total:total,pages:pages,page:page,start:start,end:end};
+}
+function renderListPager(prefix,key,info,unit){
+ if(!info||!info.total)return "";
+ unit=unit||"条";
+ var cur=info.total?((info.start+1)+"-"+info.end):"0";
+ var html='<div class="cm-comment-pager"><span>共 '+info.total+' '+unit+' · 第 '+info.page+' / '+info.pages+' 页 · 当前 '+cur+'</span>';
+ if(info.pages>1){
+   html+='<span class="cm-mini"><button class="cm-btn sm" type="button" data-act="'+prefix+'Prev" data-id="'+attr(key)+'" data-count="'+info.pages+'" '+(info.page<=1?"disabled":"")+'>上一页</button><button class="cm-btn sm" type="button" data-act="'+prefix+'Next" data-id="'+attr(key)+'" data-count="'+info.pages+'" '+(info.page>=info.pages?"disabled":"")+'>下一页</button></span>';
+ }
+ html+='</div>';
+ return html;
+}
+function resultToRisk(x){
+ var rid="R-"+(x.audit_result_id||x.id);
+ var cats=safeArr(x.categories);
+ var libraryLabels=canonicalRiskLibraryLabels([x.prompt_category,x.primary_risk].concat(cats));
+ var noRisk=(x.decision==="pass"||x.risk_level==="none")&&!cats.length;
+ var cat=libraryLabels[0]||x.primary_risk||cats[0]||(noRisk?"无风险":decisionLevel(x.risk_level));
+ var job=null;for(var ji=0;ji<tasks.length;ji++)if(tasks[ji].id===x.job_id)job=tasks[ji];
+ var terms=safeArr(x.score_breakdown).slice(0,4).map(function(r){return r.rule||r.label||r.rule_id;}).filter(Boolean);
+ if(!terms.length)terms=cats.length?cats:[];
+ var hits=safeArr(x.score_breakdown).map(function(r){return [r.rule||r.label||r.rule_id||"评分规则命中","命中"];});
+ if(!hits.length)hits=safeArr(x.evidence).map(function(r){return [r.rule||r.type||"风险证据","命中"];});
+ var comments=normalizeComments(x.comments);
+ return {id:rid,apiResultId:x.audit_result_id||x.id,jobId:x.job_id||"",title:x.title||x.content_title||x.note_id||"未命名风险内容",desc:x.summary||x.desc||(noRisk?"未发现风险证据。":"命中风险规则，等待人工复核。"),platform:platformLabel(x.platform),source:job&&job.type?job.type:"平台内容",category:cat,library:libraryLabels.join(" / ")||"未命中风险库",terms:terms,level:decisionLevel(x.risk_level),status:x.review_status?"已复核":"待复核",account:(x.author&&x.author.nickname)||x.author_key||"未知账号",linked:"待确认",conf:x.risk_score||x.conf||0,evi:x.evidence_count||safeArr(x.evidence_groups).length||safeArr(x.risk_evidence).length,task:job?job.name:(x.job_id||""),scheme:job?job.config:"",strategy:"任务审核配置",hash:(x.prompt_version||"").slice(-10),comments:comments.length?comments:[["-",x.summary||"暂无评论上下文",false]],hits:hits,evidenceGroups:x.evidence_groups||[],revisionId:x.audit_config_revision_id||"",promptVersion:x.prompt_version||"",raw:x};
+}
+function applyApiData(payload){
+ st.policies=payload.policies||[];
+ if(payload.lexicons&&payload.lexicons.length){
+   libraries=payload.lexicons.map(lexiconToLibrary);
+   if(!libraries.some(function(L){return L.id===st.libId;}))st.libId=libraries[0]?libraries[0].id:null;
+ }
+ if(st.policies.length){schemes=st.policies.map(policyToScheme);if(!getScheme(st.nt.scheme)||!schemes.some(function(s){return s.id===st.nt.scheme;}))st.nt.scheme=schemes[0].id;}
+ tasks=(payload.jobs||[]).map(jobToTask);
+ risks=(payload.results||[]).map(resultToRisk);
+ for(var i=0;i<tasks.length;i++){
+   var outs=getTaskOutputs(tasks[i]);
+   tasks[i].riskN=outs.length;
+   tasks[i].hot=outs.filter(function(r){return r.level==="高危";}).length;
+ }
+ if(tasks.length&&!tasks.some(function(t){return t.id===st.taskId;}))st.taskId=tasks[0].id;
+ if(risks.length&&!risks.some(function(r){return r.id===st.riskId;}))st.riskId=risks[0].id;
+ st.apiReady=true;
+}
+function loadSaasData(){
+ st.apiLoading=true;
+ return Promise.all([
+ apiFetch("/api/audit-policies").catch(function(){return {items:[]};}),
+  apiFetch("/api/lexicons").catch(function(){return {categories:[]};}),
+  apiFetch("/api/jobs").catch(function(){return [];}),
+  apiFetch("/api/audit-results?limit=500&sort=latest").catch(function(){return {items:[]};})
+ ]).then(function(all){
+   applyApiData({policies:all[0].items||[],lexicons:all[1].categories||[],jobs:all[2]||[],results:all[3].items||[]});
+	 }).catch(function(){
+	   st.apiReady=false;
+	 }).finally(function(){st.apiLoading=false;R();});
+	}
+function shouldAutoRefresh(){
+ return st.apiReady&&["tasks","taskDetail","workbench"].indexOf(st.screen)>-1&&!st.modal&&!st.apiLoading;
+}
+function startAutoRefresh(){
+ if(st.autoRefreshTimer)return;
+ st.autoRefreshTimer=setInterval(function(){
+   if(!shouldAutoRefresh())return;
+   loadSaasData();
+   if(st.screen==="taskDetail"&&st.taskId)loadTaskDetail(st.taskId);
+ },5000);
+}
+	function loadTaskDetail(id){
+ var t=getTask(id);if(!t||!t.apiJobId)return;
+ if(st.loadingRevisions[id])return;
+ st.loadingRevisions[id]=true;
+ apiFetch("/api/jobs/"+t.apiJobId+"/audit-config-revisions")
+  .then(function(data){st.jobRevisions[id]=data.items||[];})
+  .catch(function(){st.jobRevisions[id]=[];})
+  .finally(function(){delete st.loadingRevisions[id];R();});
+}
+function loadRiskDetail(id){
+ var r=getRisk(id);if(!r||!r.apiResultId||st.resultDetails[id])return;
+ apiFetch("/api/audit-results/"+r.apiResultId).then(function(data){st.resultDetails[id]=data;R();}).catch(function(){});
+}
+function submitCreateTask(){
+ var nt=st.nt,scm=getScheme(nt.scheme),nm=nt.name==="未命名监控任务"?typeTitle[nt.type]+" · 新任务":nt.name;
+ if(nt.type==="live"){toast("直播任务暂未接入","入口先保留，后端接入后启用");return;}
+ if(nt.type==="video"){
+   if(!nt.file){toast("请先选择本地视频文件","本地视频分析需要上传真实文件");return;}
+   var form=new FormData();form.append("video",nt.file);form.append("display_name",nm);form.append("title",nm);form.append("policy_id",scm.policyId||scm.id);
+   st.apiLoading=true;R();
+   apiForm("/api/local-video-jobs",form).then(function(){return loadSaasData();}).then(function(){st.screen="tasks";toast("本地视频任务已创建",nm+" 已生成 Revision 1");}).catch(function(err){toast("创建失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
+   return;
+ }
+ var body={policy_id:scm.policyId||scm.id,display_name:nm,platform:platformCode(nt.platforms[0]),crawl_mode:nt.type==="user"?"creator":"search",keyword_source:"lexicon",keyword:"",start_page:DEFAULT_START_PAGE,max_notes:DEFAULT_MAX_NOTES,max_comments:DEFAULT_MAX_COMMENTS,max_concurrency:DEFAULT_MAX_CONCURRENCY,analyze_limit:DEFAULT_ANALYZE_LIMIT,run_crawler:true};
+ if(nt.type==="user")body.creator_url=nt.userUrl;
+ st.apiLoading=true;R();
+ apiFetch("/api/jobs",{method:"POST",body:JSON.stringify(body)}).then(function(){return loadSaasData();}).then(function(){st.screen="tasks";toast("任务已创建",nm+" 已生成 Revision 1");}).catch(function(err){toast("任务创建失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
+}
+function updateTaskPolicy(jobId,policyId){
+ apiFetch("/api/jobs/"+jobId+"/audit-config-revisions",{method:"POST",body:JSON.stringify({policy_id:policyId,created_by:"saas-demo"})}).then(function(data){st.modal=null;toast("审核策略已更新","已生成 Revision "+data.revision.version+"，只影响后续结果");return loadSaasData();}).catch(function(err){toast("更新失败",String(err.message||err).slice(0,120));});
+}
+
+function toast(t,d){toastEl.innerHTML="<b>"+t+"</b>"+(d?"<small>"+d+"</small>":"");toastEl.classList.add("show");clearTimeout(tmr);tmr=setTimeout(function(){toastEl.classList.remove("show");},2100);}
+
+function ph(t,s,acts,badges){return '<div class="cm-ph"><div><h1>'+t+'</h1><p>'+s+'</p>'+(badges?'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">'+badges+'</div>':'')+'</div><div class="cm-acts">'+(acts||"")+'</div></div>';}
+function stat(l,v,h,tone){return '<div class="cm-stat '+(tone||"")+'"><span>'+l+'</span><b>'+v+'</b><small>'+h+'</small></div>';}
+function kv(l,v){return '<div class="cm-kv"><span>'+l+'</span><b>'+v+'</b></div>';}
+function kvLive(l,v,id){return '<div class="cm-kv"><span>'+l+'</span><b id="'+id+'">'+v+'</b></div>';}
+function bd(c,t){return '<span class="cm-bd '+c+'">'+t+'</span>';}
+function flow(t,s){return '<div class="cm-flow-step"><b>'+t+'</b><span>'+s+'</span></div>';}
+function fmtTime(v){var s=String(v||"").replace("T"," ");return s?s.slice(0,19):"-";}
+function capsReviewText(ids){var map={text:"文本",ocr:"画面文字",asr:"语音",vision:"画面",comment:"评论"};var out=[];for(var i=0;i<ids.length;i++)if(map[ids[i]])out.push(map[ids[i]]);return out.join(" / ")||"文本";}
+function splitTerms(v){if(Array.isArray(v))return v;return String(v||"").split(/[,\n，、\s]+/).filter(Boolean);}
+function termBadges(items,empty){items=safeArr(items).filter(Boolean).slice(0,8);if(!items.length)return bd("",empty||"未配置");return items.map(function(x){return bd("",attr(x));}).join("");}
+function ruleSimpleName(r){
+ var src=r.source||"";
+ if(src==="keyword")return "关键词命中";
+ if(src==="text")return "文本语义";
+ if(src==="ocr")return "OCR";
+ if(src==="asr")return "ASR";
+ if(src==="vision")return "视觉";
+ if(src==="comment")return "评论聚集";
+ return r.label||r.rule||r.id||"评分规则";
+}
+
+function top(){
+ var map={workbench:"workbench",evidence:"workbench",tasks:"tasks",taskDetail:"tasks",newTask:"tasks",users:"users",config:"config"};
+ var act=map[st.screen];
+ var nav=[["workbench","风险研判"],["tasks","监控任务"],["users","重点用户"],["config","配置底座"]];
+ var tabs="";for(var i=0;i<nav.length;i++){tabs+='<button class="cm-tab '+(act===nav[i][0]?"on":"")+'" data-act="nav" data-screen="'+nav[i][0]+'">'+nav[i][1]+'</button>';}
+ return '<div class="cm-top"><div class="cm-brand"><div class="cm-mark"><i class="ti ti-shield-search"></i></div><div><b>内容巡查研判平台</b><small>风险内容 · 证据固化 · 用户归并</small></div></div><nav class="cm-nav">'+tabs+'</nav></div>';
+}
+
+function scWorkbench(){
+ var fr=filtered();
+ var pg=pageInfo(fr.length,st.riskPage,RESULT_PAGE_SIZE);
+ st.riskPage=pg.page;
+ var shown=fr.slice(pg.start,pg.end);
+ var pager=renderListPager("riskPage","workbench",pg,"条");
+ var cards="";
+ if(!fr.length){cards='<div class="cm-empty">当前筛选条件下没有风险内容</div>';}
+ else{for(var i=0;i<shown.length;i++){cards+=riskCard(shown[i]);}}
+ function fg(label,kind,opts){var cur=st.filters[kind];var c="";for(var i=0;i<opts.length;i++){c+='<button class="cm-chip '+(cur===opts[i]?"on":"")+'" data-act="filter" data-kind="'+kind+'" data-val="'+opts[i]+'">'+opts[i]+'</button>';}return '<div class="cm-fg"><em>'+label+'</em>'+c+'</div>';}
+ return ph("风险研判工作台","按时间范围汇总异常内容，直接进入询证、固证和用户归并",
+   '<button class="cm-btn sm" data-act="exportReview"><i class="ti ti-file-export"></i>导出复核清单</button>')
+  +'<div class="cm-stats">'+stat("风险内容","128","近 7 天")+stat("高危内容","18","风险等级","dang")+stat("待复核","42","处理状态","warn")+stat("已固证","63","证据状态","ok")+stat("已归并用户","12","归人进度")+'</div>'
+  +'<div class="cm-filters">'
+   +fg("分类","category",["全部","软色情","暴恐","涉毒","违规引流"])
+   +fg("来源","source",["全部","平台内容","直播","本地上传"])
+   +fg("等级","level",["全部","高危","中危"])
+   +fg("状态","status",["全部","待复核","已固证","已加入证据链"])
+   +'<button class="cm-btn sm" data-act="resetFilter">重置</button>'
+  +'</div>'+pager+cards+(fr.length?pager:"");
+}
+
+function riskCard(r){
+ return '<article class="cm-card clk" data-act="openEvidence" data-id="'+r.id+'">'
+  +'<div class="cm-card-top">'+bd("info",r.platform)+bd("",r.source)+bd(lvlCls(r.level),r.level)+bd(stCls(r.status),r.status)+(r.decision?bd(r.decision==="已确认"?"dang":"ok",r.decision):"")+'<span class="t">'+r.id+'</span></div>'
+  +'<h3>'+r.title+'</h3><p class="desc">'+r.desc+'</p>'
+  +'<div class="cm-tags"><span class="cm-tag"><i class="ti ti-book"></i>'+r.library+'</span><span class="cm-tag"><i class="ti ti-subtask"></i>'+r.task+'</span></div>'
+  +'<div class="cm-card-foot"><span class="cm-acct">发布：<b>'+r.account+'</b> · 关联用户 '+r.linked+' · 置信度 '+r.conf+'%</span>'
+   +'<span class="cm-mini"><button class="cm-btn sm" data-act="openEvidence" data-id="'+r.id+'">查看详情</button><button class="cm-btn sm" data-act="secure" data-id="'+r.id+'">固证</button><button class="cm-btn sm" data-act="merge" data-id="'+r.id+'">归并用户</button></span></div>'
+  +'</article>';
+}
+
+var evidenceOrder=[
+ {id:"text",label:"文本证据",icon:"ti-file-text"},
+ {id:"ocr",label:"画面文字",icon:"ti-text-recognition"},
+ {id:"asr",label:"音频证据",icon:"ti-wave-sine"},
+ {id:"comment",label:"评论证据",icon:"ti-message-circle"},
+ {id:"vision",label:"视觉证据",icon:"ti-photo-search"}
+];
+
+function evidenceGroupsFor(r,detail){
+ var raw=(detail&&detail.evidence_groups)||r.evidenceGroups||[];
+ var by={};for(var i=0;i<raw.length;i++){var g=raw[i]||{},id=g.type||g.id;if(id)by[id]=g;}
+ return evidenceOrder.map(function(def){
+   var g=by[def.id]||{};
+   var items=safeArr(g.items);
+   var icon=(g.icon&&String(g.icon).indexOf("ti-")===0)?g.icon:def.icon;
+   return {id:def.id,type:def.id,label:g.label||def.label,icon:icon,count:g.count||items.length||0,items:items,hit_summary:safeArr(g.hit_summary),confidence:g.confidence||"",risk_libraries:safeArr(g.risk_libraries),risk_contribution:g.risk_contribution||0};
+ });
+}
+
+function evidenceTotal(groups){var n=0;for(var i=0;i<groups.length;i++)n+=groups[i].count||safeArr(groups[i].items).length;return n;}
+function riskLibraryLabelsFromGroups(groups){
+ var seen={},arr=[];
+ for(var i=0;i<groups.length;i++)for(var j=0;j<safeArr(groups[i].risk_libraries).length;j++){
+   var l=groups[i].risk_libraries[j]||{},labels=canonicalRiskLibraryLabels([l.id,l.label]);
+   for(var k=0;k<labels.length;k++)if(!seen[labels[k]]){seen[labels[k]]=1;arr.push(labels[k]);}
+ }
+ return arr;
+}
+function riskLibraryText(r,detail,groups){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var cats=safeArr(audit.categories);
+ var labels=riskLibraryLabelsFromGroups(groups||[]);
+ if(!labels.length)labels=canonicalRiskLibraryLabels([audit.prompt_category,audit.primary_risk].concat(cats));
+ if(!labels.length&&r.library&&r.library!=="未命中风险库")labels=canonicalRiskLibraryLabels([r.library]);
+ return labels.join(" / ")||"未命中风险库";
+}
+function activeEvidenceGroup(r,groups){
+ var active=st.activeEvidenceGroup[r.id];
+ var has=false;for(var i=0;i<groups.length;i++)if(groups[i].id===active)has=true;
+ if(has)return active;
+ for(var j=0;j<groups.length;j++)if(groups[j].count||safeArr(groups[j].items).length)return groups[j].id;
+ return groups[0]?groups[0].id:"text";
+}
+function evidenceItemLibrary(item,group,r,detail){
+ var label=canonicalRiskLibraryLabels([item.risk_library_id,item.risk_library_label])[0]||"";
+ if(!label&&safeArr(group.risk_libraries).length)label=canonicalRiskLibraryLabels([group.risk_libraries[0]])[0]||"";
+ if(!label)label=riskLibraryText(r,detail,[group]);
+ return label;
+}
+function renderLanguageRows(item,groupType){
+ var lang=String(item.language||item.ocr_language||"").toLowerCase();
+ var isUg=lang.indexOf("ug")===0||lang.indexOf("uyghur")>-1||lang.indexOf("mixed")>-1;
+ var html="";
+ if(groupType==="ocr"){
+   var ocrOrig=item.ocr_text||item.text||"";
+   var ocrZh=item.ocr_text_zh||item.text_zh||"";
+   if(ocrOrig&&(isUg||ocrZh&&ocrZh!==ocrOrig)){
+     html+='<div class="cm-evi-text"><span>OCR原文</span><p>'+attr(ocrOrig)+'</p></div>';
+     if(ocrZh)html+='<div class="cm-evi-text"><span>中文译文</span><p>'+attr(ocrZh)+'</p></div>';
+   }
+ }
+ if(groupType==="asr"){
+   var dolphin=item.source_text_dolphin||item.text||"";
+   var mms=item.source_text_mms||"";
+   var asrZh=item.translation_zh||item.text_zh||"";
+   if(dolphin&&(isUg||asrZh&&asrZh!==dolphin)){
+     html+='<div class="cm-evi-text"><span>ASR原文</span><p>'+attr(dolphin)+'</p></div>';
+     if(mms)html+='<div class="cm-evi-text"><span>MMS复核原文</span><p>'+attr(mms)+'</p></div>';
+     if(asrZh)html+='<div class="cm-evi-text"><span>中文译文</span><p>'+attr(asrZh)+'</p></div>';
+   }
+ }
+ return html;
+}
+function evidenceMediaItems(item,groupType,r,detail){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var jobId=audit.job_id||((r.raw||{}).job_id)||"";
+ if(!jobId)return [];
+ var media=[],seen={};
+ function add(label,path){
+   if(!path||seen[path])return;
+   seen[path]=1;media.push({label:label,path:path,url:assetUrl(jobId,path)});
+ }
+ if(groupType==="ocr")add("OCR原图",item.asset_rel||item.frame_asset_rel);
+ else if(groupType==="vision"){
+   if(item.frame_asset_rel)add("违规关键帧",item.frame_asset_rel);
+   if(item.asset_rel&&!(item.frame_asset_rel&&String(item.asset_rel).indexOf("sheets_")>-1))add("违规图片",item.asset_rel);
+ }
+ return media;
+}
+function renderEvidenceMedia(item,group,r,detail){
+ var media=evidenceMediaItems(item,group.type,r,detail);
+ if(!media.length)return "";
+ var html='<div class="cm-evi-media">';
+ for(var i=0;i<media.length;i++)html+='<figure><img src="'+attr(media[i].url)+'" alt="'+attr(media[i].label)+'"><figcaption>'+attr(media[i].label)+'</figcaption></figure>';
+ return html+'</div>';
+}
+function renderEvidenceItem(item,idx,group,r,detail){
+ var lib=evidenceItemLibrary(item,group,r,detail);
+ var type=item.evidence_type||({text:"文本命中",ocr:"OCR命中",asr:"ASR命中",comment:"评论命中",vision:"视觉命中"}[group.type]||"证据命中");
+ var explain=item.hit_explanation||item.reason||item.rule||item.title||"命中风险规则";
+ var summary=item.content||item.evidence||item.text_zh||item.translation_zh||item.text||item.context||"暂无摘要";
+ var pos=item.position||item.source||"内容上下文";
+ var badge=item.is_supplementary||!(item.risk_contribution>0)?bd("","补充依据"):bd("info","计分依据");
+ return '<div class="cm-evi-item">'
+  +'<div class="cm-evi-head"><b>'+((idx+1)+". "+type)+'</b>'+badge+'</div>'
+  +'<div class="cm-evi-meta">'+bd("info","风险库："+attr(lib))+'</div>'
+  +renderEvidenceMedia(item,group,r,detail)
+  +'<p><b>命中解释：</b>'+attr(explain)+'</p>'
+  +'<p><b>证据摘要：</b>'+attr(summary)+'</p>'
+  +renderLanguageRows(item,group.type)
+  +'<p style="font-size:11px;color:var(--text-muted)">位置：'+attr(pos)+'</p>'
+ +'</div>';
+}
+function renderEvidenceGroups(r,detail){
+ var groups=evidenceGroupsFor(r,detail);
+ var total=evidenceTotal(groups);
+ if(!total){
+   if(r.apiResultId&&!detail)return '<h3>证据概览</h3><div class="cm-empty" style="padding:12px">正在读取证据...</div>';
+   return '<h3>证据概览</h3><div class="cm-empty" style="padding:12px">未发现风险证据</div>';
+ }
+ var active=activeEvidenceGroup(r,groups),html='<h3>证据概览</h3><div class="cm-evg-grid">';
+ var selected=groups[0];
+ for(var i=0;i<groups.length;i++){
+   var g=groups[i],on=g.id===active;if(on)selected=g;
+   var libs=safeArr(g.risk_libraries).map(function(l){return l.label||l.id;}).filter(Boolean).join(" / ");
+   html+='<button class="cm-evg-card '+(on?"on":"")+'" data-act="selectEvidenceGroup" data-rid="'+r.id+'" data-group="'+g.id+'"><b><i class="ti '+g.icon+'"></i> '+g.label+'</b><span>'+g.count+'条</span><small>'+(libs||"暂无命中风险库")+'</small></button>';
+ }
+ html+='</div><h3>证据详情 · '+selected.label+'</h3><div class="cm-evg-detail">';
+ var items=safeArr(selected.items);
+ if(!items.length)html+='<div class="cm-empty" style="padding:12px">该证据组暂无命中内容</div>';
+ for(var j=0;j<items.length;j++)html+=renderEvidenceItem(items[j]||{},j,selected,r,detail);
+ html+='</div>';
+ return html;
+}
+
+function assetUrl(jobId,path){
+ if(!jobId||!path)return "";
+ return apiUrl("/api/jobs/"+encodeURIComponent(jobId)+"/assets?path="+encodeURIComponent(path));
+}
+function mediaAssetUrl(jobId,path){
+ if(!path)return "";
+ var s=String(path);
+ if(/^https?:\/\//i.test(s))return s;
+ if(jobId){
+   var marker="/outputs/"+jobId+"/";
+   var p=s.indexOf(marker);
+   if(p>-1)s=s.slice(p+marker.length);
+   return assetUrl(jobId,s);
+ }
+ return "";
+}
+function truncateUiText(s,n){
+ s=String(s||"").trim();
+ return s.length>n?s.slice(0,n-1)+"...":s;
+}
+function addMediaItem(out,seen,label,path,caption){
+ var key=String(path||"").trim();
+ if(!key||seen[key])return;
+ seen[key]=1;
+ out.push({label:label,path:key,caption:caption||""});
+}
+function mediaDedupeKey(path,jobId){
+ var s=String(path||"").trim();
+ if(!s)return "";
+ s=s.replace(/[?#].*$/,"");
+ if(jobId){
+   var marker="/outputs/"+jobId+"/";
+   var p=s.indexOf(marker);
+   if(p>-1)s=s.slice(p+marker.length);
+ }
+ return s.replace(/^file:\/\//,"").replace(/^\/+/,"");
+}
+function collectOriginalImages(r,detail){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var idx=audit.evidence_index||{};
+ var out=[],seen={};
+ safeArr(idx.image_units).forEach(function(x,i){
+   addMediaItem(out,seen,"图 "+(i+1),x.asset_rel||x.url,"");
+ });
+ safeArr(audit.image_analyses).forEach(function(x,i){
+   addMediaItem(out,seen,"图 "+(out.length+1),x.asset_rel||x.local_path||x.path_or_url||x.url,"");
+ });
+ safeArr(audit.risk_images).forEach(function(x,i){
+   addMediaItem(out,seen,"图 "+(out.length+1),x.asset_rel||x.local_path||x.path_or_url||x.url,"");
+ });
+ for(var j=0;j<out.length;j++){out[j].label="图 "+(j+1);out[j].caption="";}
+ return out;
+}
+function collectOriginalVideos(r,detail){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var idx=audit.evidence_index||{};
+ var jobId=audit.job_id||((r.raw||{}).job_id)||"";
+ var out=[],seen={};
+ function addVideo(label,x,caption){
+   x=x||{};
+   var candidates=[
+     x.asset_rel,x.local_path,x.path,x.video_path,x.url,x.video_url,x.video_play_url,x.video_download_url,
+     x.play_url,x.download_url,x.source_url
+   ];
+   for(var c=0;c<candidates.length;c++){
+     if(candidates[c]){
+       var path=String(candidates[c]||"").trim();
+       var key=mediaDedupeKey(path,jobId);
+       if(seen[key])return;
+       seen[key]=1;
+       out.push({label:label,path:path,caption:caption||""});
+       return;
+     }
+   }
+ }
+ safeArr(idx.video_units).forEach(function(x,i){
+   addVideo("原始视频 "+(i+1),x,firstText(x.transcript_summary,x.summary));
+ });
+ safeArr(audit.video_results).forEach(function(x,i){
+   addVideo("原始视频 "+(out.length+1),x,firstText((x.transcript||{}).text_zh,(x.transcript||{}).text,x.summary));
+ });
+ return out;
+}
+function renderOriginalVideoPlayer(r,detail,videos){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var jobId=audit.job_id||((r.raw||{}).job_id)||"";
+ var usable=[];
+ for(var i=0;i<videos.length;i++){
+   var url=mediaAssetUrl(jobId,videos[i].path);
+   if(url)usable.push({url:url,label:videos[i].label||("原始视频 "+(usable.length+1)),caption:videos[i].caption||""});
+ }
+ if(!usable.length)return "";
+ var key=r.id||((r.raw||{}).audit_result_id)||"current";
+ var idx=Number(st.originalVideoIdx[key]||0);
+ if(!Number.isFinite(idx))idx=0;
+ idx=Math.max(0,Math.min(usable.length-1,idx));
+ st.originalVideoIdx[key]=idx;
+ var cur=usable[idx],total=usable.length;
+ var html='<figure class="cm-original-video"><video controls preload="metadata" playsinline src="'+attr(cur.url)+'"></video><figcaption><b>'+attr(cur.label)+'</b>';
+ if(cur.caption)html+='<br>'+attr(truncateUiText(cur.caption,120));
+ if(total>1){
+   html+='<div class="cm-gallery-foot" style="padding:8px 0 0"><span>视频 '+(idx+1)+' / '+total+'</span><span class="cm-mini"><button class="cm-btn sm" type="button" data-act="originalVideoPrev" data-id="'+attr(key)+'" data-count="'+total+'">上一个</button><button class="cm-btn sm" type="button" data-act="originalVideoNext" data-id="'+attr(key)+'" data-count="'+total+'">下一个</button></span></div>';
+ }
+ html+='</figcaption></figure>';
+ return html;
+}
+function collectVideoFramesFromAudit(audit){
+ audit=audit||{};
+ var idx=audit.evidence_index||{};
+ var out=[],seen={};
+ function addFrame(x){
+   x=x||{};
+   var path=x.asset_rel||x.frame_asset_rel||x.local_path||x.path||x.url;
+   var key=String(path||"").trim();
+   if(!key||seen[key])return;
+   seen[key]=1;
+   out.push(x);
+ }
+ safeArr(idx.timeline_frames).forEach(addFrame);
+ safeArr(idx.video_units).forEach(function(v){
+   safeArr((v||{}).timeline_frames).forEach(addFrame);
+   safeArr((v||{}).frames).forEach(addFrame);
+ });
+ safeArr(audit.video_results).forEach(function(v){
+   safeArr((v||{}).timeline_frames).forEach(addFrame);
+   safeArr((v||{}).frames).forEach(addFrame);
+ });
+ return out;
+}
+function collectVideoSheetsFromAudit(audit){
+ audit=audit||{};
+ var idx=audit.evidence_index||{};
+ var out=[],seen={};
+ function addSheet(x){
+   x=x||{};
+   var path=x.asset_rel||x.sheet_asset_rel||x.local_path||x.path||x.url;
+   var key=String(path||"").trim();
+   if(!key||seen[key])return;
+   seen[key]=1;
+   out.push(x);
+ }
+ safeArr(idx.moment_sheets).forEach(addSheet);
+ safeArr(idx.moments).forEach(addSheet);
+ safeArr(idx.precise_sheets).forEach(addSheet);
+ safeArr(idx.video_units).forEach(function(v){
+   safeArr((v||{}).moment_sheets).forEach(addSheet);
+   safeArr((v||{}).moments).forEach(addSheet);
+   safeArr((v||{}).precise_sheets).forEach(addSheet);
+ });
+ safeArr(audit.video_results).forEach(function(v){
+   safeArr((v||{}).moment_sheets).forEach(addSheet);
+   safeArr((v||{}).moments).forEach(addSheet);
+   safeArr((v||{}).precise_sheets).forEach(addSheet);
+ });
+ return out;
+}
+function collectOriginalCover(r,detail,images){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ images=images||[];
+ if(images.length)return {label:"封面/正文图片",path:images[0].path,caption:images[0].caption};
+ var frames=collectVideoFramesFromAudit(audit);
+ if(frames.length)return {label:"视频封面截图",path:frames[0].asset_rel||frames[0].frame_asset_rel||frames[0].local_path||frames[0].path||frames[0].url,caption:frames[0].timestamp!==undefined?("时间 "+frames[0].timestamp+"s"):"首帧/关键帧"};
+ var riskFrames=safeArr(audit.risk_frames);
+ if(riskFrames.length)return {label:"视频封面截图",path:riskFrames[0].frame_asset_rel||riskFrames[0].asset_rel||riskFrames[0].path||riskFrames[0].url,caption:firstText(riskFrames[0].reason,riskFrames[0].analysis_result)};
+ return null;
+}
+function hasOriginalVideo(r,detail){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var idx=audit.evidence_index||{};
+ return safeArr(idx.video_units).length>0
+  ||safeArr(idx.timeline_frames).length>0
+  ||safeArr(idx.moment_sheets).length>0
+  ||safeArr(idx.precise_sheets).length>0
+  ||safeArr(audit.video_results).length>0
+  ||safeArr(audit.risk_frames).length>0;
+}
+function renderOriginalText(r,detail){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var parts=[];
+ var title=firstText(audit.title,audit.content_title);
+ var desc=firstText(audit.desc,audit.description);
+ if(title)parts.push("标题："+title);
+ if(desc)parts.push("正文："+desc);
+ if(!parts.length)return "";
+ return '<div class="cm-original-text">'+attr(parts.join("\n"))+'</div>';
+}
+function renderOriginalImageGallery(r,detail,images){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var jobId=audit.job_id||((r.raw||{}).job_id)||"";
+ var usable=[];
+ for(var i=0;i<images.length;i++){
+   var url=mediaAssetUrl(jobId,images[i].path);
+   if(url)usable.push({url:url,label:"图 "+(usable.length+1)});
+ }
+ if(!usable.length)return "";
+ var key=r.id||((r.raw||{}).audit_result_id)||"current";
+ var idx=Number(st.originalGalleryIdx[key]||0);
+ if(!Number.isFinite(idx))idx=0;
+ idx=Math.max(0,Math.min(usable.length-1,idx));
+ st.originalGalleryIdx[key]=idx;
+ var cur=usable[idx],total=usable.length;
+ var html='<div class="cm-original-gallery" data-gallery="'+attr(key)+'"><div class="cm-gallery-stage"><img src="'+attr(cur.url)+'" alt="'+attr(cur.label)+'" loading="lazy">';
+ if(total>1){
+   html+='<button class="cm-gallery-nav prev" data-act="originalGalleryPrev" data-id="'+attr(key)+'" data-count="'+total+'" aria-label="上一张"><i class="ti ti-chevron-left"></i></button>'
+    +'<button class="cm-gallery-nav next" data-act="originalGalleryNext" data-id="'+attr(key)+'" data-count="'+total+'" aria-label="下一张"><i class="ti ti-chevron-right"></i></button>';
+ }
+ html+='</div><div class="cm-gallery-foot"><span>图 '+(idx+1)+' / '+total+'</span>';
+ if(total>1){
+   html+='<div class="cm-gallery-dots">';
+   for(var d=0;d<total;d++)html+='<button class="cm-gallery-dot '+(d===idx?"on":"")+'" data-act="originalGalleryPick" data-id="'+attr(key)+'" data-idx="'+d+'" aria-label="第 '+(d+1)+' 张"></button>';
+   html+='</div>';
+ }
+ html+='</div></div>';
+ return html;
+}
+function renderOriginalMedia(r,detail){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var jobId=audit.job_id||((r.raw||{}).job_id)||"";
+ var images=collectOriginalImages(r,detail);
+ var videos=collectOriginalVideos(r,detail);
+ var html=renderOriginalText(r,detail);
+ var hasVideo=hasOriginalVideo(r,detail);
+ if(videos.length){
+   html+=renderOriginalVideoPlayer(r,detail,videos);
+   return html;
+ }
+ if(images.length&&!hasVideo){
+   html+=renderOriginalImageGallery(r,detail,images);
+   return html;
+ }
+ var cover=collectOriginalCover(r,detail,images);
+ if(cover&&cover.path){
+   var coverUrl=mediaAssetUrl(jobId,cover.path);
+   if(coverUrl)html+='<figure class="cm-original-cover"><img src="'+attr(coverUrl)+'" alt="'+attr(cover.label)+'" loading="lazy"><figcaption><b>'+attr(cover.label)+'</b>'+(cover.caption?'<br>'+attr(truncateUiText(cover.caption,100)):"")+'</figcaption></figure>';
+ }
+ if(images.length>1&&!hasVideo){
+   html+='<div class="cm-original-media"><div class="cm-original-grid">';
+   for(var i=1;i<images.length;i++){
+     var img=images[i],url=mediaAssetUrl(jobId,img.path);
+     if(!url)continue;
+     html+='<figure class="cm-original-image"><img src="'+attr(url)+'" alt="'+attr(img.label)+'" loading="lazy"><figcaption><b>'+attr(img.label)+'</b>'+(img.caption?'<br>'+attr(truncateUiText(img.caption,90)):"")+'</figcaption></figure>';
+   }
+   html+='</div></div>';
+ }
+ if(html)return html;
+ return '<div class="cm-frame"><i class="ti ti-movie"></i><span>'+r.platform+' · 原始内容预览</span></div>';
+}
+function renderJudgementMeta(r,detail,rev){
+ var groups=evidenceGroupsFor(r,detail);
+ var riskText=riskLibraryText(r,detail,groups);
+ var scheme=(rev.source_policy_name||r.scheme||"任务审核配置")+" "+(rev.source_policy_version||"");
+ var revision=rev.version?"Revision "+rev.version:(r.revisionId?"Revision "+r.revisionId:"未记录 Revision");
+ return "命中风险库："+attr(riskText)+" · 研判方案："+attr(scheme.trim())+" · 任务配置："+attr(revision);
+}
+function sheetSummaryBySource(idx,audit){
+ audit=audit||{};
+ var map={};
+ function putMoment(m){
+   var source=m.source||m.moment_id;
+   if(source&&!map[source])map[source]=firstText(m.reason,m.safe_context,m.visual_summary,m.summary);
+ }
+ function putSheet(p){
+   var source=p.source||p.precise_sheet_id||p.moment_id;
+   if(source&&!map[source])map[source]=firstText(p.visual_summary,p.safe_context,p.reason,p.summary,map[source]);
+ }
+ safeArr(idx.moments).forEach(putMoment);
+ safeArr(idx.moment_sheets).forEach(putSheet);
+ safeArr(idx.video_units).forEach(function(v){
+   safeArr(v.moments).forEach(putMoment);
+   safeArr(v.moment_sheets).forEach(putSheet);
+   safeArr(v.precise_sheets).forEach(putSheet);
+ });
+ safeArr(idx.precise_sheets).forEach(putSheet);
+ safeArr(audit.video_results).forEach(function(v){
+   safeArr((v||{}).moments).forEach(putMoment);
+   safeArr((v||{}).moment_sheets).forEach(putSheet);
+   safeArr((v||{}).precise_sheets).forEach(putSheet);
+ });
+ return map;
+}
+function videoSummaryFromIndex(idx,audit){
+ audit=audit||{};
+ var texts=[];
+ safeArr(idx.precise_sheets).forEach(function(x){if(x.visual_summary)texts.push(x.visual_summary);});
+ safeArr(idx.moments).forEach(function(x){var text=firstText(x.reason,x.safe_context);if(text)texts.push(text);});
+ safeArr(idx.video_units).forEach(function(v){safeArr(v.moments).forEach(function(x){var text=firstText(x.reason,x.safe_context,x.visual_summary);if(text)texts.push(text);});});
+ safeArr(audit.video_results).forEach(function(v){
+   safeArr((v||{}).moments).forEach(function(x){var text=firstText(x.reason,x.safe_context,x.visual_summary);if(text)texts.push(text);});
+   safeArr((v||{}).precise_sheets).forEach(function(x){if(x.visual_summary)texts.push(x.visual_summary);});
+ });
+ var seen={},out=[];
+ for(var i=0;i<texts.length;i++){var t=String(texts[i]||"").trim();if(t&&!/^<[^>]+>(<[^>]+>)*$/.test(t)&&!seen[t]){seen[t]=1;out.push(t);}}
+ return out.slice(0,2).join(" ");
+}
+function renderVideoContext(r,detail){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var idx=audit.evidence_index||{};
+ var summary=videoSummaryFromIndex(idx,audit);
+ return summary?'<h3>视频内容摘要</h3><div class="cm-video-summary">'+attr(summary)+'</div>':"";
+}
+
+function scEvidence(){
+ var r=getRisk(st.riskId);
+ var detail=st.resultDetails[r.id]||null;
+ var rev=(detail&&detail.audit_config_revision)||{};
+ var historical=detail&&detail.is_historical_config;
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var comments=normalizeComments(safeArr(audit.comments).length?audit.comments:r.comments);
+ return ph("风险内容询证详情","原始内容、命中依据、证据材料、用户归因的完整证据链",
+   '<button class="cm-btn" data-act="nav" data-screen="workbench"><i class="ti ti-arrow-left"></i>返回工作台</button><button class="cm-btn pri" data-act="secure" data-id="'+r.id+'">固证</button>')
+  +'<div class="cm-card"><div class="cm-card-top">'+bd("info","来源："+r.source)+bd("info",r.platform)+bd(lvlCls(r.level),r.level)+bd(stCls(r.status),r.status)+bd("","证据 "+r.evi+" 条")+'<span class="t">'+r.id+'</span></div><h3 style="margin:0">'+r.title+'</h3></div>'
+  +'<div class="cm-2">'
+   +'<div class="cm-panel"><h2><i class="ti ti-player-play"></i>原始内容与上下文</h2>'
+     +renderOriginalMedia(r,detail)
+     +kv("平台",r.platform)+kv("发布账号",r.account)+kv("来源任务",r.task)+kv("抓取批次","KW-TAG-0629-018")
+     +'<h3>评论 / 弹幕上下文</h3>'+renderCommentContext(r,comments)+renderVideoContext(r,detail)+'</div>'
+   +'<div class="cm-panel"><h2><i class="ti ti-brain"></i>可解释判定与证据</h2>'
+     +'<p class="sub">'+renderJudgementMeta(r,detail,rev)+'</p>'
+     +(historical?'<div class="cm-cmt" style="background:var(--bg-warning);color:var(--text-warning)">该结果使用历史配置生成，和任务当前配置可能不同。</div>':"")
+     +renderEvidenceGroups(r,detail)
+     +'</div>'
+  +'</div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-users-group"></i>用户归因与操作</h2>'
+   +'<div class="cm-2"><div>'
+     +'<div class="cm-rel-node"><b>'+r.account+' → '+r.linked+'</b><span>关联置信度 88% · 关联证据 '+r.evi+' 条 · 相似话术 + 相同引流目标</span></div>'
+     +'<h3>下一步建议</h3>'+flow("人工复核风险解释","确认多模态命中是否成立")+flow("补抓近期发布","补充该账号近 7 天内容")+flow("归并到重点用户","聚合到用户维度持续观察")
+   +'</div><div>'
+     +'<h3>处置动作'+(r.decision?' · 当前：'+r.decision:"")+'</h3>'
+     +'<div class="cm-mini" style="flex-direction:column;align-items:stretch;gap:8px">'
+      +'<button class="cm-btn pri" data-act="confirmRisk" data-id="'+r.id+'"><i class="ti ti-check"></i>确认风险</button>'
+      +'<button class="cm-btn" data-act="secure" data-id="'+r.id+'"><i class="ti ti-fingerprint"></i>固证生成保全记录</button>'
+      +'<button class="cm-btn" data-act="merge" data-id="'+r.id+'"><i class="ti ti-user-plus"></i>归并到重点用户</button>'
+      +'<button class="cm-btn" data-act="backfillRisk" data-id="'+r.id+'"><i class="ti ti-refresh"></i>补抓近期发布</button>'
+      +'<button class="cm-btn" data-act="dismissRisk" data-id="'+r.id+'"><i class="ti ti-x"></i>排除误报</button>'
+     +'</div></div></div></div>';
+}
+
+function scTasks(){
+ var running=tasks.filter(function(t){return t.status==="运行中";}).length;
+ var rows="";for(var i=0;i<tasks.length;i++){rows+=taskRow(tasks[i]);}
+ return ph("监控任务","平台抓取、直播接入、重点用户、本地视频四类来源的运行操作台",
+   '<button class="cm-btn pri" data-act="nav" data-screen="newTask"><i class="ti ti-plus"></i>新建监控任务</button>')
+  +'<div class="cm-stats">'+stat("运行中任务",""+running,"当前")+stat("新增风险","128","近 7 天")+stat("直播接入","4","实时")+stat("重点用户","37","账号")+stat("本地待分析","6","队列","warn")+'</div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-list-check"></i>任务运行列表</h2><p class="sub">点任务行或「查看产出」进入产出详情，看这个任务真正抓到了什么。也可暂停、补抓、调整配置。</p>'+rows+'</div>';
+}
+
+function taskRow(t){
+ var paused=t.status==="已暂停";
+ var sc=t.status.indexOf("完成")>-1?"ok":paused?"warn":"info";
+ var outN=getTaskOutputs(t).length;
+ return '<div class="cm-task" data-act="taskOpen" data-id="'+t.id+'" style="cursor:pointer"><div class="tm"><b>'+t.name+'</b><span>'+t.type+' · '+compactTargetText(t.target)+'</span><small><i class="ti ti-settings" style="font-size:12px;vertical-align:-1px"></i> 引用：'+t.config+' · 更新于 '+t.updated+'</small></div>'
+  +'<div class="ts">'+bd(sc,t.status)+'<b class="'+(t.hot>0&&!paused?"d":"")+'">产出 '+outN+' · 高危 '+t.hot+'</b><span style="font-size:11px;color:var(--text-muted)">可进入询证 '+outN+' 条</span><span style="font-size:11px;color:var(--text-muted)">'+attr(t.progressText||"")+'</span></div>'
+  +'<div class="cm-task-acts">'
+   +'<button class="cm-btn sm pri" data-act="taskOpen" data-id="'+t.id+'"><i class="ti ti-eye"></i>查看产出</button>'
+   +'<button class="cm-btn sm" data-act="taskPause" data-id="'+t.id+'"><i class="ti '+(paused?"ti-player-play":"ti-player-pause")+'"></i>'+(paused?"继续":"暂停")+'</button>'
+   +'<button class="cm-btn sm" data-act="taskBackfill" data-id="'+t.id+'"><i class="ti ti-refresh"></i>补抓</button>'
+   +'<button class="cm-btn sm" data-act="taskConfig" data-id="'+t.id+'"><i class="ti ti-settings"></i>调整配置</button>'
+   +'<button class="cm-btn sm" data-act="taskOpen" data-id="'+t.id+'"><i class="ti ti-history"></i>运行日志</button>'
+  +'</div></div>';
+}
+
+function renderTaskAuditConfig(t){
+ var cur=t.apiJob&&t.apiJob.current_audit_config_revision;
+ var compat=false;
+ var ac={};
+ if(t.apiJobId&&!Object.prototype.hasOwnProperty.call(st.jobRevisions,t.id))loadTaskDetail(t.id);
+ if(cur){
+   ac=cur.audit_config||{};
+ }else if(t.apiJob){
+   compat=true;
+   ac={
+    library_ids:safeArr(t.apiJob.library_ids),
+    capabilities:safeArr(t.apiJob.capabilities),
+    scoring_template:t.apiJob.scoring_template||"legacy",
+    thresholds:(t.apiJob.rule_snapshot&&t.apiJob.rule_snapshot.thresholds)||{},
+    scoring_rules:(t.apiJob.rule_snapshot&&t.apiJob.rule_snapshot.scoring_rules)||[],
+    prompt_version:(t.apiJob.prompt_profile_snapshot&&t.apiJob.prompt_profile_snapshot.prompt_version)||""
+   };
+   cur={version:"兼容",source_policy_name:"自定义审核配置",source_policy_version:"旧任务",effective_from:t.apiJob.created_at||t.apiJob.updated_at||"",prompt_version:ac.prompt_version};
+ }else{
+   return '<div class="cm-panel"><h2><i class="ti ti-settings"></i>本任务审核配置</h2><p class="sub">静态样例任务暂无后端配置快照。</p>'+kv("引用配置",t.config)+kv("采集对象",compactTargetText(t.target))+'</div>';
+ }
+ var fullRev=cur;
+ var revs=safeArr(st.jobRevisions[t.id]);
+ for(var ri=0;ri<revs.length;ri++){if(cur&&revs[ri].id===cur.id)fullRev=revs[ri];}
+ var kps=safeArr((fullRev||{}).knowledge_package_snapshots);
+ if(!kps.length)kps=safeArr(ac.knowledge_package_snapshots);
+ var caps=capsReviewText(safeArr(ac.capabilities));
+ var sourceTemplate=((cur.source_policy_name||"自定义审核配置")+" "+(cur.source_policy_version||"")).trim();
+ var libCards="";
+ var jobTerms=splitTerms((t.apiJob&&t.apiJob.lexicon_keywords&&t.apiJob.lexicon_keywords.length?t.apiJob.lexicon_keywords:(t.apiJob&&t.apiJob.keyword))||"");
+ if(kps.length){
+   libCards=kps.map(function(k){
+     var kw=k.keywords||{};
+     var search=safeArr(k.platform_search_terms||k.search_terms);
+     if(!search.length)search=jobTerms.length?jobTerms:safeArr(kw.exact).concat(safeArr(kw.fuzzy));
+     var tags=safeArr(k.platform_tag_terms||k.platform_tags||k.topic_tags||kw.platform_tags);
+     if(!tags.length)tags=safeArr(k.output_labels);
+     return '<div class="cm-lib-card"><b><span>'+attr((k.lexicon_title||k.title||knowledgeLabel(k.id||"")).replace(/风险$/,""))+'</span>'+bd("info",k.version||"快照")+'</b>'
+       +'<div class="cm-lib-row"><span>平台搜索词</span><div class="cm-lib-meta">'+termBadges(search,"未配置")+'</div></div>'
+       +'<div class="cm-lib-row"><span>平台标签词</span><div class="cm-lib-meta">'+termBadges(tags,"未配置")+'</div></div></div>';
+   }).join("");
+ }else{
+   libCards=safeArr(ac.library_ids).map(function(id){return '<div class="cm-lib-card"><b><span>'+knowledgeLabel(id)+'</span>'+bd("info","任务快照")+'</b>'
+    +'<div class="cm-lib-row"><span>平台搜索词</span><div class="cm-lib-meta">'+termBadges(jobTerms,"未配置")+'</div></div>'
+    +'<div class="cm-lib-row"><span>平台标签词</span><div class="cm-lib-meta">'+bd("",knowledgeLabel(id))+'</div></div></div>';}).join("");
+ }
+ if(!libCards)libCards='<div class="cm-empty" style="padding:12px">未记录黑话库</div>';
+ var ruleItems=[],ruleSeen={};
+ safeArr(ac.scoring_rules).forEach(function(r){
+   var name=ruleSimpleName(r);
+   var key=r.source||name;
+   var existing=ruleSeen[key];
+   if(existing){
+     if(toNum(r.score)>toNum(existing.score))existing.score=r.score;
+     if(toNum(importanceScores[r.importance])>toNum(importanceScores[existing.importance]))existing.importance=r.importance;
+     return;
+   }
+   ruleSeen[key]=r;
+   ruleItems.push(r);
+ });
+ var rules=ruleItems.map(function(r){
+   return '<div class="cm-rule-row"><b>'+attr(ruleSimpleName(r))+'</b><span>'+(importanceLabels[r.importance]||r.importance||"")+'</span>'+bd("info","+"+(r.score||0))+'</div>';
+ }).join("");
+ if(!rules)rules='<div class="cm-empty" style="padding:12px">'+(compat?"旧任务只保存了 Prompt/基础配置，未生成结构化评分规则。":"未记录评分规则")+'</div>';
+ var th=ac.thresholds||{};
+ return '<div class="cm-panel"><h2><i class="ti ti-settings"></i>本次审核配置</h2><p class="sub">当前任务实际运行使用的审核配置，仅供查看，不可修改。</p>'
+  +'<div class="cm-config-grid cm-config-meta"><div>'+kv("来源模板",sourceTemplate||"-")+kv("修订版本",compat?"兼容配置":"Revision "+cur.version)+kv("检测范围",caps)+'</div><div>'+kv("风险阈值","高危≥"+(th.high||80)+" · 中危≥"+(th.medium||60)+" · 待复核≥"+(th.review||40))+kv("生效时间",fmtTime(cur.effective_from))+'</div></div>'
+  +'<div class="cm-config-grid"><div><h3>黑话库</h3><div class="cm-kp-list">'+libCards+'</div></div><div><h3>评分规则</h3><div class="cm-rule-list">'+rules+'</div></div></div></div>';
+}
+function renderConfigHistory(t){
+ if(!t.apiJobId)return "";
+ var loaded=Object.prototype.hasOwnProperty.call(st.jobRevisions,t.id);
+ if(!loaded){loadTaskDetail(t.id);return '<div class="cm-panel"><h2><i class="ti ti-history"></i>配置历史</h2><p class="sub">正在读取配置历史，稍后会自动刷新。</p></div>';}
+ var revs=st.jobRevisions[t.id]||[];
+ if(!revs.length){
+   var j=t.apiJob||{};
+   var libs=safeArr(j.library_ids).map(knowledgeLabel).join(" / ")||"未记录";
+   var prompt=(j.prompt_profile_snapshot&&j.prompt_profile_snapshot.prompt_version)||"-";
+   return '<div class="cm-panel"><h2><i class="ti ti-history"></i>配置历史</h2><p class="sub">这是旧任务，创建时还没有 Revision 表；这里直接展示当前兼容配置，后续点击“更新审核策略”会生成正式 Revision。</p><div class="cm-rel-node"><b>兼容配置 · 当前使用</b><span>自定义审核配置 · '+libs+' · Prompt '+prompt+'</span></div></div>';
+ }
+ var current=t.apiJob.current_audit_config_revision_id;
+ var rows="";for(var i=0;i<revs.length;i++){var r=revs[i],ac=r.audit_config||{};rows+='<div class="cm-rel-node"><b style="display:flex;justify-content:space-between;gap:8px">Revision '+r.version+(r.id===current?' · 当前使用':' · 历史配置')+'<span>'+bd(r.id===current?"ok":"",r.id===current?"当前":"历史")+'</span></b><span>'+(r.source_policy_name||"自定义配置")+' '+(r.source_policy_version||"")+' · '+safeArr(ac.library_ids).map(knowledgeLabel).join(" / ")+' · Prompt '+((r.prompt_profile_snapshot||{}).prompt_version||"-")+'</span></div>';}
+ return '<div class="cm-panel"><h2><i class="ti ti-history"></i>配置历史</h2><p class="sub">升级策略只影响后续新分析结果，历史结果仍指向各自生成时的 Revision。</p>'+rows+'</div>';
+}
+
+function scTaskDetail(){
+ var t=getTask(st.taskId);
+ var outs=getTaskOutputs(t);
+ var pageKey=t.id||"current";
+ var pg=pageInfo(outs.length,st.taskOutputPage[pageKey],RESULT_PAGE_SIZE);
+ st.taskOutputPage[pageKey]=pg.page;
+ var shown=outs.slice(pg.start,pg.end);
+ var pager=renderListPager("taskOutputPage",pageKey,pg,"条");
+ var paused=t.status==="已暂停";
+ var hi=outs.filter(function(r){return r.level==="高危";}).length;
+ var plats={};outs.forEach(function(r){plats[r.platform]=(plats[r.platform]||0)+1;});
+ var platText=Object.keys(plats).map(function(k){return k+" "+plats[k]+" 条";}).join(" · ")||"暂无平台分布";
+ var logRows="";for(var i=0;i<t.log.length;i++){logRows+='<div class="cm-log-item"><em>'+t.log[i][0]+'</em><span>'+t.log[i][1]+'</span></div>';}
+ var cards="";
+ if(outs.length){for(var j=0;j<shown.length;j++)cards+=riskCard(shown[j]);}
+ else cards='<div class="cm-empty">任务正在采集或分析，暂无审核产出。完成分析后会自动出现在这里。</div>';
+ return ph("任务产出 · "+t.name,"运行状态、运行日志，以及本任务真实抓取到的审核产出内容",
+   '<button class="cm-btn" data-act="nav" data-screen="tasks"><i class="ti ti-arrow-left"></i>返回监控任务</button>'
+   +'<button class="cm-btn" data-act="taskPause" data-id="'+t.id+'"><i class="ti '+(paused?"ti-player-play":"ti-player-pause")+'"></i>'+(paused?"继续采集":"暂停采集")+'</button>'
+   +'<button class="cm-btn" data-act="taskPolicyOpen" data-id="'+t.id+'"><i class="ti ti-versions"></i>更新审核策略</button>'
+   +'<button class="cm-btn pri" data-act="taskBackfill" data-id="'+t.id+'"><i class="ti ti-refresh"></i>补抓近期内容</button>',
+   bd(paused?"warn":t.status.indexOf("完成")>-1?"ok":"info",t.status)+bd("info",t.type)+bd("","引用 "+t.config))
+  +'<div class="cm-2">'
+   +'<div class="cm-panel"><h2><i class="ti ti-activity"></i>任务运行</h2>'
+     +kv("运行状态",t.status)+kv("处理统计",t.progressText||"已抓取 0 · 已分析 0 · 待处理 0 · 失败 0")+kv("引用配置",t.config)+kv("采集对象",compactTargetText(t.target))+kv("最近运行",t.updated)
+     +'<div class="cm-mini" style="margin-top:12px"><button class="cm-btn sm" data-act="taskConfig" data-id="'+t.id+'"><i class="ti ti-settings"></i>调整配置</button><button class="cm-btn sm" data-act="taskTest" data-id="'+t.id+'"><i class="ti ti-flask"></i>测试引用策略</button></div></div>'
+   +'<div class="cm-panel"><h2><i class="ti ti-history"></i>运行日志</h2><p class="sub">最近抓取、命中与补抓记录（点「补抓」会追加）。完整日志可在此区域内滚动查看。</p><div class="cm-log-scroll">'+logRows+'</div></div>'
+  +'</div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-alert-triangle"></i>本任务产出内容</h2>'
+    +'<div class="cm-stats" style="margin-bottom:12px">'+stat("产出内容",""+outs.length,"条")+stat("其中高危",""+hi,"条","dang")+stat("平台",""+Object.keys(plats).length,"个")+stat("可进入询证",""+outs.length,"条","ok")+'</div>'
+    +'<p class="sub">'+platText+' · 点任意一条进入询证详情，可固证、归并用户</p>'
+    +pager+cards+(outs.length?pager:"")+'</div>'
+  +renderTaskAuditConfig(t)
+  +renderConfigHistory(t);
+}
+
+function scNewTask(){
+ var nt=st.nt;var sel=nt.type;
+ var types="";var order=["platform","live","user","video"];
+ for(var i=0;i<order.length;i++){var k=order[i];types+='<button class="cm-type '+(sel===k?"on":"")+'" data-act="ntType" data-type="'+k+'"><i class="ti '+typeIcon[k]+'"></i><b>'+typeTitle[k]+'</b><span>'+typeDesc[k]+'</span></button>';}
+ var scm=getScheme(nt.scheme);
+ var schemeOpts="";for(var j=0;j<schemes.length;j++){var s=schemes[j];schemeOpts+='<button class="cm-scheme '+(nt.scheme===s.id?"on":"")+'" data-act="ntScheme" data-id="'+s.id+'"><b>'+s.name+'</b><small>'+s.libIds.map(function(l){return getLib(l).name;}).join(" / ")+' · 适用 '+s.tasks+'</small></button>';}
+ return ph("新建监控任务","选择来源类型，配置采集对象与研判方案，创建后回到任务列表",
+   '<button class="cm-btn" data-act="nav" data-screen="tasks">取消</button><button class="cm-btn" data-act="saveDraft">保存草稿</button><button class="cm-btn pri" data-act="createTask">创建任务</button>')
+  +'<div class="cm-panel"><h2><span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--bg-accent);color:var(--text-accent);align-items:center;justify-content:center;font-size:11px">1</span>选择任务类型</h2><p class="sub">任务类型用独立措辞，避免和顶部导航同名误点。</p><div class="cm-types">'+types+'</div></div>'
+  +'<div class="cm-panel"><h2><span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--bg-accent);color:var(--text-accent);align-items:center;justify-content:center;font-size:11px">2</span>配置采集对象</h2><p class="sub">'+(sel==="video"?"选择本地视频文件。":"平台每个任务只选择一个；抓取范围与识别能力由研判方案决定。")+'</p>'+ntConfig(sel)+'</div>'
+  +'<div class="cm-2">'
+   +'<div class="cm-panel"><h2><span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--bg-accent);color:var(--text-accent);align-items:center;justify-content:center;font-size:11px">3</span>绑定研判方案</h2><p class="sub">方案决定检测什么、怎么判、产出什么。</p>'+schemeOpts
+     +'<div class="cm-cmt" style="margin-top:6px">知识库：'+scm.libIds.map(function(l){return getLib(l).name;}).join(" / ")+' · 判定：'+scm.modal+'（'+scm.conds.length+' 条）</div></div>'
+   +'<div class="cm-panel"><h2><i class="ti ti-eye"></i>任务预览</h2>'
+     +kvLive("任务名称",attr(nt.name),"nt-name-preview")+kv("来源类型",typeTitle[sel])+kvLive("采集对象",attr(compactTargetText(taskTargetText(nt))),"nt-target-preview")+kv("绑定方案",scm.name)+kv("风险范围",schemeCategoryText(scm))+kv("采集/分析方式",scm.modal||"未选择")+kv("预计产出",scm.outputs.join("、"))
+     +'<button class="cm-btn pri" style="width:100%;justify-content:center;margin-top:10px" data-act="createTask">创建任务</button></div>'
+  +'</div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-route"></i>创建后的数据流向</h2>'+flow("监控任务","执行采集 / 接入 / 上传")+flow("风险内容","异常内容进入风险研判工作台")+flow("询证详情","保留原贴、截图、片段、哈希")+flow("重点用户归并","把异常聚合到用户维度")+'</div>';
+}
+
+function methodText(ms){var map={keyword:"黑话关键词",tag:"话题标签",comment:"评论扩散",ocr:"图片/OCR","live-video":"实时画面",asr:"语音转写",danmu:"弹幕分析",replay:"回放补采",profile:"主页资料",posts:"发布内容",interaction:"互动关系",live:"直播行为",frame:"逐帧视觉",keyframe:"关键帧导出"};return ms.map(function(m){return map[m]||m;}).join(" / ");}
+function schemeCategoryText(s){var cats=[];for(var i=0;i<s.libIds.length;i++){var c=getLib(s.libIds[i]).category;if(cats.indexOf(c)<0)cats.push(c);}return cats.join(" / ")||"未选择";}
+function attr(s){return String(s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function taskTargetText(nt){if(nt.type==="video")return nt.fileName||"待选择视频";var p=nt.platforms.join(" / ")||"待选择平台";if(nt.type==="user")return p+" · "+(nt.userUrl||"待填写用户 URL");return p;}
+function compactTargetText(text){
+ text=String(text||"").trim();
+ if(!text)return "";
+ var m=text.match(/^(.*?·\s*)?(https?:\/\/\S+)$/i);
+ if(m){
+   var prefix=String(m[1]||"").trim();
+   var url=String(m[2]||"").replace(/[\/?#]+$/,"");
+   var tail=url.slice(-10);
+   return (prefix?prefix+" ":"")+"用户尾号 "+tail;
+ }
+ return text;
+}
+
+function choice(title,desc,m){var on=st.nt.methods.indexOf(m)>-1;return '<label class="cm-choice '+(on?"on":"")+'" data-act="ntMethod" data-m="'+m+'"><i class="ti '+(on?"ti-checkbox":"ti-square")+'"></i><span><b>'+title+'</b><small>'+desc+'</small></span></label>';}
+function pill(name,kind){var arr=kind==="platform"?st.nt.platforms:[];var on=arr.indexOf(name)>-1;return '<button class="cm-pill '+(on?"on":"")+'" data-act="ntPlatform" data-v="'+name+'">'+name+'</button>';}
+
+function ntConfig(t){
+ var nameField='<label class="cm-field" style="margin-top:0"><span>任务名称</span><input id="nt-task-name" data-act="ntTaskName" value="'+attr(st.nt.name)+'" placeholder="例如 重点账号软色情巡查" /></label>';
+ if(t==="video")return nameField+'<div class="cm-frame"><i class="ti ti-upload"></i><span>'+(st.nt.fileName?"已选择："+attr(st.nt.fileName):"未选择文件")+'</span><input id="nt-video-file" type="file" accept="video/*" style="display:none"><button class="cm-btn sm" data-act="pickFile">选择本地视频文件</button></div>';
+ return nameField+'<div class="cm-pills">'+pill("抖音","platform")+pill("小红书","platform")+pill("快手","platform")+'</div>'
+  +(t==="user"?'<label class="cm-field"><span>用户 URL</span><input id="nt-user-url" data-act="ntUserUrl" value="'+attr(st.nt.userUrl)+'" placeholder="粘贴用户主页链接，例如 https://www.xiaohongshu.com/user/profile/..." /></label>':"");
+}
+
+function miniTable(hd,rows){var h="";for(var i=0;i<hd.length;i++)h+='<th>'+hd[i]+'</th>';var b="";for(var j=0;j<rows.length;j++){var c="";for(var k=0;k<rows[j].length;k++)c+='<td>'+rows[j][k]+'</td>';b+='<tr>'+c+'</tr>';}return '<table class="cm-table"><thead><tr>'+h+'</tr></thead><tbody>'+b+'</tbody></table>';}
+
+function scUsers(){
+ var u=getUser(st.userId);
+ var list="";for(var i=0;i<users.length;i++){var x=users[i];list+='<button class="cm-user '+(x.id===u.id?"on":"")+'" data-act="selUser" data-id="'+x.id+'"><b>'+x.account+'<span>'+(x.watched?bd("ok","观察中"):"")+bd("dang","风险 "+x.score)+'</span></b><span>'+x.platforms+'</span><small>'+x.scope+'</small></button>';}
+ var latest="";for(var j=0;j<u.latest.length;j++){var lv=j===0?"高危":"中危";latest+='<div class="cm-cmt"><span class="cm-bd '+(lv==="高危"?"dang":"warn")+'">'+lv+'</span> '+u.latest[j]+'</div>';}
+ var rel="";for(var k=0;k<u.related.length;k++){rel+='<div class="cm-rel-node"><b style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+u.related[k][0]+'<button class="cm-btn sm" data-act="userUnlink" data-idx="'+k+'">解除</button></b><span>'+u.related[k][1]+'</span></div>';}
+ if(!u.related.length)rel='<div class="cm-empty" style="padding:12px">关联账号已全部解除</div>';
+ var tlData=u.latest.concat(["自动生成监控产出","人工归并检查"]);var tl="";for(var m=0;m<tlData.length;m++){tl+='<div class="cm-tl-item"><em>06-'+(25+m)+'</em><span>'+tlData[m]+'</span></div>';}
+ return ph("重点用户监控","监控哪些账号、监控什么、抓到了什么、如何归并和持续观察",
+   '<button class="cm-btn" data-act="userBackfill"><i class="ti ti-refresh"></i>补抓近期发布</button><button class="cm-btn '+(u.watched?"":"pri")+'" data-act="userWatch"><i class="ti '+(u.watched?"ti-eye-off":"ti-eye")+'"></i>'+(u.watched?"取消持续观察":"加入持续观察")+'</button>',
+   bd(u.watched?"ok":"warn",u.watched?"持续观察中":"未持续观察")+bd("dang","风险分 "+u.score)+bd("info",u.account))
+  +'<div class="cm-2">'
+   +'<div class="cm-panel"><h2><i class="ti ti-user-search"></i>监控对象</h2><p class="sub">点击切换查看不同重点用户的持续观察详情。</p>'+list+'<button class="cm-btn sm" data-act="userAdd" style="width:100%;justify-content:center"><i class="ti ti-plus"></i>新增监控账号</button></div>'
+   +'<div class="cm-panel"><h2><i class="ti ti-alert-triangle"></i>最新异常内容</h2>'+kv("当前账号",u.account)+kv("平台",u.platforms)+kv("监控范围",u.scope)+'<h3>近期风险产出</h3>'+latest+'<h3>持续监控时间线</h3>'+tl+'</div>'
+  +'</div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-affiliate"></i>监控计划、关联与归并</h2><div class="cm-2"><div>'
+    +kv("绑定黑话库",u.libraries)+kv("分析策略",u.strategies)+kv("监控频率",u.freq)+'<h3>跨平台关联账号</h3>'+rel
+   +'</div><div><h3>证据链材料</h3><div class="cm-tiles">'+["原始链接","截图","视频片段","评论弹幕","哈希记录"].map(function(x,i){return '<div class="cm-tile"><i class="ti '+["ti-link","ti-screenshot","ti-movie","ti-message","ti-fingerprint"][i]+'"></i>'+x+'</div>';}).join("")+'</div>'
+    +'<div class="cm-mini" style="flex-direction:column;align-items:stretch;gap:8px;margin-top:12px">'
+     +'<button class="cm-btn pri" data-act="userExport"><i class="ti ti-package"></i>导出证据包</button>'
+     +'<button class="cm-btn" data-act="userPlan"><i class="ti ti-calendar-cog"></i>调整监控计划</button>'
+    +'</div></div></div></div>';
+}
+
+function schemeRefTasks(s){return tasks.filter(function(t){return t.config.indexOf(s.name)>-1;});}
+function libSchemes(id){return schemes.filter(function(s){return s.libIds.indexOf(id)>-1;});}
+function scopeDef(id){for(var i=0;i<scopeDefs.length;i++)if(scopeDefs[i].id===id)return scopeDefs[i];return scopeDefs[0];}
+function capDef(id){for(var i=0;i<capabilityDefs.length;i++)if(capabilityDefs[i].id===id)return capabilityDefs[i];return capabilityDefs[0];}
+function templateDef(id){for(var i=0;i<templateDefs.length;i++)if(templateDefs[i].id===id)return templateDefs[i];return templateDefs[0];}
+function cloneMap(obj){var o={};for(var k in obj){if(obj.hasOwnProperty(k))o[k]=obj[k];}return o;}
+function schemeCaps(s){
+ if(s.caps&&s.caps.length)return s.caps.slice();
+ var m=(s.modal||"").toLowerCase();var ids=[];
+ if(/文本|标题|正文|评论|弹幕|text/.test(s.modal||""))ids.push("text");
+ if(/ocr/.test(m))ids.push("ocr");
+ if(/asr|语音|口播|音频/.test(m))ids.push("asr");
+ if(/视觉|画面|图片|视频|关键帧|封面|vision/.test(s.modal||""))ids.push("vision");
+ if(/评论|弹幕|互动|comment/.test(s.modal||""))ids.push("comment");
+ var uniq=[];for(var i=0;i<ids.length;i++)if(uniq.indexOf(ids[i])<0)uniq.push(ids[i]);
+ ids=uniq;
+ if(!ids.length)ids=["text","ocr","asr","vision","comment"];
+ return ids;
+}
+function schemeScopes(s){if(s.scopes&&s.scopes.length)return s.scopes.slice();return ["title_body","comment","image","video","audio"];}
+function schemeTemplate(s){return s.template||"balanced";}
+function schemeImportance(s){var t=templateDef(schemeTemplate(s));var m=s.ruleImportance?cloneMap(s.ruleImportance):cloneMap(t.weights);var ids=schemeCaps(s);for(var i=0;i<ids.length;i++)if(!m[ids[i]])m[ids[i]]=t.weights[ids[i]]||"medium";return m;}
+function capsToModal(ids){var labels=[];for(var i=0;i<capabilityDefs.length;i++)if(ids.indexOf(capabilityDefs[i].id)>-1)labels.push(capabilityDefs[i].short);return labels.join(" / ")||"文本";}
+function thresholdsFromText(text){var t=text||"";function pick(name,fb){var re=new RegExp(name+"[^0-9]*(\\d+)");var m=t.match(re);return m?parseInt(m[1],10):fb;}return {high:pick("高危",85),medium:pick("中危",65),review:pick("待复核",45)};}
+function thresholdsOf(s){return s.thresholds||thresholdsFromText(s.th);}
+function thresholdsText(th){return "高危≥"+th.high+" · 中危≥"+th.medium+" · 待复核≥"+th.review;}
+function readThresholds(prefix,fb){function num(id,val){var e=document.getElementById(prefix+"-"+id);var n=e?parseInt(e.value,10):NaN;return isNaN(n)?val:Math.max(0,Math.min(100,n));}return {high:num("high",fb.high),medium:num("medium",fb.medium),review:num("review",fb.review)};}
+function scoringRulesForScheme(s){
+ var out=[],libs=s.libIds||[],caps=schemeCaps(s),imp=schemeImportance(s),tmpl=templateDef(schemeTemplate(s)).weights;
+ var sources=["keyword"].concat(caps);
+ for(var li=0;li<libs.length;li++){
+   var L=getLib(libs[li]),bid=libraryBackendId(libs[li]),cat=L.category||L.name||bid;
+   for(var si=0;si<sources.length;si++){
+     var src=sources[si],level=imp[src]||tmpl[src]||"medium",score=importanceScores[level]||0;
+     if(score<=0)continue;
+     out.push({id:src+"_"+bid,label:cat+(src==="keyword"?"关键词/黑话命中":capDef(src).rule),source:src,library_id:bid,category:cat,importance:level,score:score});
+   }
+ }
+ return out;
+}
+function schemePolicyPayload(s){
+ var th=thresholdsOf(s),imp=schemeImportance(s);
+ return {name:s.name||"未命名研判方案",description:"",library_ids:(s.libIds||[]).map(libraryBackendId),capabilities:schemeCaps(s),scoring_template:schemeTemplate(s),
+  rule_snapshot:{thresholds:th,scoring_rules:scoringRulesForScheme(s),rule_importance:imp},config:{library_ids:(s.libIds||[]).map(libraryBackendId),capabilities:schemeCaps(s),scopes:schemeScopes(s),scoring_template:schemeTemplate(s),rule_importance:imp,outputs:s.outputs||deriveSchemeOutputs(s),rule_snapshot:{thresholds:th,scoring_rules:scoringRulesForScheme(s),rule_importance:imp}}};
+}
+function saveSchemePolicy(s,publish){
+ var payload=schemePolicyPayload(s),id=s.policyId||s.id,method=id&&String(id).indexOf("scx")!==0?"PATCH":"POST",path=method==="PATCH"?"/api/audit-policies/"+id:"/api/audit-policies";
+ st.apiLoading=true;R();
+ apiFetch(path,{method:method,body:JSON.stringify(payload)}).then(function(saved){
+   if(publish)return apiFetch("/api/audit-policies/"+saved.id+"/publish",{method:"POST"});
+   return saved;
+ }).then(function(saved){
+   st.schemeId=saved.id;st.cfgView=publish?"list":"scheme";st.pendingChanges=0;
+   return loadSaasData().then(function(){st.schemeId=saved.id;});
+ }).then(function(){toast(publish?"方案已发布":"方案已保存",payload.name+" 已入库");}).catch(function(err){toast(publish?"发布失败":"保存失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
+}
+function ruleRowsForCaps(ids,s){var imp=s?schemeImportance(s):cloneMap(templateDef(st.nsTemplate||"balanced").weights);var rows=[];for(var i=0;i<capabilityDefs.length;i++){var c=capabilityDefs[i];if(ids.indexOf(c.id)>-1){var level=imp[c.id]||"medium";rows.push([c.rule,importanceScores[level]+"分",c.source,c.id,level]);}}return rows;}
+function syncSchemeRules(s){var ids=schemeCaps(s);s.caps=ids;s.scopes=schemeScopes(s);s.template=schemeTemplate(s);s.ruleImportance=schemeImportance(s);s.modal=capsToModal(ids);s.conds=ruleRowsForCaps(ids,s);if(!s.thresholds)s.thresholds=thresholdsOf(s);s.th=thresholdsText(s.thresholds);}
+function choiceCard(def,on,act,key){return '<button class="cm-choice '+(on?"on":"")+'" data-act="'+act+'" data-'+key+'="'+def.id+'" type="button"><i class="ti '+(on?"ti-checkbox":"ti-square")+'"></i><span><b>'+def.label+'</b><small>'+def.desc+'</small></span></button>';}
+function scopeChoices(ids,act){var h="";for(var i=0;i<scopeDefs.length;i++)h+=choiceCard(scopeDefs[i],ids.indexOf(scopeDefs[i].id)>-1,act,"scope");return h;}
+function capChoices(ids,act){var h="";for(var i=0;i<capabilityDefs.length;i++)h+=choiceCard(capabilityDefs[i],ids.indexOf(capabilityDefs[i].id)>-1,act,"cap");return h;}
+function templateChoices(cur,act){var h="";for(var i=0;i<templateDefs.length;i++){var t=templateDefs[i];h+='<button class="cm-choice '+(cur===t.id?"on":"")+'" data-act="'+act+'" data-template="'+t.id+'" type="button"><i class="ti '+(cur===t.id?"ti-circle-check":"ti-circle")+'"></i><span><b>'+t.label+'</b><small>'+t.desc+'</small></span></button>';}return h;}
+function importanceSelect(action,cap,cur){var h='<select class="cm-mini-select" data-act="'+action+'" data-cap="'+cap+'">';for(var k in importanceLabels){if(importanceLabels.hasOwnProperty(k))h+='<option value="'+k+'" '+(cur===k?"selected":"")+'>'+importanceLabels[k]+'</option>';}return h+'</select>';}
+function scoreTotal(ids,s){var rows=ruleRowsForCaps(ids,s);var total=0;for(var i=0;i<rows.length;i++)total+=importanceScores[rows[i][4]]||0;return total;}
+function scoreRuleNote(ids,s){var total=scoreTotal(ids,s);return '<p class="sub">这里不是百分比权重，而是证据命中加分：单个风险类别内命中后累加，最高封顶 100 分；不同风险类别独立评分，总风险默认取最高类别分。当前启用规则最高 '+total+' 分。</p>';}
+function scoreRows(ids,s,action){var rows=ruleRowsForCaps(ids,s);var h="";for(var i=0;i<rows.length;i++){var d=capDef(rows[i][3]);var score=importanceScores[rows[i][4]];h+='<div class="cm-cond"><b>'+rows[i][0]+'</b><span class="w">重要程度</span>'+importanceSelect(action,rows[i][3],rows[i][4])+bd("",rows[i][2])+bd("info","命中 +"+score)+'</div>';}return h||'<div class="cm-empty" style="padding:12px">至少启用一种识别能力</div>';}
+function thresholdInputs(prefix,th){return '<div class="cm-num-grid"><label class="cm-num-card"><span>高危阈值</span><input id="'+prefix+'-high" type="number" min="0" max="100" value="'+th.high+'"></label><label class="cm-num-card"><span>中危阈值</span><input id="'+prefix+'-medium" type="number" min="0" max="100" value="'+th.medium+'"></label><label class="cm-num-card"><span>待复核阈值</span><input id="'+prefix+'-review" type="number" min="0" max="100" value="'+th.review+'"></label></div>';}
+function deriveSchemeTasks(s){var scopes=schemeScopes(s);var t=["平台内容"];if(scopes.indexOf("audio")>-1||scopes.indexOf("video")>-1)t.push("直播");if(scopes.indexOf("video")>-1||scopes.indexOf("image")>-1||scopes.indexOf("audio")>-1)t.push("本地视频");if(scopes.indexOf("comment")>-1)t.push("重点用户");var u=[];for(var i=0;i<t.length;i++)if(u.indexOf(t[i])<0)u.push(t[i]);return u.join(" / ");}
+function deriveSchemeOutputs(s){var ids=schemeCaps(s);var o=["风险内容"];for(var i=0;i<ids.length;i++){var src=capDef(ids[i]).source;if(o.indexOf(src)<0)o.push(src);}if(o.indexOf("询证材料")<0)o.push("询证材料");return o;}
+function recomputeScheme(s){syncSchemeRules(s);s.tasks=deriveSchemeTasks(s);s.outputs=deriveSchemeOutputs(s);}
+function flushScheme(s){s.name=val("sc-name")||s.name;s.thresholds=readThresholds("sc-th",thresholdsOf(s));recomputeScheme(s);}
+function seedSchemeTags(s){seedTags({});}
+function seedLibTags(L){seedTags({"lib-terms":(L.terms||[]).slice(),"lib-pk":(L.pk||[]).slice(),"lib-pt":(L.pt||[]).slice()});}
+function stp(n){return '<span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--bg-accent);color:var(--text-accent);align-items:center;justify-content:center;font-size:11px">'+n+'</span>';}
+
+function scConfig(){
+ if(st.cfgView==="scheme")return renderSchemePage();
+ if(st.cfgView==="schemeNew")return renderSchemeNew();
+ if(st.cfgView==="lib")return renderLibPage();
+ if(st.cfgView==="libNew")return renderLibNew();
+ return renderConfigList();
+}
+
+function renderConfigList(){
+ var pub=schemes.filter(function(s){return s.status==="已发布";}).length;
+ var grid="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px";
+ var sc="";
+ for(var i=0;i<schemes.length;i++){var s=schemes[i];var refs=schemeRefTasks(s);
+   sc+='<button class="cm-card clk" data-act="openScheme" data-id="'+s.id+'" style="width:100%;text-align:left;display:block;font:inherit;cursor:pointer;margin:0">'
+    +'<div class="cm-card-top">'+bd(s.status==="已发布"?"ok":"warn",s.status)+bd("info",s.libIds.length+" 知识库")+bd("",schemeCaps(s).length+" 项能力")+'<span class="t">'+s.id+'</span></div>'
+    +'<h3>'+s.name+'</h3>'
+    +'<div class="cm-tags"><span class="cm-tag"><i class="ti ti-book"></i>'+s.libIds.map(function(l){return getLib(l).name;}).join("、")+'</span><span class="cm-tag"><i class="ti ti-subtask"></i>适用 '+s.tasks+'</span></div>'
+    +'<div class="cm-card-foot"><span class="cm-acct">输出：'+s.outputs.join("、")+'</span><span class="cm-acct">被 <b>'+refs.length+'</b> 个任务引用</span></div>'
+   +'</button>';
+ }
+ var lb="";
+ for(var j=0;j<libraries.length;j++){var L=libraries[j];var used=libSchemes(L.id).length;
+   lb+='<button class="cm-card clk" data-act="openLib" data-id="'+L.id+'" style="width:100%;text-align:left;display:block;font:inherit;cursor:pointer;margin:0">'
+    +'<div class="cm-card-top">'+bd("info",L.category)+bd("",L.terms.length+" 词条")+'<span class="t">被 '+used+' 个方案使用</span></div>'
+    +'<h3>'+L.name+'</h3>'
+    +'<div class="cm-tags">'+L.terms.slice(0,8).map(function(t){return '<span class="cm-tag">'+t+'</span>';}).join("")+'</div>'
+   +'</button>';
+ }
+ return ph("配置底座","研判方案是对外使用主体：监控任务引用方案，方案再组合检测范围、检测能力与评分规则",
+   '<button class="cm-btn pri" data-act="cfgPublish"><i class="ti ti-rocket"></i>发布版本</button>',
+   bd("info","当前已发布 v"+st.cfgVersion)+(st.pendingChanges>0?bd("warn","待审核变更 "+st.pendingChanges):bd("ok","无待发布变更")))
+  +'<div class="cm-stats">'+stat("研判方案",""+schemes.length,"对外主体")+stat("已发布",""+pub,"启用","ok")+stat("黑话库",""+libraries.length,"可复用素材")+stat("待审核变更",""+st.pendingChanges,"草稿",st.pendingChanges>0?"warn":"ok")+'</div>'
+  +'<div class="cm-panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px"><h2 style="margin:0"><i class="ti ti-stack-2"></i>研判方案</h2><button class="cm-btn sm pri" data-act="schemeNewOpen"><i class="ti ti-plus"></i>新建方案</button></div><p class="sub">监控任务引用的就是方案。点方案查看/编辑它的检测范围、检测能力和风险评分规则。</p><div style="'+grid+'">'+sc+'</div></div>'
+  +'<div class="cm-panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px"><h2 style="margin:0"><i class="ti ti-book"></i>黑话库 · 可复用素材</h2><button class="cm-btn sm" data-act="libNewOpen"><i class="ti ti-plus"></i>新建黑话库</button></div><p class="sub">按风险分类维护的词库，可被多个方案复用。</p><div style="'+grid+'">'+lb+'</div></div>';
+}
+
+function renderSchemePage(){
+ var s=getScheme(st.schemeId);var refs=schemeRefTasks(s);
+ var libCards="";
+ for(var i=0;i<s.libIds.length;i++){var L=getLib(s.libIds[i]);
+   libCards+='<div class="cm-card" style="margin-bottom:10px"><div class="cm-card-top">'+bd("info",L.category)+bd("",L.terms.length+" 词条")+'<span class="cm-mini" style="margin-left:auto"><button class="cm-btn sm" data-act="openLib" data-id="'+L.id+'">编辑</button><button class="cm-btn sm" data-act="schemeUnbindLib" data-lib="'+L.id+'">移除</button></span></div><h3 style="margin:4px 0 6px">'+L.name+'</h3><div class="cm-tags">'+L.terms.map(function(t){return '<span class="cm-tag">'+t+'</span>';}).join("")+'</div></div>';
+ }
+ if(!s.libIds.length)libCards='<div class="cm-empty" style="padding:14px">尚未绑定黑话库，点右上角绑定或新建</div>';
+ var capIds=schemeCaps(s);
+ var scopeIds=schemeScopes(s);
+ var th=thresholdsOf(s);
+ var refList="";if(refs.length){for(var r=0;r<refs.length;r++)refList+='<div class="cm-rel-node"><b style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+refs[r].name+'<button class="cm-btn sm" data-act="taskOpen" data-id="'+refs[r].id+'">查看产出</button></b><span>'+refs[r].type+' · '+refs[r].status+' · 风险 '+refs[r].riskN+'</span></div>';}else refList='<div class="cm-empty" style="padding:12px">暂无监控任务引用该方案</div>';
+ return ph("研判方案 · "+s.name,"方案 = 检测范围 + 检测能力 + 风险评分规则 + 输出规则",
+   '<button class="cm-btn" data-act="cfgBack"><i class="ti ti-arrow-left"></i>返回配置底座</button><button class="cm-btn" data-act="schemeSave" data-id="'+s.id+'"><i class="ti ti-device-floppy"></i>保存</button><button class="cm-btn pri" data-act="schemePublish" data-id="'+s.id+'"><i class="ti ti-rocket"></i>发布</button>',
+  bd(s.status==="已发布"?"ok":"warn",s.status)+bd("info",s.id))
+  +'<div class="cm-panel"><h2><i class="ti ti-file-text"></i>方案基础</h2>'+finput("sc-name","方案名称",s.name,"")+'</div>'
+  +'<div class="cm-panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><h2 style="margin:0"><i class="ti ti-book"></i>风险范围 · 选择知识库</h2><span class="cm-mini"><button class="cm-btn sm" data-act="schemeBindOpen" data-id="'+s.id+'"><i class="ti ti-link"></i>绑定已有</button><button class="cm-btn sm" data-act="libNewFromScheme" data-id="'+s.id+'"><i class="ti ti-plus"></i>新建黑话库</button></span></div><p class="sub">知识库决定本方案要检测哪些风险类别，可多选组合；关键词只是知识包的一部分。</p>'+libCards+'</div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-layout-grid"></i>内容范围 · 选择要看哪里</h2><p class="sub">内容范围决定任务会从标题正文、评论、图片、视频、语音里找证据。</p><div class="cm-choices">'+scopeChoices(scopeIds,"schemeToggleScope")+'</div></div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-adjustments"></i>识别能力与评分规则</h2><p class="sub">这里用业务语言描述能力，系统会在后台映射到文本理解、画面文字识别、语音识别、视觉识别等模型步骤。</p>'
+    +'<h3>识别能力</h3><div class="cm-choices">'+capChoices(capIds,"schemeToggleCap")+'</div>'
+    +'<h3>规则模板</h3><div class="cm-choices">'+templateChoices(schemeTemplate(s),"schemeTemplate")+'</div>'
+    +'<h3>风险评分规则</h3>'+scoreRuleNote(capIds,s)+scoreRows(capIds,s,"schemeRuleImportance")
+    +'<div class="cm-mini" style="margin-top:10px"><button class="cm-btn sm" data-act="cfgTest"><i class="ti ti-flask"></i>测试方案</button></div>'
+    +'<h3 style="margin-top:14px">风险阈值</h3>'+thresholdInputs("sc-th",th)+'</div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-plug"></i>被哪些监控任务引用</h2>'+refList+'</div>';
+}
+
+function renderLibPage(){
+ var L=getLib(st.libId);var used=libSchemes(L.id);
+ var usedList="";if(used.length){for(var i=0;i<used.length;i++)usedList+='<div class="cm-rel-node"><b style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+used[i].name+'<button class="cm-btn sm" data-act="openScheme" data-id="'+used[i].id+'">查看方案</button></b><span>适用 '+used[i].tasks+'</span></div>';}else usedList='<div class="cm-empty" style="padding:12px">暂无方案使用该黑话库</div>';
+ return ph("黑话库 · "+L.name,"按风险分类维护的可复用词库：词条、变体、平台搜索词、平台标签",
+   '<button class="cm-btn" data-act="cfgBack"><i class="ti ti-arrow-left"></i>返回配置底座</button><button class="cm-btn" data-act="cfgImport"><i class="ti ti-upload"></i>批量导入</button><button class="cm-btn pri" data-act="libSave" data-id="'+L.id+'"><i class="ti ti-device-floppy"></i>保存黑话库</button>',
+   bd("info",L.category)+bd("",L.terms.length+" 词条")+bd("",used.length+" 个方案在用"))
+  +'<div class="cm-panel"><h2><i class="ti ti-file-text"></i>基础信息</h2><div class="cm-2">'+finput("lib-cat","风险分类",L.category,"")+finput("lib-name","词库名称与版本",L.name,"")+'</div></div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-vocabulary"></i>词条与平台配置</h2>'+taginput("lib-terms","黑话词 / 变体","输入后回车添加")+'<div class="cm-2">'+taginput("lib-pk","平台搜索词","输入后回车添加")+taginput("lib-pt","平台标签","输入后回车添加")+'</div></div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-plug"></i>被哪些方案使用</h2>'+usedList+'</div>';
+}
+
+function finput(id,label,val,ph){return '<label style="display:block;margin-bottom:10px"><span style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px">'+label+'</span><input id="'+id+'" value="'+(val||"")+'" placeholder="'+(ph||"")+'" style="width:100%;height:34px;padding:0 10px;border:0.5px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--text-primary);font:inherit;font-size:13px"/></label>';}
+function tagChipHtml(key,value,idx){return '<span class="cm-chip-tag">'+attr(value)+'<button type="button" data-act="tagDel" data-key="'+attr(key)+'" data-idx="'+idx+'" data-value="'+attr(value)+'" tabindex="-1" aria-label="删除标签"><i class="ti ti-x"></i></button></span>';}
+function taginput(key,label,ph){var arr=st.tags[key]||[];var chips="";for(var i=0;i<arr.length;i++){chips+=tagChipHtml(key,arr[i],i);}return '<label style="display:block;margin-bottom:10px"><span style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px">'+label+'</span><div class="cm-taginput" data-act="tagFocus" data-key="'+attr(key)+'">'+chips+'<input class="cm-tagfield" data-key="'+attr(key)+'" placeholder="'+attr(ph||"输入后回车添加")+'" /></div></label>';}
+function splitTagText(text){return String(text||"").split(/，/).map(function(s){return s.trim();}).filter(Boolean);}
+function tagVals(key){var arr=(st.tags[key]||[]).slice();var inp=document.querySelector('.cm-tagfield[data-key="'+key+'"]');if(inp&&inp.value.trim()){splitTagText(inp.value).forEach(function(x){arr.push(x);});}return arr;}
+function seedTags(obj){st.tags={};for(var k in obj){if(obj.hasOwnProperty(k))st.tags[k]=obj[k].slice();}}
+function libPayloadFromForm(prefix,existing){
+ var title=val(prefix+"-name")||(existing&&existing.name)||"自定义词库";
+ return {id:existing&&existing.backendId?existing.backendId:"",title:title,risk_label:val(prefix+"-cat")||(existing&&existing.category)||"",terms:uniqueList(tagVals(prefix+"-terms")),platform_keywords:uniqueList(tagVals(prefix+"-pk")),platform_tags:uniqueList(tagVals(prefix+"-pt"))};
+}
+function saveLexiconLibrary(L,isNew,returnSchemeId){
+ var prefix=isNew?"nl":"lib",payload=libPayloadFromForm(prefix,L),path=isNew?"/api/lexicons":"/api/lexicons/"+(L.backendId||libraryBackendId(L.id)),method=isNew?"POST":"PATCH";
+ if(!payload.terms.length&&!payload.platform_keywords.length&&!payload.platform_tags.length){toast("请至少填写一个词","黑话词、平台搜索词或平台标签至少需要一个");return;}
+ st.apiLoading=true;R();
+ apiFetch(path,{method:method,body:JSON.stringify(payload)}).then(function(data){
+   var saved=data.category,uiId=libraryUiId(saved.id);
+   return loadSaasData().then(function(){return {saved:saved,uiId:uiId};});
+ }).then(function(res){
+   if(returnSchemeId){var rs=getScheme(returnSchemeId);if(rs&&rs.libIds.indexOf(res.uiId)<0){rs.libIds.push(res.uiId);recomputeScheme(rs);}st.schemeId=returnSchemeId;st.libReturn=null;st.cfgView="scheme";toast("黑话库已新建并绑定",(payload.title||"黑话库")+" 已入库，保存方案后绑定关系生效");}
+   else{st.libId=res.uiId;st.cfgView="list";toast(isNew?"黑话库已新建":"黑话库已保存",(payload.title||"黑话库")+" 已入库");}
+ }).catch(function(err){toast("黑话库保存失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
+}
+
+function renderSchemeNew(){
+ var libChk="";for(var i=0;i<libraries.length;i++)libChk+='<label class="cm-choice"><input type="checkbox" class="cfg-lib" value="'+libraries[i].id+'"/><span><b>'+libraries[i].category+'</b><small>'+libraries[i].name+' · '+libraries[i].terms.length+' 词条</small></span></label>';
+ var nsTh={high:85,medium:65,review:45};
+ return ph("新建研判方案","命名 → 选择风险范围与内容范围 → 选择识别能力 → 套用规则模板 → 设置风险阈值",
+   '<button class="cm-btn" data-act="cfgBack"><i class="ti ti-arrow-left"></i>取消</button><button class="cm-btn pri" data-act="schemeCreate"><i class="ti ti-device-floppy"></i>保存方案</button>')
+  +'<div class="cm-panel"><h2>'+stp("1")+'方案名称</h2>'+finput("ns2-name","方案名称","","例如 赌博引流研判方案")+'</div>'
+  +'<div class="cm-panel"><h2>'+stp("2")+'风险范围</h2><p class="sub">勾选要用的知识库（可多选）。知识库决定检测哪些风险类别。</p><div class="cm-choices">'+libChk+'</div></div>'
+  +'<div class="cm-panel"><h2>'+stp("3")+'内容范围</h2><p class="sub">选择本方案需要查看哪些内容位置。</p><div class="cm-choices">'+scopeChoices(st.nsScopes,"nsToggleScope")+'</div></div>'
+  +'<div class="cm-panel"><h2>'+stp("4")+'识别能力与评分规则</h2><p class="sub">业务用户选择能力和模板即可，系统在后台生成对应 Prompt 与结构化输出要求。</p><h3>识别能力</h3><div class="cm-choices">'+capChoices(st.nsCaps,"nsToggleCap")+'</div><h3>规则模板</h3><div class="cm-choices">'+templateChoices(st.nsTemplate,"nsTemplate")+'</div><h3>风险评分规则</h3>'+scoreRuleNote(st.nsCaps,{ruleImportance:st.nsImportance||cloneMap(templateDef(st.nsTemplate).weights),template:st.nsTemplate,caps:st.nsCaps})+scoreRows(st.nsCaps,{ruleImportance:st.nsImportance||cloneMap(templateDef(st.nsTemplate).weights),template:st.nsTemplate,caps:st.nsCaps},"nsRuleImportance")+'<h3 style="margin-top:14px">风险阈值</h3>'+thresholdInputs("ns2-th",nsTh)+'</div>';
+}
+
+function renderLibNew(){
+ return ph("新建黑话库","维护风险分类、词条与变体、平台搜索词和平台标签",
+   '<button class="cm-btn" data-act="cfgBack"><i class="ti ti-arrow-left"></i>取消</button><button class="cm-btn pri" data-act="libCreate"><i class="ti ti-device-floppy"></i>保存黑话库</button>')
+  +'<div class="cm-panel"><h2><i class="ti ti-book"></i>新增黑话库</h2><div class="cm-2">'+finput("nl-cat","风险分类","","例如 赌博 / 诈骗")+finput("nl-name","词库名称与版本","","例如 自定义词库 v1.0")+'</div>'
+   +taginput("nl-terms","黑话词 / 变体","输入后回车添加")+'<div class="cm-2">'+taginput("nl-pk","平台搜索词","输入后回车添加")+taginput("nl-pt","平台标签","输入后回车添加")+'</div></div>';
+}
+
+function screen(){
+ switch(st.screen){
+  case "workbench":return scWorkbench();
+  case "evidence":return scEvidence();
+  case "tasks":return scTasks();
+  case "taskDetail":return scTaskDetail();
+  case "newTask":return scNewTask();
+  case "users":return scUsers();
+  case "config":return scConfig();
+ }
+ return "";
+}
+
+function renderModal(){var m=st.modal;return '<div class="cm-modal-bg" data-act="modalBg"><div class="cm-modal"><div class="cm-modal-head"><div><h2>'+m.title+'</h2>'+(m.sub?'<p>'+m.sub+'</p>':'')+'</div><button class="cm-x" data-act="modalClose" aria-label="关闭"><i class="ti ti-x"></i></button></div><div class="cm-modal-body">'+m.body+'</div></div></div>';}
+
+function R(){shell.innerHTML=top()+'<div class="cm-body">'+screen()+'</div>'+(st.modal?renderModal():"");if(st.focusKey){var f=shell.querySelector('.cm-tagfield[data-key="'+st.focusKey+'"]');if(f)f.focus();st.focusKey=null;}}
+function refreshTags(key){var c=shell.querySelector('.cm-taginput[data-key="'+key+'"]');if(!c)return;var inp=c.querySelector('.cm-tagfield');[].slice.call(c.querySelectorAll('.cm-chip-tag')).forEach(function(x){x.remove();});var arr=st.tags[key]||[];for(var i=0;i<arr.length;i++){var wrap=document.createElement("span");wrap.innerHTML=tagChipHtml(key,arr[i],i);c.insertBefore(wrap.firstChild,inp);}if(inp)inp.focus();}
+function removeTagValue(key,idx,value){var arr=st.tags[key];if(!arr)return false;var i=parseInt(idx,10);if(!isFinite(i)||i<0||i>=arr.length)i=value?arr.indexOf(value):-1;if(value&&arr[i]!==value){var byValue=arr.indexOf(value);if(byValue<0)return false;i=byValue;}if(i<0||i>=arr.length)return false;arr.splice(i,1);return true;}
+function refreshNsConds(){var c=shell.querySelector("#ns-conds");if(!c)return;var h="";for(var i=0;i<st.nsConds.length;i++)h+='<div class="cm-cond"><b>'+st.nsConds[i][0]+'</b><span class="w">权重 '+st.nsConds[i][1]+'</span><button class="cm-btn sm" data-act="nsDelCond" data-idx="'+i+'" style="margin-left:auto">删除</button></div>';if(!st.nsConds.length)h='<div class="cm-empty" style="padding:12px">还没有判定条件，下面添加至少一条</div>';c.innerHTML=h;}
+
+function toggle(arr,v){var i=arr.indexOf(v);if(i>-1)arr.splice(i,1);else arr.push(v);}
+function val(id){var e=document.getElementById(id);return e?e.value.trim():"";}
+function splitList(s){return s.split(/[,\s/、]+/).filter(Boolean);}
+
+root.addEventListener("click",function(e){
+ var el=e.target.closest("[data-act]");if(!el)return;
+ if(["INPUT","TEXTAREA","SELECT"].indexOf(el.tagName)>-1)return;
+ var a=el.dataset.act,d=el.dataset,msg=null;
+ if(a==="modalBg"){if(e.target!==el)return;st.modal=null;}
+ else if(a==="modalClose"){st.modal=null;}
+ else if(a==="nav"){st.screen=d.screen;st.modal=null;if(d.screen==="config")st.cfgView="list";}
+ else if(a==="filter"){st.filters[d.kind]=d.val;st.riskPage=1;}
+ else if(a==="resetFilter"){st.filters={category:"全部",source:"全部",level:"全部",status:"全部"};st.riskPage=1;}
+ else if(a==="openEvidence"){st.riskId=d.id;st.screen="evidence";loadRiskDetail(d.id);}
+ else if(a==="secure"){var r=getRisk(d.id);if(r.status!=="已固证"){r.status="已固证";}msg=["证据已固证",d.id+" 已生成保全记录"];}
+ else if(a==="merge"){
+   var rr=getRisk(d.id);var u=userByAccount(rr.account);
+   if(!u){u={id:"ux"+(++cnt),account:rr.account,platforms:rr.platform,scope:"主页 · 发布 · 评论互动",score:70,libraries:rr.library,strategies:rr.strategy,freq:"每 2 小时",latest:[],related:[],watched:true};users.push(u);}
+   if(u.latest.indexOf(rr.title+" · 已归并")<0)u.latest.unshift(rr.title+" · 已归并");
+   u.watched=true;rr.linked=u.account;st.userId=u.id;st.screen="users";st.modal=null;
+   msg=["已归并到重点用户",rr.account+" · 该风险已挂载到重点用户监控"];
+ }
+ else if(a==="taskOpen"){st.taskId=d.id;st.screen="taskDetail";loadTaskDetail(d.id);}
+ else if(a==="selectEvidenceGroup"){st.activeEvidenceGroup[d.rid]=d.group;}
+ else if(a==="toggleEvidenceGroup"){st.openEvidenceGroups[d.gid]=!st.openEvidenceGroups[d.gid];}
+ else if(a==="moreEvidenceGroup"){st.moreEvidenceGroups[d.gid]=true;}
+ else if(a==="originalGalleryPrev"){var gp=Number(d.count||0),gi=Number(st.originalGalleryIdx[d.id]||0);if(gp>1)st.originalGalleryIdx[d.id]=(gi-1+gp)%gp;}
+ else if(a==="originalGalleryNext"){var gn=Number(d.count||0),gj=Number(st.originalGalleryIdx[d.id]||0);if(gn>1)st.originalGalleryIdx[d.id]=(gj+1)%gn;}
+ else if(a==="originalGalleryPick"){st.originalGalleryIdx[d.id]=Number(d.idx||0);}
+ else if(a==="originalVideoPrev"){var vp=Number(d.count||0),vi=Number(st.originalVideoIdx[d.id]||0);if(vp>1)st.originalVideoIdx[d.id]=(vi-1+vp)%vp;}
+ else if(a==="originalVideoNext"){var vn=Number(d.count||0),vj=Number(st.originalVideoIdx[d.id]||0);if(vn>1)st.originalVideoIdx[d.id]=(vj+1)%vn;}
+ else if(a==="commentPrev"){var cp=Number(d.count||1),ci=Number(st.commentPage[d.id]||1);st.commentPage[d.id]=Math.max(1,ci-1);}
+ else if(a==="commentNext"){var cn=Number(d.count||1),cj=Number(st.commentPage[d.id]||1);st.commentPage[d.id]=Math.min(cn,cj+1);}
+ else if(a==="riskPagePrev"){var rp=Number(st.riskPage||1);st.riskPage=Math.max(1,rp-1);}
+ else if(a==="riskPageNext"){var rn=Number(d.count||1),rq=Number(st.riskPage||1);st.riskPage=Math.min(rn,rq+1);}
+ else if(a==="taskOutputPagePrev"){var tpKey=d.id||"current",top=Number(st.taskOutputPage[tpKey]||1);st.taskOutputPage[tpKey]=Math.max(1,top-1);}
+ else if(a==="taskOutputPageNext"){var tnKey=d.id||"current",ton=Number(d.count||1),toq=Number(st.taskOutputPage[tnKey]||1);st.taskOutputPage[tnKey]=Math.min(ton,toq+1);}
+ else if(a==="taskPause"){var tp=getTask(d.id);if(tp.apiJobId){apiFetch("/api/jobs/"+tp.apiJobId+"/control",{method:"POST",body:JSON.stringify({action:tp.status==="已暂停"?"backfill_analysis":"pause_crawl"})}).then(function(){return loadSaasData();}).then(function(){toast(tp.status==="已暂停"?"任务已继续":"任务已暂停",tp.name);}).catch(function(err){toast("操作失败",String(err.message||err).slice(0,100));});return;}if(tp.status==="已暂停"){tp.status="运行中";tp.log.unshift([nowStamp(),"任务已恢复采集"]);msg=["任务已继续",tp.name+" 恢复采集"];}else{tp.status="已暂停";tp.log.unshift([nowStamp(),"人工暂停采集"]);msg=["任务已暂停",tp.name+" 已停止采集"];}}
+ else if(a==="taskBackfill"){var tb=getTask(d.id);if(tb.apiJobId){apiFetch("/api/jobs/"+tb.apiJobId+"/control",{method:"POST",body:JSON.stringify({action:"backfill_analysis"})}).then(function(){return loadSaasData();}).then(function(){toast("补抓任务已创建",tb.name);}).catch(function(err){toast("补抓失败",String(err.message||err).slice(0,100));});return;}var batch="KW-"+(1000+(++cnt));tb.log.unshift([nowStamp(),"补抓批次 "+batch+" 已创建，采集近 7 天内容"]);tb.riskN+=3;msg=["补抓任务已创建",tb.name+" · 批次 "+batch];}
+ else if(a==="taskPolicyOpen"){var tpo=getTask(d.id);if(!tpo.apiJobId){msg=["静态样例不能更新策略","真实后端任务可生成新 Revision"];}else{var body="";for(var pp=0;pp<st.policies.length;pp++){var p=st.policies[pp];body+='<div class="cm-list-row"><span><b>'+p.name+'</b><br><small style="color:var(--text-secondary)">'+(p.published_version||p.draft_version||"draft")+' · '+safeArr((p.published_config||p.config||{}).library_ids).map(knowledgeLabel).join(" / ")+'</small></span><button class="cm-btn sm pri g" data-act="taskPolicyApply" data-job="'+tpo.apiJobId+'" data-policy="'+p.id+'" style="margin-left:auto">使用</button></div>';}openModal("更新审核策略","生成新的任务配置 Revision，只影响后续新分析结果",body||'<div class="cm-empty">暂无可用策略模板</div>');}}
+ else if(a==="taskPolicyApply"){updateTaskPolicy(d.job,d.policy);return;}
+ else if(a==="taskConfig"){var tc=getTask(d.id);var sm=null;for(var li=0;li<schemes.length;li++)if(tc.config.indexOf(schemes[li].name)>-1)sm=schemes[li];sm=sm||schemes[0];st.schemeId=sm.id;seedSchemeTags(sm);st.cfgView="scheme";st.screen="config";msg=["已打开引用的研判方案",tc.name+" 使用 "+sm.name];}
+ else if(a==="taskTest"){var tt=getTask(d.id);openModal("策略测试 · "+tt.name,"用最近 100 条样本校验引用策略的命中效果",
+   '<div class="cm-stats" style="margin-bottom:12px">'+stat("样本","100","条")+stat("命中","37","条","dang")+stat("疑似","12","条","warn")+stat("命中率","37%","")+'</div>'
+   +miniTable(["样本类型","命中条件","预期结论"],[["平台内容","谐音暗号 / 跳转话术","进入风险研判"],["直播弹幕","口播暗号 / 跳转引导","生成弹幕截图"],["重点用户","相似话术 / 互动账号","进入用户归并线索"]])
+   +'<div class="cm-mini" style="margin-top:12px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">关闭</button><button class="cm-btn pri" data-act="modalClose">采纳并更新阈值</button></div>');}
+ else if(a==="exportReview"){
+   var fr=filtered();var body='<p class="sub">按当前筛选导出 '+fr.length+' 条风险内容摘要，可下载为复核清单。</p>';
+   for(var fi=0;fi<fr.length;fi++){var x=fr[fi];body+='<div class="cm-list-row">'+bd(lvlCls(x.level),x.level)+'<span><b>'+x.title+'</b><br><small style="color:var(--text-secondary)">'+x.platform+' · '+x.account+' · '+x.terms.join(" / ")+'</small></span><span class="g">'+x.id+'</span></div>';}
+   if(!fr.length)body+='<div class="cm-empty">当前筛选没有风险内容</div>';
+   body+='<div class="cm-mini" style="margin-top:14px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">关闭</button><button class="cm-btn pri" data-act="exportDone">下载复核清单</button></div>';
+   openModal("复核清单","共 "+fr.length+" 条待复核 / 已研判内容",body);
+ }
+ else if(a==="exportDone"){st.modal=null;msg=["复核清单已下载","review_list.csv 已生成"];}
+ else if(a==="confirmRisk"){var rc=getRisk(d.id);if(rc.apiResultId){apiFetch("/api/audit-results/"+rc.apiResultId+"/review",{method:"PATCH",body:JSON.stringify({status:"confirmed",note:"确认风险",reviewer:"saas-demo"})}).then(function(data){st.resultDetails[d.id]=data;return loadSaasData();}).then(function(){toast("风险结论已入库",rc.id+" 已标记为确认风险");}).catch(function(err){toast("入库失败",String(err.message||err).slice(0,100));});return;}rc.decision="已确认";msg=["风险结论已记录",rc.id+" 已标记为确认风险"];}
+ else if(a==="dismissRisk"){var rd=getRisk(d.id);if(rd.apiResultId){apiFetch("/api/audit-results/"+rd.apiResultId+"/review",{method:"PATCH",body:JSON.stringify({status:"dismissed",note:"排除误报",reviewer:"saas-demo"})}).then(function(data){st.resultDetails[d.id]=data;return loadSaasData();}).then(function(){toast("复核结论已入库",rd.id+" 已排除误报");}).catch(function(err){toast("入库失败",String(err.message||err).slice(0,100));});return;}rd.decision="已排除";msg=["复核结论已记录",rd.id+" 已排除误报"];}
+ else if(a==="backfillRisk"){var rb=getRisk(d.id);var tk=null;for(var ti2=0;ti2<tasks.length;ti2++)if(tasks[ti2].name===rb.task)tk=tasks[ti2];if(tk)tk.log.unshift([nowStamp(),"针对 "+rb.account+" 的补抓已创建"]);msg=["补抓任务已创建",rb.account+" 近期发布将补充采集"];}
+ else if(a==="saveDraft"){var dn="草稿 · "+typeTitle[st.nt.type]+"任务";tasks.push({id:"T-DRAFT"+(++cnt),name:dn,type:typeTitle[st.nt.type],target:st.nt.platforms.join(" / ")||"待配置",config:getScheme(st.nt.scheme).name,status:"草稿",prog:0,riskN:0,hot:0,updated:"刚刚",log:[[nowStamp(),"草稿已保存，尚未开始采集"]]});st.screen="tasks";msg=["草稿已保存","可在监控任务列表继续编辑并启动"];}
+ else if(a==="userBackfill"){var ub=getUser(st.userId);ub.latest.unshift("补抓近期发布 · 已加入采集队列");msg=["补抓任务已创建",ub.account+" 近期发布将补充采集"];}
+ else if(a==="userWatch"){var uw=getUser(st.userId);uw.watched=!uw.watched;msg=[uw.watched?"已加入持续观察":"已取消持续观察",uw.account];}
+ else if(a==="userUnlink"){var uu=getUser(st.userId);var ix=parseInt(d.idx,10);if(uu.related[ix]){var rem=uu.related[ix][0];uu.related.splice(ix,1);msg=["关联已移除",rem+" 关系进入待确认"];}}
+ else if(a==="userAdd"){seedTags({"ua-plat":["抖音"],"ua-scope":["主页","发布","评论互动"],"ua-lib":["违规引流 v1.8"]});openModal("新增监控账号","填写账号主页与监控范围，加入重点用户监控",
+   finput("ua-acc","账号 / 主页","","例如 User_66**08")+taginput("ua-plat","平台","输入平台后回车")+taginput("ua-scope","监控范围","如 主页、发布，回车添加")+taginput("ua-lib","绑定黑话库","输入词库后回车")
+   +'<div class="cm-mini" style="margin-top:12px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">取消</button><button class="cm-btn pri" data-act="userAddSave">保存并加入监控</button></div>');}
+ else if(a==="userAddSave"){var acc=val("ua-acc")||"新监控账号";var ap=tagVals("ua-plat"),asc=tagVals("ua-scope"),al=tagVals("ua-lib");users.push({id:"ux"+(++cnt),account:acc,platforms:ap.length?ap.join(" / "):"抖音",scope:asc.length?asc.join(" · "):"主页 · 发布",score:65,libraries:al.length?al.join(" / "):"违规引流 v1.8",strategies:"多模态引流识别",freq:"每 2 小时",latest:["新加入监控，等待首轮采集"],related:[],watched:true});st.userId=users[users.length-1].id;st.modal=null;st.tags={};msg=["监控账号已新增",acc+" 已加入重点用户监控"];}
+ else if(a==="userPlan"){var up=getUser(st.userId);seedTags({"up-lib":up.libraries.split(/\s*\/\s*/),"up-str":up.strategies.split(/\s*\/\s*/),"up-scope":up.scope.split(/\s*·\s*/)});openModal("调整监控计划 · "+up.account,"修改监控频率、绑定黑话库与分析策略",
+   finput("up-freq","监控频率",up.freq,"")+taginput("up-lib","绑定黑话库","输入词库后回车")+taginput("up-str","分析策略","输入策略后回车")+taginput("up-scope","监控范围","输入范围后回车")
+   +'<div class="cm-mini" style="margin-top:12px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">取消</button><button class="cm-btn pri" data-act="userPlanSave">保存计划</button></div>');}
+ else if(a==="userPlanSave"){var us=getUser(st.userId);var pl=tagVals("up-lib"),ps=tagVals("up-str"),psc=tagVals("up-scope");us.freq=val("up-freq")||us.freq;if(pl.length)us.libraries=pl.join(" / ");if(ps.length)us.strategies=ps.join(" / ");if(psc.length)us.scope=psc.join(" · ");st.modal=null;st.tags={};msg=["监控计划已更新",us.account+" 的频率与配置已保存"];}
+ else if(a==="userExport"){var ue=getUser(st.userId);var linked=risks.filter(function(r){return r.account===ue.account||(r.linked&&ue.account.indexOf("**")>-1&&r.account===ue.account);});var body='<p class="sub">'+ue.account+' 的证据包包含以下材料与关联风险，可打包下载。</p><h3>证据材料</h3><div class="cm-tiles">'+["原始链接","主页截图","视频片段","评论弹幕","哈希记录"].map(function(x,i){return '<div class="cm-tile"><i class="ti '+["ti-link","ti-screenshot","ti-movie","ti-message","ti-fingerprint"][i]+'"></i>'+x+'</div>';}).join("")+'</div><h3>关联风险内容</h3>';
+   var lk=ue.latest.slice(0,4);for(var le=0;le<lk.length;le++)body+='<div class="cm-list-row"><i class="ti ti-file" style="color:var(--text-muted)"></i><span>'+lk[le]+'</span></div>';
+   body+='<div class="cm-mini" style="margin-top:14px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">关闭</button><button class="cm-btn pri" data-act="exportDone">下载证据包</button></div>';
+   openModal("导出证据包 · "+ue.account,"原始链接、截图、片段、评论弹幕与哈希记录",body);
+ }
+ else if(a==="cfgPublish"){st.cfgVersion++;st.pendingChanges=0;for(var sp=0;sp<schemes.length;sp++)schemes[sp].status="已发布";msg=["配置版本已发布","已发布 v"+st.cfgVersion+"，所有方案生效，新任务将使用最新配置"];}
+ else if(a==="cfgBack"){st.cfgView="list";}
+ else if(a==="openScheme"){st.schemeId=d.id;seedSchemeTags(getScheme(d.id));st.cfgView="scheme";}
+ else if(a==="openLib"){st.libId=d.id;seedLibTags(getLib(d.id));st.cfgView="lib";}
+ else if(a==="schemeNewOpen"){st.cfgView="schemeNew";st.tags={};st.nsConds=[];st.nsScopes=["title_body","comment","image","video","audio"];st.nsCaps=["text","ocr","asr","vision","comment"];st.nsTemplate="balanced";st.nsImportance=cloneMap(templateDef("balanced").weights);}
+ else if(a==="libNewOpen"){st.cfgView="libNew";st.tags={};st.libReturn=null;}
+ else if(a==="libNewFromScheme"){flushScheme(getScheme(d.id));st.libReturn=d.id;st.cfgView="libNew";st.tags={};}
+ else if(a==="schemeBindOpen"){var sob=getScheme(d.id);var pool=libraries.filter(function(L){return sob.libIds.indexOf(L.id)<0;});var body=pool.length?"":'<div class="cm-empty">全部黑话库都已绑定</div>';for(var pi=0;pi<pool.length;pi++)body+='<div class="cm-list-row">'+bd("info",pool[pi].category)+'<span><b>'+pool[pi].name+'</b></span><button class="cm-btn sm pri g" data-act="schemeBindLib" data-lib="'+pool[pi].id+'" style="margin-left:auto">绑定</button></div>';openModal("绑定已有黑话库","选择要加入 "+sob.name+" 的词库",body+'<div class="cm-mini" style="margin-top:12px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">关闭</button></div>');}
+ else if(a==="schemeBindLib"){var sbs=getScheme(st.schemeId);flushScheme(sbs);if(sbs.libIds.indexOf(d.lib)<0)sbs.libIds.push(d.lib);st.pendingChanges++;st.modal=null;msg=["已绑定黑话库",getLib(d.lib).name+" 已加入 "+sbs.name];}
+ else if(a==="schemeUnbindLib"){var sus=getScheme(st.schemeId);flushScheme(sus);var ui=sus.libIds.indexOf(d.lib);if(ui>-1)sus.libIds.splice(ui,1);st.pendingChanges++;msg=["已移除黑话库",getLib(d.lib).name+" 已从方案移除"];}
+ else if(a==="schemeToggleScope"){var sts=getScheme(st.schemeId);flushScheme(sts);var scp=schemeScopes(sts);var si0=scp.indexOf(d.scope);if(si0>-1&&scp.length===1){msg=["至少保留一个内容范围","需要知道任务要看哪里"];}else{toggle(scp,d.scope);sts.scopes=scp;recomputeScheme(sts);st.pendingChanges++;msg=["内容范围已更新",deriveSchemeTasks(sts)];}}
+ else if(a==="schemeToggleCap"){var stc=getScheme(st.schemeId);flushScheme(stc);var ids=schemeCaps(stc);var ci0=ids.indexOf(d.cap);if(ci0>-1&&ids.length===1){msg=["至少保留一种识别能力","需要至少一种能力来形成证据"];}else{toggle(ids,d.cap);stc.caps=ids;if(!stc.ruleImportance)stc.ruleImportance=cloneMap(templateDef(schemeTemplate(stc)).weights);recomputeScheme(stc);st.pendingChanges++;msg=["识别能力已更新",stc.modal];}}
+ else if(a==="schemeTemplate"){var stm=getScheme(st.schemeId);flushScheme(stm);stm.template=d.template;stm.ruleImportance=cloneMap(templateDef(d.template).weights);recomputeScheme(stm);st.pendingChanges++;msg=["规则模板已套用",templateDef(d.template).label];}
+ else if(a==="schemeAddCond"){var sac=getScheme(d.id);flushScheme(sac);var nc=val("sc-newc");if(nc){sac.conds.push([nc,val("sc-neww")||"10分","截图"]);recomputeScheme(sac);st.pendingChanges++;msg=["判定条件已添加",nc];}else msg=["请先填写判定条件",""];}
+ else if(a==="schemeDelCond"){var sdc=getScheme(st.schemeId);flushScheme(sdc);sdc.conds.splice(parseInt(d.idx,10),1);recomputeScheme(sdc);st.pendingChanges++;msg=["判定条件已删除",""];}
+ else if(a==="schemeSave"){var ss=getScheme(d.id);flushScheme(ss);if(st.apiReady){saveSchemePolicy(ss,false);return;}st.pendingChanges++;st.cfgView="list";msg=["方案已保存",ss.name+" 变更进入待发布版本"];}
+ else if(a==="schemePublish"){var sps=getScheme(d.id);flushScheme(sps);if(st.apiReady){saveSchemePolicy(sps,true);return;}sps.status="已发布";st.cfgVersion++;st.pendingChanges=0;msg=["方案已发布",sps.name+" 已发布 v"+st.cfgVersion];}
+ else if(a==="schemeCreate"){
+   var cnm=val("ns2-name")||"新研判方案";var clibs=[].slice.call(document.querySelectorAll(".cfg-lib:checked")).map(function(x){return x.value;});if(!clibs.length)clibs=[libraries[0].id];
+   var ccaps=st.nsCaps.length?st.nsCaps.slice():["text"];var cscopes=st.nsScopes.length?st.nsScopes.slice():["title_body"];var ctemplate=st.nsTemplate||"balanced";var cimp=st.nsImportance?cloneMap(st.nsImportance):cloneMap(templateDef(ctemplate).weights);var cth=readThresholds("ns2-th",{high:85,medium:65,review:45});
+   var draft={ruleImportance:cimp,template:ctemplate,caps:ccaps,thresholds:cth};var cmodal=capsToModal(ccaps);var cconds=ruleRowsForCaps(ccaps,draft);
+   var nid="scx"+(++cnt);schemes.push({id:nid,name:cnm,status:"草稿",libIds:clibs,scopes:cscopes,caps:ccaps,template:ctemplate,ruleImportance:cimp,thresholds:cth,modal:cmodal,th:thresholdsText(cth),conds:cconds,tasks:"",outputs:[]});
+   recomputeScheme(getScheme(nid));
+   if(st.apiReady){saveSchemePolicy(getScheme(nid),false);return;}
+   st.schemeId=nid;seedSchemeTags(getScheme(nid));st.cfgView="scheme";st.pendingChanges++;msg=["研判方案已新建",cnm+" 已创建，可继续编辑或发布"];
+ }
+ else if(a==="libSave"){var ls=getLib(d.id);if(st.apiReady){saveLexiconLibrary(ls,false,null);return;}ls.category=val("lib-cat")||ls.category;ls.name=val("lib-name")||ls.name;var lt=tagVals("lib-terms");var lpk2=tagVals("lib-pk");var lpt2=tagVals("lib-pt");if(!lt.length&&!lpk2.length&&!lpt2.length){msg=["请至少填写一个词","黑话词、平台搜索词或平台标签至少需要一个"];}else{ls.terms=lt;ls.pk=lpk2;ls.pt=lpt2;st.pendingChanges++;st.cfgView="list";msg=["黑话库已保存",ls.name+" 变更进入待发布版本"];}}
+ else if(a==="libCreate"){
+   var nlnm=val("nl-name")||"自定义词库 v1.0";var nlt=tagVals("nl-terms");if(!nlt.length)nlt=["自定义词"];
+   if(st.apiReady){saveLexiconLibrary(null,true,st.libReturn);return;}
+   var nlid="libx"+(++cnt);var nlpk=tagVals("nl-pk");var nlpt=tagVals("nl-pt");
+   libraries.push({id:nlid,category:val("nl-cat")||"自定义",name:nlnm,terms:nlt,pk:nlpk.length?nlpk:["自定义搜索词"],pt:nlpt.length?nlpt:["#自定义"]});
+   st.pendingChanges++;
+   if(st.libReturn){var rs=getScheme(st.libReturn);rs.libIds.push(nlid);st.schemeId=st.libReturn;st.libReturn=null;seedSchemeTags(rs);st.cfgView="scheme";msg=["黑话库已新建并绑定",nlnm+" 已加入方案"];}
+   else{st.libId=nlid;seedLibTags(getLib(nlid));st.cfgView="list";msg=["黑话库已新建",nlnm+" 已加入可复用素材"];}
+ }
+ else if(a==="nsAddCond"){var ncc=val("ns2-c");if(ncc){st.nsConds.push([ncc,val("ns2-w")||"10分","截图"]);var ci=document.getElementById("ns2-c");var wi=document.getElementById("ns2-w");if(ci)ci.value="";if(wi)wi.value="";refreshNsConds();}return;}
+ else if(a==="nsDelCond"){st.nsConds.splice(parseInt(d.idx,10),1);refreshNsConds();return;}
+ else if(a==="nsToggleScope"){var si1=st.nsScopes.indexOf(d.scope);if(si1>-1&&st.nsScopes.length===1){msg=["至少保留一个内容范围","需要知道任务要看哪里"];}else{toggle(st.nsScopes,d.scope);msg=["内容范围已更新",st.nsScopes.map(function(x){return scopeDef(x).label;}).join(" / ")];}}
+ else if(a==="nsToggleCap"){var ci1=st.nsCaps.indexOf(d.cap);if(ci1>-1&&st.nsCaps.length===1){msg=["至少保留一种识别能力","需要至少一种能力来形成证据"];}else{toggle(st.nsCaps,d.cap);if(!st.nsImportance)st.nsImportance=cloneMap(templateDef(st.nsTemplate||"balanced").weights);msg=["识别能力已更新",capsToModal(st.nsCaps)];}}
+ else if(a==="nsTemplate"){st.nsTemplate=d.template;st.nsImportance=cloneMap(templateDef(d.template).weights);msg=["规则模板已套用",templateDef(d.template).label];}
+ else if(a==="cfgImport"){openModal("批量导入语料","使用中文逗号分隔黑话词/变体，保存后加入当前黑话库",
+   '<textarea id="imp-text" class="cm-ta" placeholder="夜间兼职，一对一私聊，加V暗号"></textarea>'
+   +'<div class="cm-mini" style="margin-top:12px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">取消</button><button class="cm-btn pri" data-act="cfgImportSave">解析并入库</button></div>');}
+ else if(a==="cfgImportSave"){var lines=splitTagText(document.getElementById("imp-text")?document.getElementById("imp-text").value:"");if(!st.tags["lib-terms"])st.tags["lib-terms"]=[];var added=0;for(var im=0;im<lines.length;im++){if(st.tags["lib-terms"].indexOf(lines[im])<0){st.tags["lib-terms"].push(lines[im]);added++;}}st.modal=null;msg=["语料已导入","新增 "+added+" 条词条，保存黑话库后进入待发布变更"];}
+ else if(a==="cfgTest"){openModal("方案测试","用最近样本验证判定条件、权重与阈值",
+   '<div class="cm-stats" style="margin-bottom:12px">'+stat("样本","100","条")+stat("命中","41","条","dang")+stat("待复核","15","条","warn")+stat("命中率","41%","")+'</div>'
+   +miniTable(["样本类型","命中条件","预期结论"],[["平台内容","谐音暗号 / 跳转话术","进入风险研判工作台"],["直播弹幕","口播暗号","生成弹幕截图"],["重点用户","相似话术 / 互动账号","进入用户归并线索"]])
+   +'<div class="cm-mini" style="margin-top:12px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">关闭</button></div>');}
+ else if(a==="ntType"){st.nt.type=d.type;}
+ else if(a==="ntScheme"){st.nt.scheme=d.id;}
+ else if(a==="ntPlatform"){st.nt.platforms=[d.v];}
+ else if(a==="ntMethod"){toggle(st.nt.methods,d.m);}
+ else if(a==="pickFile"){var vf=document.getElementById("nt-video-file");if(vf)vf.click();return;}
+ else if(a==="createTask"){
+   st.nt.name=(val("nt-task-name")||st.nt.name||"未命名监控任务").trim();
+   if(st.nt.type==="user")st.nt.userUrl=(val("nt-user-url")||st.nt.userUrl||"").trim();
+   if(st.nt.type==="user"&&!st.nt.userUrl){msg=["请先填写用户 URL","重点用户监控需要明确主页链接"];}
+   else if(st.apiReady){submitCreateTask();return;}
+   else{
+   var nm=st.nt.name==="未命名监控任务"?typeTitle[st.nt.type]+" · 新任务":st.nt.name;
+   var exist=false;for(var z=0;z<tasks.length;z++)if(tasks[z].id==="T-NEW")exist=true;
+   var createScheme=getScheme(st.nt.scheme);
+   var newRow={id:"T-NEW",name:nm,type:typeTitle[st.nt.type],target:taskTargetText(st.nt),config:createScheme.name,status:"运行中",prog:8,riskN:0,hot:0,updated:"刚刚"};
+   if(exist){tasks[tasks.length-1]=newRow;}else{tasks.push(newRow);}
+   st.screen="tasks";msg=["任务已创建",nm+" 已开始采集，命中异常后进入工作台"];
+   }
+ }
+ else if(a==="selUser"){st.userId=d.id;}
+ else if(a==="tagFocus"){var tf=el.querySelector(".cm-tagfield");if(tf)tf.focus();return;}
+ else if(a==="tagDel"){e.preventDefault();e.stopPropagation();var btn=el.closest('button[data-act="tagDel"]')||el;var tk=btn.dataset.key;if(removeTagValue(tk,btn.dataset.idx,btn.dataset.value))refreshTags(tk);return;}
+ else if(a==="toast"){msg=[d.t,d.d||""];}
+ R();
+ if(msg)toast(msg[0],msg[1]);
+});
+
+root.addEventListener("input",function(e){
+ var el=e.target.closest("[data-act]");if(!el)return;
+ var a=el.dataset.act;
+ if(a==="ntTaskName"){
+   st.nt.name=el.value.trim();
+   var np=document.getElementById("nt-name-preview");if(np)np.textContent=st.nt.name||"未命名监控任务";
+ }
+ else if(a==="ntUserUrl"){
+   st.nt.userUrl=el.value.trim();
+   var pv=document.getElementById("nt-target-preview");if(pv)pv.textContent=compactTargetText(taskTargetText(st.nt));
+ }
+});
+
+root.addEventListener("change",function(e){
+ var fileEl=e.target.closest("#nt-video-file");
+ if(fileEl){
+   var f=fileEl.files&&fileEl.files[0];
+   if(f){st.nt.file=f;st.nt.fileName=f.name;st.nt.fileLoaded=true;R();toast("文件已选择",f.name);}
+   return;
+ }
+ var el=e.target.closest("select[data-act]");if(!el)return;
+ var a=el.dataset.act,d=el.dataset,msg=null;
+ if(a==="schemeRuleImportance"){
+   var sr=getScheme(st.schemeId);flushScheme(sr);if(!sr.ruleImportance)sr.ruleImportance=cloneMap(templateDef(schemeTemplate(sr)).weights);
+   sr.ruleImportance[d.cap]=el.value;recomputeScheme(sr);st.pendingChanges++;msg=["评分规则已更新",capDef(d.cap).rule+" · "+importanceLabels[el.value]];
+ }
+ else if(a==="nsRuleImportance"){
+   if(!st.nsImportance)st.nsImportance=cloneMap(templateDef(st.nsTemplate||"balanced").weights);
+   st.nsImportance[d.cap]=el.value;msg=["评分规则已更新",capDef(d.cap).rule+" · "+importanceLabels[el.value]];
+ }
+ R();
+ if(msg)toast(msg[0],msg[1]);
+});
+
+root.addEventListener("keydown",function(e){
+ var inp=e.target.closest(".cm-tagfield");if(!inp)return;
+ var key=inp.dataset.key;
+ if(e.key==="Enter"){
+   e.preventDefault();var parts=splitTagText(inp.value);if(!parts.length)return;
+   if(!st.tags[key])st.tags[key]=[];
+   parts.forEach(function(x){if(st.tags[key].indexOf(x)<0)st.tags[key].push(x);});
+   inp.value="";refreshTags(key);
+ } else if(e.key==="Backspace"&&inp.value===""){
+   if(st.tags[key]&&st.tags[key].length){st.tags[key].pop();refreshTags(key);}
+ }
+});
+
+R();
+loadSaasData().then(startAutoRefresh);
+	})();
+</script>
+</body>
+</html>

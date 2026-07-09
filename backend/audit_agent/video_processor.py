@@ -1,30 +1,59 @@
 from __future__ import annotations
 
 import json
+import os
+import re
+import shutil
 import subprocess
 from pathlib import Path
-
-import cv2
-import numpy as np
+from time import perf_counter
 
 from .config import settings
+from .remote_inference import RemoteInferenceClient
+
+cv2 = None
+np = None
+
+
+def _load_frame_deps() -> None:
+    global cv2, np
+    if cv2 is None or np is None:
+        import cv2 as cv2_module
+        import numpy as np_module
+
+        cv2 = cv2_module
+        np = np_module
 
 
 class DemoAudioProcessor:
     def __init__(self, model_size: str | None = None):
+        self.engine = settings.asr_engine
         self.model_size = model_size or settings.whisper_model
         self._model = None
         self.device = settings.whisper_device
         self.compute_type = settings.whisper_compute_type
         self._load_error = ""
+        self.last_extract_error = ""
+        self.remote = RemoteInferenceClient()
 
     def extract_audio(self, video_path: Path, output_dir: Path) -> Path | None:
         output_dir.mkdir(parents=True, exist_ok=True)
         audio_path = output_dir / "audio.wav"
+        self.last_extract_error = ""
+
+        ffmpeg_path = self._resolve_ffmpeg()
+        if not ffmpeg_path:
+            self.last_extract_error = "ffmpeg not found; install ffmpeg or set FFMPEG_PATH"
+            return None
+        if not video_path.exists():
+            self.last_extract_error = f"video file not found: {video_path}"
+            return None
+
         try:
-            subprocess.run(
+            completed = subprocess.run(
                 [
-                    "ffmpeg",
+                    ffmpeg_path,
+                    "-hide_banner",
                     "-i",
                     str(video_path),
                     "-vn",
@@ -37,14 +66,66 @@ class DemoAudioProcessor:
                     "-y",
                     str(audio_path),
                 ],
-                check=True,
                 capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
+            if completed.returncode != 0:
+                details = (completed.stderr or completed.stdout or "").strip()
+                self.last_extract_error = self._compact_error(
+                    f"ffmpeg exited with code {completed.returncode}: {details}"
+                )
+                return None
+            if not audio_path.exists() or audio_path.stat().st_size == 0:
+                self.last_extract_error = "ffmpeg produced no audio; the video may not contain an audio track"
+                return None
             return audio_path
-        except Exception:
+        except FileNotFoundError:
+            self.last_extract_error = f"ffmpeg command not found: {ffmpeg_path}"
+            return None
+        except Exception as exc:
+            self.last_extract_error = self._compact_error(str(exc))
             return None
 
+    def _resolve_ffmpeg(self) -> str:
+        configured = settings.ffmpeg_path
+        if configured:
+            configured_path = Path(configured).expanduser()
+            if configured_path.exists():
+                return str(configured_path)
+            found = shutil.which(configured)
+            if found:
+                return found
+
+        found = shutil.which("ffmpeg")
+        if found:
+            return found
+
+        for candidate in ("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"):
+            if Path(candidate).exists():
+                return candidate
+        return ""
+
+    def _compact_error(self, message: str, limit: int = 800) -> str:
+        message = " ".join((message or "").split())
+        if len(message) <= limit:
+            return message
+        return "..." + message[-limit:]
+
     def transcribe(self, audio_path: Path) -> dict:
+        if settings.use_remote_asr:
+            if not self.remote.asr_enabled:
+                return {"text": "", "segments": [], "error": "USE_REMOTE_ASR=true but REMOTE_ASR_BASE_URL/REMOTE_INFERENCE_BASE_URL is empty"}
+            return self.remote.transcribe(audio_path)
+
+        if self.engine == "dolphin":
+            return self._transcribe_dolphin(audio_path)
+        if self.engine != "whisper":
+            return {"text": "", "segments": [], "error": f"Unsupported ASR_ENGINE: {self.engine}"}
+        return self._transcribe_whisper(audio_path)
+
+    def _transcribe_whisper(self, audio_path: Path) -> dict:
         try:
             from faster_whisper import WhisperModel
         except Exception as exc:
@@ -58,10 +139,12 @@ class DemoAudioProcessor:
             word_timestamps=True,
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 500},
-            language="zh",
+            language=settings.asr_language or "zh",
         )
         segment_list = list(segments)
         result = {
+            "provider": "whisper",
+            "asr_engine": "whisper",
             "text": " ".join(seg.text for seg in segment_list),
             "language": info.language,
             "device": self.device if not self._load_error else "cpu",
@@ -88,6 +171,225 @@ class DemoAudioProcessor:
             result["fallback_reason"] = self._load_error
         return result
 
+    def _transcribe_dolphin(self, audio_path: Path) -> dict:
+        try:
+            import dolphin
+            from dolphin import transcribe
+        except Exception as exc:
+            return {"text": "", "segments": [], "error": f"Dolphin unavailable: {exc}"}
+
+        if settings.dolphin_audio_loader == "soundfile":
+            self._patch_torchaudio_load_with_soundfile()
+
+        if self._model is None:
+            model_dir = settings.dolphin_model_dir or None
+            if model_dir:
+                Path(model_dir).mkdir(parents=True, exist_ok=True)
+                try:
+                    self._model = dolphin.load_model(settings.dolphin_model, model_dir, settings.asr_device)
+                except TypeError:
+                    self._model = dolphin.load_model(settings.dolphin_model, device=settings.asr_device)
+            else:
+                self._model = dolphin.load_model(settings.dolphin_model, device=settings.asr_device)
+
+        lang_sym = settings.dolphin_lang_sym or settings.asr_language or "auto"
+        region_sym = settings.dolphin_region_sym or ""
+        decode_kwargs = {}
+        if lang_sym and lang_sym.lower() != "auto":
+            decode_kwargs["lang_sym"] = lang_sym
+            if region_sym and region_sym.upper() != "AUTO":
+                decode_kwargs["region_sym"] = region_sym
+        decode_kwargs["predict_time"] = settings.dolphin_predict_time
+        decode_kwargs["word_timestamp"] = settings.dolphin_word_timestamp
+        timestamp_warning = ""
+        try:
+            result = transcribe(self._model, str(audio_path), **decode_kwargs)
+        except TypeError as exc:
+            if "predict_time" not in str(exc) and "word_timestamp" not in str(exc):
+                raise
+            timestamp_warning = f"Dolphin timestamp options unsupported by installed package: {exc}"
+            decode_kwargs.pop("predict_time", None)
+            decode_kwargs.pop("word_timestamp", None)
+            result = transcribe(self._model, str(audio_path), **decode_kwargs)
+        payload = self._serializable(result)
+        text = self._extract_dolphin_text(result)
+        output = {
+            "provider": "dolphin",
+            "asr_engine": "dolphin",
+            "text": text,
+            "language": self._payload_value(payload, ("lang", "language", "lang_sym")) or lang_sym,
+            "region": self._payload_value(payload, ("region", "region_sym")) or region_sym,
+            "device": settings.asr_device,
+            "model": settings.dolphin_model,
+            "model_dir": settings.dolphin_model_dir,
+            "predict_time": settings.dolphin_predict_time,
+            "word_timestamp": settings.dolphin_word_timestamp,
+            "segments": self._dolphin_segments(payload),
+            "raw": payload,
+        }
+        if timestamp_warning:
+            output["timestamp_warning"] = timestamp_warning
+        return output
+
+    def _patch_torchaudio_load_with_soundfile(self) -> None:
+        try:
+            import soundfile as sf
+            import torch
+            import torchaudio
+        except Exception:
+            return
+
+        def load(path: str | Path, *args, **kwargs):
+            data, sample_rate = sf.read(str(path), dtype="float32", always_2d=True)
+            waveform = torch.from_numpy(data.T.copy())
+            return waveform, sample_rate
+
+        torchaudio.load = load
+
+    def _extract_dolphin_text(self, result) -> str:
+        if isinstance(result, list):
+            chunks = []
+            for item in result:
+                chunks.append(
+                    getattr(item, "text_nospecial", "")
+                    or getattr(item, "text", "")
+                    or str(item)
+                )
+            return "\n".join(chunk for chunk in chunks if chunk)
+        return (
+            getattr(result, "text_nospecial", "")
+            or getattr(result, "text", "")
+            or str(result)
+        )
+
+    def _serializable(self, value):
+        from dataclasses import asdict, is_dataclass
+
+        if is_dataclass(value):
+            return self._serializable(asdict(value))
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        if isinstance(value, dict):
+            return {str(k): self._serializable(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self._serializable(item) for item in value]
+        if hasattr(value, "model_dump"):
+            return self._serializable(value.model_dump())
+        if hasattr(value, "__dict__"):
+            return self._serializable(vars(value))
+        return str(value)
+
+    def _dolphin_segments(self, payload) -> list[dict]:
+        items = payload if isinstance(payload, list) else [payload]
+        segments = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            text = item.get("text_nospecial") or item.get("text") or item.get("sentence") or ""
+            word_segments = self._dolphin_segments_from_words(text, item.get("word_timestamps"))
+            if word_segments and not any(key in item for key in ("start", "end", "start_time", "end_time")):
+                segments.extend(word_segments)
+                continue
+            if not text:
+                continue
+            segment = {"text": text}
+            for source_key, target_key in (("start", "start"), ("end", "end"), ("start_time", "start"), ("end_time", "end")):
+                if source_key in item:
+                    segment[target_key] = item[source_key]
+            segments.append(segment)
+        return segments
+
+    def _dolphin_segments_from_words(self, text: str, word_timestamps) -> list[dict]:
+        words = self._normalize_dolphin_words(word_timestamps)
+        if not words:
+            return []
+
+        segments = []
+        current = []
+        max_gap_seconds = settings.asr_segment_max_gap_seconds
+        max_segment_seconds = settings.asr_segment_max_seconds
+        max_words = settings.asr_segment_max_tokens
+
+        def flush() -> None:
+            if not current:
+                return
+            segment_words = [dict(word) for word in current]
+            segment_text = self._join_dolphin_words([word.get("word", "") for word in segment_words])
+            segments.append({
+                "start": segment_words[0]["start"],
+                "end": segment_words[-1]["end"],
+                "text": segment_text,
+            })
+            current.clear()
+
+        for word in words:
+            if current:
+                gap = word["start"] - current[-1]["end"]
+                duration = word["end"] - current[0]["start"]
+                if gap > max_gap_seconds or duration > max_segment_seconds or len(current) >= max_words:
+                    flush()
+            current.append(word)
+        flush()
+
+        if len(segments) == 1 and text and not segments[0].get("text"):
+            segments[0]["text"] = text
+        return segments
+
+    @staticmethod
+    def _normalize_dolphin_words(word_timestamps) -> list[dict]:
+        if not isinstance(word_timestamps, list):
+            return []
+        words = []
+        for item in word_timestamps:
+            if not isinstance(item, dict):
+                continue
+            raw_word = item.get("word") or item.get("text") or item.get("token") or item.get("char") or ""
+            try:
+                start = float(item.get("start", item.get("start_time")))
+                end = float(item.get("end", item.get("end_time")))
+            except (TypeError, ValueError):
+                continue
+            if end < start:
+                end = start
+            words.append({
+                "word": str(raw_word),
+                "start": start,
+                "end": end,
+                **({
+                    "probability": item.get("probability")
+                } if item.get("probability") is not None else {}),
+            })
+        return words
+
+    @staticmethod
+    def _join_dolphin_words(words: list[str]) -> str:
+        clean_words = [str(word).strip() for word in words if str(word).strip()]
+        if not clean_words:
+            return ""
+        cjk_chars = sum(
+            1
+            for word in clean_words
+            for char in word
+            if "\u4e00" <= char <= "\u9fff"
+        )
+        total_chars = sum(len(word) for word in clean_words)
+        if total_chars and cjk_chars / total_chars > 0.6:
+            return "".join(clean_words)
+        return " ".join(clean_words)
+
+    def _payload_value(self, payload, keys: tuple[str, ...]) -> str:
+        items = payload if isinstance(payload, list) else [payload]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            for key in keys:
+                value = item.get(key)
+                if value:
+                    return str(value)
+        return ""
+
     def _load_model(self, whisper_model_cls):
         try:
             return whisper_model_cls(
@@ -102,70 +404,484 @@ class DemoAudioProcessor:
             return whisper_model_cls(self.model_size, device="cpu", compute_type="float32")
 
 
+class MMSAudioProcessor:
+    def __init__(self):
+        self.remote = RemoteInferenceClient()
+        self._processor = None
+        self._model = None
+        self._pipeline = None
+        self._device_name = ""
+        self._dtype_name = ""
+
+    def transcribe(self, audio_path: Path) -> dict:
+        if settings.use_remote_mms_asr:
+            if not self.remote.mms_asr_enabled:
+                return {
+                    "text": "",
+                    "segments": [],
+                    "error": "USE_REMOTE_MMS_ASR=true but REMOTE_MMS_ASR_BASE_URL is empty",
+                    "provider": "mms",
+                    "asr_engine": "mms",
+                }
+            return self.remote.mms_transcribe(audio_path)
+        return self.transcribe_local(audio_path)
+
+    def transcribe_local(self, audio_path: Path) -> dict:
+        started = perf_counter()
+        if settings.mms_hf_endpoint:
+            os.environ["HF_ENDPOINT"] = settings.mms_hf_endpoint
+        try:
+            import soundfile as sf
+            import torch
+            from transformers import AutoModelForCTC, AutoProcessor, pipeline
+        except Exception as exc:
+            return {
+                "text": "",
+                "segments": [],
+                "error": f"MMS dependencies unavailable: {exc}",
+                "provider": "mms",
+                "asr_engine": "mms",
+            }
+
+        if self._pipeline is None:
+            device_name = self._pick_device(torch)
+            torch_dtype = self._pick_dtype(torch, device_name)
+            self._device_name = device_name
+            self._dtype_name = str(torch_dtype).replace("torch.", "")
+            self._processor = AutoProcessor.from_pretrained(
+                settings.mms_model,
+                target_lang=settings.mms_target_lang,
+                local_files_only=settings.mms_local_files_only,
+            )
+            self._model = AutoModelForCTC.from_pretrained(
+                settings.mms_model,
+                target_lang=settings.mms_target_lang,
+                ignore_mismatched_sizes=True,
+                torch_dtype=torch_dtype,
+                low_cpu_mem_usage=True,
+                local_files_only=settings.mms_local_files_only,
+            )
+            self._model.to(device_name)
+            self._model.eval()
+            self._pipeline = pipeline(
+                "automatic-speech-recognition",
+                model=self._model,
+                tokenizer=self._processor.tokenizer,
+                feature_extractor=self._processor.feature_extractor,
+                torch_dtype=torch_dtype,
+                device=0 if device_name == "cuda" else -1,
+            )
+
+        data, sample_rate = sf.read(str(audio_path), dtype="float32", always_2d=False)
+        if getattr(data, "ndim", 1) > 1:
+            data = data.mean(axis=1)
+        audio_input = {"array": data, "sampling_rate": sample_rate}
+        kwargs: dict = {"batch_size": settings.mms_batch_size}
+        if settings.mms_chunk_length_s > 0:
+            kwargs["chunk_length_s"] = settings.mms_chunk_length_s
+        if settings.mms_stride_length_s > 0:
+            kwargs["stride_length_s"] = settings.mms_stride_length_s
+        if settings.mms_return_timestamps:
+            kwargs["return_timestamps"] = "word"
+
+        try:
+            result = self._pipeline(audio_input, **kwargs)
+        except TypeError as exc:
+            if "return_timestamps" not in str(exc):
+                raise
+            kwargs.pop("return_timestamps", None)
+            result = self._pipeline(audio_input, **kwargs)
+
+        payload = DemoAudioProcessor()._serializable(result)
+        text = payload.get("text", "") if isinstance(payload, dict) else str(payload)
+        chunks = payload.get("chunks", []) if isinstance(payload, dict) else []
+        return {
+            "provider": "mms",
+            "asr_engine": "mms",
+            "text": str(text or "").strip(),
+            "language": "ug",
+            "model": settings.mms_model,
+            "target_lang": settings.mms_target_lang,
+            "device": self._device_name,
+            "dtype": self._dtype_name,
+            "chunks": chunks,
+            "elapsed_seconds": perf_counter() - started,
+            "raw": payload,
+        }
+
+    @staticmethod
+    def _pick_device(torch) -> str:
+        requested = (settings.mms_device or "auto").lower()
+        if requested == "cuda":
+            return "cuda"
+        if requested == "cpu":
+            return "cpu"
+        return "cuda" if torch.cuda.is_available() else "cpu"
+
+    @staticmethod
+    def _pick_dtype(torch, device: str):
+        requested = (settings.mms_dtype or "auto").lower()
+        if requested == "float16":
+            return torch.float16
+        if requested == "bfloat16":
+            return torch.bfloat16
+        if requested == "float32":
+            return torch.float32
+        return torch.float16 if device == "cuda" else torch.float32
+
+
 class DemoFrameExtractor:
     threshold = 10.0
 
     def extract_keyframes(self, video_path: Path, output_dir: Path, max_frames: int) -> list[dict]:
+        return self.extract_timeline_frames(video_path, output_dir, max_frames)
+
+    def extract_timeline_frames(self, video_path: Path, output_dir: Path, max_frames: int) -> list[dict]:
+        _load_frame_deps()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        fps, total_frames, duration = self._video_meta(video_path)
+        if total_frames <= 0:
+            return []
+
+        candidates = self._extract_ffmpeg_candidates(
+            video_path=video_path,
+            output_dir=output_dir / "candidates",
+            fps=fps,
+            scene_threshold=settings.video_scene_threshold,
+            fps_floor_seconds=settings.video_fps_floor_seconds,
+        )
+        if not candidates:
+            candidates = self._extract_cv2_candidates(
+                video_path=video_path,
+                output_dir=output_dir / "candidates",
+                fps=fps,
+                total_frames=total_frames,
+                scene_threshold=settings.video_scene_threshold,
+                fps_floor_seconds=settings.video_fps_floor_seconds,
+            )
+
+        candidates.sort(key=lambda item: (float(item.get("timestamp") or 0.0), int(item.get("frame_number") or 0)))
+        deduped = self._dedupe_frame_files(
+            candidates,
+            threshold=settings.video_dedup_threshold,
+            window=settings.video_dedup_window,
+        )
+        selected = self._thin_by_time(deduped, max_frames)
+
+        frames: list[dict] = []
+        for idx, item in enumerate(selected):
+            frame_id = f"f{idx + 1:04d}"
+            target = output_dir / f"{frame_id}.jpg"
+            source = Path(str(item["path"]))
+            if source.resolve() != target.resolve():
+                shutil.copy2(source, target)
+            frames.append({
+                "index": idx,
+                "frame_id": frame_id,
+                "path": str(target),
+                "timestamp": float(item.get("timestamp") or 0.0),
+                "frame_number": int(item.get("frame_number") or round(float(item.get("timestamp") or 0.0) * fps)),
+                "score": float(item.get("score") or 0.0),
+                "dedup_dist": item.get("dedup_dist"),
+                "kind": "timeline_frame",
+            })
+
+        (output_dir / "timeline_index.json").write_text(
+            json.dumps(
+                {
+                    "fps": fps,
+                    "duration": duration,
+                    "scene_threshold": settings.video_scene_threshold,
+                    "fps_floor_seconds": settings.video_fps_floor_seconds,
+                    "candidate_count": len(candidates),
+                    "deduped_count": len(deduped),
+                    "selected_count": len(frames),
+                    "frames": frames,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        return frames
+
+    def _extract_cv2_candidates(
+        self,
+        video_path: Path,
+        output_dir: Path,
+        fps: float,
+        total_frames: int,
+        scene_threshold: float,
+        fps_floor_seconds: float,
+    ) -> list[dict]:
         output_dir.mkdir(parents=True, exist_ok=True)
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
             return []
 
-        fps = cap.get(cv2.CAP_PROP_FPS) or 25
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        if total_frames <= 0:
-            cap.release()
-            return []
-
-        sample_interval = max(1, total_frames // max(max_frames * 3, 1))
+        floor_interval = max(1, int(round(fps * max(0.1, fps_floor_seconds))))
         candidates = []
-        sampled_diffs = []
         prev = None
         frame_num = 0
+        last_selected = -floor_interval
         while frame_num < total_frames:
             ok, frame = cap.read()
             if not ok:
                 break
-            if frame_num % sample_interval == 0:
-                score = self._diff(frame, prev)
-                sampled_diffs.append({
-                    "frame_num": frame_num,
+            score = self._diff(frame, prev)
+            should_keep = prev is None or score >= scene_threshold * 100 or frame_num - last_selected >= floor_interval
+            if should_keep:
+                path = output_dir / f"candidate_{len(candidates) + 1:05d}.jpg"
+                cv2.imwrite(str(path), frame)
+                candidates.append({
+                    "path": str(path),
+                    "timestamp": frame_num / fps,
+                    "frame_number": frame_num,
                     "score": float(score),
-                    "global_score": float(score),
-                    "block_score": float(score),
+                    "source": "cv2_scene_or_floor",
                 })
-                if prev is None or score > self.threshold:
-                    candidates.append((frame_num, frame.copy(), score))
-                prev = frame.copy()
+                last_selected = frame_num
+            prev = frame.copy()
             frame_num += 1
         cap.release()
+        return candidates
 
-        selected = sorted(candidates, key=lambda item: item[2], reverse=True)[:max_frames]
-        # Keep output easier to inspect by restoring chronological order.
-        selected = sorted(selected, key=lambda item: item[0])
-        selected_frame_nums = {frame_num for frame_num, _frame, _score in selected}
-        self._write_keyframe_curve_artifacts(
-            output_dir=output_dir,
-            fps=fps,
-            diffs=sampled_diffs,
-            selected_frame_nums=selected_frame_nums,
+    def _extract_ffmpeg_candidates(
+        self,
+        video_path: Path,
+        output_dir: Path,
+        fps: float,
+        scene_threshold: float,
+        fps_floor_seconds: float,
+    ) -> list[dict]:
+        ffmpeg_path = self._resolve_ffmpeg()
+        if not ffmpeg_path:
+            return []
+        output_dir.mkdir(parents=True, exist_ok=True)
+        pattern = output_dir / "candidate_%05d.jpg"
+        expr = (
+            "select='isnan(prev_selected_t)"
+            f"+gt(scene\\,{scene_threshold:.4f})"
+            f"+gte(t-prev_selected_t\\,{max(0.1, fps_floor_seconds):.4f})',showinfo"
         )
+        try:
+            completed = subprocess.run(
+                [
+                    ffmpeg_path,
+                    "-hide_banner",
+                    "-i",
+                    str(video_path),
+                    "-vf",
+                    expr,
+                    "-vsync",
+                    "vfr",
+                    "-q:v",
+                    "2",
+                    "-y",
+                    str(pattern),
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except FileNotFoundError:
+            return []
+        if completed.returncode != 0:
+            return []
 
-        frames = []
-        for idx, (frame_num, frame, score) in enumerate(selected):
-            path = output_dir / f"frame_{idx:02d}.jpg"
+        timestamps = [
+            float(match.group(1))
+            for match in re.finditer(r"pts_time:([0-9]+(?:\.[0-9]+)?)", completed.stderr or "")
+        ]
+        files = sorted(output_dir.glob("candidate_*.jpg"))
+        candidates: list[dict] = []
+        for idx, path in enumerate(files):
+            timestamp = timestamps[idx] if idx < len(timestamps) else idx * max(0.1, fps_floor_seconds)
+            candidates.append({
+                "path": str(path),
+                "timestamp": timestamp,
+                "frame_number": int(round(timestamp * fps)),
+                "score": 0.0,
+                "source": "ffmpeg_scene_or_floor",
+            })
+        return candidates
+
+    def create_contact_sheet(
+        self,
+        frames: list[dict],
+        output_path: Path,
+        *,
+        columns: int = 3,
+        rows: int = 3,
+    ) -> Path:
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+        except Exception as exc:
+            raise RuntimeError(f"Pillow unavailable for contact sheet: {exc}") from exc
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        cell_w, cell_h = 360, 260
+        label_h = 34
+        sheet = Image.new("RGB", (columns * cell_w, rows * (cell_h + label_h)), (248, 250, 252))
+        draw = ImageDraw.Draw(sheet)
+        font = self._load_sheet_font(ImageFont)
+
+        for idx in range(columns * rows):
+            col = idx % columns
+            row = idx // columns
+            x = col * cell_w
+            y = row * (cell_h + label_h)
+            draw.rectangle((x, y, x + cell_w - 1, y + cell_h + label_h - 1), outline=(203, 213, 225), width=1)
+            if idx >= len(frames):
+                draw.text((x + 12, y + cell_h + 8), "empty", fill=(148, 163, 184), font=font)
+                continue
+            frame = frames[idx]
+            try:
+                with Image.open(frame["path"]) as image:
+                    image = image.convert("RGB")
+                    image.thumbnail((cell_w, cell_h), Image.Resampling.LANCZOS)
+                    ox = x + (cell_w - image.width) // 2
+                    oy = y + (cell_h - image.height) // 2
+                    sheet.paste(image, (ox, oy))
+            except Exception:
+                draw.text((x + 12, y + 20), "image unavailable", fill=(239, 68, 68), font=font)
+            frame_id = str(frame.get("frame_id") or f"f{idx + 1:04d}")
+            timestamp = self._format_seconds(float(frame.get("timestamp") or 0.0))
+            draw.rectangle((x, y + cell_h, x + cell_w, y + cell_h + label_h), fill=(15, 23, 42))
+            draw.text((x + 12, y + cell_h + 8), f"{frame_id}  {timestamp}", fill=(255, 255, 255), font=font)
+
+        sheet.save(output_path, format="JPEG", quality=88)
+        return output_path
+
+    def extract_precise_window(
+        self,
+        video_path: Path,
+        output_dir: Path,
+        center_timestamp: float,
+        sheet_id: str,
+        *,
+        window_seconds: float,
+        frame_count: int,
+    ) -> list[dict]:
+        _load_frame_deps()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        fps, total_frames, duration = self._video_meta(video_path)
+        if total_frames <= 0:
+            return []
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            return []
+        count = max(1, frame_count)
+        half = max(0.1, window_seconds) / 2
+        start = max(0.0, center_timestamp - half)
+        end = min(duration, center_timestamp + half)
+        if count == 1:
+            timestamps = [min(max(center_timestamp, 0.0), duration)]
+        else:
+            span = max(0.001, end - start)
+            timestamps = [start + span * i / (count - 1) for i in range(count)]
+
+        frames: list[dict] = []
+        for idx, timestamp in enumerate(timestamps):
+            frame_num = min(max(0, int(round(timestamp * fps))), max(0, total_frames - 1))
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
+            ok, frame = cap.read()
+            if not ok:
+                continue
+            path = output_dir / f"{sheet_id}_p{idx + 1:02d}.jpg"
             cv2.imwrite(str(path), frame)
             frames.append({
                 "index": idx,
+                "frame_id": f"{sheet_id}:p{idx + 1:02d}",
                 "path": str(path),
                 "timestamp": frame_num / fps,
                 "frame_number": frame_num,
-                "score": float(score),
-                "diff_curve_path": str(output_dir / "keyframe_curve.png"),
-                "diff_curve_json_path": str(output_dir / "keyframe_curve.json"),
-                "kind": "keyframe",
+                "kind": "precise_frame",
             })
+        cap.release()
         return frames
+
+    def _dedupe_frame_files(self, candidates: list[dict], threshold: float, window: int) -> list[dict]:
+        deduped: list[dict] = []
+        signatures: list = []
+        for item in candidates:
+            signature = self._image_signature(Path(str(item["path"])))
+            if signature is None:
+                item["dedup_dist"] = None
+                deduped.append(item)
+                signatures.append(signature)
+                continue
+            recent = [sig for sig in signatures[-max(1, window):] if sig is not None]
+            distances = [float(np.mean(np.abs(signature.astype("float32") - sig.astype("float32")))) for sig in recent]
+            min_dist = min(distances) if distances else 999.0
+            item["dedup_dist"] = min_dist
+            if not recent or min_dist > threshold:
+                deduped.append(item)
+                signatures.append(signature)
+        return deduped
+
+    def _image_signature(self, path: Path):
+        image = cv2.imread(str(path))
+        if image is None:
+            return None
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        return cv2.resize(image, (32, 32), interpolation=cv2.INTER_AREA)
+
+    @staticmethod
+    def _thin_by_time(frames: list[dict], max_frames: int) -> list[dict]:
+        if max_frames <= 0:
+            return []
+        if len(frames) <= max_frames:
+            return frames
+        if max_frames == 1:
+            return [frames[0]]
+        last = len(frames) - 1
+        indexes = [round(i * last / (max_frames - 1)) for i in range(max_frames)]
+        selected = []
+        seen = set()
+        for index in indexes:
+            if index in seen:
+                continue
+            seen.add(index)
+            selected.append(frames[index])
+        return selected
+
+    def _video_meta(self, video_path: Path) -> tuple[float, int, float]:
+        _load_frame_deps()
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            return 25.0, 0, 0.0
+        fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        cap.release()
+        duration = total_frames / fps if total_frames > 0 and fps > 0 else 0.0
+        return float(fps), total_frames, float(duration)
+
+    def _resolve_ffmpeg(self) -> str:
+        configured = settings.ffmpeg_path
+        if configured:
+            configured_path = Path(configured).expanduser()
+            if configured_path.exists():
+                return str(configured_path)
+            found = shutil.which(configured)
+            if found:
+                return found
+        return shutil.which("ffmpeg") or ""
+
+    @staticmethod
+    def _load_sheet_font(image_font_module):
+        for path in (
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/Library/Fonts/Arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ):
+            if Path(path).exists():
+                try:
+                    return image_font_module.truetype(path, 18)
+                except Exception:
+                    pass
+        return image_font_module.load_default()
 
     def _write_keyframe_curve_artifacts(
         self,
@@ -214,6 +930,7 @@ class DemoFrameExtractor:
         diffs: list[dict],
         selected_frame_nums: set[int],
     ) -> None:
+        _load_frame_deps()
         if not diffs:
             return
 
@@ -265,6 +982,7 @@ class DemoFrameExtractor:
 
     def detect_flash_spikes(self, video_path: Path, output_dir: Path, max_spikes: int) -> list[dict]:
         """Scan adjacent frame triples for isolated flash insertions."""
+        _load_frame_deps()
         output_dir.mkdir(parents=True, exist_ok=True)
 
         diff_spikes = self._detect_diff_peak_segments(video_path, output_dir, max_spikes)
@@ -460,6 +1178,7 @@ class DemoFrameExtractor:
         output_dir: Path,
         max_spikes: int,
     ) -> list[dict]:
+        _load_frame_deps()
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
             return []
@@ -697,6 +1416,7 @@ class DemoFrameExtractor:
         segments: list[dict],
         threshold: float,
     ) -> None:
+        _load_frame_deps()
         if not diffs:
             return
 
@@ -786,6 +1506,7 @@ class DemoFrameExtractor:
         output_dir: Path,
         max_spikes: int,
     ) -> list[dict]:
+        _load_frame_deps()
         try:
             from scenedetect import ContentDetector, detect
         except Exception:
@@ -863,6 +1584,7 @@ class DemoFrameExtractor:
         return results
 
     def _gray_small(self, frame, target_width: int = 320):
+        _load_frame_deps()
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         height, width = gray.shape[:2]
         if width > target_width:
@@ -890,6 +1612,7 @@ class DemoFrameExtractor:
         return global_score, block_score
 
     def _read_frame(self, video_path: Path, frame_num: int):
+        _load_frame_deps()
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
             return None
@@ -899,6 +1622,7 @@ class DemoFrameExtractor:
         return frame if ok else None
 
     def _diff(self, frame1, frame2) -> float:
+        _load_frame_deps()
         if frame1 is None or frame2 is None:
             return 0.0
         gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)

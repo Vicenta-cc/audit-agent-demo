@@ -1,7 +1,14 @@
 __pycache__/
 *.pyc
+.DS_Store
 .env
 .venv/
+.venv-qwen3-asr/
+.venv-*/
 data/
 outputs/
 node_modules/
+local_models/
+videos/
+tools/
+*.zip
