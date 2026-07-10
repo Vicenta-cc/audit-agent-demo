@@ -60,6 +60,12 @@ D:\good-agent\MediaCrawler\.venv\Scripts\python.exe -m uvicorn backend.main:app 
 http://127.0.0.1:8090
 ```
 
+如果要把项目交给其他同学在本机启动，或者需要接服务器上的 ASR 模型，见：
+
+```text
+docs/backend_startup_and_remote_asr.md
+```
+
 ## Demo 流程
 
 1. 前端选择小红书，输入关键词，如 `泳装`。

@@ -181,6 +181,10 @@ class AuditResultStore:
         values = [payload[column] for column in columns]
 
         with self._lock, self._connect() as conn:
+            # Serialize the archive check with this write so deletion cannot race a late result.
+            conn.execute("BEGIN IMMEDIATE")
+            if self._job_is_archived(conn, job_id):
+                return {}
             conn.execute(
                 f"""
                 INSERT INTO audit_results ({", ".join(columns)})
@@ -233,9 +237,16 @@ class AuditResultStore:
             )
             params.extend([like, like, like, like, like])
 
-        where_sql = " AND ".join(where) if where else "1 = 1"
         order_sql = self._order_sql(sort)
         with self._lock, self._connect() as conn:
+            if self._has_jobs_table(conn):
+                where.append(
+                    "NOT EXISTS ("
+                    "SELECT 1 FROM jobs "
+                    "WHERE jobs.id = audit_results.job_id AND jobs.archived = 1"
+                    ")"
+                )
+            where_sql = " AND ".join(where) if where else "1 = 1"
             total_row = conn.execute(
                 f"SELECT COUNT(*) AS count FROM audit_results WHERE {where_sql}",
                 params,
@@ -255,8 +266,36 @@ class AuditResultStore:
 
     def get_result(self, result_id: int) -> dict | None:
         with self._lock, self._connect() as conn:
-            row = conn.execute("SELECT * FROM audit_results WHERE id = ?", (result_id,)).fetchone()
+            archived_filter = ""
+            if self._has_jobs_table(conn):
+                archived_filter = (
+                    " AND NOT EXISTS ("
+                    "SELECT 1 FROM jobs "
+                    "WHERE jobs.id = audit_results.job_id AND jobs.archived = 1"
+                    ")"
+                )
+            row = conn.execute(
+                f"SELECT * FROM audit_results WHERE id = ?{archived_filter}",
+                (result_id,),
+            ).fetchone()
             return self._row_to_item(row) if row else None
+
+    def delete_for_job(self, job_id: str) -> int:
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute("DELETE FROM audit_results WHERE job_id = ?", (job_id,))
+            return int(cursor.rowcount or 0)
+
+    def delete_for_archived_jobs(self) -> int:
+        with self._lock, self._connect() as conn:
+            if not self._has_jobs_table(conn):
+                return 0
+            cursor = conn.execute(
+                """
+                DELETE FROM audit_results
+                WHERE job_id IN (SELECT id FROM jobs WHERE archived = 1)
+                """
+            )
+            return int(cursor.rowcount or 0)
 
     def review_result(
         self,
@@ -268,7 +307,18 @@ class AuditResultStore:
     ) -> dict:
         now = utc_now()
         with self._lock, self._connect() as conn:
-            row = conn.execute("SELECT * FROM audit_results WHERE id = ?", (result_id,)).fetchone()
+            archived_filter = ""
+            if self._has_jobs_table(conn):
+                archived_filter = (
+                    " AND NOT EXISTS ("
+                    "SELECT 1 FROM jobs "
+                    "WHERE jobs.id = audit_results.job_id AND jobs.archived = 1"
+                    ")"
+                )
+            row = conn.execute(
+                f"SELECT * FROM audit_results WHERE id = ?{archived_filter}",
+                (result_id,),
+            ).fetchone()
             if not row:
                 raise KeyError(result_id)
             result = self._loads_json(row["result_json"], {})
@@ -392,6 +442,20 @@ class AuditResultStore:
             return json.loads(value)
         except (TypeError, json.JSONDecodeError):
             return fallback
+
+    @staticmethod
+    def _has_jobs_table(conn: sqlite3.Connection) -> bool:
+        row = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'jobs'"
+        ).fetchone()
+        return row is not None
+
+    @classmethod
+    def _job_is_archived(cls, conn: sqlite3.Connection, job_id: str) -> bool:
+        if not cls._has_jobs_table(conn):
+            return False
+        row = conn.execute("SELECT archived FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        return bool(row and row["archived"])
 
 
 class BatchWriter:
@@ -829,9 +893,39 @@ class IngestionStore:
                             audit_result_id = COALESCE(?, audit_result_id),
                             updated_at = ?
                         WHERE task_id = ? AND content_id = ?
-                        """,
+                            """,
                         (status, result_path, audit_result_id, utc_now(), task_id, int(row["id"])),
                     )
+
+    def mark_task_content_status(
+        self,
+        task_id: str,
+        platform: str,
+        content_key: str,
+        status: str,
+        result_path: str = "",
+        audit_result_id: int | None = None,
+    ) -> None:
+        if not task_id or not content_key:
+            return
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT id FROM contents WHERE platform = ? AND content_key = ?",
+                (platform, content_key),
+            ).fetchone()
+            if not row:
+                return
+            conn.execute(
+                """
+                UPDATE task_contents
+                SET analyze_status = ?,
+                    result_path = COALESCE(NULLIF(?, ''), result_path),
+                    audit_result_id = COALESCE(?, audit_result_id),
+                    updated_at = ?
+                WHERE task_id = ? AND content_id = ?
+                """,
+                (status, result_path, audit_result_id, utc_now(), task_id, int(row["id"])),
+            )
 
     def reset_analyzing_for_task(self, task_id: str) -> int:
         with self._lock, self._connect() as conn:

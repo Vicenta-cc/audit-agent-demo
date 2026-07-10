@@ -23,6 +23,7 @@ class Settings:
     asr_translate_model = os.getenv("ASR_TRANSLATE_MODEL", qwen_text_model).strip()
     qwen_use_response_format = os.getenv("QWEN_USE_RESPONSE_FORMAT", "false").lower() == "true"
     qwen_max_tokens = int(os.getenv("QWEN_MAX_TOKENS", "1024"))
+    fusion_max_tokens = int(os.getenv("FUSION_MAX_TOKENS", "3072"))
     request_timeout = int(os.getenv("REQUEST_TIMEOUT", "180"))
     remote_inference_base_url = os.getenv("REMOTE_INFERENCE_BASE_URL", "").rstrip("/")
     remote_asr_base_url = os.getenv("REMOTE_ASR_BASE_URL", remote_inference_base_url).rstrip("/")
@@ -65,14 +66,17 @@ class Settings:
     paddleocr_api_request_retries = int(os.getenv("PADDLEOCR_API_REQUEST_RETRIES", "3"))
     paddleocr_api_retry_backoff_seconds = float(os.getenv("PADDLEOCR_API_RETRY_BACKOFF_SECONDS", "1"))
     ocr_prompt_max_chars = int(os.getenv("OCR_PROMPT_MAX_CHARS", "4000"))
-    fusion_max_comments = int(os.getenv("FUSION_MAX_COMMENTS", "20"))
-    fusion_comment_max_chars = int(os.getenv("FUSION_COMMENT_MAX_CHARS", "160"))
+    fusion_max_comments = int(os.getenv("FUSION_MAX_COMMENTS", "50"))
+    fusion_comment_max_chars = int(os.getenv("FUSION_COMMENT_MAX_CHARS", "240"))
+    fusion_prompt_max_chars = int(os.getenv("FUSION_PROMPT_MAX_CHARS", "24000"))
     fusion_max_ocr_states = int(os.getenv("FUSION_MAX_OCR_STATES", "24"))
     fusion_ocr_text_max_chars = int(os.getenv("FUSION_OCR_TEXT_MAX_CHARS", "180"))
     fusion_frame_summary_max_chars = int(os.getenv("FUSION_FRAME_SUMMARY_MAX_CHARS", "180"))
     fusion_frame_max_risk_items = int(os.getenv("FUSION_FRAME_MAX_RISK_ITEMS", "3"))
     fusion_frame_max_ocr_items = int(os.getenv("FUSION_FRAME_MAX_OCR_ITEMS", "2"))
-    fusion_frame_evidence_max_chars = int(os.getenv("FUSION_FRAME_EVIDENCE_MAX_CHARS", "5000"))
+    fusion_frame_evidence_max_chars = int(os.getenv("FUSION_FRAME_EVIDENCE_MAX_CHARS", "8000"))
+    auto_analyze_crawled_content = os.getenv("AUTO_ANALYZE_CRAWLED_CONTENT", "true").lower() == "true"
+    analysis_media_scope = os.getenv("ANALYSIS_MEDIA_SCOPE", "all").strip().lower()
     stream_crawl_analysis = os.getenv("STREAM_CRAWL_ANALYSIS", "true").lower() == "true"
     batch_ingestion_enabled = os.getenv("BATCH_INGESTION_ENABLED", "true").lower() == "true"
     batch_size = int(os.getenv("BATCH_SIZE", "20"))

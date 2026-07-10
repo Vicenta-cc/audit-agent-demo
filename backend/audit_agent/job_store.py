@@ -107,6 +107,50 @@ class JobStore:
 
                 CREATE INDEX IF NOT EXISTS idx_job_logs_job_id ON job_logs(job_id, id);
                 CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at);
+
+                CREATE TABLE IF NOT EXISTS monitored_users (
+                    id TEXT PRIMARY KEY,
+                    platform TEXT NOT NULL,
+                    stable_key TEXT NOT NULL,
+                    display_name TEXT,
+                    profile_url TEXT,
+                    raw_identity TEXT,
+                    source_audit_result_id INTEGER,
+                    source_job_id TEXT,
+                    author_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(platform, stable_key)
+                );
+
+                CREATE TABLE IF NOT EXISTS suspected_related_accounts (
+                    id TEXT PRIMARY KEY,
+                    monitored_user_id TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    stable_key TEXT NOT NULL,
+                    display_name TEXT,
+                    profile_url TEXT,
+                    raw_identity TEXT,
+                    source_comment_id TEXT,
+                    source_comment_text TEXT,
+                    source_risk_content TEXT,
+                    source_audit_result_id INTEGER,
+                    source_job_id TEXT,
+                    analysis_job_id TEXT,
+                    analysis_status TEXT NOT NULL DEFAULT 'job_created',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(monitored_user_id, platform, stable_key)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_monitored_users_updated_at
+                ON monitored_users(updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_suspected_related_accounts_user
+                ON suspected_related_accounts(monitored_user_id, updated_at);
+
+                CREATE INDEX IF NOT EXISTS idx_suspected_related_accounts_analysis_job
+                ON suspected_related_accounts(analysis_job_id);
                 """
             )
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
@@ -126,6 +170,18 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN rule_snapshot TEXT NOT NULL DEFAULT '{}'")
             if "current_audit_config_revision_id" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN current_audit_config_revision_id TEXT")
+
+            related_columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(suspected_related_accounts)").fetchall()
+            }
+            for column, definition in {
+                "source_comment_text": "TEXT",
+                "source_risk_content": "TEXT",
+                "analysis_status": "TEXT NOT NULL DEFAULT 'job_created'",
+            }.items():
+                if column not in related_columns:
+                    conn.execute(f"ALTER TABLE suspected_related_accounts ADD COLUMN {column} {definition}")
 
     def create(self, **kwargs) -> dict:
         with self._lock, self._connect() as conn:
@@ -317,6 +373,498 @@ class JobStore:
                     ),
                 )
             return len(rows)
+
+    def upsert_monitored_user_from_audit_result(self, audit_result: dict) -> dict:
+        author = audit_result.get("author") if isinstance(audit_result.get("author"), dict) else {}
+        platform = self._normalize_platform_label(
+            self._first_text(audit_result.get("platform"), author.get("platform"))
+        )
+        display_name = self._first_text(
+            author.get("nickname"),
+            author.get("user_unique_id"),
+            author.get("short_user_id"),
+            author.get("user_id"),
+            author.get("sec_uid"),
+            audit_result.get("author_key"),
+            "未知账号",
+        )
+        profile_url = self._first_text(
+            author.get("profile_url"),
+            author.get("homepage_url"),
+            author.get("homepage"),
+            author.get("user_url"),
+            author.get("url"),
+        )
+        raw_identity = self._first_text(
+            author.get("sec_uid"),
+            author.get("user_id"),
+            author.get("user_unique_id"),
+            author.get("short_user_id"),
+            display_name,
+        )
+        stable_key = self._stable_account_key(
+            platform=platform,
+            profile_url=profile_url,
+            raw_identity=raw_identity,
+            display_name=display_name,
+        )
+        if not platform or not stable_key:
+            raise ValueError("audit result has no stable author identity")
+
+        result_id = int(audit_result.get("audit_result_id") or audit_result.get("id") or 0) or None
+        source_job_id = self._first_text(audit_result.get("job_id"))
+        now = datetime.now().isoformat(timespec="seconds")
+
+        with self._lock, self._connect() as conn:
+            monitored_id = self._upsert_monitored_user(
+                conn,
+                platform=platform,
+                stable_key=stable_key,
+                display_name=display_name,
+                profile_url=profile_url,
+                raw_identity=raw_identity,
+                source_audit_result_id=result_id,
+                source_job_id=source_job_id,
+                author=author,
+                now=now,
+            )
+            row = conn.execute("SELECT * FROM monitored_users WHERE id = ?", (monitored_id,)).fetchone()
+            return self._row_to_monitored_user(conn, row)
+
+    def upsert_comment_user_relation(
+        self,
+        *,
+        analysis_job_id: str,
+        relation_context: dict,
+        parent_audit_result: dict,
+    ) -> dict:
+        if (relation_context or {}).get("source") != "comment_user_analysis":
+            return {}
+
+        author = parent_audit_result.get("author") if isinstance(parent_audit_result.get("author"), dict) else {}
+        parent_platform = str(parent_audit_result.get("platform") or author.get("platform") or "").strip()
+        parent_display_name = self._first_text(
+            author.get("nickname"),
+            author.get("user_unique_id"),
+            author.get("short_user_id"),
+            author.get("user_id"),
+            author.get("sec_uid"),
+            parent_audit_result.get("author_key"),
+            "未知账号",
+        )
+        parent_profile_url = self._first_text(
+            author.get("profile_url"),
+            author.get("homepage_url"),
+            author.get("homepage"),
+            author.get("user_url"),
+            author.get("url"),
+        )
+        parent_raw_identity = self._first_text(
+            author.get("sec_uid"),
+            author.get("user_id"),
+            author.get("user_unique_id"),
+            author.get("short_user_id"),
+            parent_display_name,
+        )
+        parent_stable_key = self._stable_account_key(
+            platform=parent_platform,
+            profile_url=parent_profile_url,
+            raw_identity=parent_raw_identity,
+            display_name=parent_display_name,
+        )
+        if not parent_platform or not parent_stable_key:
+            raise ValueError("parent audit result has no stable author identity")
+
+        comment_id = self._first_text(relation_context.get("source_comment_id"))
+        source_comment = self._find_source_comment(parent_audit_result, comment_id)
+        suspect_platform = self._normalize_platform_label(
+            self._first_text(relation_context.get("suspect_platform"), parent_platform)
+        )
+        suspect_display_name = self._first_text(
+            relation_context.get("suspect_display_name"),
+            source_comment.get("nickname"),
+            source_comment.get("user_unique_id"),
+            source_comment.get("short_user_id"),
+            source_comment.get("user_id"),
+            "评论者",
+        )
+        suspect_profile_url = self._first_text(relation_context.get("suspect_profile_url"))
+        suspect_raw_identity = self._first_text(
+            relation_context.get("suspect_raw_identity"),
+            source_comment.get("sec_uid"),
+            source_comment.get("user_id"),
+            source_comment.get("user_unique_id"),
+            source_comment.get("short_user_id"),
+            suspect_display_name,
+        )
+        suspect_stable_key = self._stable_account_key(
+            platform=suspect_platform,
+            profile_url=suspect_profile_url,
+            raw_identity=suspect_raw_identity,
+            display_name=suspect_display_name,
+        )
+        if not suspect_platform or not suspect_stable_key:
+            raise ValueError("relation_context has no stable suspect identity")
+
+        parent_result_id = int(parent_audit_result.get("audit_result_id") or parent_audit_result.get("id") or 0) or None
+        parent_job_id = self._first_text(parent_audit_result.get("job_id"), relation_context.get("source_job_id"))
+        source_comment_text = self._first_text(
+            relation_context.get("source_comment_text"),
+            source_comment.get("content"),
+            source_comment.get("text"),
+        )
+        source_risk_content = self._first_text(
+            relation_context.get("source_risk_content"),
+            source_comment_text,
+            parent_audit_result.get("summary"),
+            parent_audit_result.get("title"),
+        )
+        now = datetime.now().isoformat(timespec="seconds")
+
+        with self._lock, self._connect() as conn:
+            monitored_id = self._upsert_monitored_user(
+                conn,
+                platform=parent_platform,
+                stable_key=parent_stable_key,
+                display_name=parent_display_name,
+                profile_url=parent_profile_url,
+                raw_identity=parent_raw_identity,
+                source_audit_result_id=parent_result_id,
+                source_job_id=parent_job_id,
+                author=author,
+                now=now,
+            )
+            related_id = self._upsert_related_account(
+                conn,
+                monitored_user_id=monitored_id,
+                platform=suspect_platform,
+                stable_key=suspect_stable_key,
+                display_name=suspect_display_name,
+                profile_url=suspect_profile_url,
+                raw_identity=suspect_raw_identity,
+                source_comment_id=comment_id,
+                source_comment_text=source_comment_text,
+                source_risk_content=source_risk_content,
+                source_audit_result_id=parent_result_id,
+                source_job_id=parent_job_id,
+                analysis_job_id=analysis_job_id,
+                analysis_status="job_created" if analysis_job_id else "linked",
+                now=now,
+            )
+            return {
+                "monitored_user_id": monitored_id,
+                "related_account_id": related_id,
+            }
+
+    def list_monitored_users(self) -> list[dict]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM monitored_users
+                ORDER BY updated_at DESC, created_at DESC
+                """
+            ).fetchall()
+            return [self._row_to_monitored_user(conn, row) for row in rows]
+
+    def _upsert_monitored_user(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        platform: str,
+        stable_key: str,
+        display_name: str,
+        profile_url: str,
+        raw_identity: str,
+        source_audit_result_id: int | None,
+        source_job_id: str,
+        author: dict,
+        now: str,
+    ) -> str:
+        row = conn.execute(
+            "SELECT id FROM monitored_users WHERE platform = ? AND stable_key = ?",
+            (platform, stable_key),
+        ).fetchone()
+        if row:
+            monitored_id = row["id"]
+            conn.execute(
+                """
+                UPDATE monitored_users
+                SET display_name = COALESCE(NULLIF(?, ''), display_name),
+                    profile_url = COALESCE(NULLIF(?, ''), profile_url),
+                    raw_identity = COALESCE(NULLIF(?, ''), raw_identity),
+                    source_audit_result_id = COALESCE(?, source_audit_result_id),
+                    source_job_id = COALESCE(NULLIF(?, ''), source_job_id),
+                    author_json = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    display_name,
+                    profile_url,
+                    raw_identity,
+                    source_audit_result_id,
+                    source_job_id,
+                    json.dumps(author or {}, ensure_ascii=False),
+                    now,
+                    monitored_id,
+                ),
+            )
+            return monitored_id
+
+        monitored_id = uuid4().hex[:12]
+        conn.execute(
+            """
+            INSERT INTO monitored_users (
+                id, platform, stable_key, display_name, profile_url, raw_identity,
+                source_audit_result_id, source_job_id, author_json, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                monitored_id,
+                platform,
+                stable_key,
+                display_name,
+                profile_url,
+                raw_identity,
+                source_audit_result_id,
+                source_job_id,
+                json.dumps(author or {}, ensure_ascii=False),
+                now,
+                now,
+            ),
+        )
+        return monitored_id
+
+    def _upsert_related_account(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        monitored_user_id: str,
+        platform: str,
+        stable_key: str,
+        display_name: str,
+        profile_url: str,
+        raw_identity: str,
+        source_comment_id: str,
+        source_comment_text: str,
+        source_risk_content: str,
+        source_audit_result_id: int | None,
+        source_job_id: str,
+        analysis_job_id: str,
+        analysis_status: str,
+        now: str,
+    ) -> str:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM suspected_related_accounts
+            WHERE monitored_user_id = ? AND platform = ? AND stable_key = ?
+            """,
+            (monitored_user_id, platform, stable_key),
+        ).fetchone()
+        if row:
+            related_id = row["id"]
+            conn.execute(
+                """
+                UPDATE suspected_related_accounts
+                SET display_name = COALESCE(NULLIF(?, ''), display_name),
+                    profile_url = COALESCE(NULLIF(?, ''), profile_url),
+                    raw_identity = COALESCE(NULLIF(?, ''), raw_identity),
+                    source_comment_id = COALESCE(NULLIF(?, ''), source_comment_id),
+                    source_comment_text = COALESCE(NULLIF(?, ''), source_comment_text),
+                    source_risk_content = COALESCE(NULLIF(?, ''), source_risk_content),
+                    source_audit_result_id = COALESCE(?, source_audit_result_id),
+                    source_job_id = COALESCE(NULLIF(?, ''), source_job_id),
+                    analysis_job_id = COALESCE(NULLIF(?, ''), analysis_job_id),
+                    analysis_status = CASE
+                        WHEN NULLIF(?, '') IS NOT NULL THEN 'job_created'
+                        WHEN NULLIF(analysis_job_id, '') IS NULL THEN ?
+                        ELSE analysis_status
+                    END,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    display_name,
+                    profile_url,
+                    raw_identity,
+                    source_comment_id,
+                    source_comment_text,
+                    source_risk_content,
+                    source_audit_result_id,
+                    source_job_id,
+                    analysis_job_id,
+                    analysis_job_id,
+                    analysis_status,
+                    now,
+                    related_id,
+                ),
+            )
+            return related_id
+
+        related_id = uuid4().hex[:12]
+        conn.execute(
+            """
+            INSERT INTO suspected_related_accounts (
+                id, monitored_user_id, platform, stable_key, display_name, profile_url,
+                raw_identity, source_comment_id, source_comment_text, source_risk_content,
+                source_audit_result_id, source_job_id, analysis_job_id, analysis_status,
+                created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                related_id,
+                monitored_user_id,
+                platform,
+                stable_key,
+                display_name,
+                profile_url,
+                raw_identity,
+                source_comment_id,
+                source_comment_text,
+                source_risk_content,
+                source_audit_result_id,
+                source_job_id,
+                analysis_job_id,
+                analysis_status,
+                now,
+                now,
+            ),
+        )
+        return related_id
+
+    def _row_to_monitored_user(self, conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+        related_rows = conn.execute(
+            """
+            SELECT
+                r.*,
+                j.status AS job_status,
+                j.display_name AS job_display_name,
+                j.created_at AS job_created_at,
+                j.updated_at AS job_updated_at
+            FROM suspected_related_accounts r
+            LEFT JOIN jobs j ON j.id = r.analysis_job_id
+            WHERE r.monitored_user_id = ?
+            ORDER BY r.updated_at DESC, r.created_at DESC
+            """,
+            (row["id"],),
+        ).fetchall()
+        return {
+            "id": row["id"],
+            "platform": row["platform"],
+            "stable_key": row["stable_key"],
+            "display_name": row["display_name"] or "",
+            "profile_url": row["profile_url"] or "",
+            "raw_identity": row["raw_identity"] or "",
+            "source_audit_result_id": row["source_audit_result_id"],
+            "source_job_id": row["source_job_id"] or "",
+            "author": self._loads_json(row["author_json"], {}),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "suspected_related_accounts": [
+                self._row_to_related_account(related)
+                for related in related_rows
+            ],
+        }
+
+    def _row_to_related_account(self, row: sqlite3.Row) -> dict:
+        job_status = row["job_status"] or ""
+        analysis_status = job_status or row["analysis_status"] or "job_created"
+        return {
+            "id": row["id"],
+            "monitored_user_id": row["monitored_user_id"],
+            "platform": row["platform"],
+            "stable_key": row["stable_key"],
+            "display_name": row["display_name"] or "",
+            "profile_url": row["profile_url"] or "",
+            "raw_identity": row["raw_identity"] or "",
+            "source_comment_id": row["source_comment_id"] or "",
+            "source_comment_text": row["source_comment_text"] or "",
+            "source_risk_content": row["source_risk_content"] or "",
+            "source_audit_result_id": row["source_audit_result_id"],
+            "source_job_id": row["source_job_id"] or "",
+            "analysis_job_id": row["analysis_job_id"] or "",
+            "analysis_status": analysis_status,
+            "job_created_at": row["job_created_at"] or "",
+            "job_updated_at": row["job_updated_at"] or "",
+            "analysis_job": {
+                "id": row["analysis_job_id"] or "",
+                "status": job_status,
+                "display_name": row["job_display_name"] or "",
+                "created_at": row["job_created_at"] or "",
+                "updated_at": row["job_updated_at"] or "",
+            },
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def _find_source_comment(self, parent_audit_result: dict, comment_id: str) -> dict:
+        comments = parent_audit_result.get("comments") or []
+        if not isinstance(comments, list):
+            return {}
+        if comment_id:
+            for comment in comments:
+                if not isinstance(comment, dict):
+                    continue
+                current = self._first_text(comment.get("comment_id"), comment.get("id"))
+                if current == comment_id:
+                    return comment
+        return {}
+
+    def _stable_account_key(
+        self,
+        *,
+        platform: str,
+        profile_url: str = "",
+        raw_identity: str = "",
+        display_name: str = "",
+    ) -> str:
+        normalized_url = self._normalize_profile_url(profile_url)
+        if normalized_url:
+            return f"url:{normalized_url}"
+        identity = self._first_text(raw_identity)
+        if identity:
+            return f"id:{identity}"
+        name = self._first_text(display_name)
+        if name:
+            return f"name:{name.lower()}"
+        return f"platform:{platform or 'unknown'}"
+
+    def _normalize_profile_url(self, value: str) -> str:
+        text = self._first_text(value)
+        if not text:
+            return ""
+        try:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(text)
+        except ValueError:
+            return text.rstrip("/").lower()
+        if not parsed.scheme or not parsed.netloc:
+            return text.rstrip("/").lower()
+        path = parsed.path.rstrip("/")
+        return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}"
+
+    def _normalize_platform_label(self, value: str) -> str:
+        text = self._first_text(value).lower()
+        return {
+            "抖音": "dy",
+            "douyin": "dy",
+            "小红书": "xhs",
+            "xiaohongshu": "xhs",
+            "快手": "ks",
+            "kuaishou": "ks",
+        }.get(text, text)
+
+    def _first_text(self, *values) -> str:
+        for value in values:
+            text = str(value or "").strip()
+            if text:
+                return text
+        return ""
 
     def _row_to_job(self, conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
         job = dict(row)

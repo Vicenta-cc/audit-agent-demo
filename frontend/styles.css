@@ -808,9 +808,26 @@ aside, article {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
   margin-bottom: 5px;
   color: #64748b;
   font-size: 12px;
+}
+.comment-user-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.comment-user-actions .comment-analysis-button,
+.comment-user-actions .comment-link-button {
+  margin-left: 0;
+}
+.comment-analysis-state {
+  color: #166534;
+  font-weight: 700;
 }
 .evidence {
   border: 1px solid #fecaca;
@@ -1262,6 +1279,80 @@ pre.json {
 .profile-conclusion p {
   color: #1e3a8a;
   line-height: 1.65;
+}
+.monitored-layout {
+  min-height: 520px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+.monitored-users-list {
+  display: grid;
+  gap: 12px;
+}
+.monitored-user-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.monitored-user-head,
+.monitored-related-head,
+.related-account-row,
+.related-account-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.monitored-user-head,
+.monitored-related-head,
+.related-account-row {
+  justify-content: space-between;
+}
+.monitored-user-head h3 {
+  margin: 0 0 4px;
+  color: #111827;
+  font-size: 16px;
+}
+.monitored-user-head p,
+.monitored-related-head span,
+.related-account-row span,
+.related-account-row p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+.monitored-related-list {
+  display: grid;
+  gap: 8px;
+}
+.related-account-row {
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+}
+.related-account-row > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.related-account-row strong {
+  color: #111827;
+  font-size: 14px;
+}
+.related-account-row p {
+  overflow-wrap: anywhere;
+}
+.related-risk-text {
+  color: #92400e !important;
+}
+.related-account-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 .lexicon-layout {
   display: grid;

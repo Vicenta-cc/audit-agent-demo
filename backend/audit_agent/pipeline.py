@@ -19,11 +19,26 @@ from .models import AuditSubject
 from .ocr_processor import VideoOCRTracker
 from .prompts import get_prompt_set
 from .qwen_client import QwenClient
+from .rule_compiler import DEFAULT_THRESHOLDS
 from .translation import TranslationProcessor
 from .video_processor import DemoAudioProcessor, DemoFrameExtractor, MMSAudioProcessor
 
 
 _crawler_lock = threading.Lock()
+
+AUDIO_URL_EXTENSIONS = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
+AUDIO_FILE_SIGNATURES = (
+    b"ID3",
+    b"\xff\xfb",
+    b"\xff\xf3",
+    b"\xff\xf2",
+    b"\xff\xf1",
+    b"\xff\xf9",
+)
+VIDEO_TEXT_CONTEXT_MAX_CHARS = 1800
+VIDEO_VISUAL_CONTEXT_MAX_CHARS = 1000
+VIDEO_CANDIDATE_CONTEXT_MAX_ITEMS = 8
+VIDEO_CANDIDATE_TEXT_MAX_ITEMS = 3
 
 
 def _severity_rank(severity) -> int:
@@ -44,6 +59,7 @@ class AuditPipeline:
         self.audit_results = AuditResultStore()
         self.prompt_set = get_prompt_set("soft")
         self.audit_config_revision_id = ""
+        self.rule_snapshot: dict = {}
 
     def run(self, request) -> None:
         try:
@@ -51,6 +67,7 @@ class AuditPipeline:
             job_store.log(self.job_id, "开始任务")
             job_snapshot = job_store.get(self.job_id) or {}
             self.audit_config_revision_id = str(job_snapshot.get("current_audit_config_revision_id") or "")
+            self.rule_snapshot = self._rule_snapshot_from_source(job_snapshot or request)
             self._set_prompt_context(
                 self._prompt_category_from_source(request),
                 self._prompt_profile_from_source(request),
@@ -74,9 +91,6 @@ class AuditPipeline:
                 results: list[dict] = []
                 analyzed_ids: set[str] = set()
                 analyze_limit = max(0, request.analyze_limit)
-                stream_analysis = settings.stream_crawl_analysis
-                use_batch_ingestion = stream_analysis and settings.batch_ingestion_enabled
-                skip_final_supplement = use_batch_ingestion
                 stream_queue: queue.Queue[dict | tuple[list[dict], list[dict]] | None] = queue.Queue()
                 analysis_errors: list[BaseException] = []
                 batch_writer = BatchWriter(
@@ -88,6 +102,21 @@ class AuditPipeline:
                 )
                 raw_items_dir = source_root / "raw_items"
                 stop_flusher = threading.Event()
+                auto_analyze_crawled_content = settings.auto_analyze_crawled_content
+                if not auto_analyze_crawled_content:
+                    analyze_limit = 0
+                    job_store.log(
+                        self.job_id,
+                        "当前为采集入库模式：内容会入库，审核分析暂不自动执行，可稍后点击继续分析",
+                    )
+                analysis_media_scope = self._analysis_media_scope()
+                if analysis_media_scope == "image_text":
+                    job_store.log(self.job_id, "当前分析范围：仅分析图文内容，视频内容只入库不审核")
+                stream_items_enabled = settings.stream_crawl_analysis
+                use_batch_ingestion = stream_items_enabled and settings.batch_ingestion_enabled
+                stream_analysis = stream_items_enabled and auto_analyze_crawled_content
+                skip_final_supplement = use_batch_ingestion and auto_analyze_crawled_content
+                stream_callback_enabled = use_batch_ingestion or stream_analysis
 
                 def crawl_stop_requested() -> bool:
                     current = control()
@@ -102,11 +131,12 @@ class AuditPipeline:
                 def enqueue_stream_batch(contents: list[dict], comments: list[dict]) -> None:
                     if not contents:
                         return
-                    if not use_batch_ingestion:
-                        stream_queue.put((contents, comments))
+                    if use_batch_ingestion:
+                        for batch_path in batch_writer.add(contents, comments):
+                            ingest_completed_batch(batch_path)
                         return
-                    for batch_path in batch_writer.add(contents, comments):
-                        ingest_completed_batch(batch_path)
+                    if stream_analysis:
+                        stream_queue.put((contents, comments))
 
                 def ingest_completed_batch(batch_path: Path) -> None:
                     queued = self.ingestion.ingest_batch(batch_path, raw_items_dir)
@@ -114,8 +144,9 @@ class AuditPipeline:
                         self.job_id,
                         f"ingestion 完成 batch：{batch_path.name}，新内容 {len(queued)} 条",
                     )
-                    for ref in queued:
-                        stream_queue.put(ref)
+                    if stream_analysis:
+                        for ref in queued:
+                            stream_queue.put(ref)
 
                 def flush_batches_periodically() -> None:
                     while not stop_flusher.is_set():
@@ -140,6 +171,10 @@ class AuditPipeline:
                     for subject in subjects:
                         subject_key = content_key or content_identity(ref["item"], request.platform) or subject.note_id
                         if not subject_key or subject_key in analyzed_ids:
+                            continue
+                        if not self._should_analyze_subject(subject):
+                            analyzed_ids.add(subject_key)
+                            self._mark_subject_skipped(request.platform, subject_key, subject)
                             continue
                         if analyze_limit and len(results) >= analyze_limit:
                             return
@@ -198,6 +233,10 @@ class AuditPipeline:
                     )
                     for subject in subjects:
                         if not subject.note_id or subject.note_id in analyzed_ids:
+                            continue
+                        if not self._should_analyze_subject(subject):
+                            analyzed_ids.add(subject.note_id)
+                            self._mark_subject_skipped(request.platform, subject.note_id, subject)
                             continue
                         if analyze_limit and len(results) >= analyze_limit:
                             return
@@ -264,6 +303,7 @@ class AuditPipeline:
                         daemon=True,
                     )
                     stream_analyzer.start()
+                if use_batch_ingestion:
                     batch_flusher = threading.Thread(
                         target=flush_batches_periodically,
                         name=f"audit-batch-flusher-{self.job_id}",
@@ -285,8 +325,8 @@ class AuditPipeline:
                                 get_sub_comment=request.get_sub_comment,
                                 save_root=crawl_dir,
                                 progress_callback=log_crawl_progress,
-                                content_callback=enqueue_stream_batch if stream_analysis else None,
-                                stream_items=stream_analysis,
+                                content_callback=enqueue_stream_batch if stream_callback_enabled else None,
+                                stream_items=stream_callback_enabled,
                                 stop_checker=crawl_stop_requested,
                             )
                         else:
@@ -306,8 +346,8 @@ class AuditPipeline:
                                 get_sub_comment=request.get_sub_comment,
                                 save_root=crawl_dir,
                                 progress_callback=log_crawl_progress,
-                                content_callback=enqueue_stream_batch if stream_analysis else None,
-                                stream_items=stream_analysis,
+                                content_callback=enqueue_stream_batch if stream_callback_enabled else None,
+                                stream_items=stream_callback_enabled,
                                 stop_checker=crawl_stop_requested,
                             )
                 finally:
@@ -376,14 +416,21 @@ class AuditPipeline:
             job_store.log(self.job_id, f"subjects built: subjects={len(subjects)}, comments={total_comments}")
             job_store.log(self.job_id, f"loaded subjects: {len(subjects)}")
 
-            remaining_subjects = [] if skip_final_supplement else [
-                subject for subject in subjects if subject.note_id not in analyzed_ids
-            ]
-            remaining_limit = max(0, max(0, request.analyze_limit) - len(results))
+            remaining_limit = max(0, analyze_limit - len(results))
+            remaining_subjects = []
+            if not skip_final_supplement and remaining_limit > 0:
+                remaining_subjects = [
+                    subject for subject in subjects if subject.note_id not in analyzed_ids
+                ]
+                remaining_subjects = self._filter_subjects_for_analysis(
+                    output.platform,
+                    remaining_subjects,
+                    ingested_refs_by_key,
+                )
             total = min(len(remaining_subjects), remaining_limit)
             job_store.log(
                 self.job_id,
-                f"analysis limit applied: analyze_limit={request.analyze_limit}, already_analyzed={len(results)}, will_analyze_remaining={total}",
+                f"analysis limit applied: analyze_limit={request.analyze_limit}, effective_analyze_limit={analyze_limit}, already_analyzed={len(results)}, will_analyze_remaining={total}",
             )
             batch_size = max(1, getattr(request, "analysis_batch_size", 5))
             analysis_stopped = False
@@ -477,6 +524,7 @@ class AuditPipeline:
             analyzed_ids = {str(item.get("note_id") or "") for item in results if item.get("note_id")}
             job_store.update(self.job_id, status="analysis_running")
             self.audit_config_revision_id = str(job.get("current_audit_config_revision_id") or "")
+            self.rule_snapshot = self._rule_snapshot_from_source(job)
             self._set_prompt_context(
                 self._prompt_category_from_source(job),
                 self._prompt_profile_from_source(job),
@@ -489,6 +537,8 @@ class AuditPipeline:
             )
             if source_root.resolve() != (settings.outputs_dir / self.job_id).resolve():
                 job_store.log(self.job_id, f"继续分析复用已有输出媒体目录：{source_root.name}")
+            if self._analysis_media_scope() == "image_text":
+                job_store.log(self.job_id, "继续分析范围：仅分析图文内容，视频内容将跳过")
             job_store.log(self.job_id, f"继续分析开始：待处理 {len(refs)} 条")
             batch_size = max(1, analysis_batch_size)
             for batch_start in range(0, len(refs), batch_size):
@@ -505,6 +555,10 @@ class AuditPipeline:
                     for subject in subjects:
                         subject_key = content_key or content_identity(ref["item"], platform) or subject.note_id
                         if subject.note_id in analyzed_ids:
+                            continue
+                        if not self._should_analyze_subject(subject):
+                            analyzed_ids.add(subject.note_id)
+                            self._mark_subject_skipped(platform, subject_key, subject)
                             continue
                         analyzed_ids.add(subject.note_id)
                         job_store.log(self.job_id, f"继续分析：{subject.note_id}")
@@ -565,6 +619,7 @@ class AuditPipeline:
             job_store.log(self.job_id, "开始本地视频审核任务")
             job = job_store.get(self.job_id) or {}
             self.audit_config_revision_id = str(job.get("current_audit_config_revision_id") or "")
+            self.rule_snapshot = self._rule_snapshot_from_source(job)
             self._set_prompt_context(self._prompt_category_from_source(job), self._prompt_profile_from_source(job))
             subject = AuditSubject(
                 platform="local",
@@ -633,11 +688,63 @@ class AuditPipeline:
         profile = source.get("prompt_profile_snapshot") if isinstance(source, dict) else getattr(source, "prompt_profile_snapshot", None)
         return profile if isinstance(profile, dict) else {}
 
+    @staticmethod
+    def _rule_snapshot_from_source(source) -> dict:
+        snapshot = source.get("rule_snapshot") if isinstance(source, dict) else getattr(source, "rule_snapshot", None)
+        return snapshot if isinstance(snapshot, dict) else {}
+
     def _set_prompt_context(self, category: str | None, prompt_profile: dict | None = None) -> None:
         self.prompt_set = get_prompt_set(category, prompt_profile=prompt_profile)
         job_store.log(
             self.job_id,
             f"使用审核 Prompt：{self.prompt_set.category} · {self.prompt_set.prompt_version}",
+        )
+
+    @staticmethod
+    def _analysis_media_scope() -> str:
+        scope = str(settings.analysis_media_scope or "all").strip().lower().replace("-", "_")
+        if scope in {"image", "images", "image_only", "image_text", "image_text_only", "photo", "photos"}:
+            return "image_text"
+        return "all"
+
+    def _should_analyze_subject(self, subject: AuditSubject) -> bool:
+        if self._analysis_media_scope() != "image_text":
+            return True
+        has_image = bool(subject.local_image_paths or subject.image_urls)
+        has_video = bool(subject.local_video_paths or subject.video_urls)
+        return has_image and not has_video
+
+    def _filter_subjects_for_analysis(
+        self,
+        platform: str,
+        subjects: list[AuditSubject],
+        refs_by_key: dict[str, dict],
+    ) -> list[AuditSubject]:
+        if self._analysis_media_scope() != "image_text":
+            return subjects
+        kept: list[AuditSubject] = []
+        skipped = 0
+        for subject in subjects:
+            if self._should_analyze_subject(subject):
+                kept.append(subject)
+                continue
+            skipped += 1
+            self._mark_subject_skipped(platform, self._subject_content_key(subject, refs_by_key), subject)
+        if skipped:
+            job_store.log(self.job_id, f"分析范围过滤：跳过非图文内容 {skipped} 条")
+        return kept
+
+    def _mark_subject_skipped(self, platform: str, content_key: str, subject: AuditSubject) -> None:
+        if content_key:
+            self.ingestion.mark_task_content_status(
+                self.job_id,
+                platform,
+                content_key,
+                "skipped",
+            )
+        job_store.log(
+            self.job_id,
+            f"跳过非图文内容：{subject.note_id or content_key}（视频只入库，不进入本轮审核）",
         )
 
     def _ingest_loaded_output(
@@ -753,7 +860,10 @@ class AuditPipeline:
         subjects = []
         for item in contents:
             note_id = self._content_id(item, platform)
-            local_video_paths = self._find_local_media(media_root, platform, note_id, "videos", VIDEO_EXTENSIONS)
+            local_video_paths = self._valid_local_video_paths(
+                note_id,
+                self._find_local_media(media_root, platform, note_id, "videos", VIDEO_EXTENSIONS),
+            )
             local_image_paths = self._find_local_media(media_root, platform, note_id, "images", IMAGE_EXTENSIONS)
             subjects.append(
                 AuditSubject(
@@ -839,10 +949,23 @@ class AuditPipeline:
 
     def _video_urls(self, item: dict, platform: str) -> list[str]:
         if platform == "dy":
-            return split_csv_urls(item.get("video_download_url"))
+            if self._is_douyin_image_note(item):
+                return []
+            return self._filter_video_urls(split_csv_urls(item.get("video_download_url")))
         if platform == "ks":
-            return split_csv_urls(item.get("video_play_url"))
-        return split_csv_urls(item.get("video_url"))
+            return self._filter_video_urls(split_csv_urls(item.get("video_play_url")))
+        return self._filter_video_urls(split_csv_urls(item.get("video_url")))
+
+    def _is_douyin_image_note(self, item: dict) -> bool:
+        aweme_type = str(item.get("aweme_type") or "").strip()
+        return aweme_type == "68" and bool(str(item.get("note_download_url") or "").strip())
+
+    def _filter_video_urls(self, urls: list[str]) -> list[str]:
+        return [url for url in urls if not self._looks_like_audio_url(url)]
+
+    def _looks_like_audio_url(self, url: str) -> bool:
+        clean = str(url or "").split("?", 1)[0].split("#", 1)[0].lower()
+        return any(clean.endswith(ext) for ext in AUDIO_URL_EXTENSIONS)
 
     def _find_local_media(self, media_root: Path, platform: str, note_id: str, media_type: str, extensions: set[str]) -> list[str]:
         platform_dir = PLATFORM_DATA_DIRS.get(platform, platform)
@@ -859,6 +982,32 @@ class AuditPipeline:
                     if path.is_file() and path.suffix.lower() in extensions
                 )
         return [str(path) for path in sorted(files)]
+
+    def _valid_local_video_paths(self, note_id: str, paths: list[str]) -> list[str]:
+        valid = []
+        for raw_path in paths:
+            path = Path(raw_path)
+            if self._is_probably_video_file(path):
+                valid.append(str(path))
+                continue
+            job_store.log(self.job_id, f"笔记 {note_id}：跳过非视频媒体文件 {path.name}")
+        return valid
+
+    def _is_probably_video_file(self, path: Path) -> bool:
+        try:
+            with path.open("rb") as handle:
+                header = handle.read(64)
+        except OSError:
+            return False
+        if not header or header.startswith(AUDIO_FILE_SIGNATURES):
+            return False
+        if b"ftyp" in header[:16]:
+            return True
+        if header.startswith(b"\x1a\x45\xdf\xa3"):
+            return True
+        if header.startswith(b"RIFF") and b"AVI " in header[:16]:
+            return True
+        return False
 
     def _analyze_subject(self, subject: AuditSubject) -> dict:
         note_dir = settings.outputs_dir / self.job_id / "assets" / subject.note_id
@@ -884,30 +1033,65 @@ class AuditPipeline:
             desc=subject.desc,
             comments=self._format_comments_for_prompt(subject.comments),
             image_analyses=json.dumps(image_analyses, ensure_ascii=False, indent=2),
-            video_transcripts=self._format_relevant_transcripts_for_prompt(video_results),
+            video_transcripts="（视频 ASR 已合并到视频关键帧分析 JSON 的 video_text_context.asr_global_text 与 candidate_context.asr）",
             video_ocr_tracks="（视频 OCR 已绑定到 Evidence Index 的原始 timeline frame；如需引用画面文字，请使用对应 video_frame:<timestamp> 或 video:<v>/moment:<m>）",
             frame_analyses=self._format_evidence_index_for_prompt(evidence_index),
         )
         job_store.log(self.job_id, f"笔记 {subject.note_id}：开始融合审核")
-        audit = self.qwen.audit_text(prompt)
+        audit = self.qwen.audit_text(prompt, max_tokens=settings.fusion_max_tokens)
+        audit = self._recover_truncated_fusion_audit(audit)
         elapsed = perf_counter() - started_at
         job_store.log(self.job_id, f"笔记 {subject.note_id}：融合审核完成，耗时 {elapsed:.1f}s")
 
         job_root = settings.outputs_dir / self.job_id
-        risk_evidence = self._normalize_fusion_evidence(audit)
-        decision = audit.get("decision", "review")
-        risk_level = audit.get("risk_level", "unknown")
-        risk_score = self._normalize_risk_score(audit.get("risk_score"), risk_level)
-        category_scores = self._normalize_category_scores(
-            audit.get("category_scores"),
-            audit.get("categories", []),
-            risk_score,
-            risk_level,
-        )
-        score_breakdown = audit.get("score_breakdown") if isinstance(audit.get("score_breakdown"), list) else []
+        evidence_items = self._normalize_evidence_items(audit, subject, evidence_index)
+        rule_matches = self._normalize_rule_matches(audit)
+        if not rule_matches and evidence_items:
+            rule_matches = self._infer_rule_matches_from_evidence_items(evidence_items)
+        scoring = self._score_rule_matches(rule_matches)
+        evidence_risk = self._risk_from_evidence_items(evidence_items)
+        suggested_decision = str(audit.get("decision_suggestion") or audit.get("decision") or "review")
+        suggested_risk_level = str(audit.get("risk_level_suggestion") or audit.get("risk_level") or "unknown")
         primary_risk = str(audit.get("primary_risk") or "")
+        suggested_categories = audit.get("categories") if isinstance(audit.get("categories"), list) else []
+        category_labels = suggested_categories or ([primary_risk] if primary_risk else [])
+        if evidence_risk["risk_level"] != "none":
+            risk_score = evidence_risk["risk_score"]
+            risk_level = evidence_risk["risk_level"]
+            decision = evidence_risk["decision"]
+            risk_basis = "max_evidence_risk"
+            category_scores = self._normalize_category_scores(
+                [],
+                category_labels,
+                risk_score,
+                risk_level,
+            )
+            score_breakdown = scoring["score_breakdown"]
+        elif scoring["score_breakdown"]:
+            risk_score = scoring["risk_score"]
+            risk_level = scoring["risk_level"]
+            decision = scoring["decision"]
+            risk_basis = "rule_score"
+            category_scores = scoring["category_scores"]
+            score_breakdown = scoring["score_breakdown"]
+        else:
+            decision = suggested_decision
+            risk_level = suggested_risk_level
+            risk_basis = "model_suggestion"
+            risk_score = self._normalize_risk_score(audit.get("risk_score"), risk_level)
+            category_scores = self._normalize_category_scores(
+                audit.get("category_scores"),
+                suggested_categories,
+                risk_score,
+                risk_level,
+            )
+            score_breakdown = audit.get("score_breakdown") if isinstance(audit.get("score_breakdown"), list) else []
+        risk_evidence = self._normalize_fusion_evidence(audit, evidence_items=evidence_items)
         if not primary_risk and category_scores:
             primary_risk = str(category_scores[0].get("category") or "")
+        categories = suggested_categories
+        if not categories and category_scores:
+            categories = [str(item.get("category") or "") for item in category_scores if item.get("category")]
         risk_frames = self._collect_risk_frames(
             video_results,
             job_root,
@@ -933,9 +1117,12 @@ class AuditPipeline:
             "risk_level": risk_level,
             "risk_score": risk_score,
             "primary_risk": primary_risk,
-            "categories": audit.get("categories", []),
+            "categories": categories,
             "category_scores": category_scores,
             "score_breakdown": score_breakdown,
+            "risk_basis": risk_basis,
+            "evidence_items": evidence_items,
+            "rule_matches": rule_matches,
             "evidence": audit.get("evidence", []),
             "risk_evidence": risk_evidence,
             "risk_frames": risk_frames,
@@ -959,8 +1146,38 @@ class AuditPipeline:
         except (ValueError, OSError):
             return None
 
-    def _normalize_fusion_evidence(self, audit: dict) -> list[dict]:
+    def _normalize_fusion_evidence(self, audit: dict, evidence_items: list[dict] | None = None) -> list[dict]:
         out: list[dict] = []
+        if evidence_items:
+            for ev in evidence_items:
+                source = str(ev.get("source") or "")
+                modality = str(ev.get("primary_modality") or ev.get("modality") or "")
+                if modality == "comment" or source.startswith("comment"):
+                    kind = "comment"
+                elif modality == "asr" or source.startswith("video_audio"):
+                    kind = "audio"
+                elif modality == "ocr":
+                    kind = "ocr"
+                elif modality == "vision" and (source.startswith("video_frame") or source.startswith("video:")):
+                    kind = "frame_ref"
+                elif modality == "vision" or source.startswith("image"):
+                    kind = "image_ref"
+                elif source.startswith("video_frame") or source.startswith("video:"):
+                    kind = "frame_ref"
+                else:
+                    kind = "text"
+                out.append({
+                    "kind": kind,
+                    "source": source,
+                    "severity": ev.get("severity", ""),
+                    "text": ev.get("text") or ev.get("ocr_text") or ev.get("transcript_text") or "",
+                    "reason": ev.get("reason", ""),
+                    "start": ev.get("start"),
+                    "end": ev.get("end"),
+                    "comment_id": ev.get("comment_id", ""),
+                    "nickname": ev.get("nickname", ""),
+                })
+            return out
         for ev in audit.get("evidence", []) or []:
             source = str(ev.get("source", ""))
             if source.startswith("comment"):
@@ -985,6 +1202,472 @@ class AuditPipeline:
                 "end": ev.get("end"),
             })
         return out
+
+    def _normalize_evidence_items(self, audit: dict, subject: AuditSubject, evidence_index: dict) -> list[dict]:
+        raw_items = audit.get("evidence_items") if isinstance(audit.get("evidence_items"), list) else []
+        if raw_items:
+            items = [item for item in raw_items if isinstance(item, dict)]
+        else:
+            items = self._legacy_evidence_items(audit)
+        comments_by_id = {
+            str(comment.get("comment_id") or comment.get("id") or ""): comment
+            for comment in subject.comments
+            if comment.get("comment_id") or comment.get("id")
+        }
+        normalized: list[dict] = []
+        seen: set[tuple[str, str, str]] = set()
+        for index, item in enumerate(items, start=1):
+            source = str(item.get("source") or "").strip()
+            primary_modality = self._primary_modality_for_item(item)
+            evidence_id = str(item.get("evidence_id") or item.get("id") or f"ev_{primary_modality}_{index:03d}")
+            enriched = dict(item)
+            enriched["evidence_id"] = evidence_id
+            enriched["id"] = evidence_id
+            enriched["primary_modality"] = primary_modality
+            enriched["modality"] = primary_modality
+            enriched["source"] = source or self._default_source_for_modality(primary_modality)
+            self._fill_original_evidence(enriched, subject, comments_by_id, evidence_index)
+            enriched["evidence_risk_level"] = self._normalize_evidence_risk_level(
+                enriched.get("evidence_risk_level")
+                or enriched.get("risk_level")
+                or enriched.get("severity")
+            )
+            signature = (
+                primary_modality,
+                str(enriched.get("source") or ""),
+                self._compact_signature(enriched.get("text") or enriched.get("ocr_text") or enriched.get("visual_context") or ""),
+            )
+            if signature in seen:
+                continue
+            seen.add(signature)
+            normalized.append(enriched)
+        return normalized
+
+    def _risk_from_evidence_items(self, evidence_items: list[dict]) -> dict:
+        max_level = "none"
+        for item in evidence_items:
+            if not isinstance(item, dict):
+                continue
+            level = self._normalize_evidence_risk_level(
+                item.get("evidence_risk_level")
+                or item.get("risk_level")
+                or item.get("severity")
+            )
+            if self._risk_level_rank(level) > self._risk_level_rank(max_level):
+                max_level = level
+        return {
+            "risk_level": max_level,
+            "risk_score": self._risk_score_for_level(max_level),
+            "decision": self._decision_for_level(max_level),
+        }
+
+    @staticmethod
+    def _normalize_evidence_risk_level(value) -> str:
+        text = str(value or "").strip().lower()
+        aliases = {
+            "high": "high",
+            "高危": "high",
+            "medium": "medium",
+            "中危": "medium",
+            "mid": "medium",
+            "low": "low",
+            "低危": "low",
+            "待复核": "low",
+            "review": "low",
+            "none": "none",
+            "pass": "none",
+            "无风险": "none",
+            "未命中": "none",
+        }
+        return aliases.get(text, "none")
+
+    @staticmethod
+    def _risk_level_rank(level: str) -> int:
+        return {"none": 0, "low": 1, "medium": 2, "high": 3}.get(str(level or ""), 0)
+
+    @staticmethod
+    def _risk_score_for_level(level: str) -> int:
+        return {"high": 80, "medium": 60, "low": 40, "none": 0}.get(str(level or ""), 0)
+
+    @staticmethod
+    def _decision_for_level(level: str) -> str:
+        if level == "high":
+            return "reject"
+        if level in {"medium", "low"}:
+            return "review"
+        return "pass"
+
+    def _recover_truncated_fusion_audit(self, audit: dict) -> dict:
+        if not isinstance(audit, dict):
+            return {}
+        raw_response = str(audit.get("raw_response") or "")
+        if not raw_response or audit.get("evidence_items") or audit.get("rule_matches"):
+            return audit
+        recovered = dict(audit)
+        recovered["schema_version"] = self._extract_json_string_field(raw_response, "schema_version") or "audit_fusion_v3"
+        for key in (
+            "content_title",
+            "summary",
+            "decision_suggestion",
+            "risk_level_suggestion",
+            "primary_risk",
+        ):
+            value = self._extract_json_string_field(raw_response, key)
+            if value:
+                recovered[key] = value
+        categories = self._extract_json_array_field(raw_response, "categories")
+        if isinstance(categories, list):
+            recovered["categories"] = categories
+        evidence_items = self._extract_json_array_field(raw_response, "evidence_items")
+        if isinstance(evidence_items, list):
+            recovered["evidence_items"] = [item for item in evidence_items if isinstance(item, dict)]
+        rule_matches = self._extract_json_array_field(raw_response, "rule_matches")
+        if isinstance(rule_matches, list):
+            recovered["rule_matches"] = [item for item in rule_matches if isinstance(item, dict)]
+        return recovered
+
+    @staticmethod
+    def _extract_json_string_field(text: str, key: str) -> str:
+        marker = f'"{key}"'
+        start = text.find(marker)
+        if start < 0:
+            return ""
+        colon = text.find(":", start + len(marker))
+        if colon < 0:
+            return ""
+        decoder = json.JSONDecoder()
+        try:
+            value, _ = decoder.raw_decode(text[colon + 1:].lstrip())
+        except json.JSONDecodeError:
+            return ""
+        return str(value) if isinstance(value, str) else ""
+
+    @staticmethod
+    def _extract_json_array_field(text: str, key: str) -> list | None:
+        marker = f'"{key}"'
+        start = text.find(marker)
+        if start < 0:
+            return None
+        colon = text.find(":", start + len(marker))
+        if colon < 0:
+            return None
+        array_start = text.find("[", colon)
+        if array_start < 0:
+            return None
+        depth = 0
+        in_string = False
+        escaped = False
+        for pos in range(array_start, len(text)):
+            ch = text[pos]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif ch == "\\":
+                    escaped = True
+                elif ch == '"':
+                    in_string = False
+                continue
+            if ch == '"':
+                in_string = True
+            elif ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        value = json.loads(text[array_start:pos + 1])
+                    except json.JSONDecodeError:
+                        return None
+                    return value if isinstance(value, list) else None
+        return None
+
+    def _legacy_evidence_items(self, audit: dict) -> list[dict]:
+        items: list[dict] = []
+        for index, ev in enumerate(audit.get("evidence", []) or [], start=1):
+            if not isinstance(ev, dict):
+                continue
+            source = str(ev.get("source") or "")
+            modality = self._modality_from_source(source)
+            items.append({
+                "evidence_id": f"ev_{modality}_{index:03d}",
+                "primary_modality": modality,
+                "source": source,
+                "text": ev.get("text", ""),
+                "reason": ev.get("reason", ""),
+                "severity": ev.get("severity", ""),
+                "start": ev.get("start"),
+                "end": ev.get("end"),
+            })
+        return items
+
+    @staticmethod
+    def _primary_modality_for_item(item: dict) -> str:
+        value = str(item.get("primary_modality") or item.get("modality") or "").lower().strip()
+        source = str(item.get("source") or "").lower()
+        visual_elements = item.get("visual_elements") if isinstance(item.get("visual_elements"), list) else []
+        has_ocr_text = bool(str(item.get("ocr_text") or item.get("ocr_text_zh") or "").strip())
+        has_textual_image_evidence = (
+            (source.startswith("image") or source.startswith("video_frame") or source.startswith("video:"))
+            and bool(str(item.get("text") or "").strip())
+            and not visual_elements
+        )
+        if value == "vision" and (has_ocr_text or has_textual_image_evidence):
+            return "ocr"
+        if value in {"text", "ocr", "asr", "vision", "comment"}:
+            return value
+        if has_ocr_text:
+            return "ocr"
+        return AuditPipeline._modality_from_source(str(item.get("source") or ""))
+
+    @staticmethod
+    def _modality_from_source(source: str) -> str:
+        text = str(source or "").lower()
+        if text.startswith("comment"):
+            return "comment"
+        if text.startswith("video_audio") or text.startswith("audio"):
+            return "asr"
+        if text.startswith("image") or text.startswith("video_frame") or text.startswith("video:"):
+            return "vision"
+        if text.startswith("title") or text.startswith("desc"):
+            return "text"
+        return "text"
+
+    @staticmethod
+    def _default_source_for_modality(modality: str) -> str:
+        return {
+            "text": "title",
+            "ocr": "image",
+            "asr": "video_audio",
+            "comment": "comment",
+            "vision": "image",
+        }.get(modality, "title")
+
+    def _fill_original_evidence(
+        self,
+        item: dict,
+        subject: AuditSubject,
+        comments_by_id: dict[str, dict],
+        evidence_index: dict,
+    ) -> None:
+        source = str(item.get("source") or "")
+        if source == "title":
+            item.setdefault("source_label", "标题")
+            item["text"] = subject.title
+        elif source == "desc":
+            item.setdefault("source_label", "正文")
+            item["text"] = subject.desc
+        elif source.startswith("comment"):
+            comment_id = str(item.get("comment_id") or "").strip()
+            if not comment_id and ":" in source:
+                comment_id = source.split(":", 1)[1].strip()
+            comment = comments_by_id.get(comment_id) or {}
+            if comment_id:
+                item["comment_id"] = comment_id
+            if comment:
+                item["nickname"] = str(comment.get("nickname") or item.get("nickname") or "")
+                item["text"] = str(comment.get("content") or item.get("text") or "")
+            item.setdefault("source_label", "评论")
+        elif source.startswith("image"):
+            image = self._match_image_unit(evidence_index, source)
+            if image:
+                item.setdefault("source_label", f"图片 {image.get('index', '')}".strip())
+                item.setdefault("asset_rel", image.get("asset_rel") or "")
+                if image.get("ocr_text") or image.get("ocr_text_zh"):
+                    item.setdefault("ocr_text", image.get("ocr_text") or "")
+                    item.setdefault("ocr_text_zh", image.get("ocr_text_zh") or "")
+            if item.get("primary_modality") == "ocr":
+                item["text"] = item.get("ocr_text_zh") or item.get("ocr_text") or item.get("text") or ""
+        elif source.startswith("video_frame") or source.startswith("video:"):
+            frame = self._match_frame_unit(evidence_index, source)
+            if frame:
+                item.setdefault("asset_rel", frame.get("asset_rel") or "")
+                item.setdefault("frame_id", frame.get("frame_id") or "")
+                item.setdefault("timestamp", frame.get("timestamp"))
+                item.setdefault("ocr_text", frame.get("ocr_text") or "")
+                item.setdefault("ocr_text_zh", frame.get("ocr_text_zh") or "")
+            if item.get("primary_modality") == "ocr":
+                item["text"] = item.get("ocr_text_zh") or item.get("ocr_text") or item.get("text") or ""
+        if item.get("primary_modality") == "ocr" and item.get("asset_rel"):
+            supporting = item.get("supporting_modalities")
+            if not isinstance(supporting, list):
+                supporting = []
+            if "vision" not in supporting:
+                supporting.append("vision")
+            item["supporting_modalities"] = supporting
+
+    @staticmethod
+    def _match_image_unit(evidence_index: dict, source: str) -> dict:
+        for image in evidence_index.get("image_units") or []:
+            if str(image.get("source") or "") == source or str(image.get("evidence_id") or "") == source:
+                return image
+        return {}
+
+    @staticmethod
+    def _match_frame_unit(evidence_index: dict, source: str) -> dict:
+        for frame in evidence_index.get("timeline_frames") or []:
+            if source in {str(frame.get("source") or ""), str(frame.get("video_frame_source") or "")}:
+                return frame
+        timestamp = AuditPipeline._source_timestamp(source)
+        if timestamp is None:
+            return {}
+        for frame in evidence_index.get("timeline_frames") or []:
+            try:
+                if abs(float(frame.get("timestamp")) - timestamp) < 0.25:
+                    return frame
+            except (TypeError, ValueError):
+                continue
+        return {}
+
+    @staticmethod
+    def _source_timestamp(source: str) -> float | None:
+        if ":" not in source:
+            return None
+        tail = source.rsplit(":", 1)[-1]
+        if "-" in tail:
+            tail = tail.split("-", 1)[0]
+        try:
+            return float(tail)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _compact_signature(value) -> str:
+        return "".join(str(value or "").split()).lower()[:120]
+
+    @staticmethod
+    def _normalize_rule_matches(audit: dict) -> list[dict]:
+        values = audit.get("rule_matches") if isinstance(audit.get("rule_matches"), list) else []
+        out: list[dict] = []
+        for item in values:
+            if not isinstance(item, dict):
+                continue
+            rule_id = str(item.get("rule_id") or item.get("id") or "").strip()
+            if not rule_id:
+                continue
+            evidence_ids = item.get("evidence_ids") if isinstance(item.get("evidence_ids"), list) else []
+            out.append({
+                "rule_id": rule_id,
+                "rule_name": str(item.get("rule_name") or item.get("rule") or ""),
+                "modality": str(item.get("modality") or item.get("source") or ""),
+                "evidence_ids": [str(value) for value in evidence_ids if str(value).strip()],
+                "confidence": str(item.get("confidence") or ""),
+                "features": item.get("features") if isinstance(item.get("features"), list) else [],
+            })
+        return out
+
+    def _infer_rule_matches_from_evidence_items(self, evidence_items: list[dict]) -> list[dict]:
+        rules = self._active_scoring_rules()
+        if not rules:
+            return []
+        by_source: dict[str, list[dict]] = {}
+        for rule in rules:
+            source = str(rule.get("source") or "").strip()
+            if source:
+                by_source.setdefault(source, []).append(rule)
+        matches: list[dict] = []
+        for item in evidence_items:
+            if not isinstance(item, dict):
+                continue
+            modality = str(item.get("primary_modality") or item.get("modality") or "").strip()
+            evidence_id = str(item.get("evidence_id") or item.get("id") or "").strip()
+            if not modality or not evidence_id:
+                continue
+            candidates = by_source.get(modality) or []
+            if not candidates:
+                continue
+            library_id = str(item.get("risk_library_id") or item.get("library_id") or "").strip()
+            selected = None
+            if library_id:
+                selected = next(
+                    (
+                        rule for rule in candidates
+                        if str(rule.get("library_id") or "") == library_id
+                    ),
+                    None,
+                )
+            selected = selected or candidates[0]
+            matches.append({
+                "rule_id": str(selected.get("id") or selected.get("rule_id") or ""),
+                "rule_name": str(selected.get("label") or selected.get("rule") or ""),
+                "modality": modality,
+                "evidence_ids": [evidence_id],
+                "confidence": str(item.get("confidence") or ""),
+                "features": item.get("features") if isinstance(item.get("features"), list) else [],
+            })
+        return [match for match in matches if match.get("rule_id")]
+
+    def _score_rule_matches(self, rule_matches: list[dict]) -> dict:
+        rules = self._active_scoring_rules()
+        rule_by_id = {str(rule.get("id") or rule.get("rule_id") or ""): rule for rule in rules}
+        thresholds = self._active_thresholds()
+        merged: dict[str, dict] = {}
+        for match in rule_matches:
+            rule_id = str(match.get("rule_id") or "")
+            rule = rule_by_id.get(rule_id)
+            if not rule:
+                continue
+            row = merged.setdefault(rule_id, {
+                "rule_id": rule_id,
+                "rule": str(rule.get("label") or rule.get("rule") or rule_id),
+                "category": str(rule.get("category") or rule.get("library_id") or ""),
+                "library_id": str(rule.get("library_id") or ""),
+                "modality": str(rule.get("source") or match.get("modality") or ""),
+                "source": str(rule.get("source") or match.get("modality") or ""),
+                "score": self._normalize_risk_score(rule.get("score"), "none"),
+                "score_policy": "once_per_rule",
+                "evidence_ids": [],
+            })
+            for evidence_id in match.get("evidence_ids") or []:
+                if evidence_id not in row["evidence_ids"]:
+                    row["evidence_ids"].append(evidence_id)
+        score_breakdown = list(merged.values())
+        category_totals: dict[str, int] = {}
+        for row in score_breakdown:
+            category = row["category"] or row["library_id"] or "风险类别"
+            category_totals[category] = min(100, category_totals.get(category, 0) + int(row["score"] or 0))
+        category_scores = [
+            {
+                "category": category,
+                "score": score,
+                "level": self._level_from_score(score, thresholds),
+            }
+            for category, score in sorted(category_totals.items(), key=lambda item: item[1], reverse=True)
+        ]
+        risk_score = max(category_totals.values(), default=0)
+        risk_level = self._level_from_score(risk_score, thresholds)
+        decision = "reject" if risk_level == "high" else ("review" if risk_level in {"medium", "low"} else "pass")
+        return {
+            "score_breakdown": score_breakdown,
+            "category_scores": category_scores,
+            "risk_score": risk_score,
+            "risk_level": risk_level,
+            "decision": decision,
+        }
+
+    def _active_scoring_rules(self) -> list[dict]:
+        rules = self.rule_snapshot.get("scoring_rules") if isinstance(self.rule_snapshot, dict) else []
+        return [rule for rule in (rules or []) if isinstance(rule, dict)]
+
+    def _active_thresholds(self) -> dict:
+        incoming = self.rule_snapshot.get("thresholds") if isinstance(self.rule_snapshot, dict) else {}
+        thresholds = dict(DEFAULT_THRESHOLDS)
+        if isinstance(incoming, dict):
+            for key in thresholds:
+                try:
+                    thresholds[key] = int(incoming.get(key, thresholds[key]))
+                except (TypeError, ValueError):
+                    pass
+        return thresholds
+
+    @staticmethod
+    def _level_from_score(score: int, thresholds: dict) -> str:
+        if score >= int(thresholds.get("high", 80)):
+            return "high"
+        if score >= int(thresholds.get("medium", 60)):
+            return "medium"
+        if score >= int(thresholds.get("review", 40)):
+            return "low"
+        return "none"
 
     @staticmethod
     def _normalize_risk_score(score, risk_level: str = "unknown") -> int:
@@ -1296,6 +1979,7 @@ class AuditPipeline:
                     "start": moment.get("start"),
                     "end": moment.get("end"),
                     "frame_ids": moment.get("frame_ids") or [],
+                    "summary": analysis.get("summary", ""),
                     "status": analysis.get("status", "safe"),
                     "candidate_frame_ids": analysis.get("candidate_frame_ids") or [],
                     "risk_types": analysis.get("risk_types") or [],
@@ -1355,33 +2039,247 @@ class AuditPipeline:
 
     def _format_evidence_index_for_prompt(self, evidence_index: dict) -> str:
         compact = {
-            "allowed_sources": [
-                "image:<index>",
-                "video:<v>/moment:<m>",
-                "video_frame:<timestamp>",
-                "video_audio:<start-end>",
-                "comment:<id>",
-            ],
-            "image_units": evidence_index.get("image_units", []),
-            "moments": [
-                moment
-                for moment in evidence_index.get("moments", [])
-                if moment.get("status") == "suspicious" or moment.get("safe_context")
-            ],
-            "precise_sheets": evidence_index.get("precise_sheets", []),
-            "relevant_asr_segments": self._relevant_asr_segments_for_index(evidence_index),
-            "relevant_ocr_items": self._relevant_ocr_items_for_index(evidence_index),
+            "video_text_context": {
+                "ocr_global_text": self._global_ocr_text_for_prompt(evidence_index),
+                "asr_global_text": self._global_asr_text_for_prompt(evidence_index),
+            },
+            "video_visual_context": self._video_visual_context_for_prompt(evidence_index),
+            "candidate_context": self._candidate_context_for_prompt(evidence_index),
         }
         text = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
         limit = settings.fusion_frame_evidence_max_chars
         if limit > 0 and len(text) > limit:
-            compact["image_units"] = compact["image_units"][: settings.max_images_per_note]
-            compact["moments"] = compact["moments"][:12]
-            compact["precise_sheets"] = compact["precise_sheets"][: settings.max_precise_sheets_per_video]
-            compact["relevant_asr_segments"] = compact["relevant_asr_segments"][:12]
-            compact["relevant_ocr_items"] = compact["relevant_ocr_items"][:12]
+            compact["candidate_context"] = compact["candidate_context"][: max(1, VIDEO_CANDIDATE_CONTEXT_MAX_ITEMS // 2)]
+            text_context = compact["video_text_context"]
+            text_context["ocr_global_text"] = self._truncate_text(
+                text_context.get("ocr_global_text", ""),
+                max(400, VIDEO_TEXT_CONTEXT_MAX_CHARS // 2),
+            )
+            text_context["asr_global_text"] = self._truncate_text(
+                text_context.get("asr_global_text", ""),
+                max(400, VIDEO_TEXT_CONTEXT_MAX_CHARS // 2),
+            )
+            compact["video_visual_context"] = self._truncate_text(
+                compact.get("video_visual_context", ""),
+                max(300, VIDEO_VISUAL_CONTEXT_MAX_CHARS // 2),
+            )
             text = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
         return text
+
+    def _global_ocr_text_for_prompt(self, evidence_index: dict) -> str:
+        texts = []
+        for item in evidence_index.get("ocr_items") or []:
+            text = self._preferred_text(item)
+            if text:
+                texts.append(text)
+        return self._compact_text_sequence(texts, VIDEO_TEXT_CONTEXT_MAX_CHARS)
+
+    def _global_asr_text_for_prompt(self, evidence_index: dict) -> str:
+        texts = []
+        for item in evidence_index.get("asr_segments") or []:
+            text = self._preferred_text(item)
+            if text:
+                texts.append(text)
+        return self._compact_text_sequence(texts, VIDEO_TEXT_CONTEXT_MAX_CHARS)
+
+    def _video_visual_context_for_prompt(self, evidence_index: dict) -> str:
+        summaries = []
+        moments = sorted(
+            evidence_index.get("moments") or [],
+            key=lambda item: float(item.get("start") or 0.0),
+        )
+        for moment in moments:
+            summary = (
+                str(moment.get("summary") or "").strip()
+                or str(moment.get("reason") or "").strip()
+                or str(moment.get("safe_context") or "").strip()
+            )
+            if not summary:
+                continue
+            source = str(moment.get("source") or "").strip()
+            prefix = f"{source}：" if source else ""
+            summaries.append(prefix + summary)
+        return self._compact_text_sequence(summaries, VIDEO_VISUAL_CONTEXT_MAX_CHARS, separator="；")
+
+    def _candidate_context_for_prompt(self, evidence_index: dict) -> list[dict]:
+        out: list[dict] = []
+        moments_by_source = {
+            str(moment.get("source") or ""): moment
+            for moment in evidence_index.get("moments") or []
+            if moment.get("source")
+        }
+        covered_moments: set[str] = set()
+        for precise in evidence_index.get("precise_sheets") or []:
+            if len(out) >= VIDEO_CANDIDATE_CONTEXT_MAX_ITEMS:
+                break
+            candidate_frame_id = str(precise.get("candidate_frame_id") or "").strip()
+            moment_id = str(precise.get("moment_id") or "").strip()
+            moment = moments_by_source.get(moment_id) or {}
+            center_source = self._frame_source_for_candidate(
+                evidence_index,
+                candidate_frame_id,
+                precise.get("center_timestamp"),
+            )
+            out.append({
+                "candidate_id": str(precise.get("source") or f"{moment_id}:{candidate_frame_id}" or len(out) + 1),
+                "moment": moment_id,
+                "center_source": center_source,
+                "visual": {
+                    "summary": self._truncate_text(precise.get("visual_summary", ""), 140),
+                    "safe": self._truncate_text(precise.get("safe_context", ""), 120),
+                    "risks": self._compact_precise_risks(precise.get("risk_items") or [], center_source),
+                },
+                "ocr": self._candidate_ocr_for_prompt(evidence_index, [candidate_frame_id]),
+                "asr": self._candidate_asr_for_prompt(evidence_index, moment),
+            })
+            if moment_id:
+                covered_moments.add(moment_id)
+
+        for moment in evidence_index.get("moments") or []:
+            if len(out) >= VIDEO_CANDIDATE_CONTEXT_MAX_ITEMS:
+                break
+            moment_id = str(moment.get("source") or "").strip()
+            if moment_id in covered_moments or moment.get("status") != "suspicious":
+                continue
+            frame_ids = [str(value) for value in (moment.get("candidate_frame_ids") or []) if str(value).strip()]
+            center_source = self._frame_source_for_candidate(evidence_index, frame_ids[0] if frame_ids else "", None)
+            out.append({
+                "candidate_id": f"{moment_id}:coarse" if moment_id else f"coarse:{len(out) + 1}",
+                "moment": moment_id,
+                "center_source": center_source,
+                "visual": {
+                    "summary": self._truncate_text(moment.get("reason", ""), 140),
+                    "safe": "",
+                    "risks": [],
+                },
+                "ocr": self._candidate_ocr_for_prompt(evidence_index, frame_ids),
+                "asr": self._candidate_asr_for_prompt(evidence_index, moment),
+            })
+        return out
+
+    def _compact_precise_risks(self, risk_items: list[dict], fallback_source: str) -> list[dict]:
+        out = []
+        for item in risk_items[:VIDEO_CANDIDATE_TEXT_MAX_ITEMS]:
+            if not isinstance(item, dict):
+                continue
+            timestamp = item.get("timestamp")
+            source = fallback_source
+            try:
+                source = f"video_frame:{float(timestamp):.2f}"
+            except (TypeError, ValueError):
+                pass
+            out.append({
+                "source": source,
+                "level": str(item.get("severity") or "low"),
+                "type": self._truncate_text(item.get("risk_type", ""), 60),
+                "text": self._truncate_text(item.get("evidence", ""), 100),
+                "reason": self._truncate_text(item.get("reason", ""), 100),
+            })
+        return out
+
+    def _candidate_ocr_for_prompt(self, evidence_index: dict, frame_ids: list[str]) -> list[dict]:
+        targets = {str(frame_id) for frame_id in frame_ids if str(frame_id).strip()}
+        if not targets:
+            return []
+        frame_sources = self._frame_sources_by_id(evidence_index)
+        out = []
+        for item in evidence_index.get("ocr_items") or []:
+            source = str(item.get("source") or "")
+            frame_id = source.rsplit(":", 1)[-1] if ":" in source else ""
+            if frame_id not in targets:
+                continue
+            text = self._preferred_text(item)
+            if not text:
+                continue
+            out.append({
+                "source": frame_sources.get(frame_id) or self._source_from_timestamp(item.get("timestamp")),
+                "text": self._truncate_text(text, settings.fusion_ocr_text_max_chars),
+            })
+            if len(out) >= VIDEO_CANDIDATE_TEXT_MAX_ITEMS:
+                break
+        return out
+
+    def _candidate_asr_for_prompt(self, evidence_index: dict, moment: dict) -> list[dict]:
+        if not moment:
+            return []
+        try:
+            range_start = float(moment.get("start") or 0.0)
+            range_end = float(moment.get("end") if moment.get("end") is not None else range_start)
+        except (TypeError, ValueError):
+            return []
+        out = []
+        for seg in evidence_index.get("asr_segments") or []:
+            try:
+                start = float(seg.get("start") or 0.0)
+                end = float(seg.get("end") if seg.get("end") is not None else start)
+            except (TypeError, ValueError):
+                continue
+            if end < range_start or start > range_end:
+                continue
+            text = self._preferred_text(seg)
+            if not text:
+                continue
+            out.append({
+                "source": str(seg.get("audio_source") or f"video_audio:{start:.1f}-{end:.1f}"),
+                "text": self._truncate_text(text, 220),
+            })
+            if len(out) >= VIDEO_CANDIDATE_TEXT_MAX_ITEMS:
+                break
+        return out
+
+    def _frame_source_for_candidate(self, evidence_index: dict, frame_id: str, fallback_timestamp) -> str:
+        frame_sources = self._frame_sources_by_id(evidence_index)
+        if frame_id and frame_sources.get(frame_id):
+            return frame_sources[frame_id]
+        return self._source_from_timestamp(fallback_timestamp)
+
+    @staticmethod
+    def _frame_sources_by_id(evidence_index: dict) -> dict[str, str]:
+        values = {}
+        for frame in evidence_index.get("timeline_frames") or []:
+            frame_id = str(frame.get("frame_id") or "").strip()
+            source = str(frame.get("video_frame_source") or "").strip()
+            if frame_id and source:
+                values[frame_id] = source
+        return values
+
+    @staticmethod
+    def _source_from_timestamp(timestamp) -> str:
+        try:
+            return f"video_frame:{float(timestamp):.2f}"
+        except (TypeError, ValueError):
+            return ""
+
+    @staticmethod
+    def _preferred_text(item: dict) -> str:
+        return str(
+            item.get("translation_zh")
+            or item.get("text_zh")
+            or item.get("text")
+            or ""
+        ).strip()
+
+    def _compact_text_sequence(self, values: list[str], max_chars: int, separator: str = " | ") -> str:
+        clean = []
+        last = ""
+        for value in values:
+            text = " ".join(str(value or "").split())
+            if not text or text == last:
+                continue
+            clean.append(text)
+            last = text
+        if not clean:
+            return ""
+        combined = separator.join(clean)
+        if max_chars <= 0 or len(combined) <= max_chars:
+            return combined
+        marker = " … "
+        half = max(1, (max_chars - len(marker)) // 2)
+        head = separator.join(clean[: max(1, len(clean) // 2)])
+        tail = separator.join(clean[max(1, len(clean) // 2):])
+        head = head[:half].rstrip(separator)
+        tail = tail[-half:].lstrip(separator)
+        return f"{head}{marker}{tail}"
 
     def _relevant_asr_segments_for_index(self, evidence_index: dict) -> list[dict]:
         ranges = [
@@ -1451,19 +2349,29 @@ class AuditPipeline:
         return "\n".join(lines).strip() or "（无相关语音转写内容）"
 
     def _format_comments_for_prompt(self, comments: list[dict]) -> str:
-        lines: list[str] = []
         limit = max(0, settings.fusion_max_comments)
+        compact: list[dict] = []
         for comment in comments[:limit]:
             text = self._truncate_text(comment.get("content", ""), settings.fusion_comment_max_chars)
             if not text:
                 continue
             comment_id = comment.get("comment_id") or comment.get("id") or ""
-            lines.append(f"- comment:{comment_id}: {text}")
-        if not lines:
+            compact.append({
+                "comment_id": str(comment_id or ""),
+                "nickname": str(comment.get("nickname") or ""),
+                "text": text,
+            })
+        if not compact:
             return "（无评论）"
+        payload = {
+            "comments": compact,
+            "comment_count": len(comments),
+            "included_count": len(compact),
+        }
         if len(comments) > limit:
-            lines.append(f"…（评论较多，已仅保留前 {limit} 条）")
-        return "\n".join(lines)
+            payload["truncated"] = True
+            payload["limit"] = limit
+        return json.dumps(payload, ensure_ascii=False, indent=2)
 
     def _format_frame_evidence_for_prompt(self, video_results: list[dict]) -> str:
         videos_out: list[dict] = []
@@ -1686,17 +2594,299 @@ class AuditPipeline:
             "{video_ocr_tracks}": video_ocr_tracks,
             "{frame_analyses}": frame_analyses,
         }
+        extra_instruction = (
+            "\n\n新视频证据结构说明：视频关键帧分析字段现在是紧凑 JSON，包含 "
+            "video_text_context（全局 OCR/ASR 主旨文本）、video_visual_context（按 moment summary 拼接的整体画面理解）"
+            "和 candidate_context（局部粗筛/精筛候选）。"
+            "最终 evidence.source 可引用 image:<index>、video:<v>/moment:<m>、"
+            "video_frame:<timestamp>、video_audio:<start-end>、comment:<id>。"
+            "candidate_context 是局部候选，天然偏风险；最终判断必须优先结合标题、正文、"
+            "video_text_context 和 video_visual_context 的整体主旨重新校准。"
+            "如果只有 Moment 粗审怀疑、没有 Precise Sheet 明确证据，不要直接 reject/high，"
+            "优先输出 review 或 low，并说明需要复核。"
+            "若整体语境是揭秘、科普、反诈/反赌、违法犯罪警示、不能做或被骗曝光，"
+            "且没有联系方式、群入口、二维码、平台入口、收益承诺、招募带做或接单交易路径，"
+            "不要仅凭候选 OCR/ASR 中的黑话或流程词判 high/reject。"
+        )
+        prompt = self._compose_fusion_prompt(replacements, extra_instruction)
+        limit = settings.fusion_prompt_max_chars
+        if limit > 0 and len(prompt) > limit:
+            original_len = len(prompt)
+            prompt = self._trim_fusion_prompt_to_limit(replacements, extra_instruction, limit)
+            job_store.log(
+                self.job_id,
+                f"融合 Prompt 超过总长度上限，已压缩：{original_len} -> {len(prompt)} / {limit} 字符",
+            )
+        return prompt
+
+    def _compose_fusion_prompt(self, replacements: dict[str, str], extra_instruction: str) -> str:
         prompt = self.prompt_set.fusion_prompt_template
         for token, value in replacements.items():
             prompt = prompt.replace(token, value)
-        prompt += (
-            "\n\n新视频证据结构说明：视频画面证据来自 Evidence Index。"
-            "最终 evidence.source 可引用 image:<index>、video:<v>/moment:<m>、"
-            "video_frame:<timestamp>、video_audio:<start-end>、comment:<id>。"
-            "如果只有 Moment 粗审怀疑、没有 Precise Sheet 明确证据，不要直接 reject/high，"
-            "优先输出 review 或 low，并说明需要复核。"
+        return prompt + extra_instruction
+
+    def _trim_fusion_prompt_to_limit(
+        self,
+        replacements: dict[str, str],
+        extra_instruction: str,
+        limit: int,
+    ) -> str:
+        values = dict(replacements)
+
+        def render() -> str:
+            return self._compose_fusion_prompt(values, extra_instruction)
+
+        prompt = render()
+        if len(prompt) <= limit:
+            return prompt
+
+        values["{comments}"] = self._compact_comments_prompt_block(values.get("{comments}", ""), max_comments=24, max_chars=160)
+        prompt = render()
+        if len(prompt) <= limit:
+            return prompt
+
+        values["{image_analyses}"] = self._compact_image_analyses_prompt_block(
+            values.get("{image_analyses}", ""),
+            max_images=settings.max_images_per_note,
+            text_chars=220,
+            summary_chars=160,
+            risk_limit=2,
         )
-        return prompt
+        prompt = render()
+        if len(prompt) <= limit:
+            return prompt
+
+        values["{comments}"] = self._compact_comments_prompt_block(values.get("{comments}", ""), max_comments=12, max_chars=120)
+        values["{image_analyses}"] = self._compact_image_analyses_prompt_block(
+            values.get("{image_analyses}", ""),
+            max_images=min(2, settings.max_images_per_note),
+            text_chars=140,
+            summary_chars=100,
+            risk_limit=1,
+        )
+        prompt = render()
+        if len(prompt) <= limit:
+            return prompt
+
+        values["{frame_analyses}"] = self._compact_video_context_prompt_block(
+            values.get("{frame_analyses}", ""),
+            candidate_limit=max(2, VIDEO_CANDIDATE_CONTEXT_MAX_ITEMS // 2),
+            text_chars=1200,
+            visual_chars=700,
+            local_text_limit=2,
+            risk_limit=2,
+        )
+        prompt = render()
+        if len(prompt) <= limit:
+            return prompt
+
+        values["{frame_analyses}"] = self._compact_video_context_prompt_block(
+            values.get("{frame_analyses}", ""),
+            candidate_limit=2,
+            text_chars=700,
+            visual_chars=400,
+            local_text_limit=1,
+            risk_limit=1,
+        )
+        values["{desc}"] = self._truncate_prompt_block(values.get("{desc}", ""), 1200, "正文")
+        prompt = render()
+        if len(prompt) <= limit:
+            return prompt
+
+        minimums = {
+            "{frame_analyses}": 1200,
+            "{image_analyses}": 600,
+            "{comments}": 500,
+            "{desc}": 500,
+            "{title}": 160,
+        }
+        while len(prompt) > limit:
+            reducible = [
+                (token, len(values.get(token, "")))
+                for token, minimum in minimums.items()
+                if len(values.get(token, "")) > minimum
+            ]
+            if not reducible:
+                break
+            token, current_len = max(reducible, key=lambda item: item[1])
+            next_len = max(minimums[token], current_len // 2)
+            values[token] = self._truncate_prompt_block(values.get(token, ""), next_len, token.strip("{}"))
+            prompt = render()
+
+        if len(prompt) <= limit:
+            return prompt
+        return prompt[: max(0, limit - 80)] + f"\n…（融合 Prompt 仍超过总长度上限，已硬截断到 {limit} 字符）"
+
+    def _compact_comments_prompt_block(self, value: str, *, max_comments: int, max_chars: int) -> str:
+        text = str(value or "").strip()
+        if not text or text == "（无评论）":
+            return text or "（无评论）"
+        try:
+            payload = json.loads(text)
+        except (TypeError, ValueError):
+            return self._truncate_prompt_block(text, max_comments * max_chars + 300, "评论")
+        comments = payload.get("comments") if isinstance(payload, dict) else None
+        if not isinstance(comments, list):
+            return self._truncate_prompt_block(text, max_comments * max_chars + 300, "评论")
+        compact = []
+        for comment in comments[: max(0, max_comments)]:
+            if not isinstance(comment, dict):
+                continue
+            comment_text = self._truncate_text(comment.get("text", ""), max_chars)
+            if not comment_text:
+                continue
+            compact.append({
+                "comment_id": str(comment.get("comment_id") or ""),
+                "text": comment_text,
+            })
+        return json.dumps({
+            "comments": compact,
+            "comment_count": payload.get("comment_count", len(comments)),
+            "included_count": len(compact),
+            "truncated_for_prompt": True,
+        }, ensure_ascii=False, separators=(",", ":"))
+
+    def _compact_image_analyses_prompt_block(
+        self,
+        value: str,
+        *,
+        max_images: int,
+        text_chars: int,
+        summary_chars: int,
+        risk_limit: int,
+    ) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return "[]"
+        try:
+            payload = json.loads(text)
+        except (TypeError, ValueError):
+            return self._truncate_prompt_block(text, max(800, max_images * (text_chars + summary_chars + 220)), "图片分析")
+        if isinstance(payload, dict) and isinstance(payload.get("images"), list):
+            images = payload.get("images") or []
+            image_count = payload.get("image_count", len(images))
+        elif isinstance(payload, list):
+            images = payload
+            image_count = len(images)
+        else:
+            return self._truncate_prompt_block(text, max(800, max_images * (text_chars + summary_chars + 220)), "图片分析")
+        if not isinstance(images, list):
+            return self._truncate_prompt_block(text, max(800, max_images * (text_chars + summary_chars + 220)), "图片分析")
+        compact = []
+        for image in images[: max(0, max_images)]:
+            if not isinstance(image, dict):
+                continue
+            item = {
+                "source": image.get("source") or image.get("evidence_id") or f"image:{image.get('index', len(compact))}",
+                "index": image.get("index"),
+            }
+            summary = self._truncate_text(image.get("visual_summary", ""), summary_chars)
+            if summary:
+                item["visual_summary"] = summary
+            safe = self._truncate_text(image.get("benign_context", ""), summary_chars)
+            if safe:
+                item["benign_context"] = safe
+            ocr_text = self._truncate_text(image.get("ocr_text_zh") or image.get("ocr_text") or "", text_chars)
+            if ocr_text:
+                item["ocr_text"] = ocr_text
+            risks = self._compact_risk_items((image.get("risk_items") or [])[: max(0, risk_limit)])
+            if risks:
+                item["risk_items"] = risks
+            error = self._truncate_text(image.get("error", ""), 120)
+            if error:
+                item["error"] = error
+            compact.append(item)
+        return json.dumps({
+            "images": compact,
+            "image_count": image_count,
+            "included_count": len(compact),
+            "truncated_for_prompt": True,
+        }, ensure_ascii=False, separators=(",", ":"))
+
+    def _compact_video_context_prompt_block(
+        self,
+        value: str,
+        *,
+        candidate_limit: int,
+        text_chars: int,
+        visual_chars: int,
+        local_text_limit: int,
+        risk_limit: int,
+    ) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return "{}"
+        try:
+            payload = json.loads(text)
+        except (TypeError, ValueError):
+            return self._truncate_prompt_block(text, max(1200, text_chars * 2 + visual_chars), "视频证据")
+        if not isinstance(payload, dict):
+            return self._truncate_prompt_block(text, max(1200, text_chars * 2 + visual_chars), "视频证据")
+        text_context = payload.get("video_text_context") if isinstance(payload.get("video_text_context"), dict) else {}
+        compact = {
+            "video_text_context": {
+                "ocr_global_text": self._truncate_text(text_context.get("ocr_global_text", ""), text_chars),
+                "asr_global_text": self._truncate_text(text_context.get("asr_global_text", ""), text_chars),
+            },
+            "video_visual_context": self._truncate_text(payload.get("video_visual_context", ""), visual_chars),
+            "candidate_context": [],
+            "truncated_for_prompt": True,
+        }
+        for candidate in (payload.get("candidate_context") or [])[: max(0, candidate_limit)]:
+            if not isinstance(candidate, dict):
+                continue
+            visual = candidate.get("visual") if isinstance(candidate.get("visual"), dict) else {}
+            compact_candidate = {
+                "candidate_id": candidate.get("candidate_id", ""),
+                "moment": candidate.get("moment", ""),
+                "center_source": candidate.get("center_source", ""),
+                "visual": {
+                    "summary": self._truncate_text(visual.get("summary", ""), 100),
+                    "safe": self._truncate_text(visual.get("safe", ""), 100),
+                    "risks": self._compact_candidate_risks(visual.get("risks") or [], risk_limit),
+                },
+                "ocr": self._compact_source_text_items(candidate.get("ocr") or [], local_text_limit, 100),
+                "asr": self._compact_source_text_items(candidate.get("asr") or [], local_text_limit, 140),
+            }
+            compact["candidate_context"].append(compact_candidate)
+        return json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+
+    def _compact_candidate_risks(self, risks: list[dict], limit: int) -> list[dict]:
+        compact = []
+        for risk in risks[: max(0, limit)]:
+            if not isinstance(risk, dict):
+                continue
+            compact.append({
+                "source": risk.get("source", ""),
+                "level": risk.get("level", ""),
+                "type": self._truncate_text(risk.get("type", ""), 50),
+                "text": self._truncate_text(risk.get("text", ""), 80),
+                "reason": self._truncate_text(risk.get("reason", ""), 80),
+            })
+        return compact
+
+    def _compact_source_text_items(self, items: list[dict], limit: int, max_chars: int) -> list[dict]:
+        compact = []
+        for item in items[: max(0, limit)]:
+            if not isinstance(item, dict):
+                continue
+            text = self._truncate_text(item.get("text", ""), max_chars)
+            if not text:
+                continue
+            compact.append({
+                "source": item.get("source", ""),
+                "text": text,
+            })
+        return compact
+
+    def _truncate_prompt_block(self, value: str, max_chars: int, label: str) -> str:
+        text = str(value or "")
+        if max_chars <= 0 or len(text) <= max_chars:
+            return text
+        suffix = f"\n…（{label}过长，已为控制融合 Prompt 截断，原始长度 {len(text)} 字）"
+        if max_chars <= len(suffix) + 20:
+            return text[:max_chars]
+        return text[: max_chars - len(suffix)] + suffix
 
     def _analyze_images(self, subject: AuditSubject, image_dir: Path) -> list[dict]:
         results = []
@@ -1899,12 +3089,14 @@ class AuditPipeline:
             if not local:
                 error = download.error or "video download failed"
                 job_store.log(self.job_id, f"笔记 {subject.note_id}：视频下载失败：{error}")
-                results.append({
-                    "index": idx,
-                    "url": url,
-                    "error": error,
-                    "status_code": download.status_code,
-                })
+                continue
+
+            if not self._is_probably_video_file(local):
+                job_store.log(self.job_id, f"笔记 {subject.note_id}：远程媒体不是可播放视频，已跳过 {local.name}")
+                try:
+                    local.unlink()
+                except OSError:
+                    pass
                 continue
 
             results.append(self._analyze_video_file(
@@ -2313,16 +3505,18 @@ class AuditPipeline:
             "请沿用下面原关键帧审核 prompt 的判断边界，但本次只做粗审，不做最终处罚。\n\n"
             "粗审只输出合法 JSON，字段必须完全一致：\n"
             "{\n"
+            '  "summary": "一句话客观概括本 contact sheet 的画面和文字主旨，最多 35 个汉字，不写审核结论",\n'
             '  "status": "safe|suspicious",\n'
             '  "candidate_frame_ids": ["只能从本次 frames 中选择，如 f0001"],\n'
             '  "risk_types": ["风险类别"],\n'
             '  "reason": "如果 suspicious，用一句话说明怀疑点；safe 时写空字符串",\n'
-            '  "safe_context": "如果 safe，说明为什么未发现明显违规线索；suspicious 时写空字符串"\n'
+            '  "safe_context": "兼容字段，可留空；如需说明明显豁免语境，最多 30 个汉字"\n'
             "}\n\n"
             "约束：\n"
             "1. 只能引用本 contact sheet 中存在的 frame_id，不要输出自由时间段。\n"
             "2. 没有明确画面证据时输出 safe，candidate_frame_ids 为空数组。\n"
-            "3. OCR/ASR 只是上下文线索，不要仅凭单个敏感词升级风险。\n\n"
+            "3. OCR/ASR 只是上下文线索，不要仅凭单个敏感词升级风险。\n"
+            "4. summary 必须简短客观，只概括本 sheet 画面/字幕主旨，不写“安全/可疑/违规”。\n\n"
             f"原关键帧审核 prompt：\n{self.prompt_set.frame_prompt}\n\n"
             "本 Moment 上下文 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, indent=2)
@@ -2403,6 +3597,7 @@ class AuditPipeline:
         if status == "safe":
             candidate_frame_ids = []
         return {
+            "summary": self._truncate_text(analysis.get("summary", ""), 80),
             "status": status,
             "candidate_frame_ids": candidate_frame_ids,
             "risk_types": risk_types,

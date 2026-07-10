@@ -1,7 +1,9 @@
+import copy
 import hashlib
 import json
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +18,7 @@ from .audit_agent.evidence_groups import build_evidence_groups
 from .audit_agent.ingestion import AuditResultStore, IngestionStore
 from .audit_agent.job_store import job_store
 from .audit_agent.lexicon_store import LexiconStore
-from .audit_agent.pipeline import AuditPipeline
+from .audit_agent.pipeline import AuditPipeline, AUDIO_FILE_SIGNATURES, AUDIO_URL_EXTENSIONS
 from .audit_agent.rule_compiler import (
     DEFAULT_CAPABILITIES,
     DEFAULT_THRESHOLDS,
@@ -49,6 +51,126 @@ audit_policy_store = AuditPolicyStore()
 audit_config_revision_store = TaskAuditConfigRevisionStore()
 
 
+def _looks_like_audio_url(url: str) -> bool:
+    clean = str(url or "").split("?", 1)[0].split("#", 1)[0].lower()
+    return any(clean.endswith(ext) for ext in AUDIO_URL_EXTENSIONS)
+
+
+def _job_asset_path(item: dict, path_or_url: str | None) -> Path | None:
+    value = str(path_or_url or "").strip()
+    job_id = str(item.get("job_id") or "").strip()
+    if not value or not job_id or value.startswith(("http://", "https://")):
+        return None
+    job_root = (settings.outputs_dir / job_id).resolve()
+    marker = f"/outputs/{job_id}/"
+    if marker in value:
+        value = value.split(marker, 1)[1]
+    target = Path(value).expanduser()
+    if not target.is_absolute():
+        target = job_root / value
+    target = target.resolve()
+    try:
+        target.relative_to(job_root)
+    except ValueError:
+        return None
+    return target
+
+
+def _is_probably_video_file(path: Path) -> bool:
+    try:
+        with path.open("rb") as handle:
+            header = handle.read(64)
+    except OSError:
+        return False
+    if not header or header.startswith(AUDIO_FILE_SIGNATURES):
+        return False
+    if b"ftyp" in header[:16]:
+        return True
+    if header.startswith(b"\x1a\x45\xdf\xa3"):
+        return True
+    if header.startswith(b"RIFF") and b"AVI " in header[:16]:
+        return True
+    return False
+
+
+def _is_valid_video_ref(item: dict, *refs: str | None) -> bool:
+    saw_local_ref = False
+    for ref in refs:
+        value = str(ref or "").strip()
+        if not value:
+            continue
+        if _looks_like_audio_url(value):
+            return False
+        asset_path = _job_asset_path(item, value)
+        if asset_path:
+            saw_local_ref = True
+            if _is_probably_video_file(asset_path):
+                return True
+    return False if saw_local_ref else any(str(ref or "").startswith(("http://", "https://")) for ref in refs)
+
+
+def _sanitize_audit_result_media(item: dict) -> dict:
+    sanitized = copy.deepcopy(item)
+    index = sanitized.get("evidence_index") if isinstance(sanitized.get("evidence_index"), dict) else {}
+    if not index and not isinstance(sanitized.get("video_results"), list):
+        return sanitized
+
+    valid_video_units = []
+    valid_video_sources: set[str] = set()
+    for pos, unit in enumerate(index.get("video_units") or [], start=1):
+        if not isinstance(unit, dict):
+            continue
+        if _is_valid_video_ref(
+            sanitized,
+            unit.get("asset_rel"),
+            unit.get("local_path"),
+            unit.get("path"),
+            unit.get("url"),
+            unit.get("video_url"),
+            unit.get("video_play_url"),
+            unit.get("video_download_url"),
+        ):
+            valid_video_units.append(unit)
+            valid_video_sources.add(str(unit.get("source") or f"video:{pos}"))
+
+    valid_video_results = []
+    for result in sanitized.get("video_results") or []:
+        if not isinstance(result, dict):
+            continue
+        if _is_valid_video_ref(
+            sanitized,
+            result.get("asset_rel"),
+            result.get("local_path"),
+            result.get("path"),
+            result.get("url"),
+            result.get("video_url"),
+            result.get("video_play_url"),
+            result.get("video_download_url"),
+        ):
+            valid_video_results.append(result)
+
+    if isinstance(index, dict):
+        index["video_units"] = valid_video_units
+        if not valid_video_units and not valid_video_results:
+            for key in ("timeline_frames", "moment_sheets", "moments", "precise_sheets", "asr_segments", "asr_raw", "ocr_items"):
+                index[key] = []
+        elif valid_video_sources:
+            for key in ("timeline_frames", "moment_sheets", "moments", "precise_sheets", "asr_segments", "ocr_items"):
+                values = index.get(key)
+                if not isinstance(values, list):
+                    continue
+                index[key] = [
+                    value
+                    for value in values
+                    if not isinstance(value, dict)
+                    or not str(value.get("source") or "").startswith("video:")
+                    or any(str(value.get("source") or "").startswith(source) for source in valid_video_sources)
+                ]
+        sanitized["evidence_index"] = index
+    sanitized["video_results"] = valid_video_results
+    return sanitized
+
+
 class CrawlRequest(BaseModel):
     platform: str = "xhs"
     display_name: str = ""
@@ -74,6 +196,7 @@ class CrawlRequest(BaseModel):
     analysis_batch_size: int = 5
     prompt_profile_snapshot: dict = Field(default_factory=dict)
     policy_id: str = ""
+    relation_context: dict = Field(default_factory=dict)
 
 
 class JobControlRequest(BaseModel):
@@ -94,6 +217,14 @@ class AuditPolicyRequest(BaseModel):
 class AuditConfigRevisionRequest(BaseModel):
     policy_id: str
     created_by: str = ""
+
+
+class MonitoredUserFromAuditResultRequest(BaseModel):
+    audit_result_id: int
+
+
+class CommentUserRelationRequest(BaseModel):
+    relation_context: dict = Field(default_factory=dict)
 
 
 class AuditResultReviewRequest(BaseModel):
@@ -348,6 +479,56 @@ def validate_creator_url(platform: str, creator_url: str, *, allow_legacy_id: bo
     return value
 
 
+def normalize_relation_context(value: dict | None) -> dict:
+    context = dict(value or {})
+    if not context:
+        return {}
+    source = str(context.get("source") or "").strip()
+    if source != "comment_user_analysis":
+        raise HTTPException(status_code=400, detail=f"Unsupported relation_context source: {source or 'unknown'}")
+    try:
+        parent_id = int(context.get("parent_audit_result_id") or 0)
+    except (TypeError, ValueError):
+        parent_id = 0
+    if parent_id <= 0:
+        raise HTTPException(status_code=400, detail="relation_context.parent_audit_result_id is required")
+    context["parent_audit_result_id"] = parent_id
+    return context
+
+
+def relation_context_parent_result(context: dict) -> dict | None:
+    if not context:
+        return None
+    result = audit_result_store.get_result(int(context.get("parent_audit_result_id") or 0))
+    if not result:
+        raise HTTPException(status_code=404, detail="Parent audit result not found")
+    return result
+
+
+def profile_url_identity(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = urlparse(text)
+    except ValueError:
+        return text.rstrip("/").lower()
+    if not parsed.scheme or not parsed.netloc:
+        return text.rstrip("/").lower()
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{parsed.path.rstrip('/')}"
+
+
+def ensure_relation_context_matches_creator(context: dict, creator_url: str) -> dict:
+    if not context:
+        return {}
+    next_context = dict(context)
+    context_url = str(next_context.get("suspect_profile_url") or "").strip()
+    if context_url and profile_url_identity(context_url) != profile_url_identity(creator_url):
+        raise HTTPException(status_code=400, detail="relation_context.suspect_profile_url must match creator_url")
+    next_context["suspect_profile_url"] = creator_url
+    return next_context
+
+
 def enrich_job(job: dict) -> dict:
     enriched = dict(job)
     control = enriched.get("control") or {}
@@ -458,6 +639,9 @@ def available_job_actions(job: dict, stats: dict) -> dict:
 
 @app.on_event("startup")
 def recover_interrupted_jobs():
+    deleted_results = audit_result_store.delete_for_archived_jobs()
+    if deleted_results:
+        print(f"[startup] deleted results for archived jobs: {deleted_results}")
     recovered = job_store.recover_interrupted_jobs()
     if recovered:
         print(f"[startup] recovered interrupted jobs: {recovered}")
@@ -555,6 +739,40 @@ def list_outputs():
     return {"outputs": MediaCrawlerAdapter().list_existing_outputs()}
 
 
+@app.get("/api/monitored-users")
+def list_monitored_users():
+    return {"items": job_store.list_monitored_users()}
+
+
+@app.post("/api/monitored-users/from-audit-result")
+def create_monitored_user_from_audit_result(request: MonitoredUserFromAuditResultRequest):
+    result = audit_result_store.get_result(request.audit_result_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="Audit result not found")
+    try:
+        item = job_store.upsert_monitored_user_from_audit_result(result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"item": item}
+
+
+@app.post("/api/monitored-users/comment-relation")
+def create_comment_user_relation(request: CommentUserRelationRequest):
+    relation_context = normalize_relation_context(request.relation_context)
+    parent_result = relation_context_parent_result(relation_context)
+    if not parent_result:
+        raise HTTPException(status_code=404, detail="Parent audit result not found")
+    try:
+        relation = job_store.upsert_comment_user_relation(
+            analysis_job_id="",
+            relation_context=relation_context,
+            parent_audit_result=parent_result,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"relation": relation}
+
+
 @app.get("/api/audit-policies")
 def list_audit_policies(include_drafts: bool = True):
     return {"items": audit_policy_store.list(include_drafts=include_drafts)}
@@ -617,6 +835,15 @@ def publish_audit_policy(policy_id: str):
         raise HTTPException(status_code=404, detail="Audit policy not found")
 
 
+@app.delete("/api/audit-policies/{policy_id}")
+def delete_audit_policy(policy_id: str):
+    try:
+        policy = audit_policy_store.delete(policy_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Audit policy not found")
+    return {"ok": True, "id": policy_id, "policy": policy}
+
+
 @app.get("/api/lexicons")
 def list_lexicons():
     return {"categories": lexicon_store.list_categories()}
@@ -654,6 +881,22 @@ def update_lexicon_category(category_id: str, request: LexiconCategoryRequest):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"category": category, "categories": lexicon_store.list_categories()}
+
+
+@app.delete("/api/lexicons/{category_id}")
+def delete_lexicon_category(category_id: str):
+    try:
+        category = lexicon_store.delete_category(category_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Lexicon category not found")
+    affected_policies = audit_policy_store.remove_library_references(category_id)
+    return {
+        "ok": True,
+        "id": category_id,
+        "category": category,
+        "affected_policy_count": affected_policies,
+        "categories": lexicon_store.list_categories(),
+    }
 
 
 @app.post("/api/lexicon-keywords")
@@ -788,6 +1031,7 @@ def gpu_health():
 
 @app.post("/api/jobs")
 def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
+    relation_context = normalize_relation_context(request.relation_context)
     provided_library_ids = [item for item in request.library_ids if str(item).strip()]
     provided_capabilities = [item for item in request.capabilities if str(item).strip()]
     provided_rule_snapshot = bool(request.rule_snapshot)
@@ -798,7 +1042,10 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail=f"Unsupported crawl_mode: {request.crawl_mode}")
     if request.keyword_source not in {"keyword", "lexicon"}:
         raise HTTPException(status_code=400, detail=f"Unsupported keyword_source: {request.keyword_source}")
+    if relation_context and request.crawl_mode != "creator":
+        raise HTTPException(status_code=400, detail="relation_context is only supported for creator jobs")
     request.lexicon_category = request.lexicon_category.strip() or "soft"
+    relation_parent_result = relation_context_parent_result(relation_context)
     revision_payload = None
     if request.policy_id:
         policy = audit_policy_store.get(request.policy_id)
@@ -857,6 +1104,7 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
             allow_legacy_id=not bool(request.creator_url.strip()),
         )
         request.creator_id = request.creator_url
+        relation_context = ensure_relation_context_matches_creator(relation_context, request.creator_url)
     if not request.run_crawler and not request.source_output_id:
         raise HTTPException(status_code=400, detail="source_output_id is required when run_crawler is false")
 
@@ -902,6 +1150,17 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         job["id"],
         f"生成任务审核配置 Revision {revision.get('version')}：{revision.get('source_policy_name') or '自定义审核配置'}",
     )
+    if relation_context and relation_parent_result:
+        relation = job_store.upsert_comment_user_relation(
+            analysis_job_id=job["id"],
+            relation_context=relation_context,
+            parent_audit_result=relation_parent_result,
+        )
+        if relation:
+            job_store.log(
+                job["id"],
+                "已写入重点用户与疑似关联账号关系，任务创建成功后标记为已创建分析任务。",
+            )
     pipeline = AuditPipeline(job_id=job["id"])
     background_tasks.add_task(pipeline.run, request)
     return enrich_job(job_store.get(job["id"]) or job)
@@ -1127,9 +1386,10 @@ def delete_job(job_id: str):
     )
     if job.get("status") not in {"completed", "failed", "stopped", "interrupted"}:
         job_store.update(job_id, status="stopping")
-    job_store.log(job_id, "收到控制指令：删除任务，已从任务列表隐藏")
+    job_store.log(job_id, "收到控制指令：删除任务及关联分析帖子")
     job_store.archive(job_id)
-    return {"ok": True, "id": job_id}
+    deleted_result_count = audit_result_store.delete_for_job(job_id)
+    return {"ok": True, "id": job_id, "deleted_result_count": deleted_result_count}
 
 
 @app.get("/api/jobs/{job_id}/items")
@@ -1194,6 +1454,7 @@ def get_audit_result_detail(result_id: int):
     item = audit_result_store.get_result(result_id)
     if not item:
         raise HTTPException(status_code=404, detail="Audit result not found")
+    item = _sanitize_audit_result_media(item)
     revision_id = str(item.get("audit_config_revision_id") or "")
     revision = audit_config_revision_store.get(revision_id) if revision_id else None
     job = job_store.get(str(item.get("job_id") or "")) if item.get("job_id") else None
@@ -1218,6 +1479,7 @@ def review_audit_result(result_id: int, request: AuditResultReviewRequest):
         )
     except KeyError:
         raise HTTPException(status_code=404, detail="Audit result not found")
+    item = _sanitize_audit_result_media(item)
     evidence_groups = build_evidence_groups(item)
     revision_id = str(item.get("audit_config_revision_id") or "")
     revision = audit_config_revision_store.get(revision_id) if revision_id else None

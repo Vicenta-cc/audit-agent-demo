@@ -45,6 +45,8 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-btn{font:inherit;font-size:13px;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border-strong);background:var(--surface-2);color:var(--text-primary);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
 .cm-btn:hover{background:var(--surface-1)}
 .cm-btn.pri{background:var(--fill-accent);color:#fff;border-color:transparent}
+.cm-btn.dang{background:#dc2626;color:#fff;border-color:transparent}
+.cm-btn.dang:hover{background:#b91c1c}
 .cm-btn.sm{padding:4px 10px;font-size:12px}
 .cm-bd{display:inline-flex;align-items:center;font-size:11px;padding:2px 8px;border-radius:6px;background:var(--surface-1);color:var(--text-secondary);font-weight:500}
 .cm-bd.dang{background:var(--bg-danger);color:var(--text-danger)}
@@ -59,7 +61,23 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-stat.dang b{color:var(--text-danger)}
 .cm-stat.warn b{color:var(--text-warning)}
 .cm-stat.ok b{color:var(--text-success)}
-.cm-filters{display:flex;flex-wrap:wrap;gap:10px 16px;margin-bottom:16px;align-items:center}
+.cm-filter-shell{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:end;gap:14px;padding:12px 14px;margin-bottom:16px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-2)}
+.cm-filter-heading{display:flex;align-items:center;gap:8px;align-self:center;min-width:104px}
+.cm-filter-heading>i{font-size:18px;color:var(--text-accent)}
+.cm-filter-heading span{display:block;min-width:0}
+.cm-filter-heading b{display:block;font-size:12px;font-weight:500;color:var(--text-primary)}
+.cm-filter-heading small{display:block;margin-top:1px;font-size:10px;color:var(--text-muted);white-space:nowrap}
+.cm-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;min-width:0}
+.cm-filter-field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.cm-filter-field span{font-size:11px;color:var(--text-muted)}
+.cm-filter-select{width:100%;height:36px;min-width:0;border:0.5px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-0);color:var(--text-primary);font:inherit;font-size:12px;padding:0 30px 0 10px;cursor:pointer}
+.cm-filter-select:focus{outline:none;box-shadow:0 0 0 2px var(--bg-accent);border-color:var(--border-accent)}
+.cm-filter-select.on{background:var(--bg-accent);color:var(--text-accent);border-color:var(--border-accent)}
+.cm-filter-reset{width:36px;height:36px;padding:0;justify-content:center;align-self:end}
+.cm-filter-reset i{font-size:16px}
+.cm-filter-reset:disabled{opacity:.4;cursor:not-allowed;background:var(--surface-1)}
+.cm-output-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:10px 0 6px}
+.cm-output-toolbar>span{padding-bottom:8px;font-size:12px;color:var(--text-secondary)}
 .cm-fg{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .cm-fg>em{font-style:normal;font-size:11px;color:var(--text-muted)}
 .cm-chip{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:0.5px solid var(--border);background:var(--surface-2);color:var(--text-secondary);cursor:pointer}
@@ -82,6 +100,14 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-panel h2{font-size:15px;font-weight:500;margin:0 0 4px;display:flex;align-items:center;gap:8px}
 .cm-panel .sub{font-size:12px;color:var(--text-secondary);margin:0 0 10px}
 .cm-panel h3{font-size:13px;font-weight:500;margin:14px 0 8px;color:var(--text-secondary)}
+.cm-collapsible{padding:0;overflow:hidden}
+.cm-panel-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;border:0;background:transparent;color:var(--text-primary);font:inherit;text-align:left;padding:16px 18px 10px;cursor:pointer}
+.cm-panel-head:hover{background:var(--surface-1)}
+.cm-panel-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:500}
+.cm-panel-head>.ti{font-size:18px;color:var(--text-muted);flex:0 0 auto}
+.cm-panel-body{padding:0 18px 16px}
+.cm-panel-body>.sub:first-child{margin-top:0}
+.cm-collapsible.is-collapsed .cm-panel-head{padding-bottom:16px}
 .cm-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
 .cm-kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:13px}
 .cm-kv:last-child{border-bottom:none}
@@ -121,18 +147,40 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-video-sheet img{display:block;width:100%;height:auto;background:var(--surface-1)}
 .cm-video-sheet span{display:block;padding:6px 8px;font-size:11px;color:var(--text-muted)}
 .cm-video-sheet p{margin:0;padding:0 8px 8px;font-size:11px;line-height:1.45;color:var(--text-secondary)}
-.cm-video-summary{font-size:12px;color:var(--text-secondary);padding:8px 10px;border-radius:var(--radius);background:var(--surface-1);line-height:1.5;margin-bottom:8px}
+.cm-video-summary{font-size:12px;color:var(--text-secondary);padding:8px 10px;border-radius:var(--radius);background:var(--surface-1);line-height:1.5;margin-bottom:8px;white-space:pre-line}
 .cm-cmt{font-size:12px;color:var(--text-secondary);padding:7px 10px;border-radius:var(--radius);background:var(--surface-1);margin-bottom:6px}
 .cm-cmt b{color:var(--text-primary);font-weight:500}
 .cm-cmt.hit{background:var(--bg-danger);color:var(--text-danger)}
 .cm-cmt.hit b{color:var(--text-danger)}
+.cm-user-output{width:100%;display:flex;align-items:center;gap:10px;text-align:left;font:inherit;color:var(--text-primary);background:transparent;border:0;border-top:0.5px solid var(--border);padding:9px 8px;cursor:pointer}
+.cm-user-output:first-child{border-top:0}
+.cm-user-output:hover{background:var(--surface-1);border-radius:var(--radius)}
+.cm-user-output-main{display:block;min-width:0;flex:1}
+.cm-user-output-main b{display:block;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cm-user-output-main small{display:block;margin-top:2px;font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cm-user-output-side{display:flex;align-items:center;gap:7px;flex:0 0 auto}
+.cm-user-output-side i{font-size:16px;color:var(--text-muted)}
+.cm-user-output-summary{padding:7px 8px 0;font-size:11px;color:var(--text-muted);border-top:0.5px solid var(--border)}
 .cm-comment-pager{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0 6px;color:var(--text-secondary);font-size:12px}
 .cm-comment-pager .cm-mini{margin-left:auto}
 .cm-comment-list{max-height:520px;overflow:auto;padding-right:2px}
+.cm-cmt-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cm-cmt-user{min-width:0;overflow-wrap:anywhere}
+.cm-cmt-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;margin-left:auto}
+.cm-cmt-actions .cm-bd{white-space:nowrap}
 .cm-cmt p{margin:3px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .cm-cond{display:flex;align-items:center;gap:8px;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--radius);margin-bottom:6px;font-size:12px}
 .cm-cond b{font-weight:500;color:var(--text-primary);margin-right:auto}
 .cm-cond .w{color:var(--text-muted)}
+.cm-score-list{display:grid;gap:8px}
+.cm-score-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;padding:11px 12px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-2)}
+.cm-score-main{min-width:0}
+.cm-score-main b{display:block;font-size:13px;font-weight:500;color:var(--text-primary)}
+.cm-score-main small{display:block;margin-top:3px;color:var(--text-muted);font-size:11px;line-height:1.35}
+.cm-score-controls{display:flex;justify-content:flex-end;align-items:center}
+.cm-score-field{display:grid;grid-template-columns:auto 132px;gap:10px;align-items:center}
+.cm-score-field>span{color:var(--text-muted);font-size:11px;white-space:nowrap}
+.cm-score-field .cm-mini-select{width:132px;padding:0 30px;text-align:center;text-align-last:center;font-weight:600}
 .cm-task{display:grid;grid-template-columns:1fr auto;gap:8px 14px;align-items:start;padding:14px 16px;border:0.5px solid var(--border);border-radius:12px;margin-bottom:10px;background:var(--surface-2)}
 .cm-task .tm b{font-size:14px;font-weight:500;display:block}
 .cm-task .tm span{font-size:12px;color:var(--text-secondary)}
@@ -155,8 +203,10 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-choice b{display:block;font-weight:500}
 .cm-choice small{color:var(--text-secondary)}
 .cm-pills{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
-.cm-pill{font:inherit;font-size:12px;padding:6px 12px;border-radius:999px;border:0.5px solid var(--border);background:var(--surface-2);color:var(--text-secondary);cursor:pointer}
+.cm-pill{min-width:96px;display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12px;padding:7px 11px;border-radius:var(--radius);border:0.5px solid var(--border);background:var(--surface-2);color:var(--text-secondary);cursor:pointer}
+.cm-pill i{font-size:15px;color:var(--text-muted)}
 .cm-pill.on{background:var(--bg-accent);color:var(--text-accent);border-color:var(--border-accent)}
+.cm-pill.on i{color:var(--text-accent)}
 .cm-field{display:block;margin-top:12px;max-width:720px}
 .cm-field span{display:block;font-size:12px;color:var(--text-secondary);margin-bottom:5px}
 .cm-field input{width:100%;height:36px;padding:0 11px;border:0.5px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--text-primary);font:inherit;font-size:13px}
@@ -231,7 +281,7 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-lib-row{margin-top:10px}
 .cm-lib-row span{display:block;color:var(--text-secondary);margin-bottom:5px}
 .cm-lib-meta{display:flex;gap:6px;flex-wrap:wrap}
-.cm-rule-row{display:grid;grid-template-columns:1fr 72px auto;gap:10px;align-items:center;padding:10px 12px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-2);margin-bottom:8px;font-size:12px}
+.cm-rule-row{display:grid;grid-template-columns:1fr 72px;gap:10px;align-items:center;padding:10px 12px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-2);margin-bottom:8px;font-size:12px}
 .cm-rule-row b{font-weight:500}
 .cm-rule-row span{color:var(--text-secondary);text-align:right}
 .cm-tag.new{background:var(--bg-success);color:var(--text-success)}
@@ -262,7 +312,13 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-evi-text span{display:block;font-size:11px;color:var(--text-muted);margin-bottom:3px}
 .cm-evi-text p{white-space:pre-wrap;color:var(--text-secondary)}
 @media(max-width:760px){
+ .cm-filter-shell{grid-template-columns:1fr auto;align-items:center;gap:10px;padding:12px}
+ .cm-filter-heading{grid-column:1;grid-row:1}
+ .cm-filter-reset{grid-column:2;grid-row:1}
+ .cm-filters{grid-column:1/-1;grid-row:2;grid-template-columns:repeat(2,minmax(0,1fr))}
  .cm-config-grid{grid-template-columns:1fr}
+ .cm-score-row{grid-template-columns:1fr;gap:10px}
+ .cm-score-controls{justify-content:flex-start}
 }
 </style>
 </head>
@@ -284,7 +340,7 @@ var shell=document.getElementById("cmshell");
 
 	var typeTitle={platform:"平台内容抓取",live:"直播监控",user:"重点用户监控",video:"本地视频分析"};
 var typeIcon={platform:"ti-search",live:"ti-broadcast",user:"ti-user-search",video:"ti-device-tv"};
-var typeDesc={platform:"按黑话词与标签抓取笔记、视频、图片、评论、弹幕。",live:"接入实时流、回放流、弹幕流、评论流做分析。",user:"按账号监控主页、发布、互动、直播与跨平台关联。",video:"上传本地视频做逐帧、OCR、ASR、关键帧分析。"};
+var typeDesc={platform:"按黑话词与标签抓取笔记、视频、图片、评论、弹幕。",live:"接入实时流、回放流、弹幕流、评论流做分析。",user:"按账号监控主页、发布、互动、直播与疑似关联账号。",video:"上传本地视频做逐帧、OCR、ASR、关键帧分析。"};
 
 var risks=[
  {id:"R-2041",title:"夜间私域引流短视频",desc:"视频用谐音暗号引导添加站外联系方式，评论区出现高频跳转话术和私域口令。",platform:"抖音",source:"平台内容",category:"违规引流",library:"违规引流词库 v1.8",terms:["夜间","加V","私域口令"],level:"高危",status:"待复核",account:"User_88**42",linked:"SL-20240629-001",conf:92,evi:6,task:"抖音违规引流抓取",scheme:"违规引流研判方案",strategy:"多模态引流识别策略",hash:"a1f3··9c2e",
@@ -305,7 +361,7 @@ var risks=[
  {id:"R-2045",title:"图文笔记封面二维码引流",platform:"小红书",source:"平台内容",category:"违规引流",library:"违规引流词库 v1.8",terms:["夜间","跳转码"],level:"中危",status:"已加入证据链",account:"XHS_57**",linked:"SL-20240629-001",conf:67,evi:4,task:"抖音违规引流抓取",scheme:"违规引流研判方案",strategy:"多模态引流识别策略",hash:"f3c8··2b40",
   desc:"笔记封面用贴纸遮挡二维码，正文与评论引导跳转，已与重点用户 SL-20240629-001 形成关联证据。",
   comments:[["18:40","评论 留联系方式",false],["18:52","封面二维码遮挡",true]],
-  hits:[["OCR：封面二维码","命中"],["文本：跳转引导","命中"],["关系：跨平台关联","命中"]]}
+  hits:[["OCR：封面二维码","命中"],["文本：跳转引导","命中"],["关系：疑似关联账号","命中"]]}
 ];
 
 var tasks=[
@@ -314,7 +370,7 @@ var tasks=[
  {id:"T-002",name:"重点直播间实时监控",type:"直播监控",target:"直播间 live/Anchor_31**08",config:"软色情研判方案 v2.1",status:"运行中",prog:48,riskN:14,hot:3,updated:"刚刚",
   log:[["21:20","口播暗号命中，回放自动补证 R-2042"],["21:14","弹幕跳转引导，实时告警"],["20:00","接入实时直播流 + 弹幕流"]]},
  {id:"T-003",name:"重点账号持续观察",type:"重点用户监控",target:"User_88**42 等 48 个账号",config:"引流 + 软色情组合方案",status:"运行中",prog:90,riskN:5,hot:1,updated:"8 分钟前",
-  log:[["09:40","User_88**42 主页更新，触发补抓"],["08:12","跨平台关联到 XHS_57**"],["06:00","按每 2 小时频率轮询 48 个账号"]]},
+  log:[["09:40","User_88**42 主页更新，触发补抓"],["08:12","疑似关联账号 XHS_57** 已更新"],["06:00","按每 2 小时频率轮询 48 个账号"]]},
  {id:"T-004",name:"本地视频暴恐分析",type:"本地视频分析",target:"sample_clip_2026_0629.mp4",config:"暴恐研判方案 v1.2",status:"已完成",prog:100,riskN:3,hot:2,updated:"1 小时前",
   log:[["00:31","OCR 字幕命中，生成 R-2043"],["00:12","关键帧武器特征命中"],["00:00","本地视频进入逐帧分析队列"]]}
 ];
@@ -322,13 +378,13 @@ var tasks=[
 var users=[
  {id:"u1",account:"User_88**42",platforms:"抖音 / 快手",scope:"主页 · 发布 · 评论互动 · 直播",score:86,libraries:"违规引流 v1.8 / 软色情 v2.1",strategies:"多模态引流识别 / 软色情综合判定",freq:"每 2 小时",
   latest:["夜间私域引流短视频 · 命中私域口令","直播间口播暗号高频出现","评论区跳转话术聚集"],
-  related:[["Anchor_31**08","直播间高频互动"],["XHS_57**","跨平台引流目标一致"],["User_73**41","评论话术重合"]]},
+  related:[["Anchor_31**08","直播间高频互动"],["XHS_57**","疑似引流目标一致"],["User_73**41","评论话术重合"]]},
  {id:"u2",account:"Anchor_31**08",platforms:"抖音直播",scope:"直播 · 弹幕 · 回放",score:74,libraries:"软色情 v2.1",strategies:"直播画面 + ASR 综合",freq:"实时",
   latest:["直播画面命中软色情视觉特征","弹幕引导跳转私域","回放自动补证完成"],
   related:[["User_88**42","直播互动高频"],["XHS_57**","引流目标相同"]]},
  {id:"u3",account:"XHS_57**",platforms:"小红书",scope:"笔记 · 评论",score:61,libraries:"违规引流 v1.8",strategies:"图文 OCR 引流识别",freq:"每日",
   latest:["笔记封面二维码遮挡","评论区留联系方式"],
-  related:[["User_88**42","相同引流目标"],["Anchor_31**08","跨平台关联"]]}
+  related:[["User_88**42","相同引流目标"],["Anchor_31**08","疑似关联"]]}
 ];
 
 var libraries=[
@@ -387,9 +443,9 @@ var cnt=0;
 var st={screen:"workbench",riskId:"R-2041",taskId:"T-001",userId:"u1",libId:"lib1",cfgTab:"library",cfgMode:"view",strId:null,schemeId:null,
  modal:null,userEdit:null,cfgVersion:3,pendingChanges:5,tags:{},focusKey:null,cfgView:"list",nsConds:[],libReturn:null,
  filters:{category:"全部",source:"全部",level:"全部",status:"全部"},
- nsScopes:["title_body","comment","image","video","audio"],nsCaps:["text","ocr","asr","vision","comment"],nsTemplate:"balanced",nsImportance:null,
- nt:{type:"platform",name:"未命名监控任务",scheme:"sc1",platforms:["抖音"],methods:["keyword","tag"],userUrl:"",fileLoaded:false},
- apiReady:false,apiLoading:false,policies:[],jobRevisions:{},loadingRevisions:{},resultDetails:{},openEvidenceGroups:{},moreEvidenceGroups:{},activeEvidenceGroup:{},originalGalleryIdx:{},originalVideoIdx:{},commentPage:{},riskPage:1,taskOutputPage:{}};
+ nsName:"",nsLibIds:[],nsScopes:["title_body","comment","image","video","audio"],nsCaps:["text","ocr","asr","vision","comment"],nsTemplate:"balanced",nsImportance:null,nsThresholds:null,
+ nt:{type:"platform",name:"未命名监控任务",scheme:"sc1",platforms:["抖音"],methods:["keyword","tag"],userUrl:"",fileLoaded:false,relationContext:null},
+ apiReady:false,apiLoading:false,policies:[],monitoredUsers:[],jobRevisions:{},loadingRevisions:{},resultDetails:{},openEvidenceGroups:{},moreEvidenceGroups:{},activeEvidenceGroup:{},originalGalleryIdx:{},originalVideoIdx:{},commentPage:{},riskPage:1,taskOutputPage:{},taskOutputLevel:{},collapsedPanels:{},evidenceReturnTaskId:null,newTaskReturn:null,userReturn:null,taskReturnByTaskId:{}};
 
 for(var _u=0;_u<users.length;_u++)users[_u].watched=(users[_u].id==="u1");
 for(var _s2=0;_s2<schemes.length;_s2++)recomputeScheme(schemes[_s2]);
@@ -406,12 +462,19 @@ function getTaskOutputs(t){
 function userByAccount(acc){for(var i=0;i<users.length;i++)if(users[i].account===acc)return users[i];return null;}
 function nowStamp(){var arr=["刚刚","1 分钟前","2 分钟前"];return arr[(cnt++)%3];}
 function openModal(title,sub,body){st.modal={title:title,sub:sub,body:body};}
-function getUser(id){for(var i=0;i<users.length;i++)if(users[i].id===id)return users[i];return users[0];}
+function getUser(id){for(var i=0;i<users.length;i++)if(users[i].id===id)return users[i];return users[0]||{id:"",account:"暂无重点用户",platforms:"-",scope:"-",score:0,libraries:"-",strategies:"-",freq:"-",latest:[],related:[],watched:false};}
 function libraryUiId(id){var text=String(id||"");return text.indexOf("kp_")===0?text:"kp_"+text;}
 function libraryBackendId(id){var text=String(id||"");for(var i=0;i<libraries.length;i++)if(libraries[i].id===text)return libraries[i].backendId||text.replace(/^kp_/,"");return text.replace(/^kp_/,"");}
 function getLib(id){var wanted=String(id||"");var backend=wanted.replace(/^kp_/,"");for(var i=0;i<libraries.length;i++)if(libraries[i].id===wanted||libraries[i].backendId===backend)return libraries[i];return libraries[0];}
 function getScheme(id){for(var i=0;i<schemes.length;i++)if(schemes[i].id===id)return schemes[i];return schemes[0];}
-function filtered(){return risks.filter(function(r){var f=st.filters;return (f.category==="全部"||r.category===f.category)&&(f.source==="全部"||r.source===f.source)&&(f.level==="全部"||r.level===f.level)&&(f.status==="全部"||r.status===f.status);});}
+function matchesFilters(r,skip){
+ var f=st.filters;
+ return (skip==="category"||f.category==="全部"||r.category===f.category)
+  &&(skip==="source"||f.source==="全部"||r.source===f.source)
+  &&(skip==="level"||f.level==="全部"||r.level===f.level)
+  &&(skip==="status"||f.status==="全部"||r.status===f.status);
+}
+function filtered(){return risks.filter(function(r){return matchesFilters(r,"");});}
 function lvlCls(l){return l==="高危"?"dang":l==="无风险"?"ok":"warn";}
 function stCls(s){return (s.indexOf("固证")>-1||s.indexOf("证据链")>-1)?"ok":"warn";}
 
@@ -432,8 +495,26 @@ function apiForm(path,form){
 }
 function platformCode(label){return {"抖音":"dy","小红书":"xhs","快手":"ks"}[label]||"xhs";}
 function platformLabel(code){return {dy:"抖音",xhs:"小红书",ks:"快手",local:"本地上传"}[code]||code||"未知平台";}
+function isXhsProfileUrlMissingToken(value){
+ var text=String(value||"").trim();
+ return text.indexOf("xiaohongshu.com/user/profile/")>-1&&(text.indexOf("xsec_token=")<0||text.indexOf("xsec_source=")<0);
+}
 function decisionLevel(level){return {high:"高危",medium:"中危",low:"待复核",none:"无风险",unknown:"待复核"}[level]||level||"待复核";}
-function jobStatusLabel(s){return {queued:"排队中",running:"运行中",completed:"已完成",failed:"失败",stopped:"已停止",interrupted:"已中断",analysis_running:"分析中",analysis_stopped:"已暂停",crawl_paused:"已暂停",analysis_paused:"已暂停"}[s]||s||"未知";}
+function evidenceRiskLevel(item){
+ var v=String((item&&item.evidence_risk_level)||(item&&item.risk_level)||(item&&item.severity)||"").toLowerCase();
+ if(v==="高危")v="high";
+ else if(v==="中危")v="medium";
+ else if(v==="低危"||v==="待复核"||v==="review")v="low";
+ else if(v==="无风险"||v==="未命中"||v==="pass")v="none";
+ return {high:1,medium:1,low:1,none:1}[v]?v:"";
+}
+function evidenceRiskBadge(item){
+ var level=evidenceRiskLevel(item);
+ var labels={high:"高危证据",medium:"中危证据",low:"低危证据",none:"无风险证据"};
+ var classes={high:"dang",medium:"warn",low:"info",none:""};
+ return bd(classes[level]||"",labels[level]||"未定级证据");
+}
+function jobStatusLabel(s){return {queued:"排队中",running:"运行中",completed:"已完成",failed:"失败",stopped:"已停止",interrupted:"已中断",analysis_running:"分析中",analysis_stopped:"已暂停",crawl_paused:"已暂停",analysis_paused:"已暂停",linked:"已关联",job_created:"已创建分析任务"}[s]||s||"未知";}
 function safeArr(x){return Array.isArray(x)?x:[];}
 function knowledgeLabel(id){return {prohibited:"违禁引流",soft:"软色情",terror:"暴恐",drug:"涉毒",gambling:"赌博博彩",fraud:"诈骗",hate:"仇恨歧视"}[id]||id;}
 var riskLibraryIds={"违规引流":"prohibited","违禁引流":"prohibited","非法交易入口":"prohibited","管制物品":"prohibited","灰产服务":"prohibited","绕平台交易":"prohibited","软色情":"soft","色情低俗":"soft","隐私部位暴露":"soft","性暗示动作":"soft","色情资源导流":"soft","低俗互动":"soft","暴恐":"terror","暴恐极端":"terror","暴恐极端风险":"terror","涉毒":"drug","赌博":"gambling","赌博博彩":"gambling","诈骗":"fraud","仇恨":"hate","仇恨歧视":"hate"};
@@ -482,7 +563,7 @@ function ensureLibrary(id){
  return lid;
 }
 function policyToScheme(p){
- var cfg=p.published_config&&Object.keys(p.published_config).length?p.published_config:p.config||{};
+ var cfg=p.config&&Object.keys(p.config).length?p.config:p.published_config||{};
  var kids=safeArr(cfg.library_ids);
  var libIds=kids.map(ensureLibrary);
  var caps=safeArr(cfg.capabilities);if(!caps.length)caps=["text","ocr","asr","vision","comment"];
@@ -491,7 +572,7 @@ function policyToScheme(p){
  var imp=(cfg.rule_snapshot&&cfg.rule_snapshot.rule_importance)||cfg.rule_importance||cloneMap(templateDef(tmpl).weights);
  var scopes=safeArr(cfg.scopes);if(!scopes.length)scopes=["title_body","comment","image","video","audio"];
  var s={id:p.id,name:p.name,status:p.status==="published"?"已发布":"草稿",libIds:libIds,caps:caps,template:tmpl,
-  thresholds:{high:th.high||80,medium:th.medium||60,review:th.review||40},policyId:p.id,policyVersion:p.published_version||p.draft_version||"draft",
+  thresholds:{high:th.high||80,medium:th.medium||60,review:th.review||40},policyId:p.id,policyVersion:p.draft_version||p.published_version||"draft",
   sourcePolicy:p,ruleImportance:cloneMap(imp),scopes:scopes,tasks:"",outputs:cfg.outputs||[]};
  recomputeScheme(s);
  if(cfg.outputs&&cfg.outputs.length)s.outputs=cfg.outputs;
@@ -507,6 +588,91 @@ function jobToTask(j){
  if(!log.length)log=[[j.updated_at||"刚刚","任务已创建"]];
  var progress=jobProgressInfo(j,stats);
  return {id:j.id,name:j.display_name||j.keyword||j.id,type:type,target:target,config:(cur.source_policy_name||"自定义审核配置")+" "+(cur.source_policy_version||""),status:jobStatusLabel(j.status),prog:progress.percent,progressText:progress.text,taskStats:progress.stats,riskN:0,hot:0,updated:(j.updated_at||"").replace("T"," ").slice(5,16)||"刚刚",log:log,apiJob:j,apiJobId:j.id,revisions:[]};
+}
+function identityToken(value){return String(value||"").trim().toLowerCase();}
+function monitoredUserIdentity(u){
+ var author=u.author||{},strong=[],names=[];
+ var stable=String(u.stable_key||"");
+ if(stable.indexOf("id:")===0)strong.push(identityToken(stable.slice(3)));
+ else if(stable.indexOf("name:")===0)names.push(identityToken(stable.slice(5)));
+ var fields=["sec_uid","user_id","user_unique_id","short_user_id","author_key"];
+ for(var i=0;i<fields.length;i++)strong.push(identityToken(author[fields[i]]));
+ names.push(identityToken(u.display_name));
+ names.push(identityToken(u.raw_identity));
+ names.push(identityToken(author.nickname));
+ return {strong:uniqueList(strong),names:uniqueList(names)};
+}
+function riskIdentity(r){
+ var raw=r.raw||{},author=raw.author||{},strong=[],names=[];
+ var fields=["sec_uid","user_id","user_unique_id","short_user_id","author_key"];
+ for(var i=0;i<fields.length;i++)strong.push(identityToken(author[fields[i]]));
+ strong.push(identityToken(raw.author_key));
+ names.push(identityToken(author.nickname));
+ names.push(identityToken(r.account));
+ return {strong:uniqueList(strong),names:uniqueList(names)};
+}
+function identityIntersects(a,b){
+ var seen={};
+ for(var i=0;i<a.length;i++)if(a[i])seen[a[i]]=1;
+ for(var j=0;j<b.length;j++)if(b[j]&&seen[b[j]])return true;
+ return false;
+}
+function riskResultNumber(r){return Number(r.apiResultId||((r.raw||{}).audit_result_id)||((r.raw||{}).id)||0)||0;}
+function riskOutputTime(r){var raw=r.raw||{};return raw.analyzed_at||raw.updated_at||raw.created_at||"";}
+function riskOutputDedupeKey(r){
+ var raw=r.raw||{};
+ var content=raw.content_key||raw.note_id||raw.url||raw.content_url||r.title||r.id;
+ return identityToken(raw.platform||r.platform)+":"+identityToken(content);
+}
+function monitoredUserOutputs(u){
+ var identity=monitoredUserIdentity(u),sourceJob=String(u.source_job_id||""),identityMatches=[],sourceMatches=[];
+ for(var i=0;i<risks.length;i++){
+   var r=risks[i],rid=riskIdentity(r),jobId=String(r.jobId||((r.raw||{}).job_id)||"");
+   if(r.level==="无风险")continue;
+   var sameStrong=identityIntersects(identity.strong,rid.strong);
+   var sameName=!identity.strong.length&&!rid.strong.length&&identityIntersects(identity.names,rid.names);
+   if(sameStrong||sameName)identityMatches.push(r);
+   if(sourceJob&&jobId===sourceJob)sourceMatches.push(r);
+ }
+ var matches=identityMatches.length?identityMatches:sourceMatches;
+ matches.sort(function(a,b){
+   var aSource=String(a.jobId||((a.raw||{}).job_id)||"")===sourceJob;
+   var bSource=String(b.jobId||((b.raw||{}).job_id)||"")===sourceJob;
+   if(aSource!==bSource)return aSource?-1:1;
+   return riskResultNumber(b)-riskResultNumber(a);
+ });
+ var out=[],seen={};
+ for(var j=0;j<matches.length;j++){
+   var key=riskOutputDedupeKey(matches[j]);
+   if(!seen[key]){seen[key]=1;out.push(matches[j]);}
+ }
+ out.sort(function(a,b){
+   var at=riskOutputTime(a),bt=riskOutputTime(b);
+   if(at!==bt)return at<bt?1:-1;
+   return riskResultNumber(b)-riskResultNumber(a);
+ });
+ return out;
+}
+function monitoredUserToSaasUser(u){
+ var related=safeArr(u.suspected_related_accounts);
+ var account=u.display_name||u.raw_identity||u.stable_key||"未知账号";
+ var outputs=monitoredUserOutputs(u);
+ var timeline=outputs.slice(0,5).map(function(x){return {date:shortDate(riskOutputTime(x)),text:"产出「"+(x.title||"未命名内容")+"」 · "+x.level};});
+ timeline=timeline.concat(related.map(function(x){return {date:shortDate(x.job_updated_at||x.updated_at||x.job_created_at||x.created_at),text:relatedAnalysisTimelineText(x)};}));
+ return {id:"mu-"+u.id,account:account,platforms:platformLabel(u.platform),scope:"主页 · 发布 · 评论互动",score:0,libraries:"按关联任务审核配置",strategies:"评论用户主页分析",freq:"任务创建后同步",latest:outputs,timeline:timeline,
+  related:related.map(function(x){return [x.display_name||x.raw_identity||"评论用户",x.source_comment_text||x.source_risk_content||jobStatusLabel(x.analysis_status),x.analysis_job_id||((x.analysis_job||{}).id)||""];}),
+  watched:true,apiMonitoredUser:u};
+}
+function shortDate(value){
+ var s=String(value||"");
+ var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+ return m?m[2]+"-"+m[3]:"--";
+}
+function relatedAnalysisTimelineText(x){
+ var name=x.display_name||x.raw_identity||"评论用户";
+ var status=String(x.analysis_status||"job_created");
+ var state={completed:"已完成",running:"进行中",analysis_running:"进行中",queued:"排队中",failed:"失败",stopped:"已停止",interrupted:"已中断",linked:"已关联",job_created:"已创建"}[status]||jobStatusLabel(status);
+ return "评论用户 "+name+" 主页分析"+state;
 }
 function toNum(v){var n=Number(v||0);return Number.isFinite(n)?n:0;}
 function pct(done,total){if(!total)return 0;return Math.max(0,Math.min(100,Math.round(done*100/total)));}
@@ -537,6 +703,7 @@ function jobProgressInfo(j,stats){
    return {percent:pct(analyzed,total2),text:text,stats:taskStats};
  }
  if(crawled>0){
+   var maxNotes=toNum(j.max_notes)||toNum(j.maxNotes)||10000;
    return {percent:pct(crawled,maxNotes),text:text,stats:taskStats};
  }
  if(status==="running"||status==="queued"||j.crawl_status==="running")return {percent:0,text:text,stats:taskStats};
@@ -584,8 +751,76 @@ function commentIsRiskHit(c){
 }
 function normalizeComments(comments){
  return safeArr(comments).map(function(c,i){
-   return [commentDisplayLabel(c,i),commentDisplayText(c),commentIsRiskHit(c)];
+   return [commentDisplayLabel(c,i),commentDisplayText(c),commentIsRiskHit(c),tryParseJsonObject(c)];
  }).filter(function(x){return x[1];});
+}
+function commentPlatformLabel(c,r){
+ var raw=tryParseJsonObject(c)||{};
+ var p=String(raw.platform||((r.raw||{}).platform)||r.platform||"").toLowerCase();
+ if(p==="dy"||p.indexOf("douyin")>-1||p.indexOf("抖音")>-1)return "抖音";
+ if(p==="xhs"||p.indexOf("xiaohongshu")>-1||p.indexOf("小红书")>-1)return "小红书";
+ if(p==="ks"||p.indexOf("kuaishou")>-1||p.indexOf("快手")>-1)return "快手";
+ return "抖音";
+}
+function commentUserName(c,label){
+ var raw=tryParseJsonObject(c)||{};
+ return raw.nickname||raw.user_unique_id||raw.short_user_id||raw.user_id||String(label||"评论用户").replace(/^评论\s*\d+\s*·\s*/,"").split(" · ")[0]||"评论用户";
+}
+function commentProfileUrl(c,r){
+ var raw=tryParseJsonObject(c)||{};
+ var direct=[raw.profile_url,raw.user_url,raw.homepage_url,raw.home_url,raw.author_url,raw.share_url];
+ for(var i=0;i<direct.length;i++){
+   var u=String(direct[i]||"");
+   if(/^https?:\/\//i.test(u)&&/(douyin\.com\/user\/|xiaohongshu\.com\/user\/profile\/|kuaishou\.com\/profile\/)/i.test(u))return u;
+ }
+ var p=commentPlatformLabel(raw,r);
+ if(p==="抖音"&&raw.sec_uid)return "https://www.douyin.com/user/"+encodeURIComponent(raw.sec_uid);
+ if(p==="小红书"&&(raw.user_id||raw.user_unique_id||raw.short_user_id))return "https://www.xiaohongshu.com/user/profile/"+encodeURIComponent(raw.user_id||raw.user_unique_id||raw.short_user_id);
+ if(p==="快手"&&(raw.user_id||raw.user_unique_id||raw.short_user_id))return "https://www.kuaishou.com/profile/"+encodeURIComponent(raw.user_id||raw.user_unique_id||raw.short_user_id);
+ return "";
+}
+function profileUrlKey(value){
+ var text=String(value||"").trim();
+ if(!text)return "";
+ try{var u=new URL(text);return (u.protocol+"//"+u.host+u.pathname.replace(/\/$/,"")).toLowerCase();}
+ catch(_){return text.replace(/\/$/,"").toLowerCase();}
+}
+function commentRawIdentity(c){
+ var raw=tryParseJsonObject(c)||{};
+ return String(raw.sec_uid||raw.user_id||raw.user_unique_id||raw.short_user_id||"").trim();
+}
+function commentSourceId(c){
+ var raw=tryParseJsonObject(c)||{};
+ return String(raw.comment_id||raw.id||"").trim();
+}
+function relatedForComment(r,c,userUrl){
+ var resultId=Number(r.apiResultId||((r.raw||{}).audit_result_id)||((r.raw||{}).id)||0);
+ var commentId=commentSourceId(c);
+ var rawId=commentRawIdentity(c);
+ var urlKey=profileUrlKey(userUrl);
+ for(var i=0;i<st.monitoredUsers.length;i++){
+   var accounts=safeArr(st.monitoredUsers[i].suspected_related_accounts);
+   for(var j=0;j<accounts.length;j++){
+     var a=accounts[j],sameParent=Number(a.source_audit_result_id||0)===resultId;
+     if(sameParent&&commentId&&String(a.source_comment_id||"")===commentId)return a;
+     if(sameParent&&((urlKey&&profileUrlKey(a.profile_url)===urlKey)||(rawId&&String(a.raw_identity||"")===rawId)))return a;
+   }
+ }
+ return null;
+}
+function relationContextForComment(r,c,userUrl,userName,platform,commentText){
+ return {
+   source:"comment_user_analysis",
+   parent_audit_result_id:Number(r.apiResultId||((r.raw||{}).audit_result_id)||((r.raw||{}).id)||0),
+   source_job_id:r.jobId||((r.raw||{}).job_id)||"",
+   source_comment_id:commentSourceId(c),
+   suspect_platform:platformCode(platform),
+   suspect_display_name:userName||"评论用户",
+   suspect_profile_url:userUrl||"",
+   suspect_raw_identity:commentRawIdentity(c),
+   source_comment_text:commentText||"",
+   source_risk_content:commentText||r.desc||""
+ };
 }
 function renderCommentContext(r,comments){
  comments=comments||[];
@@ -604,7 +839,14 @@ function renderCommentContext(r,comments){
  html+='</div><div class="cm-comment-list">';
  for(var i=start;i<end;i++){
    var c=comments[i];
-   html+='<div class="cm-cmt '+(c[2]?"hit":"")+'"><b>'+attr(c[0])+'</b><p>'+attr(c[1])+'</p></div>';
+   var userUrl=commentProfileUrl(c[3],r),userName=commentUserName(c[3],c[0]),platform=commentPlatformLabel(c[3],r);
+   var rel=relatedForComment(r,c[3],userUrl);
+   var ctx=encodeURIComponent(JSON.stringify(relationContextForComment(r,c[3],userUrl,userName,platform,c[1])));
+   var action="";
+   var linkAction=rel?'<span class="cm-bd ok">已关联</span>':'<button class="cm-btn sm" type="button" data-act="linkCommentUser" data-ctx="'+attr(ctx)+'"><i class="ti ti-link"></i>关联</button>';
+   var analysisAction=rel&&rel.analysis_job_id?'<button class="cm-btn sm" type="button" data-act="taskOpen" data-id="'+attr(rel.analysis_job_id)+'"><i class="ti ti-arrow-right"></i>查看分析任务</button>':(userUrl?'<button class="cm-btn sm" type="button" data-act="analyzeCommentUser" data-url="'+attr(userUrl)+'" data-name="'+attr(userName)+'" data-platform="'+attr(platform)+'" data-ctx="'+attr(ctx)+'"><i class="ti ti-user-search"></i>分析该用户主页</button>':"");
+   action='<span class="cm-cmt-actions">'+linkAction+analysisAction+'</span>';
+   html+='<div class="cm-cmt '+(c[2]?"hit":"")+'"><div class="cm-cmt-head"><b class="cm-cmt-user">'+attr(c[0])+'</b>'+action+'</div><p>'+attr(c[1])+'</p></div>';
  }
  html+='</div>';
  return html;
@@ -647,13 +889,15 @@ function resultToRisk(x){
 }
 function applyApiData(payload){
  st.policies=payload.policies||[];
+ st.monitoredUsers=payload.monitoredUsers||[];
  if(payload.lexicons&&payload.lexicons.length){
-   libraries=payload.lexicons.map(lexiconToLibrary);
+   libraries=mapApiItems(payload.lexicons,lexiconToLibrary,"lexicon");
    if(!libraries.some(function(L){return L.id===st.libId;}))st.libId=libraries[0]?libraries[0].id:null;
  }
- if(st.policies.length){schemes=st.policies.map(policyToScheme);if(!getScheme(st.nt.scheme)||!schemes.some(function(s){return s.id===st.nt.scheme;}))st.nt.scheme=schemes[0].id;}
- tasks=(payload.jobs||[]).map(jobToTask);
- risks=(payload.results||[]).map(resultToRisk);
+ if(st.policies.length){schemes=mapApiItems(st.policies,policyToScheme,"policy");if(!getScheme(st.nt.scheme)||!schemes.some(function(s){return s.id===st.nt.scheme;}))st.nt.scheme=schemes[0]&&schemes[0].id;}
+ tasks=mapApiItems(payload.jobs||[],jobToTask,"job");
+ risks=mapApiItems(payload.results||[],resultToRisk,"audit-result");
+ users=mapApiItems(st.monitoredUsers,monitoredUserToSaasUser,"monitored-user");
  for(var i=0;i<tasks.length;i++){
    var outs=getTaskOutputs(tasks[i]);
    tasks[i].riskN=outs.length;
@@ -661,7 +905,16 @@ function applyApiData(payload){
  }
  if(tasks.length&&!tasks.some(function(t){return t.id===st.taskId;}))st.taskId=tasks[0].id;
  if(risks.length&&!risks.some(function(r){return r.id===st.riskId;}))st.riskId=risks[0].id;
+ if(users.length&&!users.some(function(u){return u.id===st.userId;}))st.userId=users[0].id;
  st.apiReady=true;
+}
+function mapApiItems(items,mapper,label){
+ var out=[];
+ for(var i=0;i<safeArr(items).length;i++){
+   try{out.push(mapper(items[i]));}
+   catch(err){if(window.console&&console.warn)console.warn("skip invalid "+label,err,items[i]);}
+ }
+ return out.filter(Boolean);
 }
 function loadSaasData(){
  st.apiLoading=true;
@@ -669,15 +922,17 @@ function loadSaasData(){
  apiFetch("/api/audit-policies").catch(function(){return {items:[]};}),
   apiFetch("/api/lexicons").catch(function(){return {categories:[]};}),
   apiFetch("/api/jobs").catch(function(){return [];}),
-  apiFetch("/api/audit-results?limit=500&sort=latest").catch(function(){return {items:[]};})
+  apiFetch("/api/audit-results?limit=500&sort=latest").catch(function(){return {items:[]};}),
+  apiFetch("/api/monitored-users").catch(function(){return {items:[]};})
  ]).then(function(all){
-   applyApiData({policies:all[0].items||[],lexicons:all[1].categories||[],jobs:all[2]||[],results:all[3].items||[]});
-	 }).catch(function(){
+   applyApiData({policies:all[0].items||[],lexicons:all[1].categories||[],jobs:all[2]||[],results:all[3].items||[],monitoredUsers:all[4].items||[]});
+	 }).catch(function(err){
+	   if(window.console&&console.warn)console.warn("load SaaS API data failed",err);
 	   st.apiReady=false;
 	 }).finally(function(){st.apiLoading=false;R();});
 	}
 function shouldAutoRefresh(){
- return st.apiReady&&["tasks","taskDetail","workbench"].indexOf(st.screen)>-1&&!st.modal&&!st.apiLoading;
+ return st.apiReady&&["tasks","taskDetail","workbench","users"].indexOf(st.screen)>-1&&!st.modal&&!st.apiLoading;
 }
 function startAutoRefresh(){
  if(st.autoRefreshTimer)return;
@@ -697,8 +952,87 @@ function startAutoRefresh(){
   .finally(function(){delete st.loadingRevisions[id];R();});
 }
 function loadRiskDetail(id){
- var r=getRisk(id);if(!r||!r.apiResultId||st.resultDetails[id])return;
- apiFetch("/api/audit-results/"+r.apiResultId).then(function(data){st.resultDetails[id]=data;R();}).catch(function(){});
+	 var r=getRisk(id);if(!r||!r.apiResultId||st.resultDetails[id])return;
+	 apiFetch("/api/audit-results/"+r.apiResultId).then(function(data){st.resultDetails[id]=data;R();}).catch(function(){});
+}
+function returnFromNewTask(fallback){
+ var ret=st.newTaskReturn||null;
+ st.newTaskReturn=null;
+ st.nt.relationContext=null;
+ if(ret&&ret.screen==="evidence"&&ret.riskId){
+   st.riskId=ret.riskId;
+   st.evidenceReturnTaskId=ret.taskId||null;
+   st.screen="evidence";
+   loadRiskDetail(ret.riskId);
+   return true;
+ }
+ st.screen=fallback||"tasks";
+ return false;
+}
+function currentTaskReturnContext(){
+ if(st.screen==="users")return {screen:"users",userId:st.userId};
+ if(st.screen==="evidence")return {screen:"evidence",riskId:st.riskId,taskId:st.evidenceReturnTaskId||null};
+ if(st.screen==="config")return {screen:"config",cfgView:st.cfgView,schemeId:st.schemeId,libId:st.libId};
+ return null;
+}
+function mergeUserReturnContext(){
+ if(st.screen==="taskDetail"&&st.taskId)return {screen:"taskDetail",taskId:st.taskId};
+ if(st.screen==="evidence"){
+   if(st.evidenceReturnTaskId)return {screen:"taskDetail",taskId:st.evidenceReturnTaskId,riskId:st.riskId};
+   return {screen:"evidence",riskId:st.riskId,taskId:null};
+ }
+ if(st.screen==="workbench")return {screen:"workbench"};
+ return null;
+}
+function userReturnButton(){
+ var ret=st.userReturn||null;
+ if(!ret)return "";
+ if(ret.screen==="taskDetail"&&ret.taskId&&tasks.some(function(t){return t.id===ret.taskId;})){
+   return '<button class="cm-btn" data-act="userReturnBack"><i class="ti ti-arrow-left"></i>返回任务产出</button>';
+ }
+ if(ret.screen==="evidence"&&ret.riskId){
+   return '<button class="cm-btn" data-act="userReturnBack"><i class="ti ti-arrow-left"></i>返回该帖子分析</button>';
+ }
+ if(ret.screen==="workbench"){
+   return '<button class="cm-btn" data-act="userReturnBack"><i class="ti ti-arrow-left"></i>返回风险研判</button>';
+ }
+ return "";
+}
+function returnFromUsers(){
+ var ret=st.userReturn||null;
+ st.userReturn=null;
+ if(ret&&ret.screen==="taskDetail"&&ret.taskId&&tasks.some(function(t){return t.id===ret.taskId;})){
+   st.taskId=ret.taskId;
+   st.screen="taskDetail";
+   loadTaskDetail(st.taskId);
+   return true;
+ }
+ if(ret&&ret.screen==="evidence"&&ret.riskId){
+   st.riskId=ret.riskId;
+   st.evidenceReturnTaskId=ret.taskId||null;
+   st.screen="evidence";
+   loadRiskDetail(ret.riskId);
+   return true;
+ }
+ if(ret&&ret.screen==="workbench"){
+   st.screen="workbench";
+   return true;
+ }
+ return false;
+}
+function taskBackButton(t){
+ var ret=st.taskReturnByTaskId[t.id]||null;
+ if(ret&&ret.screen==="users")return '<button class="cm-btn" data-act="taskBack"><i class="ti ti-arrow-left"></i>返回重点用户</button>';
+ if(ret&&ret.screen==="evidence")return '<button class="cm-btn" data-act="taskBack"><i class="ti ti-arrow-left"></i>返回该帖子分析</button>';
+ if(ret&&ret.screen==="config")return '<button class="cm-btn" data-act="taskBack"><i class="ti ti-arrow-left"></i>返回配置底座</button>';
+ return '<button class="cm-btn" data-act="nav" data-screen="tasks"><i class="ti ti-arrow-left"></i>返回监控任务</button>';
+}
+function returnFromTaskDetail(){
+ var ret=st.taskReturnByTaskId[st.taskId]||null;
+ if(ret&&ret.screen==="users"){st.userId=ret.userId||st.userId;st.screen="users";return true;}
+ if(ret&&ret.screen==="evidence"&&ret.riskId){st.riskId=ret.riskId;st.evidenceReturnTaskId=ret.taskId||null;st.screen="evidence";loadRiskDetail(ret.riskId);return true;}
+ if(ret&&ret.screen==="config"){st.cfgView=ret.cfgView||"list";st.schemeId=ret.schemeId||st.schemeId;st.libId=ret.libId||st.libId;st.screen="config";return true;}
+ st.screen="tasks";return false;
 }
 function submitCreateTask(){
  var nt=st.nt,scm=getScheme(nt.scheme),nm=nt.name==="未命名监控任务"?typeTitle[nt.type]+" · 新任务":nt.name;
@@ -707,13 +1041,23 @@ function submitCreateTask(){
    if(!nt.file){toast("请先选择本地视频文件","本地视频分析需要上传真实文件");return;}
    var form=new FormData();form.append("video",nt.file);form.append("display_name",nm);form.append("title",nm);form.append("policy_id",scm.policyId||scm.id);
    st.apiLoading=true;R();
-   apiForm("/api/local-video-jobs",form).then(function(){return loadSaasData();}).then(function(){st.screen="tasks";toast("本地视频任务已创建",nm+" 已生成 Revision 1");}).catch(function(err){toast("创建失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
+   apiForm("/api/local-video-jobs",form).then(function(){return loadSaasData();}).then(function(){var returned=returnFromNewTask("tasks");toast("本地视频任务已创建",returned?nm+" 已创建，已返回该帖子分析页面":nm+" 已生成 Revision 1");}).catch(function(err){toast("创建失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
    return;
  }
  var body={policy_id:scm.policyId||scm.id,display_name:nm,platform:platformCode(nt.platforms[0]),crawl_mode:nt.type==="user"?"creator":"search",keyword_source:"lexicon",keyword:"",start_page:DEFAULT_START_PAGE,max_notes:DEFAULT_MAX_NOTES,max_comments:DEFAULT_MAX_COMMENTS,max_concurrency:DEFAULT_MAX_CONCURRENCY,analyze_limit:DEFAULT_ANALYZE_LIMIT,run_crawler:true};
- if(nt.type==="user")body.creator_url=nt.userUrl;
+ if(nt.type==="user"){
+   body.creator_url=nt.userUrl;
+   if(body.platform==="xhs"&&isXhsProfileUrlMissingToken(body.creator_url)){toast("请复制完整小红书主页地址","需要包含 xsec_token 和 xsec_source");return;}
+   if(nt.relationContext&&profileUrlKey(nt.relationContext.suspect_profile_url)===profileUrlKey(body.creator_url)){
+     body.relation_context=Object.assign({},nt.relationContext,{suspect_profile_url:body.creator_url});
+   }
+   else if(nm.indexOf("评论用户 · ")===0){
+     toast("缺少评论关系上下文","请从评论区的“分析该用户主页”按钮重新进入");
+     return;
+   }
+ }
  st.apiLoading=true;R();
- apiFetch("/api/jobs",{method:"POST",body:JSON.stringify(body)}).then(function(){return loadSaasData();}).then(function(){st.screen="tasks";toast("任务已创建",nm+" 已生成 Revision 1");}).catch(function(err){toast("任务创建失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
+ apiFetch("/api/jobs",{method:"POST",body:JSON.stringify(body)}).then(function(){return loadSaasData();}).then(function(){var returned=returnFromNewTask("tasks");toast("任务已创建",returned?nm+" 已创建，已返回该帖子分析页面":nm+" 已生成 Revision 1");}).catch(function(err){toast("任务创建失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
 }
 function updateTaskPolicy(jobId,policyId){
  apiFetch("/api/jobs/"+jobId+"/audit-config-revisions",{method:"POST",body:JSON.stringify({policy_id:policyId,created_by:"saas-demo"})}).then(function(data){st.modal=null;toast("审核策略已更新","已生成 Revision "+data.revision.version+"，只影响后续结果");return loadSaasData();}).catch(function(err){toast("更新失败",String(err.message||err).slice(0,120));});
@@ -727,6 +1071,17 @@ function kv(l,v){return '<div class="cm-kv"><span>'+l+'</span><b>'+v+'</b></div>
 function kvLive(l,v,id){return '<div class="cm-kv"><span>'+l+'</span><b id="'+id+'">'+v+'</b></div>';}
 function bd(c,t){return '<span class="cm-bd '+c+'">'+t+'</span>';}
 function flow(t,s){return '<div class="cm-flow-step"><b>'+t+'</b><span>'+s+'</span></div>';}
+function panelKey(scope,id){return "task:"+(id||"current")+":"+scope;}
+function panelDefaultCollapsed(key){return /:(run-log|audit-config|config-history)$/.test(String(key||""));}
+function panelCollapsed(key){return Object.prototype.hasOwnProperty.call(st.collapsedPanels,key)?!!st.collapsedPanels[key]:panelDefaultCollapsed(key);}
+function renderCollapsiblePanel(key,icon,title,body,extraClass){
+ var collapsed=panelCollapsed(key);
+ return '<section class="cm-panel cm-collapsible '+(extraClass||"")+(collapsed?' is-collapsed':'')+'">'
+  +'<button class="cm-panel-head" type="button" data-act="togglePanel" data-key="'+attr(key)+'" aria-expanded="'+(collapsed?"false":"true")+'" title="'+(collapsed?"展开":"收起")+'">'
+  +'<span class="cm-panel-title"><i class="ti '+attr(icon)+'"></i>'+attr(title)+'</span><i class="ti '+(collapsed?'ti-chevron-down':'ti-chevron-up')+'"></i></button>'
+  +(collapsed?'':'<div class="cm-panel-body">'+body+'</div>')
+  +'</section>';
+}
 function fmtTime(v){var s=String(v||"").replace("T"," ");return s?s.slice(0,19):"-";}
 function capsReviewText(ids){var map={text:"文本",ocr:"画面文字",asr:"语音",vision:"画面",comment:"评论"};var out=[];for(var i=0;i<ids.length;i++)if(map[ids[i]])out.push(map[ids[i]]);return out.join(" / ")||"文本";}
 function splitTerms(v){if(Array.isArray(v))return v;return String(v||"").split(/[,\n，、\s]+/).filter(Boolean);}
@@ -751,6 +1106,13 @@ function top(){
 }
 
 function scWorkbench(){
+ var riskStats={total:0,high:0,medium:0,review:0};
+ for(var statIdx=0;statIdx<risks.length;statIdx++){
+   var statLevel=risks[statIdx].level;
+   if(statLevel==="高危"){riskStats.high++;riskStats.total++;}
+   else if(statLevel==="中危"){riskStats.medium++;riskStats.total++;}
+   else if(statLevel==="待复核"){riskStats.review++;riskStats.total++;}
+ }
  var fr=filtered();
  var pg=pageInfo(fr.length,st.riskPage,RESULT_PAGE_SIZE);
  st.riskPage=pg.page;
@@ -759,26 +1121,51 @@ function scWorkbench(){
  var cards="";
  if(!fr.length){cards='<div class="cm-empty">当前筛选条件下没有风险内容</div>';}
  else{for(var i=0;i<shown.length;i++){cards+=riskCard(shown[i]);}}
- function fg(label,kind,opts){var cur=st.filters[kind];var c="";for(var i=0;i<opts.length;i++){c+='<button class="cm-chip '+(cur===opts[i]?"on":"")+'" data-act="filter" data-kind="'+kind+'" data-val="'+opts[i]+'">'+opts[i]+'</button>';}return '<div class="cm-fg"><em>'+label+'</em>'+c+'</div>';}
- return ph("风险研判工作台","按时间范围汇总异常内容，直接进入询证、固证和用户归并",
+ function filterOrder(kind){
+   return {category:["软色情","暴恐","涉毒","违规引流","赌博博彩","诈骗","仇恨歧视","无风险"],source:["平台内容","平台内容抓取","直播","直播监控","重点用户监控","本地上传","本地视频分析"],level:["高危","中危","待复核","无风险"],status:["待复核","已复核","已固证","已加入证据链"]}[kind]||[];
+ }
+ function filterSelect(label,kind){
+   var base=risks.filter(function(r){return matchesFilters(r,kind);});
+   var counts={};
+   for(var fi=0;fi<base.length;fi++){var v=base[fi][kind]||"未标记";counts[v]=(counts[v]||0)+1;}
+   var cur=st.filters[kind]||"全部";
+   if(cur!=="全部"&&!Object.prototype.hasOwnProperty.call(counts,cur))counts[cur]=0;
+   var order=filterOrder(kind);
+   var vals=Object.keys(counts).sort(function(a,b){
+     var ai=order.indexOf(a),bi=order.indexOf(b);
+     if(ai>-1||bi>-1)return (ai>-1?ai:999)-(bi>-1?bi:999);
+     return a.localeCompare(b,"zh-Hans-CN");
+   });
+   var html='<label class="cm-filter-field"><span>'+label+'</span><select class="cm-filter-select '+(cur!=="全部"?"on":"")+'" data-act="filterSelect" data-kind="'+kind+'">';
+   html+='<option value="全部">全部（'+base.length+'）</option>';
+   for(var oi=0;oi<vals.length;oi++){html+='<option value="'+attr(vals[oi])+'" '+(cur===vals[oi]?"selected":"")+'>'+attr(vals[oi])+'（'+counts[vals[oi]]+'）</option>';}
+   html+='</select></label>';
+   return html;
+ }
+ var activeFilterCount=0;
+ for(var filterKey in st.filters)if(Object.prototype.hasOwnProperty.call(st.filters,filterKey)&&st.filters[filterKey]!=="全部")activeFilterCount++;
+ return ph("风险研判工作台","按时间范围汇总异常内容，直接进入询证和用户归并",
    '<button class="cm-btn sm" data-act="exportReview"><i class="ti ti-file-export"></i>导出复核清单</button>')
-  +'<div class="cm-stats">'+stat("风险内容","128","近 7 天")+stat("高危内容","18","风险等级","dang")+stat("待复核","42","处理状态","warn")+stat("已固证","63","证据状态","ok")+stat("已归并用户","12","归人进度")+'</div>'
-  +'<div class="cm-filters">'
-   +fg("分类","category",["全部","软色情","暴恐","涉毒","违规引流"])
-   +fg("来源","source",["全部","平台内容","直播","本地上传"])
-   +fg("等级","level",["全部","高危","中危"])
-   +fg("状态","status",["全部","待复核","已固证","已加入证据链"])
-   +'<button class="cm-btn sm" data-act="resetFilter">重置</button>'
+  +'<div class="cm-stats">'+stat("风险内容",""+riskStats.total,"全部风险")+stat("高危内容",""+riskStats.high,"风险等级","dang")+stat("中危内容",""+riskStats.medium,"风险等级","warn")+stat("待复核",""+riskStats.review,"风险等级")+stat("已归并用户",""+users.length,"重点用户","ok")+'</div>'
+  +'<div class="cm-filter-shell">'
+   +'<div class="cm-filter-heading"><i class="ti ti-adjustments-horizontal"></i><span><b>筛选条件</b><small>'+(activeFilterCount?"已启用 "+activeFilterCount+" 项":"全部内容")+'</small></span></div>'
+   +'<div class="cm-filters">'
+    +filterSelect("分类","category")
+    +filterSelect("来源","source")
+    +filterSelect("等级","level")
+    +filterSelect("状态","status")
+   +'</div>'
+   +'<button class="cm-btn cm-filter-reset" type="button" data-act="resetFilter" title="重置筛选" aria-label="重置筛选" '+(activeFilterCount?"":"disabled")+'><i class="ti ti-restore"></i></button>'
   +'</div>'+pager+cards+(fr.length?pager:"");
 }
 
 function riskCard(r){
  return '<article class="cm-card clk" data-act="openEvidence" data-id="'+r.id+'">'
-  +'<div class="cm-card-top">'+bd("info",r.platform)+bd("",r.source)+bd(lvlCls(r.level),r.level)+bd(stCls(r.status),r.status)+(r.decision?bd(r.decision==="已确认"?"dang":"ok",r.decision):"")+'<span class="t">'+r.id+'</span></div>'
+  +'<div class="cm-card-top">'+bd("info",r.platform)+bd("",r.source)+bd(lvlCls(r.level),r.level)+(r.decision?bd(r.decision==="已确认"?"dang":"ok",r.decision):"")+'<span class="t">'+r.id+'</span></div>'
   +'<h3>'+r.title+'</h3><p class="desc">'+r.desc+'</p>'
   +'<div class="cm-tags"><span class="cm-tag"><i class="ti ti-book"></i>'+r.library+'</span><span class="cm-tag"><i class="ti ti-subtask"></i>'+r.task+'</span></div>'
   +'<div class="cm-card-foot"><span class="cm-acct">发布：<b>'+r.account+'</b> · 关联用户 '+r.linked+' · 置信度 '+r.conf+'%</span>'
-   +'<span class="cm-mini"><button class="cm-btn sm" data-act="openEvidence" data-id="'+r.id+'">查看详情</button><button class="cm-btn sm" data-act="secure" data-id="'+r.id+'">固证</button><button class="cm-btn sm" data-act="merge" data-id="'+r.id+'">归并用户</button></span></div>'
+   +'<span class="cm-mini"><button class="cm-btn sm" data-act="openEvidence" data-id="'+r.id+'">查看详情</button><button class="cm-btn sm" data-act="merge" data-id="'+r.id+'">归并用户</button></span></div>'
   +'</article>';
 }
 
@@ -855,6 +1242,37 @@ function renderLanguageRows(item,groupType){
  }
  return html;
 }
+function compactListText(values){
+ values=safeArr(values).map(function(v){return String(v||"").trim();}).filter(Boolean);
+ return values.join("、");
+}
+function renderOriginalEvidenceRows(item,groupType){
+ var html="";
+ function row(label,value){
+   value=String(value||"").trim();
+   if(value)html+='<p><b>'+label+'：</b>'+attr(value)+'</p>';
+ }
+ if(groupType==="comment"){
+   row("评论用户",item.nickname||item.user_nickname||"");
+   row("评论ID",item.comment_id||"");
+   row("评论原文",item.text||item.content||item.evidence||"");
+ }else if(groupType==="ocr"){
+   row("OCR原文",item.ocr_text||item.text||item.content||"");
+   if(item.ocr_text_zh&&item.ocr_text_zh!==(item.ocr_text||item.text))row("中文译文",item.ocr_text_zh);
+ }else if(groupType==="asr"){
+   var range=(item.start||item.start===0?item.start:"")+(item.end||item.end===0?" - "+item.end:"");
+   row("时间",range);
+   row("转写原文",item.source_text_dolphin||item.text||item.content||"");
+   if(item.source_text_mms)row("MMS复核原文",item.source_text_mms);
+   row("中文译文",item.translation_zh||item.text_zh||"");
+ }else if(groupType==="vision"){
+   row("可见元素",compactListText(item.visual_elements));
+   row("画面原文",item.text||item.content||"");
+ }else{
+   row("原文",item.text||item.content||item.evidence||"");
+ }
+ return html;
+}
 function evidenceMediaItems(item,groupType,r,detail){
  var audit=(detail&&detail.audit_result)||r.raw||{};
  var jobId=audit.job_id||((r.raw||{}).job_id)||"";
@@ -878,20 +1296,75 @@ function renderEvidenceMedia(item,group,r,detail){
  for(var i=0;i<media.length;i++)html+='<figure><img src="'+attr(media[i].url)+'" alt="'+attr(media[i].label)+'"><figcaption>'+attr(media[i].label)+'</figcaption></figure>';
  return html+'</div>';
 }
+function evidenceCommentId(item){
+ return String(item.comment_id||item.source_comment_id||item.commentId||(String(item.source||"").indexOf("comment:")===0?String(item.source).split(":")[1]:"")||"").trim();
+}
+function rawCommentFromEntry(entry){
+ if(Array.isArray(entry))return tryParseJsonObject(entry[3])||{};
+ var raw=tryParseJsonObject(entry);
+ return raw&&typeof raw==="object"?raw:{};
+}
+function commentForEvidenceItem(r,item,detail){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var targetId=evidenceCommentId(item);
+ var targetText=String(item.text||item.content||item.evidence||"").trim();
+ var targetName=String(item.nickname||item.user_nickname||item.user_name||"").trim();
+ var lists=[safeArr(audit.comments),safeArr(r.comments)];
+ for(var li=0;li<lists.length;li++){
+   var comments=lists[li];
+   for(var i=0;i<comments.length;i++){
+     var raw=rawCommentFromEntry(comments[i]);
+     if(!raw||typeof raw!=="object")continue;
+     if(targetId&&commentSourceId(raw)===targetId)return raw;
+   }
+ }
+ for(var lj=0;lj<lists.length;lj++){
+   var fallback=lists[lj];
+   for(var j=0;j<fallback.length;j++){
+     var raw2=rawCommentFromEntry(fallback[j]);
+     if(!raw2||typeof raw2!=="object")continue;
+     var sameText=targetText&&String(commentDisplayText(raw2)||"").trim()===targetText;
+     var sameName=targetName&&commentUserName(raw2,"")===targetName;
+     if(sameText&&(!targetName||sameName))return raw2;
+   }
+ }
+ return {
+   comment_id:targetId,
+   nickname:targetName,
+   user_id:item.user_id||item.comment_user_id||"",
+   user_unique_id:item.user_unique_id||"",
+   short_user_id:item.short_user_id||"",
+   sec_uid:item.sec_uid||"",
+   content:targetText
+ };
+}
+function renderCommentEvidenceActions(item,r,detail){
+ var raw=commentForEvidenceItem(r,item,detail);
+ var text=String(item.text||item.content||item.evidence||commentDisplayText(raw)||"").trim();
+ var userName=commentUserName(raw,item.nickname||item.user_nickname||item.user_name||"评论用户");
+ var platform=commentPlatformLabel(raw,r);
+ var userUrl=commentProfileUrl(raw,r);
+ var ctxObj=relationContextForComment(r,raw,userUrl,userName,platform,text);
+ if(!ctxObj.parent_audit_result_id)return "";
+ var ctx=encodeURIComponent(JSON.stringify(ctxObj));
+ var rel=relatedForComment(r,raw,userUrl);
+ var linkAction=rel?'<span class="cm-bd ok">已关联</span>':'<button class="cm-btn sm" type="button" data-act="linkCommentUser" data-ctx="'+attr(ctx)+'"><i class="ti ti-link"></i>关联</button>';
+ var analysisAction=rel&&rel.analysis_job_id?'<button class="cm-btn sm" type="button" data-act="taskOpen" data-id="'+attr(rel.analysis_job_id)+'"><i class="ti ti-arrow-right"></i>查看分析任务</button>':(userUrl?'<button class="cm-btn sm" type="button" data-act="analyzeCommentUser" data-url="'+attr(userUrl)+'" data-name="'+attr(userName)+'" data-platform="'+attr(platform)+'" data-ctx="'+attr(ctx)+'"><i class="ti ti-user-search"></i>分析该用户主页</button>':"");
+ return '<span class="cm-cmt-actions">'+linkAction+analysisAction+'</span>';
+}
 function renderEvidenceItem(item,idx,group,r,detail){
  var lib=evidenceItemLibrary(item,group,r,detail);
  var type=item.evidence_type||({text:"文本命中",ocr:"OCR命中",asr:"ASR命中",comment:"评论命中",vision:"视觉命中"}[group.type]||"证据命中");
  var explain=item.hit_explanation||item.reason||item.rule||item.title||"命中风险规则";
- var summary=item.content||item.evidence||item.text_zh||item.translation_zh||item.text||item.context||"暂无摘要";
  var pos=item.position||item.source||"内容上下文";
- var badge=item.is_supplementary||!(item.risk_contribution>0)?bd("","补充依据"):bd("info","计分依据");
+ var badge=evidenceRiskBadge(item);
+ var commentActions=group.type==="comment"?renderCommentEvidenceActions(item,r,detail):"";
  return '<div class="cm-evi-item">'
-  +'<div class="cm-evi-head"><b>'+((idx+1)+". "+type)+'</b>'+badge+'</div>'
+  +'<div class="cm-evi-head"><b>'+((idx+1)+". "+type)+'</b>'+commentActions+badge+'</div>'
   +'<div class="cm-evi-meta">'+bd("info","风险库："+attr(lib))+'</div>'
   +renderEvidenceMedia(item,group,r,detail)
+  +renderOriginalEvidenceRows(item,group.type)
   +'<p><b>命中解释：</b>'+attr(explain)+'</p>'
-  +'<p><b>证据摘要：</b>'+attr(summary)+'</p>'
-  +renderLanguageRows(item,group.type)
   +'<p style="font-size:11px;color:var(--text-muted)">位置：'+attr(pos)+'</p>'
  +'</div>';
 }
@@ -1104,8 +1577,8 @@ function renderOriginalText(r,detail){
  return '<div class="cm-original-text">'+attr(parts.join("\n"))+'</div>';
 }
 function renderOriginalImageGallery(r,detail,images){
- var audit=(detail&&detail.audit_result)||r.raw||{};
- var jobId=audit.job_id||((r.raw||{}).job_id)||"";
+	 var audit=(detail&&detail.audit_result)||r.raw||{};
+	 var jobId=audit.job_id||((r.raw||{}).job_id)||"";
  var usable=[];
  for(var i=0;i<images.length;i++){
    var url=mediaAssetUrl(jobId,images[i].path);
@@ -1129,20 +1602,20 @@ function renderOriginalImageGallery(r,detail,images){
    for(var d=0;d<total;d++)html+='<button class="cm-gallery-dot '+(d===idx?"on":"")+'" data-act="originalGalleryPick" data-id="'+attr(key)+'" data-idx="'+d+'" aria-label="第 '+(d+1)+' 张"></button>';
    html+='</div>';
  }
- html+='</div></div>';
- return html;
+	 html+='</div></div>';
+	 return html;
 }
 function renderOriginalMedia(r,detail){
- var audit=(detail&&detail.audit_result)||r.raw||{};
- var jobId=audit.job_id||((r.raw||{}).job_id)||"";
+	 var audit=(detail&&detail.audit_result)||r.raw||{};
+	 var jobId=audit.job_id||((r.raw||{}).job_id)||"";
  var images=collectOriginalImages(r,detail);
  var videos=collectOriginalVideos(r,detail);
  var html=renderOriginalText(r,detail);
- var hasVideo=hasOriginalVideo(r,detail);
- if(videos.length){
-   html+=renderOriginalVideoPlayer(r,detail,videos);
-   return html;
- }
+	 var hasVideo=hasOriginalVideo(r,detail);
+	 if(videos.length){
+	   html+=renderOriginalVideoPlayer(r,detail,videos);
+	   return html;
+	 }
  if(images.length&&!hasVideo){
    html+=renderOriginalImageGallery(r,detail,images);
    return html;
@@ -1176,7 +1649,7 @@ function sheetSummaryBySource(idx,audit){
  var map={};
  function putMoment(m){
    var source=m.source||m.moment_id;
-   if(source&&!map[source])map[source]=firstText(m.reason,m.safe_context,m.visual_summary,m.summary);
+   if(source&&!map[source])map[source]=firstText(m.summary,m.safe_context,m.reason,m.visual_summary);
  }
  function putSheet(p){
    var source=p.source||p.precise_sheet_id||p.moment_id;
@@ -1199,35 +1672,45 @@ function sheetSummaryBySource(idx,audit){
 }
 function videoSummaryFromIndex(idx,audit){
  audit=audit||{};
- var texts=[];
- safeArr(idx.precise_sheets).forEach(function(x){if(x.visual_summary)texts.push(x.visual_summary);});
- safeArr(idx.moments).forEach(function(x){var text=firstText(x.reason,x.safe_context);if(text)texts.push(text);});
- safeArr(idx.video_units).forEach(function(v){safeArr(v.moments).forEach(function(x){var text=firstText(x.reason,x.safe_context,x.visual_summary);if(text)texts.push(text);});});
+ var momentTexts=[],fallbackTexts=[];
+ function momentText(x){
+   var analysis=(x&&x.analysis)||x||{};
+   return firstText(analysis.summary,x.summary,analysis.safe_context,x.safe_context,analysis.reason,x.reason,analysis.visual_summary,x.visual_summary);
+ }
+ function preciseText(x){
+   return firstText(x&&x.safe_context,x&&x.visual_summary,x&&x.reason,x&&x.summary);
+ }
+ safeArr(idx.moments).forEach(function(x){var text=momentText(x);if(text)momentTexts.push(text);});
+ safeArr(idx.video_units).forEach(function(v){safeArr(v.moments).forEach(function(x){var text=momentText(x);if(text)momentTexts.push(text);});});
  safeArr(audit.video_results).forEach(function(v){
-   safeArr((v||{}).moments).forEach(function(x){var text=firstText(x.reason,x.safe_context,x.visual_summary);if(text)texts.push(text);});
-   safeArr((v||{}).precise_sheets).forEach(function(x){if(x.visual_summary)texts.push(x.visual_summary);});
+   safeArr((v||{}).moments).forEach(function(x){var text=momentText(x);if(text)momentTexts.push(text);});
+   safeArr((v||{}).precise_sheets).forEach(function(x){var text=preciseText(x);if(text)fallbackTexts.push(text);});
  });
+ safeArr(idx.precise_sheets).forEach(function(x){var text=preciseText(x);if(text)fallbackTexts.push(text);});
+ var texts=momentTexts.length?momentTexts:fallbackTexts;
  var seen={},out=[];
  for(var i=0;i<texts.length;i++){var t=String(texts[i]||"").trim();if(t&&!/^<[^>]+>(<[^>]+>)*$/.test(t)&&!seen[t]){seen[t]=1;out.push(t);}}
- return out.slice(0,2).join(" ");
+ return truncateUiText(out.join("\n"),900);
 }
 function renderVideoContext(r,detail){
  var audit=(detail&&detail.audit_result)||r.raw||{};
  var idx=audit.evidence_index||{};
  var summary=videoSummaryFromIndex(idx,audit);
- return summary?'<h3>视频内容摘要</h3><div class="cm-video-summary">'+attr(summary)+'</div>':"";
+ return summary?'<h3>视频画面概览</h3><div class="cm-video-summary">'+attr(summary)+'</div>':"";
 }
 
 function scEvidence(){
- var r=getRisk(st.riskId);
- var detail=st.resultDetails[r.id]||null;
- var rev=(detail&&detail.audit_config_revision)||{};
- var historical=detail&&detail.is_historical_config;
- var audit=(detail&&detail.audit_result)||r.raw||{};
- var comments=normalizeComments(safeArr(audit.comments).length?audit.comments:r.comments);
- return ph("风险内容询证详情","原始内容、命中依据、证据材料、用户归因的完整证据链",
-   '<button class="cm-btn" data-act="nav" data-screen="workbench"><i class="ti ti-arrow-left"></i>返回工作台</button><button class="cm-btn pri" data-act="secure" data-id="'+r.id+'">固证</button>')
-  +'<div class="cm-card"><div class="cm-card-top">'+bd("info","来源："+r.source)+bd("info",r.platform)+bd(lvlCls(r.level),r.level)+bd(stCls(r.status),r.status)+bd("","证据 "+r.evi+" 条")+'<span class="t">'+r.id+'</span></div><h3 style="margin:0">'+r.title+'</h3></div>'
+	 var r=getRisk(st.riskId);
+	 var detail=st.resultDetails[r.id]||null;
+	 var rev=(detail&&detail.audit_config_revision)||{};
+	 var historical=detail&&detail.is_historical_config;
+	 var audit=(detail&&detail.audit_result)||r.raw||{};
+	 var comments=normalizeComments(safeArr(audit.comments).length?audit.comments:r.comments);
+	 var backTaskId=st.evidenceReturnTaskId&&tasks.some(function(t){return t.id===st.evidenceReturnTaskId;})?st.evidenceReturnTaskId:"";
+	 var backBtn=backTaskId?'<button class="cm-btn" data-act="taskOpen" data-id="'+attr(backTaskId)+'" data-preserve-return="1"><i class="ti ti-arrow-left"></i>返回该任务</button>':'<button class="cm-btn" data-act="nav" data-screen="workbench"><i class="ti ti-arrow-left"></i>返回工作台</button>';
+	 return ph("风险内容询证详情","原始内容、命中依据与证据材料的完整证据链",
+	   backBtn)
+  +'<div class="cm-card"><div class="cm-card-top">'+bd("info","来源："+r.source)+bd("info",r.platform)+bd(lvlCls(r.level),r.level)+bd("","证据 "+r.evi+" 条")+'<span class="t">'+r.id+'</span></div><h3 style="margin:0">'+r.title+'</h3></div>'
   +'<div class="cm-2">'
    +'<div class="cm-panel"><h2><i class="ti ti-player-play"></i>原始内容与上下文</h2>'
      +renderOriginalMedia(r,detail)
@@ -1238,29 +1721,24 @@ function scEvidence(){
      +(historical?'<div class="cm-cmt" style="background:var(--bg-warning);color:var(--text-warning)">该结果使用历史配置生成，和任务当前配置可能不同。</div>':"")
      +renderEvidenceGroups(r,detail)
      +'</div>'
-  +'</div>'
-  +'<div class="cm-panel"><h2><i class="ti ti-users-group"></i>用户归因与操作</h2>'
-   +'<div class="cm-2"><div>'
-     +'<div class="cm-rel-node"><b>'+r.account+' → '+r.linked+'</b><span>关联置信度 88% · 关联证据 '+r.evi+' 条 · 相似话术 + 相同引流目标</span></div>'
-     +'<h3>下一步建议</h3>'+flow("人工复核风险解释","确认多模态命中是否成立")+flow("补抓近期发布","补充该账号近 7 天内容")+flow("归并到重点用户","聚合到用户维度持续观察")
-   +'</div><div>'
-     +'<h3>处置动作'+(r.decision?' · 当前：'+r.decision:"")+'</h3>'
-     +'<div class="cm-mini" style="flex-direction:column;align-items:stretch;gap:8px">'
-      +'<button class="cm-btn pri" data-act="confirmRisk" data-id="'+r.id+'"><i class="ti ti-check"></i>确认风险</button>'
-      +'<button class="cm-btn" data-act="secure" data-id="'+r.id+'"><i class="ti ti-fingerprint"></i>固证生成保全记录</button>'
-      +'<button class="cm-btn" data-act="merge" data-id="'+r.id+'"><i class="ti ti-user-plus"></i>归并到重点用户</button>'
-      +'<button class="cm-btn" data-act="backfillRisk" data-id="'+r.id+'"><i class="ti ti-refresh"></i>补抓近期发布</button>'
-      +'<button class="cm-btn" data-act="dismissRisk" data-id="'+r.id+'"><i class="ti ti-x"></i>排除误报</button>'
-     +'</div></div></div></div>';
+  +'</div>';
 }
 
 function scTasks(){
- var running=tasks.filter(function(t){return t.status==="运行中";}).length;
+ var running=tasks.filter(function(t){return t.status==="运行中"||t.status==="分析中";}).length;
+ var recentCutoff=Date.now()-7*24*60*60*1000;
+ var recentRisks=risks.filter(function(r){
+   if(r.level==="无风险")return false;
+   var stamp=riskOutputTime(r),time=Date.parse(stamp);
+   return !stamp||!Number.isFinite(time)||time>=recentCutoff;
+ }).length;
+ var userTasks=tasks.filter(function(t){return t.type==="重点用户监控";}).length;
+ var platformTasks=tasks.filter(function(t){return t.type==="平台内容抓取";}).length;
  var rows="";for(var i=0;i<tasks.length;i++){rows+=taskRow(tasks[i]);}
  return ph("监控任务","平台抓取、直播接入、重点用户、本地视频四类来源的运行操作台",
    '<button class="cm-btn pri" data-act="nav" data-screen="newTask"><i class="ti ti-plus"></i>新建监控任务</button>')
-  +'<div class="cm-stats">'+stat("运行中任务",""+running,"当前")+stat("新增风险","128","近 7 天")+stat("直播接入","4","实时")+stat("重点用户","37","账号")+stat("本地待分析","6","队列","warn")+'</div>'
-  +'<div class="cm-panel"><h2><i class="ti ti-list-check"></i>任务运行列表</h2><p class="sub">点任务行或「查看产出」进入产出详情，看这个任务真正抓到了什么。也可暂停、补抓、调整配置。</p>'+rows+'</div>';
+  +'<div class="cm-stats">'+stat("运行中任务",""+running,"当前")+stat("新增风险",""+recentRisks,"近 7 天","dang")+stat("直播监控任务","0","暂未接入")+stat("重点用户任务",""+userTasks,"任务")+stat("平台抓取任务",""+platformTasks,"任务")+'</div>'
+  +'<div class="cm-panel"><h2><i class="ti ti-list-check"></i>任务运行列表</h2><p class="sub">点任务行或「查看产出」进入产出详情，看这个任务真正抓到了什么。也可暂停抓取、补抓、暂停分析或继续分析。</p>'+rows+'</div>';
 }
 
 function taskRow(t){
@@ -1268,17 +1746,19 @@ function taskRow(t){
  var sc=t.status.indexOf("完成")>-1?"ok":paused?"warn":"info";
  var outN=getTaskOutputs(t).length;
  return '<div class="cm-task" data-act="taskOpen" data-id="'+t.id+'" style="cursor:pointer"><div class="tm"><b>'+t.name+'</b><span>'+t.type+' · '+compactTargetText(t.target)+'</span><small><i class="ti ti-settings" style="font-size:12px;vertical-align:-1px"></i> 引用：'+t.config+' · 更新于 '+t.updated+'</small></div>'
-  +'<div class="ts">'+bd(sc,t.status)+'<b class="'+(t.hot>0&&!paused?"d":"")+'">产出 '+outN+' · 高危 '+t.hot+'</b><span style="font-size:11px;color:var(--text-muted)">可进入询证 '+outN+' 条</span><span style="font-size:11px;color:var(--text-muted)">'+attr(t.progressText||"")+'</span></div>'
-  +'<div class="cm-task-acts">'
-   +'<button class="cm-btn sm pri" data-act="taskOpen" data-id="'+t.id+'"><i class="ti ti-eye"></i>查看产出</button>'
-   +'<button class="cm-btn sm" data-act="taskPause" data-id="'+t.id+'"><i class="ti '+(paused?"ti-player-play":"ti-player-pause")+'"></i>'+(paused?"继续":"暂停")+'</button>'
-   +'<button class="cm-btn sm" data-act="taskBackfill" data-id="'+t.id+'"><i class="ti ti-refresh"></i>补抓</button>'
-   +'<button class="cm-btn sm" data-act="taskConfig" data-id="'+t.id+'"><i class="ti ti-settings"></i>调整配置</button>'
-   +'<button class="cm-btn sm" data-act="taskOpen" data-id="'+t.id+'"><i class="ti ti-history"></i>运行日志</button>'
-  +'</div></div>';
+  +'<div class="ts">'+bd(sc,t.status)+'<b class="'+(t.hot>0&&!paused?"d":"")+'">产出 '+outN+' · 高危 '+t.hot+'</b><span style="font-size:11px;color:var(--text-muted)">'+attr(t.progressText||"")+'</span></div>'
+	 +'<div class="cm-task-acts">'
+	  +'<button class="cm-btn sm pri" data-act="taskOpen" data-id="'+t.id+'"><i class="ti ti-eye"></i>查看产出</button>'
+	  +'<button class="cm-btn sm" data-act="taskControl" data-control="pause_crawl" data-name="暂停抓取" data-id="'+t.id+'"><i class="ti ti-player-pause"></i>暂停抓取</button>'
+	  +'<button class="cm-btn sm" data-act="taskBackfill" data-id="'+t.id+'"><i class="ti ti-refresh"></i>补抓</button>'
+	  +'<button class="cm-btn sm" data-act="taskControl" data-control="pause_analysis" data-name="暂停分析" data-id="'+t.id+'"><i class="ti ti-player-pause"></i>暂停分析</button>'
+	  +'<button class="cm-btn sm" data-act="taskControl" data-control="backfill_analysis" data-name="继续分析" data-id="'+t.id+'"><i class="ti ti-player-play"></i>继续分析</button>'
+	  +'<button class="cm-btn sm dang" data-act="taskDelete" data-id="'+t.id+'"><i class="ti ti-trash"></i>删除</button>'
+	 +'</div></div>';
 }
 
 function renderTaskAuditConfig(t){
+ var panel=panelKey("audit-config",t.id);
  var cur=t.apiJob&&t.apiJob.current_audit_config_revision;
  var compat=false;
  var ac={};
@@ -1297,7 +1777,7 @@ function renderTaskAuditConfig(t){
    };
    cur={version:"兼容",source_policy_name:"自定义审核配置",source_policy_version:"旧任务",effective_from:t.apiJob.created_at||t.apiJob.updated_at||"",prompt_version:ac.prompt_version};
  }else{
-   return '<div class="cm-panel"><h2><i class="ti ti-settings"></i>本任务审核配置</h2><p class="sub">静态样例任务暂无后端配置快照。</p>'+kv("引用配置",t.config)+kv("采集对象",compactTargetText(t.target))+'</div>';
+   return renderCollapsiblePanel(panel,"ti-settings","本任务审核配置",'<p class="sub">静态样例任务暂无后端配置快照。</p>'+kv("引用配置",t.config)+kv("采集对象",compactTargetText(t.target)));
  }
  var fullRev=cur;
  var revs=safeArr(st.jobRevisions[t.id]);
@@ -1339,62 +1819,72 @@ function renderTaskAuditConfig(t){
    ruleItems.push(r);
  });
  var rules=ruleItems.map(function(r){
-   return '<div class="cm-rule-row"><b>'+attr(ruleSimpleName(r))+'</b><span>'+(importanceLabels[r.importance]||r.importance||"")+'</span>'+bd("info","+"+(r.score||0))+'</div>';
+   var level=r.importance||"medium";
+   return '<div class="cm-rule-row"><b>'+attr(ruleSimpleName(r))+'</b><span>'+(importanceLabels[level]||level)+'</span></div>';
  }).join("");
  if(!rules)rules='<div class="cm-empty" style="padding:12px">'+(compat?"旧任务只保存了 Prompt/基础配置，未生成结构化评分规则。":"未记录评分规则")+'</div>';
  var th=ac.thresholds||{};
- return '<div class="cm-panel"><h2><i class="ti ti-settings"></i>本次审核配置</h2><p class="sub">当前任务实际运行使用的审核配置，仅供查看，不可修改。</p>'
+ return renderCollapsiblePanel(panel,"ti-settings","本次审核配置",'<p class="sub">当前任务实际运行使用的审核配置，仅供查看，不可修改。</p>'
   +'<div class="cm-config-grid cm-config-meta"><div>'+kv("来源模板",sourceTemplate||"-")+kv("修订版本",compat?"兼容配置":"Revision "+cur.version)+kv("检测范围",caps)+'</div><div>'+kv("风险阈值","高危≥"+(th.high||80)+" · 中危≥"+(th.medium||60)+" · 待复核≥"+(th.review||40))+kv("生效时间",fmtTime(cur.effective_from))+'</div></div>'
-  +'<div class="cm-config-grid"><div><h3>黑话库</h3><div class="cm-kp-list">'+libCards+'</div></div><div><h3>评分规则</h3><div class="cm-rule-list">'+rules+'</div></div></div></div>';
+  +'<div class="cm-config-grid"><div><h3>黑话库</h3><div class="cm-kp-list">'+libCards+'</div></div><div><h3>评分规则</h3><div class="cm-rule-list">'+rules+'</div></div></div>');
 }
 function renderConfigHistory(t){
  if(!t.apiJobId)return "";
+ var panel=panelKey("config-history",t.id);
  var loaded=Object.prototype.hasOwnProperty.call(st.jobRevisions,t.id);
- if(!loaded){loadTaskDetail(t.id);return '<div class="cm-panel"><h2><i class="ti ti-history"></i>配置历史</h2><p class="sub">正在读取配置历史，稍后会自动刷新。</p></div>';}
+ if(!loaded){loadTaskDetail(t.id);return renderCollapsiblePanel(panel,"ti-history","配置历史",'<p class="sub">正在读取配置历史，稍后会自动刷新。</p>');}
  var revs=st.jobRevisions[t.id]||[];
  if(!revs.length){
    var j=t.apiJob||{};
    var libs=safeArr(j.library_ids).map(knowledgeLabel).join(" / ")||"未记录";
    var prompt=(j.prompt_profile_snapshot&&j.prompt_profile_snapshot.prompt_version)||"-";
-   return '<div class="cm-panel"><h2><i class="ti ti-history"></i>配置历史</h2><p class="sub">这是旧任务，创建时还没有 Revision 表；这里直接展示当前兼容配置，后续点击“更新审核策略”会生成正式 Revision。</p><div class="cm-rel-node"><b>兼容配置 · 当前使用</b><span>自定义审核配置 · '+libs+' · Prompt '+prompt+'</span></div></div>';
+   return renderCollapsiblePanel(panel,"ti-history","配置历史",'<p class="sub">这是旧任务，创建时还没有 Revision 表；这里直接展示当前兼容配置，后续点击“更新审核策略”会生成正式 Revision。</p><div class="cm-rel-node"><b>兼容配置 · 当前使用</b><span>自定义审核配置 · '+libs+' · Prompt '+prompt+'</span></div>');
  }
  var current=t.apiJob.current_audit_config_revision_id;
  var rows="";for(var i=0;i<revs.length;i++){var r=revs[i],ac=r.audit_config||{};rows+='<div class="cm-rel-node"><b style="display:flex;justify-content:space-between;gap:8px">Revision '+r.version+(r.id===current?' · 当前使用':' · 历史配置')+'<span>'+bd(r.id===current?"ok":"",r.id===current?"当前":"历史")+'</span></b><span>'+(r.source_policy_name||"自定义配置")+' '+(r.source_policy_version||"")+' · '+safeArr(ac.library_ids).map(knowledgeLabel).join(" / ")+' · Prompt '+((r.prompt_profile_snapshot||{}).prompt_version||"-")+'</span></div>';}
- return '<div class="cm-panel"><h2><i class="ti ti-history"></i>配置历史</h2><p class="sub">升级策略只影响后续新分析结果，历史结果仍指向各自生成时的 Revision。</p>'+rows+'</div>';
+ return renderCollapsiblePanel(panel,"ti-history","配置历史",'<p class="sub">升级策略只影响后续新分析结果，历史结果仍指向各自生成时的 Revision。</p>'+rows);
 }
 
 function scTaskDetail(){
  var t=getTask(st.taskId);
- var outs=getTaskOutputs(t);
  var pageKey=t.id||"current";
+ var allOuts=getTaskOutputs(t);
+ var selectedLevel=st.taskOutputLevel[pageKey]||"全部";
+ var outs=selectedLevel==="全部"?allOuts:allOuts.filter(function(r){return r.level===selectedLevel;});
  var pg=pageInfo(outs.length,st.taskOutputPage[pageKey],RESULT_PAGE_SIZE);
  st.taskOutputPage[pageKey]=pg.page;
  var shown=outs.slice(pg.start,pg.end);
  var pager=renderListPager("taskOutputPage",pageKey,pg,"条");
  var paused=t.status==="已暂停";
- var hi=outs.filter(function(r){return r.level==="高危";}).length;
- var plats={};outs.forEach(function(r){plats[r.platform]=(plats[r.platform]||0)+1;});
+ var hi=allOuts.filter(function(r){return r.level==="高危";}).length;
+ var plats={};allOuts.forEach(function(r){plats[r.platform]=(plats[r.platform]||0)+1;});
  var platText=Object.keys(plats).map(function(k){return k+" "+plats[k]+" 条";}).join(" · ")||"暂无平台分布";
  var logRows="";for(var i=0;i<t.log.length;i++){logRows+='<div class="cm-log-item"><em>'+t.log[i][0]+'</em><span>'+t.log[i][1]+'</span></div>';}
  var cards="";
  if(outs.length){for(var j=0;j<shown.length;j++)cards+=riskCard(shown[j]);}
+ else if(allOuts.length)cards='<div class="cm-empty">当前危险等级下暂无审核产出。</div>';
  else cards='<div class="cm-empty">任务正在采集或分析，暂无审核产出。完成分析后会自动出现在这里。</div>';
- return ph("任务产出 · "+t.name,"运行状态、运行日志，以及本任务真实抓取到的审核产出内容",
-   '<button class="cm-btn" data-act="nav" data-screen="tasks"><i class="ti ti-arrow-left"></i>返回监控任务</button>'
-   +'<button class="cm-btn" data-act="taskPause" data-id="'+t.id+'"><i class="ti '+(paused?"ti-player-play":"ti-player-pause")+'"></i>'+(paused?"继续采集":"暂停采集")+'</button>'
+ var levelOptions="",levels=["全部","高危","中危","待复核","无风险"];
+ for(var levelIdx=0;levelIdx<levels.length;levelIdx++)levelOptions+='<option value="'+levels[levelIdx]+'" '+(selectedLevel===levels[levelIdx]?"selected":"")+'>'+levels[levelIdx]+'</option>';
+ var outputToolbar='<div class="cm-output-toolbar"><label class="cm-filter-field"><span>危险等级</span><select class="cm-filter-select '+(selectedLevel!=="全部"?"on":"")+'" data-act="taskOutputLevel" data-id="'+attr(pageKey)+'">'+levelOptions+'</select></label><span>筛选后 '+outs.length+' / '+allOuts.length+' 条 · 默认按最新产出排列</span></div>';
+ var runLogKey=panelKey("run-log",t.id);
+ var runBody=kv("运行状态",t.status)+kv("处理统计",t.progressText||"已抓取 0 · 已分析 0 · 待处理 0 · 失败 0")+kv("引用配置",t.config)+kv("采集对象",compactTargetText(t.target))+kv("最近运行",t.updated)
+   +'<div class="cm-mini" style="margin-top:12px"><button class="cm-btn sm" data-act="taskConfig" data-id="'+t.id+'"><i class="ti ti-settings"></i>调整配置</button><button class="cm-btn sm" data-act="taskTest" data-id="'+t.id+'"><i class="ti ti-flask"></i>测试引用策略</button></div>';
+ var logBody='<p class="sub">最近抓取、命中与补抓记录（点「补抓」会追加）。完整日志可在此区域内滚动查看。</p><div class="cm-log-scroll">'+logRows+'</div>';
+ var outputBody='<div class="cm-stats" style="margin-bottom:12px">'+stat("产出内容",""+allOuts.length,"条")+stat("其中高危",""+hi,"条","dang")+stat("平台",""+Object.keys(plats).length,"个")+stat("可进入询证",""+allOuts.length,"条","ok")+'</div>'
+   +'<p class="sub">'+platText+' · 点任意一条进入询证详情，可归并用户</p>'
+	   +outputToolbar+pager+cards+(outs.length?pager:"");
+	 return ph("任务产出 · "+t.name,"运行状态、运行日志，以及本任务真实抓取到的审核产出内容",
+	   taskBackButton(t)
+	   +'<button class="cm-btn" data-act="taskPause" data-id="'+t.id+'"><i class="ti '+(paused?"ti-player-play":"ti-player-pause")+'"></i>'+(paused?"继续采集":"暂停采集")+'</button>'
    +'<button class="cm-btn" data-act="taskPolicyOpen" data-id="'+t.id+'"><i class="ti ti-versions"></i>更新审核策略</button>'
    +'<button class="cm-btn pri" data-act="taskBackfill" data-id="'+t.id+'"><i class="ti ti-refresh"></i>补抓近期内容</button>',
    bd(paused?"warn":t.status.indexOf("完成")>-1?"ok":"info",t.status)+bd("info",t.type)+bd("","引用 "+t.config))
   +'<div class="cm-2">'
-   +'<div class="cm-panel"><h2><i class="ti ti-activity"></i>任务运行</h2>'
-     +kv("运行状态",t.status)+kv("处理统计",t.progressText||"已抓取 0 · 已分析 0 · 待处理 0 · 失败 0")+kv("引用配置",t.config)+kv("采集对象",compactTargetText(t.target))+kv("最近运行",t.updated)
-     +'<div class="cm-mini" style="margin-top:12px"><button class="cm-btn sm" data-act="taskConfig" data-id="'+t.id+'"><i class="ti ti-settings"></i>调整配置</button><button class="cm-btn sm" data-act="taskTest" data-id="'+t.id+'"><i class="ti ti-flask"></i>测试引用策略</button></div></div>'
-   +'<div class="cm-panel"><h2><i class="ti ti-history"></i>运行日志</h2><p class="sub">最近抓取、命中与补抓记录（点「补抓」会追加）。完整日志可在此区域内滚动查看。</p><div class="cm-log-scroll">'+logRows+'</div></div>'
+   +renderCollapsiblePanel(runLogKey,"ti-activity","任务运行",runBody)
+   +renderCollapsiblePanel(runLogKey,"ti-history","运行日志",logBody)
   +'</div>'
-  +'<div class="cm-panel"><h2><i class="ti ti-alert-triangle"></i>本任务产出内容</h2>'
-    +'<div class="cm-stats" style="margin-bottom:12px">'+stat("产出内容",""+outs.length,"条")+stat("其中高危",""+hi,"条","dang")+stat("平台",""+Object.keys(plats).length,"个")+stat("可进入询证",""+outs.length,"条","ok")+'</div>'
-    +'<p class="sub">'+platText+' · 点任意一条进入询证详情，可固证、归并用户</p>'
-    +pager+cards+(outs.length?pager:"")+'</div>'
+  +renderCollapsiblePanel(panelKey("outputs",t.id),"ti-alert-triangle","本任务产出内容",outputBody)
   +renderTaskAuditConfig(t)
   +renderConfigHistory(t);
 }
@@ -1403,12 +1893,13 @@ function scNewTask(){
  var nt=st.nt;var sel=nt.type;
  var types="";var order=["platform","live","user","video"];
  for(var i=0;i<order.length;i++){var k=order[i];types+='<button class="cm-type '+(sel===k?"on":"")+'" data-act="ntType" data-type="'+k+'"><i class="ti '+typeIcon[k]+'"></i><b>'+typeTitle[k]+'</b><span>'+typeDesc[k]+'</span></button>';}
- var scm=getScheme(nt.scheme);
- var schemeOpts="";for(var j=0;j<schemes.length;j++){var s=schemes[j];schemeOpts+='<button class="cm-scheme '+(nt.scheme===s.id?"on":"")+'" data-act="ntScheme" data-id="'+s.id+'"><b>'+s.name+'</b><small>'+s.libIds.map(function(l){return getLib(l).name;}).join(" / ")+' · 适用 '+s.tasks+'</small></button>';}
- return ph("新建监控任务","选择来源类型，配置采集对象与研判方案，创建后回到任务列表",
-   '<button class="cm-btn" data-act="nav" data-screen="tasks">取消</button><button class="cm-btn" data-act="saveDraft">保存草稿</button><button class="cm-btn pri" data-act="createTask">创建任务</button>')
+	 var scm=getScheme(nt.scheme);
+	 var schemeOpts="";for(var j=0;j<schemes.length;j++){var s=schemes[j];schemeOpts+='<button class="cm-scheme '+(nt.scheme===s.id?"on":"")+'" data-act="ntScheme" data-id="'+s.id+'"><b>'+s.name+'</b><small>'+s.libIds.map(function(l){return getLib(l).name;}).join(" / ")+' · 适用 '+s.tasks+'</small></button>';}
+	 var cancelAct=st.newTaskReturn?'<button class="cm-btn" data-act="newTaskBack"><i class="ti ti-arrow-left"></i>返回该帖子分析</button>':'<button class="cm-btn" data-act="nav" data-screen="tasks">取消</button>';
+	 return ph("新建监控任务",st.newTaskReturn?"选择来源类型，配置采集对象与研判方案，创建后返回该帖子分析页面":"选择来源类型，配置采集对象与研判方案，创建后回到任务列表",
+	   cancelAct+'<button class="cm-btn" data-act="saveDraft">保存草稿</button><button class="cm-btn pri" data-act="createTask">创建任务</button>')
   +'<div class="cm-panel"><h2><span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--bg-accent);color:var(--text-accent);align-items:center;justify-content:center;font-size:11px">1</span>选择任务类型</h2><p class="sub">任务类型用独立措辞，避免和顶部导航同名误点。</p><div class="cm-types">'+types+'</div></div>'
-  +'<div class="cm-panel"><h2><span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--bg-accent);color:var(--text-accent);align-items:center;justify-content:center;font-size:11px">2</span>配置采集对象</h2><p class="sub">'+(sel==="video"?"选择本地视频文件。":"平台每个任务只选择一个；抓取范围与识别能力由研判方案决定。")+'</p>'+ntConfig(sel)+'</div>'
+  +'<div class="cm-panel"><h2><span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--bg-accent);color:var(--text-accent);align-items:center;justify-content:center;font-size:11px">2</span>配置采集对象</h2><p class="sub">'+(sel==="video"?"选择本地视频文件。":"可同时选择多个平台；抓取范围与识别能力由研判方案决定。")+'</p>'+ntConfig(sel)+'</div>'
   +'<div class="cm-2">'
    +'<div class="cm-panel"><h2><span style="display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--bg-accent);color:var(--text-accent);align-items:center;justify-content:center;font-size:11px">3</span>绑定研判方案</h2><p class="sub">方案决定检测什么、怎么判、产出什么。</p>'+schemeOpts
      +'<div class="cm-cmt" style="margin-top:6px">知识库：'+scm.libIds.map(function(l){return getLib(l).name;}).join(" / ")+' · 判定：'+scm.modal+'（'+scm.conds.length+' 条）</div></div>'
@@ -1437,12 +1928,12 @@ function compactTargetText(text){
 }
 
 function choice(title,desc,m){var on=st.nt.methods.indexOf(m)>-1;return '<label class="cm-choice '+(on?"on":"")+'" data-act="ntMethod" data-m="'+m+'"><i class="ti '+(on?"ti-checkbox":"ti-square")+'"></i><span><b>'+title+'</b><small>'+desc+'</small></span></label>';}
-function pill(name,kind){var arr=kind==="platform"?st.nt.platforms:[];var on=arr.indexOf(name)>-1;return '<button class="cm-pill '+(on?"on":"")+'" data-act="ntPlatform" data-v="'+name+'">'+name+'</button>';}
+function pill(name,kind){var arr=kind==="platform"?st.nt.platforms:[];var on=arr.indexOf(name)>-1;return '<button type="button" class="cm-pill '+(on?"on":"")+'" data-act="ntPlatform" data-v="'+name+'" aria-pressed="'+(on?"true":"false")+'"><i class="ti '+(on?"ti-square-check":"ti-square")+'"></i><span>'+name+'</span></button>';}
 
 function ntConfig(t){
  var nameField='<label class="cm-field" style="margin-top:0"><span>任务名称</span><input id="nt-task-name" data-act="ntTaskName" value="'+attr(st.nt.name)+'" placeholder="例如 重点账号软色情巡查" /></label>';
  if(t==="video")return nameField+'<div class="cm-frame"><i class="ti ti-upload"></i><span>'+(st.nt.fileName?"已选择："+attr(st.nt.fileName):"未选择文件")+'</span><input id="nt-video-file" type="file" accept="video/*" style="display:none"><button class="cm-btn sm" data-act="pickFile">选择本地视频文件</button></div>';
- return nameField+'<div class="cm-pills">'+pill("抖音","platform")+pill("小红书","platform")+pill("快手","platform")+'</div>'
+ return nameField+'<div class="cm-pills">'+pill("小红书","platform")+pill("抖音","platform")+pill("快手","platform")+'</div>'
   +(t==="user"?'<label class="cm-field"><span>用户 URL</span><input id="nt-user-url" data-act="ntUserUrl" value="'+attr(st.nt.userUrl)+'" placeholder="粘贴用户主页链接，例如 https://www.xiaohongshu.com/user/profile/..." /></label>':"");
 }
 
@@ -1450,25 +1941,45 @@ function miniTable(hd,rows){var h="";for(var i=0;i<hd.length;i++)h+='<th>'+hd[i]
 
 function scUsers(){
  var u=getUser(st.userId);
- var list="";for(var i=0;i<users.length;i++){var x=users[i];list+='<button class="cm-user '+(x.id===u.id?"on":"")+'" data-act="selUser" data-id="'+x.id+'"><b>'+x.account+'<span>'+(x.watched?bd("ok","观察中"):"")+bd("dang","风险 "+x.score)+'</span></b><span>'+x.platforms+'</span><small>'+x.scope+'</small></button>';}
- var latest="";for(var j=0;j<u.latest.length;j++){var lv=j===0?"高危":"中危";latest+='<div class="cm-cmt"><span class="cm-bd '+(lv==="高危"?"dang":"warn")+'">'+lv+'</span> '+u.latest[j]+'</div>';}
- var rel="";for(var k=0;k<u.related.length;k++){rel+='<div class="cm-rel-node"><b style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+u.related[k][0]+'<button class="cm-btn sm" data-act="userUnlink" data-idx="'+k+'">解除</button></b><span>'+u.related[k][1]+'</span></div>';}
+ var returnAct=userReturnButton();
+ if(!users.length){
+  return ph("重点用户监控","监控哪些账号、监控什么、抓到了什么、如何归并和持续观察",
+   returnAct+'<button class="cm-btn" data-act="userAdd"><i class="ti ti-plus"></i>新增监控账号</button>',
+   bd("warn","暂无入库重点用户"))
+   +'<div class="cm-empty">暂无入库的重点用户。评论用户主页任务创建成功后，会在这里显示重点用户和疑似关联账号。</div>';
+ }
+ var list="";for(var i=0;i<users.length;i++){var x=users[i];list+='<button class="cm-user '+(x.id===u.id?"on":"")+'" data-act="selUser" data-id="'+x.id+'"><b>'+attr(x.account)+'</b><span>'+attr(x.platforms)+'</span><small>'+attr(x.scope)+'</small></button>';}
+ var latest="";
+ var latestItems=safeArr(u.latest),latestVisible=latestItems.slice(0,8);
+ if(latestVisible.length){
+   for(var j=0;j<latestVisible.length;j++){
+     var output=latestVisible[j];
+     latest+='<button type="button" class="cm-user-output" data-act="openEvidence" data-id="'+attr(output.id)+'"><span class="cm-user-output-main"><b>'+attr(output.title)+'</b><small>'+attr(output.platform)+' · '+attr(output.task||"未关联任务")+' · '+attr(output.id)+'</small></span><span class="cm-user-output-side">'+bd(lvlCls(output.level),output.level)+'<i class="ti ti-chevron-right"></i></span></button>';
+   }
+   if(latestItems.length>latestVisible.length)latest+='<div class="cm-user-output-summary">已关联 '+latestItems.length+' 条，显示最近 '+latestVisible.length+' 条</div>';
+ }
+ else latest='<div class="cm-empty" style="padding:12px">暂无关联的真实审核产出</div>';
+ var rel="";for(var k=0;k<u.related.length;k++){
+   var relJobId=u.related[k][2]||"";
+   rel+='<div class="cm-rel-node"><b style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>'+attr(u.related[k][0])+'</span><span class="cm-mini" style="margin:0;gap:6px">'+(relJobId?'<button class="cm-btn sm" data-act="taskOpen" data-id="'+attr(relJobId)+'">查看分析任务</button>':'<button class="cm-btn sm" disabled>查看分析任务</button>')+'<button class="cm-btn sm" data-act="userUnlink" data-idx="'+k+'">解除</button></span></b><span>'+attr(u.related[k][1])+'</span></div>';
+ }
  if(!u.related.length)rel='<div class="cm-empty" style="padding:12px">关联账号已全部解除</div>';
- var tlData=u.latest.concat(["自动生成监控产出","人工归并检查"]);var tl="";for(var m=0;m<tlData.length;m++){tl+='<div class="cm-tl-item"><em>06-'+(25+m)+'</em><span>'+tlData[m]+'</span></div>';}
+ var tlItems=safeArr(u.timeline);
+ if(!tlItems.length&&safeArr(u.latest).length)tlItems=u.latest.map(function(x,i){return {date:"06-"+(25+i),text:x};});
+ var tl="";for(var m=0;m<tlItems.length;m++){var it=tlItems[m]||{};tl+='<div class="cm-tl-item"><em>'+attr(it.date||"--")+'</em><span>'+attr(it.text||it)+'</span></div>';}
+ if(!tl)tl='<div class="cm-empty" style="padding:12px">暂无持续监控事件</div>';
  return ph("重点用户监控","监控哪些账号、监控什么、抓到了什么、如何归并和持续观察",
-   '<button class="cm-btn" data-act="userBackfill"><i class="ti ti-refresh"></i>补抓近期发布</button><button class="cm-btn '+(u.watched?"":"pri")+'" data-act="userWatch"><i class="ti '+(u.watched?"ti-eye-off":"ti-eye")+'"></i>'+(u.watched?"取消持续观察":"加入持续观察")+'</button>',
-   bd(u.watched?"ok":"warn",u.watched?"持续观察中":"未持续观察")+bd("dang","风险分 "+u.score)+bd("info",u.account))
+   returnAct+'<button class="cm-btn" data-act="userBackfill"><i class="ti ti-refresh"></i>补抓近期发布</button><button class="cm-btn '+(u.watched?"":"pri")+'" data-act="userWatch"><i class="ti '+(u.watched?"ti-eye-off":"ti-eye")+'"></i>'+(u.watched?"取消持续观察":"加入持续观察")+'</button>')
   +'<div class="cm-2">'
    +'<div class="cm-panel"><h2><i class="ti ti-user-search"></i>监控对象</h2><p class="sub">点击切换查看不同重点用户的持续观察详情。</p>'+list+'<button class="cm-btn sm" data-act="userAdd" style="width:100%;justify-content:center"><i class="ti ti-plus"></i>新增监控账号</button></div>'
-   +'<div class="cm-panel"><h2><i class="ti ti-alert-triangle"></i>最新异常内容</h2>'+kv("当前账号",u.account)+kv("平台",u.platforms)+kv("监控范围",u.scope)+'<h3>近期风险产出</h3>'+latest+'<h3>持续监控时间线</h3>'+tl+'</div>'
+   +'<div class="cm-panel"><h2><i class="ti ti-alert-triangle"></i>最新异常内容</h2>'+kv("当前账号",u.account)+kv("平台",u.platforms)+kv("监控范围",u.scope)+'<h3>近期风险产出 · '+latestItems.length+' 条</h3>'+latest+'<h3>持续监控时间线</h3>'+tl+'</div>'
   +'</div>'
-  +'<div class="cm-panel"><h2><i class="ti ti-affiliate"></i>监控计划、关联与归并</h2><div class="cm-2"><div>'
-    +kv("绑定黑话库",u.libraries)+kv("分析策略",u.strategies)+kv("监控频率",u.freq)+'<h3>跨平台关联账号</h3>'+rel
-   +'</div><div><h3>证据链材料</h3><div class="cm-tiles">'+["原始链接","截图","视频片段","评论弹幕","哈希记录"].map(function(x,i){return '<div class="cm-tile"><i class="ti '+["ti-link","ti-screenshot","ti-movie","ti-message","ti-fingerprint"][i]+'"></i>'+x+'</div>';}).join("")+'</div>'
-    +'<div class="cm-mini" style="flex-direction:column;align-items:stretch;gap:8px;margin-top:12px">'
-     +'<button class="cm-btn pri" data-act="userExport"><i class="ti ti-package"></i>导出证据包</button>'
-     +'<button class="cm-btn" data-act="userPlan"><i class="ti ti-calendar-cog"></i>调整监控计划</button>'
-    +'</div></div></div></div>';
+  +'<div class="cm-2">'
+   +'<div class="cm-panel"><h2><i class="ti ti-affiliate"></i>监控计划</h2>'
+    +kv("绑定黑话库",u.libraries)+kv("分析策略",u.strategies)+kv("监控频率",u.freq)
+    +'<div class="cm-mini" style="margin-top:12px"><button class="cm-btn pri" data-act="userPlan"><i class="ti ti-calendar-cog"></i>调整监控计划</button></div></div>'
+   +'<div class="cm-panel"><h2><i class="ti ti-users-group"></i>疑似关联账号</h2>'+rel+'</div>'
+  +'</div>';
 }
 
 function schemeRefTasks(s){return tasks.filter(function(t){return t.config.indexOf(s.name)>-1;});}
@@ -1500,13 +2011,13 @@ function thresholdsText(th){return "高危≥"+th.high+" · 中危≥"+th.medium
 function readThresholds(prefix,fb){function num(id,val){var e=document.getElementById(prefix+"-"+id);var n=e?parseInt(e.value,10):NaN;return isNaN(n)?val:Math.max(0,Math.min(100,n));}return {high:num("high",fb.high),medium:num("medium",fb.medium),review:num("review",fb.review)};}
 function scoringRulesForScheme(s){
  var out=[],libs=s.libIds||[],caps=schemeCaps(s),imp=schemeImportance(s),tmpl=templateDef(schemeTemplate(s)).weights;
- var sources=["keyword"].concat(caps);
+ var sources=caps.slice();
  for(var li=0;li<libs.length;li++){
    var L=getLib(libs[li]),bid=libraryBackendId(libs[li]),cat=L.category||L.name||bid;
    for(var si=0;si<sources.length;si++){
      var src=sources[si],level=imp[src]||tmpl[src]||"medium",score=importanceScores[level]||0;
      if(score<=0)continue;
-     out.push({id:src+"_"+bid,label:cat+(src==="keyword"?"关键词/黑话命中":capDef(src).rule),source:src,library_id:bid,category:cat,importance:level,score:score});
+     out.push({id:src+"_"+bid,label:cat+capDef(src).rule,source:src,library_id:bid,category:cat,importance:level,score:score});
    }
  }
  return out;
@@ -1527,16 +2038,14 @@ function saveSchemePolicy(s,publish){
    return loadSaasData().then(function(){st.schemeId=saved.id;});
  }).then(function(){toast(publish?"方案已发布":"方案已保存",payload.name+" 已入库");}).catch(function(err){toast(publish?"发布失败":"保存失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
 }
-function ruleRowsForCaps(ids,s){var imp=s?schemeImportance(s):cloneMap(templateDef(st.nsTemplate||"balanced").weights);var rows=[];for(var i=0;i<capabilityDefs.length;i++){var c=capabilityDefs[i];if(ids.indexOf(c.id)>-1){var level=imp[c.id]||"medium";rows.push([c.rule,importanceScores[level]+"分",c.source,c.id,level]);}}return rows;}
+function ruleRowsForCaps(ids,s){var imp=s?schemeImportance(s):cloneMap(templateDef(st.nsTemplate||"balanced").weights);var rows=[];for(var i=0;i<capabilityDefs.length;i++){var c=capabilityDefs[i];if(ids.indexOf(c.id)>-1){var level=imp[c.id]||"medium";rows.push([c.rule,importanceLabels[level]||level,c.source,c.id,level]);}}return rows;}
 function syncSchemeRules(s){var ids=schemeCaps(s);s.caps=ids;s.scopes=schemeScopes(s);s.template=schemeTemplate(s);s.ruleImportance=schemeImportance(s);s.modal=capsToModal(ids);s.conds=ruleRowsForCaps(ids,s);if(!s.thresholds)s.thresholds=thresholdsOf(s);s.th=thresholdsText(s.thresholds);}
 function choiceCard(def,on,act,key){return '<button class="cm-choice '+(on?"on":"")+'" data-act="'+act+'" data-'+key+'="'+def.id+'" type="button"><i class="ti '+(on?"ti-checkbox":"ti-square")+'"></i><span><b>'+def.label+'</b><small>'+def.desc+'</small></span></button>';}
 function scopeChoices(ids,act){var h="";for(var i=0;i<scopeDefs.length;i++)h+=choiceCard(scopeDefs[i],ids.indexOf(scopeDefs[i].id)>-1,act,"scope");return h;}
 function capChoices(ids,act){var h="";for(var i=0;i<capabilityDefs.length;i++)h+=choiceCard(capabilityDefs[i],ids.indexOf(capabilityDefs[i].id)>-1,act,"cap");return h;}
 function templateChoices(cur,act){var h="";for(var i=0;i<templateDefs.length;i++){var t=templateDefs[i];h+='<button class="cm-choice '+(cur===t.id?"on":"")+'" data-act="'+act+'" data-template="'+t.id+'" type="button"><i class="ti '+(cur===t.id?"ti-circle-check":"ti-circle")+'"></i><span><b>'+t.label+'</b><small>'+t.desc+'</small></span></button>';}return h;}
 function importanceSelect(action,cap,cur){var h='<select class="cm-mini-select" data-act="'+action+'" data-cap="'+cap+'">';for(var k in importanceLabels){if(importanceLabels.hasOwnProperty(k))h+='<option value="'+k+'" '+(cur===k?"selected":"")+'>'+importanceLabels[k]+'</option>';}return h+'</select>';}
-function scoreTotal(ids,s){var rows=ruleRowsForCaps(ids,s);var total=0;for(var i=0;i<rows.length;i++)total+=importanceScores[rows[i][4]]||0;return total;}
-function scoreRuleNote(ids,s){var total=scoreTotal(ids,s);return '<p class="sub">这里不是百分比权重，而是证据命中加分：单个风险类别内命中后累加，最高封顶 100 分；不同风险类别独立评分，总风险默认取最高类别分。当前启用规则最高 '+total+' 分。</p>';}
-function scoreRows(ids,s,action){var rows=ruleRowsForCaps(ids,s);var h="";for(var i=0;i<rows.length;i++){var d=capDef(rows[i][3]);var score=importanceScores[rows[i][4]];h+='<div class="cm-cond"><b>'+rows[i][0]+'</b><span class="w">重要程度</span>'+importanceSelect(action,rows[i][3],rows[i][4])+bd("",rows[i][2])+bd("info","命中 +"+score)+'</div>';}return h||'<div class="cm-empty" style="padding:12px">至少启用一种识别能力</div>';}
+function scoreRows(ids,s,action){var rows=ruleRowsForCaps(ids,s);var h="";for(var i=0;i<rows.length;i++){h+='<div class="cm-score-row"><div class="cm-score-main"><b>'+rows[i][0]+'</b><small>证据范围 · '+rows[i][2]+'</small></div><div class="cm-score-controls"><label class="cm-score-field"><span>重要程度</span>'+importanceSelect(action,rows[i][3],rows[i][4])+'</label></div></div>';}return h?'<div class="cm-score-list">'+h+'</div>':'<div class="cm-empty" style="padding:12px">至少启用一种识别能力</div>';}
 function thresholdInputs(prefix,th){return '<div class="cm-num-grid"><label class="cm-num-card"><span>高危阈值</span><input id="'+prefix+'-high" type="number" min="0" max="100" value="'+th.high+'"></label><label class="cm-num-card"><span>中危阈值</span><input id="'+prefix+'-medium" type="number" min="0" max="100" value="'+th.medium+'"></label><label class="cm-num-card"><span>待复核阈值</span><input id="'+prefix+'-review" type="number" min="0" max="100" value="'+th.review+'"></label></div>';}
 function deriveSchemeTasks(s){var scopes=schemeScopes(s);var t=["平台内容"];if(scopes.indexOf("audio")>-1||scopes.indexOf("video")>-1)t.push("直播");if(scopes.indexOf("video")>-1||scopes.indexOf("image")>-1||scopes.indexOf("audio")>-1)t.push("本地视频");if(scopes.indexOf("comment")>-1)t.push("重点用户");var u=[];for(var i=0;i<t.length;i++)if(u.indexOf(t[i])<0)u.push(t[i]);return u.join(" / ");}
 function deriveSchemeOutputs(s){var ids=schemeCaps(s);var o=["风险内容"];for(var i=0;i<ids.length;i++){var src=capDef(ids[i]).source;if(o.indexOf(src)<0)o.push(src);}if(o.indexOf("询证材料")<0)o.push("询证材料");return o;}
@@ -1557,23 +2066,23 @@ function scConfig(){
 function renderConfigList(){
  var pub=schemes.filter(function(s){return s.status==="已发布";}).length;
  var grid="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px";
- var sc="";
- for(var i=0;i<schemes.length;i++){var s=schemes[i];var refs=schemeRefTasks(s);
-   sc+='<button class="cm-card clk" data-act="openScheme" data-id="'+s.id+'" style="width:100%;text-align:left;display:block;font:inherit;cursor:pointer;margin:0">'
-    +'<div class="cm-card-top">'+bd(s.status==="已发布"?"ok":"warn",s.status)+bd("info",s.libIds.length+" 知识库")+bd("",schemeCaps(s).length+" 项能力")+'<span class="t">'+s.id+'</span></div>'
-    +'<h3>'+s.name+'</h3>'
-    +'<div class="cm-tags"><span class="cm-tag"><i class="ti ti-book"></i>'+s.libIds.map(function(l){return getLib(l).name;}).join("、")+'</span><span class="cm-tag"><i class="ti ti-subtask"></i>适用 '+s.tasks+'</span></div>'
-    +'<div class="cm-card-foot"><span class="cm-acct">输出：'+s.outputs.join("、")+'</span><span class="cm-acct">被 <b>'+refs.length+'</b> 个任务引用</span></div>'
-   +'</button>';
- }
- var lb="";
- for(var j=0;j<libraries.length;j++){var L=libraries[j];var used=libSchemes(L.id).length;
-   lb+='<button class="cm-card clk" data-act="openLib" data-id="'+L.id+'" style="width:100%;text-align:left;display:block;font:inherit;cursor:pointer;margin:0">'
-    +'<div class="cm-card-top">'+bd("info",L.category)+bd("",L.terms.length+" 词条")+'<span class="t">被 '+used+' 个方案使用</span></div>'
-    +'<h3>'+L.name+'</h3>'
-    +'<div class="cm-tags">'+L.terms.slice(0,8).map(function(t){return '<span class="cm-tag">'+t+'</span>';}).join("")+'</div>'
-   +'</button>';
- }
+	 var sc="";
+	 for(var i=0;i<schemes.length;i++){var s=schemes[i];var refs=schemeRefTasks(s);
+	   sc+='<div class="cm-card clk" data-act="openScheme" data-id="'+s.id+'" role="button" tabindex="0" style="width:100%;text-align:left;display:block;font:inherit;cursor:pointer;margin:0">'
+	    +'<div class="cm-card-top">'+bd(s.status==="已发布"?"ok":"warn",s.status)+bd("info",s.libIds.length+" 知识库")+bd("",schemeCaps(s).length+" 项能力")+'<span class="t">'+s.id+'</span><button class="cm-btn sm dang" data-act="schemeDelete" data-id="'+s.id+'"><i class="ti ti-trash"></i>删除</button></div>'
+	    +'<h3>'+s.name+'</h3>'
+	    +'<div class="cm-tags"><span class="cm-tag"><i class="ti ti-book"></i>'+s.libIds.map(function(l){return getLib(l).name;}).join("、")+'</span><span class="cm-tag"><i class="ti ti-subtask"></i>适用 '+s.tasks+'</span></div>'
+	    +'<div class="cm-card-foot"><span class="cm-acct">输出：'+s.outputs.join("、")+'</span><span class="cm-acct">被 <b>'+refs.length+'</b> 个任务引用</span></div>'
+	   +'</div>';
+	 }
+	 var lb="";
+	 for(var j=0;j<libraries.length;j++){var L=libraries[j];var used=libSchemes(L.id).length;
+	   lb+='<div class="cm-card clk" data-act="openLib" data-id="'+L.id+'" role="button" tabindex="0" style="width:100%;text-align:left;display:block;font:inherit;cursor:pointer;margin:0">'
+	    +'<div class="cm-card-top">'+bd("info",L.category)+bd("",L.terms.length+" 词条")+'<span class="t">被 '+used+' 个方案使用</span><button class="cm-btn sm dang" data-act="libDelete" data-id="'+L.id+'"><i class="ti ti-trash"></i>删除</button></div>'
+	    +'<h3>'+L.name+'</h3>'
+	    +'<div class="cm-tags">'+L.terms.slice(0,8).map(function(t){return '<span class="cm-tag">'+t+'</span>';}).join("")+'</div>'
+	   +'</div>';
+	 }
  return ph("配置底座","研判方案是对外使用主体：监控任务引用方案，方案再组合检测范围、检测能力与评分规则",
    '<button class="cm-btn pri" data-act="cfgPublish"><i class="ti ti-rocket"></i>发布版本</button>',
    bd("info","当前已发布 v"+st.cfgVersion)+(st.pendingChanges>0?bd("warn","待审核变更 "+st.pendingChanges):bd("ok","无待发布变更")))
@@ -1594,7 +2103,7 @@ function renderSchemePage(){
  var th=thresholdsOf(s);
  var refList="";if(refs.length){for(var r=0;r<refs.length;r++)refList+='<div class="cm-rel-node"><b style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+refs[r].name+'<button class="cm-btn sm" data-act="taskOpen" data-id="'+refs[r].id+'">查看产出</button></b><span>'+refs[r].type+' · '+refs[r].status+' · 风险 '+refs[r].riskN+'</span></div>';}else refList='<div class="cm-empty" style="padding:12px">暂无监控任务引用该方案</div>';
  return ph("研判方案 · "+s.name,"方案 = 检测范围 + 检测能力 + 风险评分规则 + 输出规则",
-   '<button class="cm-btn" data-act="cfgBack"><i class="ti ti-arrow-left"></i>返回配置底座</button><button class="cm-btn" data-act="schemeSave" data-id="'+s.id+'"><i class="ti ti-device-floppy"></i>保存</button><button class="cm-btn pri" data-act="schemePublish" data-id="'+s.id+'"><i class="ti ti-rocket"></i>发布</button>',
+   '<button class="cm-btn" data-act="cfgBack"><i class="ti ti-arrow-left"></i>返回配置底座</button><button class="cm-btn dang" data-act="schemeDelete" data-id="'+s.id+'"><i class="ti ti-trash"></i>删除</button><button class="cm-btn" data-act="schemeSave" data-id="'+s.id+'"><i class="ti ti-device-floppy"></i>保存</button><button class="cm-btn pri" data-act="schemePublish" data-id="'+s.id+'"><i class="ti ti-rocket"></i>发布</button>',
   bd(s.status==="已发布"?"ok":"warn",s.status)+bd("info",s.id))
   +'<div class="cm-panel"><h2><i class="ti ti-file-text"></i>方案基础</h2>'+finput("sc-name","方案名称",s.name,"")+'</div>'
   +'<div class="cm-panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><h2 style="margin:0"><i class="ti ti-book"></i>风险范围 · 选择知识库</h2><span class="cm-mini"><button class="cm-btn sm" data-act="schemeBindOpen" data-id="'+s.id+'"><i class="ti ti-link"></i>绑定已有</button><button class="cm-btn sm" data-act="libNewFromScheme" data-id="'+s.id+'"><i class="ti ti-plus"></i>新建黑话库</button></span></div><p class="sub">知识库决定本方案要检测哪些风险类别，可多选组合；关键词只是知识包的一部分。</p>'+libCards+'</div>'
@@ -1602,7 +2111,7 @@ function renderSchemePage(){
   +'<div class="cm-panel"><h2><i class="ti ti-adjustments"></i>识别能力与评分规则</h2><p class="sub">这里用业务语言描述能力，系统会在后台映射到文本理解、画面文字识别、语音识别、视觉识别等模型步骤。</p>'
     +'<h3>识别能力</h3><div class="cm-choices">'+capChoices(capIds,"schemeToggleCap")+'</div>'
     +'<h3>规则模板</h3><div class="cm-choices">'+templateChoices(schemeTemplate(s),"schemeTemplate")+'</div>'
-    +'<h3>风险评分规则</h3>'+scoreRuleNote(capIds,s)+scoreRows(capIds,s,"schemeRuleImportance")
+    +'<h3>风险评分规则</h3>'+scoreRows(capIds,s,"schemeRuleImportance")
     +'<div class="cm-mini" style="margin-top:10px"><button class="cm-btn sm" data-act="cfgTest"><i class="ti ti-flask"></i>测试方案</button></div>'
     +'<h3 style="margin-top:14px">风险阈值</h3>'+thresholdInputs("sc-th",th)+'</div>'
   +'<div class="cm-panel"><h2><i class="ti ti-plug"></i>被哪些监控任务引用</h2>'+refList+'</div>';
@@ -1612,14 +2121,14 @@ function renderLibPage(){
  var L=getLib(st.libId);var used=libSchemes(L.id);
  var usedList="";if(used.length){for(var i=0;i<used.length;i++)usedList+='<div class="cm-rel-node"><b style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+used[i].name+'<button class="cm-btn sm" data-act="openScheme" data-id="'+used[i].id+'">查看方案</button></b><span>适用 '+used[i].tasks+'</span></div>';}else usedList='<div class="cm-empty" style="padding:12px">暂无方案使用该黑话库</div>';
  return ph("黑话库 · "+L.name,"按风险分类维护的可复用词库：词条、变体、平台搜索词、平台标签",
-   '<button class="cm-btn" data-act="cfgBack"><i class="ti ti-arrow-left"></i>返回配置底座</button><button class="cm-btn" data-act="cfgImport"><i class="ti ti-upload"></i>批量导入</button><button class="cm-btn pri" data-act="libSave" data-id="'+L.id+'"><i class="ti ti-device-floppy"></i>保存黑话库</button>',
+   '<button class="cm-btn" data-act="cfgBack"><i class="ti ti-arrow-left"></i>返回配置底座</button><button class="cm-btn dang" data-act="libDelete" data-id="'+L.id+'"><i class="ti ti-trash"></i>删除</button><button class="cm-btn" data-act="cfgImport"><i class="ti ti-upload"></i>批量导入</button><button class="cm-btn pri" data-act="libSave" data-id="'+L.id+'"><i class="ti ti-device-floppy"></i>保存黑话库</button>',
    bd("info",L.category)+bd("",L.terms.length+" 词条")+bd("",used.length+" 个方案在用"))
   +'<div class="cm-panel"><h2><i class="ti ti-file-text"></i>基础信息</h2><div class="cm-2">'+finput("lib-cat","风险分类",L.category,"")+finput("lib-name","词库名称与版本",L.name,"")+'</div></div>'
   +'<div class="cm-panel"><h2><i class="ti ti-vocabulary"></i>词条与平台配置</h2>'+taginput("lib-terms","黑话词 / 变体","输入后回车添加")+'<div class="cm-2">'+taginput("lib-pk","平台搜索词","输入后回车添加")+taginput("lib-pt","平台标签","输入后回车添加")+'</div></div>'
   +'<div class="cm-panel"><h2><i class="ti ti-plug"></i>被哪些方案使用</h2>'+usedList+'</div>';
 }
 
-function finput(id,label,val,ph){return '<label style="display:block;margin-bottom:10px"><span style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px">'+label+'</span><input id="'+id+'" value="'+(val||"")+'" placeholder="'+(ph||"")+'" style="width:100%;height:34px;padding:0 10px;border:0.5px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--text-primary);font:inherit;font-size:13px"/></label>';}
+function finput(id,label,val,ph){return '<label style="display:block;margin-bottom:10px"><span style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px">'+attr(label)+'</span><input id="'+attr(id)+'" value="'+attr(val||"")+'" placeholder="'+attr(ph||"")+'" style="width:100%;height:34px;padding:0 10px;border:0.5px solid var(--border-strong);border-radius:var(--radius);background:var(--surface-2);color:var(--text-primary);font:inherit;font-size:13px"/></label>';}
 function tagChipHtml(key,value,idx){return '<span class="cm-chip-tag">'+attr(value)+'<button type="button" data-act="tagDel" data-key="'+attr(key)+'" data-idx="'+idx+'" data-value="'+attr(value)+'" tabindex="-1" aria-label="删除标签"><i class="ti ti-x"></i></button></span>';}
 function taginput(key,label,ph){var arr=st.tags[key]||[];var chips="";for(var i=0;i<arr.length;i++){chips+=tagChipHtml(key,arr[i],i);}return '<label style="display:block;margin-bottom:10px"><span style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px">'+label+'</span><div class="cm-taginput" data-act="tagFocus" data-key="'+attr(key)+'">'+chips+'<input class="cm-tagfield" data-key="'+attr(key)+'" placeholder="'+attr(ph||"输入后回车添加")+'" /></div></label>';}
 function splitTagText(text){return String(text||"").split(/，/).map(function(s){return s.trim();}).filter(Boolean);}
@@ -1643,14 +2152,15 @@ function saveLexiconLibrary(L,isNew,returnSchemeId){
 }
 
 function renderSchemeNew(){
- var libChk="";for(var i=0;i<libraries.length;i++)libChk+='<label class="cm-choice"><input type="checkbox" class="cfg-lib" value="'+libraries[i].id+'"/><span><b>'+libraries[i].category+'</b><small>'+libraries[i].name+' · '+libraries[i].terms.length+' 词条</small></span></label>';
- var nsTh={high:85,medium:65,review:45};
+ var selectedLibs=st.nsLibIds||[];
+ var libChk="";for(var i=0;i<libraries.length;i++){var checked=selectedLibs.indexOf(libraries[i].id)>-1?" checked":"";libChk+='<label class="cm-choice"><input type="checkbox" class="cfg-lib" value="'+libraries[i].id+'"'+checked+'/><span><b>'+libraries[i].category+'</b><small>'+libraries[i].name+' · '+libraries[i].terms.length+' 词条</small></span></label>';}
+ var nsTh=st.nsThresholds||{high:85,medium:65,review:45};
  return ph("新建研判方案","命名 → 选择风险范围与内容范围 → 选择识别能力 → 套用规则模板 → 设置风险阈值",
    '<button class="cm-btn" data-act="cfgBack"><i class="ti ti-arrow-left"></i>取消</button><button class="cm-btn pri" data-act="schemeCreate"><i class="ti ti-device-floppy"></i>保存方案</button>')
-  +'<div class="cm-panel"><h2>'+stp("1")+'方案名称</h2>'+finput("ns2-name","方案名称","","例如 赌博引流研判方案")+'</div>'
+  +'<div class="cm-panel"><h2>'+stp("1")+'方案名称</h2>'+finput("ns2-name","方案名称",st.nsName||"","例如 赌博引流研判方案")+'</div>'
   +'<div class="cm-panel"><h2>'+stp("2")+'风险范围</h2><p class="sub">勾选要用的知识库（可多选）。知识库决定检测哪些风险类别。</p><div class="cm-choices">'+libChk+'</div></div>'
   +'<div class="cm-panel"><h2>'+stp("3")+'内容范围</h2><p class="sub">选择本方案需要查看哪些内容位置。</p><div class="cm-choices">'+scopeChoices(st.nsScopes,"nsToggleScope")+'</div></div>'
-  +'<div class="cm-panel"><h2>'+stp("4")+'识别能力与评分规则</h2><p class="sub">业务用户选择能力和模板即可，系统在后台生成对应 Prompt 与结构化输出要求。</p><h3>识别能力</h3><div class="cm-choices">'+capChoices(st.nsCaps,"nsToggleCap")+'</div><h3>规则模板</h3><div class="cm-choices">'+templateChoices(st.nsTemplate,"nsTemplate")+'</div><h3>风险评分规则</h3>'+scoreRuleNote(st.nsCaps,{ruleImportance:st.nsImportance||cloneMap(templateDef(st.nsTemplate).weights),template:st.nsTemplate,caps:st.nsCaps})+scoreRows(st.nsCaps,{ruleImportance:st.nsImportance||cloneMap(templateDef(st.nsTemplate).weights),template:st.nsTemplate,caps:st.nsCaps},"nsRuleImportance")+'<h3 style="margin-top:14px">风险阈值</h3>'+thresholdInputs("ns2-th",nsTh)+'</div>';
+  +'<div class="cm-panel"><h2>'+stp("4")+'识别能力与评分规则</h2><p class="sub">业务用户选择能力和模板即可，系统在后台生成对应 Prompt 与结构化输出要求。</p><h3>识别能力</h3><div class="cm-choices">'+capChoices(st.nsCaps,"nsToggleCap")+'</div><h3>规则模板</h3><div class="cm-choices">'+templateChoices(st.nsTemplate,"nsTemplate")+'</div><h3>风险评分规则</h3>'+scoreRows(st.nsCaps,{ruleImportance:st.nsImportance||cloneMap(templateDef(st.nsTemplate).weights),template:st.nsTemplate,caps:st.nsCaps},"nsRuleImportance")+'<h3 style="margin-top:14px">风险阈值</h3>'+thresholdInputs("ns2-th",nsTh)+'</div>';
 }
 
 function renderLibNew(){
@@ -1682,27 +2192,50 @@ function refreshNsConds(){var c=shell.querySelector("#ns-conds");if(!c)return;va
 
 function toggle(arr,v){var i=arr.indexOf(v);if(i>-1)arr.splice(i,1);else arr.push(v);}
 function val(id){var e=document.getElementById(id);return e?e.value.trim():"";}
+function selectedNewSchemeLibIds(){return [].slice.call(document.querySelectorAll(".cfg-lib:checked")).map(function(x){return x.value;});}
+function syncNewSchemeDraft(){
+ if(st.cfgView!=="schemeNew")return;
+ var name=document.getElementById("ns2-name");if(name)st.nsName=name.value.trim();
+ var libs=document.querySelectorAll(".cfg-lib");if(libs.length)st.nsLibIds=selectedNewSchemeLibIds();
+ var th=document.getElementById("ns2-th-high");if(th)st.nsThresholds=readThresholds("ns2-th",st.nsThresholds||{high:85,medium:65,review:45});
+}
 function splitList(s){return s.split(/[,\s/、]+/).filter(Boolean);}
 
 root.addEventListener("click",function(e){
  var el=e.target.closest("[data-act]");if(!el)return;
  if(["INPUT","TEXTAREA","SELECT"].indexOf(el.tagName)>-1)return;
  var a=el.dataset.act,d=el.dataset,msg=null;
+ if(a!=="schemeNewOpen")syncNewSchemeDraft();
  if(a==="modalBg"){if(e.target!==el)return;st.modal=null;}
  else if(a==="modalClose"){st.modal=null;}
- else if(a==="nav"){st.screen=d.screen;st.modal=null;if(d.screen==="config")st.cfgView="list";}
+ else if(a==="nav"){if(d.screen==="newTask"||st.screen==="newTask")st.newTaskReturn=null;if(d.screen==="users"&&st.screen!=="users")st.userReturn=null;st.screen=d.screen;st.modal=null;if(d.screen==="config")st.cfgView="list";}
  else if(a==="filter"){st.filters[d.kind]=d.val;st.riskPage=1;}
  else if(a==="resetFilter"){st.filters={category:"全部",source:"全部",level:"全部",status:"全部"};st.riskPage=1;}
- else if(a==="openEvidence"){st.riskId=d.id;st.screen="evidence";loadRiskDetail(d.id);}
+ else if(a==="openEvidence"){st.evidenceReturnTaskId=st.screen==="taskDetail"?st.taskId:null;st.riskId=d.id;st.screen="evidence";loadRiskDetail(d.id);}
  else if(a==="secure"){var r=getRisk(d.id);if(r.status!=="已固证"){r.status="已固证";}msg=["证据已固证",d.id+" 已生成保全记录"];}
  else if(a==="merge"){
    var rr=getRisk(d.id);var u=userByAccount(rr.account);
+   var mergeReturn=mergeUserReturnContext();
+   if(rr.apiResultId){
+     apiFetch("/api/monitored-users/from-audit-result",{method:"POST",body:JSON.stringify({audit_result_id:rr.apiResultId})})
+      .then(function(data){return loadSaasData().then(function(){
+        var item=data&&data.item?data.item:null;
+        if(item&&item.id)st.userId="mu-"+item.id;
+        else if(users.length)st.userId=users[0].id;
+        st.userReturn=mergeReturn;
+        st.screen="users";st.modal=null;R();
+        toast("已归并到重点用户",rr.account+" · 已写入后端监控对象");
+      });})
+      .catch(function(err){toast("归并失败",String(err.message||err).slice(0,120));});
+     return;
+   }
    if(!u){u={id:"ux"+(++cnt),account:rr.account,platforms:rr.platform,scope:"主页 · 发布 · 评论互动",score:70,libraries:rr.library,strategies:rr.strategy,freq:"每 2 小时",latest:[],related:[],watched:true};users.push(u);}
    if(u.latest.indexOf(rr.title+" · 已归并")<0)u.latest.unshift(rr.title+" · 已归并");
-   u.watched=true;rr.linked=u.account;st.userId=u.id;st.screen="users";st.modal=null;
+   u.watched=true;rr.linked=u.account;st.userId=u.id;st.userReturn=mergeReturn;st.screen="users";st.modal=null;
    msg=["已归并到重点用户",rr.account+" · 该风险已挂载到重点用户监控"];
  }
- else if(a==="taskOpen"){st.taskId=d.id;st.screen="taskDetail";loadTaskDetail(d.id);}
+ else if(a==="taskOpen"){if(!d.preserveReturn){var trc=currentTaskReturnContext();if(trc)st.taskReturnByTaskId[d.id]=trc;else delete st.taskReturnByTaskId[d.id];}st.taskId=d.id;st.screen="taskDetail";loadTaskDetail(d.id);}
+ else if(a==="taskBack"){returnFromTaskDetail();}
  else if(a==="selectEvidenceGroup"){st.activeEvidenceGroup[d.rid]=d.group;}
  else if(a==="toggleEvidenceGroup"){st.openEvidenceGroups[d.gid]=!st.openEvidenceGroups[d.gid];}
  else if(a==="moreEvidenceGroup"){st.moreEvidenceGroups[d.gid]=true;}
@@ -1717,7 +2250,10 @@ root.addEventListener("click",function(e){
  else if(a==="riskPageNext"){var rn=Number(d.count||1),rq=Number(st.riskPage||1);st.riskPage=Math.min(rn,rq+1);}
  else if(a==="taskOutputPagePrev"){var tpKey=d.id||"current",top=Number(st.taskOutputPage[tpKey]||1);st.taskOutputPage[tpKey]=Math.max(1,top-1);}
  else if(a==="taskOutputPageNext"){var tnKey=d.id||"current",ton=Number(d.count||1),toq=Number(st.taskOutputPage[tnKey]||1);st.taskOutputPage[tnKey]=Math.min(ton,toq+1);}
+ else if(a==="togglePanel"){st.collapsedPanels[d.key]=!panelCollapsed(d.key);}
  else if(a==="taskPause"){var tp=getTask(d.id);if(tp.apiJobId){apiFetch("/api/jobs/"+tp.apiJobId+"/control",{method:"POST",body:JSON.stringify({action:tp.status==="已暂停"?"backfill_analysis":"pause_crawl"})}).then(function(){return loadSaasData();}).then(function(){toast(tp.status==="已暂停"?"任务已继续":"任务已暂停",tp.name);}).catch(function(err){toast("操作失败",String(err.message||err).slice(0,100));});return;}if(tp.status==="已暂停"){tp.status="运行中";tp.log.unshift([nowStamp(),"任务已恢复采集"]);msg=["任务已继续",tp.name+" 恢复采集"];}else{tp.status="已暂停";tp.log.unshift([nowStamp(),"人工暂停采集"]);msg=["任务已暂停",tp.name+" 已停止采集"];}}
+ else if(a==="taskControl"){var ctl=getTask(d.id),act=d.control||"",name=d.name||"操作";if(ctl.apiJobId){apiFetch("/api/jobs/"+ctl.apiJobId+"/control",{method:"POST",body:JSON.stringify({action:act})}).then(function(){return loadSaasData();}).then(function(){toast(name+"已提交",ctl.name);}).catch(function(err){toast(name+"失败",String(err.message||err).slice(0,100));});return;}ctl.log=ctl.log||[];if(act==="pause_crawl"){ctl.status="已暂停";ctl.log.unshift([nowStamp(),"人工暂停抓取"]);msg=["抓取已暂停",ctl.name];}else if(act==="pause_analysis"){ctl.log.unshift([nowStamp(),"人工暂停分析"]);msg=["分析已暂停",ctl.name];}else if(act==="backfill_analysis"){ctl.status="运行中";ctl.log.unshift([nowStamp(),"继续分析已启动"]);msg=["继续分析已启动",ctl.name];}}
+ else if(a==="taskDelete"){var td=getTask(d.id),tdName=td.name;if(!window.confirm("删除任务「"+tdName+"」？\n\n该任务生成的分析帖子也会从风险研判中删除，此操作不可恢复。"))return;if(td.apiJobId){var deletedCount=0;apiFetch("/api/jobs/"+td.apiJobId,{method:"DELETE"}).then(function(data){deletedCount=Number(data.deleted_result_count||0);return loadSaasData();}).then(function(){if(st.taskId===d.id&&tasks.length)st.taskId=tasks[0].id;toast("任务及分析帖子已删除",tdName+" · "+deletedCount+" 条");}).catch(function(err){toast("删除失败",String(err.message||err).slice(0,100));});return;}for(var di=tasks.length-1;di>=0;di--)if(tasks[di].id===d.id)tasks.splice(di,1);if(st.taskId===d.id&&tasks.length)st.taskId=tasks[0].id;msg=["任务已删除",tdName];}
  else if(a==="taskBackfill"){var tb=getTask(d.id);if(tb.apiJobId){apiFetch("/api/jobs/"+tb.apiJobId+"/control",{method:"POST",body:JSON.stringify({action:"backfill_analysis"})}).then(function(){return loadSaasData();}).then(function(){toast("补抓任务已创建",tb.name);}).catch(function(err){toast("补抓失败",String(err.message||err).slice(0,100));});return;}var batch="KW-"+(1000+(++cnt));tb.log.unshift([nowStamp(),"补抓批次 "+batch+" 已创建，采集近 7 天内容"]);tb.riskN+=3;msg=["补抓任务已创建",tb.name+" · 批次 "+batch];}
  else if(a==="taskPolicyOpen"){var tpo=getTask(d.id);if(!tpo.apiJobId){msg=["静态样例不能更新策略","真实后端任务可生成新 Revision"];}else{var body="";for(var pp=0;pp<st.policies.length;pp++){var p=st.policies[pp];body+='<div class="cm-list-row"><span><b>'+p.name+'</b><br><small style="color:var(--text-secondary)">'+(p.published_version||p.draft_version||"draft")+' · '+safeArr((p.published_config||p.config||{}).library_ids).map(knowledgeLabel).join(" / ")+'</small></span><button class="cm-btn sm pri g" data-act="taskPolicyApply" data-job="'+tpo.apiJobId+'" data-policy="'+p.id+'" style="margin-left:auto">使用</button></div>';}openModal("更新审核策略","生成新的任务配置 Revision，只影响后续新分析结果",body||'<div class="cm-empty">暂无可用策略模板</div>');}}
  else if(a==="taskPolicyApply"){updateTaskPolicy(d.job,d.policy);return;}
@@ -1734,11 +2270,10 @@ root.addEventListener("click",function(e){
    openModal("复核清单","共 "+fr.length+" 条待复核 / 已研判内容",body);
  }
  else if(a==="exportDone"){st.modal=null;msg=["复核清单已下载","review_list.csv 已生成"];}
- else if(a==="confirmRisk"){var rc=getRisk(d.id);if(rc.apiResultId){apiFetch("/api/audit-results/"+rc.apiResultId+"/review",{method:"PATCH",body:JSON.stringify({status:"confirmed",note:"确认风险",reviewer:"saas-demo"})}).then(function(data){st.resultDetails[d.id]=data;return loadSaasData();}).then(function(){toast("风险结论已入库",rc.id+" 已标记为确认风险");}).catch(function(err){toast("入库失败",String(err.message||err).slice(0,100));});return;}rc.decision="已确认";msg=["风险结论已记录",rc.id+" 已标记为确认风险"];}
- else if(a==="dismissRisk"){var rd=getRisk(d.id);if(rd.apiResultId){apiFetch("/api/audit-results/"+rd.apiResultId+"/review",{method:"PATCH",body:JSON.stringify({status:"dismissed",note:"排除误报",reviewer:"saas-demo"})}).then(function(data){st.resultDetails[d.id]=data;return loadSaasData();}).then(function(){toast("复核结论已入库",rd.id+" 已排除误报");}).catch(function(err){toast("入库失败",String(err.message||err).slice(0,100));});return;}rd.decision="已排除";msg=["复核结论已记录",rd.id+" 已排除误报"];}
- else if(a==="backfillRisk"){var rb=getRisk(d.id);var tk=null;for(var ti2=0;ti2<tasks.length;ti2++)if(tasks[ti2].name===rb.task)tk=tasks[ti2];if(tk)tk.log.unshift([nowStamp(),"针对 "+rb.account+" 的补抓已创建"]);msg=["补抓任务已创建",rb.account+" 近期发布将补充采集"];}
- else if(a==="saveDraft"){var dn="草稿 · "+typeTitle[st.nt.type]+"任务";tasks.push({id:"T-DRAFT"+(++cnt),name:dn,type:typeTitle[st.nt.type],target:st.nt.platforms.join(" / ")||"待配置",config:getScheme(st.nt.scheme).name,status:"草稿",prog:0,riskN:0,hot:0,updated:"刚刚",log:[[nowStamp(),"草稿已保存，尚未开始采集"]]});st.screen="tasks";msg=["草稿已保存","可在监控任务列表继续编辑并启动"];}
+ else if(a==="newTaskBack"){returnFromNewTask("tasks");msg=["已返回帖子分析","未创建新的监控任务"];}
+ else if(a==="saveDraft"){var dn="草稿 · "+typeTitle[st.nt.type]+"任务";tasks.push({id:"T-DRAFT"+(++cnt),name:dn,type:typeTitle[st.nt.type],target:st.nt.platforms.join(" / ")||"待配置",config:getScheme(st.nt.scheme).name,status:"草稿",prog:0,riskN:0,hot:0,updated:"刚刚",log:[[nowStamp(),"草稿已保存，尚未开始采集"]]});st.newTaskReturn=null;st.nt.relationContext=null;st.screen="tasks";msg=["草稿已保存","可在监控任务列表继续编辑并启动"];}
  else if(a==="userBackfill"){var ub=getUser(st.userId);ub.latest.unshift("补抓近期发布 · 已加入采集队列");msg=["补抓任务已创建",ub.account+" 近期发布将补充采集"];}
+ else if(a==="userReturnBack"){if(!returnFromUsers())st.screen="tasks";}
  else if(a==="userWatch"){var uw=getUser(st.userId);uw.watched=!uw.watched;msg=[uw.watched?"已加入持续观察":"已取消持续观察",uw.account];}
  else if(a==="userUnlink"){var uu=getUser(st.userId);var ix=parseInt(d.idx,10);if(uu.related[ix]){var rem=uu.related[ix][0];uu.related.splice(ix,1);msg=["关联已移除",rem+" 关系进入待确认"];}}
  else if(a==="userAdd"){seedTags({"ua-plat":["抖音"],"ua-scope":["主页","发布","评论互动"],"ua-lib":["违规引流 v1.8"]});openModal("新增监控账号","填写账号主页与监控范围，加入重点用户监控",
@@ -1749,16 +2284,11 @@ root.addEventListener("click",function(e){
    finput("up-freq","监控频率",up.freq,"")+taginput("up-lib","绑定黑话库","输入词库后回车")+taginput("up-str","分析策略","输入策略后回车")+taginput("up-scope","监控范围","输入范围后回车")
    +'<div class="cm-mini" style="margin-top:12px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">取消</button><button class="cm-btn pri" data-act="userPlanSave">保存计划</button></div>');}
  else if(a==="userPlanSave"){var us=getUser(st.userId);var pl=tagVals("up-lib"),ps=tagVals("up-str"),psc=tagVals("up-scope");us.freq=val("up-freq")||us.freq;if(pl.length)us.libraries=pl.join(" / ");if(ps.length)us.strategies=ps.join(" / ");if(psc.length)us.scope=psc.join(" · ");st.modal=null;st.tags={};msg=["监控计划已更新",us.account+" 的频率与配置已保存"];}
- else if(a==="userExport"){var ue=getUser(st.userId);var linked=risks.filter(function(r){return r.account===ue.account||(r.linked&&ue.account.indexOf("**")>-1&&r.account===ue.account);});var body='<p class="sub">'+ue.account+' 的证据包包含以下材料与关联风险，可打包下载。</p><h3>证据材料</h3><div class="cm-tiles">'+["原始链接","主页截图","视频片段","评论弹幕","哈希记录"].map(function(x,i){return '<div class="cm-tile"><i class="ti '+["ti-link","ti-screenshot","ti-movie","ti-message","ti-fingerprint"][i]+'"></i>'+x+'</div>';}).join("")+'</div><h3>关联风险内容</h3>';
-   var lk=ue.latest.slice(0,4);for(var le=0;le<lk.length;le++)body+='<div class="cm-list-row"><i class="ti ti-file" style="color:var(--text-muted)"></i><span>'+lk[le]+'</span></div>';
-   body+='<div class="cm-mini" style="margin-top:14px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">关闭</button><button class="cm-btn pri" data-act="exportDone">下载证据包</button></div>';
-   openModal("导出证据包 · "+ue.account,"原始链接、截图、片段、评论弹幕与哈希记录",body);
- }
  else if(a==="cfgPublish"){st.cfgVersion++;st.pendingChanges=0;for(var sp=0;sp<schemes.length;sp++)schemes[sp].status="已发布";msg=["配置版本已发布","已发布 v"+st.cfgVersion+"，所有方案生效，新任务将使用最新配置"];}
  else if(a==="cfgBack"){st.cfgView="list";}
  else if(a==="openScheme"){st.schemeId=d.id;seedSchemeTags(getScheme(d.id));st.cfgView="scheme";}
  else if(a==="openLib"){st.libId=d.id;seedLibTags(getLib(d.id));st.cfgView="lib";}
- else if(a==="schemeNewOpen"){st.cfgView="schemeNew";st.tags={};st.nsConds=[];st.nsScopes=["title_body","comment","image","video","audio"];st.nsCaps=["text","ocr","asr","vision","comment"];st.nsTemplate="balanced";st.nsImportance=cloneMap(templateDef("balanced").weights);}
+ else if(a==="schemeNewOpen"){st.cfgView="schemeNew";st.tags={};st.nsConds=[];st.nsName="";st.nsLibIds=[];st.nsScopes=["title_body","comment","image","video","audio"];st.nsCaps=["text","ocr","asr","vision","comment"];st.nsTemplate="balanced";st.nsImportance=cloneMap(templateDef("balanced").weights);st.nsThresholds={high:85,medium:65,review:45};}
  else if(a==="libNewOpen"){st.cfgView="libNew";st.tags={};st.libReturn=null;}
  else if(a==="libNewFromScheme"){flushScheme(getScheme(d.id));st.libReturn=d.id;st.cfgView="libNew";st.tags={};}
  else if(a==="schemeBindOpen"){var sob=getScheme(d.id);var pool=libraries.filter(function(L){return sob.libIds.indexOf(L.id)<0;});var body=pool.length?"":'<div class="cm-empty">全部黑话库都已绑定</div>';for(var pi=0;pi<pool.length;pi++)body+='<div class="cm-list-row">'+bd("info",pool[pi].category)+'<span><b>'+pool[pi].name+'</b></span><button class="cm-btn sm pri g" data-act="schemeBindLib" data-lib="'+pool[pi].id+'" style="margin-left:auto">绑定</button></div>';openModal("绑定已有黑话库","选择要加入 "+sob.name+" 的词库",body+'<div class="cm-mini" style="margin-top:12px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">关闭</button></div>');}
@@ -1771,9 +2301,23 @@ root.addEventListener("click",function(e){
  else if(a==="schemeDelCond"){var sdc=getScheme(st.schemeId);flushScheme(sdc);sdc.conds.splice(parseInt(d.idx,10),1);recomputeScheme(sdc);st.pendingChanges++;msg=["判定条件已删除",""];}
  else if(a==="schemeSave"){var ss=getScheme(d.id);flushScheme(ss);if(st.apiReady){saveSchemePolicy(ss,false);return;}st.pendingChanges++;st.cfgView="list";msg=["方案已保存",ss.name+" 变更进入待发布版本"];}
  else if(a==="schemePublish"){var sps=getScheme(d.id);flushScheme(sps);if(st.apiReady){saveSchemePolicy(sps,true);return;}sps.status="已发布";st.cfgVersion++;st.pendingChanges=0;msg=["方案已发布",sps.name+" 已发布 v"+st.cfgVersion];}
+ else if(a==="schemeDelete"){
+   var ds=getScheme(d.id),dsRefs=schemeRefTasks(ds),dsName=ds.name;
+   var dsWarn=dsRefs.length?"\n\n该方案当前被 "+dsRefs.length+" 个任务引用；已有任务会保留历史审核配置，但新任务不能再选择该方案。":"";
+   if(!window.confirm("删除研判方案「"+dsName+"」？"+dsWarn+"\n\n此操作会从配置库删除该方案，且不可恢复。"))return;
+   if(st.apiReady&&ds.policyId){
+     st.apiLoading=true;R();
+     apiFetch("/api/audit-policies/"+ds.policyId,{method:"DELETE"}).then(function(){st.cfgView="list";st.schemeId=null;return loadSaasData();}).then(function(){toast("研判方案已删除",dsName+" 已从配置库删除");}).catch(function(err){toast("删除失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
+     return;
+   }
+   for(var dsi=schemes.length-1;dsi>=0;dsi--)if(schemes[dsi].id===d.id)schemes.splice(dsi,1);
+   if(st.schemeId===d.id)st.schemeId=schemes[0]?schemes[0].id:null;
+   st.cfgView="list";msg=["研判方案已删除",dsName];
+ }
  else if(a==="schemeCreate"){
-   var cnm=val("ns2-name")||"新研判方案";var clibs=[].slice.call(document.querySelectorAll(".cfg-lib:checked")).map(function(x){return x.value;});if(!clibs.length)clibs=[libraries[0].id];
-   var ccaps=st.nsCaps.length?st.nsCaps.slice():["text"];var cscopes=st.nsScopes.length?st.nsScopes.slice():["title_body"];var ctemplate=st.nsTemplate||"balanced";var cimp=st.nsImportance?cloneMap(st.nsImportance):cloneMap(templateDef(ctemplate).weights);var cth=readThresholds("ns2-th",{high:85,medium:65,review:45});
+   syncNewSchemeDraft();
+   var cnm=st.nsName||val("ns2-name")||"新研判方案";var clibs=(st.nsLibIds||[]).slice();if(!clibs.length)clibs=[libraries[0].id];
+   var ccaps=st.nsCaps.length?st.nsCaps.slice():["text"];var cscopes=st.nsScopes.length?st.nsScopes.slice():["title_body"];var ctemplate=st.nsTemplate||"balanced";var cimp=st.nsImportance?cloneMap(st.nsImportance):cloneMap(templateDef(ctemplate).weights);var cth=st.nsThresholds||readThresholds("ns2-th",{high:85,medium:65,review:45});
    var draft={ruleImportance:cimp,template:ctemplate,caps:ccaps,thresholds:cth};var cmodal=capsToModal(ccaps);var cconds=ruleRowsForCaps(ccaps,draft);
    var nid="scx"+(++cnt);schemes.push({id:nid,name:cnm,status:"草稿",libIds:clibs,scopes:cscopes,caps:ccaps,template:ctemplate,ruleImportance:cimp,thresholds:cth,modal:cmodal,th:thresholdsText(cth),conds:cconds,tasks:"",outputs:[]});
    recomputeScheme(getScheme(nid));
@@ -1781,6 +2325,21 @@ root.addEventListener("click",function(e){
    st.schemeId=nid;seedSchemeTags(getScheme(nid));st.cfgView="scheme";st.pendingChanges++;msg=["研判方案已新建",cnm+" 已创建，可继续编辑或发布"];
  }
  else if(a==="libSave"){var ls=getLib(d.id);if(st.apiReady){saveLexiconLibrary(ls,false,null);return;}ls.category=val("lib-cat")||ls.category;ls.name=val("lib-name")||ls.name;var lt=tagVals("lib-terms");var lpk2=tagVals("lib-pk");var lpt2=tagVals("lib-pt");if(!lt.length&&!lpk2.length&&!lpt2.length){msg=["请至少填写一个词","黑话词、平台搜索词或平台标签至少需要一个"];}else{ls.terms=lt;ls.pk=lpk2;ls.pt=lpt2;st.pendingChanges++;st.cfgView="list";msg=["黑话库已保存",ls.name+" 变更进入待发布版本"];}}
+ else if(a==="libDelete"){
+   var dl=getLib(d.id),dlUsed=libSchemes(dl.id),dlName=dl.name;
+   var dlWarn=dlUsed.length?"\n\n该黑话库正在被 "+dlUsed.length+" 个研判方案使用；删除后会同时从这些方案中移除引用。":"";
+   if(!window.confirm("删除黑话库「"+dlName+"」？"+dlWarn+"\n\n此操作会删除词条和 Prompt 配置，且不可恢复。"))return;
+   var backendLibId=dl.backendId||libraryBackendId(dl.id);
+   if(st.apiReady){
+     st.apiLoading=true;R();
+     apiFetch("/api/lexicons/"+backendLibId,{method:"DELETE"}).then(function(data){st.cfgView="list";st.libId=null;return loadSaasData().then(function(){return data;});}).then(function(data){toast("黑话库已删除",dlName+" · 已同步 "+(data.affected_policy_count||0)+" 个方案");}).catch(function(err){toast("删除失败",String(err.message||err).slice(0,120));}).finally(function(){st.apiLoading=false;R();});
+     return;
+   }
+   for(var dli=libraries.length-1;dli>=0;dli--)if(libraries[dli].id===dl.id)libraries.splice(dli,1);
+   for(var dls=0;dls<schemes.length;dls++){var idx=schemes[dls].libIds.indexOf(dl.id);if(idx>-1){schemes[dls].libIds.splice(idx,1);recomputeScheme(schemes[dls]);}}
+   if(st.libId===dl.id)st.libId=libraries[0]?libraries[0].id:null;
+   st.cfgView="list";msg=["黑话库已删除",dlName+" 已从引用方案中移除"];
+ }
  else if(a==="libCreate"){
    var nlnm=val("nl-name")||"自定义词库 v1.0";var nlt=tagVals("nl-terms");if(!nlt.length)nlt=["自定义词"];
    if(st.apiReady){saveLexiconLibrary(null,true,st.libReturn);return;}
@@ -1803,9 +2362,33 @@ root.addEventListener("click",function(e){
    '<div class="cm-stats" style="margin-bottom:12px">'+stat("样本","100","条")+stat("命中","41","条","dang")+stat("待复核","15","条","warn")+stat("命中率","41%","")+'</div>'
    +miniTable(["样本类型","命中条件","预期结论"],[["平台内容","谐音暗号 / 跳转话术","进入风险研判工作台"],["直播弹幕","口播暗号","生成弹幕截图"],["重点用户","相似话术 / 互动账号","进入用户归并线索"]])
    +'<div class="cm-mini" style="margin-top:12px;justify-content:flex-end"><button class="cm-btn" data-act="modalClose">关闭</button></div>');}
+ else if(a==="linkCommentUser"){
+   var linkCtx=null;
+   if(d.ctx){try{linkCtx=JSON.parse(decodeURIComponent(d.ctx));}catch(_){linkCtx=null;}}
+   if(!linkCtx||!linkCtx.parent_audit_result_id){toast("关联失败","缺少评论关系上下文");return;}
+   apiFetch("/api/monitored-users/comment-relation",{method:"POST",body:JSON.stringify({relation_context:linkCtx})})
+     .then(function(){return loadSaasData();})
+     .then(function(){toast("已关联评论用户","已写入重点用户的疑似关联账号");})
+     .catch(function(err){toast("关联失败",String(err.message||err).slice(0,120));});
+   return;
+ }
+ else if(a==="analyzeCommentUser"){
+   var relationCtx=null;
+   if(d.ctx){try{relationCtx=JSON.parse(decodeURIComponent(d.ctx));}catch(_){relationCtx=null;}}
+   st.nt.type="user";st.nt.platforms=[d.platform||"抖音"];st.nt.userUrl=d.url||"";st.nt.name="评论用户 · "+(d.name||"主页")+" 分析";st.nt.methods=["profile","posts","interaction"];st.nt.relationContext=relationCtx;st.newTaskReturn={screen:"evidence",riskId:st.riskId,taskId:st.evidenceReturnTaskId};st.screen="newTask";st.modal=null;
+   msg=isXhsProfileUrlMissingToken(st.nt.userUrl)?["已填入用户主页","小红书需补充完整主页地址后再创建任务"]:["已填入用户主页",(d.name||"评论用户")+" · 创建任务成功后写入疑似关联账号"];
+ }
  else if(a==="ntType"){st.nt.type=d.type;}
  else if(a==="ntScheme"){st.nt.scheme=d.id;}
- else if(a==="ntPlatform"){st.nt.platforms=[d.v];}
+ else if(a==="ntPlatform"){
+   var platformIdx=st.nt.platforms.indexOf(d.v);
+   if(platformIdx>-1&&st.nt.platforms.length===1){msg=["至少保留一个平台","小红书、抖音、快手可同时多选"];}else{
+     toggle(st.nt.platforms,d.v);
+     var platformOrder={"小红书":0,"抖音":1,"快手":2};
+     st.nt.platforms.sort(function(a,b){return platformOrder[a]-platformOrder[b];});
+     msg=["采集平台已更新",st.nt.platforms.join(" / ")];
+   }
+ }
  else if(a==="ntMethod"){toggle(st.nt.methods,d.m);}
  else if(a==="pickFile"){var vf=document.getElementById("nt-video-file");if(vf)vf.click();return;}
  else if(a==="createTask"){
@@ -1819,7 +2402,7 @@ root.addEventListener("click",function(e){
    var createScheme=getScheme(st.nt.scheme);
    var newRow={id:"T-NEW",name:nm,type:typeTitle[st.nt.type],target:taskTargetText(st.nt),config:createScheme.name,status:"运行中",prog:8,riskN:0,hot:0,updated:"刚刚"};
    if(exist){tasks[tasks.length-1]=newRow;}else{tasks.push(newRow);}
-   st.screen="tasks";msg=["任务已创建",nm+" 已开始采集，命中异常后进入工作台"];
+	   var returned=returnFromNewTask("tasks");msg=["任务已创建",returned?nm+" 已开始采集，已返回该帖子分析页面":nm+" 已开始采集，命中异常后进入工作台"];
    }
  }
  else if(a==="selUser"){st.userId=d.id;}
@@ -1831,6 +2414,9 @@ root.addEventListener("click",function(e){
 });
 
 root.addEventListener("input",function(e){
+ if(st.cfgView==="schemeNew"&&(e.target.id==="ns2-name"||/^ns2-th-/.test(e.target.id||""))){
+   syncNewSchemeDraft();
+ }
  var el=e.target.closest("[data-act]");if(!el)return;
  var a=el.dataset.act;
  if(a==="ntTaskName"){
@@ -1844,15 +2430,33 @@ root.addEventListener("input",function(e){
 });
 
 root.addEventListener("change",function(e){
+ if(st.cfgView==="schemeNew"&&e.target.classList&&e.target.classList.contains("cfg-lib")){
+   syncNewSchemeDraft();
+   return;
+ }
+ if(st.cfgView==="schemeNew"&&/^ns2-th-/.test(e.target.id||"")){
+   syncNewSchemeDraft();
+   return;
+ }
+ var levelEl=e.target.closest('[data-act="taskOutputLevel"]');
+ if(levelEl){
+   var levelKey=levelEl.dataset.id||"current";
+   st.taskOutputLevel[levelKey]=levelEl.value||"全部";
+   st.taskOutputPage[levelKey]=1;
+   R();
+   return;
+ }
  var fileEl=e.target.closest("#nt-video-file");
  if(fileEl){
    var f=fileEl.files&&fileEl.files[0];
    if(f){st.nt.file=f;st.nt.fileName=f.name;st.nt.fileLoaded=true;R();toast("文件已选择",f.name);}
    return;
  }
+ syncNewSchemeDraft();
  var el=e.target.closest("select[data-act]");if(!el)return;
  var a=el.dataset.act,d=el.dataset,msg=null;
- if(a==="schemeRuleImportance"){
+ if(a==="filterSelect"){st.filters[d.kind]=el.value;st.riskPage=1;}
+ else if(a==="schemeRuleImportance"){
    var sr=getScheme(st.schemeId);flushScheme(sr);if(!sr.ruleImportance)sr.ruleImportance=cloneMap(templateDef(schemeTemplate(sr)).weights);
    sr.ruleImportance[d.cap]=el.value;recomputeScheme(sr);st.pendingChanges++;msg=["评分规则已更新",capDef(d.cap).rule+" · "+importanceLabels[el.value]];
  }

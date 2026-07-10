@@ -143,6 +143,11 @@ class LexiconStore:
                     prompt_version TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS lexicon_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
                 """
             )
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(lexicon_prompt_profiles)").fetchall()}
@@ -159,6 +164,21 @@ class LexiconStore:
     def _seed_defaults(self) -> None:
         now = datetime.now().isoformat(timespec="seconds")
         with self._lock, self._connect() as conn:
+            seeded = conn.execute(
+                "SELECT value FROM lexicon_metadata WHERE key = 'defaults_seeded'"
+            ).fetchone()
+            if seeded:
+                return
+            count = conn.execute("SELECT COUNT(*) AS count FROM lexicon_categories").fetchone()
+            if int(count["count"] or 0) > 0:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO lexicon_metadata (key, value)
+                    VALUES ('defaults_seeded', ?)
+                    """,
+                    (now,),
+                )
+                return
             for order, category in enumerate(DEFAULT_LEXICON):
                 conn.execute(
                     """
@@ -196,6 +216,13 @@ class LexiconStore:
                     (self._default_risk_label(category["id"], category["title"]), category["id"]),
                 )
             self._seed_prompt_profiles(conn, now)
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO lexicon_metadata (key, value)
+                VALUES ('defaults_seeded', ?)
+                """,
+                (now,),
+            )
 
     def _seed_prompt_profiles(self, conn: sqlite3.Connection, now: str) -> None:
         for category_id, profile in DEFAULT_PROMPT_PROFILES.items():
@@ -707,6 +734,25 @@ class LexiconStore:
             cursor = conn.execute("DELETE FROM lexicon_keywords WHERE id = ?", (keyword_id,))
         if cursor.rowcount <= 0:
             raise KeyError(str(keyword_id))
+
+    def delete_category(self, category_id: str) -> dict:
+        cleaned_id = str(category_id or "").strip()
+        if not cleaned_id:
+            raise KeyError(category_id)
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM lexicon_categories WHERE id = ?", (cleaned_id,)).fetchone()
+            if not row:
+                raise KeyError(cleaned_id)
+            category = dict(row)
+            keyword_cursor = conn.execute("DELETE FROM lexicon_keywords WHERE category_id = ?", (cleaned_id,))
+            profile_cursor = conn.execute("DELETE FROM lexicon_prompt_profiles WHERE category_id = ?", (cleaned_id,))
+            conn.execute("DELETE FROM lexicon_categories WHERE id = ?", (cleaned_id,))
+        return {
+            "id": category["id"],
+            "title": category["title"],
+            "deleted_keyword_count": int(keyword_cursor.rowcount or 0),
+            "deleted_prompt_profile_count": int(profile_cursor.rowcount or 0),
+        }
 
     def _keyword_row(self, row: sqlite3.Row) -> dict:
         return {

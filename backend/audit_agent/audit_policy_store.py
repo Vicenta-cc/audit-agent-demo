@@ -141,11 +141,27 @@ class AuditPolicyStore:
 
                 CREATE INDEX IF NOT EXISTS idx_audit_policies_status
                 ON audit_policies(status, updated_at);
+
+                CREATE TABLE IF NOT EXISTS audit_policy_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
                 """
             )
-            count = conn.execute("SELECT COUNT(*) AS count FROM audit_policies").fetchone()
-            if int(count["count"] or 0) == 0:
-                self._seed_defaults(conn)
+            seeded = conn.execute(
+                "SELECT value FROM audit_policy_metadata WHERE key = 'defaults_seeded'"
+            ).fetchone()
+            if not seeded:
+                count = conn.execute("SELECT COUNT(*) AS count FROM audit_policies").fetchone()
+                if int(count["count"] or 0) == 0:
+                    self._seed_defaults(conn)
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO audit_policy_metadata (key, value)
+                    VALUES ('defaults_seeded', ?)
+                    """,
+                    (utc_now(),),
+                )
 
     def _seed_defaults(self, conn: sqlite3.Connection) -> None:
         now = utc_now()
@@ -253,6 +269,46 @@ class AuditPolicyStore:
             row = conn.execute("SELECT * FROM audit_policies WHERE id = ?", (policy_id,)).fetchone()
             return self._row_to_policy(row)
 
+    def delete(self, policy_id: str) -> dict:
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM audit_policies WHERE id = ?", (policy_id,)).fetchone()
+            if not row:
+                raise KeyError(policy_id)
+            policy = self._row_to_policy(row)
+            conn.execute("DELETE FROM audit_policies WHERE id = ?", (policy_id,))
+            return policy
+
+    def remove_library_references(self, library_id: str) -> int:
+        target = str(library_id or "").strip()
+        if not target:
+            return 0
+        affected = 0
+        now = utc_now()
+        with self._lock, self._connect() as conn:
+            rows = conn.execute("SELECT * FROM audit_policies").fetchall()
+            for row in rows:
+                draft = self._loads_json(row["config_json"], {})
+                published = self._loads_json(row["published_config_json"], {})
+                new_draft, draft_changed = self._without_library(draft, target)
+                new_published, published_changed = self._without_library(published, target)
+                if not draft_changed and not published_changed:
+                    continue
+                affected += 1
+                conn.execute(
+                    """
+                    UPDATE audit_policies
+                    SET config_json = ?, published_config_json = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        json.dumps(new_draft, ensure_ascii=False),
+                        json.dumps(new_published, ensure_ascii=False),
+                        now,
+                        row["id"],
+                    ),
+                )
+        return affected
+
     @staticmethod
     def config_for_use(policy: dict) -> dict:
         config = policy.get("published_config") or policy.get("config") or {}
@@ -287,6 +343,31 @@ class AuditPolicyStore:
             return json.loads(value)
         except (TypeError, json.JSONDecodeError):
             return fallback
+
+    def _without_library(self, config: dict, library_id: str) -> tuple[dict, bool]:
+        if not isinstance(config, dict):
+            return {}, False
+        out = dict(config)
+        changed = False
+        libs = out.get("library_ids")
+        if isinstance(libs, list):
+            kept = [item for item in libs if str(item) != library_id]
+            changed = len(kept) != len(libs)
+            out["library_ids"] = kept
+        snapshot = out.get("rule_snapshot")
+        if isinstance(snapshot, dict):
+            new_snapshot = dict(snapshot)
+            rules = new_snapshot.get("scoring_rules")
+            if isinstance(rules, list):
+                kept_rules = [
+                    rule for rule in rules
+                    if not isinstance(rule, dict) or str(rule.get("library_id") or "") != library_id
+                ]
+                if len(kept_rules) != len(rules):
+                    new_snapshot["scoring_rules"] = kept_rules
+                    changed = True
+            out["rule_snapshot"] = new_snapshot
+        return out, changed
 
 
 class TaskAuditConfigRevisionStore:

@@ -80,6 +80,9 @@ def build_evidence_groups(result: dict) -> list[dict]:
     contributions: Counter[str] = Counter()
     rule_hits: dict[str, Counter[str]] = defaultdict(Counter)
     result_libraries = _risk_libraries_for_result(result)
+    if isinstance(result.get("evidence_items"), list) and result.get("evidence_items"):
+        return _build_groups_from_evidence_items(result, result_libraries)
+    seen_items: set[tuple[str, str, str]] = set()
 
     for item in result.get("score_breakdown") or []:
         if not isinstance(item, dict):
@@ -99,9 +102,10 @@ def build_evidence_groups(result: dict) -> list[dict]:
             "context": item.get("context") or "",
             "position": item.get("position") or _source_position(source),
         }
-        buckets[source].append(_decorate_item(evidence_item, item, result, source, result_libraries))
-        contributions[source] += score
-        rule_hits[source][rule] += 1
+        decorated = _decorate_item(evidence_item, item, result, source, result_libraries)
+        if _append_unique(buckets, source, decorated, seen_items):
+            contributions[source] += score
+            rule_hits[source][rule] += 1
 
     for item in result.get("risk_evidence") or result.get("evidence") or []:
         if not isinstance(item, dict):
@@ -126,8 +130,9 @@ def build_evidence_groups(result: dict) -> list[dict]:
             "context": item.get("context") or "",
             "position": item.get("position") or _source_position(source),
         }
-        buckets[source].append(_decorate_item(evidence_item, item, result, source, result_libraries))
-        rule_hits[source][rule] += 1
+        decorated = _decorate_item(evidence_item, item, result, source, result_libraries)
+        if _append_unique(buckets, source, decorated, seen_items):
+            rule_hits[source][rule] += 1
 
     for index, item in enumerate(result.get("risk_images") or [], start=1):
         if isinstance(item, dict):
@@ -147,8 +152,9 @@ def build_evidence_groups(result: dict) -> list[dict]:
             "context": "",
             "position": "图片/视频画面",
         }
-        buckets["vision"].append(_decorate_item(evidence_item, item if isinstance(item, dict) else {}, result, "vision", result_libraries))
-        rule_hits["vision"]["图片/视频画面命中"] += 1
+        decorated = _decorate_item(evidence_item, item if isinstance(item, dict) else {}, result, "vision", result_libraries)
+        if _append_unique(buckets, "vision", decorated, seen_items):
+            rule_hits["vision"]["图片/视频画面命中"] += 1
 
     for index, item in enumerate(result.get("risk_frames") or [], start=1):
         if isinstance(item, dict):
@@ -168,9 +174,72 @@ def build_evidence_groups(result: dict) -> list[dict]:
             "context": "",
             "position": "视频关键帧",
         }
-        buckets["vision"].append(_decorate_item(evidence_item, item if isinstance(item, dict) else {}, result, "vision", result_libraries))
-        rule_hits["vision"]["关键帧命中"] += 1
+        decorated = _decorate_item(evidence_item, item if isinstance(item, dict) else {}, result, "vision", result_libraries)
+        if _append_unique(buckets, "vision", decorated, seen_items):
+            rule_hits["vision"]["关键帧命中"] += 1
 
+    return _groups_from_buckets(buckets, contributions, rule_hits, result_libraries)
+
+
+def _build_groups_from_evidence_items(result: dict, result_libraries: list[dict]) -> list[dict]:
+    buckets: dict[str, list[dict]] = defaultdict(list)
+    contributions: Counter[str] = Counter()
+    rule_hits: dict[str, Counter[str]] = defaultdict(Counter)
+    score_by_evidence: dict[str, int] = defaultdict(int)
+    rules_by_evidence: dict[str, list[dict]] = defaultdict(list)
+    for row in result.get("score_breakdown") or []:
+        if not isinstance(row, dict):
+            continue
+        score = _as_int(row.get("score"))
+        rule = str(row.get("rule") or row.get("label") or row.get("rule_id") or "评分规则命中")
+        evidence_ids = row.get("evidence_ids") if isinstance(row.get("evidence_ids"), list) else []
+        if not evidence_ids:
+            continue
+        for evidence_id in evidence_ids:
+            key = str(evidence_id)
+            score_by_evidence[key] += score
+            rules_by_evidence[key].append(row)
+    seen_items: set[tuple[str, str, str]] = set()
+    for index, raw in enumerate(result.get("evidence_items") or [], start=1):
+        if not isinstance(raw, dict):
+            continue
+        evidence_id = str(raw.get("evidence_id") or raw.get("id") or f"ev_{index:03d}")
+        source = _normalize_group(raw.get("primary_modality") or raw.get("modality") or raw.get("source"))
+        rule_rows = rules_by_evidence.get(evidence_id) or []
+        rule_names = [
+            str(row.get("rule") or row.get("label") or row.get("rule_id") or "")
+            for row in rule_rows
+            if str(row.get("rule") or row.get("label") or row.get("rule_id") or "")
+        ]
+        rule = " / ".join(rule_names) or str(raw.get("rule_name") or raw.get("risk_type") or "风险证据")
+        content = _original_content(raw, source)
+        evidence_item = {
+            "id": evidence_id,
+            "title": rule,
+            "source": source,
+            "rule": rule,
+            "risk_contribution": score_by_evidence.get(evidence_id, 0),
+            "confidence": raw.get("confidence") or "",
+            "content": content,
+            "context": raw.get("visual_context") or raw.get("context") or "",
+            "position": raw.get("source_label") or _position_from_raw_source(raw.get("source")) or _source_position(source),
+            "score_rule_ids": [str(row.get("rule_id") or row.get("id") or "") for row in rule_rows if row.get("rule_id") or row.get("id")],
+            "score_rules": rule_rows,
+        }
+        decorated = _decorate_item(evidence_item, raw, result, source, result_libraries)
+        if _append_unique(buckets, source, decorated, seen_items):
+            contributions[source] += _as_int(decorated.get("risk_contribution"))
+            for name in rule_names or [rule]:
+                rule_hits[source][name] += 1
+    return _groups_from_buckets(buckets, contributions, rule_hits, result_libraries)
+
+
+def _groups_from_buckets(
+    buckets: dict[str, list[dict]],
+    contributions: Counter[str],
+    rule_hits: dict[str, Counter[str]],
+    result_libraries: list[dict],
+) -> list[dict]:
     groups = []
     for source in ("text", "ocr", "asr", "comment", "vision"):
         items = buckets.get(source) or []
@@ -197,6 +266,24 @@ def build_evidence_groups(result: dict) -> list[dict]:
             "items": items,
         })
     return groups
+
+
+def _append_unique(
+    buckets: dict[str, list[dict]],
+    source: str,
+    item: dict,
+    seen_items: set[tuple[str, str, str]],
+) -> bool:
+    key = (
+        source,
+        str(item.get("position") or item.get("source") or ""),
+        _signature_text(item.get("content") or item.get("text") or item.get("ocr_text") or item.get("reason") or ""),
+    )
+    if key in seen_items:
+        return False
+    seen_items.add(key)
+    buckets[source].append(item)
+    return True
 
 
 def _normalize_group_for_item(item: dict) -> str:
@@ -258,6 +345,21 @@ def _decorate_item(item: dict, raw: dict, result: dict, source: str, result_libr
         "asset_rel",
         "frame_asset_rel",
         "visual_summary",
+        "visual_context",
+        "visual_elements",
+        "features",
+        "evidence_risk_level",
+        "supporting_modalities",
+        "primary_modality",
+        "comment_id",
+        "nickname",
+        "source_label",
+        "score_rule_ids",
+        "score_rules",
+        "frame_id",
+        "ocr_engine",
+        "ocr_language",
+        "ocr_confidence",
     ):
         value = raw.get(key)
         if value not in (None, "", [], {}):
@@ -337,11 +439,53 @@ def _evidence_type(source: str, position, rule) -> str:
     position_text = str(position or "")
     rule_text = str(rule or "")
     if source == "text":
-        if "标题" in position_text or "标题" in rule_text:
+        if position_text == "标题" or ("标题" in rule_text and "正文" not in rule_text):
             return "标题命中"
-        if "正文" in position_text or "正文" in rule_text:
+        if position_text == "正文" or ("正文" in rule_text and "标题" not in rule_text):
             return "正文命中"
     return label
+
+
+def _original_content(item: dict, source: str) -> str:
+    if source == "ocr":
+        return str(item.get("ocr_text_zh") or item.get("ocr_text") or item.get("text") or "")
+    if source == "asr":
+        return str(
+            item.get("translation_zh")
+            or item.get("text_zh")
+            or item.get("source_text_dolphin")
+            or item.get("text")
+            or ""
+        )
+    if source == "comment":
+        return str(item.get("text") or item.get("content") or "")
+    if source == "vision":
+        elements = item.get("visual_elements") if isinstance(item.get("visual_elements"), list) else []
+        if elements:
+            return "、".join(str(value) for value in elements if str(value).strip())
+        return str(item.get("visual_context") or item.get("visual_summary") or item.get("text") or "")
+    return str(item.get("text") or item.get("content") or "")
+
+
+def _position_from_raw_source(source) -> str:
+    text = str(source or "")
+    if text == "title":
+        return "标题"
+    if text == "desc":
+        return "正文"
+    if text.startswith("comment"):
+        return "评论/弹幕"
+    if text.startswith("image"):
+        return "图片"
+    if text.startswith("video_audio"):
+        return "语音转写"
+    if text.startswith("video_frame") or text.startswith("video:"):
+        return "视频关键帧"
+    return ""
+
+
+def _signature_text(value) -> str:
+    return "".join(str(value or "").split()).lower()[:120]
 
 
 def _source_details(result: dict, source, group: str) -> dict:
@@ -349,8 +493,16 @@ def _source_details(result: dict, source, group: str) -> dict:
     if not index:
         return {}
     if group == "ocr":
+        image = _match_image_unit(index.get("image_units") or [], source)
         item = _match_by_source_or_timestamp(index.get("ocr_items") or [], source)
         frame = _match_by_source_or_timestamp(index.get("timeline_frames") or [], source)
+        if image:
+            return {
+                "ocr_text": image.get("ocr_text") or "",
+                "ocr_text_zh": image.get("ocr_text_zh") or "",
+                "language": image.get("ocr_language") or "",
+                "asset_rel": image.get("asset_rel") or "",
+            }
         if item or frame:
             return {
                 "ocr_text": item.get("text") or "",
@@ -372,6 +524,12 @@ def _source_details(result: dict, source, group: str) -> dict:
                 "end": item.get("end"),
             }
     if group == "vision":
+        image = _match_image_unit(index.get("image_units") or [], source)
+        if image:
+            return {
+                "asset_rel": image.get("asset_rel") or "",
+                "visual_summary": image.get("visual_summary") or "",
+            }
         frame = _match_by_source_or_timestamp(index.get("timeline_frames") or [], source)
         if frame:
             return {
@@ -379,6 +537,17 @@ def _source_details(result: dict, source, group: str) -> dict:
                 "frame_id": frame.get("frame_id") or "",
                 "timestamp": frame.get("timestamp"),
             }
+    return {}
+
+
+def _match_image_unit(items: list[dict], source) -> dict:
+    text = str(source or "")
+    for item in items:
+        if str(item.get("source") or item.get("evidence_id") or "") == text:
+            return item
+        index = item.get("index")
+        if index is not None and text == f"image:{index}":
+            return item
     return {}
 
 

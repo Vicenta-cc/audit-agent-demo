@@ -23,6 +23,7 @@
         <button class="nav-item active" type="button" data-view="tasks">任务管理</button>
         <div class="nav-group-title">审核研判</div>
         <button class="nav-item" type="button" data-view="audit">审核研判</button>
+        <button class="nav-item" type="button" data-view="monitored">重点用户监控</button>
       </nav>
     </aside>
 
@@ -267,6 +268,18 @@
           <article class="detail-pane">
             <div id="detail" class="detail-empty">选择左侧内容查看详情</div>
           </article>
+        </section>
+      </section>
+
+      <section class="workspace-view" id="view-monitored" data-view="monitored">
+        <section class="monitored-layout">
+          <div class="panel-head">
+            <div>
+              <h3>重点用户</h3>
+            </div>
+            <button class="small-button secondary-button" type="button" id="refresh-monitored-users-button">刷新</button>
+          </div>
+          <div id="monitored-users-list" class="monitored-users-list"></div>
         </section>
       </section>
     </section>

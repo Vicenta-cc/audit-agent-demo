@@ -150,7 +150,7 @@ def normalize_rule_snapshot(
             for rule in incoming_rules
             if isinstance(rule, dict)
         ]
-        scoring_rules = [rule for rule in scoring_rules if rule["score"] > 0]
+        scoring_rules = [rule for rule in scoring_rules if rule["score"] > 0 and rule.get("source") != "keyword"]
     else:
         scoring_rules = _default_scoring_rules(libraries, capabilities, scoring_template)
 
@@ -168,9 +168,9 @@ def _default_scoring_rules(libraries: list[dict], capabilities: list[str], templ
         title = str(library.get("title") or library_id).replace("词库", "").replace("知识包", "").strip()
         if not library_id:
             continue
-        sources = ["keyword"] + [capability for capability in capabilities if capability != "text"]
+        sources = [capability for capability in capabilities if capability != "text"]
         if "text" in capabilities:
-            sources.insert(1, "text")
+            sources.insert(0, "text")
         for source in sources:
             importance = TEMPLATE_IMPORTANCE[template].get(source, "medium")
             score = IMPORTANCE_SCORES[importance]
@@ -254,7 +254,7 @@ def _format_scoring_rules(rule_snapshot: dict) -> str:
     lines = []
     for rule in rule_snapshot.get("scoring_rules") or []:
         lines.append(
-            f"- {rule.get('label')}：category={rule.get('category')}，"
+            f"- rule_id={rule.get('id')}，{rule.get('label')}：category={rule.get('category')}，"
             f"library_id={rule.get('library_id')}，source={rule.get('source')}，"
             f"importance={rule.get('importance')}，score={rule.get('score')}"
         )
@@ -346,17 +346,20 @@ def _fusion_prompt(
 你是一个内容审核 agent。请审核一条社交平台内容是否存在“{audit_goal}”。
 
 重要原则：
-1. Prompt 里的知识包决定“检测什么”，评分规则决定“怎么判”；不要扩展到知识包之外的风险。
+1. Prompt 里的知识包决定“检测什么”，系统策略会按最高证据风险生成最终结论；不要扩展到知识包之外的风险。
 2. 必须区分“提及/讨论/批判/科普/新闻/影视游戏”与“宣扬/诱导/攻击/交易/组织”。
-3. 每个风险类别独立评分；总风险分 risk_score 默认取最高类别分数。
+3. 你只负责输出原始证据 evidence_items，并判断每条证据自身的 evidence_risk_level；不要自己计算分数。
 4. 不允许把不同风险类别的弱证据机械相加成高危。
 5. 图片、关键帧和 OCR/ASR risk_items 只是候选线索，融合阶段必须重新校准。
 6. 每个风险结论必须引用证据来源：标题/正文/评论/图片/视频语音/视频关键帧。
+7. 关键词/黑话只写入 evidence_items.features，不作为独立计分规则。
+8. OCR 与视觉边界：风险来自画面文字时 primary_modality=ocr；风险来自二维码、界面、物品、动作、场景等非文字画面元素时 primary_modality=vision；两者都有时只保留一个主证据，另一个放 supporting_modalities。
+9. evidence_risk_level 表示“这条证据自身的危险程度”，只能是 none、low、medium、high；最终帖子风险由系统取所有证据的最高等级。
 
 风险知识包：
 {knowledge_text}
 
-评分规则：
+识别能力与旧版评分规则（仅用于理解能力来源，不要求输出 rule_matches）：
 {scoring_text}
 
 风险等级阈值：
@@ -366,36 +369,32 @@ def _fusion_prompt(
 
 请只输出一个合法 JSON 对象，不要输出 Markdown、代码块、解释性文字或多余前后缀。
 所有字段都是必填字段；没有内容时输出空数组 [] 或空字符串 ""，不要省略字段。
-decision 只能是 "pass"、"review"、"reject"；risk_level 只能是 "none"、"low"、"medium"、"high"。
+decision_suggestion 只能是 "pass"、"review"、"reject"；risk_level_suggestion 只能是 "none"、"low"、"medium"、"high"。
 格式：
 {{
+  "schema_version": "audit_fusion_v3",
   "content_title": "内容短标题，8-18字，概括帖子主题，不写审核结论或风险等级",
   "summary": "内容总结，100字以内",
-  "decision": "pass|review|reject",
-  "risk_level": "none|low|medium|high",
-  "risk_score": 0,
+  "decision_suggestion": "pass|review|reject",
+  "risk_level_suggestion": "none|low|medium|high",
   "primary_risk": "主风险类别，没有则空字符串",
   "categories": ["风险类别"],
-  "category_scores": [
-    {{"category": "风险类别", "score": 0, "level": "none|low|medium|high"}}
-  ],
-  "score_breakdown": [
+  "evidence_items": [
     {{
-      "rule_id": "评分规则 id",
-      "rule": "评分规则名称",
-      "score": 0,
+      "evidence_id": "ev_text_001",
+      "primary_modality": "text|ocr|asr|vision|comment",
+      "supporting_modalities": ["vision"],
       "source": "title|desc|comment:<id>|image:<index>|video_audio|video_frame:<time>",
-      "evidence": "命中的词、画面、口播、评论或证据摘要"
-    }}
-  ],
-  "evidence": [
-    {{
-      "source": "title|desc|comment:<id>|image:<index>|video_audio|video_frame:<time>",
-      "text": "命中的文字或画面描述",
-      "start": "可选，视频开始时间",
-      "end": "可选，视频结束时间",
-      "reason": "违规或疑似违规原因",
-      "severity": "low|medium|high"
+      "source_label": "标题|正文|评论|图片 1|视频关键帧",
+      "risk_library_id": "风险库 id",
+      "risk_library_label": "风险库名称",
+      "text": "原始命中文字、评论原文、OCR文字、ASR转写或可见元素；没有则空字符串",
+      "ocr_text": "仅 OCR 证据填写画面文字原文",
+      "visual_elements": ["仅视觉证据填写二维码、投注平台界面、转账截图等非文字元素"],
+      "features": ["黑话、私域联系暗示等命中特征"],
+      "evidence_risk_level": "none|low|medium|high",
+      "reason": "命中解释，只解释为什么命中，不要替代原始证据",
+      "confidence": "low|medium|high"
     }}
   ]
 }}

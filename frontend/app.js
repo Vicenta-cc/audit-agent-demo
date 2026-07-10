@@ -21,6 +21,8 @@ let activeLexiconCategory = "soft";
 let activeLexiconPanel = "keywords";
 let promptProfileDirty = false;
 let activeDetailTab = "audit";
+let monitoredUsers = [];
+let pendingRelationContext = null;
 let logsFollowTail = true;
 const RAW_COMMENT_LIMIT = 5;
 const DEFAULT_START_PAGE = 1;
@@ -65,6 +67,8 @@ const controlButtons = [...document.querySelectorAll(".job-controls button")];
 const jobListEl = document.getElementById("job-list");
 const refreshJobsButtonEl = document.getElementById("refresh-jobs-button");
 const openAuditButtonEl = document.getElementById("open-audit-button");
+const refreshMonitoredUsersButtonEl = document.getElementById("refresh-monitored-users-button");
+const monitoredUsersListEl = document.getElementById("monitored-users-list");
 const userListEl = document.getElementById("user-list");
 const listEl = document.getElementById("item-list");
 const detailEl = document.getElementById("detail");
@@ -104,6 +108,10 @@ const workspaceCopy = {
   audit: {
     title: "审核研判",
     subtitle: "用户列表、帖子列表、内容证据和用户画像",
+  },
+  monitored: {
+    title: "重点用户监控",
+    subtitle: "查看入库后的重点用户和疑似关联账号",
   },
 };
 
@@ -156,6 +164,7 @@ renderLexiconTableHead();
 loadOutputs();
 loadLexicons();
 loadJobs();
+loadMonitoredUsers();
 navItems.forEach(item => {
   item.addEventListener("click", () => setWorkspaceView(item.dataset.view));
 });
@@ -240,6 +249,9 @@ if (auditItemRiskSortButtonEl) {
 }
 if (refreshJobsButtonEl) {
   refreshJobsButtonEl.addEventListener("click", () => loadJobs({ keepSelection: true }));
+}
+if (refreshMonitoredUsersButtonEl) {
+  refreshMonitoredUsersButtonEl.addEventListener("click", () => loadMonitoredUsers({ rerenderDetail: true }));
 }
 if (logsEl) {
   logsEl.addEventListener("scroll", () => {
@@ -488,6 +500,11 @@ form.addEventListener("submit", async (event) => {
     statusEl.textContent = "当前词库没有启用关键词";
     return;
   }
+  if (!isSearch && platformEl.value === "xhs" && isXhsProfileUrlMissingToken(creatorUrlEl.value)) {
+    statusEl.textContent = "小红书主页需要复制完整地址，包含 xsec_token 和 xsec_source";
+    creatorUrlEl.focus();
+    return;
+  }
   const payload = {
     platform: platformEl.value,
     crawl_mode: crawlModeEl.value,
@@ -505,6 +522,13 @@ form.addEventListener("submit", async (event) => {
     run_crawler: runCrawler,
     source_output_id: sourceOutputId,
   };
+  const relationContext = relationContextForSubmit(payload);
+  if (relationContext) {
+    payload.relation_context = relationContext;
+  } else if (pendingRelationContext && payload.crawl_mode === "creator") {
+    statusEl.textContent = "当前主页地址与评论用户不一致，请从评论区重新点击“分析该用户主页”";
+    return;
+  }
 
   statusEl.textContent = "提交中...";
   renderLogsText("", { forceBottom: true });
@@ -560,8 +584,10 @@ async function handleCreatedJobResponse(response) {
     return;
   }
 
+  pendingRelationContext = null;
   await selectJob(data.id, { job: data, view: "tasks" });
   await loadJobs({ keepSelection: true });
+  await loadMonitoredUsers({ rerenderDetail: true });
   startPolling();
 }
 
@@ -608,7 +634,7 @@ async function sendJobControl(action) {
 async function deleteCurrentJob() {
   if (!currentJobId) return;
   const job = jobsById.get(currentJobId);
-  const confirmed = window.confirm(`删除任务「${jobTitle(job || { id: currentJobId })}」？\n\n任务会从列表隐藏，已生成的审核结果暂不物理删除。`);
+  const confirmed = window.confirm(`删除任务「${jobTitle(job || { id: currentJobId })}」？\n\n该任务生成的分析帖子也会从风险研判中删除，此操作不可恢复。`);
   if (!confirmed) return;
 
   const button = controlButtons.find(item => item.dataset.action === "delete_job");
@@ -626,7 +652,7 @@ async function deleteCurrentJob() {
     resetAuditView();
     selectedUserKey = "";
     selectedResultId = "";
-    statusEl.textContent = "任务已删除";
+    statusEl.textContent = `任务已删除，同时删除 ${Number(data.deleted_result_count || 0)} 条分析帖子`;
     renderLogsText("", { forceBottom: true });
     renderTaskState(null);
     renderList();
@@ -649,6 +675,9 @@ function setWorkspaceView(view) {
   const copy = workspaceCopy[view] || workspaceCopy.tasks;
   workspaceTitleEl.textContent = copy.title;
   workspaceSubtitleEl.textContent = copy.subtitle;
+  if (view === "monitored") {
+    loadMonitoredUsers();
+  }
 }
 
 function setLexiconCategory(category) {
@@ -896,6 +925,44 @@ function selectedSourceOutputId() {
   return sourceOutputEl.value;
 }
 
+function isXhsProfileUrlMissingToken(value) {
+  const text = String(value || "").trim();
+  if (!text.includes("xiaohongshu.com/user/profile/")) return false;
+  return !text.includes("xsec_token=") || !text.includes("xsec_source=");
+}
+
+function relationContextForSubmit(payload) {
+  if (!pendingRelationContext || payload.crawl_mode !== "creator") {
+    return null;
+  }
+  const creatorUrl = String(payload.creator_url || "").trim();
+  const pendingUrl = String(pendingRelationContext.suspect_profile_url || "").trim();
+  if (pendingUrl && creatorUrl && !sameProfileUrlIdentity(pendingUrl, creatorUrl)) {
+    return null;
+  }
+  return {
+    ...pendingRelationContext,
+    suspect_profile_url: creatorUrl || pendingUrl,
+  };
+}
+
+function sameProfileUrlIdentity(left, right) {
+  const leftKey = profileUrlIdentity(left);
+  const rightKey = profileUrlIdentity(right);
+  return Boolean(leftKey && rightKey && leftKey === rightKey);
+}
+
+function profileUrlIdentity(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  try {
+    const url = new URL(text);
+    return `${url.protocol}//${url.host}${url.pathname.replace(/\/$/, "")}`.toLowerCase();
+  } catch (_) {
+    return text.replace(/\/$/, "").toLowerCase();
+  }
+}
+
 function platformLabel(platform) {
   return {
     xhs: "小红书",
@@ -936,6 +1003,87 @@ async function loadJobs(options = {}) {
     renderLogsText(`${logsEl.textContent ? logsEl.textContent + "\n\n" : ""}读取任务列表失败：${error}`);
   }
 }
+
+async function loadMonitoredUsers(options = {}) {
+  try {
+    const response = await apiFetch("/api/monitored-users");
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(JSON.stringify(data));
+    }
+    monitoredUsers = Array.isArray(data) ? data : (data.items || []);
+    renderMonitoredUsers();
+    if (options.rerenderDetail && selectedResultId) {
+      renderDetail(findItemByStableId(selectedResultId));
+    }
+  } catch (error) {
+    if (monitoredUsersListEl) {
+      monitoredUsersListEl.innerHTML = `<p class="detail-empty">读取重点用户失败</p>`;
+    }
+    renderLogsText(`${logsEl.textContent ? logsEl.textContent + "\n\n" : ""}读取重点用户失败：${error}`);
+  }
+}
+
+function renderMonitoredUsers() {
+  if (!monitoredUsersListEl) return;
+  if (!monitoredUsers.length) {
+    monitoredUsersListEl.innerHTML = `<p class="detail-empty">暂无入库的重点用户</p>`;
+    return;
+  }
+  monitoredUsersListEl.innerHTML = monitoredUsers.map(user => {
+    const related = user.suspected_related_accounts || [];
+    const author = user.author || {};
+    const name = user.display_name || author.nickname || user.raw_identity || "未知账号";
+    return `
+      <article class="monitored-user-card">
+        <div class="monitored-user-head">
+          <div>
+            <h3>${escapeHtml(name)}</h3>
+            <p>${escapeHtml(platformLabel(user.platform))} · ${escapeHtml(user.raw_identity || user.stable_key || "")}</p>
+          </div>
+          ${user.profile_url ? `<a class="open-link" href="${escapeAttr(user.profile_url)}" target="_blank">主页链接</a>` : ""}
+        </div>
+        <div class="monitored-related-head">
+          <strong>疑似关联账号</strong>
+          <span>${related.length} 个</span>
+        </div>
+        <div class="monitored-related-list">
+          ${related.length ? related.map(renderRelatedAccount).join("") : `<p class="detail-empty">暂无疑似关联账号</p>`}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderRelatedAccount(account) {
+  const jobId = account.analysis_job_id || "";
+  const jobStatus = account.analysis_status || (account.analysis_job || {}).status || "job_created";
+  return `
+    <div class="related-account-row">
+      <div>
+        <strong>${escapeHtml(account.display_name || account.raw_identity || "评论用户")}</strong>
+        <span>${escapeHtml(platformLabel(account.platform))} · ${escapeHtml(account.raw_identity || account.stable_key || "")}</span>
+        ${account.source_comment_text ? `<p>${escapeHtml(account.source_comment_text)}</p>` : ""}
+        ${account.source_risk_content && account.source_risk_content !== account.source_comment_text ? `<p class="related-risk-text">${escapeHtml(account.source_risk_content)}</p>` : ""}
+      </div>
+      <div class="related-account-actions">
+        <span class="badge review">${escapeHtml(statusLabel(jobStatus))}</span>
+        ${jobId ? `<button class="table-action" type="button" onclick="openRelatedJob('${escapeJs(jobId)}')">查看任务</button>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+window.openRelatedJob = async (jobId) => {
+  if (!jobsById.has(jobId)) {
+    await loadJobs({ keepSelection: true });
+  }
+  if (jobsById.has(jobId)) {
+    await selectJob(jobId, { view: "tasks" });
+  } else {
+    statusEl.textContent = "关联任务不在当前任务列表中";
+  }
+};
 
 async function selectJob(jobId, options = {}) {
   const job = options.job || jobsById.get(jobId);
@@ -1362,6 +1510,8 @@ function statusLabel(status) {
     paused: "已暂停",
     analysis_paused: "分析已暂停",
     pending: "待补分析",
+    linked: "已关联",
+    job_created: "已创建分析任务",
     interrupted: "已中断",
     skipped: "跳过",
     unknown: "未知",
@@ -1967,7 +2117,7 @@ function renderRawCommentsContent(item) {
       <h4>评论区</h4>
       ${shown.length ? `
         <div class="raw-comment-list">
-          ${shown.map(renderRawCommentRow).join("")}
+          ${shown.map(comment => renderRawCommentRow(comment, item)).join("")}
         </div>
         ${comments.length > shown.length ? `<p class="raw-comment-more">仅展示前 ${shown.length} 条，共 ${comments.length} 条评论</p>` : ""}
       ` : renderEmptyEvidenceNote("暂无评论")}
@@ -1975,7 +2125,7 @@ function renderRawCommentsContent(item) {
   `;
 }
 
-function renderRawCommentRow(comment) {
+function renderRawCommentRow(comment, item = {}) {
   const userId = comment.user_unique_id || comment.short_user_id || comment.user_id || comment.sec_uid || "";
   const meta = [
     comment.nickname || "评论者",
@@ -1984,7 +2134,10 @@ function renderRawCommentRow(comment) {
   ].filter(Boolean).join(" · ");
   return `
     <div class="raw-comment-row">
-      <div class="comment-meta">${escapeHtml(meta)}</div>
+      <div class="comment-meta">
+        <span>${escapeHtml(meta)}</span>
+        ${renderCommentUserAction(item, comment, {})}
+      </div>
       <p dir="auto">${escapeHtml(comment.content || comment.text || "（无文本评论）")}</p>
     </div>
   `;
@@ -2183,6 +2336,7 @@ function collectVideoMoments(item) {
       status: moment.status,
       candidate_frame_ids: moment.candidate_frame_ids || [],
       risk_types: moment.risk_types || [],
+      summary: moment.summary || "",
       reason: moment.reason || "",
       safe_context: moment.safe_context || "",
     },
@@ -2208,9 +2362,10 @@ function renderMomentCard(moment) {
   const time = moment.start !== undefined || moment.end !== undefined
     ? `${formatSeconds(Number(moment.start || 0))} - ${formatSeconds(Number(moment.end || moment.start || 0))}`
     : "";
-  const text = status === "suspicious"
-    ? (analysis.reason || "粗审发现可疑画面，已进入局部精审。")
-    : (analysis.safe_context || "未发现明显违规线索。");
+  const text = analysis.summary
+    || (status === "suspicious"
+      ? (analysis.reason || "粗审发现可疑画面，已进入局部精审。")
+      : (analysis.safe_context || "未发现明显违规线索。"));
   return `
     <figure class="moment-card ${status}">
       ${img}
@@ -2371,7 +2526,7 @@ function renderCommentEvidence(item) {
   const commentsById = new Map(comments.map(comment => [String(comment.comment_id || ""), comment]));
   return renderCheckResult(
     "评论区",
-    commentEvidence.length ? commentEvidence.map(ev => renderCommentEvidenceRow(ev, commentsById)).join("") : renderSafeCommentCheck(item)
+    commentEvidence.length ? commentEvidence.map(ev => renderCommentEvidenceRow(ev, commentsById, item)).join("") : renderSafeCommentCheck(item)
   );
 }
 
@@ -2384,7 +2539,7 @@ function renderCheckResult(title, content) {
   `;
 }
 
-function renderCommentEvidenceRow(ev, commentsById) {
+function renderCommentEvidenceRow(ev, commentsById, item = {}) {
   const commentId = String(ev.source || "").replace(/^comment:/, "");
   const comment = commentsById.get(commentId) || {};
   const userId = comment.user_id || comment.short_user_id || comment.user_unique_id || comment.sec_uid || ev.user_id || "未知评论者";
@@ -2395,6 +2550,7 @@ function renderCommentEvidenceRow(ev, commentsById) {
         <span>ID：${escapeHtml(userId)}</span>
         ${commentId ? `<span>评论：${escapeHtml(commentId)}</span>` : ""}
         ${comment.ip_location ? `<span>${escapeHtml(comment.ip_location)}</span>` : ""}
+        ${renderCommentUserAction(item, comment, ev)}
       </div>
       <div class="ev-text">${escapeHtml(ev.text || comment.content || "（无文本评论）")}</div>
       ${ev.reason ? `<div class="ev-reason">${escapeHtml(ev.reason)}</div>` : ""}
@@ -2479,6 +2635,7 @@ function renderSafeOverviewCheck(item) {
   const moment = collectVideoMoments(item)[0] || firstMomentSheet(item);
   const analysis = moment?.analysis || moment || {};
   const sample = moment ? [
+    analysis.summary ? `画面概览：${analysis.summary}` : "",
     analysis.safe_context ? `概览结论：${analysis.safe_context}` : "",
     analysis.reason ? `粗审摘要：${analysis.reason}` : "",
   ].filter(Boolean).join("\n") : "";
@@ -2830,6 +2987,172 @@ function profileUrl(author, platform) {
   }
   return "";
 }
+
+function commentProfileUrl(comment = {}, platform = "") {
+  const direct = comment.profile_url || comment.homepage_url || comment.homepage || comment.user_url || comment.url;
+  if (direct) return direct;
+  const code = normalizePlatformCode(platform);
+  if (code === "xhs") {
+    const userId = comment.user_id || comment.user_unique_id || comment.short_user_id;
+    return userId ? `https://www.xiaohongshu.com/user/profile/${encodeURIComponent(userId)}` : "";
+  }
+  if (code === "dy" && comment.sec_uid) {
+    return `https://www.douyin.com/user/${encodeURIComponent(comment.sec_uid)}`;
+  }
+  if (code === "ks") {
+    const userId = comment.user_id || comment.user_unique_id || comment.short_user_id;
+    return userId ? `https://www.kuaishou.com/profile/${encodeURIComponent(userId)}` : "";
+  }
+  return "";
+}
+
+function normalizePlatformCode(platform) {
+  const text = String(platform || "").trim();
+  return {
+    抖音: "dy",
+    douyin: "dy",
+    小红书: "xhs",
+    xiaohongshu: "xhs",
+    快手: "ks",
+    kuaishou: "ks",
+  }[text] || text || "xhs";
+}
+
+function renderCommentUserAction(item = {}, comment = {}, ev = {}) {
+  const payload = commentRelationPayload(item, comment, ev);
+  if (!payload) return "";
+  const relation = relatedAccountForComment(item, comment, ev);
+  const encoded = encodeURIComponent(JSON.stringify(payload));
+  const relationControl = relation
+    ? `<span class="comment-analysis-state">已关联</span>`
+    : `<button class="table-action comment-link-button" type="button" onclick="linkCommentUserFromDetail('${escapeJs(encoded)}')">关联</button>`;
+  const analysisControl = relation?.analysis_job_id
+    ? `<button class="table-action comment-analysis-button" type="button" onclick="openRelatedJob('${escapeJs(relation.analysis_job_id)}')">查看分析任务</button>`
+    : (payload.suspect_profile_url
+      ? `<button class="table-action comment-analysis-button" type="button" onclick="analyzeCommentUserFromDetail('${escapeJs(encoded)}')">分析该用户主页</button>`
+      : "");
+  return `
+    <span class="comment-user-actions">
+      ${relationControl}
+      ${analysisControl}
+    </span>
+  `;
+}
+
+function commentRelationPayload(item = {}, comment = {}, ev = {}) {
+  const platform = normalizePlatformCode(item.platform || (item.author || {}).platform || platformEl.value);
+  const profile = commentProfileUrl(comment, platform);
+  const parentResultId = Number(item.audit_result_id || item.id || 0);
+  const rawIdentity = commentRawIdentity(comment, ev);
+  const displayName = comment.nickname || ev.user_name || ev.user_id || rawIdentity || "评论用户";
+  if (!parentResultId || (!profile && !rawIdentity && !displayName)) return null;
+  return {
+    source: "comment_user_analysis",
+    parent_audit_result_id: parentResultId,
+    source_job_id: item.job_id || currentJobId || "",
+    source_comment_id: sourceCommentId(comment, ev),
+    suspect_platform: platform,
+    suspect_display_name: displayName,
+    suspect_profile_url: profile,
+    suspect_raw_identity: rawIdentity,
+    source_comment_text: comment.content || comment.text || "",
+    source_risk_content: ev.text || comment.content || comment.text || item.summary || "",
+  };
+}
+
+function relatedAccountForComment(item = {}, comment = {}, ev = {}) {
+  const parentResultId = Number(item.audit_result_id || item.id || 0);
+  const commentId = sourceCommentId(comment, ev);
+  const platform = normalizePlatformCode(item.platform || (item.author || {}).platform || "");
+  const profileKey = profileUrlIdentity(commentProfileUrl(comment, platform));
+  const rawIdentity = commentRawIdentity(comment, ev);
+  for (const user of monitoredUsers) {
+    for (const account of (user.suspected_related_accounts || [])) {
+      const sameParent = Number(account.source_audit_result_id || 0) === parentResultId;
+      const sameComment = commentId && String(account.source_comment_id || "") === commentId;
+      if (sameParent && sameComment) {
+        return account;
+      }
+      const sameProfile = profileKey && profileUrlIdentity(account.profile_url) === profileKey;
+      const sameRaw = rawIdentity && String(account.raw_identity || "") === rawIdentity;
+      const samePlatform = normalizePlatformCode(account.platform) === platform;
+      if (sameParent && samePlatform && (sameProfile || sameRaw)) {
+        return account;
+      }
+    }
+  }
+  return null;
+}
+
+function sourceCommentId(comment = {}, ev = {}) {
+  return String(
+    comment.comment_id
+    || comment.id
+    || String(ev.source || "").replace(/^comment:/, "")
+    || ""
+  ).trim();
+}
+
+function commentRawIdentity(comment = {}, ev = {}) {
+  return String(
+    comment.sec_uid
+    || comment.user_id
+    || comment.user_unique_id
+    || comment.short_user_id
+    || ev.user_id
+    || ""
+  ).trim();
+}
+
+window.linkCommentUserFromDetail = async (encodedPayload) => {
+  let payload = {};
+  try {
+    payload = JSON.parse(decodeURIComponent(encodedPayload || ""));
+  } catch (_) {
+    statusEl.textContent = "评论用户信息解析失败";
+    return;
+  }
+  try {
+    statusEl.textContent = "正在关联评论用户...";
+    const response = await apiFetch("/api/monitored-users/comment-relation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ relation_context: payload }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || JSON.stringify(data));
+    }
+    await loadMonitoredUsers({ rerenderDetail: true });
+    statusEl.textContent = "已关联到重点用户的疑似关联账号";
+  } catch (error) {
+    statusEl.textContent = `关联评论用户失败：${error.message || error}`;
+  }
+};
+
+window.analyzeCommentUserFromDetail = (encodedPayload) => {
+  let payload = {};
+  try {
+    payload = JSON.parse(decodeURIComponent(encodedPayload || ""));
+  } catch (_) {
+    statusEl.textContent = "评论用户信息解析失败";
+    return;
+  }
+  pendingRelationContext = payload;
+  platformEl.value = normalizePlatformCode(payload.suspect_platform || "xhs");
+  crawlModeEl.value = "creator";
+  creatorUrlEl.value = payload.suspect_profile_url || "";
+  runCrawlerEl.checked = true;
+  updateSourceOutputState();
+  updateCrawlModeState();
+  setWorkspaceView("tasks");
+  if (isXhsProfileUrlMissingToken(creatorUrlEl.value)) {
+    statusEl.textContent = "已预填用户主页。小红书需补充完整主页地址后再创建任务";
+  } else {
+    statusEl.textContent = "已预填用户主页，创建任务成功后会写入疑似关联账号";
+  }
+  creatorUrlEl.focus();
+};
 
 function percentText(count, total) {
   if (!total) return "0%";
