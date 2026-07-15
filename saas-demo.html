@@ -48,6 +48,9 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-btn.dang{background:#dc2626;color:#fff;border-color:transparent}
 .cm-btn.dang:hover{background:#b91c1c}
 .cm-btn.sm{padding:4px 10px;font-size:12px}
+.cm-btn.soft-danger{background:var(--surface-1);color:var(--text-secondary);border-color:var(--border)}
+.cm-btn.soft-danger:hover{background:var(--surface-0);color:var(--text-primary);border-color:var(--border-strong)}
+.cm-btn.soft-danger i{color:var(--text-muted)}
 .cm-bd{display:inline-flex;align-items:center;font-size:11px;padding:2px 8px;border-radius:6px;background:var(--surface-1);color:var(--text-secondary);font-weight:500}
 .cm-bd.dang{background:var(--bg-danger);color:var(--text-danger)}
 .cm-bd.warn{background:var(--bg-warning);color:var(--text-warning)}
@@ -93,6 +96,13 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-tag{font-size:11px;color:var(--text-secondary);background:var(--surface-1);padding:2px 8px;border-radius:6px}
 .cm-tag i{font-size:12px;margin-right:3px;vertical-align:-1px}
 .cm-card-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:0.5px solid var(--border);padding-top:9px;flex-wrap:wrap}
+.cm-config-card{min-height:150px;display:flex!important;flex-direction:column;transition:border-color .18s,box-shadow .18s,transform .18s}
+.cm-config-card:hover{box-shadow:0 10px 24px rgba(15,18,25,0.07);transform:translateY(-1px)}
+.cm-config-card h3{margin:3px 0 8px}
+.cm-config-card .cm-tags{margin-bottom:12px}
+.cm-config-card .cm-card-foot{margin-top:auto;align-items:flex-end;gap:12px}
+.cm-config-card-meta{display:flex;flex-direction:column;gap:4px;min-width:0}
+.cm-config-card-delete{margin-left:auto;flex:0 0 auto}
 .cm-acct{font-size:12px;color:var(--text-secondary)}
 .cm-acct b{color:var(--text-primary);font-weight:500}
 .cm-mini{display:flex;gap:6px;flex-wrap:wrap}
@@ -2068,19 +2078,20 @@ function renderConfigList(){
  var grid="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px";
 	 var sc="";
 	 for(var i=0;i<schemes.length;i++){var s=schemes[i];var refs=schemeRefTasks(s);
-	   sc+='<div class="cm-card clk" data-act="openScheme" data-id="'+s.id+'" role="button" tabindex="0" style="width:100%;text-align:left;display:block;font:inherit;cursor:pointer;margin:0">'
-	    +'<div class="cm-card-top">'+bd(s.status==="已发布"?"ok":"warn",s.status)+bd("info",s.libIds.length+" 知识库")+bd("",schemeCaps(s).length+" 项能力")+'<span class="t">'+s.id+'</span><button class="cm-btn sm dang" data-act="schemeDelete" data-id="'+s.id+'"><i class="ti ti-trash"></i>删除</button></div>'
+	   sc+='<div class="cm-card cm-config-card clk" data-act="openScheme" data-id="'+s.id+'" role="button" tabindex="0" style="width:100%;text-align:left;font:inherit;cursor:pointer;margin:0">'
+	    +'<div class="cm-card-top">'+bd(s.status==="已发布"?"ok":"warn",s.status)+bd("info",s.libIds.length+" 知识库")+bd("",schemeCaps(s).length+" 项能力")+'<span class="t">'+s.id+'</span></div>'
 	    +'<h3>'+s.name+'</h3>'
 	    +'<div class="cm-tags"><span class="cm-tag"><i class="ti ti-book"></i>'+s.libIds.map(function(l){return getLib(l).name;}).join("、")+'</span><span class="cm-tag"><i class="ti ti-subtask"></i>适用 '+s.tasks+'</span></div>'
-	    +'<div class="cm-card-foot"><span class="cm-acct">输出：'+s.outputs.join("、")+'</span><span class="cm-acct">被 <b>'+refs.length+'</b> 个任务引用</span></div>'
+	    +'<div class="cm-card-foot"><span class="cm-config-card-meta"><span class="cm-acct">输出：'+s.outputs.join("、")+'</span><span class="cm-acct">被 <b>'+refs.length+'</b> 个任务引用</span></span><button class="cm-btn sm soft-danger cm-config-card-delete" data-act="schemeDelete" data-id="'+s.id+'"><i class="ti ti-trash"></i>删除</button></div>'
 	   +'</div>';
 	 }
 	 var lb="";
 	 for(var j=0;j<libraries.length;j++){var L=libraries[j];var used=libSchemes(L.id).length;
-	   lb+='<div class="cm-card clk" data-act="openLib" data-id="'+L.id+'" role="button" tabindex="0" style="width:100%;text-align:left;display:block;font:inherit;cursor:pointer;margin:0">'
-	    +'<div class="cm-card-top">'+bd("info",L.category)+bd("",L.terms.length+" 词条")+'<span class="t">被 '+used+' 个方案使用</span><button class="cm-btn sm dang" data-act="libDelete" data-id="'+L.id+'"><i class="ti ti-trash"></i>删除</button></div>'
+	   lb+='<div class="cm-card cm-config-card clk" data-act="openLib" data-id="'+L.id+'" role="button" tabindex="0" style="width:100%;text-align:left;font:inherit;cursor:pointer;margin:0">'
+	    +'<div class="cm-card-top">'+bd("info",L.category)+bd("",L.terms.length+" 词条")+'</div>'
 	    +'<h3>'+L.name+'</h3>'
 	    +'<div class="cm-tags">'+L.terms.slice(0,8).map(function(t){return '<span class="cm-tag">'+t+'</span>';}).join("")+'</div>'
+	    +'<div class="cm-card-foot"><span class="cm-acct">被 <b>'+used+'</b> 个方案使用</span><button class="cm-btn sm soft-danger cm-config-card-delete" data-act="libDelete" data-id="'+L.id+'"><i class="ti ti-trash"></i>删除</button></div>'
 	   +'</div>';
 	 }
  return ph("配置底座","研判方案是对外使用主体：监控任务引用方案，方案再组合检测范围、检测能力与评分规则",
