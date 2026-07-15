@@ -33,6 +33,7 @@ from .audit_agent.rule_compiler import (
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIR = ROOT / "frontend"
 FRONTEND_SAAS_DIR = ROOT / "frontend-saas"
+FRONTEND_V2_DIST_DIR = ROOT / "frontend-v2" / "dist"
 
 app = FastAPI(title="XHS Audit Agent Demo")
 app.add_middleware(
@@ -44,6 +45,11 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 app.mount("/saas-static", StaticFiles(directory=str(FRONTEND_SAAS_DIR)), name="saas-static")
+app.mount(
+    "/saas-v2/assets",
+    StaticFiles(directory=str(FRONTEND_V2_DIST_DIR / "assets"), check_dir=False),
+    name="saas-v2-assets",
+)
 ingestion_store = IngestionStore()
 audit_result_store = AuditResultStore()
 lexicon_store = LexiconStore()
@@ -655,6 +661,16 @@ def index():
 @app.get("/saas")
 def saas_index():
     return FileResponse(ROOT / "saas-demo.html")
+
+
+@app.get("/saas-v2")
+@app.get("/saas-v2/")
+@app.get("/saas-v2/{path:path}")
+def saas_v2_index(path: str = ""):
+    index_path = FRONTEND_V2_DIST_DIR / "index.html"
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="frontend-v2 has not been built")
+    return FileResponse(index_path)
 
 
 @app.get("/styles.css")
