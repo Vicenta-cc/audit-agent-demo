@@ -68,6 +68,13 @@ export interface RawJob {
   creator_id?: string;
   creator_nickname?: string;
   run_crawler?: boolean;
+  start_page?: number;
+  max_notes?: number;
+  max_comments?: number;
+  max_concurrency?: number;
+  get_sub_comment?: boolean;
+  analyze_limit?: number;
+  analysis_batch_size?: number;
   input_type?: string;
   input_filename?: string;
   source_output_id?: string;
@@ -115,26 +122,52 @@ export interface AuditResult {
   comments_count?: number;
   evidence?: unknown[];
   risk_evidence?: unknown[];
+  evidence_items?: Array<{
+    evidence_id?: string;
+    primary_modality?: string;
+    modality?: string;
+    risk_library_id?: string;
+    risk_library_label?: string;
+  }>;
   risk_images?: unknown[];
   risk_frames?: unknown[];
   ocr_items?: unknown[];
   asr_segments?: unknown[];
   timeline_frames?: Array<{ ocr_text?: string; ocr_text_zh?: string }>;
-  image_analyses?: Array<{ ocr_text?: string; visual_summary?: string }>;
+  image_analyses?: Array<{
+    ocr_text?: string;
+    visual_summary?: string;
+    asset_rel?: string;
+    local_path?: string;
+    original_path?: string;
+    url?: string;
+  }>;
   video_results?: Array<{
     transcript?: { segments?: unknown[]; text?: string };
     timeline_frames?: unknown[];
     moments?: unknown[];
     moment_sheets?: unknown[];
+    asset_rel?: string;
+    local_path?: string;
+    url?: string;
+    duration?: number;
   }>;
   evidence_index?: {
     text_context?: { title?: string; desc?: string; comments_count?: number };
-    image_units?: unknown[];
+    image_units?: Array<{
+      asset_rel?: string;
+      local_path?: string;
+      url?: string;
+    }>;
     video_units?: Array<{
       timeline_frame_count?: number;
       moment_count?: number;
       precise_sheet_count?: number;
       transcript_summary?: string;
+      asset_rel?: string;
+      local_path?: string;
+      url?: string;
+      duration?: number;
     }>;
     audio_units?: unknown[];
     ocr_items?: unknown[];

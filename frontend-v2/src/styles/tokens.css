@@ -24,4 +24,15 @@
   --header-height: 80px;
   --sidebar-width: 324px;
   --content-max-width: 1440px;
+  --task-output-content-max-width: 1568px;
+  --task-output-border: #dbe5f2;
+  --task-output-border-strong: #cfdaea;
+  --task-output-radius: 14px;
+  --task-output-shadow: 0 10px 24px rgba(22, 36, 62, 0.045);
+  --font-size-page-title: 26px;
+  --font-size-section-title: 20px;
+  --font-size-card-title: 16px;
+  --font-size-body: 14px;
+  --font-size-caption: 12px;
+  --font-size-metric: 24px;
 }
