@@ -28,9 +28,16 @@ export function TaskActionsMenu({
       open={open}
       onClose={onClose}
       trigger={
-        <Button type="button" variant="secondary" size="small" aria-expanded={open} onClick={onToggle}>
-          更多
-          <MoreHorizontal size={15} />
+        <Button
+          type="button"
+          className="task-more-button"
+          variant="secondary"
+          size="small"
+          aria-label="更多操作"
+          aria-expanded={open}
+          onClick={onToggle}
+        >
+          <MoreHorizontal size={18} />
         </Button>
       }
     >

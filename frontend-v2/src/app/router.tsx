@@ -1,8 +1,9 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { PlaceholderPage } from "../components/layout/PlaceholderPage";
 import { ConfigCenterPage } from "../features/config-center/ConfigCenterPage";
 import { FocusUsersPage } from "../features/focus-users/FocusUsersPage";
 import { MonitorTasksPage } from "../features/monitor-tasks/MonitorTasksPage";
+import { RiskWorkbenchPage } from "../features/risk-workbench/RiskWorkbenchPage";
+import { TaskOutputDetailPage } from "../features/task-outputs/TaskOutputDetailPage";
 import { TaskOutputsPage } from "../features/task-outputs/TaskOutputsPage";
 
 export const navigationItems = [
@@ -18,9 +19,9 @@ export function AppRouter() {
       <Route path="/" element={<Navigate to="/tasks" replace />} />
       <Route path="/tasks" element={<MonitorTasksPage />} />
       <Route path="/tasks/:taskId/outputs" element={<TaskOutputsPage />} />
-      <Route path="/tasks/:taskId/outputs/:outputId" element={<PlaceholderPage title="风险证据详情页建设中" />} />
+      <Route path="/tasks/:taskId/outputs/:outputId" element={<TaskOutputDetailPage />} />
       <Route path="/users" element={<FocusUsersPage />} />
-      <Route path="/risk" element={<PlaceholderPage title="风险研判页面建设中" />} />
+      <Route path="/risk" element={<RiskWorkbenchPage />} />
       <Route path="/config/*" element={<ConfigCenterPage />} />
       <Route path="*" element={<Navigate to="/tasks" replace />} />
     </Routes>

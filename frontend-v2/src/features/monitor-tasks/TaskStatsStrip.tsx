@@ -16,13 +16,6 @@ export function TaskStatsStrip({ stats, loading }: TaskStatsStripProps) {
       tone: "blue"
     },
     {
-      label: "新增风险",
-      value: stats.recentRiskCount,
-      helper: "近 7 天",
-      icon: ShieldAlert,
-      tone: "red"
-    },
-    {
       label: "直播监控任务",
       value: stats.liveTaskCount,
       helper: stats.liveTaskCount > 0 ? "任务" : "暂未接入",
@@ -42,6 +35,13 @@ export function TaskStatsStrip({ stats, loading }: TaskStatsStripProps) {
       helper: "任务",
       icon: Target,
       tone: "orange"
+    },
+    {
+      label: "新增风险",
+      value: stats.recentRiskCount,
+      helper: "近 7 天",
+      icon: ShieldAlert,
+      tone: "red"
     }
   ] as const;
 

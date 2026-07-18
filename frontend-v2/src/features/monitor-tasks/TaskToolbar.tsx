@@ -20,7 +20,7 @@ const sourceOptions: TaskSourceFilter[] = ["全部", "平台抓取", "直播接�
 const sortOptions: Array<{ label: string; value: TaskSortKey }> = [
   { label: "默认排序", value: "default" },
   { label: "最近更新", value: "updated" },
-  { label: "待处理最多", value: "waiting" },
+  { label: "待分析最多", value: "waiting" },
   { label: "高危最多", value: "high" },
   { label: "产出最多", value: "outputs" }
 ];

@@ -21,10 +21,18 @@ export function TaskTable({
   return (
     <div className="task-table" role="table" aria-label="任务运行列表">
       <div className="task-table-head" role="row">
-        <span>任务信息</span>
-        <span>运行数据</span>
-        <span>状态</span>
-        <span>操作</span>
+        <span className="task-table-head-cell task-info-head" role="columnheader">
+          任务信息
+        </span>
+        <span className="task-table-head-cell task-run-head" role="columnheader">
+          运行概览
+        </span>
+        <span className="task-table-head-cell task-update-head" role="columnheader">
+          最近更新
+        </span>
+        <span className="task-table-head-cell task-action-head" role="columnheader">
+          操作
+        </span>
       </div>
       {tasks.map((task) => (
         <TaskRow

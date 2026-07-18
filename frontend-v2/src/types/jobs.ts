@@ -40,16 +40,106 @@ export interface JobLog {
 
 export interface JobAuditConfigRevision {
   id?: string;
+  job_id?: string;
   version?: string | number;
   source_policy_id?: string;
   source_policy_name?: string;
   source_policy_version?: string;
+  config_hash?: string;
   effective_from?: string;
+  created_at?: string;
+  created_by?: string;
   prompt_version?: string;
   audit_config?: {
+    schema_version?: string;
+    source_policy_id?: string;
+    source_policy_name?: string;
+    source_policy_version?: string;
     library_ids?: string[];
     capabilities?: string[];
+    scoring_template?: string;
+    thresholds?: Record<string, number>;
+    scoring_rules?: Array<Record<string, unknown>>;
+    prompt_version?: string;
   };
+  knowledge_package_snapshots?: Array<Record<string, unknown>>;
+  capabilities?: string[];
+  library_ids?: string[];
+}
+
+export interface AuditComment {
+  comment_id?: string;
+  id?: string | number;
+  create_time?: number | string;
+  created_at?: string;
+  time?: string;
+  ip_location?: string;
+  note_id?: string;
+  content?: string;
+  text?: string;
+  user_id?: string;
+  nickname?: string;
+  user_name?: string;
+  avatar?: string;
+  user_url?: string;
+  profile_url?: string;
+  sec_uid?: string;
+  user_unique_id?: string;
+  short_user_id?: string;
+  like_count?: string | number;
+  sub_comment_count?: string | number;
+  [key: string]: unknown;
+}
+
+export interface AuditEvidenceGroupItem {
+  id?: string;
+  title?: string;
+  source?: string;
+  rule?: string;
+  risk_contribution?: number;
+  confidence?: string;
+  content?: string;
+  context?: string;
+  position?: string;
+  risk_library_id?: string;
+  risk_library_label?: string;
+  evidence_type?: string;
+  hit_explanation?: string;
+  is_supplementary?: boolean;
+  text?: string;
+  ocr_text?: string;
+  ocr_text_zh?: string;
+  features?: string[];
+  evidence_risk_level?: string;
+  supporting_modalities?: string[];
+  primary_modality?: string;
+  source_label?: string;
+  asset_rel?: string;
+  local_path?: string;
+  url?: string;
+  timestamp?: number | string;
+  [key: string]: unknown;
+}
+
+export interface AuditEvidenceGroup {
+  id?: string;
+  type?: "text" | "ocr" | "asr" | "comment" | "vision" | string;
+  label?: string;
+  icon?: string;
+  count?: number;
+  hit_summary?: Array<{ rule?: string; count?: number }>;
+  confidence?: string;
+  risk_contribution?: number;
+  risk_libraries?: Array<{ id?: string; label?: string }>;
+  preview_limit?: number;
+  items?: AuditEvidenceGroupItem[];
+}
+
+export interface AuditResultDetail {
+  audit_result: AuditResult;
+  audit_config_revision?: JobAuditConfigRevision;
+  evidence_groups?: AuditEvidenceGroup[];
+  is_historical_config?: boolean;
 }
 
 export interface RawJob {
@@ -115,6 +205,13 @@ export interface AuditResult {
   risk_score?: number;
   primary_risk?: string;
   categories?: string[];
+  prompt_category?: string;
+  prompt_version?: string;
+  risk_basis?: string;
+  has_risk?: boolean;
+  rule_matches?: Array<Record<string, unknown>>;
+  score_breakdown?: Array<Record<string, unknown>>;
+  comments?: AuditComment[];
   evidence_count?: number;
   risk_image_count?: number;
   risk_frame_count?: number;
@@ -124,10 +221,23 @@ export interface AuditResult {
   risk_evidence?: unknown[];
   evidence_items?: Array<{
     evidence_id?: string;
+    id?: string;
     primary_modality?: string;
     modality?: string;
+    source?: string;
+    source_label?: string;
     risk_library_id?: string;
     risk_library_label?: string;
+    text?: string;
+    ocr_text?: string;
+    ocr_text_zh?: string;
+    visual_elements?: string[];
+    features?: string[];
+    evidence_risk_level?: string;
+    reason?: string;
+    confidence?: string;
+    supporting_modalities?: string[];
+    asset_rel?: string;
   }>;
   risk_images?: unknown[];
   risk_frames?: unknown[];
@@ -155,23 +265,39 @@ export interface AuditResult {
   evidence_index?: {
     text_context?: { title?: string; desc?: string; comments_count?: number };
     image_units?: Array<{
+      evidence_id?: string;
+      index?: number;
       asset_rel?: string;
       local_path?: string;
       url?: string;
+      ocr_text?: string;
+      ocr_text_zh?: string;
+      visual_summary?: string;
+      benign_context?: string;
     }>;
     video_units?: Array<{
+      evidence_id?: string;
+      source?: string;
       timeline_frame_count?: number;
       moment_count?: number;
       precise_sheet_count?: number;
       transcript_summary?: string;
       asset_rel?: string;
       local_path?: string;
+      path?: string;
       url?: string;
+      video_url?: string;
+      video_play_url?: string;
+      video_download_url?: string;
       duration?: number;
     }>;
+    timeline_frames?: Array<Record<string, unknown>>;
+    moment_sheets?: Array<Record<string, unknown>>;
+    moments?: Array<Record<string, unknown>>;
+    precise_sheets?: Array<Record<string, unknown>>;
     audio_units?: unknown[];
-    ocr_items?: unknown[];
-    asr_segments?: unknown[];
+    ocr_items?: Array<Record<string, unknown>>;
+    asr_segments?: Array<Record<string, unknown>>;
   };
   platform?: string;
   author_key?: string;

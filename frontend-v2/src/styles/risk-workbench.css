@@ -1,0 +1,590 @@
+.risk-workbench-page {
+  min-height: calc(100vh - var(--header-height));
+  padding: 28px 48px 8px;
+  background: #fbfdff;
+}
+
+.risk-workbench-header,
+.risk-overview-grid,
+.risk-filter-panel,
+.risk-list-section {
+  width: min(100%, var(--content-max-width));
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.risk-workbench-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 18px;
+}
+
+.risk-workbench-header h1 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 26px;
+  font-weight: 820;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.risk-workbench-header p {
+  margin: 0;
+  color: #475569;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.risk-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.56fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.risk-donut-panel,
+.risk-metric-strip,
+.risk-filter-panel,
+.risk-list-section .empty-state {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  box-shadow: var(--shadow-card);
+}
+
+.risk-donut-panel {
+  min-height: 178px;
+  padding: 20px 24px;
+}
+
+.risk-panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: #64748b;
+}
+
+.risk-panel-title h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 780;
+  line-height: 22px;
+}
+
+.risk-donut-content {
+  display: grid;
+  grid-template-columns: 136px minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+
+.risk-donut-chart {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 136px;
+  height: 136px;
+  border-radius: 999px;
+}
+
+.risk-donut-chart::after {
+  position: absolute;
+  inset: 32px;
+  background: #ffffff;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px #eef2f7;
+  content: "";
+}
+
+.risk-donut-chart > div {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  gap: 3px;
+}
+
+.risk-donut-chart strong {
+  color: #071329;
+  font-size: 23px;
+  font-weight: 840;
+  line-height: 1;
+}
+
+.risk-donut-chart span {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.risk-donut-legend {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.risk-donut-legend-item {
+  display: grid;
+  grid-template-columns: 10px minmax(52px, 0.6fr) 54px 64px;
+  align-items: center;
+  gap: 10px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.risk-donut-legend-item strong {
+  color: #0f172a;
+  font-weight: 720;
+}
+
+.risk-donut-legend-item em {
+  overflow: hidden;
+  color: #64748b;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.risk-dot-high { background: #dc2626; }
+.risk-dot-medium { background: #f59e0b; }
+.risk-dot-review { background: #2563eb; }
+.risk-dot-safe { background: #16a34a; }
+
+.risk-metric-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-height: 178px;
+  padding: 26px 28px;
+}
+
+.risk-metric-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  padding: 0 24px;
+}
+
+.risk-metric-item:first-child {
+  padding-left: 0;
+}
+
+.risk-metric-item:not(:first-child)::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 1px;
+  height: 60px;
+  background: #e7ebf2;
+  content: "";
+  transform: translateY(-50%);
+}
+
+.risk-metric-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.risk-metric-icon svg {
+  stroke-width: 2;
+}
+
+.risk-metric-copy {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.risk-metric-copy span {
+  overflow: hidden;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-metric-copy strong {
+  color: #061126;
+  font-size: 32px;
+  font-weight: 840;
+  line-height: 1;
+}
+
+.risk-metric-copy small {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.risk-metric-high .risk-metric-icon { color: #dc2626; background: #fee2e2; }
+.risk-metric-medium .risk-metric-icon { color: #f59e0b; background: #ffedd5; }
+.risk-metric-review .risk-metric-icon { color: #2563eb; background: #dbeafe; }
+.risk-metric-safe .risk-metric-icon { color: #16a34a; background: #dcfce7; }
+
+.risk-filter-panel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  margin-bottom: 18px;
+  padding: 14px 20px;
+}
+
+.risk-search-field,
+.risk-select-field {
+  display: flex;
+  align-items: center;
+  height: 42px;
+  color: #64748b;
+  background: #ffffff;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-medium);
+}
+
+.risk-search-field {
+  width: clamp(320px, 30vw, 420px);
+  gap: 9px;
+  padding: 0 14px;
+}
+
+.risk-search-field input {
+  width: 100%;
+  min-width: 0;
+  color: #111827;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.risk-search-field input::placeholder {
+  color: #94a3b8;
+}
+
+.risk-select-field {
+  position: relative;
+  width: 190px;
+  gap: 10px;
+  padding: 0 12px;
+}
+
+.risk-select-field span {
+  flex: 0 0 auto;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.risk-select-field select {
+  width: 100%;
+  min-width: 0;
+  appearance: none;
+  color: #0f172a;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-weight: 700;
+}
+
+.risk-select-field svg {
+  flex: 0 0 auto;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.risk-sort-field {
+  width: 190px;
+}
+
+.risk-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.risk-filter-actions .mt-button {
+  min-width: 84px;
+}
+
+.risk-list-section {
+  padding-bottom: 20px;
+}
+
+.risk-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  color: #475569;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.risk-list-heading span:first-child {
+  color: #334155;
+  font-weight: 720;
+}
+
+.risk-output-list {
+  display: grid;
+  gap: 10px;
+}
+
+.risk-output-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) 210px;
+  align-items: center;
+  min-height: 100px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-large);
+  box-shadow: 0 6px 18px rgba(22, 36, 62, 0.035);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.risk-output-row:hover {
+  border-color: #cfd9e8;
+  box-shadow: 0 10px 22px rgba(22, 36, 62, 0.045);
+}
+
+.risk-output-row::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  content: "";
+}
+
+.risk-row-high::before { background: #dc2626; }
+.risk-row-medium::before { background: #f59e0b; }
+.risk-row-review::before { background: #2563eb; }
+.risk-row-safe::before { background: #16a34a; }
+
+.risk-output-level {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 100%;
+  background: #fbfdff;
+  border-right: 1px solid #eef2f7;
+}
+
+.risk-output-main {
+  min-width: 0;
+  padding: 18px 24px;
+}
+
+.risk-output-title-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.risk-output-title-line h3 {
+  min-width: 0;
+  overflow: hidden;
+  margin: 0;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 820;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-platform-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.risk-output-main p {
+  overflow: hidden;
+  margin: 6px 0 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-output-meta {
+  display: grid;
+  grid-template-columns: 220px 120px 100px 160px;
+  column-gap: 12px;
+  justify-content: start;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 12px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.risk-output-meta-item {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.risk-output-side {
+  display: grid;
+  justify-items: end;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px 24px 18px 0;
+}
+
+.risk-output-side > span {
+  max-width: 100%;
+  overflow: hidden;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-output-side .mt-button-small {
+  height: 36px;
+  min-width: 94px;
+}
+
+@media (max-width: 1280px) {
+  .risk-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .risk-filter-panel {
+    flex-wrap: wrap;
+  }
+
+  .risk-filter-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 980px) {
+  .risk-workbench-page {
+    padding: 22px 18px 8px;
+  }
+
+  .risk-metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 0;
+  }
+
+  .risk-metric-item:nth-child(3) {
+    padding-left: 0;
+  }
+
+  .risk-metric-item:nth-child(3)::before {
+    display: none;
+  }
+
+  .risk-output-row {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .risk-output-side {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 0 18px 18px 104px;
+  }
+
+}
+
+@media (max-width: 720px) {
+  .risk-workbench-header,
+  .risk-list-heading,
+  .risk-donut-content {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .risk-donut-content {
+    display: flex;
+  }
+
+  .risk-search-field,
+  .risk-select-field,
+  .risk-sort-field {
+    width: 100%;
+  }
+
+  .risk-metric-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .risk-metric-item,
+  .risk-metric-item:first-child,
+  .risk-metric-item:nth-child(3) {
+    padding: 0;
+  }
+
+  .risk-metric-item::before {
+    display: none;
+  }
+
+  .risk-output-row {
+    grid-template-columns: 1fr;
+  }
+
+  .risk-output-level {
+    justify-content: flex-start;
+    height: auto;
+    padding: 16px 18px 0;
+    background: #ffffff;
+    border-right: 0;
+  }
+
+  .risk-output-main {
+    padding: 12px 18px;
+  }
+
+  .risk-output-side {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+    justify-items: start;
+    padding: 0 18px 18px;
+  }
+}

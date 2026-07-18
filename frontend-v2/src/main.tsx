@@ -5,6 +5,7 @@ import "./styles/tokens.css";
 import "./styles/global.css";
 import "./styles/focus-users.css";
 import "./styles/monitor-tasks.css";
+import "./styles/risk-workbench.css";
 import "./styles/task-outputs.css";
 import "./styles/config-center.css";
 

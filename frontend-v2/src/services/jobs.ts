@@ -1,6 +1,7 @@
 import { apiRequest, withQuery } from "./apiClient";
 import type {
   AuditResult,
+  AuditResultDetail,
   DeleteJobResponse,
   JobsSnapshot,
   JobTaskStats,
@@ -43,6 +44,17 @@ export function fetchAuditResults(query: { jobId?: string; limit?: number; sort?
         sort: query.sort ?? "latest"
       });
   return apiRequest<{ items: AuditResult[]; total: number; next_after_id: number }>(path);
+}
+
+export function fetchAuditResultDetail(resultId: number | string) {
+  return apiRequest<AuditResultDetail>(`/api/audit-results/${encodeURIComponent(String(resultId))}`);
+}
+
+export function linkCommentUserRelation(relationContext: Record<string, unknown>) {
+  return apiRequest<{ relation: Record<string, unknown> }>("/api/monitored-users/comment-relation", {
+    method: "POST",
+    body: JSON.stringify({ relation_context: relationContext })
+  });
 }
 
 export function controlJob(jobId: string, action: string) {

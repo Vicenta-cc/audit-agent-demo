@@ -234,3 +234,82 @@ img {
     gap: 20px;
   }
 }
+
+@media (max-width: 720px) {
+  .top-navigation {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
+    height: auto;
+    min-height: var(--header-height);
+    padding: 10px 12px 0;
+  }
+
+  .brand-block {
+    grid-area: brand;
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+  }
+
+  .brand-mark svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .brand-title {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .brand-subtitle {
+    max-width: 180px;
+    overflow: hidden;
+    font-size: 11px;
+    text-overflow: ellipsis;
+  }
+
+  .primary-nav {
+    grid-area: nav;
+    justify-content: flex-start;
+    gap: 18px;
+    height: 42px;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .primary-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .primary-nav-link {
+    flex: 0 0 auto;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .top-actions {
+    grid-area: actions;
+    gap: 6px;
+  }
+
+  .current-user-name {
+    display: none;
+  }
+
+  .user-menu-trigger {
+    height: 36px;
+  }
+
+  .current-user-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+  }
+}

@@ -39,7 +39,7 @@ export function MonitorTasksPage() {
   const [sourceFilter, setSourceFilter] = useState<TaskSourceFilter>("全部");
   const [sortKey, setSortKey] = useState<TaskSortKey>("default");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(20);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<MonitorTask | null>(null);
   const [drawerMode, setDrawerMode] = useState<"detail" | "outputs">("detail");
