@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Mic,
   MoreHorizontal,
+  Play,
   ScanEye,
   ShieldAlert,
   ShieldCheck,
@@ -44,7 +45,7 @@ import type {
   RawJob
 } from "../../types/jobs";
 import type { RiskLevel, TaskOutputItem } from "../../types/taskOutputs";
-import { getOutputKey, mapAuditResultToTaskOutput } from "./taskOutputUtils";
+import { getOutputKey, isNoRiskOutput, mapAuditResultToTaskOutput } from "./taskOutputUtils";
 
 type EvidenceType = "text" | "ocr" | "asr" | "comment" | "vision";
 
@@ -64,6 +65,13 @@ interface DetailComment {
   time: string;
   profileUrl: string;
   rawIdentity: string;
+  translation: string;
+  auditStatus: string;
+  riskScore: number | null;
+  riskLevel: string;
+  riskBasis: string;
+  exemptionBasis: string;
+  evidenceQuote: string;
   raw: AuditComment;
 }
 
@@ -84,6 +92,7 @@ export function TaskOutputDetailPage() {
   const { taskId = "", outputId = "" } = useParams();
   const navigate = useNavigate();
   const commentsRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [detail, setDetail] = useState<AuditResultDetail | null>(null);
   const [task, setTask] = useState<MonitorTask | null>(null);
   const [job, setJob] = useState<RawJob | null>(null);
@@ -93,6 +102,7 @@ export function TaskOutputDetailPage() {
   const [activeEvidenceType, setActiveEvidenceType] = useState<EvidenceType>("text");
   const [textExpanded, setTextExpanded] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [pendingSeek, setPendingSeek] = useState<number | null>(null);
   const [toast, setToast] = useState<{ message: string; tone?: "success" | "info" } | null>(null);
 
   const loadData = useCallback(async () => {
@@ -135,7 +145,9 @@ export function TaskOutputDetailPage() {
   const groupsByType = useMemo(() => new Map(groups.map((group) => [group.type as EvidenceType, group])), [groups]);
   const mediaItems = useMemo(() => (detail && item ? collectOriginalMedia(detail.audit_result, item) : []), [detail, item]);
   const originalText = useMemo(() => (detail ? buildOriginalText(detail.audit_result) : ""), [detail]);
+  const translatedText = useMemo(() => (detail ? buildTranslatedText(detail.audit_result) : ""), [detail]);
   const comments = useMemo(() => (detail ? normalizeComments(detail.audit_result.comments || []) : []), [detail]);
+  const currentMedia = mediaItems.length ? mediaItems[Math.min(mediaIndex, mediaItems.length - 1)] : null;
 
   useEffect(() => {
     const firstAvailable = evidenceTabs.find((tab) => (groupsByType.get(tab.type)?.count || 0) > 0)?.type || "text";
@@ -149,6 +161,19 @@ export function TaskOutputDetailPage() {
     setMediaIndex(0);
     setTextExpanded(false);
   }, [outputId]);
+
+  useEffect(() => {
+    if (pendingSeek === null || !videoRef.current || currentMedia?.type !== "video") return;
+    const video = videoRef.current;
+    const seek = () => {
+      video.currentTime = pendingSeek;
+      void video.play().catch(() => undefined);
+      setPendingSeek(null);
+    };
+    if (video.readyState >= 1) seek();
+    else video.addEventListener("loadedmetadata", seek, { once: true });
+    return () => video.removeEventListener("loadedmetadata", seek);
+  }, [currentMedia?.type, mediaIndex, pendingSeek]);
 
   if (loading && !detail) {
     return <main className="task-output-detail-page"><LoadingState label="正在加载风险内容询证详情..." /></main>;
@@ -164,7 +189,6 @@ export function TaskOutputDetailPage() {
 
   const result = detail.audit_result;
   const activeGroup = groupsByType.get(activeEvidenceType) || emptyGroup(activeEvidenceType);
-  const currentMedia = mediaItems.length ? mediaItems[Math.min(mediaIndex, mediaItems.length - 1)] : null;
   const publishedAt = getPublishedAt(result);
   const batchLabel = firstText(stringField(result, "batch_id"), stringField(result, "batch"), result.job_id, "--");
   const commentTotal = Number(result.comments_count || result.comment_count || comments.length);
@@ -214,6 +238,16 @@ export function TaskOutputDetailPage() {
     const container = commentsRef.current;
     if (!container) return;
     container.scrollBy({ left: direction * Math.max(320, container.clientWidth * 0.78), behavior: "smooth" });
+  };
+
+  const playEvidenceAt = (seconds: number) => {
+    const videoIndex = mediaItems.findIndex((media) => media.type === "video");
+    if (videoIndex < 0) {
+      setToast({ message: "当前内容没有可播放的视频", tone: "info" });
+      return;
+    }
+    setMediaIndex(videoIndex);
+    setPendingSeek(Math.max(0, seconds));
   };
 
   return (
@@ -274,7 +308,7 @@ export function TaskOutputDetailPage() {
           <div className="detail-media-stage">
             {currentMedia ? (
               currentMedia.type === "video" ? (
-                <video controls preload="metadata" playsInline src={currentMedia.url} />
+                <video ref={videoRef} controls preload="metadata" playsInline src={currentMedia.url} />
               ) : (
                 <img src={currentMedia.url} alt={currentMedia.label} />
               )
@@ -315,8 +349,9 @@ export function TaskOutputDetailPage() {
 
           <div className={`detail-original-text${textExpanded ? " is-expanded" : ""}`}>
             <p>{originalText || "暂无原文正文"}</p>
+            {translatedText ? <p className="detail-original-translation"><strong>中文译文：</strong>{translatedText}</p> : null}
           </div>
-          {originalText.length > 96 ? (
+          {originalText.length + translatedText.length > 96 ? (
             <button className="detail-expand-text" type="button" onClick={() => setTextExpanded((current) => !current)}>
               {textExpanded ? "收起" : "展开"}
               <ChevronRight size={15} />
@@ -370,7 +405,13 @@ export function TaskOutputDetailPage() {
             {activeGroup.items?.length ? (
               <div className="detail-evidence-list">
                 {activeGroup.items.map((evidence, index) => (
-                  <EvidenceDetail key={evidence.id || `${activeEvidenceType}-${index}`} evidence={evidence} group={activeGroup} />
+                  <EvidenceDetail
+                    key={evidence.id || `${activeEvidenceType}-${index}`}
+                    evidence={evidence}
+                    group={activeGroup}
+                    jobId={String(result.job_id || "")}
+                    onPlayAt={playEvidenceAt}
+                  />
                 ))}
               </div>
             ) : (
@@ -389,10 +430,10 @@ export function TaskOutputDetailPage() {
         </article>
       </section>
 
-      <section className="detail-comments-section" aria-label="相关评论">
+      <section className="detail-comments-section" aria-label="逐条评论审核">
         <header className="detail-comments-header">
           <div>
-            <h2>相关评论</h2>
+            <h2>逐条评论审核</h2>
             <span>{commentTotal.toLocaleString("zh-CN")} 条</span>
           </div>
           <button type="button" onClick={() => setToast({ message: `当前已加载 ${comments.length} 条评论`, tone: "info" })}>
@@ -410,11 +451,24 @@ export function TaskOutputDetailPage() {
               <article className="detail-comment-card" key={comment.id}>
                 <header>
                   <strong title={comment.name}>{comment.name}</strong>
-                  <span>{comment.region || "未知地区"}</span>
+                  <span className={`detail-comment-risk status-${evidenceStatus(comment.riskLevel).tone}`}>
+                    {comment.auditStatus === "failed" ? "审核失败" : `${comment.riskScore ?? 0}分 · ${evidenceStatus(comment.riskLevel).label.replace("证据", "")}`}
+                  </span>
                 </header>
-                <p title={comment.content}>{comment.content}</p>
+                <div className="detail-comment-body">
+                  <p title={comment.content}>{comment.content}</p>
+                  {comment.translation ? <p className="detail-comment-translation">译文：{comment.translation}</p> : null}
+                  {comment.auditStatus === "failed" ? (
+                    <p className="detail-comment-audit-failed">本条未完成审核，不计为 0 分</p>
+                  ) : (
+                    <dl>
+                      <div><dt>违规依据</dt><dd>{comment.riskBasis || "无明确违规依据"}</dd></div>
+                      <div><dt>豁免依据</dt><dd>{comment.exemptionBasis || "无明显豁免语境"}</dd></div>
+                    </dl>
+                  )}
+                </div>
                 <footer>
-                  <time>{comment.time}</time>
+                  <time>{comment.region || "未知地区"} · {comment.time}</time>
                   <span>
                     <button type="button" onClick={() => void handleLinkComment(comment)}>
                       <Link2 size={13} />
@@ -428,7 +482,7 @@ export function TaskOutputDetailPage() {
                 </footer>
               </article>
             )) : (
-              <div className="detail-comments-empty">暂无相关评论</div>
+              <div className="detail-comments-empty">暂无可审核评论</div>
             )}
           </div>
           <IconButton type="button" className="detail-comment-arrow next" aria-label="向右查看评论" onClick={() => scrollComments(1)} disabled={!comments.length}>
@@ -442,11 +496,29 @@ export function TaskOutputDetailPage() {
   );
 }
 
-function EvidenceDetail({ evidence, group }: { evidence: AuditEvidenceGroupItem; group: AuditEvidenceGroup }) {
+function EvidenceDetail({
+  evidence,
+  group,
+  jobId,
+  onPlayAt
+}: {
+  evidence: AuditEvidenceGroupItem;
+  group: AuditEvidenceGroup;
+  jobId: string;
+  onPlayAt: (seconds: number) => void;
+}) {
+  const type = normalizeEvidenceType(group.type || evidence.primary_modality || evidence.source || "") || "text";
   const library = firstText(evidence.risk_library_label, group.risk_libraries?.map((item) => item.label).filter(Boolean).join("、"), "--");
   const content = firstText(evidence.content, evidence.text, evidence.ocr_text_zh, evidence.ocr_text, "--");
   const explanation = firstText(evidence.hit_explanation, evidence.reason, evidence.context, "暂无命中解释");
   const status = evidenceStatus(evidence.evidence_risk_level);
+  const assetUrl = resolveMediaUrl(jobId, firstText(evidence.frame_asset_rel, evidence.asset_rel));
+  const start = finiteNumber(evidence.start ?? evidence.timestamp);
+  const end = finiteNumber(evidence.end);
+  const position = type === "vision" || type === "ocr"
+    ? [evidence.frame_number !== undefined ? `帧 ${evidence.frame_number}` : "", evidence.timestamp !== undefined ? formatEvidenceTime(evidence.timestamp) : ""].filter(Boolean).join(" · ")
+    : firstText(evidence.position, evidence.source_label, evidence.source, "--");
+  const ocrContext = formatOcrContext(evidence.ocr_context);
 
   return (
     <article className="detail-evidence-item">
@@ -454,28 +526,60 @@ function EvidenceDetail({ evidence, group }: { evidence: AuditEvidenceGroupItem;
         <strong>{evidence.title || evidence.rule || group.label || "证据详情"}</strong>
         <span className={`detail-evidence-status status-${status.tone}`}>{status.label}</span>
       </header>
+      {assetUrl && (type === "vision" || type === "ocr") ? (
+        <img className="detail-evidence-frame" src={assetUrl} alt={position || "命中视频帧"} />
+      ) : null}
       <dl>
         <div>
           <dt>风险库</dt>
           <dd>{library}</dd>
         </div>
-        <div>
-          <dt>原文</dt>
-          <dd>{content}</dd>
-        </div>
+        {type === "ocr" ? (
+          <>
+            {ocrContext ? <div><dt>帧上下文</dt><dd>{ocrContext}</dd></div> : null}
+            <div><dt>OCR 原文</dt><dd>{firstText(evidence.ocr_text, content)}</dd></div>
+            <div><dt>中文译文</dt><dd>{firstText(evidence.ocr_text_zh, evidence.translation_zh, "--")}</dd></div>
+          </>
+        ) : null}
+        {type === "asr" ? (
+          <>
+            <div><dt>时间范围</dt><dd>{formatEvidenceRange(evidence.start, evidence.end)}</dd></div>
+            <div><dt>Dolphin</dt><dd>{firstText(evidence.source_text_dolphin, content)}</dd></div>
+            <div><dt>MMS 复核</dt><dd>{firstText(evidence.source_text_mms, "未触发或无可对齐文本")}</dd></div>
+            <div><dt>中文译文</dt><dd>{firstText(evidence.translation_zh, "--")}</dd></div>
+            {evidence.asr_consistency ? <div><dt>一致性</dt><dd>{evidence.asr_consistency}</dd></div> : null}
+          </>
+        ) : null}
+        {type === "comment" ? (
+          <>
+            <div><dt>评论原文</dt><dd>{content}</dd></div>
+            {evidence.translation_zh ? <div><dt>中文译文</dt><dd>{evidence.translation_zh}</dd></div> : null}
+            <div><dt>风险分</dt><dd>{evidence.risk_score ?? "--"}</dd></div>
+            <div><dt>违规依据</dt><dd>{firstText(evidence.risk_basis, evidence.reason, "无明确违规依据")}</dd></div>
+            <div><dt>豁免依据</dt><dd>{firstText(evidence.exemption_basis, "无明显豁免语境")}</dd></div>
+          </>
+        ) : null}
+        {type === "text" || type === "vision" ? <div><dt>{type === "vision" ? "画面描述" : "原文"}</dt><dd>{content}</dd></div> : null}
+        {type === "text" && evidence.translation_zh ? <div><dt>中文译文</dt><dd>{evidence.translation_zh}</dd></div> : null}
         <div>
           <dt>命中解释</dt>
           <dd>{explanation}</dd>
         </div>
         <div className="detail-evidence-inline">
           <dt>位置</dt>
-          <dd>{firstText(evidence.position, evidence.source_label, evidence.source, "--")}</dd>
+          <dd>{position || "--"}</dd>
         </div>
         <div className="detail-evidence-inline">
           <dt>证据状态</dt>
           <dd>{status.label}</dd>
         </div>
       </dl>
+      {type === "asr" && start !== null ? (
+        <button className="detail-evidence-play" type="button" onClick={() => onPlayAt(start)}>
+          <Play size={14} />
+          从 {formatEvidenceTime(start)} 播放{end !== null ? `，至 ${formatEvidenceTime(end)}` : ""}
+        </button>
+      ) : null}
     </article>
   );
 }
@@ -508,17 +612,21 @@ async function loadOutputDetail(taskId: string, outputId: string): Promise<Audit
 }
 
 function normalizeEvidenceGroups(detail: AuditResultDetail | null): AuditEvidenceGroup[] {
+  if (detail && isNoRiskOutput(detail.audit_result)) {
+    return evidenceTabs.map((tab) => emptyGroup(tab.type));
+  }
   const rawGroups = detail?.evidence_groups?.length ? detail.evidence_groups : detail ? buildFallbackGroups(detail.audit_result) : [];
   const byType = new Map<EvidenceType, AuditEvidenceGroup>();
   rawGroups.forEach((group) => {
     const type = normalizeEvidenceType(group.type || group.id || "");
     if (!type) return;
+    const items = (group.items || []).filter((item) => isRiskEvidenceLevel(item.evidence_risk_level || item.risk_level));
     byType.set(type, {
       ...group,
       type,
       label: group.label || evidenceLabel(type),
-      count: group.count ?? group.items?.length ?? 0,
-      items: group.items || []
+      count: items.length,
+      items
     });
   });
   return evidenceTabs.map((tab) => byType.get(tab.type) || emptyGroup(tab.type));
@@ -527,6 +635,7 @@ function normalizeEvidenceGroups(detail: AuditResultDetail | null): AuditEvidenc
 function buildFallbackGroups(result: AuditResult): AuditEvidenceGroup[] {
   const buckets = new Map<EvidenceType, AuditEvidenceGroupItem[]>();
   (result.evidence_items || []).forEach((item, index) => {
+    if (!isRiskEvidenceLevel(item.evidence_risk_level)) return;
     const type = normalizeEvidenceType(item.primary_modality || item.modality || item.source || "text") || "text";
     const next: AuditEvidenceGroupItem = {
       ...item,
@@ -588,8 +697,17 @@ function collectOriginalMedia(result: AuditResult, item: TaskOutputItem): MediaI
 }
 
 function buildOriginalText(result: AuditResult) {
-  const title = firstText(result.title, result.content_title);
-  const desc = firstText(result.desc, result.summary);
+  const title = firstText(result.title);
+  const desc = firstText(result.desc);
+  if (title && desc && title !== desc) {
+    return `标题：${title}\n正文：${desc}`;
+  }
+  return desc || title || "";
+}
+
+function buildTranslatedText(result: AuditResult) {
+  const title = firstText(result.title_zh);
+  const desc = firstText(result.desc_zh);
   if (title && desc && title !== desc) {
     return `标题：${title}\n正文：${desc}`;
   }
@@ -602,6 +720,9 @@ function normalizeComments(comments: AuditComment[]): DetailComment[] {
       const content = firstText(comment.content, comment.text);
       const name = firstText(comment.nickname, comment.user_name, comment.user_unique_id, comment.short_user_id, comment.user_id, "评论用户");
       const rawIdentity = firstText(comment.sec_uid, comment.user_id, comment.user_unique_id, comment.short_user_id, name);
+      const riskScore = comment.audit_status === "completed" && Number.isFinite(Number(comment.risk_score))
+        ? Number(comment.risk_score)
+        : null;
       return {
         id: firstText(comment.comment_id, String(comment.id || ""), `${index}`),
         name,
@@ -610,10 +731,18 @@ function normalizeComments(comments: AuditComment[]): DetailComment[] {
         time: formatCommentTime(comment.create_time || comment.created_at || comment.time || ""),
         profileUrl: firstText(comment.profile_url, comment.user_url),
         rawIdentity,
+        translation: firstText(comment.translation_zh),
+        auditStatus: firstText(comment.audit_status, "pending"),
+        riskScore,
+        riskLevel: firstText(comment.risk_level, riskScore !== null ? "none" : "unknown"),
+        riskBasis: firstText(comment.risk_basis),
+        exemptionBasis: firstText(comment.exemption_basis),
+        evidenceQuote: firstText(comment.evidence_quote),
         raw: comment
       };
     })
-    .filter((comment) => comment.content);
+    .filter((comment) => comment.content)
+    .sort((left, right) => (right.riskScore ?? -1) - (left.riskScore ?? -1));
 }
 
 function buildCommentRelationContext(result: AuditResult, comment: DetailComment) {
@@ -663,6 +792,11 @@ function evidenceStatus(level = "") {
   return { label: "无风险证据", tone: "safe" };
 }
 
+function isRiskEvidenceLevel(level: unknown) {
+  const normalized = String(level || "").trim().toLowerCase();
+  return ["low", "medium", "high", "review", "低危", "中危", "高危", "待复核"].includes(normalized);
+}
+
 function riskTone(level: RiskLevel) {
   if (level === "高危") return "high";
   if (level === "中危") return "medium";
@@ -701,6 +835,46 @@ function formatCommentTime(value: string | number | undefined) {
     }
   }
   return formatDateTime(String(value));
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function formatEvidenceTime(value: unknown) {
+  const seconds = finiteNumber(value);
+  if (seconds === null) return "--";
+  const rounded = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const rest = rounded % 60;
+  return hours > 0
+    ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`
+    : `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
+function formatEvidenceRange(start: unknown, end: unknown) {
+  const startText = formatEvidenceTime(start);
+  const endText = formatEvidenceTime(end);
+  if (startText === "--") return endText;
+  return endText === "--" ? startText : `${startText} - ${endText}`;
+}
+
+function formatOcrContext(context: AuditEvidenceGroupItem["ocr_context"]) {
+  if (!Array.isArray(context)) return "";
+  return context
+    .map((item) => {
+      const frameIds = Array.isArray(item.frame_ids) ? item.frame_ids.map(String).join("、") : "";
+      const source = recordText(item, "source_text");
+      const translation = recordText(item, "translation_zh");
+      return [frameIds ? `[${frameIds}]` : "", source ? `原文：${source}` : "", translation ? `译文：${translation}` : ""]
+        .filter(Boolean)
+        .join("\n");
+    })
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function platformCode(value: string) {

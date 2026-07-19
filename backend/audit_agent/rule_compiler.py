@@ -21,7 +21,7 @@ CAPABILITY_LABELS = {
     "ocr": "OCR 命中",
     "asr": "ASR 命中",
     "vision": "视觉特征",
-    "comment": "评论聚集",
+    "comment": "逐条评论审核",
     "keyword": "关键词/黑话命中",
 }
 
@@ -217,37 +217,148 @@ def _normalize_scoring_rule(rule: dict, libraries: list[dict], template: str) ->
 
 
 def _format_libraries(libraries: list[dict], capabilities: list[str]) -> str:
-    sections = []
     enabled_labels = "、".join(CAPABILITY_LABELS.get(item, item) for item in capabilities)
-    for index, library in enumerate(libraries, start=1):
-        keywords = library.get("keywords") or {}
-        exact = "、".join((keywords.get("exact") or [])[:30]) or "无"
-        fuzzy = "、".join((keywords.get("fuzzy") or [])[:30]) or "无"
-        negative = "、".join((keywords.get("negative_context") or [])[:20]) or "无"
-        guidance = library.get("modality_guidance") or {}
-        source_refs = _source_refs_to_text(library.get("source_refs"))
-        sections.append(f"""
-{index}. {library.get("title")}（id={library.get("id")}，version={library.get("version")}）
-- 规则依据：{source_refs}
-- 审核目标：{library.get("audit_goal") or library.get("title")}
-- 输出标签：{"、".join(library.get("output_labels") or [library.get("title", "")])}
-- 风险定义：{json.dumps(library.get("risk_definition") or {}, ensure_ascii=False)}
-- 风险模式：{json.dumps(library.get("risk_patterns") or {}, ensure_ascii=False)}
-- 模态指引：
-  - 文本：{guidance.get("text", "")}
-  - OCR：{guidance.get("ocr", "")}
-  - ASR：{guidance.get("asr", "")}
-  - 视觉：{guidance.get("vision", "")}
-  - 评论：{guidance.get("comment", "")}
-- 关键词：
-  - 精确词：{exact}
-  - 变体/模糊词：{fuzzy}
-  - 负向语境词：{negative}
-- 证据规则：{_rules_to_text(library.get("evidence_rules"))}
-- 融合/豁免规则：{_rules_to_text(library.get("fusion_rules"))}
-- 豁免规则：{_rules_to_text(library.get("exemption_rules"))}
-""".strip())
-    return f"启用检测能力：{enabled_labels}\n\n" + "\n\n".join(sections)
+    policies = [
+        compact_library_policy(library, modalities=capabilities)
+        for library in libraries
+    ]
+    return (
+        f"启用检测能力：{enabled_labels}\n"
+        "以下为压缩风险库规则；必须结合证据和豁免边界判断，不要仅凭关键词定性：\n"
+        + json.dumps(policies, ensure_ascii=False, separators=(",", ":"))
+    )
+
+
+def compact_library_policy(library: dict, *, modalities: list[str] | None = None) -> dict:
+    """Build a short runtime policy for prompts without losing audit boundaries."""
+    modality_set = {
+        str(item or "").strip()
+        for item in (modalities or DEFAULT_CAPABILITIES)
+        if str(item or "").strip()
+    }
+    guidance = library.get("modality_guidance") or {}
+    selected_guidance = {
+        key: str(guidance.get(key) or "").strip()
+        for key in ("text", "ocr", "asr", "vision", "comment")
+        if key in modality_set and str(guidance.get(key) or "").strip()
+    }
+    if "keyword" in modality_set:
+        selected_guidance["keyword"] = "关键词和黑话只能作为线索，必须结合上下文、交易/攻击/导流/行动意图和豁免语境。"
+    if "comment" in modality_set:
+        extra = _extra_comment_guidance(library)
+        if extra:
+            selected_guidance["comment_extra"] = extra
+    return {
+        "id": str(library.get("id") or "").strip(),
+        "title": str(library.get("title") or library.get("id") or "").strip(),
+        "version": str(library.get("version") or "").strip(),
+        "audit_goal": _short_text(library.get("audit_goal") or library.get("title"), 180),
+        "output_labels": _clean_list(library.get("output_labels") or [library.get("title", "")], 10, 24),
+        "included": _clean_list((library.get("risk_definition") or {}).get("included"), 4, 70),
+        "excluded": _clean_list((library.get("risk_definition") or {}).get("excluded"), 4, 70),
+        "risk_patterns": _compact_patterns(library.get("risk_patterns") or {}),
+        "modality_guidance": selected_guidance,
+        "keywords": _compact_keywords(library.get("keywords") or {}),
+        "evidence_rules": _compact_rules(library.get("evidence_rules")),
+        "exemption_rules": _compact_exemptions(library.get("exemption_rules")),
+    }
+
+
+def _compact_patterns(value: dict) -> dict:
+    out: dict[str, list[dict]] = {}
+    if not isinstance(value, dict):
+        return out
+    for level in ("high", "medium", "low"):
+        rows = []
+        for item in (value.get(level) or [])[:3]:
+            if isinstance(item, dict):
+                rows.append({
+                    "name": _short_text(item.get("name"), 34),
+                    "description": _short_text(item.get("description"), 90),
+                })
+            elif item:
+                rows.append({"name": _short_text(item, 34), "description": ""})
+        if rows:
+            out[level] = rows
+    return out
+
+
+def _compact_keywords(value: dict) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "exact": _clean_list(value.get("exact"), 12, 20),
+        "fuzzy": _clean_list(value.get("fuzzy"), 12, 20),
+        "negative_context": _clean_list(value.get("negative_context"), 8, 18),
+    }
+
+
+def _compact_rules(value) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    out = []
+    for item in value[:4]:
+        if isinstance(item, dict):
+            out.append({
+                "id": _short_text(item.get("id"), 40),
+                "name": _short_text(item.get("name"), 46),
+                "risk_level": _short_text(item.get("risk_level"), 16),
+                "logic": _short_text(item.get("logic"), 12),
+            })
+        elif item:
+            out.append({"id": "", "name": _short_text(item, 60), "risk_level": "", "logic": ""})
+    return out
+
+
+def _compact_exemptions(value) -> list[str]:
+    if isinstance(value, str):
+        return [_short_text(value, 90)] if value.strip() else []
+    if not isinstance(value, list):
+        return []
+    out = []
+    for item in value[:4]:
+        if isinstance(item, dict):
+            name = str(item.get("name") or "").strip()
+            condition = str(item.get("condition") or "").strip()
+            effect = str(item.get("effect") or "").strip()
+            text = "；".join(part for part in (name, condition, effect) if part)
+        else:
+            text = str(item or "").strip()
+        if text:
+            out.append(_short_text(text, 90))
+    return out
+
+
+def _extra_comment_guidance(library: dict) -> list[str]:
+    library_id = str(library.get("id") or "").strip()
+    title = str(library.get("title") or "")
+    if library_id not in {"hate", "minority"} and "民族" not in title and "宗教" not in title:
+        return []
+    return [
+        "民族关系/婚恋场景中，个人不看好、文化差异担忧、家庭习俗顾虑，不直接判高风险。",
+        "基于民族、宗教、地域或语言身份表达不能嫁娶、不该通婚、不要来往、应远离、都不可靠、嘲讽民族融合，判中风险。",
+        "出现驱逐、隔离、清除、剥夺权利、暴力威胁、恶性谣言、群体非人化，判高风险。",
+    ]
+
+
+def _clean_list(value, limit: int, max_chars: int) -> list[str]:
+    if not isinstance(value, list):
+        value = [value] if value not in (None, "", {}, []) else []
+    out = []
+    for item in value:
+        text = _short_text(item, max_chars)
+        if text and text not in out:
+            out.append(text)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _short_text(value, max_chars: int) -> str:
+    text = " ".join(str(value or "").split())
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    return text[:max_chars]
 
 
 def _format_scoring_rules(rule_snapshot: dict) -> str:
@@ -292,6 +403,8 @@ def _image_prompt(audit_goal: str, knowledge_text: str, output_labels: str) -> s
   "risk_items": [
     {{
       "risk_type": "只能使用这些类别或其子类：{output_labels}",
+      "risk_library_id": "命中的风险库 id；不确定则写空字符串",
+      "risk_library_label": "命中的风险库名称；不确定则写空字符串",
       "evidence": "必须引用图片文字或可见画面元素",
       "reason": "为什么可能违规",
       "severity": "low|medium|high"
@@ -320,6 +433,8 @@ def _frame_prompt(audit_goal: str, knowledge_text: str, output_labels: str) -> s
   "risk_items": [
     {{
       "risk_type": "只能使用这些类别或其子类：{output_labels}",
+      "risk_library_id": "命中的风险库 id；不确定则写空字符串",
+      "risk_library_label": "命中的风险库名称；不确定则写空字符串",
       "evidence": "必须引用画面文字、external_ocr 文字或可见画面元素",
       "reason": "一句话说明为什么可能违规",
       "severity": "low|medium|high"
@@ -348,13 +463,14 @@ def _fusion_prompt(
 重要原则：
 1. Prompt 里的知识包决定“检测什么”，系统策略会按最高证据风险生成最终结论；不要扩展到知识包之外的风险。
 2. 必须区分“提及/讨论/批判/科普/新闻/影视游戏”与“宣扬/诱导/攻击/交易/组织”。
-3. 你只负责输出原始证据 evidence_items，并判断每条证据自身的 evidence_risk_level；不要自己计算分数。
+3. 你只负责输出风险证据 evidence_items，并判断每条证据自身的 evidence_risk_level；不要自己计算分数。安全或豁免上下文写入 summary，不得作为 evidence_risk_level=none 的证据输出。
 4. 不允许把不同风险类别的弱证据机械相加成高危。
 5. 图片、关键帧和 OCR/ASR risk_items 只是候选线索，融合阶段必须重新校准。
 6. 每个风险结论必须引用证据来源：标题/正文/评论/图片/视频语音/视频关键帧。
 7. 关键词/黑话只写入 evidence_items.features，不作为独立计分规则。
 8. OCR 与视觉边界：风险来自画面文字时 primary_modality=ocr；风险来自二维码、界面、物品、动作、场景等非文字画面元素时 primary_modality=vision；两者都有时只保留一个主证据，另一个放 supporting_modalities。
-9. evidence_risk_level 表示“这条证据自身的危险程度”，只能是 none、low、medium、high；最终帖子风险由系统取所有证据的最高等级。
+9. evidence_risk_level 表示“这条证据自身的危险程度”，进入 evidence_items 后只能是 low、medium、high；最终帖子风险由系统取所有证据的最高等级。
+10. content_title 必须是8至18字中文短标题；原始标题为空时也必须根据正文、OCR、ASR或画面主旨生成，不得输出内容ID、审核结论或风险等级。
 
 风险知识包：
 {knowledge_text}
@@ -370,6 +486,7 @@ def _fusion_prompt(
 请只输出一个合法 JSON 对象，不要输出 Markdown、代码块、解释性文字或多余前后缀。
 所有字段都是必填字段；没有内容时输出空数组 [] 或空字符串 ""，不要省略字段。
 decision_suggestion 只能是 "pass"、"review"、"reject"；risk_level_suggestion 只能是 "none"、"low"、"medium"、"high"。
+当 decision_suggestion=pass 且 risk_level_suggestion=none 时，evidence_items 必须输出 []；只有 low、medium、high 风险证据才能进入 evidence_items。
 格式：
 {{
   "schema_version": "audit_fusion_v3",

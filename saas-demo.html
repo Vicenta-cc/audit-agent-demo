@@ -152,12 +152,32 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-original-image img{display:block;width:100%;height:180px;object-fit:contain;background:var(--surface-0)}
 .cm-original-image figcaption{padding:6px 8px;font-size:11px;color:var(--text-muted);line-height:1.35}
 .cm-original-text{font-size:12px;line-height:1.5;color:var(--text-secondary);background:var(--surface-1);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px;white-space:pre-wrap}
+.cm-original-row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px;align-items:start;white-space:normal}
+.cm-original-row+.cm-original-row{margin-top:6px}
+.cm-original-row b{color:var(--text-primary);font-weight:500}
+.cm-original-row span{white-space:pre-wrap;overflow-wrap:anywhere}
+.cm-original-row.translation{padding-top:6px;border-top:0.5px solid var(--border);color:var(--text-primary)}
 .cm-video-sheets{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:6px 0 10px}
 .cm-video-sheet{border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface-1)}
 .cm-video-sheet img{display:block;width:100%;height:auto;background:var(--surface-1)}
 .cm-video-sheet span{display:block;padding:6px 8px;font-size:11px;color:var(--text-muted)}
 .cm-video-sheet p{margin:0;padding:0 8px 8px;font-size:11px;line-height:1.45;color:var(--text-secondary)}
 .cm-video-summary{font-size:12px;color:var(--text-secondary);padding:8px 10px;border-radius:var(--radius);background:var(--surface-1);line-height:1.5;margin-bottom:8px;white-space:pre-line}
+.cm-asr-full{display:grid;gap:8px;margin-bottom:10px}
+.cm-asr-complete{padding:10px 12px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-1)}
+.cm-asr-complete b{display:block;margin-bottom:6px;color:var(--text-secondary);font-size:12px;font-weight:500}
+.cm-asr-complete p{margin:0;color:var(--text-primary);font-size:13px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere;unicode-bidi:plaintext}
+.cm-asr-complete.missing p{color:var(--text-muted)}
+.cm-asr-segments{margin-bottom:10px}
+.cm-asr-segments summary{cursor:pointer;color:var(--text-secondary);font-size:12px;user-select:none}
+.cm-asr-list{max-height:360px;overflow:auto;display:grid;gap:6px;margin-top:8px;padding-right:2px}
+.cm-asr-item{padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface-1);font-size:12px;line-height:1.5}
+.cm-asr-item>span{display:block;margin-bottom:4px;color:var(--text-muted);font-size:11px}
+.cm-asr-row{display:grid;grid-template-columns:68px minmax(0,1fr);gap:8px;align-items:start}
+.cm-asr-row+.cm-asr-row{margin-top:5px;padding-top:5px;border-top:0.5px solid var(--border)}
+.cm-asr-row b{color:var(--text-secondary);font-weight:500}
+.cm-asr-row p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-primary);unicode-bidi:plaintext}
+.cm-asr-row p.missing{color:var(--text-muted)}
 .cm-cmt{font-size:12px;color:var(--text-secondary);padding:7px 10px;border-radius:var(--radius);background:var(--surface-1);margin-bottom:6px}
 .cm-cmt b{color:var(--text-primary);font-weight:500}
 .cm-cmt.hit{background:var(--bg-danger);color:var(--text-danger)}
@@ -179,6 +199,8 @@ html,body{margin:0;background:var(--surface-1);color:var(--text-primary);font-fa
 .cm-cmt-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;margin-left:auto}
 .cm-cmt-actions .cm-bd{white-space:nowrap}
 .cm-cmt p{margin:3px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.cm-cmt .cm-cmt-translation{margin-top:6px;padding-top:6px;border-top:0.5px solid var(--border);color:var(--text-primary)}
+.cm-cmt-translation span{display:inline-block;margin-right:6px;color:var(--text-muted);font-weight:500}
 .cm-cond{display:flex;align-items:center;gap:8px;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--radius);margin-bottom:6px;font-size:12px}
 .cm-cond b{font-weight:500;color:var(--text-primary);margin-right:auto}
 .cm-cond .w{color:var(--text-muted)}
@@ -744,6 +766,12 @@ function commentDisplayText(c){
  if(c.pictures||c.image_list||c.image_url)return "（图片评论，无文本内容）";
  return "（无文本内容，可能为表情或空评论）";
 }
+function commentTranslationText(c){
+ c=tryParseJsonObject(c);
+ if(!c||typeof c!=="object"||Array.isArray(c))return "";
+ var translated=firstText(c.translation_zh,c.text_zh);
+ return translated&&translated!==commentDisplayText(c)?translated:"";
+}
 function commentDisplayLabel(c,i){
  c=tryParseJsonObject(c);
  if(Array.isArray(c))return String(c[0]||("评论 "+(i+1)));
@@ -849,6 +877,7 @@ function renderCommentContext(r,comments){
  html+='</div><div class="cm-comment-list">';
  for(var i=start;i<end;i++){
    var c=comments[i];
+   var translated=commentTranslationText(c[3]);
    var userUrl=commentProfileUrl(c[3],r),userName=commentUserName(c[3],c[0]),platform=commentPlatformLabel(c[3],r);
    var rel=relatedForComment(r,c[3],userUrl);
    var ctx=encodeURIComponent(JSON.stringify(relationContextForComment(r,c[3],userUrl,userName,platform,c[1])));
@@ -856,7 +885,7 @@ function renderCommentContext(r,comments){
    var linkAction=rel?'<span class="cm-bd ok">已关联</span>':'<button class="cm-btn sm" type="button" data-act="linkCommentUser" data-ctx="'+attr(ctx)+'"><i class="ti ti-link"></i>关联</button>';
    var analysisAction=rel&&rel.analysis_job_id?'<button class="cm-btn sm" type="button" data-act="taskOpen" data-id="'+attr(rel.analysis_job_id)+'"><i class="ti ti-arrow-right"></i>查看分析任务</button>':(userUrl?'<button class="cm-btn sm" type="button" data-act="analyzeCommentUser" data-url="'+attr(userUrl)+'" data-name="'+attr(userName)+'" data-platform="'+attr(platform)+'" data-ctx="'+attr(ctx)+'"><i class="ti ti-user-search"></i>分析该用户主页</button>':"");
    action='<span class="cm-cmt-actions">'+linkAction+analysisAction+'</span>';
-   html+='<div class="cm-cmt '+(c[2]?"hit":"")+'"><div class="cm-cmt-head"><b class="cm-cmt-user">'+attr(c[0])+'</b>'+action+'</div><p>'+attr(c[1])+'</p></div>';
+   html+='<div class="cm-cmt '+(c[2]?"hit":"")+'"><div class="cm-cmt-head"><b class="cm-cmt-user">'+attr(c[0])+'</b>'+action+'</div><p>'+attr(c[1])+'</p>'+(translated?'<p class="cm-cmt-translation"><span>中文译文</span>'+attr(translated)+'</p>':"")+'</div>';
  }
  html+='</div>';
  return html;
@@ -895,7 +924,7 @@ function resultToRisk(x){
  var hits=safeArr(x.score_breakdown).map(function(r){return [r.rule||r.label||r.rule_id||"评分规则命中","命中"];});
  if(!hits.length)hits=safeArr(x.evidence).map(function(r){return [r.rule||r.type||"风险证据","命中"];});
  var comments=normalizeComments(x.comments);
- return {id:rid,apiResultId:x.audit_result_id||x.id,jobId:x.job_id||"",title:x.title||x.content_title||x.note_id||"未命名风险内容",desc:x.summary||x.desc||(noRisk?"未发现风险证据。":"命中风险规则，等待人工复核。"),platform:platformLabel(x.platform),source:job&&job.type?job.type:"平台内容",category:cat,library:libraryLabels.join(" / ")||"未命中风险库",terms:terms,level:decisionLevel(x.risk_level),status:x.review_status?"已复核":"待复核",account:(x.author&&x.author.nickname)||x.author_key||"未知账号",linked:"待确认",conf:x.risk_score||x.conf||0,evi:x.evidence_count||safeArr(x.evidence_groups).length||safeArr(x.risk_evidence).length,task:job?job.name:(x.job_id||""),scheme:job?job.config:"",strategy:"任务审核配置",hash:(x.prompt_version||"").slice(-10),comments:comments.length?comments:[["-",x.summary||"暂无评论上下文",false]],hits:hits,evidenceGroups:x.evidence_groups||[],revisionId:x.audit_config_revision_id||"",promptVersion:x.prompt_version||"",raw:x};
+ return {id:rid,apiResultId:x.audit_result_id||x.id,jobId:x.job_id||"",title:x.content_title||x.title||x.note_id||"未命名风险内容",desc:x.summary||x.desc||(noRisk?"未发现风险证据。":"命中风险规则，等待人工复核。"),platform:platformLabel(x.platform),source:job&&job.type?job.type:"平台内容",category:cat,library:libraryLabels.join(" / ")||"未命中风险库",terms:terms,level:decisionLevel(x.risk_level),status:x.review_status?"已复核":"待复核",account:(x.author&&x.author.nickname)||x.author_key||"未知账号",linked:"待确认",conf:x.risk_score||x.conf||0,evi:x.evidence_count||safeArr(x.evidence_groups).length||safeArr(x.risk_evidence).length,task:job?job.name:(x.job_id||""),scheme:job?job.config:"",strategy:"任务审核配置",hash:(x.prompt_version||"").slice(-10),comments:comments.length?comments:[["-",x.summary||"暂无评论上下文",false]],hits:hits,evidenceGroups:x.evidence_groups||[],revisionId:x.audit_config_revision_id||"",promptVersion:x.prompt_version||"",raw:x};
 }
 function applyApiData(payload){
  st.policies=payload.policies||[];
@@ -963,7 +992,12 @@ function startAutoRefresh(){
 }
 function loadRiskDetail(id){
 	 var r=getRisk(id);if(!r||!r.apiResultId||st.resultDetails[id])return;
-	 apiFetch("/api/audit-results/"+r.apiResultId).then(function(data){st.resultDetails[id]=data;R();}).catch(function(){});
+	 apiFetch("/api/audit-results/"+r.apiResultId).then(function(data){
+	   st.resultDetails[id]=data;
+	   var audit=(data&&data.audit_result)||{};
+	   if(audit.content_title)r.title=audit.content_title;
+	   R();
+	 }).catch(function(){});
 }
 function returnFromNewTask(fallback){
  var ret=st.newTaskReturn||null;
@@ -1266,9 +1300,12 @@ function renderOriginalEvidenceRows(item,groupType){
    row("评论用户",item.nickname||item.user_nickname||"");
    row("评论ID",item.comment_id||"");
    row("评论原文",item.text||item.content||item.evidence||"");
+   row("中文译文",item.translation_zh||item.text_zh||"");
  }else if(groupType==="ocr"){
-   row("OCR原文",item.ocr_text||item.text||item.content||"");
-   if(item.ocr_text_zh&&item.ocr_text_zh!==(item.ocr_text||item.text))row("中文译文",item.ocr_text_zh);
+   var ocrOriginal=firstText(item.ocr_text,item.source_text,item.text,item.content);
+   var ocrTranslation=firstText(item.ocr_text_zh,item.translation_zh,item.text_zh);
+   row("OCR原文",ocrOriginal);
+   if(ocrTranslation&&ocrTranslation!==ocrOriginal)row("中文译文",ocrTranslation);
  }else if(groupType==="asr"){
    var range=(item.start||item.start===0?item.start:"")+(item.end||item.end===0?" - "+item.end:"");
    row("时间",range);
@@ -1278,6 +1315,9 @@ function renderOriginalEvidenceRows(item,groupType){
  }else if(groupType==="vision"){
    row("可见元素",compactListText(item.visual_elements));
    row("画面原文",item.text||item.content||"");
+ }else if(groupType==="text"){
+   row("原文",item.text||item.content||item.evidence||"");
+   row("中文译文",item.translation_zh||item.text_zh||"");
  }else{
    row("原文",item.text||item.content||item.evidence||"");
  }
@@ -1578,13 +1618,26 @@ function hasOriginalVideo(r,detail){
 }
 function renderOriginalText(r,detail){
  var audit=(detail&&detail.audit_result)||r.raw||{};
- var parts=[];
  var title=firstText(audit.title,audit.content_title);
  var desc=firstText(audit.desc,audit.description);
- if(title)parts.push("标题："+title);
- if(desc)parts.push("正文："+desc);
- if(!parts.length)return "";
- return '<div class="cm-original-text">'+attr(parts.join("\n"))+'</div>';
+ var titleZh=firstText(audit.title_zh);
+ var descZh=firstText(audit.desc_zh);
+ if(!title&&!desc)return "";
+ var html='<div class="cm-original-text">';
+ function row(label,value,translated){
+   if(!value)return;
+   html+='<div class="cm-original-row '+(translated?"translation":"")+'"><b>'+attr(label)+'</b><span>'+attr(value)+'</span></div>';
+ }
+ if(title&&desc&&title===desc){
+   row("标题 / 正文",title,false);
+   row("中文译文",firstText(titleZh,descZh),true);
+ }else{
+   row("标题",title,false);
+   row("标题译文",titleZh,true);
+   row("正文",desc,false);
+   row("正文译文",descZh,true);
+ }
+ return html+'</div>';
 }
 function renderOriginalImageGallery(r,detail,images){
 	 var audit=(detail&&detail.audit_result)||r.raw||{};
@@ -1709,21 +1762,88 @@ function renderVideoContext(r,detail){
  return summary?'<h3>视频画面概览</h3><div class="cm-video-summary">'+attr(summary)+'</div>':"";
 }
 
+function renderAsrContext(r,detail){
+ var audit=(detail&&detail.audit_result)||r.raw||{};
+ var idx=audit.evidence_index||{};
+ var items=[],itemByKey={},fullOriginal="",fullTranslated="";
+ function sourceScope(raw,fallback){
+   var source=firstText(raw&&raw.video_source,raw&&raw.source,raw&&raw.audio_source,fallback);
+   var match=source.match(/video(?::|_audio:?)?(\d+)/i);
+   return match?"video:"+match[1]:(fallback||"video:1");
+ }
+ function add(raw,fallbackScope){
+   raw=raw||{};
+   var original=firstText(raw.source_text_dolphin,raw.source_text,raw.text);
+   var translated=firstText(raw.translation_zh,raw.text_zh);
+   if(!original&&!translated)return;
+   var start=raw.start===null||raw.start===undefined||raw.start===""?null:Number(raw.start);
+   var end=raw.end===null||raw.end===undefined||raw.end===""?null:Number(raw.end);
+   if(start!==null&&!Number.isFinite(start))start=null;
+   if(end!==null&&!Number.isFinite(end))end=null;
+   var scope=sourceScope(raw,fallbackScope);
+   var key=start!==null||end!==null?[scope,start,end].join("|"):[scope,original].join("|");
+   var current=itemByKey[key];
+   if(current){
+     if(!current.original&&original)current.original=original;
+     if(!current.translated&&translated)current.translated=translated;
+     return;
+   }
+   current={start:start,end:end,original:original,translated:translated};
+   itemByKey[key]=current;
+   items.push(current);
+ }
+ safeArr(idx.asr_segments).forEach(function(segment){add(segment,"");});
+ if(!items.length)safeArr(idx.asr_chunks).forEach(function(segment){add(segment,"");});
+ safeArr(audit.video_results).forEach(function(video,videoIndex){
+   var transcript=(video||{}).transcript||{};
+   var scope="video:"+(videoIndex+1);
+   var original=firstText(transcript.text);
+   var translated=firstText(transcript.text_zh,(transcript.translation||{}).text);
+   if(original)fullOriginal+=(fullOriginal?"\n":"")+original;
+   if(translated)fullTranslated+=(fullTranslated?"\n":"")+translated;
+   safeArr(transcript.segments).forEach(function(segment){add(segment,scope);});
+   safeArr((transcript.translation||{}).segments).forEach(function(segment){add(segment,scope);});
+ });
+ if(!items.length)return "";
+ if(!fullOriginal)fullOriginal=items.map(function(item){return item.original;}).filter(Boolean).join(" ");
+ if(!fullTranslated)fullTranslated=items.map(function(item){return item.translated;}).filter(Boolean).join(" ");
+ function mediaTime(seconds){
+   if(seconds===null)return "";
+   var value=Math.max(0,Math.floor(seconds));
+   var minutes=Math.floor(value/60),rest=value%60;
+   return String(minutes).padStart(2,"0")+":"+String(rest).padStart(2,"0");
+ }
+ var html='<h3>完整语音转写与翻译</h3><div class="cm-asr-full">'
+  +'<div class="cm-asr-complete"><b>完整 ASR 原文</b><p dir="auto">'+attr(fullOriginal)+'</p></div>'
+  +'<div class="cm-asr-complete '+(fullTranslated?"":"missing")+'"><b>完整中文翻译</b><p>'+(fullTranslated?attr(fullTranslated):"未生成（本次任务的翻译阶段未产出）")+'</p></div>'
+  +'</div><details class="cm-asr-segments"><summary>分段核对 · '+items.length+' 段</summary><div class="cm-asr-list">';
+ for(var i=0;i<items.length;i++){
+   var item=items[i],range=item.start===null?"":mediaTime(item.start)+(item.end===null?"":" - "+mediaTime(item.end));
+   html+='<div class="cm-asr-item">'+(range?'<span>'+attr(range)+'</span>':"")
+    +(item.original?'<div class="cm-asr-row"><b>ASR 原文</b><p dir="auto">'+attr(item.original)+'</p></div>':"")
+    +'<div class="cm-asr-row"><b>中文译文</b><p class="'+(item.translated?"":"missing")+'">'+(item.translated?attr(item.translated):"未生成")+'</p></div>'
+    +'</div>';
+ }
+ return html+'</div></details>';
+}
+
 function scEvidence(){
 	 var r=getRisk(st.riskId);
 	 var detail=st.resultDetails[r.id]||null;
 	 var rev=(detail&&detail.audit_config_revision)||{};
 	 var historical=detail&&detail.is_historical_config;
 	 var audit=(detail&&detail.audit_result)||r.raw||{};
+	 var displayTitle=firstText(audit.content_title,r.title,audit.title,audit.note_id,"未命名内容");
 	 var comments=normalizeComments(safeArr(audit.comments).length?audit.comments:r.comments);
 	 var backTaskId=st.evidenceReturnTaskId&&tasks.some(function(t){return t.id===st.evidenceReturnTaskId;})?st.evidenceReturnTaskId:"";
 	 var backBtn=backTaskId?'<button class="cm-btn" data-act="taskOpen" data-id="'+attr(backTaskId)+'" data-preserve-return="1"><i class="ti ti-arrow-left"></i>返回该任务</button>':'<button class="cm-btn" data-act="nav" data-screen="workbench"><i class="ti ti-arrow-left"></i>返回工作台</button>';
 	 return ph("风险内容询证详情","原始内容、命中依据与证据材料的完整证据链",
 	   backBtn)
-  +'<div class="cm-card"><div class="cm-card-top">'+bd("info","来源："+r.source)+bd("info",r.platform)+bd(lvlCls(r.level),r.level)+bd("","证据 "+r.evi+" 条")+'<span class="t">'+r.id+'</span></div><h3 style="margin:0">'+r.title+'</h3></div>'
+	  +'<div class="cm-card"><div class="cm-card-top">'+bd("info","来源："+r.source)+bd("info",r.platform)+bd(lvlCls(r.level),r.level)+bd("","证据 "+r.evi+" 条")+'<span class="t">'+r.id+'</span></div><h3 style="margin:0">'+attr(displayTitle)+'</h3></div>'
   +'<div class="cm-2">'
    +'<div class="cm-panel"><h2><i class="ti ti-player-play"></i>原始内容与上下文</h2>'
      +renderOriginalMedia(r,detail)
+     +renderAsrContext(r,detail)
      +kv("平台",r.platform)+kv("发布账号",r.account)+kv("来源任务",r.task)+kv("抓取批次","KW-TAG-0629-018")
      +'<h3>评论 / 弹幕上下文</h3>'+renderCommentContext(r,comments)+renderVideoContext(r,detail)+'</div>'
    +'<div class="cm-panel"><h2><i class="ti ti-brain"></i>可解释判定与证据</h2>'

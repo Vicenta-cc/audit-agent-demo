@@ -42,7 +42,7 @@ DEFAULT_LEXICON = [
     },
     {
         "id": "minority",
-        "title": "民族语言词库",
+        "title": "民族意识形态风险词库",
         "keywords": [
             ("维语待标注", "tag", "全平台", "中", True),
             ("敏感短语 A", "模糊", "小红书", "高", False),
@@ -51,7 +51,7 @@ DEFAULT_LEXICON = [
     },
     {
         "id": "hate",
-        "title": "民族宗教仇恨风险知识包",
+        "title": "民族意识形态风险知识包",
         "keywords": [
             ("群体攻击", "模糊", "全平台", "高", True),
             ("驱逐", "模糊", "全平台", "高", True),
@@ -168,9 +168,11 @@ class LexiconStore:
                 "SELECT value FROM lexicon_metadata WHERE key = 'defaults_seeded'"
             ).fetchone()
             if seeded:
+                self._sync_default_display_names(conn, now)
                 return
             count = conn.execute("SELECT COUNT(*) AS count FROM lexicon_categories").fetchone()
             if int(count["count"] or 0) > 0:
+                self._sync_default_display_names(conn, now)
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO lexicon_metadata (key, value)
@@ -223,6 +225,50 @@ class LexiconStore:
                 """,
                 (now,),
             )
+
+    def _sync_default_display_names(self, conn: sqlite3.Connection, now: str) -> None:
+        conn.execute(
+            """
+            UPDATE lexicon_categories
+            SET
+                title = CASE
+                    WHEN title IN ('民族宗教仇恨风险知识包', '仇恨歧视词库') THEN '民族意识形态风险知识包'
+                    ELSE title
+                END,
+                risk_label = CASE
+                    WHEN risk_label IN ('', '仇恨歧视', '民族宗教仇恨风险', '民族语言与宗教仇恨', '民族语言') THEN '民族意识形态风险'
+                    ELSE risk_label
+                END,
+                updated_at = ?
+            WHERE id = 'hate'
+              AND (
+                title IN ('民族宗教仇恨风险知识包', '仇恨歧视词库')
+                OR risk_label IN ('', '仇恨歧视', '民族宗教仇恨风险', '民族语言与宗教仇恨', '民族语言')
+              )
+            """,
+            (now,),
+        )
+        conn.execute(
+            """
+            UPDATE lexicon_categories
+            SET
+                title = CASE
+                    WHEN title IN ('民族语言词库', '民族语言与宗教仇恨风险知识包') THEN '民族意识形态风险词库'
+                    ELSE title
+                END,
+                risk_label = CASE
+                    WHEN risk_label IN ('', '仇恨歧视', '民族宗教仇恨风险', '民族语言与宗教仇恨', '民族语言') THEN '民族意识形态风险'
+                    ELSE risk_label
+                END,
+                updated_at = ?
+            WHERE id = 'minority'
+              AND (
+                title IN ('民族语言词库', '民族语言与宗教仇恨风险知识包')
+                OR risk_label IN ('', '仇恨歧视', '民族宗教仇恨风险', '民族语言与宗教仇恨', '民族语言')
+              )
+            """,
+            (now,),
+        )
 
     def _seed_prompt_profiles(self, conn: sqlite3.Connection, now: str) -> None:
         for category_id, profile in DEFAULT_PROMPT_PROFILES.items():
@@ -809,8 +855,8 @@ class LexiconStore:
             "drug": "涉毒",
             "gambling": "赌博博彩",
             "fraud": "诈骗",
-            "hate": "仇恨歧视",
-            "minority": "民族语言",
+            "hate": "民族意识形态风险",
+            "minority": "民族意识形态风险",
         }
         return mapping.get(str(category_id or ""), str(title or "").replace("词库", "").replace("知识包", "").strip())
 

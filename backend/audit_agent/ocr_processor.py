@@ -396,7 +396,15 @@ class VLMOCRTranslateProcessor:
             '  "confidence": "high|medium|low"\n'
             "}"
         )
-        result = self._qwen.analyze_image(image_path, prompt, max_tokens=512)
+        result = self._qwen.analyze_image(
+            image_path,
+            prompt,
+            max_tokens=settings.ocr_vl_max_tokens,
+            compress_image=True,
+            image_max_side=settings.ocr_vl_image_max_side,
+            image_quality=settings.ocr_vl_image_quality,
+            enable_thinking=False,
+        )
         text = str(result.get("text") or result.get("ocr_text") or "").strip()
         text_zh = str(result.get("text_zh") or result.get("translation_zh") or "").strip()
         language = str(result.get("language") or settings.ocr_language_hint or "unknown").strip().lower()
@@ -410,6 +418,7 @@ class VLMOCRTranslateProcessor:
             "text_zh": text_zh,
             "confidence": confidence,
             "confidence_label": confidence_label,
+            "thinking_enabled": False,
             "translation": {
                 "translated": bool(text_zh and text_zh != text),
                 "provider": "vlm_ocr_translate",

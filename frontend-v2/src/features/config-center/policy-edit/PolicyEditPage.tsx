@@ -33,7 +33,7 @@ import type { PolicyCategory, ResearchPolicy, RiskLexicon } from "../../../types
 type StepId = 1 | 2 | 3 | 4 | 5;
 type DetectionKey = "title" | "comment" | "image" | "video" | "audio";
 type ScoringMode = "balanced" | "strict" | "text_first" | "vision_first" | "custom";
-type EvidenceSource = "文字内容命中" | "画面文字命中" | "语音内容命中" | "画面特征命中" | "评论聚集命中";
+type EvidenceSource = "文字内容命中" | "画面文字命中" | "语音内容命中" | "画面特征命中" | "逐条评论命中";
 
 interface DetectionConfig {
   key: DetectionKey;
@@ -86,15 +86,15 @@ const steps: Array<{ id: StepId; title: string }> = [
 ];
 
 const scenarioOptions = ["平台内容", "直播", "本地视频", "重点用户", "评论弹幕", "搜索巡检"];
-const abilityOptions = ["文本语义", "评论聚集", "OCR", "视觉识别", "ASR"];
+const abilityOptions = ["文本语义", "逐条评论审核", "OCR", "视觉识别", "ASR"];
 const detectionTemplates: Array<Omit<DetectionConfig, "enabled" | "customAbilities">> = [
   { key: "title", label: "标题与正文", recommendedAbilities: ["文本语义"] },
-  { key: "comment", label: "评论与弹幕", recommendedAbilities: ["文本语义", "评论聚集"] },
+  { key: "comment", label: "评论与弹幕", recommendedAbilities: ["文本语义", "逐条评论审核"] },
   { key: "image", label: "图片与封面", recommendedAbilities: ["OCR", "视觉识别"] },
   { key: "video", label: "视频画面", recommendedAbilities: ["OCR", "视觉识别"] },
   { key: "audio", label: "语音内容", recommendedAbilities: ["ASR", "文本语义"] }
 ];
-const evidenceSources: EvidenceSource[] = ["文字内容命中", "画面文字命中", "语音内容命中", "画面特征命中", "评论聚集命中"];
+const evidenceSources: EvidenceSource[] = ["文字内容命中", "画面文字命中", "语音内容命中", "画面特征命中", "逐条评论命中"];
 
 const scoringModeLabels: Record<ScoringMode, string> = {
   balanced: "均衡模式",

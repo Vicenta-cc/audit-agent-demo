@@ -34,7 +34,8 @@ RISK_LIBRARY_LABELS = {
     "drug": "涉毒",
     "gambling": "赌博博彩",
     "fraud": "诈骗",
-    "hate": "仇恨歧视",
+    "hate": "民族意识形态风险",
+    "minority": "民族意识形态风险",
 }
 
 RISK_LIBRARY_IDS = {
@@ -57,8 +58,10 @@ RISK_LIBRARY_IDS = {
     "赌博": "gambling",
     "赌博博彩": "gambling",
     "诈骗": "fraud",
+    "民族意识形态风险": "hate",
     "仇恨": "hate",
     "仇恨歧视": "hate",
+    "民族语言与宗教仇恨": "minority",
 }
 
 RISK_LIBRARY_ALIASES = (
@@ -68,13 +71,16 @@ RISK_LIBRARY_ALIASES = (
     ("drug", ("涉毒", "毒品", "吸毒", "贩毒", "违禁药", "吸食", "同城接头")),
     ("gambling", ("赌博", "博彩", "盘口", "投注", "上分", "提现", "赔率")),
     ("fraud", ("诈骗", "刷单", "返利", "虚假投资", "钓鱼", "冒充", "转账", "认证金")),
-    ("hate", ("仇恨", "歧视", "排斥", "贬损", "群体攻击", "暴力煽动", "恶性谣言")),
+    ("minority", ("民族语言与宗教仇恨", "民族语言")),
+    ("hate", ("民族意识形态", "仇恨", "歧视", "排斥", "贬损", "群体攻击", "暴力煽动", "恶性谣言")),
 )
 
 
 def build_evidence_groups(result: dict) -> list[dict]:
     """Create reviewer-friendly evidence groups from a normalized audit result."""
     if not isinstance(result, dict):
+        return []
+    if _result_is_no_risk(result):
         return []
     buckets: dict[str, list[dict]] = defaultdict(list)
     contributions: Counter[str] = Counter()
@@ -202,6 +208,8 @@ def _build_groups_from_evidence_items(result: dict, result_libraries: list[dict]
     seen_items: set[tuple[str, str, str]] = set()
     for index, raw in enumerate(result.get("evidence_items") or [], start=1):
         if not isinstance(raw, dict):
+            continue
+        if not _is_risk_evidence_item(raw):
             continue
         evidence_id = str(raw.get("evidence_id") or raw.get("id") or f"ev_{index:03d}")
         source = _normalize_group(raw.get("primary_modality") or raw.get("modality") or raw.get("source"))
@@ -356,10 +364,24 @@ def _decorate_item(item: dict, raw: dict, result: dict, source: str, result_libr
         "source_label",
         "score_rule_ids",
         "score_rules",
+        "secondary_library_ids",
         "frame_id",
+        "frame_ids",
+        "frame_number",
         "ocr_engine",
         "ocr_language",
         "ocr_confidence",
+        "ocr_chunk_id",
+        "ocr_context",
+        "asr_chunk_id",
+        "asr_consistency",
+        "segment_id",
+        "review_sheet_rel",
+        "risk_score",
+        "risk_level",
+        "risk_basis",
+        "exemption_basis",
+        "evidence_quote",
     ):
         value = raw.get(key)
         if value not in (None, "", [], {}):
@@ -602,3 +624,17 @@ def _as_int(value) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _result_is_no_risk(result: dict) -> bool:
+    decision = str(result.get("decision") or result.get("decision_suggestion") or "").strip().lower()
+    level = str(result.get("risk_level") or result.get("risk_level_suggestion") or "").strip().lower()
+    return decision == "pass" or level in {"none", "safe", "pass", "无风险"}
+
+
+def _is_risk_evidence_item(item: dict) -> bool:
+    raw_level = item.get("evidence_risk_level") or item.get("risk_level") or item.get("severity")
+    level = str(raw_level or "").strip().lower()
+    if level in {"", "none", "safe", "pass", "无风险", "未命中"}:
+        return False
+    return level in {"low", "medium", "high", "review", "低危", "中危", "高危", "待复核"}

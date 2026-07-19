@@ -51,8 +51,6 @@ export function getOutputTitle(output: AuditResult) {
     output.title ||
     output.desc ||
     output.summary ||
-    output.note_id ||
-    output.content_key ||
     "未命名内容"
   );
 }
@@ -127,11 +125,11 @@ export function getEvidenceCounts(output: AuditResult): EvidenceCounts {
     return sum + (segments.length || (item.transcript?.text ? 1 : 0));
   }, 0);
   const indexedVisual = videoUnits.reduce(
-    (sum, item) => sum + toNumber(item.timeline_frame_count) + toNumber(item.moment_count) + toNumber(item.precise_sheet_count),
+    (sum, item) => sum + toNumber(item.timeline_frame_count) + toNumber(item.segment_review_count || item.moment_count),
     0
   );
   const videoVisual = (output.video_results || []).reduce(
-    (sum, item) => sum + toArray(item.timeline_frames).length + toArray(item.moments).length + toArray(item.moment_sheets).length,
+    (sum, item) => sum + toArray(item.timeline_frames).length + toArray(item.segment_reviews || item.moments).length,
     0
   );
   const visual =

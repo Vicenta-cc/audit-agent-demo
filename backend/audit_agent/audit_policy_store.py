@@ -95,8 +95,8 @@ DEFAULT_POLICY_CONFIGS = [
     },
     {
         "id": "policy_hate",
-        "name": "仇恨歧视研判方案",
-        "description": "识别针对群体身份的侮辱、排斥、煽动攻击和组织性网暴。",
+        "name": "民族意识形态风险研判方案",
+        "description": "识别民族、宗教、地域等群体身份相关的排斥污名、仇恨歧视、煽动攻击和组织性网暴。",
         "published_version": "v1.0",
         "config": {
             "library_ids": ["hate"],
@@ -162,6 +162,7 @@ class AuditPolicyStore:
                     """,
                     (utc_now(),),
                 )
+            self._sync_default_display_names(conn)
 
     def _seed_defaults(self, conn: sqlite3.Connection) -> None:
         now = utc_now()
@@ -188,6 +189,24 @@ class AuditPolicyStore:
                     now,
                 ),
             )
+
+    def _sync_default_display_names(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            UPDATE audit_policies
+            SET
+                name = '民族意识形态风险研判方案',
+                description = CASE
+                    WHEN description = '识别针对群体身份的侮辱、排斥、煽动攻击和组织性网暴。'
+                    THEN '识别民族、宗教、地域等群体身份相关的排斥污名、仇恨歧视、煽动攻击和组织性网暴。'
+                    ELSE description
+                END,
+                updated_at = ?
+            WHERE id = 'policy_hate'
+              AND name = '仇恨歧视研判方案'
+            """,
+            (utc_now(),),
+        )
 
     def list(self, include_drafts: bool = True) -> list[dict]:
         with self._lock, self._connect() as conn:

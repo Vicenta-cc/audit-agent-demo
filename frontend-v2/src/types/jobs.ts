@@ -88,6 +88,20 @@ export interface AuditComment {
   short_user_id?: string;
   like_count?: string | number;
   sub_comment_count?: string | number;
+  source_text?: string;
+  translation_zh?: string;
+  translation_status?: string;
+  audit_status?: "completed" | "failed" | string;
+  audit_error?: string;
+  risk_score?: number;
+  risk_level?: string;
+  risk_library_id?: string;
+  risk_library_label?: string;
+  secondary_library_ids?: string[];
+  risk_type?: string;
+  risk_basis?: string;
+  exemption_basis?: string;
+  evidence_quote?: string;
   [key: string]: unknown;
 }
 
@@ -118,6 +132,25 @@ export interface AuditEvidenceGroupItem {
   local_path?: string;
   url?: string;
   timestamp?: number | string;
+  start?: number | string;
+  end?: number | string;
+  frame_id?: string;
+  frame_ids?: string[];
+  frame_number?: number | string;
+  frame_asset_rel?: string;
+  review_sheet_rel?: string;
+  ocr_chunk_id?: string;
+  ocr_context?: Array<Record<string, unknown>>;
+  asr_chunk_id?: string;
+  source_text_dolphin?: string;
+  source_text_mms?: string;
+  translation_zh?: string;
+  asr_consistency?: string;
+  risk_score?: number;
+  risk_level?: string;
+  risk_basis?: string;
+  exemption_basis?: string;
+  evidence_quote?: string;
   [key: string]: unknown;
 }
 
@@ -197,8 +230,10 @@ export interface AuditResult {
   note_id?: string;
   url?: string;
   title?: string;
+  title_zh?: string;
   content_title?: string;
   desc?: string;
+  desc_zh?: string;
   summary?: string;
   decision?: string;
   risk_level?: string;
@@ -228,7 +263,10 @@ export interface AuditResult {
     source_label?: string;
     risk_library_id?: string;
     risk_library_label?: string;
+    secondary_library_ids?: string[];
+    risk_type?: string;
     text?: string;
+    translation_zh?: string;
     ocr_text?: string;
     ocr_text_zh?: string;
     visual_elements?: string[];
@@ -255,6 +293,8 @@ export interface AuditResult {
   video_results?: Array<{
     transcript?: { segments?: unknown[]; text?: string };
     timeline_frames?: unknown[];
+    review_sheets?: unknown[];
+    segment_reviews?: unknown[];
     moments?: unknown[];
     moment_sheets?: unknown[];
     asset_rel?: string;
@@ -263,7 +303,13 @@ export interface AuditResult {
     duration?: number;
   }>;
   evidence_index?: {
-    text_context?: { title?: string; desc?: string; comments_count?: number };
+    text_context?: {
+      title?: string;
+      title_zh?: string;
+      desc?: string;
+      desc_zh?: string;
+      comments_count?: number;
+    };
     image_units?: Array<{
       evidence_id?: string;
       index?: number;
@@ -279,6 +325,8 @@ export interface AuditResult {
       evidence_id?: string;
       source?: string;
       timeline_frame_count?: number;
+      review_sheet_count?: number;
+      segment_review_count?: number;
       moment_count?: number;
       precise_sheet_count?: number;
       transcript_summary?: string;
@@ -292,6 +340,11 @@ export interface AuditResult {
       duration?: number;
     }>;
     timeline_frames?: Array<Record<string, unknown>>;
+    review_sheets?: Array<Record<string, unknown>>;
+    segment_reviews?: Array<Record<string, unknown>>;
+    ocr_chunks?: Array<Record<string, unknown>>;
+    asr_chunks?: Array<Record<string, unknown>>;
+    comment_units?: Array<Record<string, unknown>>;
     moment_sheets?: Array<Record<string, unknown>>;
     moments?: Array<Record<string, unknown>>;
     precise_sheets?: Array<Record<string, unknown>>;

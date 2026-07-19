@@ -42,6 +42,8 @@ class AuditSubject:
     image_urls: list[str]
     video_urls: list[str]
     comments: list[dict]
+    title_zh: str = ""
+    desc_zh: str = ""
     local_image_paths: list[str] = field(default_factory=list)
     local_video_paths: list[str] = field(default_factory=list)
 

@@ -533,15 +533,16 @@ DEFAULT_KNOWLEDGE_PACKAGES: dict[str, dict] = {
     "hate": {
         "schema_version": "1.0",
         "id": "hate",
-        "title": "民族宗教仇恨风险",
+        "title": "民族意识形态风险",
         "version": "1.0.0",
         "source_refs": COMMON_SOURCE_REFS,
-        "audit_goal": "识别针对民族、宗教、族裔、种族、肤色、国籍、地域出身、语言文字群体的仇恨、歧视、暴力煽动、恶性谣言和极端主义宣扬风险",
-        "output_labels": ["民族宗教仇恨", "歧视贬损", "暴力煽动", "恶性谣言", "极端主义宣扬", "仇恨符号"],
+        "audit_goal": "识别民族、宗教、族裔、种族、肤色、国籍、地域出身、语言文字群体相关的意识形态风险，包括仇恨歧视、排斥污名、跨群体婚恋/交往排斥、暴力煽动、恶性谣言和极端主义宣扬",
+        "output_labels": ["民族意识形态风险", "歧视贬损", "跨群体婚恋排斥", "暴力煽动", "恶性谣言", "极端主义宣扬", "仇恨符号"],
         "risk_definition": {
             "included": [
                 "基于民族、宗教、族裔、种族、肤色、国籍、地域出身、语言文字群体的攻击、羞辱、贬损或排斥",
                 "非人化、低等化、污名化，或鼓励歧视性抵制、隔离、剥夺权利",
+                "基于民族、宗教、地域出身或语言身份反对跨群体婚恋、交往、合作或民族融合，并进行泛化排斥、嘲讽或污名化",
                 "号召攻击、驱逐、清除、灭绝、骚扰、举报轰炸或线下围堵",
                 "针对群体的恶性谣言、仇恨符号、极端主义/仇恨组织宣传、招募或筹款",
             ],
@@ -569,6 +570,11 @@ DEFAULT_KNOWLEDGE_PACKAGES: dict[str, dict] = {
                     "name": "群体贬损或恶性刻板印象",
                     "required_evidence": ["protected_group_reference", "degrading_claim_or_slur"],
                     "description": "对群体使用强贬义黑称、侮辱宗教神圣对象，或宣称该群体肮脏、低智、危险、不配享有资源。",
+                },
+                {
+                    "name": "跨群体交往/婚恋排斥",
+                    "required_evidence": ["protected_group_reference", "intergroup_relationship_exclusion"],
+                    "description": "基于民族、宗教、地域或语言身份表达不能嫁娶、不该通婚、不要来往、应远离、都不可靠，或嘲讽民族融合。",
                 }
             ],
             "low": [
@@ -584,7 +590,7 @@ DEFAULT_KNOWLEDGE_PACKAGES: dict[str, dict] = {
             "ocr": "关注字幕、海报、截图、旗帜、标语、水印中的群体称谓、侮辱语、仇恨符号、攻击口号和组织信息。",
             "asr": "关注口播中的群体攻击、排斥号召、恶性谣言、极端主义宣扬和反讽/批判语境。",
             "vision": "关注仇恨符号、旗帜、手势、群体形象被侮辱或非人化的画面，同时区分正常文化宗教场景。",
-            "comment": "关注评论区群体攻击、接龙羞辱、组织骚扰、作者置顶/点赞/回复迎合或纠偏。",
+            "comment": "关注评论区群体攻击、接龙羞辱、组织骚扰、作者置顶/点赞/回复迎合或纠偏；民族关系/婚恋场景中，普通个人顾虑不直接判高危，基于身份的泛化排斥、反对通婚、嘲讽融合判中危，驱逐隔离、暴力威胁、恶性谣言或非人化判高危。",
         },
         "keywords": {
             "exact": [],
@@ -629,7 +635,7 @@ DEFAULT_KNOWLEDGE_PACKAGES: dict[str, dict] = {
 DEFAULT_KNOWLEDGE_PACKAGES["minority"] = {
     **deepcopy(DEFAULT_KNOWLEDGE_PACKAGES["hate"]),
     "id": "minority",
-    "title": "民族语言与宗教仇恨风险",
+    "title": "民族意识形态风险",
 }
 
 

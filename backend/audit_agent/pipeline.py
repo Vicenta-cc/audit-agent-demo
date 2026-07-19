@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import queue
+import re
 import shutil
 import shlex
 import threading
@@ -9,19 +10,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from time import perf_counter
 
+import requests
+
 from .asset_utils import download_url_with_error, safe_filename_from_url, split_csv_urls
 from .config import settings
 from .crawler_adapter import IMAGE_EXTENSIONS, PLATFORM_DATA_DIRS, VIDEO_EXTENSIONS, MediaCrawlerAdapter
 from .evidence_groups import build_evidence_groups
 from .ingestion import AuditResultStore, BatchWriter, IngestionStore, content_identity
 from .job_store import job_store
+from .knowledge_packages import get_default_knowledge_package
 from .models import AuditSubject
 from .ocr_processor import VideoOCRTracker
 from .prompts import get_prompt_set
 from .qwen_client import QwenClient
-from .rule_compiler import DEFAULT_THRESHOLDS
+from .rule_compiler import DEFAULT_THRESHOLDS, compact_library_policy
 from .translation import TranslationProcessor
-from .video_processor import DemoAudioProcessor, DemoFrameExtractor, MMSAudioProcessor
+from .video_processor import DemoAudioProcessor, DemoFrameExtractor
 
 
 _crawler_lock = threading.Lock()
@@ -41,6 +45,10 @@ VIDEO_CANDIDATE_CONTEXT_MAX_ITEMS = 8
 VIDEO_CANDIDATE_TEXT_MAX_ITEMS = 3
 
 
+class FusionAuditTimeoutError(RuntimeError):
+    pass
+
+
 def _severity_rank(severity) -> int:
     return {"high": 3, "medium": 2, "low": 1}.get(str(severity).lower(), 0)
 
@@ -51,13 +59,13 @@ class AuditPipeline:
         self.qwen = QwenClient()
         self.crawler = MediaCrawlerAdapter()
         self.audio = DemoAudioProcessor()
-        self.mms_audio = MMSAudioProcessor()
         self.translator = TranslationProcessor()
         self.frames = DemoFrameExtractor()
         self.ocr = VideoOCRTracker(self.translator)
         self.ingestion = IngestionStore()
         self.audit_results = AuditResultStore()
         self.prompt_set = get_prompt_set("soft")
+        self.prompt_profile_snapshot: dict = {}
         self.audit_config_revision_id = ""
         self.rule_snapshot: dict = {}
 
@@ -117,7 +125,18 @@ class AuditPipeline:
                 stream_analysis = stream_items_enabled and auto_analyze_crawled_content
                 skip_final_supplement = use_batch_ingestion and auto_analyze_crawled_content
                 stream_callback_enabled = use_batch_ingestion or stream_analysis
-
+                crawler_concurrency = max(
+                    1,
+                    min(
+                        int(request.max_concurrency or 1),
+                        max(1, settings.crawler_max_concurrency),
+                    ),
+                )
+                if crawler_concurrency < int(request.max_concurrency or 1):
+                    job_store.log(
+                        self.job_id,
+                        f"采集并发已限速：请求={request.max_concurrency}，实际={crawler_concurrency}",
+                    )
                 def crawl_stop_requested() -> bool:
                     current = control()
                     return bool(current.get("crawl_stop_requested") or current.get("stop_all_requested"))
@@ -207,6 +226,18 @@ class AuditPipeline:
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
                             results.append(persisted or result)
+                        except FusionAuditTimeoutError as exc:
+                            self.ingestion.mark_content_status(
+                                request.platform,
+                                subject_key,
+                                "failed",
+                                task_id=self.job_id,
+                            )
+                            job_store.log(
+                                self.job_id,
+                                f"笔记 {subject.note_id}：融合审核连续超时，已标记失败并继续后续内容：{exc}",
+                            )
+                            continue
                         except Exception:
                             self.ingestion.mark_content_status(
                                 request.platform,
@@ -268,6 +299,18 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
+                        except FusionAuditTimeoutError as exc:
+                            self.ingestion.mark_content_status(
+                                request.platform,
+                                subject_key,
+                                "failed",
+                                task_id=self.job_id,
+                            )
+                            job_store.log(
+                                self.job_id,
+                                f"笔记 {subject.note_id}：融合审核连续超时，已标记失败并继续后续内容：{exc}",
+                            )
+                            continue
                         except Exception:
                             self.ingestion.mark_content_status(
                                 request.platform,
@@ -321,7 +364,7 @@ class AuditPipeline:
                                 creator_id=creator_ref,
                                 max_notes=request.max_notes,
                                 max_comments=request.max_comments,
-                                max_concurrency=request.max_concurrency,
+                                max_concurrency=crawler_concurrency,
                                 get_sub_comment=request.get_sub_comment,
                                 save_root=crawl_dir,
                                 progress_callback=log_crawl_progress,
@@ -342,7 +385,7 @@ class AuditPipeline:
                                 start_page=request.start_page,
                                 max_notes=request.max_notes,
                                 max_comments=request.max_comments,
-                                max_concurrency=request.max_concurrency,
+                                max_concurrency=crawler_concurrency,
                                 get_sub_comment=request.get_sub_comment,
                                 save_root=crawl_dir,
                                 progress_callback=log_crawl_progress,
@@ -375,11 +418,14 @@ class AuditPipeline:
                 analyzed_ids = set()
                 analyze_limit = max(0, request.analyze_limit)
                 skip_final_supplement = False
+                crawler_concurrency = request.max_concurrency
 
             job_store.log(
                 self.job_id,
                 f"crawl limits requested: max_notes={request.max_notes}, max_comments={request.max_comments}, "
-                f"max_concurrency={request.max_concurrency}",
+                f"max_concurrency={request.max_concurrency}, effective_max_concurrency="
+                f"{crawler_concurrency}, "
+                f"crawler_sleep_seconds={settings.crawler_sleep_seconds}",
             )
             job_store.log(
                 self.job_id,
@@ -472,6 +518,20 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
+                    except FusionAuditTimeoutError as exc:
+                        if subject_key:
+                            self.ingestion.mark_content_status(
+                                output.platform,
+                                subject_key,
+                                "failed",
+                                task_id=self.job_id,
+                            )
+                        analyzed_ids.add(subject.note_id)
+                        job_store.log(
+                            self.job_id,
+                            f"笔记 {subject.note_id}：融合审核连续超时，已标记失败并继续后续内容：{exc}",
+                        )
+                        continue
                     except Exception:
                         if subject_key:
                             self.ingestion.mark_content_status(
@@ -588,6 +648,18 @@ class AuditPipeline:
                             )
                             results.append(persisted or result)
                             job_store.update(self.job_id, items=results)
+                        except FusionAuditTimeoutError as exc:
+                            self.ingestion.mark_content_status(
+                                platform,
+                                subject_key,
+                                "failed",
+                                task_id=self.job_id,
+                            )
+                            job_store.log(
+                                self.job_id,
+                                f"笔记 {subject.note_id}：融合审核连续超时，已标记失败并继续后续内容：{exc}",
+                            )
+                            continue
                         except Exception:
                             self.ingestion.mark_content_status(
                                 platform,
@@ -694,11 +766,76 @@ class AuditPipeline:
         return snapshot if isinstance(snapshot, dict) else {}
 
     def _set_prompt_context(self, category: str | None, prompt_profile: dict | None = None) -> None:
+        self.prompt_profile_snapshot = prompt_profile if isinstance(prompt_profile, dict) else {}
         self.prompt_set = get_prompt_set(category, prompt_profile=prompt_profile)
         job_store.log(
             self.job_id,
             f"使用审核 Prompt：{self.prompt_set.category} · {self.prompt_set.prompt_version}",
         )
+
+    def _active_libraries(self) -> list[dict]:
+        profile = getattr(self, "prompt_profile_snapshot", {}) or {}
+        libraries = profile.get("libraries") if isinstance(profile, dict) else None
+        if isinstance(libraries, list) and libraries:
+            return [dict(item) for item in libraries if isinstance(item, dict)]
+
+        library_ids = []
+        if isinstance(profile, dict):
+            library_ids.extend(str(item or "").strip() for item in profile.get("library_ids") or [])
+        for rule in self._active_scoring_rules():
+            library_id = str(rule.get("library_id") or "").strip()
+            if library_id:
+                library_ids.append(library_id)
+        category = getattr(getattr(self, "prompt_set", None), "category", "")
+        if category:
+            library_ids.append(str(category))
+
+        out = []
+        seen = set()
+        for library_id in library_ids:
+            if not library_id or library_id in seen:
+                continue
+            seen.add(library_id)
+            package = get_default_knowledge_package(library_id)
+            if package:
+                out.append(package)
+        if out:
+            return out
+
+        audit_goal = str(profile.get("audit_goal") or category or "内容风险") if isinstance(profile, dict) else "内容风险"
+        return [{
+            "id": str(category or "custom"),
+            "title": audit_goal,
+            "version": str(profile.get("prompt_version") or profile.get("version") or "") if isinstance(profile, dict) else "",
+            "audit_goal": audit_goal,
+            "output_labels": [audit_goal],
+            "risk_definition": {"included": [audit_goal], "excluded": []},
+            "risk_patterns": {},
+            "modality_guidance": {
+                "text": f"关注与{audit_goal}相关的明确风险意图和上下文。",
+                "ocr": f"关注画面文字中与{audit_goal}相关的明确风险线索。",
+                "asr": f"关注语音转写中与{audit_goal}相关的明确风险线索。",
+                "vision": f"关注画面中与{audit_goal}相关的明确风险对象和行为。",
+                "comment": f"关注评论中与{audit_goal}相关的明确风险表达。",
+            },
+            "keywords": {},
+            "evidence_rules": [],
+            "exemption_rules": [],
+        }]
+
+    def _active_library_policies(self, modalities: list[str]) -> list[dict]:
+        policies = [
+            compact_library_policy(library, modalities=modalities)
+            for library in self._active_libraries()
+        ]
+        return [policy for policy in policies if policy.get("id") or policy.get("title")]
+
+    def _library_policy_by_id(self, library_id: str) -> dict:
+        target = str(library_id or "").strip()
+        for policy in self._active_library_policies(["text", "ocr", "asr", "vision", "comment"]):
+            if str(policy.get("id") or "").strip() == target:
+                return policy
+        return {}
 
     @staticmethod
     def _analysis_media_scope() -> str:
@@ -1018,6 +1155,8 @@ class AuditPipeline:
             f"本地视频 {len(subject.local_video_paths)}，远程图片 {len(subject.image_urls)}，远程视频 {len(subject.video_urls)}",
         )
 
+        self._translate_subject_texts(subject)
+
         job_store.log(self.job_id, f"笔记 {subject.note_id}：开始图片分析")
         image_analyses = self._analyze_images(subject, note_dir / "images")
         job_store.log(self.job_id, f"笔记 {subject.note_id}：图片分析完成，共 {len(image_analyses)} 张")
@@ -1026,40 +1165,74 @@ class AuditPipeline:
         video_results = self._analyze_videos(subject, note_dir / "videos")
         job_store.log(self.job_id, f"笔记 {subject.note_id}：视频分析完成，共 {len(video_results)} 个")
 
-        evidence_index = self._build_evidence_index(subject, image_analyses, video_results)
+        media_summary = self._media_summary_for_comment_audit(image_analyses, video_results)
+        audited_comments = self._audit_comments(subject, media_summary)
+        evidence_index = self._build_evidence_index(subject, image_analyses, video_results, audited_comments)
         evidence_index_path = self._write_evidence_index(subject.note_id, evidence_index)
-        prompt = self._render_fusion_prompt(
-            title=subject.title,
-            desc=subject.desc,
-            comments=self._format_comments_for_prompt(subject.comments),
-            image_analyses=json.dumps(image_analyses, ensure_ascii=False, indent=2),
-            video_transcripts="（视频 ASR 已合并到视频关键帧分析 JSON 的 video_text_context.asr_global_text 与 candidate_context.asr）",
-            video_ocr_tracks="（视频 OCR 已绑定到 Evidence Index 的原始 timeline frame；如需引用画面文字，请使用对应 video_frame:<timestamp> 或 video:<v>/moment:<m>）",
-            frame_analyses=self._format_evidence_index_for_prompt(evidence_index),
-        )
-        job_store.log(self.job_id, f"笔记 {subject.note_id}：开始融合审核")
-        audit = self.qwen.audit_text(prompt, max_tokens=settings.fusion_max_tokens)
+        prompt = self._render_compact_fusion_prompt(subject, evidence_index, audited_comments)
+        audit = self._run_fusion_audit(subject.note_id, prompt)
         audit = self._recover_truncated_fusion_audit(audit)
+        audit["content_title"] = self._ensure_content_title(audit, subject, evidence_index)
         elapsed = perf_counter() - started_at
-        job_store.log(self.job_id, f"笔记 {subject.note_id}：融合审核完成，耗时 {elapsed:.1f}s")
+        job_store.log(self.job_id, f"笔记 {subject.note_id}：全部分析完成，总耗时 {elapsed:.1f}s")
 
         job_root = settings.outputs_dir / self.job_id
-        evidence_items = self._normalize_evidence_items(audit, subject, evidence_index)
+        evidence_items = self._normalize_evidence_items(
+            audit,
+            subject,
+            evidence_index,
+            comments=audited_comments,
+        )
+        existing_evidence_ids = {str(item.get("evidence_id") or "") for item in evidence_items}
+        evidence_items.extend(
+            item
+            for item in self._comment_evidence_items(audited_comments)
+            if str(item.get("evidence_id") or "") not in existing_evidence_ids
+        )
+        evidence_index["final_evidence_refs"] = [
+            str(item.get("evidence_id") or "")
+            for item in evidence_items
+            if item.get("evidence_id")
+        ]
+        self._write_evidence_index(subject.note_id, evidence_index)
         rule_matches = self._normalize_rule_matches(audit)
         if not rule_matches and evidence_items:
             rule_matches = self._infer_rule_matches_from_evidence_items(evidence_items)
+        all_evidence_ids = {
+            str(item.get("evidence_id") or "")
+            for item in evidence_items
+            if item.get("evidence_id")
+        }
+        main_evidence_ids = {
+            str(item.get("evidence_id") or "")
+            for item in evidence_items
+            if item.get("primary_modality") != "comment"
+        }
+        rule_matches = self._rule_matches_for_evidence_ids(rule_matches, all_evidence_ids)
         scoring = self._score_rule_matches(rule_matches)
         evidence_risk = self._risk_from_evidence_items(evidence_items)
+        main_evidence_risk = self._risk_from_evidence_items([
+            item for item in evidence_items if item.get("primary_modality") != "comment"
+        ])
+        comment_evidence_risk = self._risk_from_evidence_items([
+            item for item in evidence_items if item.get("primary_modality") == "comment"
+        ])
         suggested_decision = str(audit.get("decision_suggestion") or audit.get("decision") or "review")
         suggested_risk_level = str(audit.get("risk_level_suggestion") or audit.get("risk_level") or "unknown")
         primary_risk = str(audit.get("primary_risk") or "")
         suggested_categories = audit.get("categories") if isinstance(audit.get("categories"), list) else []
-        category_labels = suggested_categories or ([primary_risk] if primary_risk else [])
+        category_labels = suggested_categories or self._category_labels_from_evidence_items(evidence_items) or ([primary_risk] if primary_risk else [])
         if evidence_risk["risk_level"] != "none":
             risk_score = evidence_risk["risk_score"]
             risk_level = evidence_risk["risk_level"]
-            decision = evidence_risk["decision"]
-            risk_basis = "max_evidence_risk"
+            comment_dominant = (
+                self._risk_level_rank(comment_evidence_risk["risk_level"])
+                > self._risk_level_rank(main_evidence_risk["risk_level"])
+            )
+            decision = "review" if comment_dominant else evidence_risk["decision"]
+            risk_basis = "comment_evidence" if comment_dominant and not main_evidence_ids else (
+                "comment_evidence_dominant" if comment_dominant else "max_evidence_risk"
+            )
             category_scores = self._normalize_category_scores(
                 [],
                 category_labels,
@@ -1074,6 +1247,18 @@ class AuditPipeline:
             risk_basis = "rule_score"
             category_scores = scoring["category_scores"]
             score_breakdown = scoring["score_breakdown"]
+        elif evidence_items and not main_evidence_ids:
+            decision = "review"
+            risk_level = comment_evidence_risk["risk_level"]
+            risk_basis = "comment_evidence"
+            risk_score = comment_evidence_risk["risk_score"]
+            category_scores = self._normalize_category_scores(
+                [],
+                category_labels,
+                risk_score,
+                risk_level,
+            )
+            score_breakdown = []
         else:
             decision = suggested_decision
             risk_level = suggested_risk_level
@@ -1107,7 +1292,9 @@ class AuditPipeline:
             "note_id": subject.note_id,
             "url": subject.url,
             "title": subject.title,
+            "title_zh": subject.title_zh,
             "desc": subject.desc,
+            "desc_zh": subject.desc_zh,
             "author": subject.author,
             "prompt_category": self.prompt_set.category,
             "prompt_version": self.prompt_set.prompt_version,
@@ -1133,10 +1320,145 @@ class AuditPipeline:
             "evidence_index_rel": self._to_job_rel(str(evidence_index_path), job_root),
             "image_analyses": image_analyses,
             "video_results": video_results,
-            "comments": subject.comments,
-            "comments_count": len(subject.comments),
+            "comments": audited_comments,
+            "comments_count": len(audited_comments),
+            "comment_audit_stats": self._comment_audit_stats(audited_comments),
             "raw_audit": audit,
         }
+
+    def _translate_subject_texts(self, subject: AuditSubject) -> None:
+        translator = getattr(self, "translator", None)
+        qwen = getattr(self, "qwen", None)
+        if translator is None or qwen is None:
+            return
+        source_fields: dict[str, str] = {}
+        for source_field, target_field, label in (
+            ("title", "title_zh", "标题"),
+            ("desc", "desc_zh", "正文"),
+        ):
+            source_text = str(getattr(subject, source_field, "") or "").strip()
+            if not source_text:
+                setattr(subject, target_field, "")
+                continue
+            try:
+                should_translate = translator.should_translate(
+                    source_text,
+                    trust_language_label=False,
+                )
+            except TypeError:
+                should_translate = translator.should_translate(source_text)
+            if not should_translate:
+                setattr(subject, target_field, "")
+                continue
+            source_fields[source_field] = source_text
+
+        if not source_fields:
+            return
+        prompt = (
+            "你是社交平台文本翻译器。将输入中的外文标题和正文分别翻译成通顺、忠实的简体中文。"
+            "不要审核、总结、改写或解释；原文相同的字段译文也必须分别填写。"
+            "只输出合法JSON，字段固定为 title_zh 和 desc_zh；没有对应输入时输出空字符串。\n"
+            "输入JSON：\n"
+            + json.dumps(source_fields, ensure_ascii=False, separators=(",", ":"))
+        )
+        try:
+            translated = qwen.audit_text(prompt, max_tokens=512, enable_thinking=False)
+        except Exception as exc:
+            job_store.log(self.job_id, f"笔记 {subject.note_id}：标题/正文翻译失败：{exc}")
+            return
+
+        translated_by_source: dict[str, str] = {}
+        for source_field, target_field, label in (
+            ("title", "title_zh", "标题"),
+            ("desc", "desc_zh", "正文"),
+        ):
+            source_text = source_fields.get(source_field, "")
+            if not source_text:
+                continue
+            translated_text = str(translated.get(target_field) or "").strip()
+            if not translated_text and source_text in translated_by_source:
+                translated_text = translated_by_source[source_text]
+            if translated_text:
+                translated_by_source[source_text] = translated_text
+            setattr(subject, target_field, translated_text)
+            if translated_text:
+                job_store.log(self.job_id, f"笔记 {subject.note_id}：{label}翻译完成，译文长度={len(translated_text)}")
+            else:
+                job_store.log(self.job_id, f"笔记 {subject.note_id}：{label}翻译漏项")
+
+    def _ensure_content_title(self, audit: dict, subject: AuditSubject, evidence_index: dict) -> str:
+        current = self._normalize_content_title(audit.get("content_title"), subject.note_id)
+        if current:
+            return current
+
+        job_store.log(self.job_id, f"笔记 {subject.note_id}：融合结果缺少短标题，补充生成一次")
+        media_summaries = [
+            str(item.get("visual_summary") or item.get("benign_context") or "").strip()
+            for item in evidence_index.get("image_units") or []
+            if item.get("visual_summary") or item.get("benign_context")
+        ]
+        media_summaries.extend(
+            str(item.get("segment_summary") or "").strip()
+            for item in evidence_index.get("segment_reviews") or []
+            if item.get("segment_summary")
+        )
+        payload = {
+            "title": self._truncate_text(subject.title, 240),
+            "title_zh": self._truncate_text(subject.title_zh, 240),
+            "desc": self._truncate_text(subject.desc, 500),
+            "desc_zh": self._truncate_text(subject.desc_zh, 500),
+            "summary": self._truncate_text(audit.get("summary", ""), 240),
+            "media_summaries": [self._truncate_text(value, 120) for value in media_summaries[:6]],
+        }
+        prompt = (
+            "请根据输入内容生成一个8至18字的中文短标题，概括内容主题。"
+            "标题不能为空，不写审核结论、风险等级、平台名或内容ID。"
+            "只输出合法JSON：{\"content_title\":\"短标题\"}\n"
+            "输入JSON：\n"
+            + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        )
+        try:
+            generated = self.qwen.audit_text(prompt, max_tokens=64, enable_thinking=False)
+            title = self._normalize_content_title(
+                generated.get("content_title") or generated.get("title"),
+                subject.note_id,
+            )
+            if title:
+                job_store.log(self.job_id, f"笔记 {subject.note_id}：短标题补充生成完成：{title}")
+                return title
+            job_store.log(self.job_id, f"笔记 {subject.note_id}：短标题补充生成漏项，使用本地兜底")
+        except Exception as exc:
+            job_store.log(self.job_id, f"笔记 {subject.note_id}：短标题补充生成失败，使用本地兜底：{exc}")
+        return self._fallback_content_title(audit, subject)
+
+    @staticmethod
+    def _normalize_content_title(value, note_id: str = "") -> str:
+        text = " ".join(str(value or "").strip().strip('"“”').split())
+        if not text or text == str(note_id or "").strip() or text.isdigit():
+            return ""
+        return text[:18]
+
+    def _fallback_content_title(self, audit: dict, subject: AuditSubject) -> str:
+        candidates = (
+            audit.get("summary"),
+            subject.title_zh,
+            subject.desc_zh,
+            subject.title,
+            subject.desc,
+        )
+        for value in candidates:
+            text = " ".join(str(value or "").strip().split())
+            if not text:
+                continue
+            text = text.split("。", 1)[0].split("；", 1)[0].split("，", 1)[0].strip()
+            for prefix in ("视频内容为", "视频为", "视频是", "内容为", "内容是", "帖子为", "帖子是"):
+                if text.startswith(prefix):
+                    text = text[len(prefix):].strip()
+                    break
+            title = self._normalize_content_title(text, subject.note_id)
+            if title:
+                return title
+        return "社交平台内容"
 
     def _to_job_rel(self, path_str: str | None, job_root: Path) -> str | None:
         if not path_str:
@@ -1150,6 +1472,10 @@ class AuditPipeline:
         out: list[dict] = []
         if evidence_items:
             for ev in evidence_items:
+                if self._normalize_evidence_risk_level(
+                    ev.get("evidence_risk_level") or ev.get("risk_level") or ev.get("severity")
+                ) == "none":
+                    continue
                 source = str(ev.get("source") or "")
                 modality = str(ev.get("primary_modality") or ev.get("modality") or "")
                 if modality == "comment" or source.startswith("comment"):
@@ -1172,6 +1498,8 @@ class AuditPipeline:
                     "severity": ev.get("severity", ""),
                     "text": ev.get("text") or ev.get("ocr_text") or ev.get("transcript_text") or "",
                     "reason": ev.get("reason", ""),
+                    "risk_library_id": ev.get("risk_library_id", ""),
+                    "risk_library_label": ev.get("risk_library_label", ""),
                     "start": ev.get("start"),
                     "end": ev.get("end"),
                     "comment_id": ev.get("comment_id", ""),
@@ -1203,7 +1531,14 @@ class AuditPipeline:
             })
         return out
 
-    def _normalize_evidence_items(self, audit: dict, subject: AuditSubject, evidence_index: dict) -> list[dict]:
+    def _normalize_evidence_items(
+        self,
+        audit: dict,
+        subject: AuditSubject,
+        evidence_index: dict,
+        *,
+        comments: list[dict] | None = None,
+    ) -> list[dict]:
         raw_items = audit.get("evidence_items") if isinstance(audit.get("evidence_items"), list) else []
         if raw_items:
             items = [item for item in raw_items if isinstance(item, dict)]
@@ -1211,16 +1546,25 @@ class AuditPipeline:
             items = self._legacy_evidence_items(audit)
         comments_by_id = {
             str(comment.get("comment_id") or comment.get("id") or ""): comment
-            for comment in subject.comments
+            for comment in (comments if comments is not None else subject.comments)
             if comment.get("comment_id") or comment.get("id")
+        }
+        catalog_by_id = {
+            str(item.get("evidence_id") or ""): item
+            for item in evidence_index.get("evidence_catalog") or []
+            if item.get("evidence_id")
         }
         normalized: list[dict] = []
         seen: set[tuple[str, str, str]] = set()
         for index, item in enumerate(items, start=1):
-            source = str(item.get("source") or "").strip()
-            primary_modality = self._primary_modality_for_item(item)
-            evidence_id = str(item.get("evidence_id") or item.get("id") or f"ev_{primary_modality}_{index:03d}")
-            enriched = dict(item)
+            initial_modality = self._primary_modality_for_item(item)
+            evidence_id = str(item.get("evidence_id") or item.get("id") or f"ev_{initial_modality}_{index:03d}")
+            catalog_item = catalog_by_id.get(evidence_id)
+            if catalog_by_id and not catalog_item:
+                continue
+            enriched = {**(catalog_item or {}), **item}
+            source = str(enriched.get("source") or "").strip()
+            primary_modality = self._primary_modality_for_item(enriched)
             enriched["evidence_id"] = evidence_id
             enriched["id"] = evidence_id
             enriched["primary_modality"] = primary_modality
@@ -1232,6 +1576,8 @@ class AuditPipeline:
                 or enriched.get("risk_level")
                 or enriched.get("severity")
             )
+            if enriched["evidence_risk_level"] == "none":
+                continue
             signature = (
                 primary_modality,
                 str(enriched.get("source") or ""),
@@ -1260,6 +1606,21 @@ class AuditPipeline:
             "risk_score": self._risk_score_for_level(max_level),
             "decision": self._decision_for_level(max_level),
         }
+
+    def _category_labels_from_evidence_items(self, evidence_items: list[dict]) -> list[str]:
+        labels = []
+        for item in evidence_items:
+            if not isinstance(item, dict):
+                continue
+            label = str(
+                item.get("risk_library_label")
+                or item.get("risk_type")
+                or item.get("risk_library_id")
+                or ""
+            ).strip()
+            if label and label not in labels:
+                labels.append(label)
+        return labels
 
     @staticmethod
     def _normalize_evidence_risk_level(value) -> str:
@@ -1296,6 +1657,82 @@ class AuditPipeline:
         if level in {"medium", "low"}:
             return "review"
         return "pass"
+
+    def _run_fusion_audit(self, note_id: str, prompt: str) -> dict:
+        retries = max(0, settings.fusion_timeout_retries)
+        attempts = retries + 1
+        timeout = max(1, settings.fusion_request_timeout)
+        for attempt in range(1, attempts + 1):
+            job_store.log(
+                self.job_id,
+                f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 开始，"
+                f"prompt_chars={len(prompt)}，max_tokens={settings.fusion_max_tokens}，"
+                f"thinking=off，timeout={timeout}s",
+            )
+            started_at = perf_counter()
+            try:
+                audit = self.qwen.audit_text(
+                    prompt,
+                    max_tokens=settings.fusion_max_tokens,
+                    enable_thinking=False,
+                    request_timeout=timeout,
+                )
+            except Exception as exc:
+                elapsed = perf_counter() - started_at
+                if not self._is_timeout_error(exc):
+                    job_store.log(
+                        self.job_id,
+                        f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 失败，"
+                        f"耗时={elapsed:.1f}s，error={exc}",
+                    )
+                    raise
+                if attempt < attempts:
+                    job_store.log(
+                        self.job_id,
+                        f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 超时，"
+                        f"耗时={elapsed:.1f}s，将重试一次",
+                    )
+                    continue
+                job_store.log(
+                    self.job_id,
+                    f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 超时，"
+                    f"耗时={elapsed:.1f}s，重试次数已用尽",
+                )
+                raise FusionAuditTimeoutError(
+                    f"连续 {attempts} 次调用超时，单次上限 {timeout}s"
+                ) from exc
+
+            elapsed = perf_counter() - started_at
+            llm_meta = (
+                audit.get("_llm_meta")
+                if isinstance(audit, dict) and isinstance(audit.get("_llm_meta"), dict)
+                else {}
+            )
+            job_store.log(
+                self.job_id,
+                f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 完成，"
+                f"耗时={elapsed:.1f}s，finish_reason={llm_meta.get('finish_reason', 'unknown')}，"
+                f"input_tokens={llm_meta.get('prompt_tokens', 'unknown')}，"
+                f"output_tokens={llm_meta.get('completion_tokens', 'unknown')}，"
+                f"total_tokens={llm_meta.get('total_tokens', 'unknown')}",
+            )
+            return audit
+
+        raise FusionAuditTimeoutError("融合模型调用未执行")
+
+    @staticmethod
+    def _is_timeout_error(exc: BaseException) -> bool:
+        current: BaseException | None = exc
+        seen: set[int] = set()
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            if isinstance(current, (TimeoutError, requests.exceptions.Timeout)):
+                return True
+            message = str(current).lower()
+            if "timed out" in message or "timeout" in message:
+                return True
+            current = current.__cause__ or current.__context__
+        return False
 
     def _recover_truncated_fusion_audit(self, audit: dict) -> dict:
         if not isinstance(audit, dict):
@@ -1453,9 +1890,13 @@ class AuditPipeline:
         if source == "title":
             item.setdefault("source_label", "标题")
             item["text"] = subject.title
+            if subject.title_zh:
+                item["translation_zh"] = subject.title_zh
         elif source == "desc":
             item.setdefault("source_label", "正文")
             item["text"] = subject.desc
+            if subject.desc_zh:
+                item["translation_zh"] = subject.desc_zh
         elif source.startswith("comment"):
             comment_id = str(item.get("comment_id") or "").strip()
             if not comment_id and ":" in source:
@@ -1648,6 +2089,21 @@ class AuditPipeline:
         rules = self.rule_snapshot.get("scoring_rules") if isinstance(self.rule_snapshot, dict) else []
         return [rule for rule in (rules or []) if isinstance(rule, dict)]
 
+    @staticmethod
+    def _rule_matches_for_evidence_ids(rule_matches: list[dict], evidence_ids: set[str]) -> list[dict]:
+        if not evidence_ids:
+            return []
+        out = []
+        for match in rule_matches:
+            matched_ids = [
+                str(value)
+                for value in match.get("evidence_ids") or []
+                if str(value) in evidence_ids
+            ]
+            if matched_ids:
+                out.append({**match, "evidence_ids": matched_ids})
+        return out
+
     def _active_thresholds(self) -> dict:
         incoming = self.rule_snapshot.get("thresholds") if isinstance(self.rule_snapshot, dict) else {}
         thresholds = dict(DEFAULT_THRESHOLDS)
@@ -1730,6 +2186,39 @@ class AuditPipeline:
         frame_reasons = self._frame_evidence_reasons(risk_evidence or [])
         frames_out: list[dict] = []
         for video_idx, video in enumerate(video_results):
+            timeline_by_id = {
+                str(frame.get("frame_id") or ""): frame
+                for frame in video.get("timeline_frames") or video.get("frames") or []
+            }
+            for segment in video.get("segment_reviews") or []:
+                analysis = segment.get("analysis") or {}
+                for risk in analysis.get("visual_risks") or []:
+                    for frame_id in risk.get("frame_ids") or []:
+                        frame = timeline_by_id.get(str(frame_id)) or {}
+                        reason = (
+                            self._matching_frame_reason(frame, frame_reasons)
+                            or risk.get("reason", "")
+                        )
+                        frames_out.append({
+                            "video_index": video.get("index", video_idx),
+                            "frame_index": frame.get("frame_index", frame.get("index")),
+                            "frame_id": frame_id,
+                            "timestamp": frame.get("timestamp"),
+                            "frame_number": frame.get("frame_number"),
+                            "severity": risk.get("risk_level", ""),
+                            "risk_score": risk.get("score", 0),
+                            "risk_library_id": risk.get("risk_library_id", ""),
+                            "risk_library_label": risk.get("risk_library_label", ""),
+                            "risk_type": risk.get("risk_type", ""),
+                            "reason": reason,
+                            "analysis_result": reason,
+                            "visual_summary": analysis.get("segment_summary", ""),
+                            "ocr_text": frame.get("ocr_text", ""),
+                            "ocr_text_zh": frame.get("ocr_text_zh", ""),
+                            "asset_rel": frame.get("asset_rel") or self._to_job_rel(frame.get("path"), job_root),
+                            "review_sheet_rel": segment.get("asset_rel"),
+                            "segment_id": segment.get("segment_id"),
+                        })
             for precise in video.get("precise_sheets", []) or []:
                 analysis = precise.get("analysis") or {}
                 precise_frames = precise.get("frames") or []
@@ -1869,6 +2358,8 @@ class AuditPipeline:
             top = max(risk_items, key=lambda r: _severity_rank(r.get("severity")))
             images_out.append({
                 "severity": top.get("severity", ""),
+                "risk_library_id": top.get("risk_library_id", ""),
+                "risk_library_label": top.get("risk_library_label", ""),
                 "risk_type": top.get("risk_type", ""),
                 "evidence": top.get("evidence", ""),
                 "reason": top.get("reason", ""),
@@ -1880,7 +2371,340 @@ class AuditPipeline:
         images_out.sort(key=lambda i: _severity_rank(i.get("severity")), reverse=True)
         return images_out
 
-    def _build_evidence_index(self, subject: AuditSubject, image_analyses: list[dict], video_results: list[dict]) -> dict:
+    def _build_evidence_index(
+        self,
+        subject: AuditSubject,
+        image_analyses: list[dict],
+        video_results: list[dict],
+        comments: list[dict],
+    ) -> dict:
+        thresholds = self._active_thresholds()
+        review_threshold = int(thresholds.get("review", 40))
+        image_units: list[dict] = []
+        video_units: list[dict] = []
+        timeline_frames: list[dict] = []
+        review_sheets: list[dict] = []
+        segment_reviews: list[dict] = []
+        ocr_chunks: list[dict] = []
+        asr_chunks: list[dict] = []
+        asr_segments: list[dict] = []
+        ocr_items: list[dict] = []
+        evidence_catalog: list[dict] = []
+
+        if subject.title.strip():
+            evidence_catalog.append({
+                "evidence_id": "text:title",
+                "source": "title",
+                "primary_modality": "text",
+                "text": self._truncate_text(subject.title, 240),
+                "translation_zh": self._truncate_text(subject.title_zh, 240),
+                "risk_score": 0,
+                "evidence_risk_level": "none",
+            })
+        if subject.desc.strip():
+            evidence_catalog.append({
+                "evidence_id": "text:desc",
+                "source": "desc",
+                "primary_modality": "text",
+                "text": self._truncate_text(subject.desc, 500),
+                "translation_zh": self._truncate_text(subject.desc_zh, 500),
+                "risk_score": 0,
+                "evidence_risk_level": "none",
+            })
+
+        for image_index, image in enumerate(image_analyses, start=1):
+            source = f"image:{image_index}"
+            unit = {
+                "evidence_id": image.get("evidence_id") or source,
+                "index": image.get("index", image_index - 1),
+                "source": source,
+                "asset_rel": image.get("asset_rel") or self._to_job_rel(
+                    image.get("local_path"),
+                    settings.outputs_dir / self.job_id,
+                ),
+                "url": image.get("url", ""),
+                "ocr_text": image.get("ocr_text", ""),
+                "ocr_text_zh": image.get("ocr_text_zh", ""),
+                "ocr_engine": image.get("ocr_engine", ""),
+                "ocr_language": image.get("ocr_language", ""),
+                "ocr_confidence": image.get("ocr_confidence", 0.0),
+                "visual_summary": image.get("visual_summary", ""),
+                "benign_context": image.get("benign_context", ""),
+                "risk_items": self._compact_risk_items(image.get("risk_items") or []),
+                "error": image.get("error", ""),
+            }
+            image_units.append(unit)
+            for risk_index, risk in enumerate(unit["risk_items"], start=1):
+                score = self._normalize_risk_score(risk.get("score"), risk.get("severity") or "low")
+                evidence_catalog.append({
+                    "evidence_id": f"{source}/risk:{risk_index}",
+                    "source": source,
+                    "primary_modality": "vision",
+                    "asset_rel": unit["asset_rel"],
+                    "visual_summary": unit["visual_summary"],
+                    "risk_library_id": risk.get("risk_library_id", ""),
+                    "risk_library_label": risk.get("risk_library_label", ""),
+                    "risk_type": risk.get("risk_type", ""),
+                    "reason": risk.get("reason") or risk.get("evidence", ""),
+                    "risk_score": score,
+                    "evidence_risk_level": self._level_from_score(score, thresholds),
+                })
+
+        for video_offset, video in enumerate(video_results, start=1):
+            video_ref = f"video:{int(video.get('index', video_offset - 1) or 0) + 1}"
+            transcript = video.get("transcript") or {}
+            frame_by_id: dict[str, dict] = {}
+            compact_frames = []
+            for frame in video.get("timeline_frames") or video.get("frames") or []:
+                frame_id = str(frame.get("frame_id") or "")
+                frame_ref = f"{video_ref}/frame:{frame_id}"
+                item = {
+                    "source": frame_ref,
+                    "video_frame_source": f"video_frame:{round(float(frame.get('timestamp') or 0.0), 2)}",
+                    "video_source": video_ref,
+                    "frame_id": frame_id,
+                    "timestamp": frame.get("timestamp"),
+                    "frame_number": frame.get("frame_number"),
+                    "asset_rel": frame.get("asset_rel") or self._to_job_rel(
+                        frame.get("path"),
+                        settings.outputs_dir / self.job_id,
+                    ),
+                    "ocr_text": frame.get("ocr_text", ""),
+                    "ocr_text_zh": frame.get("ocr_text_zh", ""),
+                    "ocr_engine": frame.get("ocr_engine", ""),
+                    "ocr_language": frame.get("ocr_language", ""),
+                    "ocr_confidence": frame.get("ocr_confidence", 0.0),
+                }
+                frame_by_id[frame_id] = item
+                compact_frames.append(item)
+                timeline_frames.append(item)
+                if item["ocr_text"] or item["ocr_text_zh"]:
+                    ocr_items.append({
+                        "source": frame_ref,
+                        "timestamp": item["timestamp"],
+                        "text": item["ocr_text"],
+                        "text_zh": item["ocr_text_zh"],
+                        "language": item["ocr_language"],
+                        "confidence": item["ocr_confidence"],
+                        "engine": item["ocr_engine"],
+                        "asset_rel": item["asset_rel"],
+                        "frame_id": frame_id,
+                    })
+
+            for segment_number, seg in enumerate(transcript.get("segments") or [], start=1):
+                text = self._truncate_text(seg.get("text", ""), 500)
+                text_zh = self._truncate_text(seg.get("translation_zh", ""), 600)
+                if not text and not text_zh:
+                    continue
+                asr_segments.append({
+                    "source": f"{video_ref}/asr-raw:{segment_number}",
+                    "audio_source": f"video_audio:{self._time_range(seg.get('start'), seg.get('end')).replace('s', '')}",
+                    "start": seg.get("start"),
+                    "end": seg.get("end"),
+                    "text": text,
+                    "source_text_dolphin": self._truncate_text(seg.get("source_text_dolphin") or text, 500),
+                    "source_text_mms": self._truncate_text(seg.get("source_text_mms", ""), 500),
+                    "translation_zh": text_zh,
+                    "language": transcript.get("language", ""),
+                    "confidence": seg.get("translation_confidence", ""),
+                })
+
+            video_review_sheets = video.get("review_sheets") or []
+            for sheet in video_review_sheets:
+                stored_sheet = {**sheet, "source": sheet.get("segment_id"), "video_source": video_ref}
+                review_sheets.append(stored_sheet)
+                for chunk in sheet.get("ocr_chunks") or []:
+                    ocr_chunks.append({**chunk, "video_source": video_ref})
+                for chunk in sheet.get("asr_chunks") or []:
+                    asr_chunks.append({**chunk, "video_source": video_ref})
+
+            video_segment_reviews = []
+            for segment in video.get("segment_reviews") or []:
+                analysis = segment.get("analysis") or {}
+                compact_segment = {
+                    "source": segment.get("segment_id"),
+                    "video_source": video_ref,
+                    "segment_id": segment.get("segment_id"),
+                    "index": segment.get("index"),
+                    "asset_rel": segment.get("asset_rel"),
+                    "start": segment.get("start"),
+                    "end": segment.get("end"),
+                    "frame_ids": segment.get("frame_ids") or [],
+                    "segment_summary": analysis.get("segment_summary", ""),
+                    "segment_score": analysis.get("segment_score", 0),
+                    "segment_level": analysis.get("segment_level", "none"),
+                    "visual_risks": analysis.get("visual_risks") or [],
+                    "ocr_risks": analysis.get("ocr_risks") or [],
+                    "asr_risks": analysis.get("asr_risks") or [],
+                    "library_reviews": segment.get("library_reviews") or [],
+                }
+                segment_reviews.append(compact_segment)
+                video_segment_reviews.append(compact_segment)
+
+                for risk_index, risk in enumerate(compact_segment["visual_risks"], start=1):
+                    frame_ids = risk.get("frame_ids") or []
+                    frame = frame_by_id.get(str(frame_ids[0])) if frame_ids else {}
+                    risk_library_id = str(risk.get("risk_library_id") or "").strip()
+                    library_prefix = f"{risk_library_id}/" if risk_library_id else ""
+                    evidence_catalog.append({
+                        "evidence_id": f"{segment.get('segment_id')}/{library_prefix}visual-risk:{risk_index}",
+                        "source": (frame or {}).get("source") or segment.get("segment_id"),
+                        "primary_modality": "vision",
+                        "frame_ids": frame_ids,
+                        "frame_id": (frame or {}).get("frame_id", ""),
+                        "frame_number": (frame or {}).get("frame_number"),
+                        "timestamp": (frame or {}).get("timestamp"),
+                        "asset_rel": (frame or {}).get("asset_rel", ""),
+                        "risk_library_id": risk_library_id,
+                        "risk_library_label": risk.get("risk_library_label", ""),
+                        "risk_type": risk.get("risk_type", ""),
+                        "reason": risk.get("reason", ""),
+                        "risk_score": risk.get("score", 0),
+                        "evidence_risk_level": risk.get("risk_level", "none"),
+                    })
+                ocr_by_id = {str(item.get("ocr_chunk_id") or ""): item for item in segment.get("ocr_chunks") or []}
+                for risk_index, risk in enumerate(compact_segment["ocr_risks"], start=1):
+                    chunk = ocr_by_id.get(str(risk.get("ocr_chunk_id") or "")) or {}
+                    frame_ids = risk.get("frame_ids") or []
+                    frame = frame_by_id.get(str(frame_ids[0])) if frame_ids else {}
+                    risk_library_id = str(risk.get("risk_library_id") or "").strip()
+                    library_prefix = f"{risk_library_id}/" if risk_library_id else ""
+                    source_text = "\n".join(
+                        item.get("source_text", "") for item in chunk.get("items") or [] if item.get("source_text")
+                    )
+                    translation_zh = "\n".join(
+                        item.get("translation_zh", "") for item in chunk.get("items") or [] if item.get("translation_zh")
+                    )
+                    evidence_catalog.append({
+                        "evidence_id": f"{segment.get('segment_id')}/{library_prefix}ocr-risk:{risk_index}",
+                        "source": (frame or {}).get("source") or segment.get("segment_id"),
+                        "primary_modality": "ocr",
+                        "ocr_chunk_id": risk.get("ocr_chunk_id"),
+                        "frame_ids": frame_ids,
+                        "frame_id": (frame or {}).get("frame_id", ""),
+                        "frame_number": (frame or {}).get("frame_number"),
+                        "timestamp": (frame or {}).get("timestamp"),
+                        "asset_rel": (frame or {}).get("asset_rel", ""),
+                        "ocr_text": source_text,
+                        "ocr_text_zh": translation_zh,
+                        "ocr_context": chunk.get("items") or [],
+                        "start": chunk.get("start"),
+                        "end": chunk.get("end"),
+                        "risk_library_id": risk_library_id,
+                        "risk_library_label": risk.get("risk_library_label", ""),
+                        "risk_type": risk.get("risk_type", ""),
+                        "reason": risk.get("reason", ""),
+                        "risk_score": risk.get("score", 0),
+                        "evidence_risk_level": risk.get("risk_level", "none"),
+                    })
+                asr_by_id = {str(item.get("asr_chunk_id") or ""): item for item in segment.get("asr_chunks") or []}
+                for risk_index, risk in enumerate(compact_segment["asr_risks"], start=1):
+                    chunk = asr_by_id.get(str(risk.get("asr_chunk_id") or "")) or {}
+                    risk_library_id = str(risk.get("risk_library_id") or "").strip()
+                    library_prefix = f"{risk_library_id}/" if risk_library_id else ""
+                    evidence_catalog.append({
+                        "evidence_id": f"{segment.get('segment_id')}/{library_prefix}asr-risk:{risk_index}",
+                        "source": f"video_audio:{self._time_range(chunk.get('start'), chunk.get('end')).replace('s', '')}",
+                        "video_source": video_ref,
+                        "primary_modality": "asr",
+                        "asr_chunk_id": risk.get("asr_chunk_id"),
+                        "start": chunk.get("start"),
+                        "end": chunk.get("end"),
+                        "source_text_dolphin": chunk.get("source_text_dolphin", ""),
+                        "source_text_mms": chunk.get("source_text_mms", ""),
+                        "translation_zh": chunk.get("translation_zh", ""),
+                        "asr_consistency": chunk.get("consistency", ""),
+                        "risk_library_id": risk_library_id,
+                        "risk_library_label": risk.get("risk_library_label", ""),
+                        "risk_type": risk.get("risk_type", ""),
+                        "reason": risk.get("reason", ""),
+                        "risk_score": risk.get("score", 0),
+                        "evidence_risk_level": risk.get("risk_level", "none"),
+                    })
+
+            video_units.append({
+                "source": video_ref,
+                "asset_rel": self._to_job_rel(video.get("local_path"), settings.outputs_dir / self.job_id),
+                "timeline_frame_count": len(compact_frames),
+                "review_sheet_count": len(video_review_sheets),
+                "segment_review_count": len(video_segment_reviews),
+                "duration": video.get("duration", 0.0),
+                "transcript_summary": self._truncate_text(transcript.get("text_zh") or transcript.get("text") or "", 420),
+                "asr_raw_rel": transcript.get("asr_raw_rel"),
+                "segment_reviews": video_segment_reviews,
+            })
+
+        comment_units = []
+        for comment in comments:
+            comment_id = str(comment.get("comment_id") or comment.get("id") or "")
+            unit = {
+                "source": f"comment:{comment_id}",
+                "comment_id": comment_id,
+                "nickname": comment.get("nickname", ""),
+                "text": comment.get("source_text") or comment.get("content") or "",
+                "translation_zh": comment.get("translation_zh", ""),
+                "risk_score": comment.get("risk_score"),
+                "risk_level": comment.get("risk_level", ""),
+                "risk_library_id": comment.get("risk_library_id", ""),
+                "risk_library_label": comment.get("risk_library_label", ""),
+                "secondary_library_ids": comment.get("secondary_library_ids") or [],
+                "risk_type": comment.get("risk_type", ""),
+                "risk_basis": comment.get("risk_basis", ""),
+                "exemption_basis": comment.get("exemption_basis", ""),
+                "evidence_quote": comment.get("evidence_quote", ""),
+                "audit_status": comment.get("audit_status", "failed"),
+            }
+            comment_units.append(unit)
+            if unit["audit_status"] == "completed" and int(unit.get("risk_score") or 0) >= review_threshold:
+                evidence_catalog.append({
+                    "evidence_id": f"comment:{comment_id}",
+                    "source": f"comment:{comment_id}",
+                    "primary_modality": "comment",
+                    "comment_id": comment_id,
+                    "nickname": unit["nickname"],
+                    "text": unit["text"],
+                    "translation_zh": unit["translation_zh"],
+                    "risk_library_id": unit["risk_library_id"],
+                    "risk_library_label": unit["risk_library_label"],
+                    "secondary_library_ids": unit["secondary_library_ids"],
+                    "risk_type": unit["risk_type"],
+                    "reason": unit["risk_basis"],
+                    "exemption_basis": unit["exemption_basis"],
+                    "risk_score": unit["risk_score"],
+                    "evidence_risk_level": unit["risk_level"],
+                })
+
+        return {
+            "text_context": {
+                "title": subject.title,
+                "title_zh": subject.title_zh,
+                "desc": subject.desc,
+                "desc_zh": subject.desc_zh,
+                "comments_count": len(comments),
+            },
+            "image_units": image_units,
+            "video_units": video_units,
+            "timeline_frames": timeline_frames,
+            "review_sheets": review_sheets,
+            "segment_reviews": segment_reviews,
+            "ocr_chunks": ocr_chunks,
+            "asr_chunks": asr_chunks,
+            "asr_segments": asr_segments,
+            "asr_raw": [
+                {"source": video.get("source"), "asr_raw_rel": (video.get("transcript") or {}).get("asr_raw_rel")}
+                for video in video_results
+                if (video.get("transcript") or {}).get("asr_raw_rel")
+            ],
+            "ocr_items": ocr_items,
+            "comment_units": comment_units,
+            "evidence_catalog": evidence_catalog,
+            "final_evidence_refs": [],
+            "moment_sheets": [],
+            "moments": [],
+            "precise_sheets": [],
+        }
+
+    def _build_legacy_evidence_index(self, subject: AuditSubject, image_analyses: list[dict], video_results: list[dict]) -> dict:
         image_units = []
         for image in image_analyses:
             image_units.append({
@@ -2373,6 +3197,493 @@ class AuditPipeline:
             payload["limit"] = limit
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
+    def _media_summary_for_comment_audit(self, image_analyses: list[dict], video_results: list[dict]) -> str:
+        values: list[str] = []
+        for image in image_analyses:
+            summary = self._truncate_text(image.get("visual_summary", ""), 100)
+            risks = [
+                self._truncate_text(item.get("risk_type") or item.get("reason", ""), 40)
+                for item in image.get("risk_items") or []
+                if isinstance(item, dict)
+            ]
+            if summary or risks:
+                values.append(f"图片：{summary}" + (f"；风险线索：{'、'.join(risks[:3])}" if risks else ""))
+        for video in video_results:
+            for segment in video.get("segment_reviews") or []:
+                analysis = segment.get("analysis") or {}
+                summary = self._truncate_text(analysis.get("segment_summary", ""), 100)
+                score = self._normalize_risk_score(analysis.get("segment_score"), "none")
+                if summary:
+                    values.append(f"视频{segment.get('index', '')}段：{summary}（{score}分）")
+        return self._truncate_text("\n".join(values) or "未提取到明确媒体摘要", 1200)
+
+    def _audit_comments(self, subject: AuditSubject, media_summary: str) -> list[dict]:
+        if not subject.comments:
+            return []
+        job_store.log(self.job_id, f"笔记 {subject.note_id}：开始逐条评论审核，共 {len(subject.comments)} 条")
+
+        def prepare(index_and_comment: tuple[int, dict]) -> dict:
+            index, raw = index_and_comment
+            comment = dict(raw)
+            comment_id = str(comment.get("comment_id") or comment.get("id") or f"{subject.note_id}:comment:{index + 1}")
+            source_text = str(comment.get("content") or comment.get("text") or "").strip()
+            comment["comment_id"] = comment_id
+            comment["content"] = source_text
+            comment["source_text"] = source_text
+            existing_translation = str(comment.get("translation_zh") or "").strip()
+            if existing_translation:
+                comment["translation_zh"] = existing_translation
+                comment["translation_status"] = "completed"
+                comment["translation_required"] = False
+                return comment
+            language = str(comment.get("language") or comment.get("lang") or "")
+            translation_required = self.translator.should_translate(source_text, language)
+            comment["translation_required"] = translation_required
+            comment["translation_zh"] = ""
+            comment["translation_status"] = "pending" if translation_required else "not_needed"
+            return comment
+
+        prepared = [prepare(item) for item in enumerate(subject.comments)]
+        translation_required_count = sum(bool(item.get("translation_required")) for item in prepared)
+        if translation_required_count:
+            job_store.log(
+                self.job_id,
+                f"笔记 {subject.note_id}：评论审核将由同一次模型调用完成中文翻译，"
+                f"需翻译={translation_required_count}",
+            )
+
+        audited_by_id: dict[str, dict] = {}
+        comments_for_model = []
+        for comment in prepared:
+            comment_id = str(comment.get("comment_id") or "")
+            if str(comment.get("source_text") or "").strip():
+                comments_for_model.append(comment)
+                continue
+            audited_by_id[comment_id] = self._empty_comment_audit_result()
+
+        empty_count = len(prepared) - len(comments_for_model)
+        if empty_count:
+            job_store.log(
+                self.job_id,
+                f"笔记 {subject.note_id}：{empty_count} 条空评论已本地完成审核，不调用模型",
+            )
+
+        batch_size = max(1, settings.comment_audit_batch_size)
+        batches = [
+            comments_for_model[offset : offset + batch_size]
+            for offset in range(0, len(comments_for_model), batch_size)
+        ]
+
+        def audit_batch(index_and_batch: tuple[int, list[dict]]) -> dict[str, dict]:
+            batch_index, batch = index_and_batch
+            return self._audit_comment_batch_with_fallback(
+                subject,
+                media_summary,
+                batch,
+                batch_label=f"{batch_index}/{len(batches)}",
+            )
+
+        batch_workers = max(1, min(4, settings.comment_audit_concurrency, len(batches)))
+        indexed_batches = list(enumerate(batches, start=1))
+        if batch_workers <= 1:
+            batch_results = [audit_batch(item) for item in indexed_batches]
+        else:
+            with ThreadPoolExecutor(max_workers=batch_workers) as executor:
+                batch_results = list(executor.map(audit_batch, indexed_batches))
+        for result in batch_results:
+            audited_by_id.update(result)
+
+        output = []
+        for comment in prepared:
+            comment_id = str(comment.get("comment_id") or "")
+            audit = audited_by_id.get(comment_id) or {
+                "audit_status": "failed",
+                "audit_error": "comment result missing after retries",
+            }
+            merged = {**comment, **audit}
+            merged.pop("translation_required", None)
+            output.append(merged)
+        output.sort(
+            key=lambda item: (
+                item.get("audit_status") == "completed",
+                int(item.get("risk_score") or -1),
+            ),
+            reverse=True,
+        )
+        stats = self._comment_audit_stats(output)
+        job_store.log(
+            self.job_id,
+            f"笔记 {subject.note_id}：逐条评论审核完成，成功={stats['completed']}，失败={stats['failed']}，"
+            f"达到复核阈值={stats['review_count']}，需翻译={stats['translation_required']}，"
+            f"翻译成功={stats['translation_completed']}，翻译失败={stats['translation_failed']}",
+        )
+        return output
+
+    def _audit_comment_batch_with_fallback(
+        self,
+        subject: AuditSubject,
+        media_summary: str,
+        comments: list[dict],
+        *,
+        batch_label: str = "1/1",
+    ) -> dict[str, dict]:
+        if not comments:
+            return {}
+        normalized: dict[str, dict] = {}
+        pending = list(comments)
+        error = "model omitted comment result"
+        errors_by_id: dict[str, str] = {}
+
+        for attempt in (1, 2):
+            round_requested = list(pending)
+            request_batches = (
+                [round_requested]
+                if attempt == 1
+                else [round_requested[offset : offset + 10] for offset in range(0, len(round_requested), 10)]
+            )
+            if attempt == 2 and len(request_batches) > 1:
+                job_store.log(
+                    self.job_id,
+                    f"笔记 {subject.note_id}：评论审核批次 {batch_label} 补偿轮次拆分为"
+                    f"{len(request_batches)} 个子批次，每批最多10条",
+                )
+            round_completed: dict[str, dict] = {}
+            for sub_batch_index, requested in enumerate(request_batches, start=1):
+                started_at = perf_counter()
+                response_diagnostic = ""
+                sub_batch_label = (
+                    f"，子批次={sub_batch_index}/{len(request_batches)}"
+                    if len(request_batches) > 1
+                    else ""
+                )
+                job_store.log(
+                    self.job_id,
+                    f"笔记 {subject.note_id}：评论审核批次 {batch_label} 模型调用 {attempt}/2"
+                    f"{sub_batch_label} 开始，thinking=off，评论={len(requested)}",
+                )
+                try:
+                    prompt = self._render_comment_audit_prompt(subject, media_summary, requested)
+                    raw = self.qwen.audit_text(
+                        prompt,
+                        max_tokens=settings.comment_audit_max_tokens,
+                        model=settings.qwen_text_model,
+                        enable_thinking=False,
+                    )
+                    raw_response = str(raw.get("raw_response") or "")
+                    llm_meta = raw.get("_llm_meta") if isinstance(raw.get("_llm_meta"), dict) else {}
+                    if llm_meta:
+                        response_diagnostic = (
+                            f"，finish_reason={llm_meta.get('finish_reason', 'unknown')}"
+                            f"，input_tokens={llm_meta.get('prompt_tokens', 'unknown')}"
+                            f"，output_tokens={llm_meta.get('completion_tokens', 'unknown')}"
+                        )
+                    if raw_response:
+                        current = {}
+                        error = (
+                            "comment audit returned incomplete or invalid JSON "
+                            f"(response_chars={len(raw_response)}, "
+                            f"finish_reason={llm_meta.get('finish_reason', 'unknown')}, "
+                            f"completion_tokens={llm_meta.get('completion_tokens', 'unknown')})"
+                        )
+                        response_diagnostic += f"，JSON解析失败，响应字符={len(raw_response)}"
+                    else:
+                        current = self._normalize_comment_audit_results(raw, requested)
+                        error = "model omitted comment result"
+                except Exception as exc:
+                    current = {}
+                    error = str(exc)
+
+                normalized.update(current)
+                round_completed.update(current)
+                for comment in requested:
+                    comment_id = str(comment.get("comment_id") or "")
+                    if comment_id not in current:
+                        errors_by_id[comment_id] = error
+                missing_count = sum(
+                    str(comment.get("comment_id") or "") not in current
+                    for comment in requested
+                )
+                elapsed = perf_counter() - started_at
+                job_store.log(
+                    self.job_id,
+                    f"笔记 {subject.note_id}：评论审核批次 {batch_label} 模型调用 {attempt}/2"
+                    f"{sub_batch_label} 完成，返回有效={len(current)}，漏项={missing_count}，"
+                    f"耗时={elapsed:.1f}s{response_diagnostic}",
+                )
+
+            pending = [
+                comment
+                for comment in round_requested
+                if str(comment.get("comment_id") or "") not in round_completed
+            ]
+            if not pending:
+                break
+            if attempt == 1:
+                job_store.log(
+                    self.job_id,
+                    f"笔记 {subject.note_id}：评论审核批次 {batch_label} 首次结果漏项={len(pending)}，"
+                    "仅补偿重试一次",
+                )
+
+        for comment in pending:
+            comment_id = str(comment.get("comment_id") or "")
+            normalized[comment_id] = {
+                "audit_status": "failed",
+                "audit_error": self._truncate_text(
+                    f"{errors_by_id.get(comment_id, error)} after one retry",
+                    180,
+                ),
+            }
+            if comment.get("translation_required") and not comment.get("translation_zh"):
+                normalized[comment_id].update({
+                    "translation_status": "failed",
+                    "translation_error": "comment translation missing after one retry",
+                })
+        if pending:
+            job_store.log(
+                self.job_id,
+                f"笔记 {subject.note_id}：评论审核批次 {batch_label} 补偿重试后仍漏项={len(pending)}，"
+                "已标记审核失败，不再继续重试",
+            )
+        return normalized
+
+    @staticmethod
+    def _empty_comment_audit_result() -> dict:
+        return {
+            "audit_status": "completed",
+            "audit_source": "local_empty",
+            "risk_score": 0,
+            "risk_level": "none",
+            "risk_library_id": "",
+            "risk_library_label": "",
+            "secondary_library_ids": [],
+            "risk_type": "",
+            "risk_basis": "无有效评论文本",
+            "exemption_basis": "评论内容为空",
+            "evidence_quote": "",
+        }
+
+    def _render_comment_audit_prompt(
+        self,
+        subject: AuditSubject,
+        media_summary: str,
+        comments: list[dict],
+    ) -> str:
+        payload = {
+            "post_context": {
+                "title": self._truncate_text(subject.title, 180),
+                "desc": self._truncate_text(subject.desc, 360),
+                "media_type": "video" if subject.local_video_paths or subject.video_urls else "image",
+                "media_summary": media_summary,
+            },
+            "audit_policy": self._compact_audit_policy(),
+            "library_policies": self._active_library_policies(["comment"]),
+            "comments": [
+                {
+                    "comment_id": comment.get("comment_id"),
+                    "source_text": self._truncate_text(comment.get("source_text", ""), 300),
+                    "translation_required": bool(comment.get("translation_required")),
+                    **(
+                        {"translation_zh": self._truncate_text(comment.get("translation_zh", ""), 300)}
+                        if comment.get("translation_zh")
+                        else {}
+                    ),
+                }
+                for comment in comments
+            ],
+        }
+        return (
+            "你是评论区逐条审核器。必须结合帖子标题、正文和媒体摘要，独立判断每一条评论，"
+            "不要把多条评论聚成一个结论；一条评论可以独立触发召回。"
+            "只能按 library_policies 中的风险库判断，引用、反讽、批判、否定、举报和正常讨论应在豁免依据中体现。\n"
+            "仇恨歧视边界：以当前评论为主要依据；帖子上下文仅用于解析明确指代和确认内容中明确呈现的受保护身份，"
+            "不得依据账号 IP/发布地、使用语言、昵称、服饰等弱线索或其他评论推断身份。区分身份攻击与行为评价："
+            "对具体行为、事件或个人表现的批评，不因当事人的身份背景自动构成仇恨歧视；但对身份已明确的受保护群体"
+            "或其成员实施强侮辱、非人化、性羞辱、排斥或威胁，仍应召回。\n"
+            "语义与等级：只依据原文或可靠译文判断，不得补写原文没有的因果、谣言、排斥或煽动意图。"
+            "疑问、转述或个人观察不自动违规，也不自动豁免，应按其实际表达判断。身份指向、翻译、因果或意图不确定时"
+            "最多按低风险召回；高风险须有明确非人化、恶性谣言、暴力、驱逐或权利剥夺等强证据。"
+            "仅因身份并置、疑问或观察而低风险召回时，t/rb 应写身份关联存疑或因果不明，不得标为恶性谣言或煽动。"
+            "t/rb 必须与 q 及可靠译文一致，不得使用证据无法支持的结论。\n"
+            "只输出合法 JSON，使用稀疏字段：\n"
+            "{\"comments\":[{\"id\":\"原comment_id\",\"s\":0,\"zh\":\"仅需翻译时\"},"
+            "{\"id\":\"原comment_id\",\"s\":80,\"lib\":\"主风险库id\","
+            "\"sec\":[\"次风险库id\"],\"t\":\"短类别\",\"rb\":\"违规依据\","
+            "\"eb\":\"仅有真实豁免时\",\"q\":\"最短关键原句\",\"zh\":\"仅需翻译时\"}]}\n"
+            "字段含义：id=comment_id，s=score 0-100，lib=primary risk_library_id，sec=secondary_library_ids，"
+            "t=risk_type，rb=risk_basis，eb=exemption_basis，q=evidence_quote，zh=translation_zh。\n"
+            "要求：每个输入 comment_id 必须且只能输出一次。s=0 时只输出 id、s，"
+            "translation_required=true 时再加 zh；不要输出 lib/sec/t/rb/eb/q。"
+            "s>0 时必须输出 id/s/lib/t/rb/q；sec 仅在确有次风险库时输出，eb 仅在确有豁免或降级语境时输出。"
+            "rb 不超过18字，eb 不超过14字；q 只能摘自 source_text，禁止改写，并保持最短。"
+            "translation_required=true 时必须输出准确、自然、完整的 zh；"
+            "translation_required=false 时省略 zh。不要输出空字符串、空数组或占位依据。\n"
+            "输入 JSON：\n"
+            + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        )
+
+    def _normalize_comment_audit_results(self, raw: dict, comments: list[dict]) -> dict[str, dict]:
+        valid = {
+            str(comment.get("comment_id") or ""): comment
+            for comment in comments
+            if comment.get("comment_id")
+        }
+        rows = raw.get("comments") or raw.get("results") or raw.get("comment_results") or []
+        if not isinstance(rows, list):
+            return {}
+        thresholds = self._active_thresholds()
+        output: dict[str, dict] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            comment_id = str(row.get("id") or row.get("comment_id") or "")
+            source = valid.get(comment_id)
+            if not source or comment_id in output:
+                continue
+            try:
+                raw_score = row["s"] if "s" in row else row["score"]
+                float(raw_score)
+            except (KeyError, TypeError, ValueError):
+                continue
+            score = self._normalize_risk_score(raw_score, "none")
+            quote = self._truncate_text(row.get("q") or row.get("evidence_quote", ""), 80)
+            source_text = str(source.get("source_text") or "")
+            if quote and quote not in source_text:
+                quote = ""
+            existing_translation = str(source.get("translation_zh") or "").strip()
+            translation_zh = self._truncate_text(
+                row.get("zh") or row.get("translation_zh") or existing_translation,
+                300,
+            )
+            translation_required = bool(source.get("translation_required"))
+            if translation_required and not translation_zh:
+                continue
+            risk_library_id = self._normalize_comment_library_id(row.get("lib") or row.get("risk_library_id"), score)
+            policy = self._library_policy_by_id(risk_library_id)
+            risk_library_label = self._truncate_text(
+                policy.get("title")
+                or row.get("risk_library_label")
+                or risk_library_id,
+                50,
+            )
+            if not risk_library_id:
+                risk_library_label = ""
+            secondary_library_ids = self._normalize_secondary_library_ids(
+                row.get("sec") if "sec" in row else row.get("secondary_library_ids"),
+                primary=risk_library_id,
+            )
+            output[comment_id] = {
+                "audit_status": "completed",
+                "risk_score": score,
+                "risk_level": self._level_from_score(score, thresholds),
+                "risk_library_id": risk_library_id,
+                "risk_library_label": risk_library_label,
+                "secondary_library_ids": secondary_library_ids,
+                "risk_type": self._truncate_text(row.get("t") or row.get("risk_type", ""), 50),
+                "risk_basis": self._truncate_text(row.get("rb") or row.get("risk_basis", ""), 30),
+                "exemption_basis": self._truncate_text(row.get("eb") or row.get("exemption_basis", ""), 30),
+                "evidence_quote": quote,
+                "translation_zh": translation_zh,
+                "translation_status": "completed" if translation_zh else "not_needed",
+            }
+        return output
+
+    def _normalize_comment_library_id(self, value, score: int) -> str:
+        if int(score or 0) <= 0:
+            return ""
+        target = str(value or "").strip()
+        if not target:
+            return ""
+        valid = {
+            str(policy.get("id") or "").strip()
+            for policy in self._active_library_policies(["comment"])
+            if policy.get("id")
+        }
+        return target if target in valid else ""
+
+    def _normalize_secondary_library_ids(self, value, *, primary: str = "") -> list[str]:
+        values = value if isinstance(value, list) else ([value] if value not in (None, "", [], {}) else [])
+        valid = {
+            str(policy.get("id") or "").strip()
+            for policy in self._active_library_policies(["comment"])
+            if policy.get("id")
+        }
+        out = []
+        for item in values:
+            library_id = str(item or "").strip()
+            if library_id and library_id != primary and library_id in valid and library_id not in out:
+                out.append(library_id)
+        return out[:4]
+
+    def _comment_audit_stats(self, comments: list[dict]) -> dict:
+        thresholds = self._active_thresholds()
+        review_threshold = int(thresholds.get("review", 40))
+        completed = [item for item in comments if item.get("audit_status") == "completed"]
+        return {
+            "total": len(comments),
+            "completed": len(completed),
+            "failed": len(comments) - len(completed),
+            "translation_required": sum(
+                item.get("translation_status") in {"completed", "failed"}
+                for item in comments
+                if item.get("translation_zh") or item.get("translation_error")
+            ),
+            "translation_completed": sum(item.get("translation_status") == "completed" for item in comments),
+            "translation_failed": sum(item.get("translation_status") == "failed" for item in comments),
+            "review_count": sum(int(item.get("risk_score") or 0) >= review_threshold for item in completed),
+            "high_count": sum(item.get("risk_level") == "high" for item in completed),
+            "max_score": max((int(item.get("risk_score") or 0) for item in completed), default=0),
+        }
+
+    def _compact_audit_policy(self) -> dict:
+        return {
+            "category": getattr(self.prompt_set, "category", "") if hasattr(self, "prompt_set") else "",
+            "thresholds": self._active_thresholds(),
+            "rules": [
+                {
+                    "rule_id": rule.get("id") or rule.get("rule_id"),
+                    "label": rule.get("label") or rule.get("rule"),
+                    "category": rule.get("category") or rule.get("library_id"),
+                    "source": rule.get("source"),
+                    "score": rule.get("score"),
+                }
+                for rule in self._active_scoring_rules()[:40]
+            ],
+        }
+
+    def _comment_evidence_items(self, comments: list[dict]) -> list[dict]:
+        review_threshold = int(self._active_thresholds().get("review", 40))
+        out = []
+        for comment in comments:
+            if comment.get("audit_status") != "completed":
+                continue
+            score = int(comment.get("risk_score") or 0)
+            if score < review_threshold:
+                continue
+            comment_id = str(comment.get("comment_id") or "")
+            out.append({
+                "evidence_id": f"comment:{comment_id}",
+                "id": f"comment:{comment_id}",
+                "primary_modality": "comment",
+                "modality": "comment",
+                "source": f"comment:{comment_id}",
+                "source_label": "评论",
+                "comment_id": comment_id,
+                "nickname": comment.get("nickname", ""),
+                "text": comment.get("source_text") or comment.get("content") or "",
+                "translation_zh": comment.get("translation_zh", ""),
+                "risk_library_id": comment.get("risk_library_id", ""),
+                "risk_library_label": comment.get("risk_library_label", ""),
+                "secondary_library_ids": comment.get("secondary_library_ids") or [],
+                "risk_type": comment.get("risk_type", ""),
+                "reason": comment.get("risk_basis", ""),
+                "exemption_basis": comment.get("exemption_basis", ""),
+                "evidence_quote": comment.get("evidence_quote", ""),
+                "risk_score": score,
+                "evidence_risk_level": comment.get("risk_level", "none"),
+            })
+        return out
+
     def _format_frame_evidence_for_prompt(self, video_results: list[dict]) -> str:
         videos_out: list[dict] = []
         total_frames = 0
@@ -2431,6 +3742,8 @@ class AuditPipeline:
         for item in ordered[: max(0, settings.fusion_frame_max_risk_items)]:
             compact.append({
                 "severity": item.get("severity", ""),
+                "risk_library_id": self._truncate_text(item.get("risk_library_id", ""), 40),
+                "risk_library_label": self._truncate_text(item.get("risk_library_label", ""), 40),
                 "risk_type": self._truncate_text(item.get("risk_type", ""), 80),
                 "evidence": self._truncate_text(item.get("evidence", ""), 140),
                 "reason": self._truncate_text(item.get("reason", ""), 160),
@@ -2618,6 +3931,120 @@ class AuditPipeline:
                 f"融合 Prompt 超过总长度上限，已压缩：{original_len} -> {len(prompt)} / {limit} 字符",
             )
         return prompt
+
+    def _render_compact_fusion_prompt(
+        self,
+        subject: AuditSubject,
+        evidence_index: dict,
+        comments: list[dict],
+    ) -> str:
+        catalog = evidence_index.get("evidence_catalog") or []
+        compact_catalog = []
+        for item in catalog:
+            compact_catalog.append({
+                key: item.get(key)
+                for key in (
+                    "evidence_id",
+                    "source",
+                    "primary_modality",
+                    "risk_library_id",
+                    "risk_library_label",
+                    "secondary_library_ids",
+                    "risk_type",
+                    "reason",
+                    "risk_score",
+                    "evidence_risk_level",
+                    "comment_id",
+                    "text",
+                    "ocr_text_zh",
+                    "translation_zh",
+                    "visual_summary",
+                    "start",
+                    "end",
+                )
+                if item.get(key) not in (None, "", [], {})
+            })
+        media_summaries = [
+            {
+                "source": item.get("source"),
+                "summary": self._truncate_text(item.get("visual_summary", ""), 120),
+                "benign_context": self._truncate_text(item.get("benign_context", ""), 100),
+            }
+            for item in evidence_index.get("image_units") or []
+            if item.get("visual_summary") or item.get("benign_context")
+        ]
+        media_summaries.extend({
+            "source": item.get("source"),
+            "summary": self._truncate_text(item.get("segment_summary", ""), 120),
+            "score": item.get("segment_score", 0),
+        } for item in evidence_index.get("segment_reviews") or [])
+        completed_comments = [
+            item for item in comments if item.get("audit_status") == "completed"
+        ]
+        top_comments = sorted(
+            completed_comments,
+            key=lambda item: int(item.get("risk_score") or 0),
+            reverse=True,
+        )[: max(0, settings.comment_fusion_top_k)]
+        scoring_rules = [
+            {
+                "rule_id": rule.get("id") or rule.get("rule_id"),
+                "label": rule.get("label") or rule.get("rule"),
+                "category": rule.get("category") or rule.get("library_id"),
+                "score": rule.get("score"),
+            }
+            for rule in self._active_scoring_rules()
+        ]
+        payload = {
+            "post": {
+                "title": self._truncate_text(subject.title, 240),
+                "title_zh": self._truncate_text(subject.title_zh, 240),
+                "desc": self._truncate_text(subject.desc, 600),
+                "desc_zh": self._truncate_text(subject.desc_zh, 600),
+            },
+            "audit_policy": self._compact_audit_policy(),
+            "media_summaries": media_summaries,
+            "evidence_catalog": compact_catalog,
+            "comment_stats": self._comment_audit_stats(comments),
+            "top_comments": [
+                {
+                    "evidence_id": f"comment:{item.get('comment_id')}",
+                    "comment_id": item.get("comment_id"),
+                    "score": item.get("risk_score"),
+                    "risk_library_id": item.get("risk_library_id", ""),
+                    "risk_library_label": item.get("risk_library_label", ""),
+                    "secondary_library_ids": item.get("secondary_library_ids") or [],
+                    "risk_type": item.get("risk_type", ""),
+                    "risk_basis": item.get("risk_basis", ""),
+                    "exemption_basis": item.get("exemption_basis", ""),
+                    "text": self._truncate_text(item.get("source_text") or item.get("content", ""), 180),
+                    "translation_zh": self._truncate_text(item.get("translation_zh", ""), 180),
+                }
+                for item in top_comments
+            ],
+            "scoring_rules": scoring_rules,
+        }
+        return (
+            "你是全帖审核融合器。只校准已有证据在跨分段和跨模态语境中的含义，不重新分析原始媒体。"
+            "重点识别引用、反讽、批判、否定、新闻、科普和风险提示等豁免语境。"
+            "评论是独立证据：单条中高风险评论可以触发整帖召回复核，但必须说明风险来源为评论区，"
+            "不得把第三方评论直接归责为作者主帖风险；若作者迎合、引导、置顶或主帖证据形成闭环，再说明作者/主帖相关性。\n"
+            "post 中 title_zh/desc_zh 是标题和正文的中文译文，应优先用于理解外文语义。"
+            "content_title 必须生成8至18字中文短标题，即使原始标题为空也要根据摘要和媒体主旨生成，"
+            "不得返回内容ID、审核结论或风险等级。\n"
+            "只输出合法 JSON：\n"
+            "{\"schema_version\":\"audit_fusion_v4\",\"content_title\":\"\",\"summary\":\"\","
+            "\"decision_suggestion\":\"pass|review|reject\",\"risk_level_suggestion\":\"none|low|medium|high\","
+            "\"primary_risk\":\"\",\"categories\":[],\"evidence_items\":[{\"evidence_id\":\"目录ID\","
+            "\"evidence_risk_level\":\"low|medium|high\",\"reason\":\"短原因\"}],"
+            "\"rule_matches\":[{\"rule_id\":\"规则ID\",\"evidence_ids\":[\"目录ID\"]}]}\n"
+            "硬约束：evidence_items 和 rule_matches 只能选择 evidence_catalog 中存在的 evidence_id；"
+            "evidence_items 只输出 evidence_risk_level 为 low、medium、high 的风险证据，"
+            "安全或豁免上下文写入 summary，不得作为 none 证据输出；pass/none 时 evidence_items 和 rule_matches 必须为空数组。"
+            "不要复制原文，不要创造新证据。只选择真正支撑风险结论的有限证据。summary 不超过80字，reason 不超过45字。\n"
+            "输入 JSON：\n"
+            + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        )
 
     def _compose_fusion_prompt(self, replacements: dict[str, str], extra_instruction: str) -> str:
         prompt = self.prompt_set.fusion_prompt_template
@@ -2909,7 +4336,11 @@ class AuditPipeline:
             image_path = item["original_path"]
             ocr_fields = self._image_ocr_fields(local_ocr.get(idx) or {})
             try:
-                analysis = self.qwen.analyze_image(analysis_path, self.prompt_set.image_prompt)
+                analysis = self.qwen.analyze_image(
+                    analysis_path,
+                    self.prompt_set.image_prompt,
+                    model=settings.qwen_image_audit_model,
+                )
                 results.append({
                     "index": idx,
                     "evidence_id": f"image:{idx}",
@@ -2965,7 +4396,11 @@ class AuditPipeline:
             image_source = item["image_source"]
             ocr_fields = self._image_ocr_fields(remote_ocr.get(idx) or {})
             try:
-                analysis = self.qwen.analyze_image(image_source, self.prompt_set.image_prompt)
+                analysis = self.qwen.analyze_image(
+                    image_source,
+                    self.prompt_set.image_prompt,
+                    model=settings.qwen_image_audit_model,
+                )
                 results.append({
                     "index": idx,
                     "evidence_id": f"image:{idx}",
@@ -3133,6 +4568,7 @@ class AuditPipeline:
             "metrics": {
                 "enabled": settings.ocr_enabled,
                 "mode": "timeline_frame",
+                "max_frames": settings.video_ocr_max_frames,
                 "ocr_calls": 0,
                 "translation_calls": 0,
                 "errors": 0,
@@ -3149,7 +4585,6 @@ class AuditPipeline:
                 transcript = self._translate_transcript_if_needed(
                     transcript,
                     video_label,
-                    audio_path=audio_path,
                 )
                 transcript = self._persist_asr_raw(
                     transcript,
@@ -3173,13 +4608,13 @@ class AuditPipeline:
         try:
             job_store.log(
                 self.job_id,
-                f"{video_label}：开始抽取 timeline frames，最多 {settings.max_video_frames} 帧，"
+                f"{video_label}：开始抽取 timeline frames，最多 {settings.video_review_max_frames} 帧，"
                 f"scene={settings.video_scene_threshold}，fps-floor={settings.video_fps_floor_seconds}s",
             )
             frame_infos = self.frames.extract_timeline_frames(
                 video_path=video_path,
                 output_dir=video_dir / f"frames_{index:02d}",
-                max_frames=settings.max_video_frames,
+                max_frames=settings.video_review_max_frames,
             )
             job_store.log(self.job_id, f"{video_label}：timeline frames 抽取完成，共 {len(frame_infos)} 帧")
             ocr_started = perf_counter()
@@ -3187,7 +4622,8 @@ class AuditPipeline:
             for frame_idx, frame in enumerate(frame_infos, start=1):
                 frame_ts = float(frame.get("timestamp") or 0.0)
                 frame_ocr = frame_ocr_results.get(frame_idx) or {}
-                self._update_ocr_metrics(ocr_track, frame_ocr)
+                if frame_ocr:
+                    self._update_ocr_metrics(ocr_track, frame_ocr)
                 external_ocr = self._frame_ocr_as_external_ocr(frame_ocr, frame_ts)
                 enriched = {
                     **frame,
@@ -3207,95 +4643,150 @@ class AuditPipeline:
                 if external_ocr:
                     ocr_track["states"].extend(external_ocr)
             metrics = ocr_track.get("metrics") or {}
+            metrics["candidate_frames"] = len(frame_infos)
+            metrics["sampled_frames"] = len(frame_ocr_results)
+            metrics["skipped_frames"] = max(0, len(frame_infos) - len(frame_ocr_results))
             job_store.log(
                 self.job_id,
-                f"{video_label}：timeline OCR 完成，ocr_calls={metrics.get('ocr_calls', 0)}，"
+                f"{video_label}：timeline OCR 完成，sampled={metrics.get('sampled_frames', 0)}/{metrics.get('candidate_frames', 0)}，"
+                f"ocr_calls={metrics.get('ocr_calls', 0)}，"
                 f"translation_calls={metrics.get('translation_calls', 0)}，errors={metrics.get('errors', 0)}，"
                 f"耗时={perf_counter() - ocr_started:.1f}s",
             )
 
-            sheet_size = max(1, settings.video_moment_sheet_frames)
-            chunks = [timeline_frames[i : i + sheet_size] for i in range(0, len(timeline_frames), sheet_size)]
-            moment_jobs: list[dict] = []
-            for moment_idx, chunk in enumerate(chunks, start=1):
-                moment_id = f"video:{index + 1}/moment:{moment_idx}"
-                sheet_path = video_dir / f"moment_sheets_{index:02d}" / f"moment_{moment_idx:02d}.jpg"
-                self.frames.create_contact_sheet(chunk, sheet_path)
-                start_ts = min(float(frame.get("timestamp") or 0.0) for frame in chunk)
-                end_ts = max(float(frame.get("timestamp") or 0.0) for frame in chunk)
+            _, _, duration = self.frames.video_meta(video_path)
+            sheet_size = max(1, settings.video_review_sheet_frames)
+            chunks = [timeline_frames[:sheet_size]]
+            if len(timeline_frames) > sheet_size:
+                chunks.append(timeline_frames[sheet_size : settings.video_review_max_frames])
+            chunks = [chunk for chunk in chunks if chunk]
+            boundary_ts = (
+                float(timeline_frames[sheet_size - 1].get("timestamp") or 0.0)
+                if len(timeline_frames) > sheet_size
+                else duration
+            )
+            duration = max(duration, max((float(frame.get("timestamp") or 0.0) for frame in timeline_frames), default=0.0))
+            review_jobs: list[dict] = []
+            review_sheets_created: list[dict] = []
+            frames_by_segment: dict[str, list[dict]] = {}
+            library_policies = self._active_library_policies(["vision", "ocr", "asr"])
+            for segment_idx, chunk in enumerate(chunks, start=1):
+                segment_id = f"video:{index + 1}/segment:{segment_idx}"
+                sheet_path = video_dir / f"review_sheets_{index:02d}" / f"segment_{segment_idx:02d}.jpg"
+                self.frames.create_contact_sheet(chunk, sheet_path, columns=4, rows=4)
+                main_start = 0.0 if segment_idx == 1 else boundary_ts
+                main_end = boundary_ts if segment_idx == 1 and len(chunks) > 1 else duration
+                overlap = max(0.0, settings.video_review_asr_overlap_seconds)
+                asr_start = max(0.0, main_start - (overlap if segment_idx > 1 else 0.0))
+                asr_end = min(duration, main_end + (overlap if segment_idx == 1 and len(chunks) > 1 else 0.0))
+                ocr_chunks = self._build_ocr_context_chunks(chunk, segment_id)
+                asr_chunks = self._build_asr_context_chunks(transcript, asr_start, asr_end, segment_id)
                 sheet = {
-                    "moment_id": moment_id,
-                    "index": moment_idx,
+                    "segment_id": segment_id,
+                    "index": segment_idx,
                     "path": str(sheet_path),
                     "asset_rel": self._to_job_rel(str(sheet_path), settings.outputs_dir / self.job_id),
                     "frame_ids": [frame.get("frame_id") for frame in chunk],
-                    "start": start_ts,
-                    "end": end_ts,
+                    "start": main_start,
+                    "end": main_end,
+                    "boundary_timestamp": boundary_ts if len(chunks) > 1 else None,
+                    "ocr_chunks": ocr_chunks,
+                    "asr_chunks": asr_chunks,
+                    "library_ids": [policy.get("id") for policy in library_policies if policy.get("id")],
                 }
-                moment_sheets.append(sheet)
-                prompt = self._render_moment_prompt(
-                    video_index=index,
-                    moment_id=moment_id,
-                    frames=chunk,
-                    transcript=transcript,
-                    title=title,
-                    desc=desc,
-                    start_ts=start_ts,
-                    end_ts=end_ts,
-                )
-                moment_jobs.append({
-                    "moment_idx": moment_idx,
-                    "moment_id": moment_id,
-                    "chunk": chunk,
-                    "sheet": sheet,
-                    "sheet_path": sheet_path,
-                    "prompt": prompt,
-                })
+                review_sheets_created.append(sheet)
+                frames_by_segment[segment_id] = chunk
+                for library_policy in library_policies:
+                    prompt = self._render_review_sheet_prompt(
+                        video_index=index,
+                        segment=sheet,
+                        frames=chunk,
+                        title=title,
+                        desc=desc,
+                        library_policy=library_policy,
+                    )
+                    review_jobs.append({
+                        "sheet": sheet,
+                        "sheet_path": sheet_path,
+                        "prompt": prompt,
+                        "frames": chunk,
+                        "library_policy": library_policy,
+                    })
 
-            vlm_mode = "remote_vlm" if settings.use_remote_vlm else ("dashscope_api" if self.qwen.enabled else "mock")
-            moment_workers = max(1, min(settings.video_moment_concurrency, len(moment_jobs) or 1))
-            if moment_jobs:
+            workers = max(1, min(settings.video_review_concurrency, len(review_jobs) or 1))
+            if review_jobs:
                 job_store.log(
                     self.job_id,
-                    f"{video_label}：开始 Moment 粗审，并发={moment_workers}，共 {len(moment_jobs)} 个",
+                    f"{video_label}：开始按库 Sheet 审核，并发={workers}，"
+                    f"sheet={len(review_sheets_created)}，风险库={len(library_policies)}，任务={len(review_jobs)}",
                 )
 
-            def analyze_moment(job: dict) -> dict:
-                moment_idx = int(job["moment_idx"])
-                chunk = job["chunk"]
-                sheet_path = job["sheet_path"]
-                prompt = job["prompt"]
-                vlm_mode = "remote_vlm" if settings.use_remote_vlm else ("dashscope_api" if self.qwen.enabled else "mock")
-                job_store.log(self.job_id, f"{video_label}：Moment {moment_idx}/{len(chunks)} 粗审开始，mode={vlm_mode}")
+            def analyze_sheet(job: dict) -> dict:
+                sheet = job["sheet"]
+                segment_idx = int(sheet["index"])
+                library_policy = job.get("library_policy") or {}
+                library_label = library_policy.get("title") or library_policy.get("id") or "默认风险库"
+                mode = "remote_vlm" if settings.use_remote_vlm else ("dashscope_api" if self.qwen.enabled else "mock")
+                job_store.log(self.job_id, f"{video_label}：Sheet {segment_idx} · {library_label} 审核开始，mode={mode}")
                 vlm_started = perf_counter()
-                raw_analysis = self.qwen.analyze_image(sheet_path, prompt)
-                analysis = self._normalize_moment_analysis(raw_analysis, {str(frame.get("frame_id")) for frame in chunk})
+                raw_analysis = self.qwen.analyze_image(
+                    job["sheet_path"],
+                    job["prompt"],
+                    max_tokens=settings.fusion_max_tokens,
+                    model=settings.qwen_contact_sheet_model,
+                )
+                analysis = self._normalize_segment_review(
+                    raw_analysis,
+                    sheet,
+                    job["frames"],
+                    library_policy=library_policy,
+                )
                 job_store.log(
                     self.job_id,
-                    f"{video_label}：Moment {moment_idx}/{len(chunks)} 粗审完成，"
-                    f"status={analysis.get('status')}，candidate_frames={len(analysis.get('candidate_frame_ids') or [])}，"
+                    f"{video_label}：Sheet {segment_idx} · {library_label} 审核完成，"
+                    f"score={analysis.get('segment_score')}，risks="
+                    f"{sum(len(analysis.get(key) or []) for key in ('visual_risks', 'ocr_risks', 'asr_risks'))}，"
                     f"耗时={perf_counter() - vlm_started:.1f}s",
                 )
                 return {**job, "analysis": analysis}
 
-            if moment_workers <= 1 or len(moment_jobs) <= 1:
-                analyzed_moments = [analyze_moment(job) for job in moment_jobs]
+            if workers <= 1 or len(review_jobs) <= 1:
+                analyzed_sheets = [analyze_sheet(job) for job in review_jobs]
             else:
-                analyzed_moments = []
-                with ThreadPoolExecutor(max_workers=moment_workers) as executor:
-                    future_map = {executor.submit(analyze_moment, job): job for job in moment_jobs}
-                    for future in as_completed(future_map):
-                        analyzed_moments.append(future.result())
+                analyzed_sheets = []
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    futures = {executor.submit(analyze_sheet, job): job for job in review_jobs}
+                    for future in as_completed(futures):
+                        analyzed_sheets.append(future.result())
 
-            for moment_job in sorted(analyzed_moments, key=lambda job: int(job["moment_idx"])):
-                moment_idx = int(moment_job["moment_idx"])
-                moment_id = moment_job["moment_id"]
-                chunk = moment_job["chunk"]
-                sheet = moment_job["sheet"]
-                analysis = moment_job["analysis"]
+            moment_sheets.extend(review_sheets_created)
+            reviewed_by_segment: dict[str, list[dict]] = {}
+            for reviewed in analyzed_sheets:
+                segment_id = str((reviewed.get("sheet") or {}).get("segment_id") or "")
+                if segment_id:
+                    reviewed_by_segment.setdefault(segment_id, []).append(reviewed)
+            for sheet in review_sheets_created:
+                segment_id = str(sheet.get("segment_id") or "")
+                reviewed_items = sorted(
+                    reviewed_by_segment.get(segment_id) or [],
+                    key=lambda item: str((item.get("library_policy") or {}).get("id") or ""),
+                )
+                analyses = [item.get("analysis") or {} for item in reviewed_items]
+                merged_analysis = self._merge_segment_reviews(analyses)
+                chunk = frames_by_segment.get(segment_id) or []
                 moments.append({
                     **sheet,
-                    "analysis": analysis,
+                    "analysis": merged_analysis,
+                    "library_reviews": [
+                        {
+                            "risk_library_id": analysis.get("risk_library_id", ""),
+                            "risk_library_label": analysis.get("risk_library_label", ""),
+                            "segment_score": analysis.get("segment_score", 0),
+                            "segment_level": analysis.get("segment_level", "none"),
+                            "segment_summary": analysis.get("segment_summary", ""),
+                        }
+                        for analysis in analyses
+                    ],
                     "frames": [
                         {
                             "frame_id": frame.get("frame_id"),
@@ -3308,72 +4799,6 @@ class AuditPipeline:
                         for frame in chunk
                     ],
                 })
-
-                if analysis.get("status") != "suspicious":
-                    continue
-                if len(precise_sheets) >= settings.max_precise_sheets_per_video:
-                    job_store.log(self.job_id, f"{video_label}：已达到单视频 Precise Sheet 上限，跳过后续精审")
-                    continue
-                valid_candidates = [
-                    frame_id
-                    for frame_id in analysis.get("candidate_frame_ids") or []
-                    if any(str(frame.get("frame_id")) == str(frame_id) for frame in chunk)
-                ]
-                for candidate_frame_id in valid_candidates[: max(0, settings.max_precise_sheets_per_moment)]:
-                    if len(precise_sheets) >= settings.max_precise_sheets_per_video:
-                        break
-                    center_frame = next((frame for frame in chunk if str(frame.get("frame_id")) == str(candidate_frame_id)), None)
-                    if not center_frame:
-                        continue
-                    precise_idx = len(precise_sheets) + 1
-                    sheet_id = f"v{index + 1}_m{moment_idx}_p{precise_idx}"
-                    precise_frames = self.frames.extract_precise_window(
-                        video_path=video_path,
-                        output_dir=video_dir / f"precise_frames_{index:02d}" / sheet_id,
-                        center_timestamp=float(center_frame.get("timestamp") or 0.0),
-                        sheet_id=sheet_id,
-                        window_seconds=settings.precise_window_seconds,
-                        frame_count=settings.precise_sheet_frames,
-                    )
-                    if not precise_frames:
-                        continue
-                    precise_sheet_path = video_dir / f"precise_sheets_{index:02d}" / f"{sheet_id}.jpg"
-                    self.frames.create_contact_sheet(precise_frames, precise_sheet_path)
-                    precise_prompt = self._render_precise_prompt(
-                        video_index=index,
-                        moment_id=moment_id,
-                        candidate_frame_id=str(candidate_frame_id),
-                        precise_frames=precise_frames,
-                        moment_frames=chunk,
-                        coarse_analysis=analysis,
-                        transcript=transcript,
-                    )
-                    job_store.log(self.job_id, f"{video_label}：Precise Sheet {precise_idx} 精审开始，candidate={candidate_frame_id}")
-                    precise_started = perf_counter()
-                    raw_precise = self.qwen.analyze_image(precise_sheet_path, precise_prompt)
-                    precise_analysis = self._normalize_precise_analysis(raw_precise, precise_frames, center_frame)
-                    job_store.log(
-                        self.job_id,
-                        f"{video_label}：Precise Sheet {precise_idx} 精审完成，"
-                        f"risk_items={len(precise_analysis.get('risk_items') or [])}，"
-                        f"耗时={perf_counter() - precise_started:.1f}s",
-                    )
-                    precise_sheets.append({
-                        "precise_sheet_id": sheet_id,
-                        "moment_id": moment_id,
-                        "candidate_frame_id": str(candidate_frame_id),
-                        "center_timestamp": float(center_frame.get("timestamp") or 0.0),
-                        "path": str(precise_sheet_path),
-                        "asset_rel": self._to_job_rel(str(precise_sheet_path), settings.outputs_dir / self.job_id),
-                        "frames": [
-                            {
-                                **frame,
-                                "asset_rel": self._to_job_rel(frame.get("path"), settings.outputs_dir / self.job_id),
-                            }
-                            for frame in precise_frames
-                        ],
-                        "analysis": precise_analysis,
-                    })
 
         except Exception as exc:
             errors.append(f"frame analysis failed: {exc}")
@@ -3391,10 +4816,13 @@ class AuditPipeline:
             "ocr_track": ocr_track,
             "ocr_metrics": ocr_track.get("metrics") or {},
             "timeline_frames": timeline_frames,
-            "moment_sheets": moment_sheets,
-            "moments": moments,
-            "precise_sheets": precise_sheets,
+            "review_sheets": moment_sheets,
+            "segment_reviews": moments,
+            "moment_sheets": [],
+            "moments": [],
+            "precise_sheets": [],
             "frames": timeline_frames,
+            "duration": duration if 'duration' in locals() else 0.0,
         }
 
         curve_png = video_dir / f"frames_{index:02d}" / "keyframe_curve.png"
@@ -3417,10 +4845,20 @@ class AuditPipeline:
     def _scan_timeline_ocr_batch(self, video_index: int, video_label: str, frame_infos: list[dict]) -> dict[int, dict]:
         if not frame_infos:
             return {}
+        ocr_frames = self._select_timeline_ocr_frames(frame_infos, settings.video_ocr_max_frames)
+        if len(ocr_frames) < len(frame_infos):
+            job_store.log(
+                self.job_id,
+                f"{video_label}：OCR timeline frames sampled {len(ocr_frames)}/{len(frame_infos)}",
+            )
         workers = max(1, settings.ocr_concurrency) if settings.ocr_enabled else 1
 
-        def scan(frame_idx: int, frame: dict) -> tuple[int, dict]:
-            job_store.log(self.job_id, f"{video_label}：OCR timeline frame {frame_idx}/{len(frame_infos)}")
+        def scan(sample_idx: int, frame_idx: int, frame: dict) -> tuple[int, dict]:
+            job_store.log(
+                self.job_id,
+                f"{video_label}：OCR timeline frame {sample_idx}/{len(ocr_frames)} "
+                f"(source {frame_idx}/{len(frame_infos)})",
+            )
             frame_ts = float(frame.get("timestamp") or 0.0)
             result = self.ocr.scan_image(
                 Path(frame["path"]),
@@ -3431,14 +4869,17 @@ class AuditPipeline:
             )
             return frame_idx, result
 
-        if workers <= 1 or len(frame_infos) <= 1:
-            return dict(scan(idx, frame) for idx, frame in enumerate(frame_infos, start=1))
+        if workers <= 1 or len(ocr_frames) <= 1:
+            return dict(
+                scan(sample_idx, frame_idx, frame)
+                for sample_idx, (frame_idx, frame) in enumerate(ocr_frames, start=1)
+            )
 
         results: dict[int, dict] = {}
         with ThreadPoolExecutor(max_workers=workers) as executor:
             future_map = {
-                executor.submit(scan, idx, frame): idx
-                for idx, frame in enumerate(frame_infos, start=1)
+                executor.submit(scan, sample_idx, frame_idx, frame): frame_idx
+                for sample_idx, (frame_idx, frame) in enumerate(ocr_frames, start=1)
             }
             for future in as_completed(future_map):
                 idx = future_map[future]
@@ -3460,6 +4901,35 @@ class AuditPipeline:
         return results
 
     @staticmethod
+    def _select_timeline_ocr_frames(frame_infos: list[dict], max_frames: int) -> list[tuple[int, dict]]:
+        indexed = list(enumerate(frame_infos, start=1))
+        if max_frames <= 0 or len(indexed) <= max_frames:
+            return indexed
+        if max_frames == 1:
+            return [indexed[len(indexed) // 2]]
+
+        last_index = len(indexed) - 1
+        positions: list[int] = []
+        seen: set[int] = set()
+        for sample_idx in range(max_frames):
+            position = round(sample_idx * last_index / (max_frames - 1))
+            if position not in seen:
+                positions.append(position)
+                seen.add(position)
+
+        if len(positions) < max_frames:
+            for position in range(len(indexed)):
+                if position in seen:
+                    continue
+                positions.append(position)
+                seen.add(position)
+                if len(positions) >= max_frames:
+                    break
+            positions.sort()
+
+        return [indexed[position] for position in positions[:max_frames]]
+
+    @staticmethod
     def _update_ocr_metrics(ocr_track: dict, frame_ocr: dict) -> None:
         metrics = ocr_track.get("metrics") or {}
         ocr_track["metrics"] = metrics
@@ -3469,6 +4939,370 @@ class AuditPipeline:
             metrics["translation_calls"] = int(metrics.get("translation_calls") or 0) + 1
         if frame_ocr.get("error"):
             metrics["errors"] = int(metrics.get("errors") or 0) + 1
+
+    def _build_ocr_context_chunks(self, frames: list[dict], segment_id: str) -> list[dict]:
+        if not frames:
+            return []
+        group_count = max(1, (len(frames) + 4) // 5)
+        base_size, remainder = divmod(len(frames), group_count)
+        sizes = [base_size + (1 if idx < remainder else 0) for idx in range(group_count)]
+        chunks: list[dict] = []
+        offset = 0
+        for chunk_index, size in enumerate(sizes, start=1):
+            chunk_frames = frames[offset : offset + size]
+            offset += size
+            items: list[dict] = []
+            for frame in chunk_frames:
+                frame_id = str(frame.get("frame_id") or "")
+                source_text = self._truncate_text(frame.get("ocr_text", ""), settings.fusion_ocr_text_max_chars)
+                translation_zh = self._truncate_text(frame.get("ocr_text_zh", ""), settings.fusion_ocr_text_max_chars)
+                timestamp = round(float(frame.get("timestamp") or 0.0), 3)
+                duplicate_key = (" ".join(source_text.split()), " ".join(translation_zh.split()))
+                previous = items[-1] if items else None
+                if previous and duplicate_key != ("", "") and duplicate_key == previous.get("duplicate_key"):
+                    previous["frame_ids"].append(frame_id)
+                    previous["end"] = timestamp
+                    continue
+                items.append({
+                    "frame_ids": [frame_id],
+                    "start": timestamp,
+                    "end": timestamp,
+                    "source_text": source_text,
+                    "translation_zh": translation_zh,
+                    "duplicate_key": duplicate_key,
+                })
+            for item in items:
+                item.pop("duplicate_key", None)
+            chunks.append({
+                "ocr_chunk_id": f"{segment_id}/ocr:{chunk_index}",
+                "frame_ids": [str(frame.get("frame_id") or "") for frame in chunk_frames],
+                "start": round(float(chunk_frames[0].get("timestamp") or 0.0), 3),
+                "end": round(float(chunk_frames[-1].get("timestamp") or 0.0), 3),
+                "items": items,
+            })
+        return chunks
+
+    def _build_asr_context_chunks(
+        self,
+        transcript: dict,
+        start_ts: float,
+        end_ts: float,
+        segment_id: str,
+    ) -> list[dict]:
+        source_segments: list[dict] = []
+        for source_index, seg in enumerate(transcript.get("segments") or [], start=1):
+            try:
+                start = float(seg.get("start") or 0.0)
+                end = float(seg.get("end") if seg.get("end") is not None else start)
+            except (TypeError, ValueError):
+                continue
+            if end < start_ts or start > end_ts:
+                continue
+            dolphin_text = self._truncate_text(seg.get("source_text_dolphin") or seg.get("text", ""), 500)
+            mms_text = self._truncate_text(seg.get("source_text_mms", ""), 500)
+            translation_zh = self._truncate_text(seg.get("translation_zh", ""), 600)
+            if not dolphin_text and not mms_text and not translation_zh:
+                continue
+            source_segments.append({
+                "source_segment_id": f"asr_raw:{source_index}",
+                "start": start,
+                "end": max(start, end),
+                "source_text_dolphin": dolphin_text,
+                "source_text_mms": mms_text,
+                "translation_zh": translation_zh,
+                "consistency": self._truncate_text(
+                    seg.get("translation_notes") or seg.get("translation_confidence") or "",
+                    100,
+                ),
+            })
+
+        if not source_segments and not transcript.get("segments"):
+            fallback_text = self._truncate_text(transcript.get("text", ""), 1000)
+            fallback_zh = self._truncate_text(transcript.get("text_zh", ""), 1200)
+            if not fallback_text and not fallback_zh:
+                return []
+            source_segments = [{
+                "source_segment_id": "asr_raw:1",
+                "start": start_ts,
+                "end": end_ts,
+                "source_text_dolphin": fallback_text,
+                "source_text_mms": self._truncate_text((transcript.get("mms") or {}).get("text", ""), 1000),
+                "translation_zh": fallback_zh,
+                "consistency": self._truncate_text((transcript.get("translation") or {}).get("asr_consistency", ""), 100),
+            }]
+        if not source_segments:
+            return []
+
+        total_chars = sum(
+            len(item["source_text_dolphin"]) + len(item["translation_zh"])
+            for item in source_segments
+        )
+        configured_max = max(1, min(4, settings.video_review_asr_chunks))
+        target_count = 1
+        for threshold in (180, 500, 900):
+            if total_chars > threshold:
+                target_count += 1
+        target_count = min(configured_max, target_count, len(source_segments))
+        groups = self._partition_weighted_segments(source_segments, target_count)
+        global_consistency = self._truncate_text(
+            (transcript.get("translation") or {}).get("asr_consistency", ""),
+            120,
+        )
+        chunks: list[dict] = []
+        for chunk_index, group in enumerate(groups, start=1):
+            chunks.append({
+                "asr_chunk_id": f"{segment_id}/asr:{chunk_index}",
+                "start": round(float(group[0]["start"]), 3),
+                "end": round(float(group[-1]["end"]), 3),
+                "source_segment_ids": [item["source_segment_id"] for item in group],
+                "source_text_dolphin": " ".join(item["source_text_dolphin"] for item in group if item["source_text_dolphin"]),
+                "source_text_mms": " ".join(item["source_text_mms"] for item in group if item["source_text_mms"]),
+                "translation_zh": " ".join(item["translation_zh"] for item in group if item["translation_zh"]),
+                "consistency": global_consistency or "；".join(
+                    dict.fromkeys(item["consistency"] for item in group if item["consistency"])
+                ),
+            })
+        return chunks
+
+    @staticmethod
+    def _partition_weighted_segments(segments: list[dict], group_count: int) -> list[list[dict]]:
+        if group_count <= 1 or len(segments) <= 1:
+            return [segments]
+        weights = [
+            max(1, len(item.get("source_text_dolphin", "")) + len(item.get("translation_zh", "")))
+            for item in segments
+        ]
+        groups: list[list[dict]] = []
+        offset = 0
+        remaining_weight = sum(weights)
+        for group_index in range(group_count):
+            remaining_groups = group_count - group_index
+            max_take = len(segments) - offset - (remaining_groups - 1)
+            if remaining_groups == 1:
+                take = max_take
+            else:
+                target = remaining_weight / remaining_groups
+                take = 1
+                accumulated = weights[offset]
+                while take < max_take:
+                    next_weight = weights[offset + take]
+                    if abs(accumulated - target) <= abs(accumulated + next_weight - target):
+                        break
+                    accumulated += next_weight
+                    take += 1
+            group = segments[offset : offset + take]
+            groups.append(group)
+            consumed = sum(weights[offset : offset + take])
+            offset += take
+            remaining_weight -= consumed
+        return groups
+
+    def _render_review_sheet_prompt(
+        self,
+        *,
+        video_index: int,
+        segment: dict,
+        frames: list[dict],
+        title: str,
+        desc: str,
+        library_policy: dict | None = None,
+    ) -> str:
+        library_policy = library_policy if isinstance(library_policy, dict) else {}
+        payload = {
+            "video": video_index + 1,
+            "segment_id": segment.get("segment_id"),
+            "main_time_range": {"start": segment.get("start"), "end": segment.get("end")},
+            "risk_library": library_policy,
+            "title": self._truncate_text(title, 180),
+            "desc": self._truncate_text(desc, 360),
+            "frames": [
+                {
+                    "frame_id": frame.get("frame_id"),
+                    "frame_number": frame.get("frame_number"),
+                    "timestamp": round(float(frame.get("timestamp") or 0.0), 3),
+                }
+                for frame in frames
+            ],
+            "ocr_chunks": segment.get("ocr_chunks") or [],
+            "asr_chunks": segment.get("asr_chunks") or [],
+        }
+        return (
+            "你是视频内容审核器。输入图片是一张按真实时间排序的 4x4 contact sheet；空白格不代表视频内容。"
+            "请只按输入 JSON 中 risk_library 指定的风险库审核本分段，并结合帖子上下文、逐帧 OCR 原文/中文译文和对应时间范围内的 ASR 大段。\n"
+            "只输出合法 JSON，不要输出 Markdown，不要复述 OCR 或 ASR 全文：\n"
+            "{\n"
+            '  "segment_summary": "客观概括，最多45个汉字",\n'
+            '  "segment_score": 0,\n'
+            '  "risk_library_id": "风险库 id",\n'
+            '  "risk_library_label": "风险库名称",\n'
+            '  "visual_risks": [{"frame_ids":["f0001"],"score":0,"risk_type":"类别","reason":"短原因"}],\n'
+            '  "ocr_risks": [{"ocr_chunk_id":".../ocr:1","frame_ids":["f0001"],"score":0,"risk_type":"类别","reason":"短原因"}],\n'
+            '  "asr_risks": [{"asr_chunk_id":".../asr:1","score":0,"risk_type":"类别","reason":"短原因"}]\n'
+            "}\n"
+            "约束：所有 ID 只能从输入 JSON 中选择；没有明确风险时对应数组为空。"
+            "每条风险的 score 为 0-100，reason 最多 35 个汉字。"
+            "必须区分宣扬、诱导、攻击、交易、组织和新闻、科普、批判、举报、反讽、正常生活等豁免语境；不要仅凭关键词判违规。\n"
+            "输入 JSON：\n"
+            + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        )
+
+    def _normalize_segment_review(
+        self,
+        analysis: dict,
+        sheet: dict,
+        frames: list[dict],
+        *,
+        library_policy: dict | None = None,
+    ) -> dict:
+        analysis = analysis if isinstance(analysis, dict) else {}
+        library_policy = library_policy if isinstance(library_policy, dict) else {}
+        risk_library_id = str(
+            library_policy.get("id")
+            or analysis.get("risk_library_id")
+            or ""
+        ).strip()
+        risk_library_label = str(
+            library_policy.get("title")
+            or analysis.get("risk_library_label")
+            or risk_library_id
+        ).strip()
+        valid_frame_ids = {str(frame.get("frame_id") or "") for frame in frames}
+        ocr_by_id = {
+            str(item.get("ocr_chunk_id") or ""): item
+            for item in sheet.get("ocr_chunks") or []
+        }
+        asr_by_id = {
+            str(item.get("asr_chunk_id") or ""): item
+            for item in sheet.get("asr_chunks") or []
+        }
+        thresholds = self._active_thresholds()
+
+        def normalized_score(item: dict) -> int:
+            return self._normalize_risk_score(item.get("score"), item.get("risk_level") or "none")
+
+        visual_risks = []
+        for item in analysis.get("visual_risks") or []:
+            if not isinstance(item, dict):
+                continue
+            frame_ids = self._valid_reference_ids(item.get("frame_ids") or item.get("frame_id"), valid_frame_ids)
+            if not frame_ids:
+                continue
+            score = normalized_score(item)
+            visual_risks.append({
+                "frame_ids": frame_ids,
+                "score": score,
+                "risk_level": self._level_from_score(score, thresholds),
+                "risk_library_id": risk_library_id,
+                "risk_library_label": risk_library_label,
+                "risk_type": self._truncate_text(item.get("risk_type", ""), 60),
+                "reason": self._truncate_text(item.get("reason", ""), 100),
+            })
+
+        ocr_risks = []
+        for item in analysis.get("ocr_risks") or []:
+            if not isinstance(item, dict):
+                continue
+            chunk_id = str(item.get("ocr_chunk_id") or "")
+            chunk = ocr_by_id.get(chunk_id)
+            if not chunk:
+                continue
+            valid_chunk_frames = set(chunk.get("frame_ids") or []) & valid_frame_ids
+            frame_ids = self._valid_reference_ids(item.get("frame_ids") or item.get("frame_id"), valid_chunk_frames)
+            if not frame_ids:
+                continue
+            score = normalized_score(item)
+            ocr_risks.append({
+                "ocr_chunk_id": chunk_id,
+                "frame_ids": frame_ids,
+                "score": score,
+                "risk_level": self._level_from_score(score, thresholds),
+                "risk_library_id": risk_library_id,
+                "risk_library_label": risk_library_label,
+                "risk_type": self._truncate_text(item.get("risk_type", ""), 60),
+                "reason": self._truncate_text(item.get("reason", ""), 100),
+            })
+
+        asr_risks = []
+        for item in analysis.get("asr_risks") or []:
+            if not isinstance(item, dict):
+                continue
+            chunk_id = str(item.get("asr_chunk_id") or "")
+            if chunk_id not in asr_by_id:
+                continue
+            score = normalized_score(item)
+            asr_risks.append({
+                "asr_chunk_id": chunk_id,
+                "score": score,
+                "risk_level": self._level_from_score(score, thresholds),
+                "risk_library_id": risk_library_id,
+                "risk_library_label": risk_library_label,
+                "risk_type": self._truncate_text(item.get("risk_type", ""), 60),
+                "reason": self._truncate_text(item.get("reason", ""), 100),
+            })
+
+        segment_score = self._normalize_risk_score(analysis.get("segment_score"), "none")
+        segment_score = max(
+            [segment_score]
+            + [item["score"] for item in visual_risks + ocr_risks + asr_risks]
+        )
+        return {
+            "segment_summary": self._truncate_text(analysis.get("segment_summary") or analysis.get("summary", ""), 100),
+            "segment_score": segment_score,
+            "segment_level": self._level_from_score(segment_score, thresholds),
+            "risk_library_id": risk_library_id,
+            "risk_library_label": risk_library_label,
+            "visual_risks": visual_risks,
+            "ocr_risks": ocr_risks,
+            "asr_risks": asr_risks,
+        }
+
+    def _merge_segment_reviews(self, analyses: list[dict]) -> dict:
+        thresholds = self._active_thresholds()
+        cleaned = [analysis for analysis in analyses if isinstance(analysis, dict)]
+        if not cleaned:
+            return {
+                "segment_summary": "",
+                "segment_score": 0,
+                "segment_level": "none",
+                "visual_risks": [],
+                "ocr_risks": [],
+                "asr_risks": [],
+            }
+        top = max(cleaned, key=lambda item: int(item.get("segment_score") or 0))
+        visual_risks = []
+        ocr_risks = []
+        asr_risks = []
+        for analysis in cleaned:
+            visual_risks.extend(analysis.get("visual_risks") or [])
+            ocr_risks.extend(analysis.get("ocr_risks") or [])
+            asr_risks.extend(analysis.get("asr_risks") or [])
+        segment_score = max(
+            [self._normalize_risk_score(item.get("segment_score"), item.get("segment_level") or "none") for item in cleaned]
+            + [int(item.get("score") or 0) for item in visual_risks + ocr_risks + asr_risks]
+        )
+        return {
+            "segment_summary": self._truncate_text(
+                top.get("segment_summary")
+                or next((item.get("segment_summary") for item in cleaned if item.get("segment_summary")), ""),
+                100,
+            ),
+            "segment_score": segment_score,
+            "segment_level": self._level_from_score(segment_score, thresholds),
+            "visual_risks": visual_risks,
+            "ocr_risks": ocr_risks,
+            "asr_risks": asr_risks,
+        }
+
+    @staticmethod
+    def _valid_reference_ids(values, valid_ids: set[str]) -> list[str]:
+        if isinstance(values, str):
+            values = [values]
+        out = []
+        for value in values or []:
+            item = str(value or "").strip()
+            if item and item in valid_ids and item not in out:
+                out.append(item)
+        return out
 
     def _render_moment_prompt(
         self,
@@ -3719,47 +5553,39 @@ class AuditPipeline:
             + json.dumps(external_ocr, ensure_ascii=False, indent=2)
         )
 
-    def _translate_transcript_if_needed(self, transcript: dict, video_label: str, *, audio_path: Path | None = None) -> dict:
-        text = (transcript.get("text") or "").strip()
+    def _translate_transcript_if_needed(self, transcript: dict, video_label: str) -> dict:
+        text = self._strip_asr_control_tokens(transcript.get("text"))
+        cleaned_segments = []
+        for segment in transcript.get("segments") or []:
+            if not isinstance(segment, dict):
+                continue
+            segment_text = self._strip_asr_control_tokens(segment.get("text"))
+            if segment_text:
+                cleaned_segments.append({**segment, "text": segment_text})
+        if not text and cleaned_segments:
+            text = " ".join(segment["text"] for segment in cleaned_segments)
+        transcript["text"] = text
+        transcript["segments"] = cleaned_segments
         language = str(transcript.get("language") or "")
         if not text:
-            return transcript
-        trust_language_label = not (
-            str(transcript.get("asr_engine") or transcript.get("provider") or "").lower() == "dolphin"
-            and str(settings.dolphin_lang_sym or "").lower().startswith("ug")
-        )
-        if not self.translator.should_translate(text, language, trust_language_label=trust_language_label):
-            return transcript
-        arabic_ratio = self.translator.arabic_script_ratio(text)
-        mms_result = {}
-        if audio_path and settings.use_remote_mms_asr:
-            job_store.log(
-                self.job_id,
-                f"{video_label}：ASR 文本阿拉伯字母比例={arabic_ratio:.2f}，开始 MMS 维语复核",
-            )
-            mms_result = self.mms_audio.transcribe(audio_path)
-            transcript["mms"] = self._compact_mms_result(mms_result)
-            if mms_result.get("raw") is not None:
-                transcript["mms_raw"] = mms_result.get("raw")
-            if mms_result.get("error"):
-                job_store.log(self.job_id, f"{video_label}：MMS 复核失败：{mms_result.get('error')}")
-            else:
-                job_store.log(
-                    self.job_id,
-                    f"{video_label}：MMS 复核完成，文本长度={len(mms_result.get('text', ''))}",
-                )
-        elif audio_path:
-            transcript["mms"] = {
-                "enabled": False,
-                "reason": "USE_REMOTE_MMS_ASR=false",
+            transcript["translation"] = {
+                "translated": False,
+                "skipped": True,
+                "text": "",
+                "reason": "no valid ASR speech text",
             }
+            job_store.log(self.job_id, f"{video_label}：ASR 未识别到有效语音文本，跳过翻译")
+            return transcript
+        if not self.translator.should_translate(text, language, trust_language_label=True):
+            return transcript
 
         if settings.asr_translate_engine == "qwen_text":
             job_store.log(
                 self.job_id,
-                f"{video_label}：开始 LLM ASR 分段翻译，model={settings.asr_translate_model}，保留 Dolphin 时间戳",
+                f"{video_label}：开始 LLM ASR 全文翻译，model={settings.asr_translate_model}，"
+                "按 Dolphin 原分段回填时间戳",
             )
-            translation = self._translate_asr_segments_with_llm(transcript, mms_result)
+            translation = self._translate_asr_segments_with_llm(transcript)
         else:
             job_store.log(self.job_id, f"{video_label}：开始 HY-MT ASR 翻译")
             translation = self.translator.translate_if_needed(
@@ -3778,56 +5604,181 @@ class AuditPipeline:
                     f"，耗时={float(translation.get('elapsed_seconds') or 0.0):.1f}s"
                     f"，prompt_chars={int(translation.get('prompt_chars') or 0)}"
                     f"，segments={int(translation.get('segment_count') or 0)}"
-                    f"，mms_chars={int(translation.get('mms_reference_chars') or 0)}"
                 )
+                if translation.get("split_retry"):
+                    detail += f"，自动拆批={int(translation.get('batch_count') or 0)}"
             job_store.log(self.job_id, f"{video_label}：ASR 翻译完成，译文长度={len(translation['text'])}{detail}")
         else:
             job_store.log(self.job_id, f"{video_label}：ASR 翻译未完成：{translation.get('error') or translation.get('reason')}")
         return transcript
 
     @staticmethod
-    def _compact_mms_result(mms_result: dict) -> dict:
-        if not mms_result:
-            return {}
-        return {
-            "provider": mms_result.get("provider", "mms"),
-            "asr_engine": mms_result.get("asr_engine", "mms"),
-            "text": mms_result.get("text", ""),
-            "language": mms_result.get("language", "ug"),
-            "model": mms_result.get("model", ""),
-            "target_lang": mms_result.get("target_lang", ""),
-            "chunks": (mms_result.get("chunks") or [])[:20],
-            "elapsed_seconds": mms_result.get("elapsed_seconds"),
-            "error": mms_result.get("error", ""),
-        }
+    def _strip_asr_control_tokens(value) -> str:
+        text = str(value or "").strip()
+        return re.sub(r"<[^<>]{1,32}>", "", text).strip()
 
-    def _translate_asr_segments_with_llm(self, transcript: dict, mms_result: dict) -> dict:
+    def _translate_asr_segments_with_llm(self, transcript: dict) -> dict:
         segments = self._compact_asr_segments_for_translation(transcript)
         if not segments:
             return {"translated": False, "text": "", "reason": "no ASR segments"}
-        mms_text = self._truncate_text(mms_result.get("text", ""), 2400)
+        started = perf_counter()
+        try:
+            result, prompt_chars = self._request_asr_translation_batch(
+                transcript,
+                segments,
+                context_segments=segments,
+            )
+        except Exception as exc:
+            return {"translated": False, "text": "", "error": str(exc), "provider": "qwen_text"}
+
+        translation = self._normalize_asr_translation(result, segments)
+        if not self._asr_translation_result_complete(result, segments) and len(segments) > 1:
+            finish_reason = str((result.get("_llm_meta") or {}).get("finish_reason") or "unknown")
+            job_store.log(
+                self.job_id,
+                f"ASR 翻译返回不完整，自动按段拆批重试：segments={len(segments)}，"
+                f"finish_reason={finish_reason}",
+            )
+            midpoint = (len(segments) + 1) // 2
+            resolved_batches: list[dict] = []
+            batch_attempts: list[dict] = []
+            for batch in (segments[:midpoint], segments[midpoint:]):
+                resolved, attempts, batch_prompt_chars = self._resolve_asr_translation_batch(
+                    transcript,
+                    batch,
+                    context_segments=segments,
+                )
+                resolved_batches.extend(resolved)
+                batch_attempts.extend(attempts)
+                prompt_chars += batch_prompt_chars
+
+            merged_result, missing_indexes = self._merge_asr_translation_batches(
+                resolved_batches,
+                segments,
+            )
+            translation = self._normalize_asr_translation(merged_result, segments)
+            translation["raw"] = {
+                "split_retry": True,
+                "initial_response": result,
+                "batch_attempts": batch_attempts,
+            }
+            translation["split_retry"] = True
+            translation["batch_count"] = len(resolved_batches)
+            if missing_indexes:
+                preview = ",".join(str(index) for index in missing_indexes[:20])
+                suffix = ",..." if len(missing_indexes) > 20 else ""
+                translation["translated"] = False
+                translation["error"] = (
+                    "ASR translation split retry incomplete "
+                    f"(missing_indexes={preview}{suffix})"
+                )
+
+        translation["elapsed_seconds"] = perf_counter() - started
+        translation["prompt_chars"] = prompt_chars
+        translation["segment_count"] = len(segments)
+        return translation
+
+    def _request_asr_translation_batch(
+        self,
+        transcript: dict,
+        segments: list[dict],
+        *,
+        context_segments: list[dict],
+    ) -> tuple[dict, int]:
         prompt = self._render_asr_translation_prompt(
             transcript=transcript,
             segments=segments,
-            mms_text=mms_text,
+            context_segments=context_segments,
         )
+        result = self.qwen.audit_text(
+            prompt,
+            max_tokens=settings.asr_translate_max_tokens,
+            model=settings.asr_translate_model,
+            enable_thinking=settings.asr_translate_enable_thinking,
+        )
+        return result, len(prompt)
+
+    def _resolve_asr_translation_batch(
+        self,
+        transcript: dict,
+        segments: list[dict],
+        *,
+        context_segments: list[dict],
+    ) -> tuple[list[dict], list[dict], int]:
+        indexes = [int(item["index"]) for item in segments]
         try:
-            started = perf_counter()
-            result = self.qwen.audit_text(prompt, max_tokens=1400, model=settings.asr_translate_model)
+            result, prompt_chars = self._request_asr_translation_batch(
+                transcript,
+                segments,
+                context_segments=context_segments,
+            )
         except Exception as exc:
-            return {"translated": False, "text": "", "error": str(exc), "provider": "qwen_text"}
-        translation = self._normalize_asr_translation(result, segments)
-        translation["elapsed_seconds"] = perf_counter() - started
-        translation["prompt_chars"] = len(prompt)
-        translation["segment_count"] = len(segments)
-        translation["mms_reference_chars"] = len(mms_text)
-        return translation
+            record = {"indexes": indexes, "error": str(exc), "result": {}}
+            return [record], [record], 0
+
+        record = {"indexes": indexes, "result": result}
+        return [record], [record], prompt_chars
+
+    @staticmethod
+    def _asr_translation_result_complete(result: dict, source_segments: list[dict]) -> bool:
+        if not isinstance(result, dict):
+            return False
+        finish_reason = str((result.get("_llm_meta") or {}).get("finish_reason") or "").lower()
+        if finish_reason in {"length", "max_tokens"} or result.get("raw_response"):
+            return False
+        translated_indexes = set()
+        for item in result.get("segments") or []:
+            if not isinstance(item, dict) or not str(item.get("translation_zh") or "").strip():
+                continue
+            try:
+                translated_indexes.add(int(item.get("index") or 0))
+            except (TypeError, ValueError):
+                continue
+        expected_indexes = {int(item["index"]) for item in source_segments}
+        return bool(expected_indexes) and expected_indexes.issubset(translated_indexes)
+
+    @staticmethod
+    def _merge_asr_translation_batches(
+        records: list[dict],
+        source_segments: list[dict],
+    ) -> tuple[dict, list[int]]:
+        expected_indexes = {int(item["index"]) for item in source_segments}
+        translated_by_index: dict[int, dict] = {}
+        for record in records:
+            result = record.get("result") if isinstance(record.get("result"), dict) else {}
+            for item in result.get("segments") or []:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    index = int(item.get("index") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if (
+                    index in expected_indexes
+                    and str(item.get("translation_zh") or "").strip()
+                ):
+                    translated_by_index[index] = item
+
+        merged_segments = [
+            translated_by_index[int(source["index"])]
+            for source in source_segments
+            if int(source["index"]) in translated_by_index
+        ]
+        global_translation = " ".join(
+            str(item.get("translation_zh") or "").strip()
+            for item in merged_segments
+            if str(item.get("translation_zh") or "").strip()
+        )
+        missing_indexes = sorted(expected_indexes - set(translated_by_index))
+        return {
+            "segments": merged_segments,
+            "global_translation_zh": global_translation,
+        }, missing_indexes
 
     def _compact_asr_segments_for_translation(self, transcript: dict) -> list[dict]:
         out: list[dict] = []
-        used_chars = 0
         for idx, seg in enumerate(transcript.get("segments") or [], start=1):
-            text = self._truncate_text(seg.get("text", ""), 220)
+            text = str(seg.get("text") or "").strip()
             if not text:
                 continue
             try:
@@ -3836,9 +5787,6 @@ class AuditPipeline:
             except (TypeError, ValueError):
                 start = 0.0
                 end = 0.0
-            used_chars += len(text)
-            if settings.transcript_max_chars > 0 and used_chars > settings.transcript_max_chars:
-                break
             out.append({
                 "index": idx,
                 "start": round(start, 3),
@@ -3847,37 +5795,56 @@ class AuditPipeline:
             })
         if out:
             return out
-        text = self._truncate_text(transcript.get("text", ""), settings.transcript_max_chars)
+        text = str(transcript.get("text") or "").strip()
         return [{"index": 1, "start": 0.0, "end": 0.0, "text": text}] if text else []
 
-    def _render_asr_translation_prompt(self, *, transcript: dict, segments: list[dict], mms_text: str) -> str:
+    def _render_asr_translation_prompt(
+        self,
+        *,
+        transcript: dict,
+        segments: list[dict],
+        context_segments: list[dict] | None = None,
+    ) -> str:
+        full_context = context_segments or segments
+        full_source_text = "\n".join(
+            f"[{item['index']}] {str(item.get('text') or '').strip()}"
+            for item in full_context
+        ).strip()
         payload = {
             "language": transcript.get("language") or "ug",
             "primary_asr_engine": transcript.get("asr_engine") or transcript.get("provider") or "dolphin",
-            "reference_asr_engine": "mms" if mms_text else "",
-            "dolphin_segments": segments,
-            "mms_reference_text": mms_text,
+            "full_source_text": full_source_text,
         }
+        target_indexes = [int(item["index"]) for item in segments]
+        batch_mode = target_indexes != [int(item["index"]) for item in full_context]
+        if batch_mode:
+            payload["target_indexes"] = target_indexes
+        global_translation_scope = (
+            "只合并 target_indexes 对应译文，不得包含其他 index"
+            if batch_mode
+            else "按顺序合并全部 index 的完整中文译文"
+        )
         return (
-            "你是维吾尔语 ASR 复核与中文翻译器。请以 dolphin_segments 的 start/end 为唯一时间戳来源，"
-            "逐段翻译为中文。MMS 文本只是复核参考，用来帮助判断 Dolphin 是否漏识别、重复或明显错听；"
-            "不要根据 MMS 重新创造时间戳，不要合并或拆分 Dolphin 段。\n\n"
-            "只输出合法 JSON，字段必须完全一致：\n"
+            "你是维吾尔语 ASR 复核与中文翻译器。先完整阅读 full_source_text，把它作为一段连续讲话理解全文；"
+            "方括号数字仅用于之后对齐，不是语义边界。结合全文语境复核 Dolphin 可能出现的错听、连写或非标准拼写，"
+            "完成全文理解和翻译后，再将中文译文按原 index 对齐。不要合并或拆分 index；"
+            "如果输入包含 target_indexes，本次只输出这些 index，且不得遗漏；否则输出全部 index。"
+            "global_translation_zh 也只能合并本次要求输出的 index。"
+            "不要返回或推断时间戳。\n"
+            "译文应忠实、自然，不要逐词机械直译，也不要扩写原文没有的信息。"
+            "如果存在 ASR 疑词，在 notes 中简短说明；不要把不确定猜测写成确定事实。\n\n"
+            "只输出合法 JSON，不要输出 Markdown 或 JSON 之外的文字，字段必须完全一致：\n"
             "{\n"
             '  "segments": [\n'
             "    {\n"
             '      "index": 1,\n'
-            '      "start": 0.0,\n'
-            '      "end": 0.0,\n'
-            '      "source_text": "原 ASR 文本",\n'
+            '      "source_text": "该 index 的原 ASR 文本",\n'
             '      "translation_zh": "中文译文",\n'
-            '      "mms_reference_used": true,\n'
             '      "confidence": "high|medium|low",\n'
-            '      "notes": "必要时说明 Dolphin/MMS 差异"\n'
+            '      "notes": "必要时说明 ASR 疑词，否则为空"\n'
             "    }\n"
             "  ],\n"
-            '  "global_translation_zh": "按时间顺序合并后的中文译文",\n'
-            '  "asr_consistency": "Dolphin 与 MMS 的一致性说明"\n'
+            f'  "global_translation_zh": "{global_translation_scope}"\n'
             "}\n\n"
             "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, indent=2)
@@ -3903,9 +5870,10 @@ class AuditPipeline:
                 "index": source["index"],
                 "start": source["start"],
                 "end": source["end"],
-                "source_text": item.get("source_text") or source["text"],
+                "source_text": source["text"],
+                "source_text_mms": "",
                 "translation_zh": translation,
-                "mms_reference_used": bool(item.get("mms_reference_used")),
+                "mms_reference_used": False,
                 "confidence": str(item.get("confidence") or "medium").lower(),
                 "notes": self._truncate_text(item.get("notes", ""), 180),
             })
@@ -3913,15 +5881,21 @@ class AuditPipeline:
             result.get("global_translation_zh", "") or " ".join(seg["translation_zh"] for seg in segments if seg["translation_zh"]),
             settings.transcript_max_chars,
         )
-        return {
+        normalized = {
             "translated": bool(global_text),
             "provider": "qwen_text",
             "model": settings.asr_translate_model,
             "text": global_text,
             "segments": segments,
-            "asr_consistency": self._truncate_text(result.get("asr_consistency", ""), 260),
             "raw": result,
         }
+        raw_response = str(result.get("raw_response") or "")
+        if raw_response and not global_text:
+            normalized["error"] = (
+                "ASR translation returned incomplete or invalid JSON "
+                f"(response_chars={len(raw_response)})"
+            )
+        return normalized
 
     @staticmethod
     def _apply_asr_translation_segments(transcript: dict, translation: dict) -> None:
@@ -3937,13 +5911,18 @@ class AuditPipeline:
                 seg = {
                     **seg,
                     "source_text_dolphin": seg.get("text", ""),
+                    "source_text_mms": item.get("source_text_mms", ""),
                     "translation_zh": item.get("translation_zh", ""),
                     "mms_reference_used": item.get("mms_reference_used", False),
                     "translation_confidence": item.get("confidence", ""),
                     "translation_notes": item.get("notes", ""),
                 }
             else:
-                seg = {**seg, "source_text_dolphin": seg.get("text", "")}
+                seg = {
+                    **seg,
+                    "source_text_dolphin": seg.get("text", ""),
+                    "source_text_mms": "",
+                }
             updated.append(seg)
         transcript["segments"] = updated
 

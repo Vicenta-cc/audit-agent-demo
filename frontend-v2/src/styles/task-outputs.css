@@ -1295,6 +1295,18 @@
   -webkit-line-clamp: 3;
 }
 
+.detail-original-text .detail-original-translation {
+  margin-top: 10px;
+  padding-top: 10px;
+  color: #1e3a5f;
+  border-top: 1px solid #e2e8f0;
+}
+
+.detail-original-translation strong {
+  color: #475569;
+  font-size: 12px;
+}
+
 .detail-original-text.is-expanded p {
   display: block;
   max-height: 168px;
@@ -1535,7 +1547,17 @@
   padding: 14px;
   background: #ffffff;
   border: 1px solid #edf2f8;
-  border-radius: 10px;
+  border-radius: 8px;
+}
+
+.detail-evidence-frame {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  margin-bottom: 12px;
+  object-fit: contain;
+  background: #0f172a;
+  border-radius: 6px;
 }
 
 .detail-evidence-item header {
@@ -1621,6 +1643,20 @@
   color: #475569;
 }
 
+.detail-evidence-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 7px 10px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 760;
+}
+
 .detail-evidence-empty {
   display: grid;
   place-items: center;
@@ -1659,7 +1695,7 @@
 }
 
 .detail-comments-section {
-  height: 204px;
+  min-height: 342px;
   overflow: hidden;
   padding: 14px 18px 16px;
   background: #ffffff;
@@ -1732,15 +1768,15 @@
 .detail-comment-card {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  flex: 0 0 calc((100% - 64px) / 4.35);
-  min-width: 252px;
-  max-width: 340px;
-  height: 132px;
+  flex: 0 0 calc((100% - 32px) / 3);
+  min-width: 330px;
+  max-width: 440px;
+  height: 268px;
   scroll-snap-align: start;
   padding: 12px 13px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .detail-comment-card header,
@@ -1768,15 +1804,82 @@
   font-size: 12px;
 }
 
-.detail-comment-card p {
-  display: -webkit-box;
-  overflow: hidden;
+.detail-comment-card header .detail-comment-risk {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.detail-comment-risk.status-safe {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.detail-comment-risk.status-review {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.detail-comment-risk.status-medium {
+  color: #b45309;
+  background: #ffedd5;
+}
+
+.detail-comment-risk.status-high {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.detail-comment-body {
+  min-height: 0;
+  overflow: auto;
   margin: 8px 0;
+  padding-right: 4px;
+}
+
+.detail-comment-card p {
+  margin: 0 0 7px;
   color: #334155;
   font-size: 13px;
   line-height: 20px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  word-break: break-word;
+}
+
+.detail-comment-card .detail-comment-translation {
+  color: #475569;
+}
+
+.detail-comment-card .detail-comment-audit-failed {
+  color: #b45309;
+}
+
+.detail-comment-card dl {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+}
+
+.detail-comment-card dl div {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 7px;
+}
+
+.detail-comment-card dt,
+.detail-comment-card dd {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.detail-comment-card dt {
+  color: #64748b;
+}
+
+.detail-comment-card dd {
+  color: #334155;
+  word-break: break-word;
 }
 
 .detail-comment-card footer time {
@@ -1809,7 +1912,7 @@
 
 .detail-comment-arrow {
   position: absolute;
-  top: 48px;
+  top: 112px;
   z-index: 2;
   width: 34px;
   height: 34px;
@@ -1829,7 +1932,7 @@
   display: grid;
   place-items: center;
   width: 100%;
-  min-height: 124px;
+  min-height: 260px;
   color: #94a3b8;
   font-size: 13px;
 }
@@ -1894,7 +1997,7 @@
   }
 
   .detail-comment-card {
-    flex-basis: 320px;
+    flex-basis: 360px;
   }
 }
 
@@ -1945,7 +2048,7 @@
   }
 
   .detail-comments-section {
-    height: 214px;
+    min-height: 354px;
     padding-right: 12px;
     padding-left: 12px;
   }
@@ -1958,5 +2061,10 @@
   .detail-comment-track {
     padding-right: 38px;
     padding-left: 38px;
+  }
+
+  .detail-comment-card {
+    min-width: min(330px, calc(100vw - 94px));
+    height: 278px;
   }
 }

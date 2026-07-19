@@ -158,10 +158,40 @@ def _sanitize_audit_result_media(item: dict) -> dict:
     if isinstance(index, dict):
         index["video_units"] = valid_video_units
         if not valid_video_units and not valid_video_results:
-            for key in ("timeline_frames", "moment_sheets", "moments", "precise_sheets", "asr_segments", "asr_raw", "ocr_items"):
+            for key in (
+                "timeline_frames",
+                "review_sheets",
+                "segment_reviews",
+                "ocr_chunks",
+                "asr_chunks",
+                "moment_sheets",
+                "moments",
+                "precise_sheets",
+                "asr_segments",
+                "asr_raw",
+                "ocr_items",
+            ):
                 index[key] = []
+            index["evidence_catalog"] = [
+                value
+                for value in index.get("evidence_catalog") or []
+                if not isinstance(value, dict)
+                or not str(value.get("source") or "").startswith(("video:", "video_frame:", "video_audio:"))
+            ]
         elif valid_video_sources:
-            for key in ("timeline_frames", "moment_sheets", "moments", "precise_sheets", "asr_segments", "ocr_items"):
+            for key in (
+                "timeline_frames",
+                "review_sheets",
+                "segment_reviews",
+                "ocr_chunks",
+                "asr_chunks",
+                "moment_sheets",
+                "moments",
+                "precise_sheets",
+                "asr_segments",
+                "ocr_items",
+                "evidence_catalog",
+            ):
                 values = index.get(key)
                 if not isinstance(values, list):
                     continue
@@ -169,9 +199,21 @@ def _sanitize_audit_result_media(item: dict) -> dict:
                     value
                     for value in values
                     if not isinstance(value, dict)
-                    or not str(value.get("source") or "").startswith("video:")
-                    or any(str(value.get("source") or "").startswith(source) for source in valid_video_sources)
+                    or not str(value.get("video_source") or value.get("source") or "").startswith(("video:", "video_frame:", "video_audio:"))
+                    or any(
+                        str(value.get("video_source") or value.get("source") or "").startswith(source)
+                        for source in valid_video_sources
+                    )
                 ]
+        valid_catalog_ids = {
+            str(value.get("evidence_id") or "")
+            for value in index.get("evidence_catalog") or []
+            if isinstance(value, dict) and value.get("evidence_id")
+        }
+        if valid_catalog_ids and isinstance(index.get("final_evidence_refs"), list):
+            index["final_evidence_refs"] = [
+                value for value in index["final_evidence_refs"] if str(value) in valid_catalog_ids
+            ]
         sanitized["evidence_index"] = index
     sanitized["video_results"] = valid_video_results
     return sanitized
@@ -697,6 +739,8 @@ def get_config():
         "model_base_url": settings.dashscope_base_url,
         "qwen_text_model": settings.qwen_text_model,
         "qwen_vl_model": settings.qwen_vl_model,
+        "qwen_image_audit_model": settings.qwen_image_audit_model,
+        "qwen_contact_sheet_model": settings.qwen_contact_sheet_model,
         "asr_translate_model": settings.asr_translate_model,
         "qwen_use_response_format": settings.qwen_use_response_format,
         "vl_image_max_side": settings.vl_image_max_side,
@@ -732,6 +776,8 @@ def get_config():
         "ocr_paddle_prompt_preset": settings.ocr_paddle_prompt_preset,
         "ocr_paddle_prompt_compose": settings.ocr_paddle_prompt_compose,
         "max_video_frames": settings.max_video_frames,
+        "video_review_max_frames": settings.video_review_max_frames,
+        "video_ocr_max_frames": settings.video_ocr_max_frames,
         "video_moment_concurrency": settings.video_moment_concurrency,
         "video_scene_threshold": settings.video_scene_threshold,
         "video_fps_floor_seconds": settings.video_fps_floor_seconds,
@@ -740,6 +786,8 @@ def get_config():
         "remote_translation_base_url": settings.remote_translation_base_url,
         "remote_ocr_base_url": settings.remote_ocr_base_url,
         "media_crawler_dir": str(settings.media_crawler_dir),
+        "crawler_max_concurrency": settings.crawler_max_concurrency,
+        "crawler_sleep_seconds": settings.crawler_sleep_seconds,
         "outputs_dir": str(settings.outputs_dir),
         "risk_rule_defaults": {
             "capabilities": DEFAULT_CAPABILITIES,
@@ -988,6 +1036,8 @@ def gpu_health():
             "base_url": settings.dashscope_base_url,
             "text_model": settings.qwen_text_model,
             "vl_model": settings.qwen_vl_model,
+            "image_audit_model": settings.qwen_image_audit_model,
+            "contact_sheet_model": settings.qwen_contact_sheet_model,
             "asr_translate_model": settings.asr_translate_model,
             "use_response_format": settings.qwen_use_response_format,
             "image_max_side": settings.vl_image_max_side,
@@ -1031,6 +1081,7 @@ def gpu_health():
             "concurrency": settings.ocr_concurrency,
             "language_hint": settings.ocr_language_hint,
             "sample_fps": settings.ocr_sample_fps,
+            "video_max_frames": settings.video_ocr_max_frames,
             "paddle_device": settings.ocr_paddle_device,
             "paddle_pipeline_version": settings.ocr_paddle_pipeline_version,
             "paddle_prompt_label": settings.ocr_paddle_prompt_label,

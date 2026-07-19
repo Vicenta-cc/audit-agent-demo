@@ -174,6 +174,7 @@ class DemoAudioProcessor:
     def _transcribe_dolphin(self, audio_path: Path) -> dict:
         try:
             import dolphin
+            import torch
             from dolphin import transcribe
         except Exception as exc:
             return {"text": "", "segments": [], "error": f"Dolphin unavailable: {exc}"}
@@ -203,14 +204,16 @@ class DemoAudioProcessor:
         decode_kwargs["word_timestamp"] = settings.dolphin_word_timestamp
         timestamp_warning = ""
         try:
-            result = transcribe(self._model, str(audio_path), **decode_kwargs)
+            with torch.inference_mode():
+                result = transcribe(self._model, str(audio_path), **decode_kwargs)
         except TypeError as exc:
             if "predict_time" not in str(exc) and "word_timestamp" not in str(exc):
                 raise
             timestamp_warning = f"Dolphin timestamp options unsupported by installed package: {exc}"
             decode_kwargs.pop("predict_time", None)
             decode_kwargs.pop("word_timestamp", None)
-            result = transcribe(self._model, str(audio_path), **decode_kwargs)
+            with torch.inference_mode():
+                result = transcribe(self._model, str(audio_path), **decode_kwargs)
         payload = self._serializable(result)
         text = self._extract_dolphin_text(result)
         output = {
@@ -250,16 +253,15 @@ class DemoAudioProcessor:
         if isinstance(result, list):
             chunks = []
             for item in result:
-                chunks.append(
-                    getattr(item, "text_nospecial", "")
-                    or getattr(item, "text", "")
-                    or str(item)
-                )
+                if hasattr(item, "text_nospecial"):
+                    chunks.append(str(getattr(item, "text_nospecial", "") or "").strip())
+                else:
+                    chunks.append(str(getattr(item, "text", "") or str(item)).strip())
             return "\n".join(chunk for chunk in chunks if chunk)
+        if hasattr(result, "text_nospecial"):
+            return str(getattr(result, "text_nospecial", "") or "").strip()
         return (
-            getattr(result, "text_nospecial", "")
-            or getattr(result, "text", "")
-            or str(result)
+            str(getattr(result, "text", "") or str(result)).strip()
         )
 
     def _serializable(self, value):
@@ -287,7 +289,12 @@ class DemoAudioProcessor:
         for item in items:
             if not isinstance(item, dict):
                 continue
-            text = item.get("text_nospecial") or item.get("text") or item.get("sentence") or ""
+            text = (
+                item.get("text_nospecial")
+                if "text_nospecial" in item
+                else item.get("text") or item.get("sentence") or ""
+            )
+            text = str(text or "").strip()
             word_segments = self._dolphin_segments_from_words(text, item.get("word_timestamps"))
             if word_segments and not any(key in item for key in ("start", "end", "start_time", "end_time")):
                 segments.extend(word_segments)
@@ -566,12 +573,13 @@ class DemoFrameExtractor:
             threshold=settings.video_dedup_threshold,
             window=settings.video_dedup_window,
         )
+        deduped = self._ensure_boundary_candidates(candidates, deduped)
         selected = self._thin_by_time(deduped, max_frames)
 
         frames: list[dict] = []
         for idx, item in enumerate(selected):
             frame_id = f"f{idx + 1:04d}"
-            target = output_dir / f"{frame_id}.jpg"
+            target = output_dir / f"{frame_id}.png"
             source = Path(str(item["path"]))
             if source.resolve() != target.resolve():
                 shutil.copy2(source, target)
@@ -605,6 +613,23 @@ class DemoFrameExtractor:
         )
         return frames
 
+    def video_meta(self, video_path: Path) -> tuple[float, int, float]:
+        return self._video_meta(video_path)
+
+    @staticmethod
+    def _ensure_boundary_candidates(candidates: list[dict], selected: list[dict]) -> list[dict]:
+        if not candidates:
+            return selected
+        by_path = {str(item.get("path") or ""): item for item in selected}
+        for boundary in (candidates[0], candidates[-1]):
+            key = str(boundary.get("path") or "")
+            if key and key not in by_path:
+                by_path[key] = boundary
+        return sorted(
+            by_path.values(),
+            key=lambda item: (float(item.get("timestamp") or 0.0), int(item.get("frame_number") or 0)),
+        )
+
     def _extract_cv2_candidates(
         self,
         video_path: Path,
@@ -631,8 +656,8 @@ class DemoFrameExtractor:
             score = self._diff(frame, prev)
             should_keep = prev is None or score >= scene_threshold * 100 or frame_num - last_selected >= floor_interval
             if should_keep:
-                path = output_dir / f"candidate_{len(candidates) + 1:05d}.jpg"
-                cv2.imwrite(str(path), frame)
+                path = output_dir / f"candidate_{len(candidates) + 1:05d}.png"
+                cv2.imwrite(str(path), frame, [cv2.IMWRITE_PNG_COMPRESSION, 3])
                 candidates.append({
                     "path": str(path),
                     "timestamp": frame_num / fps,
@@ -658,7 +683,7 @@ class DemoFrameExtractor:
         if not ffmpeg_path:
             return []
         output_dir.mkdir(parents=True, exist_ok=True)
-        pattern = output_dir / "candidate_%05d.jpg"
+        pattern = output_dir / "candidate_%05d.png"
         expr = (
             "select='isnan(prev_selected_t)"
             f"+gt(scene\\,{scene_threshold:.4f})"
@@ -675,8 +700,6 @@ class DemoFrameExtractor:
                     expr,
                     "-vsync",
                     "vfr",
-                    "-q:v",
-                    "2",
                     "-y",
                     str(pattern),
                 ],
@@ -694,7 +717,7 @@ class DemoFrameExtractor:
             float(match.group(1))
             for match in re.finditer(r"pts_time:([0-9]+(?:\.[0-9]+)?)", completed.stderr or "")
         ]
-        files = sorted(output_dir.glob("candidate_*.jpg"))
+        files = sorted(output_dir.glob("candidate_*.png"))
         candidates: list[dict] = []
         for idx, path in enumerate(files):
             timestamp = timestamps[idx] if idx < len(timestamps) else idx * max(0.1, fps_floor_seconds)

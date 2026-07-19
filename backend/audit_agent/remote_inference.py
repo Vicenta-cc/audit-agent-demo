@@ -78,12 +78,38 @@ class RemoteInferenceClient:
         )
         return self._json_response(response, "remote translation failed")
 
-    def analyze_image(self, image_bytes: bytes, prompt: str, filename: str = "image.jpg") -> dict:
+    def analyze_image(
+        self,
+        image_bytes: bytes,
+        prompt: str,
+        filename: str = "image.jpg",
+        mime_type: str = "image/jpeg",
+        compress_image: bool = True,
+        image_max_side: int | None = None,
+        image_quality: int | None = None,
+        max_tokens: int | None = None,
+        model: str | None = None,
+        enable_thinking: bool | None = None,
+    ) -> dict:
+        data = {
+            "prompt": prompt,
+            "compress_image": "true" if compress_image else "false",
+        }
+        if model:
+            data["model"] = model
+        if image_max_side is not None:
+            data["image_max_side"] = str(image_max_side)
+        if image_quality is not None:
+            data["image_quality"] = str(image_quality)
+        if max_tokens is not None:
+            data["max_tokens"] = str(max_tokens)
+        if enable_thinking is not None:
+            data["enable_thinking"] = "true" if enable_thinking else "false"
         response = requests.post(
             f"{self.base_url}/api/inference/analyze-image",
             headers=self._headers(),
-            data={"prompt": prompt},
-            files={"image": (filename, image_bytes, "image/jpeg")},
+            data=data,
+            files={"image": (filename, image_bytes, mime_type)},
             timeout=self.timeout,
         )
         return self._json_response(response, "remote VLM failed")
@@ -108,12 +134,29 @@ class RemoteInferenceClient:
             )
         return self._json_response(response, "remote OCR failed")
 
-    def audit_text(self, prompt: str) -> dict:
+    def audit_text(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int | None = None,
+        model: str | None = None,
+        enable_thinking: bool | None = None,
+        request_timeout: int | float | None = None,
+    ) -> dict:
+        payload = {"prompt": prompt}
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        if model:
+            payload["model"] = model
+        if enable_thinking is not None:
+            payload["enable_thinking"] = enable_thinking
+        if request_timeout is not None:
+            payload["request_timeout"] = request_timeout
         response = requests.post(
             f"{self.base_url}/api/inference/audit-text",
             headers={**self._headers(), "Content-Type": "application/json"},
-            json={"prompt": prompt},
-            timeout=self.timeout,
+            json=payload,
+            timeout=(request_timeout + 5) if request_timeout is not None else self.timeout,
         )
         return self._json_response(response, "remote LLM failed")
 

@@ -30,6 +30,10 @@ vlm_ocr_processor = None
 
 class AuditTextRequest(BaseModel):
     prompt: str
+    max_tokens: int | None = None
+    model: str | None = None
+    enable_thinking: bool | None = None
+    request_timeout: int | float | None = None
 
 
 class TranslateRequest(BaseModel):
@@ -116,6 +120,7 @@ def health():
         "hymt_model": settings.hymt_model,
         "qwen_text_model": settings.qwen_text_model,
         "qwen_vl_model": settings.qwen_vl_model,
+        "qwen_image_audit_model": settings.qwen_image_audit_model,
         "ocr_engine": settings.ocr_engine,
         "ocr_language_hint": settings.ocr_language_hint,
         "ocr_paddle_device": settings.ocr_paddle_device,
@@ -162,6 +167,12 @@ async def mms_transcribe(audio: UploadFile = File(...), x_inference_key: str | N
 async def analyze_image(
     image: UploadFile = File(...),
     prompt: str = Form(default=IMAGE_PROMPT),
+    model: str | None = Form(default=None),
+    compress_image: bool = Form(default=True),
+    image_max_side: int | None = Form(default=None),
+    image_quality: int | None = Form(default=None),
+    max_tokens: int | None = Form(default=None),
+    enable_thinking: bool | None = Form(default=None),
     x_inference_key: str | None = Header(default=None),
 ):
     require_key(x_inference_key)
@@ -170,7 +181,16 @@ async def analyze_image(
         image_path = Path(tmp) / f"input{suffix}"
         image_path.write_bytes(await image.read())
         try:
-            return get_qwen_client().analyze_image(image_path, prompt)
+            return get_qwen_client().analyze_image(
+                image_path,
+                prompt,
+                model=model,
+                compress_image=compress_image,
+                image_max_side=image_max_side,
+                image_quality=image_quality,
+                max_tokens=max_tokens,
+                enable_thinking=enable_thinking,
+            )
         except Exception as exc:
             logger.exception("remote VLM failed")
             raise HTTPException(status_code=500, detail=f"remote VLM failed: {exc}") from exc
@@ -180,7 +200,13 @@ async def analyze_image(
 def audit_text(request: AuditTextRequest, x_inference_key: str | None = Header(default=None)):
     require_key(x_inference_key)
     try:
-        return get_qwen_client().audit_text(request.prompt)
+        return get_qwen_client().audit_text(
+            request.prompt,
+            max_tokens=request.max_tokens,
+            model=request.model,
+            enable_thinking=request.enable_thinking,
+            request_timeout=request.request_timeout,
+        )
     except Exception as exc:
         logger.exception("remote LLM failed")
         raise HTTPException(status_code=500, detail=f"remote LLM failed: {exc}") from exc

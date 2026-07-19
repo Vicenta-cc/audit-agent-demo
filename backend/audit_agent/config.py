@@ -18,12 +18,20 @@ class Settings:
         "DASHSCOPE_BASE_URL",
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     ).rstrip("/")
-    qwen_text_model = os.getenv("QWEN_TEXT_MODEL", "qwen3.6-plus")
-    qwen_vl_model = os.getenv("QWEN_VL_MODEL", "qwen3.6-plus")
+    qwen_text_model = os.getenv("QWEN_TEXT_MODEL", "qwen3.7-plus")
+    qwen_vl_model = os.getenv("QWEN_VL_MODEL", "qwen3.7-plus")
+    qwen_contact_sheet_model = os.getenv("QWEN_CONTACT_SHEET_MODEL", "qwen3.6-flash").strip()
+    qwen_image_audit_model = os.getenv("QWEN_IMAGE_AUDIT_MODEL", qwen_contact_sheet_model).strip()
     asr_translate_model = os.getenv("ASR_TRANSLATE_MODEL", qwen_text_model).strip()
+    asr_translate_max_tokens = int(os.getenv("ASR_TRANSLATE_MAX_TOKENS", "6000"))
+    asr_translate_enable_thinking = (
+        os.getenv("ASR_TRANSLATE_ENABLE_THINKING", "false").lower() == "true"
+    )
     qwen_use_response_format = os.getenv("QWEN_USE_RESPONSE_FORMAT", "false").lower() == "true"
     qwen_max_tokens = int(os.getenv("QWEN_MAX_TOKENS", "1024"))
-    fusion_max_tokens = int(os.getenv("FUSION_MAX_TOKENS", "3072"))
+    fusion_max_tokens = int(os.getenv("FUSION_MAX_TOKENS", "3000"))
+    fusion_request_timeout = int(os.getenv("FUSION_REQUEST_TIMEOUT", "90"))
+    fusion_timeout_retries = int(os.getenv("FUSION_TIMEOUT_RETRIES", "1"))
     request_timeout = int(os.getenv("REQUEST_TIMEOUT", "180"))
     remote_inference_base_url = os.getenv("REMOTE_INFERENCE_BASE_URL", "").rstrip("/")
     remote_asr_base_url = os.getenv("REMOTE_ASR_BASE_URL", remote_inference_base_url).rstrip("/")
@@ -47,6 +55,9 @@ class Settings:
     ocr_hash_threshold = int(os.getenv("OCR_HASH_THRESHOLD", "12"))
     ocr_max_samples = int(os.getenv("OCR_MAX_SAMPLES", "120"))
     ocr_translate = os.getenv("OCR_TRANSLATE", "true").lower() == "true"
+    ocr_vl_image_max_side = int(os.getenv("OCR_VL_IMAGE_MAX_SIDE", "1536"))
+    ocr_vl_image_quality = int(os.getenv("OCR_VL_IMAGE_QUALITY", "90"))
+    ocr_vl_max_tokens = int(os.getenv("OCR_VL_MAX_TOKENS", "1500"))
     ocr_paddle_device = os.getenv("OCR_PADDLE_DEVICE", "gpu:0").strip()
     ocr_paddle_pipeline_version = os.getenv("OCR_PADDLE_PIPELINE_VERSION", "v1.6").strip()
     ocr_paddle_prompt_label = os.getenv("OCR_PADDLE_PROMPT_LABEL", "ocr").strip()
@@ -78,6 +89,8 @@ class Settings:
     auto_analyze_crawled_content = os.getenv("AUTO_ANALYZE_CRAWLED_CONTENT", "true").lower() == "true"
     analysis_media_scope = os.getenv("ANALYSIS_MEDIA_SCOPE", "all").strip().lower()
     stream_crawl_analysis = os.getenv("STREAM_CRAWL_ANALYSIS", "true").lower() == "true"
+    crawler_max_concurrency = int(os.getenv("CRAWLER_MAX_CONCURRENCY", "1"))
+    crawler_sleep_seconds = float(os.getenv("CRAWLER_SLEEP_SECONDS", "6"))
     batch_ingestion_enabled = os.getenv("BATCH_INGESTION_ENABLED", "true").lower() == "true"
     batch_size = int(os.getenv("BATCH_SIZE", "20"))
     batch_flush_seconds = float(os.getenv("BATCH_FLUSH_SECONDS", "30"))
@@ -93,6 +106,12 @@ class Settings:
     # Demo defaults: keep cost and runtime small.
     max_images_per_note = int(os.getenv("MAX_IMAGES_PER_NOTE", "4"))
     max_video_frames = int(os.getenv("MAX_VIDEO_FRAMES", "36"))
+    video_review_max_frames = int(os.getenv("VIDEO_REVIEW_MAX_FRAMES", "32"))
+    video_ocr_max_frames = int(os.getenv("VIDEO_OCR_MAX_FRAMES", "16"))
+    video_review_sheet_frames = int(os.getenv("VIDEO_REVIEW_SHEET_FRAMES", "16"))
+    video_review_concurrency = int(os.getenv("VIDEO_REVIEW_CONCURRENCY", "2"))
+    video_review_asr_overlap_seconds = float(os.getenv("VIDEO_REVIEW_ASR_OVERLAP_SECONDS", "4"))
+    video_review_asr_chunks = int(os.getenv("VIDEO_REVIEW_ASR_CHUNKS", "4"))
     video_scene_threshold = float(os.getenv("VIDEO_SCENE_THRESHOLD", "0.30"))
     video_fps_floor_seconds = float(os.getenv("VIDEO_FPS_FLOOR_SECONDS", os.getenv("VIDEO_FPS_FLOOR", "1.0")))
     video_dedup_threshold = float(os.getenv("VIDEO_DEDUP_THRESHOLD", "8"))
@@ -160,6 +179,10 @@ class Settings:
     hymt_repetition_penalty = float(os.getenv("HYMT_REPETITION_PENALTY", "1.15"))
     translation_enabled = os.getenv("TRANSLATION_ENABLED", "true").lower() == "true"
     translation_arabic_ratio_threshold = float(os.getenv("TRANSLATION_ARABIC_RATIO_THRESHOLD", "0.25"))
+    comment_audit_batch_size = int(os.getenv("COMMENT_AUDIT_BATCH_SIZE", "20"))
+    comment_audit_concurrency = int(os.getenv("COMMENT_AUDIT_CONCURRENCY", "4"))
+    comment_audit_max_tokens = int(os.getenv("COMMENT_AUDIT_MAX_TOKENS", "6000"))
+    comment_fusion_top_k = int(os.getenv("COMMENT_FUSION_TOP_K", "20"))
     ffmpeg_path = os.getenv("FFMPEG_PATH", "").strip()
 
 

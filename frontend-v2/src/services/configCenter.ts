@@ -63,8 +63,8 @@ const categoryByLibraryId: Record<string, PolicyCategory> = {
   soft: "软色情",
   terror: "暴恐",
   drug: "涉毒",
-  hate: "仇恨歧视",
-  minority: "其他"
+  hate: "民族意识形态风险",
+  minority: "民族意识形态风险"
 };
 
 const policyCategories: PolicyCategory[] = [
@@ -74,7 +74,7 @@ const policyCategories: PolicyCategory[] = [
   "软色情",
   "暴恐",
   "涉毒",
-  "仇恨歧视",
+  "民族意识形态风险",
   "综合",
   "其他"
 ];
@@ -84,7 +84,7 @@ const capabilityLabels: Record<string, string> = {
   ocr: "OCR",
   asr: "ASR",
   vision: "视觉识别",
-  comment: "评论聚集"
+  comment: "逐条评论审核"
 };
 
 const defaultContentScopes = ["标题正文", "评论弹幕", "图片视频", "语音内容"];
@@ -382,8 +382,8 @@ function inferCategoryFromText(value: string, fallback: PolicyCategory): PolicyC
   if (value.includes("毒")) {
     return "涉毒";
   }
-  if (value.includes("仇恨") || value.includes("歧视") || value.includes("宗教")) {
-    return "仇恨歧视";
+  if (value.includes("民族意识形态") || value.includes("仇恨") || value.includes("歧视") || value.includes("宗教")) {
+    return "民族意识形态风险";
   }
   return fallback;
 }
