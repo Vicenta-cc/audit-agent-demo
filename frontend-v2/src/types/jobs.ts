@@ -127,6 +127,8 @@ export interface AuditEvidenceGroupItem {
   evidence_risk_level?: string;
   supporting_modalities?: string[];
   primary_modality?: string;
+  comment_id?: string;
+  nickname?: string;
   source_label?: string;
   asset_rel?: string;
   local_path?: string;
@@ -235,6 +237,11 @@ export interface AuditResult {
   desc?: string;
   desc_zh?: string;
   summary?: string;
+  cover_url?: string;
+  video_cover_url?: string;
+  thumbnail_url?: string;
+  thumbnail_asset?: AuditMediaAsset;
+  duration_seconds?: number;
   decision?: string;
   risk_level?: string;
   risk_score?: number;
@@ -254,6 +261,7 @@ export interface AuditResult {
   comments_count?: number;
   evidence?: unknown[];
   risk_evidence?: unknown[];
+  evidence_groups?: AuditEvidenceGroup[];
   evidence_items?: Array<{
     evidence_id?: string;
     id?: string;
@@ -291,10 +299,15 @@ export interface AuditResult {
     url?: string;
   }>;
   video_results?: Array<{
-    transcript?: { segments?: unknown[]; text?: string };
-    timeline_frames?: unknown[];
-    review_sheets?: unknown[];
-    segment_reviews?: unknown[];
+    transcript?: {
+      segments?: unknown[];
+      text?: string;
+      text_zh?: string;
+      translation?: { text?: string };
+    };
+    timeline_frames?: AuditMediaAsset[];
+    review_sheets?: AuditMediaAsset[];
+    segment_reviews?: AuditMediaAsset[];
     moments?: unknown[];
     moment_sheets?: unknown[];
     asset_rel?: string;
@@ -338,10 +351,11 @@ export interface AuditResult {
       video_play_url?: string;
       video_download_url?: string;
       duration?: number;
+      segment_reviews?: AuditMediaAsset[];
     }>;
-    timeline_frames?: Array<Record<string, unknown>>;
-    review_sheets?: Array<Record<string, unknown>>;
-    segment_reviews?: Array<Record<string, unknown>>;
+    timeline_frames?: AuditMediaAsset[];
+    review_sheets?: AuditMediaAsset[];
+    segment_reviews?: AuditMediaAsset[];
     ocr_chunks?: Array<Record<string, unknown>>;
     asr_chunks?: Array<Record<string, unknown>>;
     comment_units?: Array<Record<string, unknown>>;
@@ -362,12 +376,23 @@ export interface AuditResult {
   reviewed_at?: string;
   audit_config_revision_id?: string;
   author?: {
+    platform?: string;
     nickname?: string;
     user_id?: string;
     user_unique_id?: string;
     short_user_id?: string;
     sec_uid?: string;
+    avatar?: string;
   };
+}
+
+export interface AuditMediaAsset {
+  asset_rel?: string;
+  local_path?: string;
+  original_path?: string;
+  path?: string;
+  url?: string;
+  [key: string]: unknown;
 }
 
 export interface TaskRunMetrics {

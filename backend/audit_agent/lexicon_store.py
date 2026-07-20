@@ -355,6 +355,8 @@ class LexiconStore:
                 "chips": [item["keyword"] for item in items[:12]],
                 "keywords": items,
                 "prompt_profile": profile,
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
             })
         return out
 
@@ -367,6 +369,7 @@ class LexiconStore:
         terms: list[str] | None = None,
         platform_keywords: list[str] | None = None,
         platform_tags: list[str] | None = None,
+        entries: list[dict] | None = None,
     ) -> dict:
         cleaned_title = str(title or "").strip() or "自定义词库"
         cleaned_risk_label = str(risk_label or "").strip() or cleaned_title.replace("词库", "").replace("知识库", "").strip()
@@ -402,12 +405,24 @@ class LexiconStore:
                 """,
                 (cleaned_id,),
             )
-            for value in term_values:
-                self._insert_keyword_row(conn, cleaned_id, value, "黑话词", "全平台", "中", True, now)
-            for value in search_values:
-                self._insert_keyword_row(conn, cleaned_id, value, "平台搜索词", "全平台", "中", True, now)
-            for value in tag_values:
-                self._insert_keyword_row(conn, cleaned_id, value, "平台标签", "全平台", "中", True, now)
+            if entries is not None:
+                for entry in entries:
+                    main_term = str(entry.get("main_term") or "").strip()
+                    if not main_term:
+                        continue
+                    match_type = "平台标签" if entry.get("query_type") == "tag" else "黑话词"
+                    enabled = bool(entry.get("enabled", True))
+                    self._insert_keyword_row(conn, cleaned_id, main_term, match_type, "全平台", "中", enabled, now)
+                    for variant in self._dedupe_terms(entry.get("variants") or []):
+                        note = json.dumps({"variant_of": main_term}, ensure_ascii=False)
+                        self._insert_keyword_row(conn, cleaned_id, variant, match_type, "全平台", "中", enabled, now, note)
+            else:
+                for value in term_values:
+                    self._insert_keyword_row(conn, cleaned_id, value, "黑话词", "全平台", "中", True, now)
+                for value in search_values:
+                    self._insert_keyword_row(conn, cleaned_id, value, "平台搜索词", "全平台", "中", True, now)
+                for value in tag_values:
+                    self._insert_keyword_row(conn, cleaned_id, value, "平台标签", "全平台", "中", True, now)
             profile = DEFAULT_PROMPT_PROFILES.get(cleaned_id)
             base_profile = profile or DEFAULT_PROMPT_PROFILES.get("soft")
             if base_profile:
@@ -823,18 +838,20 @@ class LexiconStore:
         risk_level: str,
         enabled: bool,
         now: str,
+        note: str = "",
     ) -> None:
         conn.execute(
             """
             INSERT INTO lexicon_keywords
-                (category_id, keyword, match_type, platform, risk_level, enabled, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (category_id, keyword, match_type, platform, risk_level, enabled, note, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(category_id, keyword, platform, match_type) DO UPDATE SET
                 risk_level = excluded.risk_level,
                 enabled = excluded.enabled,
+                note = excluded.note,
                 updated_at = excluded.updated_at
             """,
-            (category_id, keyword, match_type, platform, risk_level, 1 if enabled else 0, now, now),
+            (category_id, keyword, match_type, platform, risk_level, 1 if enabled else 0, note, now, now),
         )
 
     def _dedupe_terms(self, values: list[str]) -> list[str]:

@@ -204,14 +204,17 @@ class AuditResultStore:
         job_id: str = "",
         *,
         after_id: int = 0,
+        offset: int = 0,
         limit: int = 500,
         decision: str = "",
         risk_level: str = "",
         author_key: str = "",
         keyword: str = "",
         sort: str = "id",
+        compact: bool = False,
     ) -> dict:
         limit = min(max(int(limit or 500), 1), 1000)
+        offset = max(int(offset or 0), 0)
         where = []
         params: list[object] = []
         if job_id:
@@ -252,11 +255,13 @@ class AuditResultStore:
                 params,
             ).fetchone()
             rows = conn.execute(
-                f"SELECT * FROM audit_results WHERE {where_sql} {order_sql} LIMIT ?",
-                [*params, limit],
+                f"SELECT * FROM audit_results WHERE {where_sql} {order_sql} LIMIT ? OFFSET ?",
+                [*params, limit, offset],
             ).fetchall()
 
         items = [self._row_to_item(row) for row in rows]
+        if compact:
+            items = [self._compact_list_item(item) for item in items]
         next_after_id = max((int(item.get("id") or 0) for item in items), default=after_id)
         return {
             "items": items,
@@ -420,6 +425,112 @@ class AuditResultStore:
         item.setdefault("categories", categories if isinstance(categories, list) else [])
         item.setdefault("summary", row["summary"] or "")
         return item
+
+    def _compact_list_item(self, item: dict) -> dict:
+        fields = (
+            "id",
+            "audit_result_id",
+            "job_id",
+            "content_id",
+            "platform",
+            "content_key",
+            "note_id",
+            "url",
+            "title",
+            "title_zh",
+            "content_title",
+            "desc",
+            "desc_zh",
+            "summary",
+            "decision",
+            "risk_level",
+            "risk_score",
+            "primary_risk",
+            "categories",
+            "author_key",
+            "author",
+            "analyzed_at",
+            "updated_at",
+            "created_at",
+            "review_status",
+            "review_note",
+            "reviewed_at",
+            "audit_config_revision_id",
+        )
+        compact = {field: item.get(field) for field in fields if item.get(field) is not None}
+        compact["evidence_count"] = int(item.get("evidence_count") or 0)
+        groups = [value for value in item.get("evidence_groups") or [] if isinstance(value, dict)]
+        if groups:
+            compact["evidence_groups"] = [
+                {key: group.get(key) for key in ("id", "type", "count") if group.get(key) is not None}
+                for group in groups
+            ]
+        evidence = next(
+            (
+                value
+                for value in item.get("evidence_items") or []
+                if isinstance(value, dict) and (value.get("risk_library_id") or value.get("risk_library_label"))
+            ),
+            None,
+        )
+        if evidence:
+            compact["evidence_items"] = [{
+                "risk_library_id": evidence.get("risk_library_id"),
+                "risk_library_label": evidence.get("risk_library_label"),
+            }]
+        thumbnail = self._compact_thumbnail_asset(item)
+        if thumbnail:
+            compact["thumbnail_asset"] = thumbnail
+        duration = self._compact_duration(item)
+        if duration is not None:
+            compact["duration_seconds"] = duration
+        return compact
+
+    def _compact_thumbnail_asset(self, item: dict) -> dict:
+        index = item.get("evidence_index") if isinstance(item.get("evidence_index"), dict) else {}
+        candidates = []
+        candidates.extend(item.get("image_analyses") or [])
+        candidates.extend(index.get("image_units") or [])
+        for field in ("cover_url", "video_cover_url", "thumbnail_url"):
+            if item.get(field):
+                candidates.append({"url": item[field]})
+        for video in item.get("video_results") or []:
+            if not isinstance(video, dict):
+                continue
+            for field in ("timeline_frames", "review_sheets", "segment_reviews"):
+                candidates.extend(video.get(field) or [])
+        for field in ("timeline_frames", "review_sheets", "segment_reviews"):
+            candidates.extend(index.get(field) or [])
+        for video in index.get("video_units") or []:
+            if isinstance(video, dict):
+                candidates.extend(video.get("segment_reviews") or [])
+
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            asset = {
+                key: candidate.get(key)
+                for key in ("asset_rel", "local_path", "original_path", "path", "url")
+                if candidate.get(key)
+            }
+            if asset:
+                return asset
+        return {}
+
+    def _compact_duration(self, item: dict) -> float | None:
+        index = item.get("evidence_index") if isinstance(item.get("evidence_index"), dict) else {}
+        values = [
+            *((video or {}).get("duration") for video in item.get("video_results") or [] if isinstance(video, dict)),
+            *((video or {}).get("duration") for video in index.get("video_units") or [] if isinstance(video, dict)),
+        ]
+        for value in values:
+            try:
+                duration = float(value)
+            except (TypeError, ValueError):
+                continue
+            if duration > 0:
+                return duration
+        return None
 
     def _author_key(self, author: dict) -> str:
         for key in ("sec_uid", "user_id", "user_unique_id", "nickname"):

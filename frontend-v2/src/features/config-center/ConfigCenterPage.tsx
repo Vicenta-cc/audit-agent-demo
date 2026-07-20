@@ -87,7 +87,7 @@ export function ConfigCenterPage() {
       loading,
       refreshing,
       error,
-      onRefresh: () => void loadData("refresh")
+      onRefresh: () => loadData("refresh")
     }),
     [error, loadData, loading, refreshing]
   );
@@ -103,7 +103,7 @@ export function ConfigCenterPage() {
               lexicons={snapshot.lexicons}
               loading={loading}
               error={error}
-              onRefresh={() => void loadData("refresh")}
+              onRefresh={() => loadData("refresh")}
             />
           }
         />
@@ -115,7 +115,7 @@ export function ConfigCenterPage() {
               policies={snapshot.policies}
               loading={loading}
               error={error}
-              onRefresh={() => void loadData("refresh")}
+              onRefresh={() => loadData("refresh")}
             />
           }
         />

@@ -1,16 +1,13 @@
 import { RefreshCw, Search } from "lucide-react";
 import { IconButton } from "../../components/common/IconButton";
-import { lexiconCategoryOptions } from "../../services/configCenter";
-import type { LexiconCategory, LexiconSortKey, ReferenceFilter } from "../../types/configCenter";
+import type { LexiconSortKey, ReferenceFilter } from "../../types/configCenter";
 
 interface LexiconToolbarProps {
   query: string;
-  categoryFilter: "全部" | LexiconCategory;
   referenceFilter: ReferenceFilter;
   sortKey: LexiconSortKey;
   refreshing: boolean;
   onQueryChange: (value: string) => void;
-  onCategoryChange: (value: "全部" | LexiconCategory) => void;
   onReferenceChange: (value: ReferenceFilter) => void;
   onSortChange: (value: LexiconSortKey) => void;
   onRefresh: () => void;
@@ -27,12 +24,10 @@ const sortOptions: Array<{ value: LexiconSortKey; label: string }> = [
 
 export function LexiconToolbar({
   query,
-  categoryFilter,
   referenceFilter,
   sortKey,
   refreshing,
   onQueryChange,
-  onCategoryChange,
   onReferenceChange,
   onSortChange,
   onRefresh
@@ -44,18 +39,9 @@ export function LexiconToolbar({
         <input
           value={query}
           type="search"
-          placeholder="搜索词库名称或风险分类"
+          placeholder="搜索词库名称或词条"
           onChange={(event) => onQueryChange(event.target.value)}
         />
-      </label>
-
-      <label className="config-select">
-        <span>风险分类：</span>
-        <select value={categoryFilter} onChange={(event) => onCategoryChange(event.target.value as "全部" | LexiconCategory)}>
-          {lexiconCategoryOptions.map((option) => (
-            <option key={option}>{option}</option>
-          ))}
-        </select>
       </label>
 
       <label className="config-select">

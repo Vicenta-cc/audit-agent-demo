@@ -1,21 +1,12 @@
 export type PolicyStatus = "published" | "draft" | "reviewing" | "disabled";
 
-export type PolicyCategory =
-  | "赌博博彩"
-  | "诈骗"
-  | "违规引流"
-  | "软色情"
-  | "暴恐"
-  | "涉毒"
-  | "民族意识形态风险"
-  | "综合"
-  | "其他";
-
-export type LexiconCategory = PolicyCategory;
-
 export type PolicySortKey = "updated" | "references" | "name" | "created";
 export type LexiconSortKey = "updated" | "entries" | "references" | "name";
 export type ReferenceFilter = "全部" | "已被引用" | "未被引用";
+export type DetectionScope = "title_body" | "comment" | "image" | "video" | "audio";
+export type DetectionCapability = "text" | "comment" | "ocr" | "vision" | "asr";
+export type ImportanceLevel = "低" | "中" | "高";
+export type LexiconQueryType = "keyword" | "tag";
 
 export interface PolicyReference {
   id: string;
@@ -26,31 +17,39 @@ export interface PolicyReference {
 export interface PolicyVersion {
   version: string;
   updatedAt: string;
-  updatedBy: string;
+}
+
+export interface PolicyDetectionConfig {
+  scope: DetectionScope;
+  location: string;
+  evidence: string;
+  capability: DetectionCapability;
+  capabilityLabel: string;
+  enabled: boolean;
+  importance: ImportanceLevel;
 }
 
 export interface ResearchPolicy {
   id: string;
   name: string;
   description: string;
-  category: PolicyCategory;
   status: PolicyStatus;
-  scenarioTags: string[];
   lexiconIds: string[];
   lexiconNames: string[];
   contentScopes: string[];
   recognitionCapabilities: string[];
+  detectionConfigs: PolicyDetectionConfig[];
+  scoringMode: string;
+  scoringModeLabel: string;
   references: PolicyReference[];
   version: PolicyVersion;
   createdAt: string;
   updatedAt: string;
-  updatedBy: string;
 }
 
 export interface PolicySummary {
   total: number;
-  published: number;
-  draft: number;
+  lexiconReferenceCount: number;
   referencedTaskCount: number;
 }
 
@@ -60,26 +59,44 @@ export interface LexiconReference {
   status: PolicyStatus;
 }
 
+export interface LexiconTerm {
+  id: string;
+  mainTerm: string;
+  variants: string[];
+  queryType: LexiconQueryType;
+  enabled: boolean;
+}
+
 export interface RiskLexicon {
   id: string;
   name: string;
-  category: LexiconCategory;
   entryCount: number;
-  platformSearchWordCount: number;
-  platformTagCount: number;
   keywords: string[];
-  platformSearchWords: string[];
-  platformTags: string[];
+  terms: LexiconTerm[];
   references: LexiconReference[];
+  createdAt: string;
   updatedAt: string;
-  updatedBy: string;
 }
 
 export interface LexiconSummary {
   total: number;
   entryCount: number;
   policyReferenceCount: number;
-  latestUpdatedAt: string;
+}
+
+export interface PolicySaveInput {
+  id?: string;
+  name: string;
+  description: string;
+  lexiconIds: string[];
+  detectionConfigs: PolicyDetectionConfig[];
+  scoringMode: string;
+}
+
+export interface LexiconSaveInput {
+  id?: string;
+  name: string;
+  terms: LexiconTerm[];
 }
 
 export interface ConfigCenterSnapshot {

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
-  Download,
   MoreHorizontal,
   Plus,
   Search,
@@ -12,7 +11,6 @@ import {
 import { Button } from "../../../components/common/Button";
 import { DropdownMenu } from "../../../components/common/DropdownMenu";
 import { IconButton } from "../../../components/common/IconButton";
-import { StatusTag } from "../../../components/common/StatusTag";
 import { ConfirmDialog } from "../../../components/feedback/ConfirmDialog";
 import { EmptyState } from "../../../components/feedback/EmptyState";
 import { ErrorState } from "../../../components/feedback/ErrorState";
@@ -20,50 +18,27 @@ import { LoadingState } from "../../../components/feedback/LoadingState";
 import { Toast } from "../../../components/feedback/Toast";
 import {
   deleteLexicon,
-  formatCompactDateTime,
   formatNumber,
-  getPolicyStatusLabel,
-  getPolicyStatusTone,
-  policyCategoryOptions
+  saveLexicon
 } from "../../../services/configCenter";
-import type { LexiconCategory, PolicyCategory, ResearchPolicy, RiskLexicon } from "../../../types/configCenter";
+import type { ResearchPolicy, RiskLexicon } from "../../../types/configCenter";
 
-type StepId = 1 | 2 | 3 | 4;
 type TermStatus = "enabled" | "disabled";
 type TermStatusFilter = "全部" | TermStatus;
-type MatchMethod = "精确" | "模糊" | "正则";
-type RiskWeight = "低" | "中" | "高";
-type PlatformName = "抖音" | "小红书" | "快手" | "其他平台";
+type QueryType = "keyword" | "tag";
 
 interface LexiconTerm {
   id: string;
   mainTerm: string;
   variants: string[];
-  matchMethod: MatchMethod;
-  riskWeight: RiskWeight;
-  platforms: PlatformName[];
-  platformSearchTerms: string[];
-  platformTags: string[];
+  queryType: QueryType;
   status: TermStatus;
   updatedAt: string;
-  note: string;
-}
-
-interface PlatformConfig {
-  platform: PlatformName;
-  enabled: boolean;
-  matchMethod: MatchMethod;
-  searchTerms: string[];
-  tags: string[];
 }
 
 interface LexiconEditDraft {
-  category: LexiconCategory;
   name: string;
-  version: string;
-  description: string;
   terms: LexiconTerm[];
-  platforms: PlatformConfig[];
 }
 
 interface LexiconEditPageProps {
@@ -74,45 +49,38 @@ interface LexiconEditPageProps {
   onRefresh: () => void;
 }
 
-const steps: Array<{ id: StepId; title: string }> = [
-  { id: 1, title: "基础信息" },
-  { id: 2, title: "词条管理" },
-  { id: 3, title: "平台配置" },
-  { id: 4, title: "引用方案" }
-];
-
-const platformOptions: PlatformName[] = ["抖音", "小红书", "快手", "其他平台"];
-const matchMethodOptions: MatchMethod[] = ["精确", "模糊", "正则"];
-const riskWeightOptions: RiskWeight[] = ["低", "中", "高"];
 const statusOptions: Array<{ value: TermStatusFilter; label: string }> = [
   { value: "全部", label: "全部" },
   { value: "enabled", label: "启用" },
   { value: "disabled", label: "停用" }
 ];
 
+const queryTypeLabels: Record<QueryType, string> = {
+  keyword: "关键词",
+  tag: "标签"
+};
+
 export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh }: LexiconEditPageProps) {
   const navigate = useNavigate();
   const { lexiconId = "" } = useParams();
   const isNewLexicon = lexiconId === "new";
   const lexicon = lexicons.find((item) => item.id === lexiconId);
-  const [step, setStep] = useState<StepId>(1);
   const [draft, setDraft] = useState<LexiconEditDraft | null>(null);
   const [loadedLexiconId, setLoadedLexiconId] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TermStatusFilter>("全部");
-  const [drawerTerm, setDrawerTerm] = useState<LexiconTerm | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone?: "success" | "info" } | null>(null);
 
   useEffect(() => {
     if ((!lexicon && !isNewLexicon) || loadedLexiconId === lexiconId) {
       return;
     }
-    setDraft(readStoredLexiconDraft(lexiconId) || buildLexiconDraft(lexicon));
+    setDraft(buildLexiconDraft(lexicon));
     setLoadedLexiconId(lexiconId);
-    setStep(1);
   }, [isNewLexicon, loadedLexiconId, lexicon, lexiconId]);
 
   useEffect(() => {
@@ -138,10 +106,7 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
     return draft.terms.filter((term) => {
       const matchesKeyword =
         !keyword ||
-        [term.mainTerm, term.variants.join(" "), term.platformSearchTerms.join(" "), term.platformTags.join(" ")]
-          .join(" ")
-          .toLowerCase()
-          .includes(keyword);
+        [term.mainTerm, term.variants.join(" ")].join(" ").toLowerCase().includes(keyword);
       const matchesStatus = statusFilter === "全部" || term.status === statusFilter;
       return matchesKeyword && matchesStatus;
     });
@@ -185,9 +150,16 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
     setDraft((current) => (current ? { ...current, ...patch } : current));
   };
 
-  const updateTerm = (next: LexiconTerm) => {
-    updateDraft({ terms: draft.terms.map((term) => (term.id === next.id ? next : term)) });
-    setDrawerTerm(next);
+  const updateTerm = (termId: string, patch: Partial<LexiconTerm>) => {
+    updateDraft({
+      terms: draft.terms.map((term) =>
+        term.id === termId ? { ...term, ...patch, updatedAt: new Date().toISOString() } : term
+      )
+    });
+  };
+
+  const removeTerm = (termId: string) => {
+    updateDraft({ terms: draft.terms.filter((term) => term.id !== termId) });
   };
 
   const addTerm = () => {
@@ -195,22 +167,41 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
       id: `term_${Date.now()}`,
       mainTerm: "新词条",
       variants: [],
-      matchMethod: "模糊",
-      riskWeight: "中",
-      platforms: ["抖音", "小红书", "快手"],
-      platformSearchTerms: [],
-      platformTags: [],
+      queryType: "keyword",
       status: "enabled",
-      updatedAt: new Date().toISOString(),
-      note: ""
+      updatedAt: new Date().toISOString()
     };
     updateDraft({ terms: [next, ...draft.terms] });
-    setDrawerTerm(next);
   };
 
-  const saveDraft = () => {
-    window.localStorage.setItem(`lexicon-edit-draft:${lexiconId}`, JSON.stringify(draft));
-    showToast("黑话库草稿已保存");
+  const saveDraft = async () => {
+    if (!draft.name.trim()) {
+      showToast("请输入词库名称", "info");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveLexicon({
+        id: isNewLexicon ? undefined : lexiconId,
+        name: draft.name,
+        terms: draft.terms.map((term) => ({
+          id: term.id,
+          mainTerm: term.mainTerm,
+          variants: term.variants,
+          queryType: term.queryType,
+          enabled: term.status === "enabled"
+        }))
+      });
+      await onRefresh();
+      showToast("黑话库配置已保存");
+      if (isNewLexicon) {
+        navigate("/config/lexicons");
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "保存失败", "info");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -230,8 +221,6 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
     }
   };
 
-  const categoryOptions = policyCategoryOptions.filter((item): item is PolicyCategory => item !== "全部");
-
   return (
     <main className="lexicon-edit-page">
       <header className="lexicon-edit-header">
@@ -242,8 +231,6 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
         <div className="lexicon-edit-title-block">
           <h1>{draft.name || "未命名黑话库"}</h1>
           <div className="lexicon-edit-meta">
-            <span>{draft.category}</span>
-            <span>当前版本：{draft.version}</span>
             <span>词条：{formatNumber(draft.terms.length)} 个</span>
           </div>
         </div>
@@ -265,85 +252,40 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
       </header>
 
       <section className="lexicon-edit-shell">
-        <aside className="lexicon-edit-steps" aria-label="黑话库编辑步骤">
-          {steps.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`lexicon-step-item${item.id === step ? " is-active" : ""}${item.id < step ? " is-done" : ""}`}
-              onClick={() => setStep(item.id)}
-            >
-              <span>{item.id}</span>
-              <strong>{item.title}</strong>
-            </button>
-          ))}
-        </aside>
-
         <div className="lexicon-edit-content">
-          <div className="lexicon-edit-panel">
-            {step === 1 ? (
-              <StepBasicInfo
-                draft={draft}
-                categoryOptions={categoryOptions}
-                onChange={updateDraft}
-              />
-            ) : null}
-            {step === 2 ? (
+          <div className="lexicon-card-list">
+            <div className="lexicon-config-card lexicon-basic-card">
+              <StepBasicInfo draft={draft} onChange={updateDraft} />
+            </div>
+            <div className="lexicon-config-card lexicon-terms-card">
               <StepTerms
                 query={query}
                 statusFilter={statusFilter}
                 terms={filteredTerms}
                 onQueryChange={setQuery}
                 onStatusFilterChange={setStatusFilter}
-                onImport={() => showToast("批量导入入口已保留", "info")}
                 onCreateTerm={addTerm}
-                onEditTerm={setDrawerTerm}
+                onChangeTerm={updateTerm}
+                onRemoveTerm={removeTerm}
               />
-            ) : null}
-            {step === 3 ? (
-              <StepPlatformConfig
-                platforms={draft.platforms}
-                onChange={(platforms) => updateDraft({ platforms })}
-              />
-            ) : null}
-            {step === 4 ? <StepReferences policies={references} /> : null}
+            </div>
+            <div className="lexicon-config-card lexicon-references-card">
+              <StepReferences policies={references} />
+            </div>
           </div>
 
           <footer className="lexicon-edit-actionbar">
-            <div>
-              {step === 1 ? (
-                <Button type="button" variant="secondary" onClick={() => navigate("/config/lexicons")}>
-                  取消
-                </Button>
-              ) : (
-                <Button type="button" variant="secondary" onClick={() => setStep((current) => Math.max(1, current - 1) as StepId)}>
-                  上一步
-                </Button>
-              )}
-            </div>
+            <Button type="button" variant="secondary" onClick={() => navigate("/config/lexicons")}>
+              取消
+            </Button>
             <div className="lexicon-edit-actionbar-right">
-              <Button type="button" variant="secondary" onClick={saveDraft}>
-                保存草稿
+              <Button type="button" variant="primary" onClick={() => void saveDraft()} disabled={!draft.name.trim() || saving}>
+                {saving ? "保存中..." : "保存配置"}
               </Button>
-              {step === 4 ? (
-                <Button type="button" variant="primary" onClick={() => showToast("黑话库配置已保存")}>
-                  完成
-                </Button>
-              ) : (
-                <Button type="button" variant="primary" onClick={() => setStep((current) => Math.min(4, current + 1) as StepId)}>
-                  下一步
-                </Button>
-              )}
             </div>
           </footer>
         </div>
       </section>
-
-      <TermDrawer
-        term={drawerTerm}
-        onClose={() => setDrawerTerm(null)}
-        onChange={updateTerm}
-      />
 
       <ConfirmDialog
         open={deleteOpen}
@@ -369,39 +311,17 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
 
 interface StepBasicInfoProps {
   draft: LexiconEditDraft;
-  categoryOptions: PolicyCategory[];
   onChange: (patch: Partial<LexiconEditDraft>) => void;
 }
 
-function StepBasicInfo({ draft, categoryOptions, onChange }: StepBasicInfoProps) {
+function StepBasicInfo({ draft, onChange }: StepBasicInfoProps) {
   return (
     <div className="lexicon-step-content">
       <StepHeading title="基础信息" />
       <div className="lexicon-basic-grid">
         <label className="lexicon-form-field">
-          <span>风险分类</span>
-          <select value={draft.category} onChange={(event) => onChange({ category: event.target.value as LexiconCategory })}>
-            {categoryOptions.map((item) => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
-        </label>
-        <label className="lexicon-form-field">
           <span>词库名称</span>
           <input value={draft.name} maxLength={50} onChange={(event) => onChange({ name: event.target.value })} />
-        </label>
-        <label className="lexicon-form-field">
-          <span>当前版本</span>
-          <input value={draft.version} maxLength={24} onChange={(event) => onChange({ version: event.target.value })} />
-        </label>
-        <label className="lexicon-form-field full">
-          <span>词库说明</span>
-          <textarea
-            value={draft.description}
-            maxLength={200}
-            rows={5}
-            onChange={(event) => onChange({ description: event.target.value })}
-          />
         </label>
       </div>
     </div>
@@ -414,9 +334,9 @@ interface StepTermsProps {
   terms: LexiconTerm[];
   onQueryChange: (value: string) => void;
   onStatusFilterChange: (value: TermStatusFilter) => void;
-  onImport: () => void;
   onCreateTerm: () => void;
-  onEditTerm: (term: LexiconTerm) => void;
+  onChangeTerm: (termId: string, patch: Partial<LexiconTerm>) => void;
+  onRemoveTerm: (termId: string) => void;
 }
 
 function StepTerms({
@@ -425,9 +345,9 @@ function StepTerms({
   terms,
   onQueryChange,
   onStatusFilterChange,
-  onImport,
   onCreateTerm,
-  onEditTerm
+  onChangeTerm,
+  onRemoveTerm
 }: StepTermsProps) {
   return (
     <div className="lexicon-step-content">
@@ -447,10 +367,6 @@ function StepTerms({
             ))}
           </select>
         </label>
-        <Button type="button" variant="secondary" onClick={onImport}>
-          <Download size={16} />
-          批量导入
-        </Button>
         <Button type="button" variant="primary" onClick={onCreateTerm}>
           <Plus size={16} />
           新建词条
@@ -460,92 +376,58 @@ function StepTerms({
       <div className="term-table" role="table" aria-label="词条管理表格">
         <div className="term-table-head" role="row">
           <span>主词</span>
-          <span>变体数</span>
-          <span>平台搜索词数</span>
-          <span>平台标签数</span>
+          <span>查询类型</span>
+          <span>变体</span>
           <span>状态</span>
-          <span>更新时间</span>
           <span>操作</span>
         </div>
         {terms.length ? (
           terms.map((term) => (
             <div className="term-table-row" role="row" key={term.id}>
-              <strong title={term.mainTerm}>{term.mainTerm}</strong>
-              <span>{term.variants.length} 个</span>
-              <span>{term.platformSearchTerms.length} 个</span>
-              <span>{term.platformTags.length} 个</span>
-              <StatusTag tone={term.status === "enabled" ? "success" : "neutral"}>
-                {term.status === "enabled" ? "启用" : "停用"}
-              </StatusTag>
-              <span>{formatCompactDateTime(term.updatedAt)}</span>
-              <button className="config-text-button" type="button" onClick={() => onEditTerm(term)}>
-                编辑
-              </button>
+              <input
+                className="term-main-input"
+                aria-label={`${term.mainTerm}主词`}
+                value={term.mainTerm}
+                maxLength={50}
+                onChange={(event) => onChangeTerm(term.id, { mainTerm: event.target.value })}
+              />
+              <div className="query-type-segmented" role="group" aria-label={`${term.mainTerm}查询类型`}>
+                {(Object.keys(queryTypeLabels) as QueryType[]).map((queryType) => (
+                  <button
+                    key={queryType}
+                    type="button"
+                    aria-pressed={term.queryType === queryType}
+                    className={term.queryType === queryType ? "is-selected" : ""}
+                    onClick={() => onChangeTerm(term.id, { queryType })}
+                  >
+                    {queryTypeLabels[queryType]}
+                  </button>
+                ))}
+              </div>
+              <TokenEditor
+                label="变体"
+                values={term.variants}
+                placeholder="添加变体后回车"
+                compact
+                onChange={(variants) => onChangeTerm(term.id, { variants })}
+              />
+              <label className="switch-control" title={term.status === "enabled" ? "已启用" : "已停用"}>
+                <input
+                  type="checkbox"
+                  aria-label={`${term.mainTerm}状态`}
+                  checked={term.status === "enabled"}
+                  onChange={(event) => onChangeTerm(term.id, { status: event.target.checked ? "enabled" : "disabled" })}
+                />
+                <span />
+              </label>
+              <IconButton type="button" aria-label={`删除词条${term.mainTerm}`} onClick={() => onRemoveTerm(term.id)}>
+                <Trash2 size={17} />
+              </IconButton>
             </div>
           ))
         ) : (
           <div className="term-empty">暂无匹配词条</div>
         )}
-      </div>
-    </div>
-  );
-}
-
-interface StepPlatformConfigProps {
-  platforms: PlatformConfig[];
-  onChange: (platforms: PlatformConfig[]) => void;
-}
-
-function StepPlatformConfig({ platforms, onChange }: StepPlatformConfigProps) {
-  const updatePlatform = (platform: PlatformName, patch: Partial<PlatformConfig>) => {
-    onChange(platforms.map((item) => (item.platform === platform ? { ...item, ...patch } : item)));
-  };
-
-  return (
-    <div className="lexicon-step-content">
-      <StepHeading title="平台配置" />
-      <div className="platform-config-grid">
-        {platforms.map((item) => (
-          <section className="platform-config-group" key={item.platform}>
-            <header>
-              <div>
-                <h3>{item.platform}</h3>
-                <span>{item.searchTerms.length} 个搜索词 · {item.tags.length} 个标签</span>
-              </div>
-              <label className="switch-control">
-                <input
-                  type="checkbox"
-                  checked={item.enabled}
-                  onChange={(event) => updatePlatform(item.platform, { enabled: event.target.checked })}
-                />
-                <span />
-              </label>
-            </header>
-            <label className="lexicon-form-field">
-              <span>匹配方式</span>
-              <select
-                value={item.matchMethod}
-                onChange={(event) => updatePlatform(item.platform, { matchMethod: event.target.value as MatchMethod })}
-              >
-                {matchMethodOptions.map((method) => (
-                  <option key={method}>{method}</option>
-                ))}
-              </select>
-            </label>
-            <TokenEditor
-              label="平台搜索词"
-              values={item.searchTerms}
-              placeholder="输入搜索词后回车"
-              onChange={(values) => updatePlatform(item.platform, { searchTerms: values })}
-            />
-            <TokenEditor
-              label="平台标签"
-              values={item.tags}
-              placeholder="输入平台标签后回车"
-              onChange={(values) => updatePlatform(item.platform, { tags: values })}
-            />
-          </section>
-        ))}
       </div>
     </div>
   );
@@ -564,18 +446,12 @@ function StepReferences({ policies }: StepReferencesProps) {
       <div className="reference-policy-table" role="table" aria-label="引用方案列表">
         <div className="reference-policy-head" role="row">
           <span>方案名称</span>
-          <span>状态</span>
-          <span>适用场景</span>
-          <span>引用版本</span>
           <span>操作</span>
         </div>
         {policies.length ? (
           policies.map((policy) => (
             <div className="reference-policy-row" role="row" key={policy.id}>
               <strong title={policy.name}>{policy.name}</strong>
-              <StatusTag tone={getPolicyStatusTone(policy.status)}>{getPolicyStatusLabel(policy.status)}</StatusTag>
-              <span title={policy.scenarioTags.join("、")}>{policy.scenarioTags.join("、")}</span>
-              <span>{policy.version.version}</span>
               <button className="config-text-button" type="button" onClick={() => navigate(`/config/policies/${policy.id}/edit`)}>
                 查看方案
               </button>
@@ -589,119 +465,15 @@ function StepReferences({ policies }: StepReferencesProps) {
   );
 }
 
-interface TermDrawerProps {
-  term: LexiconTerm | null;
-  onClose: () => void;
-  onChange: (term: LexiconTerm) => void;
-}
-
-function TermDrawer({ term, onClose, onChange }: TermDrawerProps) {
-  if (!term) {
-    return null;
-  }
-
-  const patch = (update: Partial<LexiconTerm>) => {
-    onChange({ ...term, ...update, updatedAt: new Date().toISOString() });
-  };
-
-  return (
-    <div className="term-drawer-backdrop" role="presentation" onClick={onClose}>
-      <aside
-        className="term-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="term-drawer-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="term-drawer-header">
-          <div>
-            <span>词条编辑</span>
-            <h2 id="term-drawer-title">{term.mainTerm}</h2>
-          </div>
-          <IconButton type="button" aria-label="关闭词条抽屉" onClick={onClose}>
-            <X size={20} />
-          </IconButton>
-        </header>
-        <div className="term-drawer-body">
-          <label className="lexicon-form-field">
-            <span>主词</span>
-            <input value={term.mainTerm} onChange={(event) => patch({ mainTerm: event.target.value })} />
-          </label>
-          <TokenEditor label="变体" values={term.variants} placeholder="输入变体后回车" onChange={(values) => patch({ variants: values })} />
-          <label className="lexicon-form-field">
-            <span>匹配方式</span>
-            <select value={term.matchMethod} onChange={(event) => patch({ matchMethod: event.target.value as MatchMethod })}>
-              {matchMethodOptions.map((method) => (
-                <option key={method}>{method}</option>
-              ))}
-            </select>
-          </label>
-          <label className="lexicon-form-field">
-            <span>风险权重</span>
-            <select value={term.riskWeight} onChange={(event) => patch({ riskWeight: event.target.value as RiskWeight })}>
-              {riskWeightOptions.map((weight) => (
-                <option key={weight}>{weight}</option>
-              ))}
-            </select>
-          </label>
-          <div className="lexicon-form-field">
-            <span>适用平台</span>
-            <div className="drawer-platform-grid">
-              {platformOptions.map((platform) => (
-                <label key={platform} className={term.platforms.includes(platform) ? "is-selected" : ""}>
-                  <input
-                    type="checkbox"
-                    checked={term.platforms.includes(platform)}
-                    onChange={() => {
-                      const platforms = term.platforms.includes(platform)
-                        ? term.platforms.filter((item) => item !== platform)
-                        : [...term.platforms, platform];
-                      patch({ platforms });
-                    }}
-                  />
-                  {platform}
-                </label>
-              ))}
-            </div>
-          </div>
-          <TokenEditor
-            label="平台搜索词"
-            values={term.platformSearchTerms}
-            placeholder="输入平台搜索词后回车"
-            onChange={(values) => patch({ platformSearchTerms: values })}
-          />
-          <TokenEditor
-            label="平台标签"
-            values={term.platformTags}
-            placeholder="输入平台标签后回车"
-            onChange={(values) => patch({ platformTags: values })}
-          />
-          <label className="lexicon-form-field">
-            <span>备注</span>
-            <textarea rows={4} value={term.note} onChange={(event) => patch({ note: event.target.value })} />
-          </label>
-        </div>
-        <footer className="term-drawer-footer">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            取消
-          </Button>
-          <Button type="button" variant="primary" onClick={onClose}>
-            保存词条
-          </Button>
-        </footer>
-      </aside>
-    </div>
-  );
-}
-
 interface TokenEditorProps {
   label: string;
   values: string[];
   placeholder: string;
+  compact?: boolean;
   onChange: (values: string[]) => void;
 }
 
-function TokenEditor({ label, values, placeholder, onChange }: TokenEditorProps) {
+function TokenEditor({ label, values, placeholder, compact = false, onChange }: TokenEditorProps) {
   const [value, setValue] = useState("");
 
   const addValue = () => {
@@ -715,8 +487,8 @@ function TokenEditor({ label, values, placeholder, onChange }: TokenEditorProps)
   };
 
   return (
-    <div className="token-editor">
-      <span>{label}</span>
+    <div className={`token-editor${compact ? " is-compact" : ""}`}>
+      {compact ? null : <span>{label}</span>}
       <div className="token-editor-box">
         {values.map((item) => (
           <button key={item} type="button" onClick={() => onChange(values.filter((valueItem) => valueItem !== item))}>
@@ -725,6 +497,7 @@ function TokenEditor({ label, values, placeholder, onChange }: TokenEditorProps)
           </button>
         ))}
         <input
+          aria-label={label}
           value={value}
           placeholder={placeholder}
           onChange={(event) => setValue(event.target.value)}
@@ -755,50 +528,18 @@ function StepHeading({ title, description }: StepHeadingProps) {
   );
 }
 
-function readStoredLexiconDraft(lexiconId: string): LexiconEditDraft | null {
-  try {
-    const stored = window.localStorage.getItem(`lexicon-edit-draft:${lexiconId}`);
-    if (!stored) {
-      return null;
-    }
-    const parsed = JSON.parse(stored) as Partial<LexiconEditDraft>;
-    if (!parsed || !Array.isArray(parsed.terms) || !Array.isArray(parsed.platforms)) {
-      return null;
-    }
-    return parsed as LexiconEditDraft;
-  } catch {
-    return null;
-  }
-}
-
 function buildLexiconDraft(lexicon?: RiskLexicon): LexiconEditDraft {
-  const keywords = lexicon?.keywords.length ? lexicon.keywords : ["新词条"];
-  const terms: LexiconTerm[] = keywords.map((keyword, index) => ({
-    id: `${lexicon?.id || "new"}_${index}`,
-    mainTerm: keyword,
-    variants: [`${keyword}变体`, `${keyword}谐音`].slice(0, index % 3),
-    matchMethod: (index % 3 === 0 ? "模糊" : index % 3 === 1 ? "精确" : "正则") as MatchMethod,
-    riskWeight: (index % 3 === 0 ? "高" : index % 3 === 1 ? "中" : "低") as RiskWeight,
-    platforms: index % 2 === 0 ? (["抖音", "小红书"] as PlatformName[]) : (["快手", "其他平台"] as PlatformName[]),
-    platformSearchTerms: (lexicon?.platformSearchWords || []).slice(index, index + 2),
-    platformTags: (lexicon?.platformTags || []).slice(index, index + 2),
-    status: (index % 5 === 4 ? "disabled" : "enabled") as TermStatus,
-    updatedAt: lexicon?.updatedAt || new Date().toISOString(),
-    note: ""
+  const terms: LexiconTerm[] = (lexicon?.terms || []).map((term) => ({
+    id: term.id,
+    mainTerm: term.mainTerm,
+    variants: term.variants,
+    queryType: term.queryType,
+    status: term.enabled ? "enabled" : "disabled",
+    updatedAt: lexicon?.updatedAt || new Date().toISOString()
   }));
 
   return {
-    category: lexicon?.category || "赌博博彩",
     name: lexicon?.name || "",
-    version: lexicon ? "v1.0" : "draft",
-    description: lexicon ? `用于识别${lexicon.category}相关黑话、搜索词和平台标签。` : "",
-    terms,
-    platforms: platformOptions.map((platform, index) => ({
-      platform,
-      enabled: true,
-      matchMethod: index === 3 ? "模糊" : "精确",
-      searchTerms: (lexicon?.platformSearchWords || []).slice(0, 4),
-      tags: (lexicon?.platformTags || []).slice(0, 4)
-    }))
+    terms
   };
 }

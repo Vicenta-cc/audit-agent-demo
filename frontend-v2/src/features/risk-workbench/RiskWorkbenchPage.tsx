@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  getListViewUrl,
+  readEnumParam,
+  readPageSizeParam,
+  readPositiveIntParam,
+  rememberListScroll,
+  useRestoreListScroll,
+  writeDefaultedParam
+} from "../../app/listNavigation";
 import {
   ArrowDownUp,
   CheckCircle2,
@@ -16,12 +25,12 @@ import { IconButton } from "../../components/common/IconButton";
 import { EmptyState } from "../../components/feedback/EmptyState";
 import { ErrorState } from "../../components/feedback/ErrorState";
 import { LoadingState } from "../../components/feedback/LoadingState";
-import { fetchAuditResults, fetchJobs, formatDateTime, getPlatformLabel, getResultTime } from "../../services/jobs";
-import type { AuditResult, RawJob } from "../../types/jobs";
+import { fetchAuditResults, formatDateTime, getPlatformLabel, getResultTime } from "../../services/jobs";
+import type { AuditResult } from "../../types/jobs";
 import type { RiskLevel, TaskOutputItem, TaskOutputSummary } from "../../types/taskOutputs";
+import { OutputPagination } from "../task-outputs/OutputPagination";
 import {
   buildOutputSummary,
-  getOutputSearchText,
   getRiskLibraries,
   mapAuditResultToTaskOutput
 } from "../task-outputs/taskOutputUtils";
@@ -68,82 +77,147 @@ const summaryCards = [
   { key: "noRisk", label: "无风险", level: "无风险", Icon: ShieldCheck }
 ] as const;
 
+interface RiskViewUpdate {
+  filters: RiskFilters;
+  page: number;
+  pageSize: number;
+}
+
 export function RiskWorkbenchPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo<RiskFilters>(() => ({
+    query: searchParams.get("q") || initialFilters.query,
+    level: readEnumParam(searchParams, "level", riskLevels, initialFilters.level),
+    sort: readEnumParam(searchParams, "sort", sortOptions.map((option) => option.value), initialFilters.sort)
+  }), [searchParams]);
+  const page = readPositiveIntParam(searchParams, "page", 1);
+  const pageSize = readPageSizeParam(searchParams, 20);
+  const viewUrl = getListViewUrl(location);
   const [rawOutputs, setRawOutputs] = useState<AuditResult[]>([]);
-  const [jobs, setJobs] = useState<RawJob[]>([]);
   const [apiTotal, setApiTotal] = useState(0);
+  const [summary, setSummary] = useState<TaskOutputSummary>(() => buildOutputSummary([]));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [draftFilters, setDraftFilters] = useState<RiskFilters>(initialFilters);
-  const [filters, setFilters] = useState<RiskFilters>(initialFilters);
+  const [draftFilters, setDraftFilters] = useState<RiskFilters>(filters);
+  const [matchedTotal, setMatchedTotal] = useState(0);
 
-  const loadData = useCallback(async (asRefresh = false) => {
-    if (asRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
+  const updateView = useCallback((updates: Partial<RiskViewUpdate>) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (updates.filters) {
+        writeDefaultedParam(next, "q", updates.filters.query, initialFilters.query);
+        writeDefaultedParam(next, "level", updates.filters.level, initialFilters.level);
+        writeDefaultedParam(next, "sort", updates.filters.sort, initialFilters.sort);
+      }
+      if (updates.page !== undefined) writeDefaultedParam(next, "page", updates.page, 1);
+      if (updates.pageSize !== undefined) writeDefaultedParam(next, "size", updates.pageSize, 20);
+      return next;
+    }, { replace: true, state: location.state });
+  }, [location.state, setSearchParams]);
+
+  const loadPage = useCallback(async () => {
+    setLoading(true);
     setError("");
     try {
-      const [outputPayload, jobPayload] = await Promise.all([
-        fetchAuditResults({ limit: 1000, sort: "latest" }),
-        fetchJobs()
-      ]);
-      setRawOutputs(outputPayload.items || []);
-      setApiTotal(outputPayload.total ?? outputPayload.items?.length ?? 0);
-      setJobs(jobPayload);
+      const resultQuery = getResultQuery(filters);
+      const outputPayload = await fetchAuditResults({
+        ...resultQuery,
+        offset: (page - 1) * pageSize,
+        limit: pageSize,
+        sort: filters.sort,
+        compact: true
+      });
+      const items = outputPayload.items || [];
+      const total = outputPayload.total ?? items.length;
+      setRawOutputs(items);
+      setMatchedTotal(total);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载风险内容失败");
     } finally {
       setLoading(false);
-      setRefreshing(false);
+    }
+  }, [filters, page, pageSize]);
+
+  const loadSummary = useCallback(async () => {
+    try {
+      const [totalPayload, highPayload, mediumPayload, safePayload] = await Promise.all([
+        fetchAuditResults({ limit: 1, compact: true }),
+        fetchAuditResults({ limit: 1, riskLevel: "high", compact: true }),
+        fetchAuditResults({ limit: 1, riskLevel: "medium", compact: true }),
+        fetchAuditResults({ limit: 1, decision: "pass", compact: true })
+      ]);
+      const overallTotal = totalPayload.total ?? 0;
+      const highRisk = highPayload.total ?? 0;
+      const mediumRisk = mediumPayload.total ?? 0;
+      const noRisk = safePayload.total ?? 0;
+      setApiTotal(overallTotal);
+      setSummary({
+        total: overallTotal,
+        highRisk,
+        mediumRisk,
+        noRisk,
+        pendingReview: Math.max(0, overallTotal - highRisk - mediumRisk - noRisk)
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载风险统计失败");
     }
   }, []);
 
+  const refreshData = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.allSettled([loadPage(), loadSummary()]);
+    setRefreshing(false);
+  }, [loadPage, loadSummary]);
+
   useEffect(() => {
-    void loadData();
-  }, [loadData]);
+    void loadPage();
+  }, [loadPage]);
+
+  useEffect(() => {
+    void loadSummary();
+  }, [loadSummary]);
+
+  useEffect(() => {
+    setDraftFilters(filters);
+  }, [filters]);
 
   const outputs = useMemo(() => rawOutputs.map(mapAuditResultToTaskOutput), [rawOutputs]);
-  const summary = useMemo(() => buildOutputSummary(outputs, apiTotal || outputs.length), [apiTotal, outputs]);
   const riskLibraries = useMemo(() => getRiskLibraries(outputs), [outputs]);
-  const jobsById = useMemo(() => new Map(jobs.map((job) => [job.id, job])), [jobs]);
 
-  const filteredOutputs = useMemo(() => {
-    const keyword = filters.query.trim().toLowerCase();
-    return outputs
-      .filter((item) => {
-        const matchesKeyword = !keyword || getOutputSearchText(item).includes(keyword);
-        const matchesLevel = filters.level === "全部" || item.riskLevel === filters.level;
-        return matchesKeyword && matchesLevel;
-      })
-      .slice()
-      .sort((a, b) => {
-        if (filters.sort === "risk") {
-          return riskRank(b.riskLevel) - riskRank(a.riskLevel) || parseTime(b.timestamp) - parseTime(a.timestamp);
-        }
-        return parseTime(b.timestamp) - parseTime(a.timestamp);
-      });
-  }, [filters, outputs]);
+  const pageCount = Math.max(1, Math.ceil(matchedTotal / pageSize));
+  const safePage = Math.min(page, pageCount);
+
+  useEffect(() => {
+    if (!loading && page !== safePage) updateView({ page: safePage });
+  }, [loading, page, safePage, updateView]);
+
+  useRestoreListScroll(viewUrl, !loading);
 
   if (loading && !rawOutputs.length) {
     return <main className="risk-workbench-page"><LoadingState label="正在加载风险研判数据..." /></main>;
   }
 
   if (error && !rawOutputs.length) {
-    return <main className="risk-workbench-page"><ErrorState message={error} onRetry={() => void loadData()} /></main>;
+    return <main className="risk-workbench-page"><ErrorState message={error} onRetry={() => void refreshData()} /></main>;
   }
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setFilters(draftFilters);
+    updateView({ filters: draftFilters, page: 1 });
   };
 
   const handleReset = () => {
     setDraftFilters(initialFilters);
-    setFilters(initialFilters);
+    updateView({ filters: initialFilters, page: 1 });
+  };
+
+  const handleSummaryFilter = (level: RiskLevel) => {
+    const nextLevel: RiskFilter = filters.level === level ? "全部" : level;
+    setDraftFilters((current) => ({ ...current, level: nextLevel }));
+    updateView({ filters: { ...filters, level: nextLevel }, page: 1 });
   };
 
   const handleViewDetail = (item: TaskOutputItem) => {
@@ -151,7 +225,14 @@ export function RiskWorkbenchPage() {
     if (!jobId) {
       return;
     }
-    navigate(`/tasks/${encodeURIComponent(jobId)}/outputs/${encodeURIComponent(item.id)}`);
+    rememberListScroll(viewUrl);
+    navigate(`/tasks/${encodeURIComponent(jobId)}/outputs/${encodeURIComponent(item.id)}`, {
+      state: {
+        returnTo: viewUrl,
+        returnLabel: "风险研判",
+        returnTitle: "风险研判工作台"
+      }
+    });
   };
 
   return (
@@ -164,7 +245,7 @@ export function RiskWorkbenchPage() {
         <IconButton
           type="button"
           aria-label="刷新风险内容"
-          onClick={() => void loadData(true)}
+          onClick={() => void refreshData()}
           disabled={refreshing}
         >
           <RefreshCw className={refreshing ? "spin" : ""} size={18} />
@@ -173,7 +254,7 @@ export function RiskWorkbenchPage() {
 
       <section className="risk-overview-grid" aria-label="风险内容概览">
         <RiskDonut summary={summary} />
-        <RiskMetricStrip summary={summary} />
+        <RiskMetricStrip summary={summary} activeLevel={filters.level} onLevelChange={handleSummaryFilter} />
       </section>
 
       <form className="risk-filter-panel" onSubmit={handleSubmit}>
@@ -222,16 +303,15 @@ export function RiskWorkbenchPage() {
 
       <section className="risk-list-section" aria-label="风险内容列表">
         <div className="risk-list-heading">
-          <span>共 {filteredOutputs.length.toLocaleString("zh-CN")} 条风险内容</span>
-          <span>{riskLibraries.length ? `覆盖 ${riskLibraries.length} 个风险库` : "暂无风险库命中"}</span>
+          <span>共匹配 {matchedTotal.toLocaleString("zh-CN")} 条 · 全部共 {apiTotal.toLocaleString("zh-CN")} 条 · 第 {safePage}/{pageCount} 页</span>
+          <span>{riskLibraries.length ? `当前页覆盖 ${riskLibraries.length} 个风险库` : "当前页暂无风险库命中"}</span>
         </div>
-        {filteredOutputs.length ? (
+        {outputs.length ? (
           <div className="risk-output-list">
-            {filteredOutputs.map((item) => (
+            {outputs.map((item) => (
               <RiskOutputRow
                 key={item.id}
                 item={item}
-                job={jobsById.get(String(item.raw.job_id || ""))}
                 onViewDetail={handleViewDetail}
               />
             ))}
@@ -239,9 +319,25 @@ export function RiskWorkbenchPage() {
         ) : (
           <EmptyState title="暂无匹配内容" description="调整筛选条件后再查看风险内容" />
         )}
+        <OutputPagination
+          total={matchedTotal}
+          page={safePage}
+          pageSize={pageSize}
+          onPageChange={(value) => updateView({ page: value })}
+          onPageSizeChange={(value) => updateView({ pageSize: value, page: 1 })}
+        />
       </section>
     </main>
   );
+}
+
+function getResultQuery(filters: RiskFilters) {
+  const query = filters.query.trim();
+  if (filters.level === "高危") return { keyword: query, riskLevel: "high" };
+  if (filters.level === "中危") return { keyword: query, riskLevel: "medium" };
+  if (filters.level === "待复核") return { keyword: query, riskLevel: "low" };
+  if (filters.level === "无风险") return { keyword: query, decision: "pass" };
+  return { keyword: query };
 }
 
 function RiskDonut({ summary }: { summary: TaskOutputSummary }) {
@@ -274,7 +370,15 @@ function RiskDonut({ summary }: { summary: TaskOutputSummary }) {
   );
 }
 
-function RiskMetricStrip({ summary }: { summary: TaskOutputSummary }) {
+function RiskMetricStrip({
+  summary,
+  activeLevel,
+  onLevelChange
+}: {
+  summary: TaskOutputSummary;
+  activeLevel: RiskFilter;
+  onLevelChange: (level: RiskLevel) => void;
+}) {
   return (
     <section className="risk-metric-strip" aria-label="风险等级统计">
       {summaryCards.map((item) => {
@@ -282,16 +386,23 @@ function RiskMetricStrip({ summary }: { summary: TaskOutputSummary }) {
         const value = summary[item.key];
         const tone = riskToneMap[item.level];
         return (
-          <div className={`risk-metric-item risk-metric-${tone}`} key={item.key}>
-            <div className="risk-metric-icon" aria-hidden="true">
+          <button
+            className={`risk-metric-item risk-metric-${tone}${activeLevel === item.level ? " is-active" : ""}`}
+            key={item.key}
+            type="button"
+            aria-pressed={activeLevel === item.level}
+            aria-label={`${activeLevel === item.level ? "取消" : "筛选"}${item.label}，共 ${value} 条`}
+            onClick={() => onLevelChange(item.level)}
+          >
+            <span className="risk-metric-icon" aria-hidden="true">
               <Icon size={22} />
-            </div>
-            <div className="risk-metric-copy">
+            </span>
+            <span className="risk-metric-copy">
               <span>{item.label}</span>
               <strong>{value.toLocaleString("zh-CN")}</strong>
               <small>占比 {formatPercent(value, summary.total)}</small>
-            </div>
-          </div>
+            </span>
+          </button>
         );
       })}
     </section>
@@ -300,16 +411,14 @@ function RiskMetricStrip({ summary }: { summary: TaskOutputSummary }) {
 
 function RiskOutputRow({
   item,
-  job,
   onViewDetail
 }: {
   item: TaskOutputItem;
-  job?: RawJob;
   onViewDetail: (item: TaskOutputItem) => void;
 }) {
   const tone = riskToneMap[item.riskLevel];
-  const jobName = job?.display_name || job?.keyword || job?.input_filename || item.raw.job_id || "平台内容抓取任务";
-  const platform = getPlatformLabel(item.raw.platform, job?.input_type || "");
+  const jobName = item.raw.job_id ? `任务 ${item.raw.job_id}` : "平台内容抓取任务";
+  const platform = getPlatformLabel(item.raw.platform, "");
   const evidenceTotal = Object.values(item.evidenceCounts).reduce((sum, value) => sum + value, 0);
 
   return (
@@ -374,13 +483,4 @@ function formatPercent(value: number, total: number) {
 function formatRiskTime(item: TaskOutputItem) {
   const value = getResultTime(item.raw) || item.timestamp;
   return value ? formatDateTime(value) : "--";
-}
-
-function riskRank(level: RiskLevel) {
-  return { 高危: 4, 中危: 3, 待复核: 2, 无风险: 1 }[level];
-}
-
-function parseTime(value: string) {
-  const timestamp = Date.parse(value || "");
-  return Number.isFinite(timestamp) ? timestamp : 0;
 }

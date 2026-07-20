@@ -4,15 +4,15 @@ import { MonitoringPlanCard } from "./MonitoringPlanCard";
 import { RelatedAccountsCard } from "./RelatedAccountsCard";
 import { RiskHistoryPreviewCard } from "./RiskHistoryPreviewCard";
 import { RiskSummaryCard } from "./RiskSummaryCard";
-import type { MonitoredAccount } from "../../types/focusUsers";
+import type { MonitoredAccount, RiskOutput } from "../../types/focusUsers";
 
 interface OverviewTabProps {
   account: MonitoredAccount;
   isRefetching: boolean;
   onRefetch: () => void;
   onSwitchTab: (tab: AccountTabKey) => void;
-  onOpenDetail: () => void;
-  onOpenRelation: () => void;
+  onOpenDetail: (risk: RiskOutput) => void;
+  onOpenAnalysisTask: (taskId: string) => void;
 }
 
 export function OverviewTab({
@@ -21,7 +21,7 @@ export function OverviewTab({
   onRefetch,
   onSwitchTab,
   onOpenDetail,
-  onOpenRelation
+  onOpenAnalysisTask
 }: OverviewTabProps) {
   return (
     <section className="overview-grid">
@@ -35,10 +35,16 @@ export function OverviewTab({
       <RiskSummaryCard metrics={account.metrics} onViewAll={() => onSwitchTab("risks")} />
       <RelatedAccountsCard
         accounts={account.relatedAccounts.slice(0, 3)}
+        totalCount={account.relatedAccounts.length}
+        variant="preview"
         onViewAll={() => onSwitchTab("relations")}
-        onOpenRelation={onOpenRelation}
+        onOpenAnalysisTask={onOpenAnalysisTask}
       />
-      <RiskHistoryPreviewCard risks={account.riskOutputs} onViewAll={() => onSwitchTab("risks")} />
+      <RiskHistoryPreviewCard
+        risks={account.riskOutputs}
+        onViewAll={() => onSwitchTab("risks")}
+        onOpenRisk={onOpenDetail}
+      />
       <MonitoringPlanCard plan={account.monitoringPlan} onAdjust={() => onSwitchTab("plan")} />
     </section>
   );

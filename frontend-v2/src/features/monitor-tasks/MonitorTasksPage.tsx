@@ -1,11 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import {
+  getListViewUrl,
+  readEnumParam,
+  readPageSizeParam,
+  readPositiveIntParam,
+  rememberListScroll,
+  useRestoreListScroll,
+  writeDefaultedParam
+} from "../../app/listNavigation";
 import { Toast } from "../../components/feedback/Toast";
 import { EmptyState } from "../../components/feedback/EmptyState";
 import { LoadingState } from "../../components/feedback/LoadingState";
 import { ErrorState } from "../../components/feedback/ErrorState";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog";
-import { controlJob, deleteJob, fetchJobsSnapshot } from "../../services/jobs";
+import {
+  controlJob,
+  deleteJob,
+  fetchJobsSnapshot,
+  readCachedJobsSnapshot,
+  writeCachedJobsSnapshot
+} from "../../services/jobs";
 import type { JobsSnapshot, MonitorTask, TaskSortKey, TaskSourceFilter, TaskStatusFilter } from "../../types/jobs";
 import { MonitorPageHeader } from "./MonitorPageHeader";
 import { TaskStatsStrip } from "./TaskStatsStrip";
@@ -28,18 +43,28 @@ const defaultSnapshot: JobsSnapshot = {
   }
 };
 
+const taskStatusFilters: TaskStatusFilter[] = ["全部", "运行中", "已暂停", "已完成", "失败"];
+const taskSourceFilters: TaskSourceFilter[] = ["全部", "平台抓取", "直播接入", "重点用户", "本地视频"];
+const taskSortKeys: TaskSortKey[] = ["default", "updated", "waiting", "high", "outputs"];
+
+interface MonitorViewUpdate {
+  query: string;
+  statusFilter: TaskStatusFilter;
+  sourceFilter: TaskSourceFilter;
+  sortKey: TaskSortKey;
+  page: number;
+  pageSize: number;
+}
+
 export function MonitorTasksPage() {
   const navigate = useNavigate();
-  const [snapshot, setSnapshot] = useState<JobsSnapshot>(defaultSnapshot);
-  const [loading, setLoading] = useState(true);
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [initialCache] = useState(() => readCachedJobsSnapshot());
+  const [snapshot, setSnapshot] = useState<JobsSnapshot>(initialCache?.snapshot ?? defaultSnapshot);
+  const [loading, setLoading] = useState(!initialCache);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>("全部");
-  const [sourceFilter, setSourceFilter] = useState<TaskSourceFilter>("全部");
-  const [sortKey, setSortKey] = useState<TaskSortKey>("default");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<MonitorTask | null>(null);
   const [drawerMode, setDrawerMode] = useState<"detail" | "outputs">("detail");
@@ -48,6 +73,26 @@ export function MonitorTasksPage() {
   const [deleteTarget, setDeleteTarget] = useState<MonitorTask | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone?: "success" | "info" } | null>(null);
+  const query = searchParams.get("q") || "";
+  const statusFilter = readEnumParam(searchParams, "status", taskStatusFilters, "全部");
+  const sourceFilter = readEnumParam(searchParams, "source", taskSourceFilters, "全部");
+  const sortKey = readEnumParam(searchParams, "sort", taskSortKeys, "default");
+  const page = readPositiveIntParam(searchParams, "page", 1);
+  const pageSize = readPageSizeParam(searchParams, 20);
+  const viewUrl = getListViewUrl(location);
+
+  const updateView = useCallback((updates: Partial<MonitorViewUpdate>) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (updates.query !== undefined) writeDefaultedParam(next, "q", updates.query, "");
+      if (updates.statusFilter !== undefined) writeDefaultedParam(next, "status", updates.statusFilter, "全部");
+      if (updates.sourceFilter !== undefined) writeDefaultedParam(next, "source", updates.sourceFilter, "全部");
+      if (updates.sortKey !== undefined) writeDefaultedParam(next, "sort", updates.sortKey, "default");
+      if (updates.page !== undefined) writeDefaultedParam(next, "page", updates.page, 1);
+      if (updates.pageSize !== undefined) writeDefaultedParam(next, "size", updates.pageSize, 20);
+      return next;
+    }, { replace: true, state: location.state });
+  }, [location.state, setSearchParams]);
 
   const loadData = useCallback(async (mode: "initial" | "refresh" = "initial") => {
     if (mode === "initial") {
@@ -60,6 +105,7 @@ export function MonitorTasksPage() {
     try {
       const next = await fetchJobsSnapshot();
       setSnapshot(next);
+      writeCachedJobsSnapshot(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : "未知错误");
     } finally {
@@ -69,8 +115,11 @@ export function MonitorTasksPage() {
   }, []);
 
   useEffect(() => {
-    void loadData("initial");
-  }, [loadData]);
+    const cacheIsFresh = initialCache && Date.now() - initialCache.savedAt < 60_000;
+    if (!cacheIsFresh) {
+      void loadData(initialCache ? "refresh" : "initial");
+    }
+  }, [initialCache, loadData]);
 
   useEffect(() => {
     if (!toast) {
@@ -79,10 +128,6 @@ export function MonitorTasksPage() {
     const timer = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(timer);
   }, [toast]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [query, statusFilter, sourceFilter, sortKey, pageSize]);
 
   const filteredTasks = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -113,11 +158,17 @@ export function MonitorTasksPage() {
       }
       return snapshot.tasks.indexOf(a) - snapshot.tasks.indexOf(b);
     });
-  }, [pageSize, query, snapshot.tasks, sortKey, sourceFilter, statusFilter]);
+  }, [query, snapshot.tasks, sortKey, sourceFilter, statusFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
   const safePage = Math.min(page, pageCount);
   const visibleTasks = filteredTasks.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    if (!loading && page !== safePage) updateView({ page: safePage });
+  }, [loading, page, safePage, updateView]);
+
+  useRestoreListScroll(viewUrl, !loading);
 
   const showToast = (message: string, tone: "success" | "info" = "success") => {
     setToast({ message, tone });
@@ -161,7 +212,14 @@ export function MonitorTasksPage() {
 
   const openDetail = (task: MonitorTask, mode: "detail" | "outputs" = "detail") => {
     if (mode === "outputs") {
-      navigate(`/tasks/${encodeURIComponent(task.id)}/outputs`);
+      rememberListScroll(viewUrl);
+      navigate(`/tasks/${encodeURIComponent(task.id)}/outputs`, {
+        state: {
+          returnTo: viewUrl,
+          returnLabel: "监控任务",
+          returnTitle: "监控任务列表"
+        }
+      });
       return;
     }
     setSelectedTask(task);
@@ -180,16 +238,16 @@ export function MonitorTasksPage() {
           sourceFilter={sourceFilter}
           sortKey={sortKey}
           refreshing={refreshing}
-          onQueryChange={setQuery}
-          onStatusChange={setStatusFilter}
-          onSourceChange={setSourceFilter}
-          onSortChange={setSortKey}
+          onQueryChange={(value) => updateView({ query: value, page: 1 })}
+          onStatusChange={(value) => updateView({ statusFilter: value, page: 1 })}
+          onSourceChange={(value) => updateView({ sourceFilter: value, page: 1 })}
+          onSortChange={(value) => updateView({ sortKey: value, page: 1 })}
           onRefresh={() => void loadData("refresh")}
         />
 
         {loading ? (
           <LoadingState label="正在加载监控任务..." />
-        ) : error ? (
+        ) : error && !snapshot.tasks.length ? (
           <ErrorState message={error} onRetry={() => void loadData("initial")} />
         ) : visibleTasks.length ? (
           <TaskTable
@@ -211,8 +269,8 @@ export function MonitorTasksPage() {
           total={filteredTasks.length}
           page={safePage}
           pageSize={pageSize}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
+          onPageChange={(value) => updateView({ page: value })}
+          onPageSizeChange={(value) => updateView({ pageSize: value, page: 1 })}
         />
       </section>
 

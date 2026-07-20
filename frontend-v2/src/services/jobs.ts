@@ -13,11 +13,17 @@ import type {
 } from "../types/jobs";
 
 const riskLevelsWithoutRisk = new Set(["", "none", "safe", "pass", "unknown"]);
+const monitorSnapshotCacheKey = "saasv2:monitor-tasks:snapshot:v1";
+
+export interface CachedJobsSnapshot {
+  savedAt: number;
+  snapshot: JobsSnapshot;
+}
 
 export async function fetchJobsSnapshot(): Promise<JobsSnapshot> {
   const [jobs, auditResultsPayload] = await Promise.all([
     fetchJobs(),
-    fetchAuditResults({ limit: 1000, sort: "latest" })
+    fetchAuditResults({ limit: 100, sort: "latest", compact: true })
   ]);
   const auditResults = auditResultsPayload.items || [];
   const tasks = mapJobsToMonitorTasks(jobs, auditResults);
@@ -33,17 +39,69 @@ export function fetchJobs() {
   return apiRequest<RawJob[]>("/api/jobs");
 }
 
-export function fetchAuditResults(query: { jobId?: string; limit?: number; sort?: string } = {}) {
-  const path = query.jobId
-    ? withQuery(`/api/jobs/${encodeURIComponent(query.jobId)}/audit-results`, {
-        limit: query.limit ?? 1000,
-        sort: query.sort ?? "latest"
-      })
-    : withQuery("/api/audit-results", {
-        limit: query.limit ?? 1000,
-        sort: query.sort ?? "latest"
-      });
+export function fetchJob(jobId: string) {
+  return apiRequest<RawJob>(`/api/jobs/${encodeURIComponent(jobId)}`);
+}
+
+export function fetchAuditResults(query: {
+  jobId?: string;
+  afterId?: number;
+  offset?: number;
+  limit?: number;
+  sort?: string;
+  decision?: string;
+  riskLevel?: string;
+  authorKey?: string;
+  keyword?: string;
+  compact?: boolean;
+} = {}) {
+  const params = {
+    job_id: query.jobId,
+    after_id: query.afterId,
+    offset: query.offset,
+    limit: query.limit ?? 1000,
+    sort: query.sort ?? "latest",
+    decision: query.decision,
+    risk_level: query.riskLevel,
+    author_key: query.authorKey,
+    keyword: query.keyword,
+    compact: query.compact
+  };
+  const path = withQuery("/api/audit-results", params);
   return apiRequest<{ items: AuditResult[]; total: number; next_after_id: number }>(path);
+}
+
+export function readCachedJobsSnapshot(): CachedJobsSnapshot | null {
+  try {
+    const value = window.sessionStorage.getItem(monitorSnapshotCacheKey);
+    if (!value) return null;
+    const cache = JSON.parse(value) as CachedJobsSnapshot;
+    return cache?.savedAt && Array.isArray(cache.snapshot?.tasks) ? cache : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedJobsSnapshot(snapshot: JobsSnapshot) {
+  try {
+    const compactSnapshot: JobsSnapshot = {
+      jobs: [],
+      auditResults: [],
+      stats: snapshot.stats,
+      tasks: snapshot.tasks.map((task) => ({
+        ...task,
+        logs: task.logs.slice(0, 8),
+        recentOutputs: task.recentOutputs.slice(0, 5).map(compactAuditResult),
+        raw: compactJob(task.raw)
+      }))
+    };
+    window.sessionStorage.setItem(monitorSnapshotCacheKey, JSON.stringify({
+      savedAt: Date.now(),
+      snapshot: compactSnapshot
+    } satisfies CachedJobsSnapshot));
+  } catch {
+    // Storage may be unavailable or full; live requests continue to work normally.
+  }
 }
 
 export function fetchAuditResultDetail(resultId: number | string) {
@@ -235,6 +293,66 @@ function tailToken(value: string) {
 
 function compactText(value: string, maxLength: number) {
   return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+}
+
+function compactJob(job: RawJob): RawJob {
+  return {
+    id: job.id,
+    status: job.status,
+    platform: job.platform,
+    display_name: job.display_name,
+    crawl_mode: job.crawl_mode,
+    keyword: job.keyword,
+    keyword_source: job.keyword_source,
+    lexicon_category: job.lexicon_category,
+    library_ids: job.library_ids,
+    capabilities: job.capabilities,
+    lexicon_keywords: job.lexicon_keywords,
+    creator_url: job.creator_url,
+    creator_id: job.creator_id,
+    creator_nickname: job.creator_nickname,
+    run_crawler: job.run_crawler,
+    start_page: job.start_page,
+    max_notes: job.max_notes,
+    max_comments: job.max_comments,
+    max_concurrency: job.max_concurrency,
+    get_sub_comment: job.get_sub_comment,
+    analyze_limit: job.analyze_limit,
+    analysis_batch_size: job.analysis_batch_size,
+    input_type: job.input_type,
+    input_filename: job.input_filename,
+    source_output_id: job.source_output_id,
+    created_at: job.created_at,
+    updated_at: job.updated_at,
+    logs: (job.logs || []).slice(-8),
+    task_stats: job.task_stats,
+    crawl_status: job.crawl_status,
+    analysis_status: job.analysis_status,
+    available_actions: job.available_actions,
+    current_audit_config_revision: job.current_audit_config_revision,
+    current_audit_config_revision_id: job.current_audit_config_revision_id,
+    prompt_profile_snapshot: job.prompt_profile_snapshot,
+    error: job.error
+  };
+}
+
+function compactAuditResult(result: AuditResult): AuditResult {
+  return {
+    id: result.id,
+    audit_result_id: result.audit_result_id,
+    job_id: result.job_id,
+    content_key: result.content_key,
+    note_id: result.note_id,
+    content_title: result.content_title,
+    title: result.title,
+    summary: result.summary,
+    primary_risk: result.primary_risk,
+    decision: result.decision,
+    risk_level: result.risk_level,
+    analyzed_at: result.analyzed_at,
+    updated_at: result.updated_at,
+    created_at: result.created_at
+  };
 }
 
 function getStatusMeta(status: string): {

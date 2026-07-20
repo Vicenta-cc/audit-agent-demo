@@ -13,6 +13,7 @@ import {
 import { Badge } from "../../components/common/Badge";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog";
 import type { MonitoredAccount } from "../../types/focusUsers";
+import { AccountAvatar } from "./AccountAvatar";
 
 interface AccountHeaderProps {
   account: MonitoredAccount;
@@ -63,7 +64,7 @@ export function AccountHeader({
         <div className="account-header-actions">
           <button className="btn btn-primary" type="button" onClick={onRefetch} disabled={isRefetching}>
             {isRefetching ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
-            补抓近期发布
+            刷新最新数据
           </button>
           <button className="btn btn-secondary" type="button" onClick={() => setIsConfirmOpen(true)}>
             <Slash size={16} />
@@ -101,7 +102,7 @@ export function AccountHeader({
 
       <div className="account-header-main">
         <div className="account-identity">
-          <img className="account-detail-avatar" src={account.avatarUrl} alt={`${account.name}头像`} />
+          <AccountAvatar name={account.name} src={account.avatarUrl} variant="detail" />
           <div>
             <div className="account-name-row">
               <h2>{account.name}</h2>
@@ -127,7 +128,7 @@ export function AccountHeader({
             label="近期风险产出"
             value={`${account.metrics.recentRiskCount}`}
             suffix="条"
-            helper="近 7 天"
+            helper={account.metrics.riskRangeLabel}
           />
           <MetricBlock
             icon={<UsersRound size={16} />}

@@ -1,5 +1,5 @@
 import { formatDateTime, getPlatformLabel, getResultTime } from "../../services/jobs";
-import type { AuditResult, MonitorTask } from "../../types/jobs";
+import type { AuditMediaAsset, AuditResult, MonitorTask } from "../../types/jobs";
 import type {
   ConfigHistoryItem,
   EvidenceCounts,
@@ -101,53 +101,45 @@ export function getRiskLibrary(output: AuditResult): RiskLibrary | null {
 }
 
 export function getEvidenceCounts(output: AuditResult): EvidenceCounts {
-  const evidenceIndex = output.evidence_index || {};
-  const indexedText = evidenceIndex.text_context;
-  const videoUnits = Array.isArray(evidenceIndex.video_units) ? evidenceIndex.video_units : [];
+  const counts = emptyEvidenceCounts();
+  if (isNoRiskOutput(output)) return counts;
 
-  const text = [
-    output.title,
-    output.content_title,
-    output.desc,
-    output.summary,
-    indexedText?.title,
-    indexedText?.desc
-  ].some(Boolean)
-    ? 1
-    : 0;
-  const timelineOcr = (output.timeline_frames || []).filter((item) => item.ocr_text || item.ocr_text_zh).length;
-  const imageOcr = (output.image_analyses || []).filter((item) => item.ocr_text).length;
-  const ocr = toArray(output.ocr_items).length + timelineOcr + imageOcr + toArray(evidenceIndex.ocr_items).length;
-  const directAsr = toArray(output.asr_segments).length;
-  const indexedAsr = toArray(evidenceIndex.asr_segments).length + toArray(evidenceIndex.audio_units).length;
-  const videoAsr = (output.video_results || []).reduce((sum, item) => {
-    const segments = item.transcript?.segments || [];
-    return sum + (segments.length || (item.transcript?.text ? 1 : 0));
-  }, 0);
-  const indexedVisual = videoUnits.reduce(
-    (sum, item) => sum + toNumber(item.timeline_frame_count) + toNumber(item.segment_review_count || item.moment_count),
-    0
-  );
-  const videoVisual = (output.video_results || []).reduce(
-    (sum, item) => sum + toArray(item.timeline_frames).length + toArray(item.segment_reviews || item.moments).length,
-    0
-  );
-  const visual =
-    toNumber(output.risk_image_count) +
-    toNumber(output.risk_frame_count) +
-    toArray(output.risk_images).length +
-    toArray(output.risk_frames).length +
-    toArray(output.image_analyses).length +
-    toArray(evidenceIndex.image_units).length +
-    indexedVisual +
-    videoVisual;
-  const comments = Math.max(
-    toNumber(output.comment_count),
-    toNumber(output.comments_count),
-    toNumber(indexedText?.comments_count)
-  );
+  if (output.evidence_groups?.length) {
+    output.evidence_groups.forEach((group) => {
+      const key = evidenceCountKey(group.type || group.id || "");
+      if (!key) return;
+      counts[key] += Math.max(0, toNumber(group.count ?? group.items?.length));
+    });
+    return counts;
+  }
 
-  return { text, ocr, asr: directAsr + indexedAsr + videoAsr, visual, comments };
+  (output.evidence_items || [])
+    .filter((item) => isRiskEvidenceLevel(item.evidence_risk_level))
+    .forEach((item) => {
+      const key = evidenceCountKey(item.primary_modality || item.modality || item.source || "text");
+      if (key) counts[key] += 1;
+    });
+
+  return counts;
+}
+
+function emptyEvidenceCounts(): EvidenceCounts {
+  return { text: 0, ocr: 0, asr: 0, visual: 0, comments: 0 };
+}
+
+function evidenceCountKey(value: string): keyof EvidenceCounts | null {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("comment")) return "comments";
+  if (normalized.includes("ocr")) return "ocr";
+  if (normalized.includes("asr") || normalized.includes("audio")) return "asr";
+  if (normalized.includes("vision") || normalized.includes("image") || normalized.includes("frame") || normalized.includes("video")) return "visual";
+  if (normalized.includes("text") || normalized.includes("title") || normalized.includes("desc") || normalized.includes("keyword")) return "text";
+  return null;
+}
+
+function isRiskEvidenceLevel(value: unknown): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return ["low", "medium", "high", "review", "低危", "中危", "高危", "待复核"].includes(normalized);
 }
 
 export function hasEvidenceType(item: TaskOutputItem, type: EvidenceTypeFilter) {
@@ -301,11 +293,21 @@ function formatOutputDate(output: AuditResult) {
 }
 
 function getThumbnailUrl(output: AuditResult) {
-  const candidates = [
+  const videoCandidates = (output.video_results || []).flatMap((video) => [
+    video.timeline_frames?.[0],
+    video.review_sheets?.[0],
+    video.segment_reviews?.[0]
+  ]);
+  const candidates: Array<AuditMediaAsset | undefined> = [
+    output.thumbnail_asset,
     output.image_analyses?.[0],
     output.evidence_index?.image_units?.[0],
-    output.evidence_index?.video_units?.[0],
-    output.video_results?.[0]
+    { url: output.cover_url || output.video_cover_url || output.thumbnail_url },
+    ...videoCandidates,
+    output.evidence_index?.timeline_frames?.[0],
+    output.evidence_index?.review_sheets?.[0],
+    output.evidence_index?.segment_reviews?.[0],
+    output.evidence_index?.video_units?.[0]?.segment_reviews?.[0]
   ];
   for (const candidate of candidates) {
     if (!candidate) continue;
@@ -313,7 +315,10 @@ function getThumbnailUrl(output: AuditResult) {
     if (remoteUrl.startsWith("http://") || remoteUrl.startsWith("https://")) {
       return remoteUrl;
     }
-    const path = normalizeAssetPath(String(candidate.asset_rel || candidate.local_path || ""), String(output.job_id || ""));
+    const path = normalizeAssetPath(
+      String(candidate.asset_rel || candidate.local_path || candidate.original_path || candidate.path || ""),
+      String(output.job_id || "")
+    );
     if (path && output.job_id) {
       return `/api/jobs/${encodeURIComponent(output.job_id)}/assets?path=${encodeURIComponent(path)}`;
     }
@@ -328,7 +333,7 @@ function normalizeAssetPath(value: string, jobId: string) {
 }
 
 function getDurationSeconds(output: AuditResult) {
-  const value = output.video_results?.[0]?.duration || output.evidence_index?.video_units?.[0]?.duration;
+  const value = output.duration_seconds || output.video_results?.[0]?.duration || output.evidence_index?.video_units?.[0]?.duration;
   const duration = Number(value || 0);
   return Number.isFinite(duration) && duration > 0 ? duration : null;
 }

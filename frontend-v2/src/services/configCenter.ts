@@ -1,12 +1,15 @@
 import { apiRequest } from "./apiClient";
-import { buildMockConfigSnapshot } from "../mocks/configCenter";
-import type { RawJob } from "../types/jobs";
 import type {
   ConfigCenterSnapshot,
-  LexiconCategory,
+  DetectionCapability,
+  DetectionScope,
+  ImportanceLevel,
   LexiconReference,
-  PolicyCategory,
+  LexiconSaveInput,
+  LexiconTerm,
+  PolicyDetectionConfig,
   PolicyReference,
+  PolicySaveInput,
   PolicyStatus,
   ResearchPolicy,
   RiskLexicon
@@ -26,24 +29,22 @@ interface RawAuditPolicy {
   created_at?: string;
   updated_at?: string;
   published_at?: string;
-  updated_by?: string;
 }
 
 interface RawLexiconKeyword {
+  id?: number | string;
   keyword?: string;
   match_type?: string;
-  platform?: string;
   enabled?: boolean | number;
+  note?: string;
 }
 
 interface RawLexiconCategory {
   id?: string;
   title?: string;
-  risk_label?: string;
-  chips?: string[];
   keywords?: RawLexiconKeyword[];
+  created_at?: string;
   updated_at?: string;
-  updated_by?: string;
 }
 
 interface PolicyPayload {
@@ -54,89 +55,143 @@ interface LexiconPayload {
   categories?: RawLexiconCategory[];
 }
 
-const fallbackSnapshot = buildMockConfigSnapshot();
+interface LexiconMutationResponse {
+  category: RawLexiconCategory;
+}
 
-const categoryByLibraryId: Record<string, PolicyCategory> = {
-  gambling: "赌博博彩",
-  fraud: "诈骗",
-  prohibited: "违规引流",
-  soft: "软色情",
-  terror: "暴恐",
-  drug: "涉毒",
-  hate: "民族意识形态风险",
-  minority: "民族意识形态风险"
-};
+interface RawPolicyReference {
+  id?: string;
+  display_name?: string;
+  keyword?: string;
+  input_filename?: string;
+  status?: string;
+  source_policy_id?: string;
+}
 
-const policyCategories: PolicyCategory[] = [
-  "赌博博彩",
-  "诈骗",
-  "违规引流",
-  "软色情",
-  "暴恐",
-  "涉毒",
-  "民族意识形态风险",
-  "综合",
-  "其他"
+interface PolicyReferencePayload {
+  items?: RawPolicyReference[];
+}
+
+const detectionTemplates: Array<
+  Omit<PolicyDetectionConfig, "enabled" | "importance">
+> = [
+  {
+    scope: "title_body",
+    location: "标题与正文",
+    evidence: "文字内容命中",
+    capability: "text",
+    capabilityLabel: "文本语义"
+  },
+  {
+    scope: "comment",
+    location: "评论与弹幕",
+    evidence: "逐条评论命中",
+    capability: "comment",
+    capabilityLabel: "评论识别"
+  },
+  {
+    scope: "image",
+    location: "图片与封面",
+    evidence: "画面文字命中",
+    capability: "ocr",
+    capabilityLabel: "画面文字"
+  },
+  {
+    scope: "video",
+    location: "视频画面",
+    evidence: "画面特征命中",
+    capability: "vision",
+    capabilityLabel: "视觉识别"
+  },
+  {
+    scope: "audio",
+    location: "语音内容",
+    evidence: "语音内容命中",
+    capability: "asr",
+    capabilityLabel: "语音识别"
+  }
 ];
 
-const capabilityLabels: Record<string, string> = {
-  text: "文本语义",
-  ocr: "OCR",
-  asr: "ASR",
-  vision: "视觉识别",
-  comment: "逐条评论审核"
+const scoringModeLabels: Record<string, string> = {
+  balanced: "均衡模式",
+  strict: "严格模式",
+  text_first: "文字优先",
+  vision_first: "视觉优先",
+  custom: "自定义"
 };
 
-const defaultContentScopes = ["标题正文", "评论弹幕", "图片视频", "语音内容"];
-
-export const policyCategoryOptions: Array<"全部" | PolicyCategory> = ["全部", ...policyCategories];
-export const lexiconCategoryOptions: Array<"全部" | LexiconCategory> = ["全部", ...policyCategories];
-
 export async function fetchConfigCenterSnapshot(): Promise<ConfigCenterSnapshot> {
-  if (shouldUseLocalMockData()) {
-    return buildMockConfigSnapshot();
-  }
-
-  const [policyResult, lexiconResult, jobResult] = await Promise.allSettled([
+  const [rawPolicies, rawLexicons, rawJobs] = await Promise.all([
     fetchRawPolicies(),
     fetchRawLexicons(),
     fetchRawJobs()
   ]);
-
-  if (policyResult.status === "rejected" && lexiconResult.status === "rejected") {
-    return buildMockConfigSnapshot();
-  }
-
-  const rawLexicons = lexiconResult.status === "fulfilled" ? lexiconResult.value : [];
-  const lexiconNameMap = new Map(rawLexicons.map((item) => [String(item.id || ""), String(item.title || item.id || "")]));
-  const rawJobs = jobResult.status === "fulfilled" ? jobResult.value : [];
-  const policies =
-    policyResult.status === "fulfilled"
-      ? rawPoliciesToResearchPolicies(policyResult.value, rawJobs, lexiconNameMap)
-      : fallbackSnapshot.policies;
-  const lexicons =
-    lexiconResult.status === "fulfilled"
-      ? rawLexiconsToRiskLexicons(rawLexicons, policies)
-      : fallbackSnapshot.lexicons;
-
+  const lexiconNameMap = new Map(
+    rawLexicons.map((item) => [String(item.id || ""), String(item.title || item.id || "")])
+  );
+  const policies = rawPoliciesToResearchPolicies(rawPolicies, rawJobs, lexiconNameMap);
+  const lexicons = rawLexiconsToRiskLexicons(rawLexicons, policies);
   return buildConfigCenterSnapshot(policies, lexicons);
 }
 
 export function deletePolicy(policyId: string) {
   return apiRequest<{ ok: boolean; id: string }>(`/api/audit-policies/${encodeURIComponent(policyId)}`, {
     method: "DELETE"
-  }).catch(() => ({ ok: true, id: policyId }));
+  });
 }
 
 export function deleteLexicon(lexiconId: string) {
   return apiRequest<{ ok: boolean; id: string }>(`/api/lexicons/${encodeURIComponent(lexiconId)}`, {
     method: "DELETE"
-  }).catch(() => ({ ok: true, id: lexiconId }));
+  });
 }
 
-export function publishPolicy(policyId: string) {
-  return apiRequest<RawAuditPolicy>(`/api/audit-policies/${encodeURIComponent(policyId)}/publish`, {
-    method: "POST"
+export async function savePolicy(input: PolicySaveInput) {
+  const enabled = input.detectionConfigs.filter((item) => item.enabled);
+  const ruleImportance = Object.fromEntries(
+    enabled.map((item) => [item.capability, importanceToApi(item.importance)])
+  );
+  const config = {
+    library_ids: input.lexiconIds,
+    capabilities: enabled.map((item) => item.capability),
+    scopes: enabled.map((item) => item.scope),
+    scoring_template: input.scoringMode,
+    rule_importance: ruleImportance,
+    outputs: enabled.map((item) => item.evidence),
+    rule_snapshot: { rule_importance: ruleImportance }
+  };
+  const path = input.id
+    ? `/api/audit-policies/${encodeURIComponent(input.id)}`
+    : "/api/audit-policies";
+  return apiRequest<RawAuditPolicy>(path, {
+    method: input.id ? "PATCH" : "POST",
+    body: JSON.stringify({
+      name: input.name.trim(),
+      description: input.description.trim(),
+      library_ids: input.lexiconIds,
+      capabilities: config.capabilities,
+      scoring_template: input.scoringMode,
+      rule_snapshot: config.rule_snapshot,
+      config
+    })
+  });
+}
+
+export async function saveLexicon(input: LexiconSaveInput) {
+  const path = input.id ? `/api/lexicons/${encodeURIComponent(input.id)}` : "/api/lexicons";
+  return apiRequest<LexiconMutationResponse>(path, {
+    method: input.id ? "PATCH" : "POST",
+    body: JSON.stringify({
+      title: input.name.trim(),
+      entries: input.terms
+        .filter((term) => term.mainTerm.trim())
+        .map((term) => ({
+          main_term: term.mainTerm.trim(),
+          variants: term.variants.map((item) => item.trim()).filter(Boolean),
+          query_type: term.queryType,
+          enabled: term.enabled
+        }))
+    })
   });
 }
 
@@ -158,32 +213,8 @@ export function formatNumber(value: number) {
   return new Intl.NumberFormat("zh-CN").format(value);
 }
 
-export function getPolicyStatusLabel(status: PolicyStatus) {
-  const labels: Record<PolicyStatus, string> = {
-    published: "已发布",
-    draft: "草稿",
-    reviewing: "待审核",
-    disabled: "已停用"
-  };
-  return labels[status];
-}
-
-export function getPolicyStatusTone(status: PolicyStatus) {
-  const tones: Record<PolicyStatus, "success" | "warning" | "info" | "neutral"> = {
-    published: "success",
-    draft: "info",
-    reviewing: "warning",
-    disabled: "neutral"
-  };
-  return tones[status];
-}
-
 function fetchRawPolicies() {
   return apiRequest<PolicyPayload>("/api/audit-policies").then((payload) => payload.items || []);
-}
-
-function shouldUseLocalMockData() {
-  return !window.XHS_AUDIT_API_BASE && Boolean(window.location.port);
 }
 
 function fetchRawLexicons() {
@@ -191,12 +222,12 @@ function fetchRawLexicons() {
 }
 
 function fetchRawJobs() {
-  return apiRequest<RawJob[]>("/api/jobs").catch(() => []);
+  return apiRequest<PolicyReferencePayload>("/api/job-policy-references").then((payload) => payload.items || []);
 }
 
 function rawPoliciesToResearchPolicies(
   rawPolicies: RawAuditPolicy[],
-  rawJobs: RawJob[],
+  rawJobs: RawPolicyReference[],
   lexiconNameMap: Map<string, string>
 ): ResearchPolicy[] {
   const referencesByPolicy = buildPolicyReferences(rawJobs);
@@ -204,36 +235,38 @@ function rawPoliciesToResearchPolicies(
   return rawPolicies.map((policy) => {
     const config = pickPolicyConfig(policy);
     const libraryIds = toStringList(config.library_ids);
-    const capabilities = toStringList(config.capabilities);
-    const contentScopes = toStringList(config.outputs).filter((item) => item !== "询证材料");
-    const scenarioTags = toStringList(config.scenarios);
-    const fallback = fallbackSnapshot.policies.find((item) => item.id === policy.id);
-    const category = inferPolicyCategory(policy, libraryIds, fallback?.category);
-    const status = normalizePolicyStatus(policy.status);
-    const updatedAt = policy.updated_at || policy.published_at || fallback?.updatedAt || "";
+    const capabilities = new Set(toStringList(config.capabilities));
+    const scopes = new Set(toStringList(config.scopes));
+    const hasExplicitScopes = scopes.size > 0;
+    const importance = toRecord(config.rule_importance) || toRecord(toRecord(config.rule_snapshot)?.rule_importance);
+    const detectionConfigs = detectionTemplates.map((item) => ({
+      ...item,
+      enabled: hasExplicitScopes ? scopes.has(item.scope) : capabilities.has(item.capability),
+      importance: importanceFromApi(importance?.[item.capability])
+    }));
+    const enabledDetection = detectionConfigs.filter((item) => item.enabled);
+    const scoringMode = String(config.scoring_template || "balanced");
+    const updatedAt = String(policy.updated_at || policy.published_at || "");
 
     return {
-      id: String(policy.id || fallback?.id || ""),
-      name: String(policy.name || fallback?.name || "未命名研判方案"),
-      description: String(policy.description || fallback?.description || "暂无方案说明"),
-      category,
-      status,
-      scenarioTags: scenarioTags.length ? scenarioTags : fallback?.scenarioTags || ["平台内容"],
-      lexiconIds: libraryIds.length ? libraryIds : fallback?.lexiconIds || [],
+      id: String(policy.id || ""),
+      name: String(policy.name || "未命名研判方案"),
+      description: String(policy.description || ""),
+      status: normalizePolicyStatus(policy.status),
+      lexiconIds: libraryIds,
       lexiconNames: libraryIds.map((id) => lexiconNameMap.get(id) || id).filter(Boolean),
-      contentScopes: contentScopes.length ? contentScopes : fallback?.contentScopes || defaultContentScopes,
-      recognitionCapabilities: capabilities.length
-        ? capabilities.map((item) => capabilityLabels[item] || item)
-        : fallback?.recognitionCapabilities || ["文本语义"],
-      references: referencesByPolicy.get(String(policy.id || "")) || fallback?.references || [],
+      contentScopes: enabledDetection.map((item) => item.location),
+      recognitionCapabilities: enabledDetection.map((item) => item.capabilityLabel),
+      detectionConfigs,
+      scoringMode,
+      scoringModeLabel: scoringModeLabels[scoringMode] || scoringMode,
+      references: referencesByPolicy.get(String(policy.id || "")) || [],
       version: {
-        version: String(policy.published_version || policy.draft_version || fallback?.version.version || "draft"),
-        updatedAt,
-        updatedBy: String(policy.updated_by || fallback?.updatedBy || "系统")
+        version: String(policy.published_version || policy.draft_version || "draft"),
+        updatedAt
       },
-      createdAt: policy.created_at || fallback?.createdAt || "",
-      updatedAt,
-      updatedBy: String(policy.updated_by || fallback?.updatedBy || "系统")
+      createdAt: String(policy.created_at || ""),
+      updatedAt
     };
   });
 }
@@ -242,28 +275,16 @@ function rawLexiconsToRiskLexicons(rawLexicons: RawLexiconCategory[], policies: 
   const referencesByLexicon = buildLexiconReferences(policies);
 
   return rawLexicons.map((lexicon) => {
-    const fallback = fallbackSnapshot.lexicons.find((item) => item.id === lexicon.id);
-    const keywords = (lexicon.keywords || []).filter((item) => item.enabled !== false && item.enabled !== 0);
-    const platformSearchWords = keywordValuesByType(keywords, "平台搜索词");
-    const platformTags = keywordValuesByType(keywords, "平台标签", "tag");
-    const termKeywords = keywords
-      .filter((item) => !["平台搜索词", "平台标签", "tag"].includes(String(item.match_type || "")))
-      .map((item) => String(item.keyword || "").trim())
-      .filter(Boolean);
-
+    const terms = groupLexiconTerms(lexicon.keywords || []);
     return {
-      id: String(lexicon.id || fallback?.id || ""),
-      name: String(lexicon.title || fallback?.name || "未命名黑话库"),
-      category: inferLexiconCategory(lexicon, fallback?.category),
-      entryCount: termKeywords.length || fallback?.entryCount || 0,
-      platformSearchWordCount: platformSearchWords.length || fallback?.platformSearchWordCount || 0,
-      platformTagCount: platformTags.length || fallback?.platformTagCount || 0,
-      keywords: termKeywords.length ? termKeywords.slice(0, 8) : fallback?.keywords || [],
-      platformSearchWords: platformSearchWords.length ? platformSearchWords.slice(0, 8) : fallback?.platformSearchWords || [],
-      platformTags: platformTags.length ? platformTags.slice(0, 8) : fallback?.platformTags || [],
-      references: referencesByLexicon.get(String(lexicon.id || "")) || fallback?.references || [],
-      updatedAt: lexicon.updated_at || fallback?.updatedAt || "",
-      updatedBy: String(lexicon.updated_by || fallback?.updatedBy || "系统")
+      id: String(lexicon.id || ""),
+      name: String(lexicon.title || "未命名黑话库"),
+      entryCount: terms.length,
+      keywords: terms.map((item) => item.mainTerm),
+      terms,
+      references: referencesByLexicon.get(String(lexicon.id || "")) || [],
+      createdAt: String(lexicon.created_at || ""),
+      updatedAt: String(lexicon.updated_at || lexicon.created_at || "")
     };
   });
 }
@@ -274,40 +295,74 @@ export function buildConfigCenterSnapshot(policies: ResearchPolicy[], lexicons: 
     lexicons,
     policySummary: {
       total: policies.length,
-      published: policies.filter((policy) => policy.status === "published").length,
-      draft: policies.filter((policy) => policy.status === "draft").length,
+      lexiconReferenceCount: policies.reduce((sum, policy) => sum + policy.lexiconIds.length, 0),
       referencedTaskCount: policies.reduce((sum, policy) => sum + policy.references.length, 0)
     },
     lexiconSummary: {
       total: lexicons.length,
       entryCount: lexicons.reduce((sum, lexicon) => sum + lexicon.entryCount, 0),
-      policyReferenceCount: lexicons.reduce((sum, lexicon) => sum + lexicon.references.length, 0),
-      latestUpdatedAt: lexicons
-        .map((lexicon) => lexicon.updatedAt)
-        .filter(Boolean)
-        .sort((a, b) => Date.parse(b) - Date.parse(a))[0] || ""
+      policyReferenceCount: lexicons.reduce((sum, lexicon) => sum + lexicon.references.length, 0)
     }
   };
 }
 
-function pickPolicyConfig(policy: RawAuditPolicy) {
-  const publishedConfig = policy.published_config || {};
-  const draftConfig = policy.config || {};
-  return Object.keys(publishedConfig).length ? publishedConfig : draftConfig;
+function groupLexiconTerms(keywords: RawLexiconKeyword[]): LexiconTerm[] {
+  const variantsByParent = new Map<string, string[]>();
+  const mainRows: RawLexiconKeyword[] = [];
+
+  keywords.forEach((row) => {
+    const variantOf = parseVariantOf(row.note);
+    const keyword = String(row.keyword || "").trim();
+    if (!keyword) {
+      return;
+    }
+    if (variantOf) {
+      variantsByParent.set(variantOf, [...(variantsByParent.get(variantOf) || []), keyword]);
+      return;
+    }
+    mainRows.push(row);
+  });
+
+  const grouped = new Map<string, LexiconTerm>();
+  mainRows.forEach((row, index) => {
+    const mainTerm = String(row.keyword || "").trim();
+    const existing = grouped.get(mainTerm);
+    const queryType = isTagType(row.match_type) ? "tag" : "keyword";
+    if (existing) {
+      if (queryType === "tag") {
+        existing.queryType = "tag";
+      }
+      existing.enabled = existing.enabled || (row.enabled !== false && row.enabled !== 0);
+      return;
+    }
+    grouped.set(mainTerm, {
+      id: String(row.id ?? `term_${index}`),
+      mainTerm,
+      variants: dedupeStrings(variantsByParent.get(mainTerm) || []),
+      queryType,
+      enabled: row.enabled !== false && row.enabled !== 0
+    });
+  });
+
+  return [...grouped.values()];
 }
 
-function buildPolicyReferences(rawJobs: RawJob[]) {
+function pickPolicyConfig(policy: RawAuditPolicy) {
+  const draftConfig = policy.config || {};
+  return Object.keys(draftConfig).length ? draftConfig : policy.published_config || {};
+}
+
+function buildPolicyReferences(rawJobs: RawPolicyReference[]) {
   const map = new Map<string, PolicyReference[]>();
   rawJobs.forEach((job) => {
-    const revision = job.current_audit_config_revision;
-    const policyId = String(revision?.source_policy_id || "");
+    const policyId = String(job.source_policy_id || "");
     if (!policyId) {
       return;
     }
     const item: PolicyReference = {
-      id: job.id,
-      name: job.display_name || job.keyword || job.input_filename || job.id,
-      status: normalizeJobStatus(job.status)
+      id: String(job.id || ""),
+      name: job.display_name || job.keyword || job.input_filename || String(job.id || ""),
+      status: normalizeJobStatus(String(job.status || ""))
     };
     map.set(policyId, [...(map.get(policyId) || []), item]);
   });
@@ -325,82 +380,70 @@ function buildLexiconReferences(policies: ResearchPolicy[]) {
   return map;
 }
 
-function keywordValuesByType(keywords: RawLexiconKeyword[], ...types: string[]) {
-  const typeSet = new Set(types);
-  return keywords
-    .filter((item) => typeSet.has(String(item.match_type || "")))
-    .map((item) => String(item.keyword || "").trim())
-    .filter(Boolean);
-}
-
 function normalizePolicyStatus(status: RawPolicyStatus = "draft"): PolicyStatus {
-  if (status === "published") {
-    return "published";
-  }
-  if (status === "reviewing" || status === "pending_review") {
-    return "reviewing";
-  }
-  if (status === "disabled" || status === "inactive") {
-    return "disabled";
-  }
+  if (status === "published") return "published";
+  if (status === "reviewing" || status === "pending_review") return "reviewing";
+  if (status === "disabled" || status === "inactive") return "disabled";
   return "draft";
 }
 
-function inferPolicyCategory(policy: RawAuditPolicy, libraryIds: string[], fallback: PolicyCategory = "其他"): PolicyCategory {
-  const firstMatch = libraryIds.map((id) => categoryByLibraryId[id]).find(Boolean);
-  if (firstMatch) {
-    return firstMatch;
-  }
-  const haystack = `${policy.name || ""} ${policy.description || ""}`;
-  return inferCategoryFromText(haystack, fallback);
-}
-
-function inferLexiconCategory(lexicon: RawLexiconCategory, fallback: LexiconCategory = "其他"): LexiconCategory {
-  const byId = categoryByLibraryId[String(lexicon.id || "")];
-  if (byId) {
-    return byId;
-  }
-  return inferCategoryFromText(`${lexicon.title || ""} ${lexicon.risk_label || ""}`, fallback);
-}
-
-function inferCategoryFromText(value: string, fallback: PolicyCategory): PolicyCategory {
-  if (value.includes("博彩") || value.includes("赌博")) {
-    return "赌博博彩";
-  }
-  if (value.includes("诈")) {
-    return "诈骗";
-  }
-  if (value.includes("引流") || value.includes("违禁")) {
-    return "违规引流";
-  }
-  if (value.includes("色情") || value.includes("低俗")) {
-    return "软色情";
-  }
-  if (value.includes("暴恐") || value.includes("极端")) {
-    return "暴恐";
-  }
-  if (value.includes("毒")) {
-    return "涉毒";
-  }
-  if (value.includes("民族意识形态") || value.includes("仇恨") || value.includes("歧视") || value.includes("宗教")) {
-    return "民族意识形态风险";
-  }
-  return fallback;
-}
-
 function normalizeJobStatus(status: string) {
-  if (status === "completed") {
-    return "已完成";
-  }
-  if (status === "failed") {
-    return "失败";
-  }
-  if (["analysis_stopped", "analysis_paused", "crawl_paused", "stopped"].includes(status)) {
-    return "已暂停";
-  }
+  if (status === "completed") return "已完成";
+  if (status === "failed") return "失败";
+  if (["analysis_stopped", "analysis_paused", "crawl_paused", "stopped", "interrupted"].includes(status)) return "已暂停";
   return "运行中";
+}
+
+function importanceFromApi(value: unknown): ImportanceLevel {
+  if (value === "high" || value === "very_high") return "高";
+  if (value === "low") return "低";
+  return "中";
+}
+
+function importanceToApi(value: ImportanceLevel) {
+  if (value === "高") return "high";
+  if (value === "低") return "low";
+  return "medium";
+}
+
+function parseVariantOf(note: unknown) {
+  if (!note) return "";
+  try {
+    const parsed = JSON.parse(String(note)) as { variant_of?: unknown };
+    return String(parsed.variant_of || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function isTagType(value: unknown) {
+  return ["平台标签", "tag"].includes(String(value || ""));
 }
 
 function toStringList(value: unknown) {
   return Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean) : [];
 }
+
+function toRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function dedupeStrings(values: string[]) {
+  return [...new Set(values.map((item) => item.trim()).filter(Boolean))];
+}
+
+export const detectionScopeByEditorKey: Record<string, DetectionScope> = {
+  title: "title_body",
+  comment: "comment",
+  image: "image",
+  video: "video",
+  audio: "audio"
+};
+
+export const detectionCapabilityByEditorKey: Record<string, DetectionCapability> = {
+  title: "text",
+  comment: "comment",
+  image: "ocr",
+  video: "vision",
+  audio: "asr"
+};

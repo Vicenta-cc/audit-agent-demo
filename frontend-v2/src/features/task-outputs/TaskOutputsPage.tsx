@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  getListViewUrl,
+  getReturnNavigationState,
+  readEnumParam,
+  readPageSizeParam,
+  readPositiveIntParam,
+  rememberListScroll,
+  useRestoreListScroll,
+  writeDefaultedParam
+} from "../../app/listNavigation";
 import { EmptyState } from "../../components/feedback/EmptyState";
 import { ErrorState } from "../../components/feedback/ErrorState";
 import { LoadingState } from "../../components/feedback/LoadingState";
 import { Toast } from "../../components/feedback/Toast";
-import { fetchAuditResults, fetchJobs, mapJobsToMonitorTasks } from "../../services/jobs";
+import { fetchAuditResults, fetchJob, mapJobsToMonitorTasks } from "../../services/jobs";
 import type { AuditResult, MonitorTask } from "../../types/jobs";
 import type { OutputFiltersValue, TaskDrawerType, TaskOutputItem } from "../../types/taskOutputs";
 import { OutputFilters } from "./OutputFilters";
@@ -32,19 +42,55 @@ const initialFilters: OutputFiltersValue = {
   sort: "latest"
 };
 
+const outputRiskLevels: OutputFiltersValue["riskLevel"][] = ["全部", "高危", "中危", "待复核", "无风险"];
+const outputEvidenceTypes: OutputFiltersValue["evidenceType"][] = ["全部", "文本", "OCR", "ASR", "视觉", "评论"];
+const outputSortKeys: OutputFiltersValue["sort"][] = ["latest", "risk"];
+
+interface OutputViewUpdate {
+  filters: OutputFiltersValue;
+  page: number;
+  pageSize: number;
+}
+
 export function TaskOutputsPage() {
   const { taskId = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [task, setTask] = useState<MonitorTask | null>(null);
   const [rawOutputs, setRawOutputs] = useState<AuditResult[]>([]);
   const [apiTotal, setApiTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filters, setFilters] = useState<OutputFiltersValue>(initialFilters);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
   const [activeDrawer, setActiveDrawer] = useState<TaskDrawerType>(null);
   const [toast, setToast] = useState<{ message: string; tone?: "success" | "info" } | null>(null);
+  const filters = useMemo<OutputFiltersValue>(() => ({
+    query: searchParams.get("q") || initialFilters.query,
+    riskLevel: readEnumParam(searchParams, "level", outputRiskLevels, initialFilters.riskLevel),
+    riskLibraryId: searchParams.get("library") || initialFilters.riskLibraryId,
+    evidenceType: readEnumParam(searchParams, "evidence", outputEvidenceTypes, initialFilters.evidenceType),
+    sort: readEnumParam(searchParams, "sort", outputSortKeys, initialFilters.sort)
+  }), [searchParams]);
+  const page = readPositiveIntParam(searchParams, "page", 1);
+  const pageSize = readPageSizeParam(searchParams, 10);
+  const viewUrl = getListViewUrl(location);
+  const parentReturn = getReturnNavigationState(location.state);
+
+  const updateView = useCallback((updates: Partial<OutputViewUpdate>) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (updates.filters) {
+        writeDefaultedParam(next, "q", updates.filters.query, initialFilters.query);
+        writeDefaultedParam(next, "level", updates.filters.riskLevel, initialFilters.riskLevel);
+        writeDefaultedParam(next, "library", updates.filters.riskLibraryId, initialFilters.riskLibraryId);
+        writeDefaultedParam(next, "evidence", updates.filters.evidenceType, initialFilters.evidenceType);
+        writeDefaultedParam(next, "sort", updates.filters.sort, initialFilters.sort);
+      }
+      if (updates.page !== undefined) writeDefaultedParam(next, "page", updates.page, 1);
+      if (updates.pageSize !== undefined) writeDefaultedParam(next, "size", updates.pageSize, 10);
+      return next;
+    }, { replace: true, state: location.state });
+  }, [location.state, setSearchParams]);
 
   const loadData = useCallback(async () => {
     if (!taskId) {
@@ -54,12 +100,10 @@ export function TaskOutputsPage() {
     }
     setError("");
     try {
-      const [jobs, outputPayload] = await Promise.all([
-        fetchJobs(),
-        fetchAuditResults({ jobId: taskId, limit: 1000, sort: "latest" })
+      const [targetJob, outputPayload] = await Promise.all([
+        fetchJob(taskId),
+        fetchAuditResults({ jobId: taskId, limit: 1000, sort: "latest", compact: true })
       ]);
-      const targetJob = jobs.find((item) => item.id === taskId);
-      if (!targetJob) throw new Error("未找到该监控任务");
       const [mappedTask] = mapJobsToMonitorTasks([targetJob], outputPayload.items || []);
       setTask(mappedTask);
       setRawOutputs(outputPayload.items || []);
@@ -72,9 +116,6 @@ export function TaskOutputsPage() {
   }, [taskId]);
 
   useEffect(() => { void loadData(); }, [loadData]);
-  useEffect(() => {
-    setPage(1);
-  }, [filters, pageSize]);
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 2400);
@@ -106,6 +147,29 @@ export function TaskOutputsPage() {
   const safePage = Math.min(page, pageCount);
   const visibleOutputs = filteredOutputs.slice((safePage - 1) * pageSize, safePage * pageSize);
 
+  useEffect(() => {
+    if (!loading && page !== safePage) updateView({ page: safePage });
+  }, [loading, page, safePage, updateView]);
+
+  useRestoreListScroll(viewUrl, !loading && Boolean(task));
+
+  const handleBack = () => {
+    if (parentReturn) navigate(-1);
+    else navigate("/tasks");
+  };
+
+  const handleViewEvidence = (item: TaskOutputItem) => {
+    if (!task) return;
+    rememberListScroll(viewUrl);
+    navigate(`/tasks/${encodeURIComponent(task.id)}/outputs/${encodeURIComponent(item.id)}`, {
+      state: {
+        returnTo: viewUrl,
+        returnLabel: "监控任务",
+        returnTitle: task.name
+      }
+    });
+  };
+
   if (loading && !task) return <main className="task-outputs-page"><LoadingState label="正在加载任务产出..." /></main>;
   if (error || !task || !taskConfig) {
     return <main className="task-outputs-page"><ErrorState message={error || "任务不存在"} onRetry={() => void loadData()} /></main>;
@@ -115,26 +179,34 @@ export function TaskOutputsPage() {
     <main className="task-outputs-page">
       <TaskOutputHeader
         task={task}
-        onBack={() => navigate("/tasks")}
+        onBack={handleBack}
         onOpenConfig={() => setActiveDrawer((current) => current === "config" ? null : "config")}
         onOpenLogs={() => setActiveDrawer((current) => current === "logs" ? null : "logs")}
         onContinueCollection={() => setToast({ message: "当前后端未提供恢复持续采集接口", tone: "info" })}
       />
-      <RiskSummary summary={summary} />
+      <RiskSummary
+        summary={summary}
+        activeRiskLevel={filters.riskLevel}
+        onRiskLevelChange={(riskLevel) => updateView({ filters: { ...filters, riskLevel }, page: 1 })}
+      />
       <section className="task-output-content-panel" aria-label="内容分析结果">
-        <OutputFilters value={filters} riskLibraries={riskLibraries} onApply={setFilters} />
+        <OutputFilters
+          value={filters}
+          riskLibraries={riskLibraries}
+          onApply={(value) => updateView({ filters: value, page: 1 })}
+        />
         {visibleOutputs.length ? (
           <OutputList
             outputs={visibleOutputs}
-            onViewEvidence={(item) => navigate(`/tasks/${encodeURIComponent(task.id)}/outputs/${encodeURIComponent(item.id)}`)}
+            onViewEvidence={handleViewEvidence}
           />
         ) : <EmptyState title="暂无匹配结果" description="调整筛选条件后再查看内容分析结果" />}
         <OutputPagination
           total={filteredOutputs.length}
           page={safePage}
           pageSize={pageSize}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
+          onPageChange={(value) => updateView({ page: value })}
+          onPageSizeChange={(value) => updateView({ pageSize: value, page: 1 })}
         />
       </section>
       <TaskOutputDrawer

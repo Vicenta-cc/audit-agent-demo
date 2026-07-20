@@ -1317,6 +1317,31 @@ class SubjectMetadataTests(unittest.TestCase):
         }
         self.assertEqual(build_evidence_groups(result), [])
 
+    def test_manual_review_evidence_uses_manual_library_label(self) -> None:
+        result = {
+            "decision": "review",
+            "risk_level": "low",
+            "risk_score": 40,
+            "categories": ["人身攻击"],
+            "evidence_items": [{
+                "evidence_id": "comment:1",
+                "primary_modality": "comment",
+                "source": "comment:1",
+                "text": "测试评论",
+                "risk_library_id": "manual",
+                "risk_library_label": "人工复核风险",
+                "risk_type": "人身攻击",
+                "evidence_risk_level": "low",
+                "risk_score": 40,
+                "reason": "人工复核命中解释",
+            }],
+        }
+
+        groups = build_evidence_groups(result)
+
+        self.assertEqual(groups[0]["items"][0]["risk_library_label"], "人工复核风险")
+        self.assertEqual(groups[0]["items"][0]["hit_explanation"], "人工复核命中解释")
+
     def test_normalization_discards_none_evidence_but_keeps_risk(self) -> None:
         pipeline = bare_pipeline()
         subject = self.subject(title="标题", desc="正文")

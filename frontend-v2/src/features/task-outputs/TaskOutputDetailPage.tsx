@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { getReturnNavigationState } from "../../app/listNavigation";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -15,10 +16,13 @@ import {
   Mic,
   MoreHorizontal,
   Play,
+  Search,
   ScanEye,
   ShieldAlert,
   ShieldCheck,
-  UserSearch
+  UserRound,
+  UserSearch,
+  X
 } from "lucide-react";
 import { Button } from "../../components/common/Button";
 import { DropdownMenu } from "../../components/common/DropdownMenu";
@@ -29,7 +33,7 @@ import { Toast } from "../../components/feedback/Toast";
 import {
   fetchAuditResultDetail,
   fetchAuditResults,
-  fetchJobs,
+  fetchJob,
   formatDateTime,
   getPlatformLabel,
   linkCommentUserRelation,
@@ -60,6 +64,7 @@ interface MediaItem {
 interface DetailComment {
   id: string;
   name: string;
+  avatarUrl: string;
   region: string;
   content: string;
   time: string;
@@ -69,10 +74,12 @@ interface DetailComment {
   auditStatus: string;
   riskScore: number | null;
   riskLevel: string;
-  riskBasis: string;
-  exemptionBasis: string;
-  evidenceQuote: string;
   raw: AuditComment;
+}
+
+interface DetailTranscript {
+  source: string;
+  translation: string;
 }
 
 const evidenceTabs: Array<{
@@ -82,16 +89,21 @@ const evidenceTabs: Array<{
   Icon: typeof FileText;
 }> = [
   { type: "text", label: "文本证据", shortLabel: "文本", Icon: FileText },
-  { type: "ocr", label: "画面文字 OCR", shortLabel: "OCR", Icon: ImageIcon },
-  { type: "asr", label: "音频 ASR", shortLabel: "ASR", Icon: Mic },
+  { type: "ocr", label: "画面文字", shortLabel: "OCR", Icon: ImageIcon },
+  { type: "asr", label: "音频证据", shortLabel: "ASR", Icon: Mic },
   { type: "comment", label: "评论证据", shortLabel: "评论", Icon: MessageSquare },
-  { type: "vision", label: "视觉理解", shortLabel: "视觉", Icon: ScanEye }
+  { type: "vision", label: "视觉证据", shortLabel: "视觉", Icon: ScanEye }
 ];
+
+const INITIAL_COMMENT_RENDER_COUNT = 20;
 
 export function TaskOutputDetailPage() {
   const { taskId = "", outputId = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnNavigation = getReturnNavigationState(location.state);
   const commentsRef = useRef<HTMLDivElement>(null);
+  const evidenceListRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [detail, setDetail] = useState<AuditResultDetail | null>(null);
   const [task, setTask] = useState<MonitorTask | null>(null);
@@ -100,7 +112,8 @@ export function TaskOutputDetailPage() {
   const [error, setError] = useState("");
   const [mediaIndex, setMediaIndex] = useState(0);
   const [activeEvidenceType, setActiveEvidenceType] = useState<EvidenceType>("text");
-  const [textExpanded, setTextExpanded] = useState(false);
+  const [contentDialogOpen, setContentDialogOpen] = useState(false);
+  const [commentsDrawerOpen, setCommentsDrawerOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [pendingSeek, setPendingSeek] = useState<number | null>(null);
   const [toast, setToast] = useState<{ message: string; tone?: "success" | "info" } | null>(null);
@@ -115,11 +128,14 @@ export function TaskOutputDetailPage() {
     setLoading(true);
     setError("");
     try {
-      const jobsPromise = fetchJobs();
-      const nextDetail = await loadOutputDetail(taskId, outputId);
-      const jobs = await jobsPromise;
+      const routeJobPromise = taskId ? fetchJob(taskId).catch(() => null) : Promise.resolve(null);
+      const [nextDetail, routeJob] = await Promise.all([loadOutputDetail(taskId, outputId), routeJobPromise]);
       const resultJobId = String(nextDetail.audit_result.job_id || taskId || "");
-      const matchedJob = jobs.find((item) => item.id === resultJobId) || null;
+      const matchedJob = routeJob?.id === resultJobId
+        ? routeJob
+        : resultJobId
+          ? await fetchJob(resultJobId).catch(() => null)
+          : null;
       setDetail(nextDetail);
       setJob(matchedJob);
       setTask(matchedJob ? mapJobsToMonitorTasks([matchedJob], [nextDetail.audit_result])[0] || null : null);
@@ -146,7 +162,9 @@ export function TaskOutputDetailPage() {
   const mediaItems = useMemo(() => (detail && item ? collectOriginalMedia(detail.audit_result, item) : []), [detail, item]);
   const originalText = useMemo(() => (detail ? buildOriginalText(detail.audit_result) : ""), [detail]);
   const translatedText = useMemo(() => (detail ? buildTranslatedText(detail.audit_result) : ""), [detail]);
+  const transcript = useMemo(() => (detail ? buildTranscript(detail.audit_result) : { source: "", translation: "" }), [detail]);
   const comments = useMemo(() => (detail ? normalizeComments(detail.audit_result.comments || []) : []), [detail]);
+  const visibleComments = comments.slice(0, INITIAL_COMMENT_RENDER_COUNT);
   const currentMedia = mediaItems.length ? mediaItems[Math.min(mediaIndex, mediaItems.length - 1)] : null;
 
   useEffect(() => {
@@ -159,8 +177,22 @@ export function TaskOutputDetailPage() {
 
   useEffect(() => {
     setMediaIndex(0);
-    setTextExpanded(false);
+    setContentDialogOpen(false);
+    setCommentsDrawerOpen(false);
   }, [outputId]);
+
+  useEffect(() => {
+    evidenceListRef.current?.scrollTo({ left: 0 });
+  }, [activeEvidenceType]);
+
+  useEffect(() => {
+    if (!contentDialogOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContentDialogOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [contentDialogOpen]);
 
   useEffect(() => {
     if (pendingSeek === null || !videoRef.current || currentMedia?.type !== "video") return;
@@ -193,6 +225,14 @@ export function TaskOutputDetailPage() {
   const batchLabel = firstText(stringField(result, "batch_id"), stringField(result, "batch"), result.job_id, "--");
   const commentTotal = Number(result.comments_count || result.comment_count || comments.length);
   const verdictSummary = firstText(item.summary, result.desc, result.title, "暂无内容摘要");
+  const fallbackReturnTo = task ? `/tasks/${encodeURIComponent(task.id)}/outputs` : "/risk";
+  const returnLabel = returnNavigation?.returnLabel || (task ? "监控任务" : "风险研判");
+  const returnTitle = returnNavigation?.returnTitle || (task?.name || "风险研判工作台");
+
+  const handleReturn = () => {
+    if (returnNavigation) navigate(-1);
+    else navigate(fallbackReturnTo);
+  };
 
   const goMedia = (direction: -1 | 1) => {
     if (mediaItems.length < 2) return;
@@ -240,6 +280,23 @@ export function TaskOutputDetailPage() {
     container.scrollBy({ left: direction * Math.max(320, container.clientWidth * 0.78), behavior: "smooth" });
   };
 
+  const scrollEvidence = (direction: -1 | 1) => {
+    const container = evidenceListRef.current;
+    if (!container) return;
+    const items = Array.from(container.querySelectorAll<HTMLElement>(".detail-evidence-item"));
+    if (!items.length) return;
+    const paddingLeft = Number.parseFloat(window.getComputedStyle(container).paddingLeft) || 0;
+    const containerLeft = container.getBoundingClientRect().left;
+    const targets = items.map((item) => (
+      item.getBoundingClientRect().left - containerLeft + container.scrollLeft - paddingLeft
+    ));
+    const currentIndex = targets.reduce((closest, target, index) => (
+      Math.abs(target - container.scrollLeft) < Math.abs(targets[closest] - container.scrollLeft) ? index : closest
+    ), 0);
+    const nextIndex = Math.min(items.length - 1, Math.max(0, currentIndex + direction));
+    container.scrollTo({ left: targets[nextIndex], behavior: "smooth" });
+  };
+
   const playEvidenceAt = (seconds: number) => {
     const videoIndex = mediaItems.findIndex((media) => media.type === "video");
     if (videoIndex < 0) {
@@ -254,12 +311,12 @@ export function TaskOutputDetailPage() {
     <main className="task-output-detail-page">
       <section className="detail-summary-shell" aria-label="内容摘要">
         <div className="detail-breadcrumb">
-          <button type="button" onClick={() => navigate(task ? `/tasks/${encodeURIComponent(task.id)}/outputs` : "/risk")}>
+          <button type="button" onClick={handleReturn}>
             <ArrowLeft size={16} />
-            <span>{task ? "监控任务" : "风险研判"}</span>
+            <span>{returnLabel}</span>
           </button>
           <span>/</span>
-          {task ? <Link to={`/tasks/${encodeURIComponent(task.id)}/outputs`}>{task.name}</Link> : <Link to="/risk">风险研判工作台</Link>}
+          <button type="button" onClick={handleReturn}>{returnTitle}</button>
           <span>/ 内容详情</span>
         </div>
 
@@ -292,7 +349,7 @@ export function TaskOutputDetailPage() {
             >
               <button type="button" onClick={() => void copySourceUrl()}>复制来源链接</button>
               <button type="button" onClick={() => void copyOutputNumber()}>复制结果编号</button>
-              <button type="button" onClick={() => navigate(task ? `/tasks/${encodeURIComponent(task.id)}/outputs` : "/risk")}>返回产出列表</button>
+              <button type="button" onClick={handleReturn}>返回{returnTitle}</button>
             </DropdownMenu>
           </div>
         </div>
@@ -345,18 +402,39 @@ export function TaskOutputDetailPage() {
             ) : null}
           </div>
 
-          {currentMedia?.caption ? <p className="detail-media-caption">{currentMedia.caption}</p> : null}
-
-          <div className={`detail-original-text${textExpanded ? " is-expanded" : ""}`}>
-            <p>{originalText || "暂无原文正文"}</p>
-            {translatedText ? <p className="detail-original-translation"><strong>中文译文：</strong>{translatedText}</p> : null}
-          </div>
-          {originalText.length + translatedText.length > 96 ? (
-            <button className="detail-expand-text" type="button" onClick={() => setTextExpanded((current) => !current)}>
-              {textExpanded ? "收起" : "展开"}
-              <ChevronRight size={15} />
+          <div className="detail-content-previews">
+            <button className="detail-content-preview" type="button" aria-haspopup="dialog" onClick={() => setContentDialogOpen(true)}>
+              <span className="detail-content-preview-head">
+                <strong>正文</strong>
+                <ChevronRight size={15} />
+              </span>
+              <span className={`detail-content-preview-copy${originalText ? "" : " is-empty"}`}>
+                {originalText || "暂无原文正文"}
+              </span>
+              {translatedText ? (
+                <span className="detail-content-preview-translation">
+                  <strong>中文译文</strong>
+                  <span>{translatedText}</span>
+                </span>
+              ) : null}
             </button>
-          ) : null}
+
+            {transcript.source || transcript.translation ? (
+              <button className="detail-content-preview detail-transcript-preview" type="button" aria-haspopup="dialog" onClick={() => setContentDialogOpen(true)}>
+                <span className="detail-content-preview-head">
+                  <strong>音视频 ASR</strong>
+                  <ChevronRight size={15} />
+                </span>
+                {transcript.source ? <span className="detail-content-preview-copy">{transcript.source}</span> : null}
+                {transcript.translation ? (
+                  <span className="detail-content-preview-translation">
+                    <strong>中文译文</strong>
+                    <span>{transcript.translation}</span>
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
+          </div>
         </article>
 
         <article className="detail-card judgement-card">
@@ -399,17 +477,33 @@ export function TaskOutputDetailPage() {
                 <strong>{activeGroup.label || evidenceLabel(activeEvidenceType)}</strong>
                 <span>{activeGroup.count || 0} 条命中</span>
               </div>
-              <span>{activeGroup.confidence || "待确认"}</span>
+              <div className="detail-evidence-panel-controls">
+                <span>{activeGroup.confidence || "待确认"}</span>
+                {activeEvidenceType === "comment" && (activeGroup.items?.length || 0) > 1 ? (
+                  <span className="detail-evidence-pager">
+                    <IconButton type="button" aria-label="上一条评论证据" onClick={() => scrollEvidence(-1)}>
+                      <ChevronLeft size={16} />
+                    </IconButton>
+                    <IconButton type="button" aria-label="下一条评论证据" onClick={() => scrollEvidence(1)}>
+                      <ChevronRight size={16} />
+                    </IconButton>
+                  </span>
+                ) : null}
+              </div>
             </div>
 
             {activeGroup.items?.length ? (
-              <div className="detail-evidence-list">
+              <div ref={evidenceListRef} className={`detail-evidence-list${activeEvidenceType === "comment" ? " is-horizontal" : ""}`}>
                 {activeGroup.items.map((evidence, index) => (
                   <EvidenceDetail
                     key={evidence.id || `${activeEvidenceType}-${index}`}
                     evidence={evidence}
                     group={activeGroup}
+                    index={index}
                     jobId={String(result.job_id || "")}
+                    comment={resolveEvidenceComment(evidence, comments)}
+                    onLinkComment={handleLinkComment}
+                    onAnalyzeCommentUser={handleAnalyzeCommentUser}
                     onPlayAt={playEvidenceAt}
                   />
                 ))}
@@ -430,16 +524,65 @@ export function TaskOutputDetailPage() {
         </article>
       </section>
 
+      {contentDialogOpen ? (
+        <div className="detail-transcript-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.currentTarget === event.target) setContentDialogOpen(false);
+        }}>
+          <section className="detail-transcript-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-transcript-title">
+            <header>
+              <div>
+                <span>原始内容</span>
+                <h2 id="detail-transcript-title">正文与音视频文字</h2>
+              </div>
+              <IconButton type="button" aria-label="关闭文字详情" onClick={() => setContentDialogOpen(false)}>
+                <X size={19} />
+              </IconButton>
+            </header>
+            <div className="detail-transcript-body">
+              {originalText ? (
+                <section>
+                  <h3>正文原文</h3>
+                  <p dir="auto">{originalText}</p>
+                </section>
+              ) : null}
+              {translatedText ? (
+                <section>
+                  <h3>正文中文译文</h3>
+                  <p dir="auto">{translatedText}</p>
+                </section>
+              ) : null}
+              {transcript.source ? (
+                <section>
+                  <h3>音视频 ASR 原文</h3>
+                  <p dir="auto">{transcript.source}</p>
+                </section>
+              ) : null}
+              {transcript.translation ? (
+                <section>
+                  <h3>音视频 ASR 中文译文</h3>
+                  <p dir="auto">{transcript.translation}</p>
+                </section>
+              ) : null}
+              {!originalText && !translatedText && !transcript.source && !transcript.translation ? (
+                <div className="detail-transcript-empty">暂无可展示的正文或音视频文字</div>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       <section className="detail-comments-section" aria-label="逐条评论审核">
         <header className="detail-comments-header">
           <div>
             <h2>逐条评论审核</h2>
             <span>{commentTotal.toLocaleString("zh-CN")} 条</span>
           </div>
-          <button type="button" onClick={() => setToast({ message: `当前已加载 ${comments.length} 条评论`, tone: "info" })}>
-            查看全部 {commentTotal.toLocaleString("zh-CN")} 条
-            <ChevronRight size={15} />
-          </button>
+          {comments.length > INITIAL_COMMENT_RENDER_COUNT ? (
+            <button type="button" aria-haspopup="dialog" onClick={() => setCommentsDrawerOpen(true)}>
+              查看全部 {comments.length.toLocaleString("zh-CN")} 条
+              <ChevronRight size={15} />
+            </button>
+          ) : null}
         </header>
 
         <div className="detail-comments-carousel">
@@ -447,10 +590,22 @@ export function TaskOutputDetailPage() {
             <ChevronLeft size={19} />
           </IconButton>
           <div className="detail-comment-track" ref={commentsRef}>
-            {comments.length ? comments.map((comment) => (
+            {visibleComments.length ? visibleComments.map((comment) => (
               <article className="detail-comment-card" key={comment.id}>
                 <header>
-                  <strong title={comment.name}>{comment.name}</strong>
+                  <div className="detail-comment-author">
+                    <span className="detail-comment-avatar" aria-hidden="true">
+                      <UserRound size={17} />
+                      {comment.avatarUrl ? (
+                        <img
+                          src={comment.avatarUrl}
+                          alt=""
+                          onError={(event) => event.currentTarget.remove()}
+                        />
+                      ) : null}
+                    </span>
+                    <strong title={comment.name}>{comment.name}</strong>
+                  </div>
                   <span className={`detail-comment-risk status-${evidenceStatus(comment.riskLevel).tone}`}>
                     {comment.auditStatus === "failed" ? "审核失败" : `${comment.riskScore ?? 0}分 · ${evidenceStatus(comment.riskLevel).label.replace("证据", "")}`}
                   </span>
@@ -460,12 +615,7 @@ export function TaskOutputDetailPage() {
                   {comment.translation ? <p className="detail-comment-translation">译文：{comment.translation}</p> : null}
                   {comment.auditStatus === "failed" ? (
                     <p className="detail-comment-audit-failed">本条未完成审核，不计为 0 分</p>
-                  ) : (
-                    <dl>
-                      <div><dt>违规依据</dt><dd>{comment.riskBasis || "无明确违规依据"}</dd></div>
-                      <div><dt>豁免依据</dt><dd>{comment.exemptionBasis || "无明显豁免语境"}</dd></div>
-                    </dl>
-                  )}
+                  ) : null}
                 </div>
                 <footer>
                   <time>{comment.region || "未知地区"} · {comment.time}</time>
@@ -491,20 +641,161 @@ export function TaskOutputDetailPage() {
         </div>
       </section>
 
+      {commentsDrawerOpen ? (
+        <CommentReviewDrawer
+          comments={comments}
+          total={comments.length}
+          onClose={() => setCommentsDrawerOpen(false)}
+          onLinkComment={handleLinkComment}
+          onAnalyzeCommentUser={handleAnalyzeCommentUser}
+        />
+      ) : null}
+
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     </main>
+  );
+}
+
+type CommentRiskFilter = "all" | "high" | "medium" | "review" | "safe" | "failed";
+
+function CommentReviewDrawer({
+  comments,
+  total,
+  onClose,
+  onLinkComment,
+  onAnalyzeCommentUser
+}: {
+  comments: DetailComment[];
+  total: number;
+  onClose: () => void;
+  onLinkComment: (comment: DetailComment) => Promise<void>;
+  onAnalyzeCommentUser: (comment: DetailComment) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [riskFilter, setRiskFilter] = useState<CommentRiskFilter>("all");
+  const normalizedQuery = query.trim().toLocaleLowerCase("zh-CN");
+  const filteredComments = useMemo(() => comments.filter((comment) => {
+    const tone = evidenceStatus(comment.riskLevel).tone;
+    const matchesRisk = riskFilter === "all"
+      || (riskFilter === "failed" ? comment.auditStatus === "failed" : comment.auditStatus !== "failed" && tone === riskFilter);
+    if (!matchesRisk) return false;
+    if (!normalizedQuery) return true;
+    return [comment.name, comment.content, comment.translation, comment.region]
+      .some((value) => value.toLocaleLowerCase("zh-CN").includes(normalizedQuery));
+  }), [comments, normalizedQuery, riskFilter]);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="detail-comments-drawer-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.currentTarget === event.target) onClose();
+    }}>
+      <aside className="detail-comments-drawer" role="dialog" aria-modal="true" aria-labelledby="detail-comments-drawer-title">
+        <header className="detail-comments-drawer-header">
+          <div>
+            <h2 id="detail-comments-drawer-title">全部评论</h2>
+            <span>{total.toLocaleString("zh-CN")} 条</span>
+          </div>
+          <IconButton type="button" aria-label="关闭全部评论" onClick={onClose}>
+            <X size={19} />
+          </IconButton>
+        </header>
+
+        <div className="detail-comments-drawer-toolbar">
+          <label className="detail-comments-drawer-search">
+            <Search size={15} aria-hidden="true" />
+            <input
+              type="search"
+              value={query}
+              placeholder="搜索用户或评论内容"
+              aria-label="搜索用户或评论内容"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <select value={riskFilter} aria-label="按评论风险筛选" onChange={(event) => setRiskFilter(event.target.value as CommentRiskFilter)}>
+            <option value="all">全部风险</option>
+            <option value="high">高危</option>
+            <option value="medium">中危</option>
+            <option value="review">待复核</option>
+            <option value="safe">无风险</option>
+            <option value="failed">审核失败</option>
+          </select>
+          <span>{filteredComments.length.toLocaleString("zh-CN")} 条结果</span>
+        </div>
+
+        <div className="detail-comments-drawer-list">
+          {filteredComments.length ? filteredComments.map((comment) => {
+            const status = evidenceStatus(comment.riskLevel);
+            return (
+              <article className="detail-comments-drawer-row" key={comment.id}>
+                <div className="detail-comments-drawer-author">
+                  <strong title={comment.name}>{comment.name}</strong>
+                  <span>{comment.region || "未知地区"}</span>
+                  <time>{comment.time}</time>
+                </div>
+                <div className="detail-comments-drawer-copy">
+                  <p dir="auto">{comment.content}</p>
+                  {comment.translation ? (
+                    <p className="detail-comments-drawer-translation" dir="auto"><strong>译文</strong>{comment.translation}</p>
+                  ) : null}
+                  {comment.auditStatus === "failed" ? (
+                    <p className="detail-comments-drawer-failed">本条未完成审核，不计为 0 分</p>
+                  ) : null}
+                </div>
+                <div className="detail-comments-drawer-side">
+                  <span className={`detail-comment-risk status-${status.tone}`}>
+                    {comment.auditStatus === "failed" ? "审核失败" : `${comment.riskScore ?? 0}分 · ${status.label.replace("证据", "")}`}
+                  </span>
+                  <div>
+                    <button type="button" onClick={() => void onLinkComment(comment)}>
+                      <Link2 size={13} />
+                      关联
+                    </button>
+                    <button type="button" onClick={() => onAnalyzeCommentUser(comment)}>
+                      <UserSearch size={13} />
+                      分析该用户主页
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          }) : (
+            <div className="detail-comments-drawer-empty">没有符合条件的评论</div>
+          )}
+        </div>
+      </aside>
+    </div>
   );
 }
 
 function EvidenceDetail({
   evidence,
   group,
+  index,
   jobId,
+  comment,
+  onLinkComment,
+  onAnalyzeCommentUser,
   onPlayAt
 }: {
   evidence: AuditEvidenceGroupItem;
   group: AuditEvidenceGroup;
+  index: number;
   jobId: string;
+  comment: DetailComment | null;
+  onLinkComment: (comment: DetailComment) => Promise<void>;
+  onAnalyzeCommentUser: (comment: DetailComment) => void;
   onPlayAt: (seconds: number) => void;
 }) {
   const type = normalizeEvidenceType(group.type || evidence.primary_modality || evidence.source || "") || "text";
@@ -512,19 +803,42 @@ function EvidenceDetail({
   const content = firstText(evidence.content, evidence.text, evidence.ocr_text_zh, evidence.ocr_text, "--");
   const explanation = firstText(evidence.hit_explanation, evidence.reason, evidence.context, "暂无命中解释");
   const status = evidenceStatus(evidence.evidence_risk_level);
-  const assetUrl = resolveMediaUrl(jobId, firstText(evidence.frame_asset_rel, evidence.asset_rel));
+  const assetUrl = resolveMediaUrl(jobId, firstText(
+    evidence.frame_asset_rel,
+    evidence.asset_rel,
+    evidence.review_sheet_rel,
+    evidence.local_path,
+    evidence.url
+  ));
   const start = finiteNumber(evidence.start ?? evidence.timestamp);
   const end = finiteNumber(evidence.end);
   const position = type === "vision" || type === "ocr"
     ? [evidence.frame_number !== undefined ? `帧 ${evidence.frame_number}` : "", evidence.timestamp !== undefined ? formatEvidenceTime(evidence.timestamp) : ""].filter(Boolean).join(" · ")
     : firstText(evidence.position, evidence.source_label, evidence.source, "--");
   const ocrContext = formatOcrContext(evidence.ocr_context);
+  const evidenceTitle = firstText(evidence.evidence_type, `${evidenceLabel(type)}命中`);
+  const commentId = firstText(comment?.id, evidence.comment_id, evidence.id?.replace(/^comment:/, ""), "--");
+  const commentName = firstText(comment?.name, evidence.nickname, "评论用户");
 
   return (
     <article className="detail-evidence-item">
       <header>
-        <strong>{evidence.title || evidence.rule || group.label || "证据详情"}</strong>
-        <span className={`detail-evidence-status status-${status.tone}`}>{status.label}</span>
+        <strong>{index + 1}. {evidenceTitle}</strong>
+        <div className="detail-evidence-header-actions">
+          {type === "comment" && comment ? (
+            <>
+              <button type="button" onClick={() => void onLinkComment(comment)}>
+                <Link2 size={13} />
+                关联
+              </button>
+              <button type="button" onClick={() => onAnalyzeCommentUser(comment)}>
+                <UserSearch size={13} />
+                分析该用户主页
+              </button>
+            </>
+          ) : null}
+          <span className={`detail-evidence-status status-${status.tone}`}>{status.label}</span>
+        </div>
       </header>
       {assetUrl && (type === "vision" || type === "ocr") ? (
         <img className="detail-evidence-frame" src={assetUrl} alt={position || "命中视频帧"} />
@@ -552,11 +866,10 @@ function EvidenceDetail({
         ) : null}
         {type === "comment" ? (
           <>
+            <div><dt>评论用户</dt><dd>{commentName}</dd></div>
+            <div><dt>评论ID</dt><dd>{commentId}</dd></div>
             <div><dt>评论原文</dt><dd>{content}</dd></div>
             {evidence.translation_zh ? <div><dt>中文译文</dt><dd>{evidence.translation_zh}</dd></div> : null}
-            <div><dt>风险分</dt><dd>{evidence.risk_score ?? "--"}</dd></div>
-            <div><dt>违规依据</dt><dd>{firstText(evidence.risk_basis, evidence.reason, "无明确违规依据")}</dd></div>
-            <div><dt>豁免依据</dt><dd>{firstText(evidence.exemption_basis, "无明显豁免语境")}</dd></div>
           </>
         ) : null}
         {type === "text" || type === "vision" ? <div><dt>{type === "vision" ? "画面描述" : "原文"}</dt><dd>{content}</dd></div> : null}
@@ -568,10 +881,6 @@ function EvidenceDetail({
         <div className="detail-evidence-inline">
           <dt>位置</dt>
           <dd>{position || "--"}</dd>
-        </div>
-        <div className="detail-evidence-inline">
-          <dt>证据状态</dt>
-          <dd>{status.label}</dd>
         </div>
       </dl>
       {type === "asr" && start !== null ? (
@@ -593,7 +902,7 @@ async function loadOutputDetail(taskId: string, outputId: string): Promise<Audit
     }
   }
 
-  const payload = await fetchAuditResults({ jobId: taskId, limit: 1000, sort: "latest" });
+  const payload = await fetchAuditResults({ jobId: taskId, limit: 1000, sort: "latest", compact: true });
   const matched = (payload.items || []).find((result) => {
     return getOutputKey(result) === outputId || String(result.audit_result_id || result.id || "") === outputId;
   });
@@ -620,7 +929,9 @@ function normalizeEvidenceGroups(detail: AuditResultDetail | null): AuditEvidenc
   rawGroups.forEach((group) => {
     const type = normalizeEvidenceType(group.type || group.id || "");
     if (!type) return;
-    const items = (group.items || []).filter((item) => isRiskEvidenceLevel(item.evidence_risk_level || item.risk_level));
+    const items = sortEvidenceByRisk(
+      (group.items || []).filter((item) => isRiskEvidenceLevel(item.evidence_risk_level || item.risk_level))
+    );
     byType.set(type, {
       ...group,
       type,
@@ -697,8 +1008,8 @@ function collectOriginalMedia(result: AuditResult, item: TaskOutputItem): MediaI
 }
 
 function buildOriginalText(result: AuditResult) {
-  const title = firstText(result.title);
-  const desc = firstText(result.desc);
+  const title = firstText(result.title, result.evidence_index?.text_context?.title);
+  const desc = firstText(result.desc, result.evidence_index?.text_context?.desc);
   if (title && desc && title !== desc) {
     return `标题：${title}\n正文：${desc}`;
   }
@@ -706,12 +1017,53 @@ function buildOriginalText(result: AuditResult) {
 }
 
 function buildTranslatedText(result: AuditResult) {
-  const title = firstText(result.title_zh);
-  const desc = firstText(result.desc_zh);
+  const title = firstText(result.title_zh, result.evidence_index?.text_context?.title_zh);
+  const desc = firstText(result.desc_zh, result.evidence_index?.text_context?.desc_zh);
   if (title && desc && title !== desc) {
     return `标题：${title}\n正文：${desc}`;
   }
   return desc || title || "";
+}
+
+function buildTranscript(result: AuditResult): DetailTranscript {
+  const sourceParts: string[] = [];
+  const translationParts: string[] = [];
+  const sourceSeen = new Set<string>();
+  const translationSeen = new Set<string>();
+  const append = (bucket: string[], seen: Set<string>, value: unknown) => {
+    const text = String(value || "").trim();
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    bucket.push(text);
+  };
+
+  (result.video_results || []).forEach((video) => {
+    const transcript = video.transcript;
+    if (!transcript) return;
+    append(sourceParts, sourceSeen, transcript.text);
+    append(translationParts, translationSeen, firstText(transcript.text_zh, transcript.translation?.text));
+  });
+
+  const needsSourceFallback = sourceParts.length === 0;
+  const needsTranslationFallback = translationParts.length === 0;
+  const appendSegment = (segment: Record<string, unknown>) => {
+    if (needsSourceFallback) append(sourceParts, sourceSeen, firstText(segment.source_text_dolphin, segment.source_text, segment.text));
+    if (needsTranslationFallback) append(translationParts, translationSeen, firstText(segment.translation_zh, segment.text_zh));
+  };
+  recordArray(result.asr_segments).forEach(appendSegment);
+  recordArray(result.evidence_index?.asr_segments).forEach(appendSegment);
+  (result.evidence_items || [])
+    .filter((item) => normalizeEvidenceType(item.primary_modality || item.modality || item.source || "") === "asr")
+    .forEach((item) => {
+      const record = item as Record<string, unknown>;
+      if (needsSourceFallback) append(sourceParts, sourceSeen, firstText(record.source_text_dolphin, item.text));
+      if (needsTranslationFallback) append(translationParts, translationSeen, item.translation_zh);
+    });
+
+  return {
+    source: sourceParts.join("\n\n"),
+    translation: translationParts.join("\n\n")
+  };
 }
 
 function normalizeComments(comments: AuditComment[]): DetailComment[] {
@@ -726,6 +1078,7 @@ function normalizeComments(comments: AuditComment[]): DetailComment[] {
       return {
         id: firstText(comment.comment_id, String(comment.id || ""), `${index}`),
         name,
+        avatarUrl: firstText(comment.avatar),
         region: firstText(comment.ip_location, "未知地区"),
         content,
         time: formatCommentTime(comment.create_time || comment.created_at || comment.time || ""),
@@ -735,14 +1088,20 @@ function normalizeComments(comments: AuditComment[]): DetailComment[] {
         auditStatus: firstText(comment.audit_status, "pending"),
         riskScore,
         riskLevel: firstText(comment.risk_level, riskScore !== null ? "none" : "unknown"),
-        riskBasis: firstText(comment.risk_basis),
-        exemptionBasis: firstText(comment.exemption_basis),
-        evidenceQuote: firstText(comment.evidence_quote),
         raw: comment
       };
     })
     .filter((comment) => comment.content)
     .sort((left, right) => (right.riskScore ?? -1) - (left.riskScore ?? -1));
+}
+
+function resolveEvidenceComment(evidence: AuditEvidenceGroupItem, comments: DetailComment[]): DetailComment | null {
+  const evidenceId = firstText(evidence.comment_id, evidence.id?.replace(/^comment:/, ""));
+  const exactMatch = evidenceId ? comments.find((comment) => comment.id === evidenceId) : undefined;
+  if (exactMatch) return exactMatch;
+
+  const content = firstText(evidence.content, evidence.text);
+  return comments.find((comment) => comment.content === content) || null;
 }
 
 function buildCommentRelationContext(result: AuditResult, comment: DetailComment) {
@@ -795,6 +1154,25 @@ function evidenceStatus(level = "") {
 function isRiskEvidenceLevel(level: unknown) {
   const normalized = String(level || "").trim().toLowerCase();
   return ["low", "medium", "high", "review", "低危", "中危", "高危", "待复核"].includes(normalized);
+}
+
+function sortEvidenceByRisk(items: AuditEvidenceGroupItem[]) {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      const levelDifference = evidenceRiskRank(right.item.evidence_risk_level || right.item.risk_level)
+        - evidenceRiskRank(left.item.evidence_risk_level || left.item.risk_level);
+      return levelDifference || left.index - right.index;
+    })
+    .map(({ item }) => item);
+}
+
+function evidenceRiskRank(level: unknown) {
+  const normalized = String(level || "").trim().toLowerCase();
+  if (["high", "高危", "高风险"].includes(normalized)) return 3;
+  if (["medium", "中危", "中风险"].includes(normalized)) return 2;
+  if (["low", "review", "低危", "低风险", "待复核"].includes(normalized)) return 1;
+  return 0;
 }
 
 function riskTone(level: RiskLevel) {

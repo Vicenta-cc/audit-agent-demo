@@ -44,6 +44,42 @@ JSON_OBJECT_FIELDS = {
     "prompt_profile_snapshot",
 }
 
+JOB_SUMMARY_COLUMNS = ", ".join((
+    "id",
+    "status",
+    "platform",
+    "display_name",
+    "crawl_mode",
+    "keyword",
+    "keyword_source",
+    "lexicon_category",
+    "library_ids",
+    "capabilities",
+    "scoring_template",
+    "rule_snapshot",
+    "lexicon_keywords",
+    "prompt_profile_snapshot",
+    "current_audit_config_revision_id",
+    "creator_url",
+    "creator_id",
+    "start_page",
+    "max_notes",
+    "max_comments",
+    "max_concurrency",
+    "get_sub_comment",
+    "analyze_limit",
+    "run_crawler",
+    "source_output_id",
+    "analysis_batch_size",
+    "input_type",
+    "input_filename",
+    "control",
+    "error",
+    "archived",
+    "created_at",
+    "updated_at",
+))
+
 
 class JobStore:
     def __init__(self, db_path: Path | None = None):
@@ -255,11 +291,57 @@ class JobStore:
                 return None
             return self._row_to_job(conn, row)
 
+    def get_summary(self, job_id: str, *, log_limit: int = 8) -> dict | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                f"SELECT {JOB_SUMMARY_COLUMNS} FROM jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+            if not row:
+                return None
+            return self._row_to_job(conn, row, log_limit=log_limit)
+
+    def exists(self, job_id: str) -> bool:
+        with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT 1 FROM jobs WHERE id = ?", (job_id,)).fetchone()
+            return row is not None
+
     def list(self, include_archived: bool = False) -> list[dict]:
         with self._lock, self._connect() as conn:
             where = "" if include_archived else "WHERE archived = 0"
             rows = conn.execute(f"SELECT * FROM jobs {where} ORDER BY created_at DESC").fetchall()
             return [self._row_to_job(conn, row) for row in rows]
+
+    def list_summaries(self, include_archived: bool = False, *, log_limit: int = 8) -> list[dict]:
+        with self._lock, self._connect() as conn:
+            where = "" if include_archived else "WHERE archived = 0"
+            rows = conn.execute(
+                f"SELECT {JOB_SUMMARY_COLUMNS} FROM jobs {where} ORDER BY created_at DESC"
+            ).fetchall()
+            return [self._row_to_job(conn, row, log_limit=log_limit) for row in rows]
+
+    def list_policy_references(self) -> list[dict]:
+        """Return the small job projection used by the configuration center."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    j.id,
+                    j.display_name,
+                    j.keyword,
+                    j.input_filename,
+                    j.status,
+                    j.created_at,
+                    j.updated_at,
+                    r.source_policy_id
+                FROM jobs j
+                LEFT JOIN task_audit_config_revisions r
+                    ON r.id = j.current_audit_config_revision_id
+                WHERE j.archived = 0
+                ORDER BY j.created_at DESC
+                """
+            ).fetchall()
+            return [dict(row) for row in rows]
 
     def update(self, job_id: str, **kwargs) -> None:
         if not kwargs:
@@ -866,7 +948,13 @@ class JobStore:
                 return text
         return ""
 
-    def _row_to_job(self, conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    def _row_to_job(
+        self,
+        conn: sqlite3.Connection,
+        row: sqlite3.Row,
+        *,
+        log_limit: int | None = None,
+    ) -> dict:
         job = dict(row)
         job["library_ids"] = self._loads_json(job.get("library_ids"), [])
         job["capabilities"] = self._loads_json(job.get("capabilities"), [])
@@ -878,10 +966,28 @@ class JobStore:
         job["get_sub_comment"] = bool(job.get("get_sub_comment"))
         job["run_crawler"] = bool(job.get("run_crawler"))
         job["archived"] = bool(job.get("archived"))
-        logs = conn.execute(
-            "SELECT time, message FROM job_logs WHERE job_id = ? ORDER BY id ASC",
-            (job["id"],),
-        ).fetchall()
+        if log_limit is None:
+            logs = conn.execute(
+                "SELECT time, message FROM job_logs WHERE job_id = ? ORDER BY id ASC",
+                (job["id"],),
+            ).fetchall()
+        elif log_limit > 0:
+            logs = conn.execute(
+                """
+                SELECT time, message
+                FROM (
+                    SELECT id, time, message
+                    FROM job_logs
+                    WHERE job_id = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                )
+                ORDER BY id ASC
+                """,
+                (job["id"], log_limit),
+            ).fetchall()
+        else:
+            logs = []
         job["logs"] = [{"time": log["time"], "message": log["message"]} for log in logs]
         return job
 

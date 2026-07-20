@@ -12,3 +12,7 @@ local_models/
 videos/
 tools/
 *.zip
+artifacts/
+frontend-v2/artifacts/
+frontend-v2/dist/
+scripts/com.xhs-audit-agent.backend.plist

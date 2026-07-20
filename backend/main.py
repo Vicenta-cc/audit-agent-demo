@@ -1,4 +1,3 @@
-import copy
 import hashlib
 import json
 from pathlib import Path
@@ -116,8 +115,9 @@ def _is_valid_video_ref(item: dict, *refs: str | None) -> bool:
 
 
 def _sanitize_audit_result_media(item: dict) -> dict:
-    sanitized = copy.deepcopy(item)
-    index = sanitized.get("evidence_index") if isinstance(sanitized.get("evidence_index"), dict) else {}
+    sanitized = dict(item)
+    raw_index = sanitized.get("evidence_index")
+    index = dict(raw_index) if isinstance(raw_index, dict) else {}
     if not index and not isinstance(sanitized.get("video_results"), list):
         return sanitized
 
@@ -298,6 +298,7 @@ class LexiconCategoryRequest(BaseModel):
     terms: list[str] = Field(default_factory=list)
     platform_keywords: list[str] = Field(default_factory=list)
     platform_tags: list[str] = Field(default_factory=list)
+    entries: list[dict] | None = None
 
 
 class LexiconPromptProfileRequest(BaseModel):
@@ -923,6 +924,7 @@ def create_lexicon_category(request: LexiconCategoryRequest):
             terms=request.terms,
             platform_keywords=request.platform_keywords,
             platform_tags=request.platform_tags,
+            entries=request.entries,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -939,6 +941,7 @@ def update_lexicon_category(category_id: str, request: LexiconCategoryRequest):
             terms=request.terms,
             platform_keywords=request.platform_keywords,
             platform_tags=request.platform_tags,
+            entries=request.entries,
         )
     except KeyError:
         raise HTTPException(status_code=404, detail="Lexicon category not found")
@@ -1324,12 +1327,17 @@ async def create_local_video_job(
 
 @app.get("/api/jobs")
 def list_jobs():
-    return [enrich_job(job) for job in job_store.list()]
+    return [enrich_job(job) for job in job_store.list_summaries()]
+
+
+@app.get("/api/job-policy-references")
+def list_job_policy_references():
+    return {"items": job_store.list_policy_references()}
 
 
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str):
-    job = job_store.get(job_id)
+    job = job_store.get_summary(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return enrich_job(job)
@@ -1337,16 +1345,14 @@ def get_job(job_id: str):
 
 @app.get("/api/jobs/{job_id}/audit-config-revisions")
 def list_job_audit_config_revisions(job_id: str):
-    job = job_store.get(job_id)
-    if not job:
+    if not job_store.exists(job_id):
         raise HTTPException(status_code=404, detail="Job not found")
     return {"items": audit_config_revision_store.list_for_job(job_id)}
 
 
 @app.get("/api/jobs/{job_id}/audit-config-revisions/{revision_id}")
 def get_job_audit_config_revision(job_id: str, revision_id: str):
-    job = job_store.get(job_id)
-    if not job:
+    if not job_store.exists(job_id):
         raise HTTPException(status_code=404, detail="Job not found")
     revision = audit_config_revision_store.get_for_job(job_id, revision_id)
     if not revision:
@@ -1471,25 +1477,28 @@ def get_job_items(job_id: str):
 def get_job_audit_results(
     job_id: str,
     after_id: int = 0,
+    offset: int = 0,
     limit: int = 500,
     decision: str = "",
     risk_level: str = "",
     author_key: str = "",
     keyword: str = "",
     sort: str = "id",
+    compact: bool = False,
 ):
-    job = job_store.get(job_id)
-    if not job:
+    if not job_store.exists(job_id):
         raise HTTPException(status_code=404, detail="Job not found")
     return audit_result_store.list_results(
         job_id,
         after_id=max(0, after_id),
+        offset=max(0, offset),
         limit=limit,
         decision=decision,
         risk_level=risk_level,
         author_key=author_key,
         keyword=keyword,
         sort=sort,
+        compact=compact,
     )
 
 
@@ -1497,22 +1506,26 @@ def get_job_audit_results(
 def list_audit_results(
     job_id: str = "",
     after_id: int = 0,
+    offset: int = 0,
     limit: int = 500,
     decision: str = "",
     risk_level: str = "",
     author_key: str = "",
     keyword: str = "",
     sort: str = "latest",
+    compact: bool = False,
 ):
     return audit_result_store.list_results(
         job_id,
         after_id=max(0, after_id),
+        offset=max(0, offset),
         limit=limit,
         decision=decision,
         risk_level=risk_level,
         author_key=author_key,
         keyword=keyword,
         sort=sort,
+        compact=compact,
     )
 
 
@@ -1524,7 +1537,7 @@ def get_audit_result_detail(result_id: int):
     item = _sanitize_audit_result_media(item)
     revision_id = str(item.get("audit_config_revision_id") or "")
     revision = audit_config_revision_store.get(revision_id) if revision_id else None
-    job = job_store.get(str(item.get("job_id") or "")) if item.get("job_id") else None
+    job = job_store.get_summary(str(item.get("job_id") or ""), log_limit=0) if item.get("job_id") else None
     evidence_groups = build_evidence_groups(item)
     current_revision_id = str((job or {}).get("current_audit_config_revision_id") or "")
     return {
@@ -1559,8 +1572,7 @@ def review_audit_result(result_id: int, request: AuditResultReviewRequest):
 
 @app.get("/api/jobs/{job_id}/assets")
 def get_job_asset(job_id: str, path: str):
-    job = job_store.get(job_id)
-    if not job:
+    if not job_store.exists(job_id):
         raise HTTPException(status_code=404, detail="Job not found")
 
     job_root = (settings.outputs_dir / job_id).resolve()

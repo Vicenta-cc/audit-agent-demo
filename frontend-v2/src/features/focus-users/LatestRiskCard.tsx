@@ -8,7 +8,7 @@ interface LatestRiskCardProps {
   isRefetching: boolean;
   onRefetch: () => void;
   onViewHistory: () => void;
-  onOpenDetail: () => void;
+  onOpenDetail: (risk: RiskOutput) => void;
 }
 
 const levelMeta: Record<RiskLevel, { label: string; tone: "red" | "orange" | "blue" | "gray" }> = {
@@ -27,20 +27,27 @@ export function LatestRiskCard({ risk, isRefetching, onRefetch, onViewHistory, o
 
       {risk ? (
         <div className="latest-risk-content">
-          <img className="latest-risk-cover" src={risk.coverUrl} alt="风险内容封面" />
+          {risk.coverUrl ? (
+            <img className="latest-risk-cover" src={risk.coverUrl} alt={`${risk.title}封面`} />
+          ) : (
+            <div className="latest-risk-cover latest-risk-cover-fallback" aria-hidden="true">
+              <AlertTriangle size={30} />
+            </div>
+          )}
           <div className="latest-risk-detail">
             <div className="latest-risk-meta">
               <Badge tone={levelMeta[risk.level].tone}>{levelMeta[risk.level].label}</Badge>
               <span>{risk.discoveredAt}</span>
               <span>{risk.sourceType}</span>
             </div>
+            <h3>{risk.title}</h3>
             <p>{risk.summary}</p>
             <div className="rule-list">
               {risk.hitRules.map((rule) => (
                 <span key={rule}>{rule}</span>
               ))}
             </div>
-            <button className="text-link" type="button" onClick={onOpenDetail}>
+            <button className="text-link" type="button" onClick={() => onOpenDetail(risk)}>
               查看详情
               <ChevronRight size={15} />
             </button>
@@ -53,7 +60,7 @@ export function LatestRiskCard({ risk, isRefetching, onRefetch, onViewHistory, o
           </button>
           <button className="btn btn-primary" type="button" onClick={onRefetch} disabled={isRefetching}>
             {isRefetching ? <Loader2 className="spin" size={15} /> : <AlertTriangle size={15} />}
-            立即补抓
+            刷新数据
           </button>
         </EmptyState>
       )}
