@@ -15,4 +15,5 @@ tools/
 artifacts/
 frontend-v2/artifacts/
 frontend-v2/dist/
+Audit_assistant/dist/
 scripts/com.xhs-audit-agent.backend.plist

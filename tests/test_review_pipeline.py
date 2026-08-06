@@ -1342,6 +1342,32 @@ class SubjectMetadataTests(unittest.TestCase):
         self.assertEqual(groups[0]["items"][0]["risk_library_label"], "人工复核风险")
         self.assertEqual(groups[0]["items"][0]["hit_explanation"], "人工复核命中解释")
 
+    def test_legacy_group_items_inherit_result_risk_level(self) -> None:
+        result = {
+            "decision": "review",
+            "risk_level": "low",
+            "score_breakdown": [{
+                "rule_id": "ocr_redirect",
+                "rule": "违禁引流画面文字命中",
+                "source": "ocr",
+                "score": 20,
+                "evidence": "OCR识别到第三方平台账号",
+            }],
+            "risk_evidence": [{
+                "kind": "frame_ref",
+                "source": "video_frame:7.05",
+                "severity": "low",
+                "text": "快手 @2458744520",
+                "reason": "画面展示第三方平台账号",
+            }],
+        }
+
+        groups = build_evidence_groups(result)
+        items = [item for group in groups for item in group["items"]]
+
+        self.assertTrue(items)
+        self.assertTrue(all(item["evidence_risk_level"] == "low" for item in items))
+
     def test_normalization_discards_none_evidence_but_keeps_risk(self) -> None:
         pipeline = bare_pipeline()
         subject = self.subject(title="标题", desc="正文")

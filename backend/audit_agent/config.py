@@ -89,8 +89,16 @@ class Settings:
     auto_analyze_crawled_content = os.getenv("AUTO_ANALYZE_CRAWLED_CONTENT", "true").lower() == "true"
     analysis_media_scope = os.getenv("ANALYSIS_MEDIA_SCOPE", "all").strip().lower()
     stream_crawl_analysis = os.getenv("STREAM_CRAWL_ANALYSIS", "true").lower() == "true"
-    crawler_max_concurrency = int(os.getenv("CRAWLER_MAX_CONCURRENCY", "1"))
+    crawler_max_concurrency = int(os.getenv("CRAWLER_MAX_CONCURRENCY", "3"))
     crawler_sleep_seconds = float(os.getenv("CRAWLER_SLEEP_SECONDS", "6"))
+    crawler_login_timeout_seconds = max(
+        60,
+        int(os.getenv("CRAWLER_LOGIN_TIMEOUT_SECONDS", "180")),
+    )
+    crawler_auth_encryption_key = os.getenv("CRAWLER_AUTH_ENCRYPTION_KEY", "").strip()
+    crawler_auth_key_file = Path(
+        os.getenv("CRAWLER_AUTH_KEY_FILE", str(data_dir / "crawler_auth.key"))
+    ).expanduser()
     batch_ingestion_enabled = os.getenv("BATCH_INGESTION_ENABLED", "true").lower() == "true"
     batch_size = int(os.getenv("BATCH_SIZE", "20"))
     batch_flush_seconds = float(os.getenv("BATCH_FLUSH_SECONDS", "30"))
@@ -101,6 +109,15 @@ class Settings:
     ]
 
     media_crawler_dir = Path(os.getenv("MEDIACRAWLER_DIR", r"D:\good-agent\MediaCrawler"))
+    _media_crawler_python_default = (
+        media_crawler_dir / ".venv" / "Scripts" / "python.exe"
+        if os.name == "nt"
+        else media_crawler_dir / ".venv" / "bin" / "python"
+    )
+    _crawler_login_python_value = os.getenv("CRAWLER_LOGIN_PYTHON", "").strip()
+    crawler_login_python = Path(
+        _crawler_login_python_value or _media_crawler_python_default
+    ).expanduser()
     video_to_txt_dir = Path(os.getenv("VIDEO_TO_TXT_DIR", r"D:\good-agent\video-to-txt"))
 
     # Demo defaults: keep cost and runtime small.

@@ -1,10 +1,10 @@
 import hashlib
 import json
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 from urllib.parse import urlparse
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 
 from .audit_agent.audit_policy_store import AuditPolicyStore, TaskAuditConfigRevisionStore
 from .audit_agent.config import settings
+from .audit_agent.crawler_account_store import crawler_account_store
+from .audit_agent.crawler_login_manager import crawler_account_login_manager
 from .audit_agent.crawler_adapter import SUPPORTED_PLATFORMS, MediaCrawlerAdapter
 from .audit_agent.evidence_groups import build_evidence_groups
 from .audit_agent.ingestion import AuditResultStore, IngestionStore
@@ -237,6 +239,8 @@ class CrawlRequest(BaseModel):
     max_notes: int = 10000
     max_comments: int = 1000
     max_concurrency: int = 1
+    max_items_per_minute: int = Field(default=5, ge=1, le=5)
+    crawler_account_id: Optional[str] = None
     get_sub_comment: bool = False
     analyze_limit: int = 10000
     run_crawler: bool = True
@@ -269,6 +273,18 @@ class AuditConfigRevisionRequest(BaseModel):
 
 class MonitoredUserFromAuditResultRequest(BaseModel):
     audit_result_id: int
+
+
+class CrawlerAccountCreateRequest(BaseModel):
+    platform: str
+    display_name: str
+    platform_account_id: str = ""
+
+
+class CrawlerAccountUpdateRequest(BaseModel):
+    display_name: str | None = None
+    platform_account_id: str | None = None
+    status: Literal["login_required", "disabled"] | None = None
 
 
 class CommentUserRelationRequest(BaseModel):
@@ -651,6 +667,22 @@ def enrich_job(job: dict) -> dict:
     return enriched
 
 
+def validate_crawler_account_for_job(account_id: str | None, platform: str) -> dict | None:
+    normalized_id = str(account_id or "").strip()
+    if not normalized_id:
+        return None
+    account = crawler_account_store.get(normalized_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="采集账号不存在")
+    if account["platform"] != platform:
+        raise HTTPException(status_code=400, detail="采集账号与任务平台不匹配")
+    if account["status"] != "active":
+        raise HTTPException(status_code=409, detail="采集账号当前不可用，请重新登录或启用账号")
+    if not account["has_auth_state"]:
+        raise HTTPException(status_code=409, detail="采集账号尚未登录")
+    return account
+
+
 def available_job_actions(job: dict, stats: dict) -> dict:
     status = str(job.get("status") or "")
     control = job.get("control") or {}
@@ -694,6 +726,11 @@ def recover_interrupted_jobs():
     recovered = job_store.recover_interrupted_jobs()
     if recovered:
         print(f"[startup] recovered interrupted jobs: {recovered}")
+
+
+@app.on_event("shutdown")
+def stop_crawler_account_login_sessions():
+    crawler_account_login_manager.shutdown()
 
 
 @app.get("/")
@@ -802,6 +839,79 @@ def get_config():
 @app.get("/api/outputs")
 def list_outputs():
     return {"outputs": MediaCrawlerAdapter().list_existing_outputs()}
+
+
+@app.get("/api/crawler-accounts")
+def list_crawler_accounts():
+    return {"items": crawler_account_store.list()}
+
+
+@app.post("/api/crawler-accounts", status_code=201)
+def create_crawler_account(request: CrawlerAccountCreateRequest):
+    try:
+        item = crawler_account_store.create(
+            platform=request.platform,
+            display_name=request.display_name,
+            platform_account_id=request.platform_account_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"item": item}
+
+
+@app.patch("/api/crawler-accounts/{account_id}")
+def update_crawler_account(account_id: str, request: CrawlerAccountUpdateRequest):
+    if request.status == "disabled":
+        crawler_account_login_manager.cancel_for_account(account_id)
+    try:
+        item = crawler_account_store.update(
+            account_id,
+            display_name=request.display_name,
+            platform_account_id=request.platform_account_id,
+            status=request.status,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not item:
+        raise HTTPException(status_code=404, detail="Crawler account not found")
+    return {"item": item}
+
+
+@app.delete("/api/crawler-accounts/{account_id}", status_code=204)
+def delete_crawler_account(account_id: str):
+    crawler_account_login_manager.cancel_for_account(account_id)
+    if not crawler_account_store.delete(account_id):
+        raise HTTPException(status_code=404, detail="Crawler account not found")
+
+
+@app.post("/api/crawler-accounts/{account_id}/login-sessions", status_code=201)
+def start_crawler_account_login(account_id: str, response: Response):
+    account = crawler_account_store.get(account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Crawler account not found")
+    try:
+        session = crawler_account_login_manager.start(account)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    response.headers["Cache-Control"] = "no-store"
+    return {"item": session}
+
+
+@app.get("/api/crawler-account-login-sessions/{session_id}")
+def get_crawler_account_login(session_id: str, response: Response):
+    session = crawler_account_login_manager.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Login session not found")
+    response.headers["Cache-Control"] = "no-store"
+    return {"item": session}
+
+
+@app.delete("/api/crawler-account-login-sessions/{session_id}", status_code=204)
+def cancel_crawler_account_login(session_id: str):
+    if not crawler_account_login_manager.cancel(session_id):
+        raise HTTPException(status_code=404, detail="Login session not found")
 
 
 @app.get("/api/monitored-users")
@@ -1178,8 +1288,13 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
     if not request.run_crawler and not request.source_output_id:
         raise HTTPException(status_code=400, detail="source_output_id is required when run_crawler is false")
 
+    request.crawler_account_id = str(request.crawler_account_id or "").strip() or None
+    crawler_account = validate_crawler_account_for_job(request.crawler_account_id, request.platform)
+
     job = job_store.create(
         platform=request.platform,
+        crawler_account_id=request.crawler_account_id,
+        crawler_account_display_name=(crawler_account or {}).get("display_name", ""),
         display_name=request.display_name.strip(),
         crawl_mode=request.crawl_mode,
         keyword=request.keyword,
@@ -1196,6 +1311,7 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         max_notes=request.max_notes,
         max_comments=request.max_comments,
         max_concurrency=request.max_concurrency,
+        max_items_per_minute=request.max_items_per_minute,
         get_sub_comment=request.get_sub_comment,
         analyze_limit=request.analyze_limit,
         run_crawler=request.run_crawler,

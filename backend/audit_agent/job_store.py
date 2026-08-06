@@ -48,6 +48,8 @@ JOB_SUMMARY_COLUMNS = ", ".join((
     "id",
     "status",
     "platform",
+    "crawler_account_id",
+    "crawler_account_display_name",
     "display_name",
     "crawl_mode",
     "keyword",
@@ -66,6 +68,7 @@ JOB_SUMMARY_COLUMNS = ", ".join((
     "max_notes",
     "max_comments",
     "max_concurrency",
+    "max_items_per_minute",
     "get_sub_comment",
     "analyze_limit",
     "run_crawler",
@@ -101,6 +104,8 @@ class JobStore:
                     id TEXT PRIMARY KEY,
                     status TEXT NOT NULL,
                     platform TEXT,
+                    crawler_account_id TEXT,
+                    crawler_account_display_name TEXT,
                     display_name TEXT,
                     crawl_mode TEXT,
                     keyword TEXT,
@@ -119,6 +124,7 @@ class JobStore:
                     max_notes INTEGER,
                     max_comments INTEGER,
                     max_concurrency INTEGER,
+                    max_items_per_minute INTEGER NOT NULL DEFAULT 5,
                     get_sub_comment INTEGER,
                     analyze_limit INTEGER,
                     run_crawler INTEGER,
@@ -206,6 +212,12 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN rule_snapshot TEXT NOT NULL DEFAULT '{}'")
             if "current_audit_config_revision_id" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN current_audit_config_revision_id TEXT")
+            if "crawler_account_id" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN crawler_account_id TEXT")
+            if "crawler_account_display_name" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN crawler_account_display_name TEXT")
+            if "max_items_per_minute" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN max_items_per_minute INTEGER NOT NULL DEFAULT 5")
 
             related_columns = {
                 row["name"]
@@ -236,20 +248,24 @@ class JobStore:
             conn.execute(
                 """
                 INSERT INTO jobs (
-                    id, status, platform, display_name, crawl_mode, keyword, keyword_source, lexicon_category,
+                    id, status, platform, crawler_account_id, crawler_account_display_name,
+                    display_name, crawl_mode, keyword, keyword_source, lexicon_category,
                     library_ids, capabilities, scoring_template, rule_snapshot,
                     lexicon_keywords, prompt_profile_snapshot, current_audit_config_revision_id,
                     creator_url, creator_id, start_page, max_notes,
-                    max_comments, max_concurrency, get_sub_comment, analyze_limit, run_crawler,
+                    max_comments, max_concurrency, max_items_per_minute,
+                    get_sub_comment, analyze_limit, run_crawler,
                     source_output_id, analysis_batch_size, input_type, input_filename, items, control,
                     error, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job["id"],
                     job["status"],
                     job.get("platform"),
+                    job.get("crawler_account_id"),
+                    job.get("crawler_account_display_name"),
                     job.get("display_name"),
                     job.get("crawl_mode"),
                     job.get("keyword"),
@@ -268,6 +284,7 @@ class JobStore:
                     job.get("max_notes"),
                     job.get("max_comments"),
                     job.get("max_concurrency"),
+                    job.get("max_items_per_minute", 5),
                     1 if job.get("get_sub_comment") else 0,
                     job.get("analyze_limit"),
                     1 if job.get("run_crawler") else 0,
@@ -351,6 +368,8 @@ class JobStore:
             "items",
             "error",
             "platform",
+            "crawler_account_id",
+            "crawler_account_display_name",
             "display_name",
             "crawl_mode",
             "keyword",
@@ -369,6 +388,7 @@ class JobStore:
             "max_notes",
             "max_comments",
             "max_concurrency",
+            "max_items_per_minute",
             "get_sub_comment",
             "analyze_limit",
             "run_crawler",

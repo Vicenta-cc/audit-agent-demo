@@ -390,6 +390,10 @@ def _decorate_item(item: dict, raw: dict, result: dict, source: str, result_libr
         value = raw.get(key)
         if value not in (None, "", [], {}):
             item[key] = value
+    if not item.get("evidence_risk_level"):
+        inherited_level = raw.get("severity") or raw.get("risk_level") or result.get("risk_level")
+        if inherited_level not in (None, "", "none", "safe", "pass", "无风险"):
+            item["evidence_risk_level"] = inherited_level
     item.update(_source_details(result, raw.get("source") or item.get("source"), source))
     return item
 

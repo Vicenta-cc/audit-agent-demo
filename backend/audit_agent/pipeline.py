@@ -12,9 +12,17 @@ from time import perf_counter
 
 import requests
 
+from .auth_state_cipher import auth_state_cipher
 from .asset_utils import download_url_with_error, safe_filename_from_url, split_csv_urls
 from .config import settings
-from .crawler_adapter import IMAGE_EXTENSIONS, PLATFORM_DATA_DIRS, VIDEO_EXTENSIONS, MediaCrawlerAdapter
+from .crawler_account_store import crawler_account_store
+from .crawler_adapter import (
+    IMAGE_EXTENSIONS,
+    PLATFORM_DATA_DIRS,
+    VIDEO_EXTENSIONS,
+    CrawlerAuthenticationError,
+    MediaCrawlerAdapter,
+)
 from .evidence_groups import build_evidence_groups
 from .ingestion import AuditResultStore, BatchWriter, IngestionStore, content_identity
 from .job_store import job_store
@@ -356,43 +364,75 @@ class AuditPipeline:
 
                 try:
                     with _crawler_lock:
-                        if request.crawl_mode == "creator":
-                            creator_ref = request.creator_url or request.creator_id
-                            job_store.log(self.job_id, f"启动 MediaCrawler 博主主页爬取 {request.platform}: {creator_ref}")
-                            output = self.crawler.run_creator(
-                                platform=request.platform,
-                                creator_id=creator_ref,
-                                max_notes=request.max_notes,
-                                max_comments=request.max_comments,
-                                max_concurrency=crawler_concurrency,
-                                get_sub_comment=request.get_sub_comment,
-                                save_root=crawl_dir,
-                                progress_callback=log_crawl_progress,
-                                content_callback=enqueue_stream_batch if stream_callback_enabled else None,
-                                stream_items=stream_callback_enabled,
-                                stop_checker=crawl_stop_requested,
+                        crawler_account_id = str(getattr(request, "crawler_account_id", "") or "").strip()
+                        account_auth_state = None
+                        if crawler_account_id:
+                            account = crawler_account_store.get(crawler_account_id)
+                            if not account:
+                                raise RuntimeError("所选采集账号不存在")
+                            if account["platform"] != request.platform:
+                                raise RuntimeError("所选采集账号与任务平台不匹配")
+                            if account["status"] != "active" or not account["has_auth_state"]:
+                                raise RuntimeError("所选采集账号当前不可用，请重新登录")
+                            ciphertext = crawler_account_store.get_auth_state_ciphertext(crawler_account_id)
+                            account_auth_state = auth_state_cipher.decrypt(ciphertext)
+                            job_store.log(
+                                self.job_id,
+                                f"执行账号：{account.get('display_name') or crawler_account_id}",
                             )
-                        else:
-                            if getattr(request, "keyword_source", "keyword") == "lexicon":
-                                job_store.log(
-                                    self.job_id,
-                                    f"词库展开 {len(getattr(request, 'lexicon_keywords', []) or [])} 个关键词：{request.lexicon_category}",
+
+                        def mark_crawler_started() -> None:
+                            if crawler_account_id:
+                                crawler_account_store.mark_used(crawler_account_id)
+
+                        try:
+                            if request.crawl_mode == "creator":
+                                creator_ref = request.creator_url or request.creator_id
+                                job_store.log(self.job_id, f"启动 MediaCrawler 博主主页爬取 {request.platform}: {creator_ref}")
+                                output = self.crawler.run_creator(
+                                    platform=request.platform,
+                                    creator_id=creator_ref,
+                                    max_notes=request.max_notes,
+                                    max_comments=request.max_comments,
+                                    max_concurrency=crawler_concurrency,
+                                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                                    get_sub_comment=request.get_sub_comment,
+                                    save_root=crawl_dir,
+                                    progress_callback=log_crawl_progress,
+                                    content_callback=enqueue_stream_batch if stream_callback_enabled else None,
+                                    stream_items=stream_callback_enabled,
+                                    stop_checker=crawl_stop_requested,
+                                    auth_state=account_auth_state,
+                                    started_callback=mark_crawler_started,
                                 )
-                            job_store.log(self.job_id, f"启动 MediaCrawler 关键词爬取 {request.platform}: {request.keyword}")
-                            output = self.crawler.run_search(
-                                platform=request.platform,
-                                keyword=request.keyword,
-                                start_page=request.start_page,
-                                max_notes=request.max_notes,
-                                max_comments=request.max_comments,
-                                max_concurrency=crawler_concurrency,
-                                get_sub_comment=request.get_sub_comment,
-                                save_root=crawl_dir,
-                                progress_callback=log_crawl_progress,
-                                content_callback=enqueue_stream_batch if stream_callback_enabled else None,
-                                stream_items=stream_callback_enabled,
-                                stop_checker=crawl_stop_requested,
-                            )
+                            else:
+                                if getattr(request, "keyword_source", "keyword") == "lexicon":
+                                    job_store.log(
+                                        self.job_id,
+                                        f"词库展开 {len(getattr(request, 'lexicon_keywords', []) or [])} 个关键词：{request.lexicon_category}",
+                                    )
+                                job_store.log(self.job_id, f"启动 MediaCrawler 关键词爬取 {request.platform}: {request.keyword}")
+                                output = self.crawler.run_search(
+                                    platform=request.platform,
+                                    keyword=request.keyword,
+                                    start_page=request.start_page,
+                                    max_notes=request.max_notes,
+                                    max_comments=request.max_comments,
+                                    max_concurrency=crawler_concurrency,
+                                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                                    get_sub_comment=request.get_sub_comment,
+                                    save_root=crawl_dir,
+                                    progress_callback=log_crawl_progress,
+                                    content_callback=enqueue_stream_batch if stream_callback_enabled else None,
+                                    stream_items=stream_callback_enabled,
+                                    stop_checker=crawl_stop_requested,
+                                    auth_state=account_auth_state,
+                                    started_callback=mark_crawler_started,
+                                )
+                        except CrawlerAuthenticationError as exc:
+                            if crawler_account_id:
+                                crawler_account_store.mark_expired(crawler_account_id, str(exc))
+                            raise
                 finally:
                     if batch_flusher:
                         stop_flusher.set()
@@ -423,6 +463,7 @@ class AuditPipeline:
             job_store.log(
                 self.job_id,
                 f"crawl limits requested: max_notes={request.max_notes}, max_comments={request.max_comments}, "
+                f"max_items_per_minute={getattr(request, 'max_items_per_minute', 5)}, "
                 f"max_concurrency={request.max_concurrency}, effective_max_concurrency="
                 f"{crawler_concurrency}, "
                 f"crawler_sleep_seconds={settings.crawler_sleep_seconds}",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import shutil
@@ -19,6 +20,12 @@ PLATFORM_DATA_DIRS = {
     "dy": "douyin",
     "ks": "kuaishou",
 }
+ACCOUNT_AUTH_STATE_ENV = "MEDIACRAWLER_ACCOUNT_AUTH_STATE_B64"
+ACCOUNT_AUTH_INVALID_MARKER = "ACCOUNT_AUTH_INVALID"
+
+
+class CrawlerAuthenticationError(RuntimeError):
+    pass
 
 
 @dataclass
@@ -34,6 +41,7 @@ class CrawlOutput:
 ProgressCallback = Callable[[int, int], None]
 ContentCallback = Callable[[list[dict], list[dict]], None]
 StopChecker = Callable[[], bool]
+StartedCallback = Callable[[], None]
 
 
 class MediaCrawlerAdapter:
@@ -48,12 +56,15 @@ class MediaCrawlerAdapter:
         max_notes: int,
         max_comments: int,
         max_concurrency: int,
+        max_items_per_minute: int,
         get_sub_comment: bool,
         save_root: Path,
         progress_callback: ProgressCallback | None = None,
         content_callback: ContentCallback | None = None,
         stream_items: bool = False,
         stop_checker: StopChecker | None = None,
+        auth_state: dict | None = None,
+        started_callback: StartedCallback | None = None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         command = [
@@ -61,7 +72,7 @@ class MediaCrawlerAdapter:
             "--platform",
             platform,
             "--lt",
-            "qrcode",
+            "cookie" if auth_state else "qrcode",
             "--type",
             "search",
             "--keywords",
@@ -74,6 +85,8 @@ class MediaCrawlerAdapter:
             str(max_comments),
             "--max_concurrency_num",
             str(max_concurrency),
+            "--crawler_max_items_per_minute",
+            str(max_items_per_minute),
             "--crawler_sleep_sec",
             str(settings.crawler_sleep_seconds),
             "--get_comment",
@@ -97,6 +110,8 @@ class MediaCrawlerAdapter:
             progress_callback=progress_callback,
             content_callback=content_callback,
             stop_checker=stop_checker,
+            auth_state=auth_state,
+            started_callback=started_callback,
         )
 
     def run_creator(
@@ -106,12 +121,15 @@ class MediaCrawlerAdapter:
         max_notes: int,
         max_comments: int,
         max_concurrency: int,
+        max_items_per_minute: int,
         get_sub_comment: bool,
         save_root: Path,
         progress_callback: ProgressCallback | None = None,
         content_callback: ContentCallback | None = None,
         stream_items: bool = False,
         stop_checker: StopChecker | None = None,
+        auth_state: dict | None = None,
+        started_callback: StartedCallback | None = None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         command = [
@@ -119,7 +137,7 @@ class MediaCrawlerAdapter:
             "--platform",
             platform,
             "--lt",
-            "qrcode",
+            "cookie" if auth_state else "qrcode",
             "--type",
             "creator",
             "--creator_id",
@@ -130,6 +148,8 @@ class MediaCrawlerAdapter:
             str(max_comments),
             "--max_concurrency_num",
             str(max_concurrency),
+            "--crawler_max_items_per_minute",
+            str(max_items_per_minute),
             "--crawler_sleep_sec",
             str(settings.crawler_sleep_seconds),
             "--get_comment",
@@ -153,6 +173,8 @@ class MediaCrawlerAdapter:
             progress_callback=progress_callback,
             content_callback=content_callback,
             stop_checker=stop_checker,
+            auth_state=auth_state,
+            started_callback=started_callback,
         )
 
     def _run_command(
@@ -164,6 +186,8 @@ class MediaCrawlerAdapter:
         progress_callback: ProgressCallback | None,
         content_callback: ContentCallback | None,
         stop_checker: StopChecker | None = None,
+        auth_state: dict | None = None,
+        started_callback: StartedCallback | None = None,
     ) -> CrawlOutput:
         save_root.mkdir(parents=True, exist_ok=True)
 
@@ -175,13 +199,15 @@ class MediaCrawlerAdapter:
             completed = subprocess.Popen(
                 command,
                 cwd=self.media_crawler_dir,
-                env=self._subprocess_env(),
+                env=self._subprocess_env(auth_state),
                 stdout=stdout_file,
                 stderr=stderr_file,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
             )
+            if started_callback:
+                started_callback()
             last_count = -1
             seen_content_ids: set[str] = set()
             while completed.poll() is None:
@@ -211,6 +237,8 @@ class MediaCrawlerAdapter:
         if completed.returncode != 0 and not (stop_checker and stop_checker()):
             stdout = stdout_path.read_text(encoding="utf-8", errors="replace") if stdout_path.exists() else ""
             stderr = stderr_path.read_text(encoding="utf-8", errors="replace") if stderr_path.exists() else ""
+            if ACCOUNT_AUTH_INVALID_MARKER in stdout or ACCOUNT_AUTH_INVALID_MARKER in stderr:
+                raise CrawlerAuthenticationError("所选采集账号登录态已失效，请重新登录")
             raise RuntimeError(
                 "MediaCrawler failed\n"
                 f"STDOUT:\n{stdout[-4000:]}\n"
@@ -227,7 +255,7 @@ class MediaCrawlerAdapter:
     def _base_command(self, platform: str) -> list[str]:
         return self._build_runner()
 
-    def _subprocess_env(self) -> dict[str, str]:
+    def _subprocess_env(self, auth_state: dict | None = None) -> dict[str, str]:
         env = os.environ.copy()
         path_parts = [
             str(settings.root_dir / "tools" / "node" / "bin"),
@@ -235,6 +263,15 @@ class MediaCrawlerAdapter:
         ]
         env["PATH"] = os.pathsep.join(part for part in path_parts if part)
         env.setdefault("EXECJS_RUNTIME", "Node")
+        if auth_state is not None:
+            payload = json.dumps(
+                auth_state,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            env[ACCOUNT_AUTH_STATE_ENV] = base64.b64encode(payload).decode("ascii")
+        else:
+            env.pop(ACCOUNT_AUTH_STATE_ENV, None)
         return env
 
     def _build_runner(self) -> list[str]:

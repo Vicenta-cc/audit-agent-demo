@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Local video">
+  <rect width="48" height="48" rx="10" fill="#eef4ff"/>
+  <path d="M15 10h13.8L37 18.2V38a4 4 0 0 1-4 4H15a4 4 0 0 1-4-4V14a4 4 0 0 1 4-4z" fill="#ffffff" stroke="#7c93ba" stroke-width="2"/>
+  <path d="M28.5 10v7.3c0 .8.7 1.5 1.5 1.5H37" fill="none" stroke="#7c93ba" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="16" y="24" width="16" height="11" rx="2.2" fill="#2563eb"/>
+  <path d="M32 27.5l4.7-2.4v8.8L32 31.5z" fill="#2563eb"/>
+  <path d="M22.5 27.3l5.1 2.6-5.1 2.8v-5.4z" fill="#ffffff"/>
+</svg>
