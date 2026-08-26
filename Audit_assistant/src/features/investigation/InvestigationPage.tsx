@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ArrowLeft, Menu } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import type {
@@ -9,11 +9,19 @@ import type {
   GroundingItem
 } from "../../types/investigation";
 import { initialSessions, mockAuditRuleSets, platformOptionsList } from "../../mocks/investigationMocks";
+import {
+  createInvestigationSession,
+  resumeInvestigationTurn,
+  sendInvestigationTurn,
+  waitForInvestigationTurn
+} from "../../services/investigations";
+import { fetchPublishedReportVersion, fetchPublishedReportVersions } from "../../services/reports";
 import { InvestigationSidebar, type SubViewType } from "./InvestigationSidebar";
 import { InvestigationCenterArea } from "./InvestigationCenterArea";
 import { InvestigationContextDrawer, type DrawerType } from "./InvestigationContextDrawer";
 import { FocusUsersPage } from "../focus-users/FocusUsersPage";
 import { CrawlerAccountsPage } from "../crawler-accounts/CrawlerAccountsPage";
+import { buildPublishedReportSummary } from "./publishedReportSession";
 
 interface InvestigationPageProps {
   initialSubView?: SubViewType;
@@ -32,6 +40,14 @@ interface InvestigationRouteState {
 }
 
 const INVESTIGATION_SESSIONS_STORAGE_KEY = "xhs-audit:investigation-sessions:v1";
+const GAMBLING_REPORT_DEMO_TASK_ID = "2272c3692807";
+
+function createClientMessageId(sessionId: string) {
+  const nonce = typeof window.crypto?.randomUUID === "function"
+    ? window.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `audit-assistant:${sessionId}:${nonce}`;
+}
 
 function createInitialSessions() {
   return [...initialSessions].sort((left, right) => (
@@ -57,7 +73,8 @@ function readStoredSessions(): InvestigationSession[] | null {
         && session.draft !== null
       ))
     ) return null;
-    return stored.sessions;
+    const sessions = stored.sessions.filter((session) => !session.id.startsWith("session-report-"));
+    return sessions.length ? sessions : null;
   } catch {
     return null;
   }
@@ -516,12 +533,17 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         ? investigationId
         : sessions[0].id
   ));
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => (
+    window.matchMedia("(max-width: 760px)").matches
+  ));
   const [activeDrawer, setActiveDrawer] = useState<DrawerType>(null);
   const [activeSubView, setActiveSubView] = useState<SubViewType>(
     routeState.restoreInvestigationState?.activeSubView ?? initialSubView
   );
+  const [sendingMessageSessionId, setSendingMessageSessionId] = useState("");
   const subViewScrollRef = useRef<HTMLDivElement>(null);
+  const loadingPublishedReportsRef = useRef(new Set<string>());
+  const pendingTurnControllersRef = useRef(new Map<string, AbortController>());
 
   useEffect(() => {
     const prevTitle = document.title;
@@ -550,6 +572,11 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     setActiveDrawer(null);
   }, [activeSessionId, investigationId, sessions]);
 
+  useEffect(() => {
+    if (!investigationId || sessions.some((session) => session.id === investigationId)) return;
+    navigate(`/investigation/${encodeURIComponent(activeSessionId)}`, { replace: true });
+  }, [activeSessionId, investigationId, navigate, sessions]);
+
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
   const activeRuleSet = mockAuditRuleSets.find((ruleSet) => ruleSet.name === activeSession.draft.matchedRuleSet)
     || mockAuditRuleSets[0];
@@ -560,6 +587,215 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       prevSessions.map((s) => (s.id === activeSessionId ? updater(s) : s))
     );
   };
+
+  const continuePublishedReportTurn = useCallback(async (
+    uiSessionId: string,
+    turnId: string,
+    resumeAttempted = false
+  ) => {
+    if (pendingTurnControllersRef.current.has(turnId)) return;
+    const controller = new AbortController();
+    pendingTurnControllersRef.current.set(turnId, controller);
+    setSendingMessageSessionId(uiSessionId);
+
+    const waitForTerminal = (afterSequence = 0, resumeReplay = false) => waitForInvestigationTurn(turnId, {
+      signal: controller.signal,
+      afterSequence,
+      resumeReplay,
+      onEvent: (event) => {
+        setSessions((current) => current.map((item) => (
+          item.id === uiSessionId
+          && item.reportBinding?.pendingTurn?.turnId === turnId
+            ? {
+                ...item,
+                reportBinding: {
+                  ...item.reportBinding,
+                  pendingTurn: {
+                    ...item.reportBinding.pendingTurn,
+                    stage: event.stage
+                  }
+                }
+              }
+            : item
+        )));
+      }
+    });
+
+    try {
+      let result = await waitForTerminal();
+      if (result.status === "interrupted" && result.retryable && !resumeAttempted) {
+        resumeAttempted = true;
+        setSessions((current) => current.map((item) => (
+          item.id === uiSessionId
+          && item.reportBinding?.pendingTurn?.turnId === turnId
+            ? {
+                ...item,
+                reportBinding: {
+                  ...item.reportBinding,
+                  pendingTurn: {
+                    ...item.reportBinding.pendingTurn,
+                    stage: "accepted",
+                    resumeAttempted: true
+                  }
+                }
+              }
+            : item
+        )));
+        await resumeInvestigationTurn(turnId);
+        result = await waitForTerminal(
+          result.event_sequence || 0,
+          !result.event_sequence
+        );
+      }
+
+      const answer = result.status === "completed"
+        ? result.answer.trim()
+        : result.safe_message.trim();
+      if (!answer) throw new Error("Investigation Turn returned no public answer");
+      setSessions((current) => current.map((item) => {
+        if (item.id !== uiSessionId || !item.reportBinding) return item;
+        const answerId = `msg-answer-${turnId}`;
+        return {
+          ...item,
+          updatedAt: "刚刚",
+          reportBinding: {
+            ...item.reportBinding,
+            pendingTurn: undefined
+          },
+          messages: item.messages.some((message) => message.id === answerId)
+            ? item.messages
+            : [
+                ...item.messages,
+                {
+                  id: answerId,
+                  sender: "assistant",
+                  timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+                  content: answer,
+                  type: result.status === "completed" ? "grounded_answer" : "text"
+                }
+              ]
+        };
+      }));
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        console.error("Failed to finish published report question", error);
+        setSessions((current) => current.map((item) => {
+          if (item.id !== uiSessionId || !item.reportBinding) return item;
+          const answerId = `msg-answer-error-${turnId}`;
+          return {
+            ...item,
+            reportBinding: {
+              ...item.reportBinding,
+              pendingTurn: undefined
+            },
+            messages: item.messages.some((message) => message.id === answerId)
+              ? item.messages
+              : [
+                  ...item.messages,
+                  {
+                    id: answerId,
+                    sender: "assistant",
+                    timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+                    content: "这次报告问答暂时无法完成，请稍后重试。",
+                    type: "text"
+                  }
+                ]
+          };
+        }));
+      }
+    } finally {
+      pendingTurnControllersRef.current.delete(turnId);
+      setSendingMessageSessionId((current) => current === uiSessionId ? "" : current);
+    }
+  }, []);
+
+  const sendPublishedReportQuestion = async (
+    session: InvestigationSession,
+    text: string,
+    clientMessageId: string
+  ) => {
+    const binding = session.reportBinding;
+    if (!binding) return;
+
+    try {
+      let investigationSessionId = binding.investigationSessionId;
+      if (!investigationSessionId) {
+        const created = await createInvestigationSession(binding.reportVersionId);
+        investigationSessionId = created.session_id;
+        setSessions((current) => current.map((item) => (
+          item.id === session.id && item.reportBinding
+            ? {
+                ...item,
+                reportBinding: {
+                  ...item.reportBinding,
+                  investigationSessionId: created.session_id
+                }
+              }
+            : item
+        )));
+      }
+
+      const result = await sendInvestigationTurn(investigationSessionId, {
+        clientMessageId,
+        content: text
+      });
+      setSessions((current) => current.map((item) => (
+        item.id === session.id && item.reportBinding
+          ? {
+              ...item,
+              updatedAt: "刚刚",
+              reportBinding: {
+                ...item.reportBinding,
+                investigationSessionId,
+                pendingTurn: {
+                  turnId: result.turn_id,
+                  clientMessageId,
+                  question: text,
+                  stage: "accepted"
+                }
+              }
+            }
+          : item
+      )));
+    } catch (error) {
+      console.error("Failed to answer published report question", error);
+      setSessions((current) => current.map((item) => (
+        item.id === session.id
+          ? {
+              ...item,
+              messages: [
+                ...item.messages,
+                {
+                  id: `msg-answer-error-${Date.now()}`,
+                  sender: "assistant",
+                  timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+                  content: "这次报告问答暂时无法完成，请稍后重试。",
+                  type: "text"
+                }
+              ]
+            }
+          : item
+      )));
+      setSendingMessageSessionId((current) => current === session.id ? "" : current);
+    }
+  };
+
+  useEffect(() => {
+    sessions.forEach((session) => {
+      const pending = session.reportBinding?.pendingTurn;
+      if (!pending || pendingTurnControllersRef.current.has(pending.turnId)) return;
+      void continuePublishedReportTurn(
+        session.id,
+        pending.turnId,
+        Boolean(pending.resumeAttempted)
+      );
+    });
+  }, [continuePublishedReportTurn, sessions]);
+
+  useEffect(() => () => {
+    pendingTurnControllersRef.current.forEach((controller) => controller.abort());
+    pendingTurnControllersRef.current.clear();
+  }, []);
 
   // Session switching
   const handleSelectSession = (id: string) => {
@@ -728,8 +964,94 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     });
   };
 
+  const attachPublishedReport = async (sessionId: string, taskId: string) => {
+    if (loadingPublishedReportsRef.current.has(sessionId)) return;
+    loadingPublishedReportsRef.current.add(sessionId);
+
+    try {
+      const versions = await fetchPublishedReportVersions(taskId);
+      if (!versions.latest_report_version_id) {
+        throw new Error("当前调查任务尚无已发布报告");
+      }
+      const report = await fetchPublishedReportVersion(versions.latest_report_version_id);
+      if (report.task_id !== taskId) {
+        throw new Error("发布报告与调查任务不匹配");
+      }
+
+      setSessions((current) => current.map((session) => {
+        if (session.id !== sessionId || session.reportBinding) return session;
+        return {
+          ...session,
+          title: report.presentation.title,
+          status: "报告已生成",
+          updatedAt: "刚刚",
+          draft: {
+            ...session.draft,
+            status: "报告已生成",
+            confirmed: true
+          },
+          executionPhase: "completed",
+          executionProgress: 100,
+          messages: [
+            ...session.messages,
+            {
+              id: `msg-report-${report.report_version_id}`,
+              sender: "assistant",
+              timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+              type: "report_card",
+              reportData: buildPublishedReportSummary(report)
+            }
+          ],
+          reportBinding: {
+            reportVersionId: report.report_version_id,
+            reportId: report.report_id,
+            taskId: report.task_id,
+            versionNumber: report.version_number,
+            publishedAt: report.published_at
+          }
+        };
+      }));
+    } catch (error) {
+      console.error("Failed to attach published report to investigation", error);
+      setSessions((current) => current.map((session) => (
+        session.id === sessionId
+          ? {
+              ...session,
+              messages: [
+                ...session.messages,
+                {
+                  id: `msg-report-error-${Date.now()}`,
+                  sender: "assistant",
+                  timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+                  content: "调查任务已经完成，但发布报告暂时无法载入。请稍后重新打开本会话。"
+                }
+              ]
+            }
+          : session
+      )));
+    } finally {
+      loadingPublishedReportsRef.current.delete(sessionId);
+    }
+  };
+
   // Handle phase changes during animation
   const handlePhaseChange = (phase: AgentExecutionPhase) => {
+    if (
+      phase === "completed"
+      && activeSession.status !== "报告已生成"
+      && activeSession.draft.reportSourceTaskId
+    ) {
+      const sessionId = activeSession.id;
+      const taskId = activeSession.draft.reportSourceTaskId;
+      updateActiveSession((session) => ({
+        ...session,
+        executionPhase: "completed",
+        executionProgress: 100
+      }));
+      void attachPublishedReport(sessionId, taskId);
+      return;
+    }
+
     updateActiveSession((session) => {
       if (phase === "completed" && session.status !== "报告已生成") {
         return {
@@ -759,8 +1081,88 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const handleSendMessage = (text: string) => {
     const nowTime = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 
+    if (activeSession.reportBinding) {
+      if (sendingMessageSessionId) return;
+      const clientMessageId = createClientMessageId(activeSession.id);
+      const session = activeSession;
+      setSendingMessageSessionId(session.id);
+      setSessions((current) => current.map((item) => (
+        item.id === session.id
+          ? {
+              ...item,
+              updatedAt: "刚刚",
+              messages: [
+                ...item.messages,
+                {
+                  id: `msg-question-${clientMessageId}`,
+                  sender: "user",
+                  timestamp: nowTime,
+                  content: text
+                }
+              ]
+            }
+          : item
+      )));
+      void sendPublishedReportQuestion(session, text, clientMessageId);
+      return;
+    }
+
     // Check if in blank state
     if (activeSession.messages.length === 0) {
+      if (
+        !text.includes("世界杯")
+        && (text.includes("博彩赌博") || text.includes("赌博类") || (text.includes("抖音") && text.includes("博彩")))
+      ) {
+        updateActiveSession((session) => ({
+          ...session,
+          title: "抖音平台博彩赌博类内容风险调查",
+          draft: {
+            ...session.draft,
+            taskName: "博彩赌博类帖子分析任务",
+            subject: "抖音平台博彩赌博类内容风险",
+            platforms: ["dy"],
+            matchedRuleSet: "赌博博彩风险规则集",
+            analysisPlanName: "博彩引流综合研判方案",
+            ruleSetDescription: "结合正文、OCR、语音转写、画面与评论证据，识别博彩招募、盘口推广、资金结算和外部导流风险。",
+            scopeDescription: "围绕抖音平台博彩赌博类内容开展采集、证据分析与风险研判。",
+            reportSourceTaskId: GAMBLING_REPORT_DEMO_TASK_ID,
+            status: "配置中",
+            confirmed: false,
+            keywords: [
+              "跑分",
+              "BC 上分 下分",
+              "首充 彩金 返水",
+              "导师 带单 计划",
+              "盘口 赔率 下注",
+              "棋牌 真人 娱乐城",
+              "代理 招商"
+            ]
+          },
+          messages: [
+            { id: `msg-u-${Date.now()}`, sender: "user", timestamp: nowTime, content: text },
+            {
+              id: `msg-a-${Date.now()}`,
+              sender: "assistant",
+              timestamp: nowTime,
+              type: "task_proposal",
+              content: "已识别为‘抖音平台博彩赌博类内容风险调查任务’。系统已根据调查主题生成本次搜索词，并匹配‘博彩引流综合研判方案’。抖音平台已选中，你可以继续调整后生成任务配置。",
+              proposalData: {
+                taskName: "博彩赌博类帖子分析任务",
+                taskType: "平台话题采集",
+                subject: "抖音平台博彩赌博类内容风险",
+                matchedRuleSet: "赌博博彩风险规则集",
+                ruleSetDescription: "结合正文、OCR、语音转写、画面与评论证据，识别博彩招募、盘口推广、资金结算和外部导流风险。",
+                keywordsNotice: "本次使用面向博彩招募、盘口和资金导流场景的专题搜索词。",
+                platformsSelected: ["dy"],
+                platformsConfirmed: false,
+                interactionMode: "platform-selection"
+              }
+            }
+          ]
+        }));
+        return;
+      }
+
       if (text.includes("世界杯") || text.includes("博彩") || text.includes("赌球")) {
         // Trigger World Cup flow in this session
         updateActiveSession((s) => ({
@@ -855,7 +1257,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             id: `msg-a-${Date.now()}`,
             sender: "assistant",
             timestamp: nowTime,
-            content: "已收到您的调查需求。您可以点击上方推荐场景示例（如「世界杯博彩专题调查」或「维汉通婚讨论调查」），快速开启完整的 4-Agent 协同研判与数据穿透体验。"
+            content: "已收到您的调查需求。您可以点击上方推荐场景示例（如「抖音博彩赌博内容风险调查」或「维汉通婚讨论调查」），快速开启完整的 4-Agent 协同研判与数据穿透体验。"
           }
         ]
       }));
@@ -960,6 +1362,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       ) : (
         <InvestigationCenterArea
           session={activeSession}
+          isSendingMessage={sendingMessageSessionId === activeSession.id}
+          sendingMessageStage={activeSession.reportBinding?.pendingTurn?.stage}
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={() => setIsSidebarCollapsed(false)}
           onUpdateDraftKeywords={handleUpdateDraftKeywords}

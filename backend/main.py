@@ -10,6 +10,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from .api.investigation import create_investigation_router
+from .api.investigation_execution import InvestigationTurnExecutor
+from .api.reporting import create_reporting_router
 from .audit_agent.audit_policy_store import AuditPolicyStore, TaskAuditConfigRevisionStore
 from .audit_agent.config import settings
 from .audit_agent.crawler_account_store import crawler_account_store
@@ -29,6 +32,8 @@ from .audit_agent.rule_compiler import (
     normalize_capabilities,
     normalize_library_ids,
 )
+from .reporting.store import ReportStore
+from .investigation.agent import InvestigationAgentService
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,6 +61,16 @@ audit_result_store = AuditResultStore()
 lexicon_store = LexiconStore()
 audit_policy_store = AuditPolicyStore()
 audit_config_revision_store = TaskAuditConfigRevisionStore()
+report_store = ReportStore()
+investigation_agent_service = InvestigationAgentService()
+investigation_turn_executor = InvestigationTurnExecutor(investigation_agent_service)
+app.include_router(create_reporting_router(report_store))
+app.include_router(
+    create_investigation_router(
+        investigation_agent_service,
+        investigation_turn_executor,
+    )
+)
 
 
 def _looks_like_audio_url(url: str) -> bool:
@@ -726,11 +741,16 @@ def recover_interrupted_jobs():
     recovered = job_store.recover_interrupted_jobs()
     if recovered:
         print(f"[startup] recovered interrupted jobs: {recovered}")
+    investigation_recovery = investigation_turn_executor.recover()
+    if any(investigation_recovery.values()):
+        print(f"[startup] investigation Turn recovery: {investigation_recovery}")
 
 
 @app.on_event("shutdown")
 def stop_crawler_account_login_sessions():
     crawler_account_login_manager.shutdown()
+    investigation_turn_executor.shutdown(wait=True)
+    investigation_agent_service.close()
 
 
 @app.get("/")

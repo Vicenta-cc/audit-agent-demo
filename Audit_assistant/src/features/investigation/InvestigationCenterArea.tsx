@@ -14,6 +14,7 @@ import type {
   AgentExecutionPhase,
   ReportSupportTarget
 } from "../../types/investigation";
+import type { InvestigationTurnStage } from "../../types/investigations";
 import { AgentCollaborationCard } from "./AgentCollaborationCard";
 import { TaskConfigCard } from "./TaskConfigCard";
 import { TaskSuggestionCard } from "./TaskSuggestionCard";
@@ -24,6 +25,8 @@ import { platformOptionsList } from "../../mocks/investigationMocks";
 
 interface InvestigationCenterAreaProps {
   session: InvestigationSession;
+  isSendingMessage: boolean;
+  sendingMessageStage?: InvestigationTurnStage;
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onUpdateDraftKeywords: (keywords: string[]) => void;
@@ -103,6 +106,8 @@ function getEthnicRelationsFollowUpPlaceholder(session: InvestigationSession) {
 
 export function InvestigationCenterArea({
   session,
+  isSendingMessage,
+  sendingMessageStage,
   isSidebarCollapsed,
   onToggleSidebar,
   onUpdateDraftKeywords,
@@ -116,6 +121,7 @@ export function InvestigationCenterArea({
   onExamplePromptSelect
 }: InvestigationCenterAreaProps) {
   const [inputText, setInputText] = useState("");
+  const isPublishedReportSession = Boolean(session.reportBinding);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(() => (
     getInitialStreamingMessageId(session)
   ));
@@ -160,14 +166,18 @@ export function InvestigationCenterArea({
     const frameId = window.requestAnimationFrame(() => {
       const timeline = timelineRef.current;
       if (!timeline) return;
+      if (session.reportBinding && session.messages.length === 1) {
+        timeline.scrollTo({ top: 0, behavior: "auto" });
+        return;
+      }
       timeline.scrollTo({ top: timeline.scrollHeight, behavior: "smooth" });
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [session.id, session.messages.length]);
+  }, [session.id, session.messages.length, session.reportBinding]);
 
   const handleSend = () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || isSendingMessage) return;
     onSendMessage(inputText.trim());
     setInputText("");
   };
@@ -187,6 +197,15 @@ export function InvestigationCenterArea({
   };
 
   const getPlaceholder = () => {
+    if (isSendingMessage) {
+      if (sendingMessageStage === "acquiring_source") return "正在查询报告资料……";
+      if (sendingMessageStage === "answering") return "正在整理回答……";
+      if (sendingMessageStage === "preparing_sources") return "正在准备所需资料……";
+      return "正在理解你的问题……";
+    }
+    if (isPublishedReportSession) {
+      return "询问报告内容、典型案例或证据……";
+    }
     if (session.messages.length === 0) {
       return "描述你希望调查的话题、账号或内容……";
     }
@@ -261,9 +280,9 @@ export function InvestigationCenterArea({
                 <button
                   type="button"
                   className="inv-example-chip"
-                  onClick={() => onExamplePromptSelect("对最近关于世界杯博彩这一话题相关的帖子做一下抓取和分析。")}
+                  onClick={() => onExamplePromptSelect("调查抖音平台博彩赌博类内容风险，并形成专项调查报告。")}
                 >
-                  <span>1. 调查最近关于世界杯博彩的相关内容</span>
+                  <span>1. 调查抖音平台博彩赌博类内容风险</span>
                   <ChevronRight size={14} />
                 </button>
 
@@ -385,9 +404,9 @@ export function InvestigationCenterArea({
                     key={msg.id}
                     report={msg.reportData}
                     onOpenReportDrawer={() => onOpenDrawer("report")}
-                    onOpenEvidenceDrawer={() => onOpenDrawer("evidence")}
-                    onOpenKeyUserDrawer={() => onOpenDrawer("key_users")}
-                    onFollowUpInvestigation={() => onSendMessage(
+                    onOpenEvidenceDrawer={isPublishedReportSession ? undefined : () => onOpenDrawer("evidence")}
+                    onOpenKeyUserDrawer={isPublishedReportSession ? undefined : () => onOpenDrawer("key_users")}
+                    onFollowUpInvestigation={isPublishedReportSession ? undefined : () => onSendMessage(
                       msg.reportData?.id.startsWith("report-ethnic-relations")
                         ? "查看四个重点对象之间的共同评论账号与疑似关联线索。"
                         : "对这 8 个重点作者候选发起主页与关联导流网络深钻穿透。"
@@ -625,13 +644,14 @@ export function InvestigationCenterArea({
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={getPlaceholder()}
+            disabled={isSendingMessage}
             aria-keyshortcuts={getSuggestedPrompt(getPlaceholder()) ? "Tab" : undefined}
           />
           <button
             type="button"
             className="inv-send-btn"
             onClick={handleSend}
-            disabled={!inputText.trim()}
+            disabled={!inputText.trim() || isSendingMessage}
             title="发送消息"
           >
             <Send size={15} />

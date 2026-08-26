@@ -1,3 +1,5 @@
+import type { PublishedReportPresentation } from "./reports";
+
 export type TaskSessionStatus = "配置中" | "等待确认" | "研判中" | "报告已生成" | "已创建";
 
 export type PlatformCode = "dy" | "xhs" | "ks" | "wb" | "multi";
@@ -63,6 +65,7 @@ export interface TaskDraft {
   ruleSetDescription: string;
   analysisPlanName?: string;
   scopeDescription?: string;
+  reportSourceTaskId?: string;
   status: TaskSessionStatus;
   confirmed: boolean;
 }
@@ -92,6 +95,9 @@ export interface ReportSummary {
   keyAuthorCandidates: number;
   findings: string[];
   riskDistribution: { name: string; count: number; percentage: number }[];
+  presentation?: PublishedReportPresentation;
+  versionNumber?: number;
+  publishedAt?: string;
 }
 
 export interface KeyUserProfile {
@@ -178,6 +184,21 @@ export interface InvestigationSession {
   executionPhase: AgentExecutionPhase;
   executionProgress: number;
   keyUsers?: KeyUserProfile[];
+  reportBinding?: {
+    reportVersionId: string;
+    reportId: string;
+    taskId: string;
+    versionNumber: number;
+    publishedAt: string;
+    investigationSessionId?: string;
+    pendingTurn?: {
+      turnId: string;
+      clientMessageId: string;
+      question: string;
+      stage: import("./investigations").InvestigationTurnStage;
+      resumeAttempted?: boolean;
+    };
+  };
 }
 
 // Knowledge Base & Recall Library Types

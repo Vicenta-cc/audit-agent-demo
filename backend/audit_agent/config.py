@@ -19,6 +19,10 @@ class Settings:
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     ).rstrip("/")
     qwen_text_model = os.getenv("QWEN_TEXT_MODEL", "qwen3.7-plus")
+    qwen_report_model = os.getenv("QWEN_REPORT_MODEL", qwen_text_model).strip()
+    report_prompt_version = os.getenv("REPORT_PROMPT_VERSION", "report-v2-human").strip()
+    report_request_timeout = int(os.getenv("REPORT_REQUEST_TIMEOUT", "180"))
+    report_max_tokens = int(os.getenv("REPORT_MAX_TOKENS", "3000"))
     qwen_vl_model = os.getenv("QWEN_VL_MODEL", "qwen3.7-plus")
     qwen_contact_sheet_model = os.getenv("QWEN_CONTACT_SHEET_MODEL", "qwen3.6-flash").strip()
     qwen_image_audit_model = os.getenv("QWEN_IMAGE_AUDIT_MODEL", qwen_contact_sheet_model).strip()
@@ -108,7 +112,11 @@ class Settings:
         if origin.strip()
     ]
 
-    media_crawler_dir = Path(os.getenv("MEDIACRAWLER_DIR", r"D:\good-agent\MediaCrawler"))
+    # Keep the dependency relocatable. Production deployments must set
+    # MEDIACRAWLER_DIR; the repository-local default is only a safe placeholder.
+    media_crawler_dir = Path(
+        os.getenv("MEDIACRAWLER_DIR", str(ROOT / "external" / "MediaCrawler"))
+    ).expanduser()
     _media_crawler_python_default = (
         media_crawler_dir / ".venv" / "Scripts" / "python.exe"
         if os.name == "nt"
@@ -118,7 +126,9 @@ class Settings:
     crawler_login_python = Path(
         _crawler_login_python_value or _media_crawler_python_default
     ).expanduser()
-    video_to_txt_dir = Path(os.getenv("VIDEO_TO_TXT_DIR", r"D:\good-agent\video-to-txt"))
+    video_to_txt_dir = Path(
+        os.getenv("VIDEO_TO_TXT_DIR", str(ROOT / "external" / "video-to-txt"))
+    ).expanduser()
 
     # Demo defaults: keep cost and runtime small.
     max_images_per_note = int(os.getenv("MAX_IMAGES_PER_NOTE", "4"))

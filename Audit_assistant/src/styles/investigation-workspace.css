@@ -491,7 +491,46 @@
   color: #1e293b;
   font-size: 13.5px;
   line-height: 1.6;
+}
+
+.inv-streaming-copy > :first-child {
+  margin-top: 0;
+}
+
+.inv-streaming-copy > :last-child {
+  margin-bottom: 0;
+}
+
+.inv-streaming-copy p {
+  margin: 0 0 9px;
   white-space: pre-line;
+}
+
+.inv-streaming-copy h1,
+.inv-streaming-copy h2,
+.inv-streaming-copy h3 {
+  margin: 14px 0 7px;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.inv-streaming-copy ul,
+.inv-streaming-copy ol {
+  display: grid;
+  gap: 5px;
+  margin: 7px 0 10px;
+  padding-left: 21px;
+}
+
+.inv-streaming-copy li {
+  padding-left: 1px;
+}
+
+.inv-streaming-copy strong {
+  color: #0f172a;
+  font-weight: 700;
 }
 
 .inv-streaming-copy.is-streaming::after {
@@ -2315,6 +2354,60 @@
   border-top: 1px solid #f1f5f9;
 }
 
+@media (max-width: 760px) {
+  .inv-center-header {
+    padding: 0 12px;
+  }
+
+  .inv-header-left {
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .inv-session-title-head {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .inv-header-actions {
+    display: none;
+  }
+
+  .inv-timeline-container {
+    padding: 16px 12px 28px;
+  }
+
+  .inv-report-card-wrap {
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .inv-report-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .inv-report-head > div {
+    min-width: 0;
+  }
+
+  .inv-report-title {
+    overflow-wrap: anywhere;
+  }
+
+  .inv-report-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 10px;
+  }
+
+  .inv-metric-lbl {
+    text-align: center;
+  }
+}
+
 /* Evidence Card Display in QA */
 .inv-evidence-grid {
   display: flex;
@@ -2386,7 +2479,6 @@
   color: #1e293b;
   font-size: 13.5px;
   line-height: 1.7;
-  white-space: pre-line;
 }
 
 .inv-grounded-compact {
@@ -2784,7 +2876,7 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 440px;
+  width: min(440px, 100vw);
   background: #ffffff;
   border-left: 1px solid #cbd5e1;
   box-shadow: -8px 0 24px rgba(15, 23, 42, 0.08);

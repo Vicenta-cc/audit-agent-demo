@@ -24,6 +24,10 @@ export function InvestigationReportCard({
   onFollowUpInvestigation
 }: InvestigationReportCardProps) {
   const isEthnicRelationsReport = report.id.startsWith("report-ethnic-relations");
+  const publishedMetrics = report.presentation?.key_metrics || [];
+  const hasActions = Boolean(
+    onOpenReportDrawer || onOpenEvidenceDrawer || onOpenKeyUserDrawer || onFollowUpInvestigation
+  );
 
   return (
     <div className="inv-report-card-wrap" aria-label="研判报告卡片">
@@ -39,22 +43,33 @@ export function InvestigationReportCard({
 
       {/* Metrics Row */}
       <div className="inv-report-metrics">
-        <div className="inv-metric-block">
-          <span className="inv-metric-val">{report.totalCollected}</span>
-          <span className="inv-metric-lbl">研判内容总量</span>
-        </div>
-        <div className="inv-metric-block">
-          <span className="inv-metric-val text-danger">{report.suspectedRisks}</span>
-          <span className="inv-metric-lbl">风险线索</span>
-        </div>
-        <div className="inv-metric-block">
-          <span className="inv-metric-val text-warning">{report.suggestedReview}</span>
-          <span className="inv-metric-lbl">建议人工复核</span>
-        </div>
-        <div className="inv-metric-block">
-          <span className="inv-metric-val">{report.keyAuthorCandidates}</span>
-          <span className="inv-metric-lbl">{isEthnicRelationsReport ? "重点调查对象" : "重点作者候选"}</span>
-        </div>
+        {publishedMetrics.length ? publishedMetrics.slice(0, 4).map((metric) => (
+          <div className="inv-metric-block" key={`${metric.label}-${metric.value}`}>
+            <span className={`inv-metric-val ${metric.label.includes("风险") ? "text-danger" : metric.label.includes("复审") ? "text-warning" : ""}`}>
+              {metric.value}
+            </span>
+            <span className="inv-metric-lbl">{metric.label}</span>
+          </div>
+        )) : (
+          <>
+            <div className="inv-metric-block">
+              <span className="inv-metric-val">{report.totalCollected}</span>
+              <span className="inv-metric-lbl">研判内容总量</span>
+            </div>
+            <div className="inv-metric-block">
+              <span className="inv-metric-val text-danger">{report.suspectedRisks}</span>
+              <span className="inv-metric-lbl">风险线索</span>
+            </div>
+            <div className="inv-metric-block">
+              <span className="inv-metric-val text-warning">{report.suggestedReview}</span>
+              <span className="inv-metric-lbl">建议人工复核</span>
+            </div>
+            <div className="inv-metric-block">
+              <span className="inv-metric-val">{report.keyAuthorCandidates}</span>
+              <span className="inv-metric-lbl">{isEthnicRelationsReport ? "重点调查对象" : "重点作者候选"}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Major Findings */}
@@ -71,44 +86,40 @@ export function InvestigationReportCard({
       </div>
 
       {/* Report Actions */}
-      <div className="inv-report-actions">
-        <button
-          type="button"
-          className="inv-btn-primary"
-          onClick={onOpenReportDrawer}
-        >
-          <FileText size={14} />
-          <span>查看完整报告</span>
-        </button>
+      {hasActions ? <div className="inv-report-actions">
+        {onOpenReportDrawer ? (
+          <button type="button" className="inv-btn-primary" onClick={onOpenReportDrawer}>
+            <FileText size={14} />
+            <span>查看完整报告</span>
+          </button>
+        ) : null}
 
-        <button
-          type="button"
-          className="inv-btn-secondary"
-          onClick={onOpenEvidenceDrawer}
-        >
-          <Search size={14} />
-          <span>查看原始证据</span>
-        </button>
+        {onOpenEvidenceDrawer ? (
+          <button type="button" className="inv-btn-secondary" onClick={onOpenEvidenceDrawer}>
+            <Search size={14} />
+            <span>查看原始证据</span>
+          </button>
+        ) : null}
 
-        <button
-          type="button"
-          className="inv-btn-secondary"
-          onClick={onOpenKeyUserDrawer}
-        >
-          <Users size={14} />
-          <span>{isEthnicRelationsReport ? "查看重点对象" : "查看重点作者"}</span>
-        </button>
+        {onOpenKeyUserDrawer ? (
+          <button type="button" className="inv-btn-secondary" onClick={onOpenKeyUserDrawer}>
+            <Users size={14} />
+            <span>{isEthnicRelationsReport ? "查看重点对象" : "查看重点作者"}</span>
+          </button>
+        ) : null}
 
-        <button
-          type="button"
-          className="inv-btn-secondary"
-          onClick={onFollowUpInvestigation}
-          style={{ marginLeft: "auto", color: "#2563eb", borderColor: "#bfdbfe" }}
-        >
-          <ArrowRight size={14} />
-          <span>{isEthnicRelationsReport ? "查看关联线索" : "发起后续穿透调查"}</span>
-        </button>
-      </div>
+        {onFollowUpInvestigation ? (
+          <button
+            type="button"
+            className="inv-btn-secondary"
+            onClick={onFollowUpInvestigation}
+            style={{ marginLeft: "auto", color: "#2563eb", borderColor: "#bfdbfe" }}
+          >
+            <ArrowRight size={14} />
+            <span>{isEthnicRelationsReport ? "查看关联线索" : "发起后续穿透调查"}</span>
+          </button>
+        ) : null}
+      </div> : null}
     </div>
   );
 }

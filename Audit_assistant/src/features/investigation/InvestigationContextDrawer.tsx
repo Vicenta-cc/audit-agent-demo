@@ -93,25 +93,81 @@ export function InvestigationContextDrawer({
         {type === "report" && report ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div style={{ fontSize: "14px", fontWeight: "800", color: "#0f172a" }}>{report.title}</div>
+            {report.presentation ? (
+              <>
+                <div style={{ fontSize: "12.5px", lineHeight: "1.75", color: "#334155", whiteSpace: "pre-line" }}>
+                  {report.presentation.summary.text}
+                </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", background: "#f8fafc", padding: "12px", borderRadius: "8px" }}>
-              <div><span style={{ fontSize: "11px", color: "#64748b" }}>总量</span><div style={{ fontSize: "16px", fontWeight: "800" }}>{report.totalCollected}</div></div>
-              <div><span style={{ fontSize: "11px", color: "#64748b" }}>疑似风险</span><div style={{ fontSize: "16px", fontWeight: "800", color: "#dc2626" }}>{report.suspectedRisks}</div></div>
-              <div><span style={{ fontSize: "11px", color: "#64748b" }}>建议复核</span><div style={{ fontSize: "16px", fontWeight: "800", color: "#d97706" }}>{report.suggestedReview}</div></div>
-              <div><span style={{ fontSize: "11px", color: "#64748b" }}>重点作者</span><div style={{ fontSize: "16px", fontWeight: "800" }}>{report.keyAuthorCandidates}</div></div>
-            </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", background: "#f8fafc", padding: "12px", borderRadius: "8px" }}>
+                  {report.presentation.key_metrics.map((metric) => (
+                    <div key={`${metric.label}-${metric.value}`}>
+                      <span style={{ fontSize: "11px", color: "#64748b" }}>{metric.label}</span>
+                      <div style={{ fontSize: "16px", fontWeight: "800", color: metric.label.includes("风险") ? "#dc2626" : "#0f172a" }}>{metric.value}</div>
+                      {metric.detail ? <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{metric.detail}</div> : null}
+                    </div>
+                  ))}
+                </div>
 
-            <div>
-              <div style={{ fontSize: "13px", fontWeight: "750", marginBottom: "8px" }}>主要风险类型分布</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {report.riskDistribution.map((item, idx) => (
-                  <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#ffffff", padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "12px" }}>
-                    <span>{item.name}</span>
-                    <span style={{ fontWeight: "700", color: "#2563eb" }}>{item.count} 条 ({item.percentage}%)</span>
-                  </div>
+                {report.presentation.sections.map((section) => (
+                  <section key={section.section_id} style={{ paddingTop: "12px", borderTop: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: "13px", fontWeight: "750", marginBottom: "8px", color: "#0f172a" }}>{section.title}</div>
+                    {section.paragraphs.map((paragraph, index) => (
+                      <p key={`${section.section_id}-${index}`} style={{ margin: index ? "10px 0 0" : 0, fontSize: "12.5px", lineHeight: "1.75", color: "#334155", whiteSpace: "pre-line" }}>
+                        {paragraph.text}
+                      </p>
+                    ))}
+                  </section>
                 ))}
-              </div>
-            </div>
+
+                {report.presentation.case_blocks.length ? (
+                  <section style={{ paddingTop: "12px", borderTop: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: "13px", fontWeight: "750", marginBottom: "8px", color: "#0f172a" }}>重点案例</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {report.presentation.case_blocks.map((item, index) => (
+                        <article key={`${item.title}-${index}`} style={{ padding: "10px", border: "1px solid #e2e8f0", borderRadius: "6px", background: "#f8fafc" }}>
+                          <div style={{ fontSize: "12.5px", fontWeight: "750", color: "#0f172a" }}>{item.title}</div>
+                          <p style={{ margin: "6px 0 0", fontSize: "12px", lineHeight: "1.65", color: "#475569" }}>{item.text}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                <section style={{ paddingTop: "12px", borderTop: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "750", marginBottom: "8px", color: "#0f172a" }}>调查结论</div>
+                  <p style={{ margin: 0, fontSize: "12.5px", lineHeight: "1.75", color: "#334155", whiteSpace: "pre-line" }}>{report.presentation.conclusion.text}</p>
+                </section>
+
+                {report.presentation.data_quality_note.text ? (
+                  <section style={{ padding: "10px", borderRadius: "6px", background: "#f8fafc", color: "#64748b" }}>
+                    <div style={{ fontSize: "12px", fontWeight: "750", marginBottom: "4px" }}>数据说明</div>
+                    <p style={{ margin: 0, fontSize: "11.5px", lineHeight: "1.65" }}>{report.presentation.data_quality_note.text}</p>
+                  </section>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", background: "#f8fafc", padding: "12px", borderRadius: "8px" }}>
+                  <div><span style={{ fontSize: "11px", color: "#64748b" }}>总量</span><div style={{ fontSize: "16px", fontWeight: "800" }}>{report.totalCollected}</div></div>
+                  <div><span style={{ fontSize: "11px", color: "#64748b" }}>疑似风险</span><div style={{ fontSize: "16px", fontWeight: "800", color: "#dc2626" }}>{report.suspectedRisks}</div></div>
+                  <div><span style={{ fontSize: "11px", color: "#64748b" }}>建议复核</span><div style={{ fontSize: "16px", fontWeight: "800", color: "#d97706" }}>{report.suggestedReview}</div></div>
+                  <div><span style={{ fontSize: "11px", color: "#64748b" }}>重点作者</span><div style={{ fontSize: "16px", fontWeight: "800" }}>{report.keyAuthorCandidates}</div></div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: "750", marginBottom: "8px" }}>主要风险类型分布</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {report.riskDistribution.map((item, idx) => (
+                      <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#ffffff", padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "12px" }}>
+                        <span>{item.name}</span>
+                        <span style={{ fontWeight: "700", color: "#2563eb" }}>{item.count} 条 ({item.percentage}%)</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         ) : null}
 
