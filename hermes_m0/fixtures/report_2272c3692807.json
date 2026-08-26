@@ -1,0 +1,2160 @@
+{
+  "cases": [
+    {
+      "id": "report-case:v2:8f6bcb77b8dd37d6970dcbc61d75496ea546044db6a66b285178c74d9b564c8f",
+      "key": "reject",
+      "member_post_ids": [
+        "content:v2:586fcb05c2da1cf5030e6380ed65040b21349283bf65ab8b1a66ad28a8c6d329"
+      ],
+      "position": 1,
+      "summary": "报告判定为拒绝的高风险内容",
+      "title": "拒绝内容"
+    },
+    {
+      "id": "report-case:v2:ba2dc92287055061cd59d1f0346cef4ccf20d6ee0966f3d9102c85734a9a8804",
+      "key": "review",
+      "member_post_ids": [
+        "content:v2:e70b63c7ad53e0d5e14e971855dcbc5c15f9bac7e13002af24ad6f4343df5d21",
+        "content:v2:4a904a6bdaead3b8aa053bf57644c50b7484f6c61faa7d59f859201ad57bb733",
+        "content:v2:12062a136671f8f4e452e0e5a33b772f1380e28452b54dfe72fc2028261f312e",
+        "content:v2:2a7d5915e1afc925f7374e23fbe311175671461152690d2285d89d3407ff7313",
+        "content:v2:888acd036b233bd0314d475f8208b2a151df43760cd72104a6c2addf57921322",
+        "content:v2:3f833a36c6c68f6c67a3099a8acc4618bc77d5aa5eeb3149536eda2d9c85fd27",
+        "content:v2:37febbf5e9e8ae5b05a8da73f07d7720cd1b0c20dfa71d74e87436e0434fe144",
+        "content:v2:4effca9e5d1542134b2dd42a3c13fd607c6117d13d830d0ab2df0c13b7dc6a8a",
+        "content:v2:7ef2fb34523541566335c821a847925d1de358280d2eff4fcfb3c9647a51ab34",
+        "content:v2:89195eb91688bcbd8f7889730c910b83f3725cbbecc1884b223d3e727377a617",
+        "content:v2:ecd34e2961b521d4a32c593692fdb5a6ff9bdf914f92d514e632b9a99abe372c",
+        "content:v2:ae345dd5e8cb3da5c42713d8738b9fa6dd01d02a0e2ffa5c38852042fd3dc7eb",
+        "content:v2:ba82065df1a419b556d8196c1e94e39c92cf9a392447dec5d834f2f5f5e31c82",
+        "content:v2:668cf4902901b47df42e7ea903a87b063ba6dcad2c950248677d5e801055f345",
+        "content:v2:0daee07891af4bb0ea0b440c52255e24892486c68eee57e07768deaa4e7673a5",
+        "content:v2:c8ae4ee64db0f43e2dee5ce42f98b54fa42756d6dbf16d2e8dbe7d49474b4fa6",
+        "content:v2:67b33b80f35d19de777f8f1184b8fe9952acdc2ab12f05dcc41041de9a8cb179"
+      ],
+      "position": 2,
+      "summary": "报告判定为需要人工复核的内容",
+      "title": "需复核内容"
+    },
+    {
+      "id": "report-case:v2:4de3dea9dabd50ac0eefe5d5ed54905793e68eb393c9b26ffe3f5784e51584db",
+      "key": "pass",
+      "member_post_ids": [
+        "content:v2:17e52ce30cf4220122d6842f29468b77520ab1fb48fca030bb17557c271328a3",
+        "content:v2:d0b38c0ac875151bafc35c2031f69a8320cbb79c139d00aa78e5fc88c079b26e",
+        "content:v2:69fd7b5d77ee01b965524c73f401bc430a6209fb3b0679617e7effeaaabbaa49",
+        "content:v2:272edb46d72b4514f63a57652c7f7060d692b90440c4bbd2b8f2507db1dfa0e4",
+        "content:v2:357bc1938d196c5ab512c638a5b19afa365a01b6cd7608e6d37db27f22404fc2",
+        "content:v2:15058b2d59aae803782a34852665a5078302203509f6594e4b944eb7c03bf010"
+      ],
+      "position": 3,
+      "summary": "报告判定为通过的内容",
+      "title": "通过内容"
+    }
+  ],
+  "evidence": [
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "我们这边是接的两两种料的,一边手机口的一手料,还有一种是某菠菜的一手料,啊菠菜的手料是百分之五十...跑五千万只赚一千块",
+        "summary": "视频为律师普法与反诈警示内容，画面及字幕明确标注“普法例子 无不良引导”。提及“菠菜”“跑分”及资金流水仅为案情还原与法律风险提示，无平台导流、组织下注或资金交易意图，符合反赌科普豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:c334554ec258b92a803bb82267b299cad94fcab897b242855ac8253a8009a9c4",
+      "id": "evidence:v2:1d7cb5e31c797f82d55e4a550a197c33482fe647caa8fbfb224ba33e0e0794c1",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:e70b63c7ad53e0d5e14e971855dcbc5c15f9bac7e13002af24ad6f4343df5d21",
+      "parent_revision_id": "content-revision:v2:d684b7f8268651aa7d5bff3393275fd0d47ce6393641965fd75fee45edf60603",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:25:04+08:00",
+        "locator": "asr:source:video_audio"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "怎么可能这么高，大混差不多或者三黑，正宗的菠菜东南亚的出来就是4-5个点，到下面一般3个，那种杀猪的高一点8-10个左右最多12个，然后就是盘，长盘老板直接对接上牙从头接到尾一般前期6个后期16，或者一次性从前期到后期12个左右，空降一般18-26但是到手上一般就6-14个，s播的一般是20左右，到下面也就十多个，玩股票的也就十几二十多，谈恋爱的对接30到43，一般也到下面也就二十，大混的接出来一般50-60，到下面最多不超过35，3️⃣黑接就70，出来给的一般50左右，更黑的一二十，点和料根本对不上",
+        "summary": "评论区聚集讨论博彩/跑分点位及求接活留言，属典型黑灰产闲聊或潜在引流噪声。但结合视频主旨为违法犯罪警示，作者未参与互动导流，无实际投注平台或资金结算路径，风险等级下调。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:c334554ec258b92a803bb82267b299cad94fcab897b242855ac8253a8009a9c4",
+      "id": "evidence:v2:b5018ce6cc2994f61d0c8064d8b8fe71a373b66fe578f81662fbe44b8f69d2d1",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:e70b63c7ad53e0d5e14e971855dcbc5c15f9bac7e13002af24ad6f4343df5d21",
+      "parent_revision_id": "content-revision:v2:d684b7f8268651aa7d5bff3393275fd0d47ce6393641965fd75fee45edf60603",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:25:04+08:00",
+        "locator": "comment:7653960617968042803"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "波菜料基本不会被私法... 红料 三黑料... 菠菜料很安全... A卡收取受害人的钱转入电子三方账户",
+        "summary": "命中赌博黑产资金术语“菠菜料”“红料”及洗钱转账流程描述，但结合标题与语音上下文，主旨为黑产流程揭秘与违法犯罪警示，明确提示“不能做”“逃不过法律制裁”，属于科普/批判语境，无平台导流、资金交易或组织参与意图。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:2cb409b675f12611e539baf57bff3b8cd7b82db29b79230cc60ec342e98f9e58",
+      "id": "evidence:v2:6cf2b9f912b414085fffaf49bb60f796ef478575b41a702b4f45426b11dc64f6",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:4a904a6bdaead3b8aa053bf57644c50b7484f6c61faa7d59f859201ad57bb733",
+      "parent_revision_id": "content-revision:v2:aa95ccde71b6db9ccc9ce8a58e59257e7026e109b6492466e69fdb0f46b26bf4",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:26:20+08:00",
+        "locator": "asr:source:video_audio:52.0-102.0"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7584399113790491944/videos/precise_frames_00/v1_m2_p2/v1_m2_p2_p05.jpg",
+        "original_text": "字幕及OCR显示“比如红料 基本无视任何过滤手段”，ASR及后续OCR提及“波菜料”、“受害者的钱直接转到你的卡上”、“A卡收取受害人的钱”。",
+        "summary": "内容明确提及黑产术语“红料”、“菠菜料”（博彩资金），并描述了利用“A卡”接收“受害者的钱”进行转账结算的洗钱路径，属于典型的非法资金结算。",
+        "timestamp_end": 67.27,
+        "timestamp_start": 67.27,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:2cb409b675f12611e539baf57bff3b8cd7b82db29b79230cc60ec342e98f9e58",
+      "id": "evidence:v2:56d9cff3f507bc4ec0201a581f567ad4952da6fa115de48c002e13106c3bdec8",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:4a904a6bdaead3b8aa053bf57644c50b7484f6c61faa7d59f859201ad57bb733",
+      "parent_revision_id": "content-revision:v2:aa95ccde71b6db9ccc9ce8a58e59257e7026e109b6492466e69fdb0f46b26bf4",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:26:20+08:00",
+        "locator": "media:asset:assets/7584399113790491944/videos/precise_frames_00/v1_m2_p2/v1_m2_p2_p05.jpg:67.270-67.270"
+      },
+      "type": "keyframe"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7584399113790491944/videos/precise_frames_00/v1_m3_p3/v1_m3_p3_p05.jpg",
+        "original_text": "字幕显示“然后继续转账出来到你的卡上 这就是二道料”，ASR提及“ab料a卡收取受害人的钱”",
+        "summary": "视频详细讲解黑产资金流转（二道料、AB料）及转账操作路径，属于非法资金结算教学。",
+        "timestamp_end": 86.43,
+        "timestamp_start": 86.43,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:2cb409b675f12611e539baf57bff3b8cd7b82db29b79230cc60ec342e98f9e58",
+      "id": "evidence:v2:9ca73f07782c911935787e4cbb87f6e24bf7ff86fc3abef84971066bbc4855a0",
+      "ordinal": 3,
+      "parent_post_id": "content:v2:4a904a6bdaead3b8aa053bf57644c50b7484f6c61faa7d59f859201ad57bb733",
+      "parent_revision_id": "content-revision:v2:aa95ccde71b6db9ccc9ce8a58e59257e7026e109b6492466e69fdb0f46b26bf4",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:26:20+08:00",
+        "locator": "media:asset:assets/7584399113790491944/videos/precise_frames_00/v1_m3_p3/v1_m3_p3_p05.jpg:86.430-86.430"
+      },
+      "type": "keyframe"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7584399113790491944/videos/precise_frames_00/v1_m3_p4/v1_m3_p4_p01.jpg",
+        "original_text": "字幕显示'AB料 A卡收取受害人的钱' (v1_m3_p4:p01) 及 '转入电子三方账户 由三方账户转到B卡' (v1_m3_p4:p08)",
+        "summary": "视频详细讲解黑产/诈骗资金的“AB料”洗钱流程，涉及受害人资金通过A卡、三方账户流转至B卡，属于非法资金结算教学。",
+        "timestamp_end": 89.43,
+        "timestamp_start": 89.43,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:2cb409b675f12611e539baf57bff3b8cd7b82db29b79230cc60ec342e98f9e58",
+      "id": "evidence:v2:33259f6d4233248101b9e01577ecdb500e638aa0e80000fc520dc7f2ec4013c0",
+      "ordinal": 4,
+      "parent_post_id": "content:v2:4a904a6bdaead3b8aa053bf57644c50b7484f6c61faa7d59f859201ad57bb733",
+      "parent_revision_id": "content-revision:v2:aa95ccde71b6db9ccc9ce8a58e59257e7026e109b6492466e69fdb0f46b26bf4",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:26:20+08:00",
+        "locator": "media:asset:assets/7584399113790491944/videos/precise_frames_00/v1_m3_p4/v1_m3_p4_p01.jpg:89.430-89.430"
+      },
+      "type": "keyframe"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "不要以为你跑分接的是菠菜料就没事... 奉劝大家收手 不然早晚都要进去的",
+        "summary": "内容命中赌博黑话及资金流转术语，但整体语境为刑事律师普法与风险提示，明确警示参与跑分及接收博彩资金的法律后果（帮信罪、掩隐罪），属于反赌/反诈科普，无投注平台、资金结算或组织参与引导，符合豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:5633e8d74b4491998168606cc89aab42e385aa745ba376aa0c5efdb8c9c20dce",
+      "id": "evidence:v2:573928a2f871441f342dc319cb31caf1f3d64c230021cafddabb43a3c9dd0088",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:12062a136671f8f4e452e0e5a33b772f1380e28452b54dfe72fc2028261f312e",
+      "parent_revision_id": "content-revision:v2:1c39ae5dd0265a9dedd1110d53bb5282e4ddbe37cac7ae3fd496c37c035c1020",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:27:56+08:00",
+        "locator": "asr:source:video_audio"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "揭秘黑灰产暗语：从“跑分”到“车队”，每一步都是在犯罪 #揭秘 #灰产 #跑分#反诈 #我要上热门🔥",
+        "summary": "内容主旨为反诈科普与黑灰产暗语揭秘，明确警示违法犯罪风险，无赌博投注、平台导流或资金交易路径，符合“反赌新闻科普/风险提示”豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:c8de4be9da466ad5afe39b4ba1c7f81cbeb98f9e8766286599e6f617bf57b1c5",
+      "id": "evidence:v2:ec5946ef3e337271a6203ce412c35f8a254e66ba6e441a25a74cbdee2ea8b2bc",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:17e52ce30cf4220122d6842f29468b77520ab1fb48fca030bb17557c271328a3",
+      "parent_revision_id": "content-revision:v2:5647564dd84fe3c1d451d8d46e7a964b62e465d1e50f43abe0566157205f3cc8",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:30:28+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "33岁干车队，接一道空降，5个月获利300万，会判多久？ #深圳律师 #刑事律师 #跑分",
+        "summary": "标题与正文以刑事律师视角提出“干车队获利判多久”的普法问题，提及赌博资金结算黑话，但整体为法律咨询与风险提示，无组织或导流行为。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:17166421ec36b61f4adf338a6e6e4793a6e91497755a5f4adea0cd6be9d3cfb3",
+      "id": "evidence:v2:e67c457ca2c8687405800da8373268e4490f7749510b4afe921f1fb617333116",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:2a7d5915e1afc925f7374e23fbe311175671461152690d2285d89d3407ff7313",
+      "parent_revision_id": "content-revision:v2:db948b32d95a450d310412984bdb095774fd9a1c214d41fab415d3d72b517ec1",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:31:45+08:00",
+        "locator": "text:title"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7438177766056480034/videos/frames_00/f0001.jpg",
+        "original_text": "一道空降色料流水800万 5个月获利300万会判多久 普法案例 无不良引导",
+        "summary": "视频画面文字与ASR转写明确标注“普法案例 无不良引导”，律师口播详细拆解“色料”“盘口”“U结算”等黑话并警告“再穷也不能犯罪”，属典型反赌警示与刑期科普，符合知识包豁免规则。",
+        "timestamp_end": 0.0,
+        "timestamp_start": 0.0,
+        "translated_text": "一道空降色料流水800万\n5个月获利300万会判多久\n普法案例 无不良引导\n5个月赚300万\n李律师(深圳)"
+      },
+      "finding_id": "finding:v2:17166421ec36b61f4adf338a6e6e4793a6e91497755a5f4adea0cd6be9d3cfb3",
+      "id": "evidence:v2:90896b19ad4948f3351e3d66fa63c542290e095dd2e0ceffc3030cd4de213344",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:2a7d5915e1afc925f7374e23fbe311175671461152690d2285d89d3407ff7313",
+      "parent_revision_id": "content-revision:v2:db948b32d95a450d310412984bdb095774fd9a1c214d41fab415d3d72b517ec1",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:31:45+08:00",
+        "locator": "media:asset:assets/7438177766056480034/videos/frames_00/f0001.jpg:0.000-0.000"
+      },
+      "type": "ocr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "色料13.5，真的一般般啊[捂脸]",
+        "summary": "评论区出现大量用户询问“色料”“找工作”“有车队吗”及讨论结算点位，属用户自发聚集，作者未进行回复导流或提供加群/充值路径，不构成代理推广或资金交易组织。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:17166421ec36b61f4adf338a6e6e4793a6e91497755a5f4adea0cd6be9d3cfb3",
+      "id": "evidence:v2:39527ad7992790684158ff036b9363d2bb400d79417aeffff22ec4a002e5d6cf",
+      "ordinal": 3,
+      "parent_post_id": "content:v2:2a7d5915e1afc925f7374e23fbe311175671461152690d2285d89d3407ff7313",
+      "parent_revision_id": "content-revision:v2:db948b32d95a450d310412984bdb095774fd9a1c214d41fab415d3d72b517ec1",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:31:45+08:00",
+        "locator": "comment:7438314663122584329"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "跑分车队，一道空降料， 获利80万U，会判多久？ 跑分车队涉嫌掩饰隐瞒犯罪所得收益罪，最高可判7年有期徒刑，大家千万不要做。#跑分 #掩饰隐瞒 #刑事律师 #深圳律师",
+        "summary": "文本提及跑分、获利金额等涉赌/洗钱相关词汇，但结合“会判多久”“涉嫌犯罪”“千万不要做”等明确警示表述，属于法律风险提示与反赌科普，无宣扬或组织意图。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:f6263caab1b3576fd0e66d07979549b44dd4d4a62ae7615a444ddca4c325e0fc",
+      "id": "evidence:v2:8897738a93e3f015a67c449b244370e10476c5e444e3700ef3a85ce0c3f4f100",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:888acd036b233bd0314d475f8208b2a151df43760cd72104a6c2addf57921322",
+      "parent_revision_id": "content-revision:v2:62092fb4524afa87a584b2cfef7d17e9d34412ef43ea169eebc3369bec140865",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:32:15+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7424467034068618550/videos/frames_00/f0002.jpg",
+        "original_text": "跑分车队，一道空降料\n获利80万U，会判多久\n普法案例，无不良引导\n车队涉嫌掩饰隐瞒",
+        "summary": "画面OCR包含涉案黑话，但同步识别出“普法案例，无不良引导”及律师身份标识，明确界定内容为法律教育，符合反赌/反诈科普豁免条件。",
+        "timestamp_end": 3.0,
+        "timestamp_start": 3.0,
+        "translated_text": "跑分车队，一道空降料\n获利80万U，会判多久\n普法案例，无不良引导\n车队涉嫌掩饰隐瞒"
+      },
+      "finding_id": "finding:v2:f6263caab1b3576fd0e66d07979549b44dd4d4a62ae7615a444ddca4c325e0fc",
+      "id": "evidence:v2:46dfc8c8c6a3d2b22a607e04bfcb53c3be9550eb2a48d4eb214cb7be42d66d8f",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:888acd036b233bd0314d475f8208b2a151df43760cd72104a6c2addf57921322",
+      "parent_revision_id": "content-revision:v2:62092fb4524afa87a584b2cfef7d17e9d34412ef43ea169eebc3369bec140865",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:32:15+08:00",
+        "locator": "media:asset:assets/7424467034068618550/videos/frames_00/f0002.jpg:3.000-3.000"
+      },
+      "type": "ocr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "你们知道两百万优是多少钱吗...千万不要干啊，这个不仅要判刑还有钱会没收",
+        "summary": "语音转写包含跑分业务细节与黑话，但整体为律师案情复盘，结尾明确劝阻“千万不要干”，符合反赌/反诈科普特征，无资金结算或导流路径。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:f6263caab1b3576fd0e66d07979549b44dd4d4a62ae7615a444ddca4c325e0fc",
+      "id": "evidence:v2:e0ef58e76d7c6c3ae903209d85fd35407caa75ece95e16aa6e2fea6dd4c5350b",
+      "ordinal": 3,
+      "parent_post_id": "content:v2:888acd036b233bd0314d475f8208b2a151df43760cd72104a6c2addf57921322",
+      "parent_revision_id": "content-revision:v2:62092fb4524afa87a584b2cfef7d17e9d34412ef43ea169eebc3369bec140865",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:32:15+08:00",
+        "locator": "asr:source:video_audio"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "这个怎么干[暗中观察]",
+        "summary": "个别评论询问参与方式或求职意向，但无实际群入口、资金结算路径或作者导流回复，属围观讨论与金额换算，未形成组织或交易风险。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:f6263caab1b3576fd0e66d07979549b44dd4d4a62ae7615a444ddca4c325e0fc",
+      "id": "evidence:v2:3dc9c25df546f14076b36f4331860196da1986a4d480c592afbe1eb17d73f072",
+      "ordinal": 4,
+      "parent_post_id": "content:v2:888acd036b233bd0314d475f8208b2a151df43760cd72104a6c2addf57921322",
+      "parent_revision_id": "content-revision:v2:62092fb4524afa87a584b2cfef7d17e9d34412ef43ea169eebc3369bec140865",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:32:15+08:00",
+        "locator": "comment:7424478346867163944"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "都2024年了，居然还有人去“跑分”，跑几天的利润还抵不过被抓时候的法律成本#柳州 #柳州律师 #律师 #法律咨询",
+        "summary": "提及“跑分”及资金结算相关话题，但语境为明确的风险警示与法律成本分析，无宣扬、导流或交易意图，符合普法科普豁免条件。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:4e6821a32b53a66a6a53775d77021240300e9d955367514bb9909abc520a8a30",
+      "id": "evidence:v2:c8bb3817d17f3d5f6bf484c4247d4f1f18e6935f791752b0ed942933c3b3e7aa",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:3f833a36c6c68f6c67a3099a8acc4618bc77d5aa5eeb3149536eda2d9c85fd27",
+      "parent_revision_id": "content-revision:v2:ce2beb18d383c6a3e99b16266b166007f0d4bbdeb16bc5009f559025b26c3c2c",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:32:46+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7350726740110527807/videos/frames_00/f0001.jpg",
+        "original_text": "无不良引导 法律科普 跑分崽 也是一届不如一届... 什么是精料... 被封卡 还被按头 得不偿失",
+        "summary": "画面文字包含跑分黑话与资金结算术语，但全程叠加“无不良引导 法律科普”标识，结合ASR口播内容，主旨为揭露跑分骗局与普法警示，属于反赌/反诈风险提示，符合豁免规则。",
+        "timestamp_end": 0.0,
+        "timestamp_start": 0.0,
+        "translated_text": "跑分崽\n也是一届不如一届"
+      },
+      "finding_id": "finding:v2:4e6821a32b53a66a6a53775d77021240300e9d955367514bb9909abc520a8a30",
+      "id": "evidence:v2:7433f51ccb8587430276089d5941ccf40df505871a809238dcb51f1dafb11686",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:3f833a36c6c68f6c67a3099a8acc4618bc77d5aa5eeb3149536eda2d9c85fd27",
+      "parent_revision_id": "content-revision:v2:ce2beb18d383c6a3e99b16266b166007f0d4bbdeb16bc5009f559025b26c3c2c",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:32:46+08:00",
+        "locator": "media:asset:assets/7350726740110527807/videos/frames_00/f0001.jpg:0.000-0.000"
+      },
+      "type": "ocr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "用对公户跑分，博彩的流水，会要判刑吗？ #跑分 #深圳律师 #开设赌场罪 #刑事律师",
+        "summary": "提及博彩资金流水与跑分行为，但语境为刑事律师普法咨询，旨在探讨法律责任与判刑后果，无推广或组织意图。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:5c28fbcd175070f82ac5302bbfd94d7b225a39d177297b40bb585911fd53439c",
+      "id": "evidence:v2:77e6f8b46d92ef67cb95395031035109b7070805a0419fd8426a380944aafd98",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:37febbf5e9e8ae5b05a8da73f07d7720cd1b0c20dfa71d74e87436e0434fe144",
+      "parent_revision_id": "content-revision:v2:5043db388f38fb1bccb261454f5004d124c0c04e32a799116b015d542387fcb3",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:33:16+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "怎么可能菠菜料有七个点... 赶紧停啊... 普法案例 无不良引导... 从犯的话你这个可能三到四年左右",
+        "summary": "视频口播详细讨论博彩跑分资金盘与佣金点位，但整体为律师普法与风险警示，明确标注无不良引导，并劝阻继续参与，符合反赌/法律科普豁免条件。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:5c28fbcd175070f82ac5302bbfd94d7b225a39d177297b40bb585911fd53439c",
+      "id": "evidence:v2:62a2770e58fa3d05fab2e6bcdc79b0db18dc77f062f661b09162de90b3a0c69d",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:37febbf5e9e8ae5b05a8da73f07d7720cd1b0c20dfa71d74e87436e0434fe144",
+      "parent_revision_id": "content-revision:v2:5043db388f38fb1bccb261454f5004d124c0c04e32a799116b015d542387fcb3",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:33:16+08:00",
+        "locator": "asr:source:video_audio"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "菠菜料啥意思",
+        "summary": "评论区聚集讨论跑分黑话与公户资源，部分用户表达参与意愿，但作者未进行导流、招募或提供交易路径，属话题衍生讨论，无实际组织或交易证据。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:5c28fbcd175070f82ac5302bbfd94d7b225a39d177297b40bb585911fd53439c",
+      "id": "evidence:v2:c4ef8e1f417deb7666a55fc33268373628d7161ad40743b6935c4b159f1741ad",
+      "ordinal": 3,
+      "parent_post_id": "content:v2:37febbf5e9e8ae5b05a8da73f07d7720cd1b0c20dfa71d74e87436e0434fe144",
+      "parent_revision_id": "content-revision:v2:5043db388f38fb1bccb261454f5004d124c0c04e32a799116b015d542387fcb3",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:33:16+08:00",
+        "locator": "comment:7452807099896251163"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "中介会跟他们说这些是赌博,非法避税黄色直播",
+        "summary": "视频为法院官方普法剧情演绎，提及赌博仅为揭露诈骗中介话术，属反赌反诈科普与风险提示，符合豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:7e7c6adc21b08db1b0c088c8bb60023597af7920b0ef8d220dfa00ba20bf36d6",
+      "id": "evidence:v2:b0323cb326215babd1accaa2a8aa5ae9f51910d04571eb4ee5a473491de868e0",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:d0b38c0ac875151bafc35c2031f69a8320cbb79c139d00aa78e5fc88c079b26e",
+      "parent_revision_id": "content-revision:v2:1b6df6e4eaf66a1fbb23d575881ea2f975a04ee2998eeef632e500576ec657b5",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:33:46+08:00",
+        "locator": "asr:source:video_audio"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "介绍五人跑分1500万 后果有多严重？ 定罪量刑插翅难逃#陈成均律师 #昭冠律所 #法律咨询 #跑分 #洗钱罪",
+        "summary": "视频明确标注“普法例子 无不良引导”，核心内容为律师讲解参与跑分洗钱的法律后果与量刑标准，属于违法犯罪警示与法律科普，符合知识包中“反赌新闻科普/风险提示”的豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:8bf4d158a3ca78cf91b88201b69e5c9220d89cea7d15c893cfdc79a75bf3058b",
+      "id": "evidence:v2:af89b51202c0e8d3c3cd31b4ff744213cb9cef2b93a1cad40f95b98cb80c88cf",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:4effca9e5d1542134b2dd42a3c13fd607c6117d13d830d0ab2df0c13b7dc6a8a",
+      "parent_revision_id": "content-revision:v2:007ceb33363ddecccc4402ec0f354890e98c41180b2805ef04abcc04ca7d6387",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:34:16+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "18个点",
+        "summary": "评论区出现跑分灰产相关的点位与求职黑话，但依附于普法视频语境，未涉及赌博投注、盘口赔率或组织下注，缺乏赌博资金交易路径与平台导流证据。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:8bf4d158a3ca78cf91b88201b69e5c9220d89cea7d15c893cfdc79a75bf3058b",
+      "id": "evidence:v2:9c10294047becfa811459f3a28548afda94eba9792ef89d42d530c0cd6538ed0",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:4effca9e5d1542134b2dd42a3c13fd607c6117d13d830d0ab2df0c13b7dc6a8a",
+      "parent_revision_id": "content-revision:v2:007ceb33363ddecccc4402ec0f354890e98c41180b2805ef04abcc04ca7d6387",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:34:16+08:00",
+        "locator": "comment:7654979978077471515"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "飞机软件里纯菠菜料，为什么被按头？ 给赌博平台跑分的车队，风险同样大，涉嫌帮信罪、掩隐罪、开设赌场罪#内容启发搜索 #抖音创作季 #灰黑产专业律师",
+        "summary": "内容主旨为律师反赌普法与风险提示，明确警示跑分车队涉嫌开设赌场罪、帮信罪等，并劝诫用户不要参与，符合反赌科普豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:c3ecb8d7ed398158587a2c43b1c7e7ac6ab83d9650757ae2c81008f81af5d3d5",
+      "id": "evidence:v2:fdc4429bfbe6f55b16227b2b6b3df8d78a3a25d7ac20036d9caad8d5cff89fc4",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:586fcb05c2da1cf5030e6380ed65040b21349283bf65ab8b1a66ad28a8c6d329",
+      "parent_revision_id": "content-revision:v2:5eda61081656ae678fad3f12f4e16ca19c2cb0fd791e3546299dcae7095217de",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:35:50+08:00",
+        "locator": "text:title"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "盘总 纯bc找车[看]",
+        "summary": "评论区出现大量用户聚集，使用“菠菜料”“车队”“盘口”“有卡”“找车”等赌博资金跑分黑话，明确表达寻找赌博平台资金结算渠道与参与跑分车队的意图，符合评论聚集组织参与资金结算的高危特征。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:c3ecb8d7ed398158587a2c43b1c7e7ac6ab83d9650757ae2c81008f81af5d3d5",
+      "id": "evidence:v2:3afe342db5b94a4dd28667253803d26feb4c21e5d77bf8e3748d845503ce67db",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:586fcb05c2da1cf5030e6380ed65040b21349283bf65ab8b1a66ad28a8c6d329",
+      "parent_revision_id": "content-revision:v2:5eda61081656ae678fad3f12f4e16ca19c2cb0fd791e3546299dcae7095217de",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:35:50+08:00",
+        "locator": "comment:7503164784314614578"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "审办理了一个为赌博平台上下分的案件,我们当时流水很乱,具体获",
+        "summary": "命中赌博相关词汇及黑话，但结合标题、正文及视频整体语境，系律师对过往刑事案件的复盘与法律风险提示，属于反赌普法与案件科普，无组织下注、平台导流或资金结算意图，符合豁免规则。",
+        "timestamp_end": 26.96,
+        "timestamp_start": 20.76,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:1e99bb5d8d4c2acb2ea3569c232363c7082951f5db00eaec3e39f4e0ac7091de",
+      "id": "evidence:v2:80a59a8122181ff6e6bf85237813829a68f036cb85ded12edbae9842fff3592f",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:69fd7b5d77ee01b965524c73f401bc430a6209fb3b0679617e7effeaaabbaa49",
+      "parent_revision_id": "content-revision:v2:1b251d976830a6169ca47fd4f6d777e12145b5e147fd02fabd6ad5a7aee329e0",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:36:20+08:00",
+        "locator": "asr:source:video_audio:20.8-27.0"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "跑分洗钱？赚最少的钱，坐最长的牢！#政媒原创作者联盟 #反诈者集合 #剧情",
+        "summary": "标题明确标注剧情与反诈主题，内容为反洗钱警示教育，无赌博投注、平台导流或资金盘特征，符合反赌科普豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:9d93226140a6fb7383b528fd5ee812b68ef1942f42e3a06157e0ebf8262e3232",
+      "id": "evidence:v2:59065eeed2cd88ce41f21060ca123e3da72d58f72c6d2a1dfcb17013944353aa",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:7ef2fb34523541566335c821a847925d1de358280d2eff4fcfb3c9647a51ab34",
+      "parent_revision_id": "content-revision:v2:6675a69834ee34f19f0ec3e1f676b7d48beeceec1cc897cedf44219cea4c6236",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:38:05+08:00",
+        "locator": "text:title"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7099409512225934622/videos/frames_00/f0014.jpg",
+        "original_text": "跑分洗钱?\n赚最少的钱 坐最长的牢",
+        "summary": "画面持续显示反诈警示文字，结合剧情明确指向违法后果提示，属于风险提示类内容，不涉及赌博博彩推广。",
+        "timestamp_end": 59.0,
+        "timestamp_start": 59.0,
+        "translated_text": "跑分洗钱?\n赚最少的钱 坐最长的牢\n跑分?"
+      },
+      "finding_id": "finding:v2:9d93226140a6fb7383b528fd5ee812b68ef1942f42e3a06157e0ebf8262e3232",
+      "id": "evidence:v2:de622567aa1257853b52043a0bf5ec89aa69592944ca03326bfad656bd413019",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:7ef2fb34523541566335c821a847925d1de358280d2eff4fcfb3c9647a51ab34",
+      "parent_revision_id": "content-revision:v2:6675a69834ee34f19f0ec3e1f676b7d48beeceec1cc897cedf44219cea4c6236",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:38:05+08:00",
+        "locator": "media:asset:assets/7099409512225934622/videos/frames_00/f0014.jpg:59.000-59.000"
+      },
+      "type": "ocr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "一场详情你是做什么工作的呀?我直接做生意生意赔了点钱,现在不是现",
+        "summary": "语音为反诈短剧台词，通过情景再现揭露跑分洗钱手法及被抓后果，旨在普法警示，无投注、赔率、上分提现或代理招募等赌博特征。",
+        "timestamp_end": 35.68,
+        "timestamp_start": 28.08,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:9d93226140a6fb7383b528fd5ee812b68ef1942f42e3a06157e0ebf8262e3232",
+      "id": "evidence:v2:e9625c36e64bb69cfe1ec071b5383d57f133639fff3f8c3fbf05591766014dd4",
+      "ordinal": 3,
+      "parent_post_id": "content:v2:7ef2fb34523541566335c821a847925d1de358280d2eff4fcfb3c9647a51ab34",
+      "parent_revision_id": "content-revision:v2:6675a69834ee34f19f0ec3e1f676b7d48beeceec1cc897cedf44219cea4c6236",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:38:05+08:00",
+        "locator": "asr:source:video_audio:28.1-35.7"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "我就是被这种诈骗团伙骗了13万",
+        "summary": "评论为用户分享被骗经历与反诈讨论，未出现求带下注、盘口赔率、赌博群入口或资金交易引导，不构成赌博风险。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:9d93226140a6fb7383b528fd5ee812b68ef1942f42e3a06157e0ebf8262e3232",
+      "id": "evidence:v2:126bfeb0e3fbf4ad211bab70aac96252cb004dc51e3a5481a6906743c76141e8",
+      "ordinal": 4,
+      "parent_post_id": "content:v2:7ef2fb34523541566335c821a847925d1de358280d2eff4fcfb3c9647a51ab34",
+      "parent_revision_id": "content-revision:v2:6675a69834ee34f19f0ec3e1f676b7d48beeceec1cc897cedf44219cea4c6236",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:38:05+08:00",
+        "locator": "comment:7100238639431484173"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "30岁对接15个盘口，一道空降料，，获利20万U，会判多久？ #跑分 #刑事律师 #深圳律师",
+        "summary": "标题包含赌博资金结算黑话及跑分相关词汇，但核心为询问法律判刑后果，结合标签#刑事律师，属法律科普语境。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:ab8fb0a128c083683c7501d9822540faed3f744c2c9ced6d119b6c0e5a46ade6",
+      "id": "evidence:v2:218fa8b06075eedcf48586042fccfadbbff03e03d7f0d8d20a2d0b534184f438",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:89195eb91688bcbd8f7889730c910b83f3725cbbecc1884b223d3e727377a617",
+      "parent_revision_id": "content-revision:v2:6440adfc33fae8d82f105b74fe8ed9c1dfddd966c4e686f9a9b415526677a4d0",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:38:39+08:00",
+        "locator": "text:title"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7422217194647358772/videos/frames_00/f0010.jpg",
+        "original_text": "普法案例，无不良引导\n掩隐最高可判7年\n获利20多万优",
+        "summary": "画面明确标注普法免责声明及具体罪名量刑提示，内容主旨为反赌普法与法律风险警示，符合豁免规则。",
+        "timestamp_end": 22.833333333333332,
+        "timestamp_start": 22.833333333333332,
+        "translated_text": "30岁对接15个盘口，一道空降料，，获利20万U，会判多久\n普法案例，无不良引导\n掩隐最高可判7年\n获利20多万优"
+      },
+      "finding_id": "finding:v2:ab8fb0a128c083683c7501d9822540faed3f744c2c9ced6d119b6c0e5a46ade6",
+      "id": "evidence:v2:3a1f48660b3f8fa39b7f39acdfa160d3403d1620da5022afbb52569a40cb288b",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:89195eb91688bcbd8f7889730c910b83f3725cbbecc1884b223d3e727377a617",
+      "parent_revision_id": "content-revision:v2:6440adfc33fae8d82f105b74fe8ed9c1dfddd966c4e686f9a9b415526677a4d0",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:38:39+08:00",
+        "locator": "media:asset:assets/7422217194647358772/videos/frames_00/f0010.jpg:22.833-22.833"
+      },
+      "type": "ocr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "求带[泣不成声]",
+        "summary": "评论区出现个别用户表达参与意愿，但系用户自发讨论，作者未进行组织、导流或提供资金路径，不构成平台违规。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:ab8fb0a128c083683c7501d9822540faed3f744c2c9ced6d119b6c0e5a46ade6",
+      "id": "evidence:v2:ff8538d5c74ec5eb2c3534cbe4df6caa9b7515c94ce3f41739416e4fab30be97",
+      "ordinal": 3,
+      "parent_post_id": "content:v2:89195eb91688bcbd8f7889730c910b83f3725cbbecc1884b223d3e727377a617",
+      "parent_revision_id": "content-revision:v2:6440adfc33fae8d82f105b74fe8ed9c1dfddd966c4e686f9a9b415526677a4d0",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:38:39+08:00",
+        "locator": "comment:7422657970368021275"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "卡接回U，取现回U的区别 #成都刑事律师  #车队取现  #跑分 #掩隐 #usdt",
+        "summary": "文本命中赌博及黑产结算相关词汇，但结合视频画面与口播可知，发布者为刑事律师，内容主旨为法律科普与刑事风险提示，分析不同资金结算路径对应的罪名与刑期，无投注引导、平台推广或资金交易组织行为，符合反赌/法律科普豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:d900fdce29e459c99dd5239aedfdd80083936a2ed4b22ac5007554eef4dcc7cf",
+      "id": "evidence:v2:777e56133f40dbacabeae3d99bf63e5340fcc0e0199f024fbfd87a19a76a7afb",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:ecd34e2961b521d4a32c593692fdb5a6ff9bdf914f92d514e632b9a99abe372c",
+      "parent_revision_id": "content-revision:v2:3f1a624319c1f0ad2aae4a8745cee1549fb9416e027b27dbc0cb43b967e9635a",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:39:33+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7601367767320775988/videos/frames_00/f0001.jpg",
+        "original_text": "盘口放料 卡/码接回USDT 车队取现回USDT 色胶料 | 精聊料 | 假BC料 料子不同、罪名不同、刑期不同 成都刑事律师 陈鹏",
+        "summary": "画面OCR及ASR转写包含“盘口放料”“假BC料”“回U”等博彩黑产术语，但视觉主体为律师普法讲座，核心逻辑为解析涉赌资金流转的刑事定罪与量刑差异，属于明确的反赌警示与法律科普，未提供投注入口、代理招募或资金结算路径，风险降级。",
+        "timestamp_end": 0.0,
+        "timestamp_start": 0.0,
+        "translated_text": "盘口放料\n卡/码接回USDT\n车队取现回USDT\n色胶料 | 精聊料 | 大区料 | 盗刷料 | 色播料 | 假BC料\n精聊料\n无论是车队卡接回U、码接回U"
+      },
+      "finding_id": "finding:v2:d900fdce29e459c99dd5239aedfdd80083936a2ed4b22ac5007554eef4dcc7cf",
+      "id": "evidence:v2:fe96595793d9a1eeb2f391844277a80547cd140491abd501f2085f3fcc3a086e",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:ecd34e2961b521d4a32c593692fdb5a6ff9bdf914f92d514e632b9a99abe372c",
+      "parent_revision_id": "content-revision:v2:3f1a624319c1f0ad2aae4a8745cee1549fb9416e027b27dbc0cb43b967e9635a",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:39:33+08:00",
+        "locator": "media:asset:assets/7601367767320775988/videos/frames_00/f0001.jpg:0.000-0.000"
+      },
+      "type": "ocr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "26岁跑分，流水950亿 获利460亿，会判多久 #跑分 #刑事律师 #深圳律师",
+        "summary": "内容明确标注为普法案例，主旨为刑事法律科普与风险提示，讨论跑分洗钱行为的法律后果，无投注、平台导流或资金交易引导，符合反赌/普法豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:72b497c51b30c20b8adc434128ad25de88942b0a19ddd3f875364cf0512ea629",
+      "id": "evidence:v2:f11d61d916d967098e5ef7fe7e2c8db88384eb01c7ff8558ff58a5c25b02b0c2",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:ae345dd5e8cb3da5c42713d8738b9fa6dd01d02a0e2ffa5c38852042fd3dc7eb",
+      "parent_revision_id": "content-revision:v2:bc05453627a31942fe8cc1f61ad978b394a2dd7c07a4e411477a9adc7fd25272",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:41:38+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "在菲律宾做园区...大混三黑...车队都崩了...回去会不会查得到",
+        "summary": "口播提及黑灰产相关黑话，但语境为律师访谈与案件复盘，旨在揭示犯罪链条与法律风险，无组织参与或资金结算引导，属警示教育范畴。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:72b497c51b30c20b8adc434128ad25de88942b0a19ddd3f875364cf0512ea629",
+      "id": "evidence:v2:09f2452cf79e94b9f8ece1a3506fb4447eeacc4c6a1e19b58730ece724e3da84",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:ae345dd5e8cb3da5c42713d8738b9fa6dd01d02a0e2ffa5c38852042fd3dc7eb",
+      "parent_revision_id": "content-revision:v2:bc05453627a31942fe8cc1f61ad978b394a2dd7c07a4e411477a9adc7fd25272",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:41:38+08:00",
+        "locator": "asr:source:video_audio"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "到底做什么的？大混三黑什么意思，科普一下",
+        "summary": "用户询问黑话含义，属正常知识探讨，无求带、上车或资金交易意图。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:72b497c51b30c20b8adc434128ad25de88942b0a19ddd3f875364cf0512ea629",
+      "id": "evidence:v2:4fb67e7f283c72ba247194613bfbd4c31e1d7bb13625392e9496c4244946c098",
+      "ordinal": 3,
+      "parent_post_id": "content:v2:ae345dd5e8cb3da5c42713d8738b9fa6dd01d02a0e2ffa5c38852042fd3dc7eb",
+      "parent_revision_id": "content-revision:v2:bc05453627a31942fe8cc1f61ad978b394a2dd7c07a4e411477a9adc7fd25272",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:41:38+08:00",
+        "locator": "comment:7370725415483638569"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "#帮信罪 涉案上千万，他们说的实话，你们总该相信了吧！#严厉打击违法犯罪 #防范电信诈骗 #警民dou平安 #跑分 @中国警察网 @红河警方 @云南警方 @国家反诈中心 @DOU+小助手",
+        "summary": "内容主旨为警方普法与反诈骗警示，明确揭露“跑分”洗钱违法性及法律后果，属于新闻科普与风险提示范畴，符合知识包豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:99696548fb4885983f529fecdfbf9d1d62f9b11c455e61095ac7e8f541b655c1",
+      "id": "evidence:v2:2ae72cbfcba28519be4473e20415ab40acbfb457c5d8407d22cf8b8670c1ab0d",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:272edb46d72b4514f63a57652c7f7060d692b90440c4bbd2b8f2507db1dfa0e4",
+      "parent_revision_id": "content-revision:v2:b1dbd80a2f7dc8244c9e1b363278de55dcb0d6dfb7e691b265919a3df5197d8a",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:43:55+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "有没有办法黑吃黑",
+        "summary": "评论区存在部分用户询问参与方式或提及“车队”等词，属网友自发讨论与好奇，无作者组织、导流或资金交易路径，不构成宣扬或诱导。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:99696548fb4885983f529fecdfbf9d1d62f9b11c455e61095ac7e8f541b655c1",
+      "id": "evidence:v2:32636f44ec90460f757ace77da88170ad1a4b8eb443060f6eca16eb894f66b51",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:272edb46d72b4514f63a57652c7f7060d692b90440c4bbd2b8f2507db1dfa0e4",
+      "parent_revision_id": "content-revision:v2:b1dbd80a2f7dc8244c9e1b363278de55dcb0d6dfb7e691b265919a3df5197d8a",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:43:55+08:00",
+        "locator": "comment:7201171178562863930"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "跑分它不是罪名...希望你没有参与跑分,如果有尽快收手,拜",
+        "summary": "视频主旨为律师普法与反洗钱风险提示，详细讲解跑分涉及的帮信罪、掩隐罪及诈骗罪定罪量刑标准，明确呼吁停止参与。符合知识包豁免规则“新闻反赌、风险提示”，无任何投注平台、资金结算或组织赌博证据。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:82121bacd24491d233cc20dca1a8f742703b12a65b7abadf54edf1f998f29a28",
+      "id": "evidence:v2:9eef92b9f43872378aa992a75badeec122e0c97522a3b1ba7ae0646c16ff65a2",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:357bc1938d196c5ab512c638a5b19afa365a01b6cd7608e6d37db27f22404fc2",
+      "parent_revision_id": "content-revision:v2:56c55038b7e7b0cc18f38680d0228656e02f589730b1b8e468affe80373a0384",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:44:46+08:00",
+        "locator": "asr:source:video_audio"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "跑分仔 人生副本之跑分仔。#人生副本#灰产#防诈骗#精神小伙",
+        "summary": "标题与正文明确带有“#防诈骗”标签，结合“人生副本”表述，属于反诈警示与剧情演绎范畴，无赌博投注或资金交易引导。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:9e8d11b86486ccf844f7c438bc7cd3e085ed2e080295e09dc84373fe61681cc8",
+      "id": "evidence:v2:db9ae20bee141a27a3b034d117ccab91b0f4d4c87083132f311a4658fb4f8c42",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:ba82065df1a419b556d8196c1e94e39c92cf9a392447dec5d834f2f5f5e31c82",
+      "parent_revision_id": "content-revision:v2:1448e7bc1bb833e5b48961861b16a543feb5f3c9553a38d89cd3e5673ed34348",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:45:52+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7651219167357586723/videos/frames_00/f0010.jpg",
+        "original_text": "仅为视频内容 无不良引导 灰产仔的人生 游戏玩家",
+        "summary": "画面为动画/游戏风格剧情演绎，叠加明确免责声明，展示跑分流程后以警方抓捕收尾，属反诈科普与虚构内容，无真实资金路径或平台导流。",
+        "timestamp_end": 2.8666666666666667,
+        "timestamp_start": 2.8666666666666667,
+        "translated_text": "仅为视频内容\n无不良引导\n灰产仔的人生\n游戏玩家"
+      },
+      "finding_id": "finding:v2:9e8d11b86486ccf844f7c438bc7cd3e085ed2e080295e09dc84373fe61681cc8",
+      "id": "evidence:v2:1f66cd05b5437540bcc5bb26343a30d57a4bf0072228aebc44269d4c2e63636c",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:ba82065df1a419b556d8196c1e94e39c92cf9a392447dec5d834f2f5f5e31c82",
+      "parent_revision_id": "content-revision:v2:1448e7bc1bb833e5b48961861b16a543feb5f3c9553a38d89cd3e5673ed34348",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:45:52+08:00",
+        "locator": "media:asset:assets/7651219167357586723/videos/frames_00/f0010.jpg:2.867-2.867"
+      },
+      "type": "ocr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "刚开始跑分流水30万的时候警察已经上门按头了",
+        "summary": "评论聚焦跑分行为的法律后果（帮信罪/掩隐罪）及被抓经历，属风险警示与经验交流，无下注、平台推广或私域导流意图。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:9e8d11b86486ccf844f7c438bc7cd3e085ed2e080295e09dc84373fe61681cc8",
+      "id": "evidence:v2:2cff80dcdcbb95a4445bd3fb07f35d1ce27298edc6d49fce44b7e4fce81c3fe8",
+      "ordinal": 3,
+      "parent_post_id": "content:v2:ba82065df1a419b556d8196c1e94e39c92cf9a392447dec5d834f2f5f5e31c82",
+      "parent_revision_id": "content-revision:v2:1448e7bc1bb833e5b48961861b16a543feb5f3c9553a38d89cd3e5673ed34348",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:45:52+08:00",
+        "locator": "comment:7651289146376815417"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "日赚10万抽佣500万流水 日赚10万抽佣500万流水\n跑分中介张三的疯狂72小时#跑分 #犯罪 #非法 #案件",
+        "summary": "内容主旨为刑事法律咨询与反赌普法，明确提示‘犯罪’‘非法’及‘遵纪守法’，属于风险提示与新闻科普范畴，无投注平台导流或资金交易组织行为，适用豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:b2aaf36acabb3f91fef0652a6155f687aabc04d22fabaa87e1ce4570e433ec08",
+      "id": "evidence:v2:1256ff7459e496c15c5a6925967c111f1abd7182ec8ba6c10ddae25d17c09b32",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:668cf4902901b47df42e7ea903a87b063ba6dcad2c950248677d5e801055f345",
+      "parent_revision_id": "content-revision:v2:4bfffbabf49069e574efc99facdd39ff69d0a342ea30e40925f8645490e34037",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:49:22+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "色料是什么意思",
+        "summary": "评论区聚集大量赌博/跑分黑话（色料、盘口、车队）及非法资金结算求职意向（求带、嘴严、负债找工作），存在潜在代理招募与私域导流风险，符合赌博黑话+私域引导特征，需复核是否存在组织方。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:b2aaf36acabb3f91fef0652a6155f687aabc04d22fabaa87e1ce4570e433ec08",
+      "id": "evidence:v2:f4f156d06feb7eddd43071f2665212565e3fce2be1a1bcab1a5e2adb5cbf952f",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:668cf4902901b47df42e7ea903a87b063ba6dcad2c950248677d5e801055f345",
+      "parent_revision_id": "content-revision:v2:4bfffbabf49069e574efc99facdd39ff69d0a342ea30e40925f8645490e34037",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:49:22+08:00",
+        "locator": "comment:7491612310994895667"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7542215449006574874/videos/frames_00/f0002.jpg",
+        "original_text": "盘口直出棋牌二道,卡接回U免押金跑分\n点位15%--30%,一笔一结,日赚5000+",
+        "summary": "画面文字为反诈科普视频中引用的诈骗广告反面教材，结合视频整体语境与ASR解说，明确用于揭露黑产套路，无实际投注平台导流或资金交易意图。",
+        "timestamp_end": 7.0,
+        "timestamp_start": 7.0,
+        "translated_text": "无押跑分骗局\n🔥最新赚钱项目,usdt搬砖操作简单,无风险🔥\n盘口直出棋牌二道,卡接回U免押金跑分\n点位15%--30%,一笔一结,日赚5000+,\n先把U准备好,财务先给你转款+佣金,款\n收到秒回我U,小白包教包会,无押金✨\n📢咨询✈️️:@\n唯一iD✈️✈️:@\n认准单个6位数ID多一位数都是骗子,只有\n此号才是官方号\n资金安全冻结包赔"
+      },
+      "finding_id": "finding:v2:96b46a632e2cb9f21f736d86d59d8e68a18e15f37a4100ffdf7a562478175228",
+      "id": "evidence:v2:d70d78e6908db42305ea1ce1e164c3de242556c219729e58e40a34704562c0ae",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:0daee07891af4bb0ea0b440c52255e24892486c68eee57e07768deaa4e7673a5",
+      "parent_revision_id": "content-revision:v2:d38b43853ecdd835830162ae4ddb021810d967791a6b3453ba4027f4b80cdcee",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:51:45+08:00",
+        "locator": "media:asset:assets/7542215449006574874/videos/frames_00/f0002.jpg:7.000-7.000"
+      },
+      "type": "ocr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "知道什么是无鸦跑分骗局吗?当你在飞机或者其他平台上看到有人发什么无压跑分先款后优...可惜这又是骗局",
+        "summary": "语音全程为反诈教学与骗局揭秘，明确提示“黑产违法”“陷阱骗局”，属于合规科普与风险提示内容，符合反赌新闻科普豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:96b46a632e2cb9f21f736d86d59d8e68a18e15f37a4100ffdf7a562478175228",
+      "id": "evidence:v2:18fe5bd70da9e25ba8476620de305e835fa465998a233e03139c70201ed964b9",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:0daee07891af4bb0ea0b440c52255e24892486c68eee57e07768deaa4e7673a5",
+      "parent_revision_id": "content-revision:v2:d38b43853ecdd835830162ae4ddb021810d967791a6b3453ba4027f4b80cdcee",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:51:45+08:00",
+        "locator": "asr:source:video_audio"
+      },
+      "type": "asr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "经典黑产套路：无押跑分骗局 无押跑分骗局是最常见的黑产套路，目的就是骗那些想挣块钱的大笨蛋的 #跑分是什么意思 #跑分骗局 #黑产揭秘 #跑分 #套路揭秘",
+        "summary": "标题与正文明确标注“黑产揭秘”“套路揭秘”“骗局”，主旨为风险提示与反诈骗教育，未包含任何宣扬、诱导或组织参与赌博/跑分的意图。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:96b46a632e2cb9f21f736d86d59d8e68a18e15f37a4100ffdf7a562478175228",
+      "id": "evidence:v2:bb425bcd52afac932e0c495e07d4d99d95e2b7b0f9bf6a588860f6e03607ffad",
+      "ordinal": 3,
+      "parent_post_id": "content:v2:0daee07891af4bb0ea0b440c52255e24892486c68eee57e07768deaa4e7673a5",
+      "parent_revision_id": "content-revision:v2:d38b43853ecdd835830162ae4ddb021810d967791a6b3453ba4027f4b80cdcee",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:51:45+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "跑分 5000 多万获利 500 万 跑分 5000 多万获利 500 万，四人车队一人被抓，谜团待解？#车队 #亿元 #博彩虾王 #案件",
+        "summary": "标题及正文提及跑分、车队、博彩等敏感词，但结合视频OCR与ASR内容（陈律刑事法律咨询、法律援助、无罪缓刑取保、案件分析），整体语境为律师针对涉赌/洗钱跑分案件进行法律科普与风险提示，属于反赌/普法范畴，无投注平台、资金结算或组织参与赌博意图，符合知识包豁免规则。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:ee22a7dba71b1bb9db5ce5391fa6c63afc1465ec27addfea3931db15c5ac0b93",
+      "id": "evidence:v2:632c67a5f704863b5f39d38b42041d08ae6a928e5acd42a90aa1678b51e8f990",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:15058b2d59aae803782a34852665a5078302203509f6594e4b944eb7c03bf010",
+      "parent_revision_id": "content-revision:v2:23aff40afb350115a2f01c52dd9faa4e4649eb2321b6f68c2c290926cd96a08a",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:52:21+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7654886733040864527/videos/precise_frames_00/v1_m2_p4/v1_m2_p4_p05.jpg",
+        "original_text": "画面顶部文字‘绿泡泡破风+白 日过百万’，字幕显示‘常规盘’（v1_m2_p4:p05），结合moment_ocr中f0018的‘U商’及ASR中的‘破风控’、‘加白’、‘分分成’",
+        "summary": "出现‘破风+白’（破解风控加白名单）、‘日过百万’（巨额流水）、‘常规盘’、‘U商’等典型网赌/洗钱黑话，虽标注普法，但标题具有明显黑产广告特征，疑似借普法之名展示或引流非法资金结算业务。",
+        "timestamp_end": 105.73,
+        "timestamp_start": 105.73,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:1d23854cafebdba548d671cc884cb7583e3f136a8f9fe25cd8b4a348b55ffcd3",
+      "id": "evidence:v2:18e0dd9850a396ff2efbf93477683de25fefd7bdec5e028122056347881f0c89",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:c8ae4ee64db0f43e2dee5ce42f98b54fa42756d6dbf16d2e8dbe7d49474b4fa6",
+      "parent_revision_id": "content-revision:v2:18aaf57c81e9e9c62b293daa1dffb1c510926b6f05cbcde3ed8f3404322d5cc0",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:54:24+08:00",
+        "locator": "media:asset:assets/7654886733040864527/videos/precise_frames_00/v1_m2_p4/v1_m2_p4_p05.jpg:105.730-105.730"
+      },
+      "type": "keyframe"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "绿泡泡破风+白日过百万 找尿某症多人孤证能判我吗 常在河边走哪有不湿鞋#陈成均律师 #昭冠律所 #法律咨询 #尿毒症 #跑分",
+        "summary": "标题及正文包含网络黑灰产术语，但结合律师身份标签与法律咨询语境，属于对违法犯罪案例的普法讨论与风险提示，无宣扬或导流意图。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:1d23854cafebdba548d671cc884cb7583e3f136a8f9fe25cd8b4a348b55ffcd3",
+      "id": "evidence:v2:629a5c4f65e4d5dfd05ca97b428033a7b29a553aa0531b5f2c63b1b69d1cb050",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:c8ae4ee64db0f43e2dee5ce42f98b54fa42756d6dbf16d2e8dbe7d49474b4fa6",
+      "parent_revision_id": "content-revision:v2:18aaf57c81e9e9c62b293daa1dffb1c510926b6f05cbcde3ed8f3404322d5cc0",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:54:24+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "assets/7654886733040864527/videos/frames_00/f0001.jpg",
+        "original_text": "绿泡泡破风+白 日过百万 找尿某症 多人孤证能判我吗 陈成均 律师 昭冠律所-创始人 常在河边走 哪有不湿鞋 普法例子 无不良引导 嘉宾言论不代表本台观点",
+        "summary": "OCR命中“破风”、“加白”、“盘子”等涉赌/洗钱黑话，但画面显著位置标注“普法例子 无不良引导”及律师执业信息，ASR内容均为法律风险解析与反赌警示，符合科普豁免条件。",
+        "timestamp_end": 0.0,
+        "timestamp_start": 0.0,
+        "translated_text": "绿泡泡破风+白 日过百万\n找尿某症 多人孤证能判我吗\n陈成均 律师\n昭冠律所-创始人\n常在河边走 哪有不湿鞋"
+      },
+      "finding_id": "finding:v2:1d23854cafebdba548d671cc884cb7583e3f136a8f9fe25cd8b4a348b55ffcd3",
+      "id": "evidence:v2:29492f4cc4e361f7ed7138be6eec75dee8440c747cc9a784012233a3a60da3f7",
+      "ordinal": 3,
+      "parent_post_id": "content:v2:c8ae4ee64db0f43e2dee5ce42f98b54fa42756d6dbf16d2e8dbe7d49474b4fa6",
+      "parent_revision_id": "content-revision:v2:18aaf57c81e9e9c62b293daa1dffb1c510926b6f05cbcde3ed8f3404322d5cc0",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:54:24+08:00",
+        "locator": "media:asset:assets/7654886733040864527/videos/frames_00/f0001.jpg:0.000-0.000"
+      },
+      "type": "ocr"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "新思路，已跑完流程，我抽成",
+        "summary": "评论区出现用户自发讨论跑分抽成、结算方式及上下游对接，涉及资金结算黑话，但属用户互动聚集，非作者组织或导流，结合视频普法主旨，风险等级下调。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:1d23854cafebdba548d671cc884cb7583e3f136a8f9fe25cd8b4a348b55ffcd3",
+      "id": "evidence:v2:307d258c3fb8c9fd105d50c23e0f840abe675b3fadcee4dfeeb5e44089e7abe7",
+      "ordinal": 4,
+      "parent_post_id": "content:v2:c8ae4ee64db0f43e2dee5ce42f98b54fa42756d6dbf16d2e8dbe7d49474b4fa6",
+      "parent_revision_id": "content-revision:v2:18aaf57c81e9e9c62b293daa1dffb1c510926b6f05cbcde3ed8f3404322d5cc0",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:54:24+08:00",
+        "locator": "comment:7659659025366172451"
+      },
+      "type": "comment"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "日吞2000万！小镇青年7天洗出北上广一套房#赚钱 #公户 #法律咨询 #跑分",
+        "summary": "视频及正文明确标注为普法例子与刑事法律咨询，核心主旨为揭示跑分、开设赌场等违法犯罪后果并进行风险提示，符合知识包中“反赌新闻科普/风险提示”的豁免条件。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:915841c7954cd7467075a65329cf9bc201c63574a93b1416d75d785ba32ed232",
+      "id": "evidence:v2:7d9ce6288ba00ec15afdbc715a4ef278a086b8e14a6541be0501ca5e1ef6c0f6",
+      "ordinal": 1,
+      "parent_post_id": "content:v2:67b33b80f35d19de777f8f1184b8fe9952acdc2ab12f05dcc41041de9a8cb179",
+      "parent_revision_id": "content-revision:v2:9bd615b1643e5e9050ae7395e5b06694d840522740f227397364fcd4bf97c8ec",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:56:46+08:00",
+        "locator": "text:desc"
+      },
+      "type": "text"
+    },
+    {
+      "content": {
+        "asset_path": "",
+        "original_text": "有码有车",
+        "summary": "评论区聚集大量提供对公账户、收款码及跑分行业黑话的留言，呈现资金结算与黑灰产招募特征。但缺乏明确的投注平台、赔率盘口或赌博交易直接路径，且主视频为普法警示语境，故单条证据风险定为低。",
+        "timestamp_end": null,
+        "timestamp_start": null,
+        "translated_text": ""
+      },
+      "finding_id": "finding:v2:915841c7954cd7467075a65329cf9bc201c63574a93b1416d75d785ba32ed232",
+      "id": "evidence:v2:9f7a7398f3e6a2bbfb91c6d9e4fbe48c9fb625c20036504f60046af2f472aebe",
+      "ordinal": 2,
+      "parent_post_id": "content:v2:67b33b80f35d19de777f8f1184b8fe9952acdc2ab12f05dcc41041de9a8cb179",
+      "parent_revision_id": "content-revision:v2:9bd615b1643e5e9050ae7395e5b06694d840522740f227397364fcd4bf97c8ec",
+      "source": {
+        "availability": "available",
+        "captured_at": "2026-07-10T01:56:46+08:00",
+        "locator": "comment:7543324212665713468"
+      },
+      "type": "comment"
+    }
+  ],
+  "findings": [
+    {
+      "categories": [],
+      "completed_at": "2026-07-10T01:34:32+08:00",
+      "decision": "review",
+      "id": "finding:v2:c334554ec258b92a803bb82267b299cad94fcab897b242855ac8253a8009a9c4",
+      "post_id": "content:v2:e70b63c7ad53e0d5e14e971855dcbc5c15f9bac7e13002af24ad6f4343df5d21",
+      "post_revision_id": "content-revision:v2:d684b7f8268651aa7d5bff3393275fd0d47ce6393641965fd75fee45edf60603",
+      "risk_level": "low",
+      "summary": "律师讲解大学生出租账号参与跑分及菠菜洗钱被强制传唤的普法案例，明确提示法律风险与反诈警示。评论区存在部分用户讨论博彩点位及求接活留言。"
+    },
+    {
+      "categories": [
+        "资金结算",
+        "赌博交易"
+      ],
+      "completed_at": "2026-07-10T01:49:56+08:00",
+      "decision": "review",
+      "id": "finding:v2:2cb409b675f12611e539baf57bff3b8cd7b82db29b79230cc60ec342e98f9e58",
+      "post_id": "content:v2:4a904a6bdaead3b8aa053bf57644c50b7484f6c61faa7d59f859201ad57bb733",
+      "post_revision_id": "content-revision:v2:aa95ccde71b6db9ccc9ce8a58e59257e7026e109b6492466e69fdb0f46b26bf4",
+      "risk_level": "low",
+      "summary": "视频科普揭秘“跑分”洗钱流程，提及“菠菜料”“红料”等黑产术语及资金流转路径。全片明确强调该行为属违法犯罪，警示用户勿参与、勿出租银行卡，整体为反诈反赌教育性质，无导流或交易意图。"
+    },
+    {
+      "categories": [],
+      "completed_at": "2026-07-10T01:57:38+08:00",
+      "decision": "review",
+      "id": "finding:v2:5633e8d74b4491998168606cc89aab42e385aa745ba376aa0c5efdb8c9c20dce",
+      "post_id": "content:v2:12062a136671f8f4e452e0e5a33b772f1380e28452b54dfe72fc2028261f312e",
+      "post_revision_id": "content-revision:v2:1c39ae5dd0265a9dedd1110d53bb5282e4ddbe37cac7ae3fd496c37c035c1020",
+      "risk_level": "low",
+      "summary": "刑事律师通过视频科普跑分接收网络赌博资金（菠菜料）的法律风险，警示参与者可能涉嫌帮信罪或掩隐罪，并揭露地下黑产黑吃黑现象，呼吁公众收手守法。"
+    },
+    {
+      "categories": [
+        "赌博博彩"
+      ],
+      "completed_at": "2026-07-10T02:05:17+08:00",
+      "decision": "pass",
+      "id": "finding:v2:c8de4be9da466ad5afe39b4ba1c7f81cbeb98f9e8766286599e6f617bf57b1c5",
+      "post_id": "content:v2:17e52ce30cf4220122d6842f29468b77520ab1fb48fca030bb17557c271328a3",
+      "post_revision_id": "content-revision:v2:5647564dd84fe3c1d451d8d46e7a964b62e465d1e50f43abe0566157205f3cc8",
+      "risk_level": "none",
+      "summary": "视频以反诈科普形式揭秘跑分、洗钱、杀猪盘等黑灰产暗语与资金流转套路，警示参与违法犯罪将留下案底。评论区多为网友分享经历或询问灰色兼职，无赌博投注、平台导流或资金交易引导。"
+    },
+    {
+      "categories": [
+        "资金结算"
+      ],
+      "completed_at": "2026-07-10T02:10:51+08:00",
+      "decision": "review",
+      "id": "finding:v2:17166421ec36b61f4adf338a6e6e4793a6e91497755a5f4adea0cd6be9d3cfb3",
+      "post_id": "content:v2:2a7d5915e1afc925f7374e23fbe311175671461152690d2285d89d3407ff7313",
+      "post_revision_id": "content-revision:v2:db948b32d95a450d310412984bdb095774fd9a1c214d41fab415d3d72b517ec1",
+      "risk_level": "low",
+      "summary": "视频为刑事律师普法内容，通过真实案例讲解参与赌博资金结算车队（跑分）的法律后果与刑期，明确提示“再穷也不能犯罪”。画面与口播均标注“普法案例 无不良引导”。评论区存在部分用户询问参与方式，但作者未回应或提供导流路径，整体属反赌警示与法律科普。"
+    },
+    {
+      "categories": [],
+      "completed_at": "2026-07-10T02:16:45+08:00",
+      "decision": "review",
+      "id": "finding:v2:f6263caab1b3576fd0e66d07979549b44dd4d4a62ae7615a444ddca4c325e0fc",
+      "post_id": "content:v2:888acd036b233bd0314d475f8208b2a151df43760cd72104a6c2addf57921322",
+      "post_revision_id": "content-revision:v2:62092fb4524afa87a584b2cfef7d17e9d34412ef43ea169eebc3369bec140865",
+      "risk_level": "low",
+      "summary": "刑事律师讲解跑分车队涉嫌掩饰隐瞒犯罪所得罪案例，提及获利金额与行业黑话。视频明确标注“普法案例，无不良引导”，结尾强烈警示“千万不要做”，整体为法律科普与风险提示，无导流或交易意图。"
+    },
+    {
+      "categories": [
+        "赌博博彩"
+      ],
+      "completed_at": "2026-07-10T02:21:54+08:00",
+      "decision": "review",
+      "id": "finding:v2:4e6821a32b53a66a6a53775d77021240300e9d955367514bb9909abc520a8a30",
+      "post_id": "content:v2:3f833a36c6c68f6c67a3099a8acc4618bc77d5aa5eeb3149536eda2d9c85fd27",
+      "post_revision_id": "content-revision:v2:ce2beb18d383c6a3e99b16266b166007f0d4bbdeb16bc5009f559025b26c3c2c",
+      "risk_level": "low",
+      "summary": "该视频为律师普法内容，通过真实案例讲解“跑分”资金结算的法律风险与诈骗套路，明确提示参与者将面临封卡、拘留等严重后果，旨在警示公众远离非法活动。"
+    },
+    {
+      "categories": [],
+      "completed_at": "2026-07-10T02:25:14+08:00",
+      "decision": "review",
+      "id": "finding:v2:5c28fbcd175070f82ac5302bbfd94d7b225a39d177297b40bb585911fd53439c",
+      "post_id": "content:v2:37febbf5e9e8ae5b05a8da73f07d7720cd1b0c20dfa71d74e87436e0434fe144",
+      "post_revision_id": "content-revision:v2:5043db388f38fb1bccb261454f5004d124c0c04e32a799116b015d542387fcb3",
+      "risk_level": "low",
+      "summary": "视频为刑事律师普法内容，通过真实咨询案例讲解使用对公账户为博彩平台跑分洗钱的刑事风险与判刑标准。画面明确标注无不良引导，旨在警示法律后果并劝阻违法行为。评论区聚集讨论跑分黑话与公户资源，但作者未进行任何导流、招募或提供交易路径，符合法律科普豁免条件。"
+    },
+    {
+      "categories": [
+        "赌博博彩"
+      ],
+      "completed_at": "2026-07-10T02:29:52+08:00",
+      "decision": "pass",
+      "id": "finding:v2:7e7c6adc21b08db1b0c088c8bb60023597af7920b0ef8d220dfa00ba20bf36d6",
+      "post_id": "content:v2:d0b38c0ac875151bafc35c2031f69a8320cbb79c139d00aa78e5fc88c079b26e",
+      "post_revision_id": "content-revision:v2:1b6df6e4eaf66a1fbb23d575881ea2f975a04ee2998eeef632e500576ec657b5",
+      "risk_level": "none",
+      "summary": "成都中院熊猫法官普法视频，通过剧情演绎审问涉嫌跑分洗钱的嫌疑人，科普掩饰隐瞒犯罪所得罪，警示公众勿贪图快钱参与非法资金转移。"
+    },
+    {
+      "categories": [],
+      "completed_at": "2026-07-10T02:35:44+08:00",
+      "decision": "review",
+      "id": "finding:v2:8bf4d158a3ca78cf91b88201b69e5c9220d89cea7d15c893cfdc79a75bf3058b",
+      "post_id": "content:v2:4effca9e5d1542134b2dd42a3c13fd607c6117d13d830d0ab2df0c13b7dc6a8a",
+      "post_revision_id": "content-revision:v2:007ceb33363ddecccc4402ec0f354890e98c41180b2805ef04abcc04ca7d6387",
+      "risk_level": "low",
+      "summary": "律师通过案例讲解介绍他人参与跑分洗钱1500万的定罪量刑后果，视频明确标注普法无不良引导。评论区出现部分跑分灰产黑话与求职留言，但整体为法律警示内容。"
+    },
+    {
+      "categories": [
+        "资金结算"
+      ],
+      "completed_at": "2026-07-10T02:41:34+08:00",
+      "decision": "reject",
+      "id": "finding:v2:c3ecb8d7ed398158587a2c43b1c7e7ac6ab83d9650757ae2c81008f81af5d3d5",
+      "post_id": "content:v2:586fcb05c2da1cf5030e6380ed65040b21349283bf65ab8b1a66ad28a8c6d329",
+      "post_revision_id": "content-revision:v2:5eda61081656ae678fad3f12f4e16ca19c2cb0fd791e3546299dcae7095217de",
+      "risk_level": "high",
+      "summary": "视频为律师普法内容，明确警示参与赌博平台跑分车队涉嫌帮信罪、开设赌场罪等法律风险，主旨为反赌科普与风险提示。但评论区聚集大量用户使用“菠菜料”“车队”“盘口”“有卡”等黑话，明确表达寻找赌博资金结算渠道与参与跑分的意图。"
+    },
+    {
+      "categories": [
+        "赌博博彩"
+      ],
+      "completed_at": "2026-07-10T02:49:56+08:00",
+      "decision": "pass",
+      "id": "finding:v2:1e99bb5d8d4c2acb2ea3569c232363c7082951f5db00eaec3e39f4e0ac7091de",
+      "post_id": "content:v2:69fd7b5d77ee01b965524c73f401bc430a6209fb3b0679617e7effeaaabbaa49",
+      "post_revision_id": "content-revision:v2:1b251d976830a6169ca47fd4f6d777e12145b5e147fd02fabd6ad5a7aee329e0",
+      "risk_level": "none",
+      "summary": "视频为律师讲解灰黑产案件中口供认定的重要性。提及曾办理赌博平台上下分案件，分析流水推算获利与实际点位的差异，警示勿签认不符口供，属法律科普。"
+    },
+    {
+      "categories": [
+        "赌博博彩"
+      ],
+      "completed_at": "2026-07-10T02:57:55+08:00",
+      "decision": "review",
+      "id": "finding:v2:9d93226140a6fb7383b528fd5ee812b68ef1942f42e3a06157e0ebf8262e3232",
+      "post_id": "content:v2:7ef2fb34523541566335c821a847925d1de358280d2eff4fcfb3c9647a51ab34",
+      "post_revision_id": "content-revision:v2:6675a69834ee34f19f0ec3e1f676b7d48beeceec1cc897cedf44219cea4c6236",
+      "risk_level": "medium",
+      "summary": "该视频为反诈普法剧情短剧，通过情景演绎揭露跑分洗钱手法及法律后果。标题与画面均强调违法坐牢风险，评论区多为受害者经历分享与反诈讨论，无赌博投注、平台导流或资金交易引导，符合科普警示豁免规则。"
+    },
+    {
+      "categories": [],
+      "completed_at": "2026-07-10T03:05:18+08:00",
+      "decision": "review",
+      "id": "finding:v2:ab8fb0a128c083683c7501d9822540faed3f744c2c9ced6d119b6c0e5a46ade6",
+      "post_id": "content:v2:89195eb91688bcbd8f7889730c910b83f3725cbbecc1884b223d3e727377a617",
+      "post_revision_id": "content-revision:v2:6440adfc33fae8d82f105b74fe8ed9c1dfddd966c4e686f9a9b415526677a4d0",
+      "risk_level": "low",
+      "summary": "视频为刑事律师普法内容，以“30岁对接15个盘口获利20万U”为案例，讲解掩饰隐瞒犯罪所得罪的量刑标准。画面明确标注“普法案例，无不良引导”，无平台推广或资金导流。"
+    },
+    {
+      "categories": [],
+      "completed_at": "2026-07-10T03:13:22+08:00",
+      "decision": "review",
+      "id": "finding:v2:d900fdce29e459c99dd5239aedfdd80083936a2ed4b22ac5007554eef4dcc7cf",
+      "post_id": "content:v2:ecd34e2961b521d4a32c593692fdb5a6ff9bdf914f92d514e632b9a99abe372c",
+      "post_revision_id": "content-revision:v2:3f1a624319c1f0ad2aae4a8745cee1549fb9416e027b27dbc0cb43b967e9635a",
+      "risk_level": "low",
+      "summary": "视频由刑事律师主讲，解析“卡接回U”与“车队取现”等黑产资金流转区别，科普不同涉赌资金对应的刑事罪名与量刑标准，属法律风险提示与反赌普法，无投注引导或资金交易路径。"
+    },
+    {
+      "categories": [],
+      "completed_at": "2026-07-10T03:16:12+08:00",
+      "decision": "review",
+      "id": "finding:v2:72b497c51b30c20b8adc434128ad25de88942b0a19ddd3f875364cf0512ea629",
+      "post_id": "content:v2:ae345dd5e8cb3da5c42713d8738b9fa6dd01d02a0e2ffa5c38852042fd3dc7eb",
+      "post_revision_id": "content-revision:v2:bc05453627a31942fe8cc1f61ad978b394a2dd7c07a4e411477a9adc7fd25272",
+      "risk_level": "low",
+      "summary": "视频为刑事律师普法内容，以26岁人员参与跑分洗钱案为例，讲解流水、获利金额及可能面临的刑事处罚。画面与字幕明确标注“普法案例 无不良引导”，评论区多为网友询问法律概念或讨论案件真实性，无赌博投注、平台导流或资金交易引导。"
+    },
+    {
+      "categories": [
+        "赌博博彩"
+      ],
+      "completed_at": "2026-07-10T03:22:09+08:00",
+      "decision": "pass",
+      "id": "finding:v2:99696548fb4885983f529fecdfbf9d1d62f9b11c455e61095ac7e8f541b655c1",
+      "post_id": "content:v2:272edb46d72b4514f63a57652c7f7060d692b90440c4bbd2b8f2507db1dfa0e4",
+      "post_revision_id": "content-revision:v2:b1dbd80a2f7dc8244c9e1b363278de55dcb0d6dfb7e691b265919a3df5197d8a",
+      "risk_level": "none",
+      "summary": "该视频为警方发布的普法警示内容，通过采访涉嫌帮信罪“跑分”洗钱嫌疑人，揭露提供银行卡参与资金结算的违法性质与法律后果，旨在提醒公众防范电信诈骗与违法犯罪。评论区存在部分网友询问参与方式或调侃，但无作者导流或组织行为。"
+    },
+    {
+      "categories": [
+        "赌博博彩"
+      ],
+      "completed_at": "2026-07-10T03:24:40+08:00",
+      "decision": "pass",
+      "id": "finding:v2:82121bacd24491d233cc20dca1a8f742703b12a65b7abadf54edf1f998f29a28",
+      "post_id": "content:v2:357bc1938d196c5ab512c638a5b19afa365a01b6cd7608e6d37db27f22404fc2",
+      "post_revision_id": "content-revision:v2:56c55038b7e7b0cc18f38680d0228656e02f589730b1b8e468affe80373a0384",
+      "risk_level": "none",
+      "summary": "视频为律师普法内容，讲解跑分涉及的帮信罪、掩隐罪及诈骗罪立案标准，明确提示属洗钱犯罪并呼吁收手。评论区多为网友咨询涉案法律后果，无赌博推广或资金交易组织行为。"
+    },
+    {
+      "categories": [
+        "赌博博彩"
+      ],
+      "completed_at": "2026-07-10T03:37:48+08:00",
+      "decision": "review",
+      "id": "finding:v2:9e8d11b86486ccf844f7c438bc7cd3e085ed2e080295e09dc84373fe61681cc8",
+      "post_id": "content:v2:ba82065df1a419b556d8196c1e94e39c92cf9a392447dec5d834f2f5f5e31c82",
+      "post_revision_id": "content-revision:v2:1448e7bc1bb833e5b48961861b16a543feb5f3c9553a38d89cd3e5673ed34348",
+      "risk_level": "low",
+      "summary": "视频以游戏副本形式演绎跑分灰产经历，结合防诈骗标签与警方抓捕结局进行反诈警示。评论区多讨论法律风险与真实案例，无平台推广或投注引导。"
+    },
+    {
+      "categories": [
+        "代理推广",
+        "资金结算"
+      ],
+      "completed_at": "2026-07-10T03:43:58+08:00",
+      "decision": "review",
+      "id": "finding:v2:b2aaf36acabb3f91fef0652a6155f687aabc04d22fabaa87e1ce4570e433ec08",
+      "post_id": "content:v2:668cf4902901b47df42e7ea903a87b063ba6dcad2c950248677d5e801055f345",
+      "post_revision_id": "content-revision:v2:4bfffbabf49069e574efc99facdd39ff69d0a342ea30e40925f8645490e34037",
+      "risk_level": "medium",
+      "summary": "视频为律师讲解跑分中介洗钱诈骗案件的刑事法律咨询内容，强调遵纪守法与法律后果。评论区聚集大量涉及赌博黑话与非法资金结算的求职意向。"
+    },
+    {
+      "categories": [
+        "赌博博彩"
+      ],
+      "completed_at": "2026-07-10T03:52:53+08:00",
+      "decision": "review",
+      "id": "finding:v2:96b46a632e2cb9f21f736d86d59d8e68a18e15f37a4100ffdf7a562478175228",
+      "post_id": "content:v2:0daee07891af4bb0ea0b440c52255e24892486c68eee57e07768deaa4e7673a5",
+      "post_revision_id": "content-revision:v2:d38b43853ecdd835830162ae4ddb021810d967791a6b3453ba4027f4b80cdcee",
+      "risk_level": "low",
+      "summary": "该视频为反诈科普内容，通过展示并拆解“无押跑分”诈骗广告，揭露黑灰产利用假钱包、二维码授权等手段骗取虚拟币的套路，旨在警示用户防范黑产陷阱，无实际赌博或资金导流行为。"
+    },
+    {
+      "categories": [
+        "赌博博彩"
+      ],
+      "completed_at": "2026-07-10T04:04:20+08:00",
+      "decision": "pass",
+      "id": "finding:v2:ee22a7dba71b1bb9db5ce5391fa6c63afc1465ec27addfea3931db15c5ac0b93",
+      "post_id": "content:v2:15058b2d59aae803782a34852665a5078302203509f6594e4b944eb7c03bf010",
+      "post_revision_id": "content-revision:v2:23aff40afb350115a2f01c52dd9faa4e4649eb2321b6f68c2c290926cd96a08a",
+      "risk_level": "none",
+      "summary": "视频为刑事律师讲解跑分车队涉案千万被抓案例，提供法律咨询与风险提示。内容提及跑分、菠菜、盘口等词汇，但主旨为普法与案件分析，无赌博推广或资金导流。"
+    },
+    {
+      "categories": [
+        "资金结算"
+      ],
+      "completed_at": "2026-07-10T04:20:26+08:00",
+      "decision": "review",
+      "id": "finding:v2:1d23854cafebdba548d671cc884cb7583e3f136a8f9fe25cd8b4a348b55ffcd3",
+      "post_id": "content:v2:c8ae4ee64db0f43e2dee5ce42f98b54fa42756d6dbf16d2e8dbe7d49474b4fa6",
+      "post_revision_id": "content-revision:v2:18aaf57c81e9e9c62b293daa1dffb1c510926b6f05cbcde3ed8f3404322d5cc0",
+      "risk_level": "low",
+      "summary": "视频为律师陈成均进行的法律科普，以“跑分”、“破风”等黑灰产案例为切入点，解析多人指认、孤证定罪等法律问题。画面明确标注“普法例子 无不良引导”。评论区存在部分用户讨论抽成与结算。"
+    },
+    {
+      "categories": [
+        "资金结算"
+      ],
+      "completed_at": "2026-07-10T04:27:53+08:00",
+      "decision": "review",
+      "id": "finding:v2:915841c7954cd7467075a65329cf9bc201c63574a93b1416d75d785ba32ed232",
+      "post_id": "content:v2:67b33b80f35d19de777f8f1184b8fe9952acdc2ab12f05dcc41041de9a8cb179",
+      "post_revision_id": "content-revision:v2:9bd615b1643e5e9050ae7395e5b06694d840522740f227397364fcd4bf97c8ec",
+      "risk_level": "low",
+      "summary": "视频为律师刑事法律咨询内容，以夸张标题引入，实际主旨为普法教育，解析跑分、诈骗、开设赌场等行为的法律后果，并明确提示防范风险。评论区聚集大量提供对公账户、商家码及跑分黑话的留言，存在资金结算与黑灰产导流嫌疑，但整体语境为反诈科普。"
+    }
+  ],
+  "posts": [
+    {
+      "author": {
+        "account_id": "account:v2:567076a67cc1a1a51985c3c7ae3a8333cfe42e3df35860bfc17ee6ef67c0c9b6",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813_bbb41b8839974a218d874eb1a1c6b9e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳刑事 陈成均律师",
+        "platform": "douyin"
+      },
+      "body": "跑五千万只赚一千块 找大学生注册某鱼某多多 在家里被强制传唤#陈成均律师 #昭冠律所 #法律咨询 #跑分 #大学生",
+      "finding_id": "finding:v2:c334554ec258b92a803bb82267b299cad94fcab897b242855ac8253a8009a9c4",
+      "id": "content:v2:e70b63c7ad53e0d5e14e971855dcbc5c15f9bac7e13002af24ad6f4343df5d21",
+      "revision_id": "content-revision:v2:d684b7f8268651aa7d5bff3393275fd0d47ce6393641965fd75fee45edf60603",
+      "source": {
+        "captured_at": "2026-07-10T01:25:04+08:00",
+        "platform": "douyin",
+        "published_at": "1780050900",
+        "url": "https://www.douyin.com/video/7644950666976283945"
+      },
+      "title": "跑五千万只赚一千块 找大学生注册某鱼某多多 在家里被强制传唤#陈成均律师 #昭冠律所 #法律咨询 #跑分 #大学生"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:e26b3e34d6e7b3fe1fde5ec23f2acc15a3451a115b40799726435717b76182bb",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813_o03gDnAYeAIL3IBfAG7SFgEMIIBGLBA0eCAQDa.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "黑牛先生",
+        "platform": "douyin"
+      },
+      "body": "一天获利上万的跑分揭秘，这些所谓的赚钱项目都是违法犯罪的行为，都不能做，小心变成炮灰！#跑分 #洗钱 #黑产 #跑分是什么意思 #车队",
+      "finding_id": "finding:v2:2cb409b675f12611e539baf57bff3b8cd7b82db29b79230cc60ec342e98f9e58",
+      "id": "content:v2:4a904a6bdaead3b8aa053bf57644c50b7484f6c61faa7d59f859201ad57bb733",
+      "revision_id": "content-revision:v2:aa95ccde71b6db9ccc9ce8a58e59257e7026e109b6492466e69fdb0f46b26bf4",
+      "source": {
+        "captured_at": "2026-07-10T01:26:20+08:00",
+        "platform": "douyin",
+        "published_at": "1765880543",
+        "url": "https://www.douyin.com/video/7584399113790491944"
+      },
+      "title": "一天获利上万的跑分揭秘，这些所谓的赚钱项目都是违法犯罪的行为，都不能做，小心变成炮灰！#跑分 #洗钱 #黑产 #跑分是什么意思 #车队"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:b154a9a9bc8ba317caaed3f218ce3832e3d2e91b837dbffa49a07a6c87e2da04",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_855d73ad247440c470086c4bab424130.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "重庆张律师团队",
+        "platform": "douyin"
+      },
+      "body": "跑分接的菠菜料就会很安全，真的是这样吗？在飞机上无非是你骗我，我骗你？#刑事律师 #帮信罪 #跑分 #网络赌博 #开设赌场罪",
+      "finding_id": "finding:v2:5633e8d74b4491998168606cc89aab42e385aa745ba376aa0c5efdb8c9c20dce",
+      "id": "content:v2:12062a136671f8f4e452e0e5a33b772f1380e28452b54dfe72fc2028261f312e",
+      "revision_id": "content-revision:v2:1c39ae5dd0265a9dedd1110d53bb5282e4ddbe37cac7ae3fd496c37c035c1020",
+      "source": {
+        "captured_at": "2026-07-10T01:27:56+08:00",
+        "platform": "douyin",
+        "published_at": "1734162854",
+        "url": "https://www.douyin.com/video/7448172639962664230"
+      },
+      "title": "跑分接的菠菜料就会很安全，真的是这样吗？在飞机上无非是你骗我，我骗你？#刑事律师 #帮信罪 #跑分 #网络赌博 #开设赌场罪"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:b64822bc882a6987530d1a792a1f4226e9a60295d5e22fa47254f93a5d9bd6a1",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813c000-ce_ocAEASP2ibnIfEnA6ADqHEokeNr9E0FwAF0Afw.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "揭秘研究所",
+        "platform": "douyin"
+      },
+      "body": "揭秘黑灰产暗语：从“跑分”到“车队”，每一步都是在犯罪 #揭秘 #灰产 #跑分#反诈 #我要上热门🔥",
+      "finding_id": "finding:v2:c8de4be9da466ad5afe39b4ba1c7f81cbeb98f9e8766286599e6f617bf57b1c5",
+      "id": "content:v2:17e52ce30cf4220122d6842f29468b77520ab1fb48fca030bb17557c271328a3",
+      "revision_id": "content-revision:v2:5647564dd84fe3c1d451d8d46e7a964b62e465d1e50f43abe0566157205f3cc8",
+      "source": {
+        "captured_at": "2026-07-10T01:30:28+08:00",
+        "platform": "douyin",
+        "published_at": "1757376900",
+        "url": "https://www.douyin.com/video/7547713519186201910"
+      },
+      "title": "揭秘黑灰产暗语：从“跑分”到“车队”，每一步都是在犯罪 #揭秘 #灰产 #跑分#反诈 #我要上热门🔥"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:12df5d908cee51d0714a0a1c2abdee23f1e8d5b68d1491238cb68a824ebead71",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_4fd48c5b4e862ad494c3602c9e6404e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳李凯律师刑事法律在线咨询",
+        "platform": "douyin"
+      },
+      "body": "33岁干车队，接一道空降，5个月获利300万，会判多久？ #深圳律师 #刑事律师 #跑分",
+      "finding_id": "finding:v2:17166421ec36b61f4adf338a6e6e4793a6e91497755a5f4adea0cd6be9d3cfb3",
+      "id": "content:v2:2a7d5915e1afc925f7374e23fbe311175671461152690d2285d89d3407ff7313",
+      "revision_id": "content-revision:v2:db948b32d95a450d310412984bdb095774fd9a1c214d41fab415d3d72b517ec1",
+      "source": {
+        "captured_at": "2026-07-10T01:31:45+08:00",
+        "platform": "douyin",
+        "published_at": "1731835735",
+        "url": "https://www.douyin.com/video/7438177766056480034"
+      },
+      "title": "33岁干车队，接一道空降，5个月获利300万，会判多久？ #深圳律师 #刑事律师 #跑分"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:12df5d908cee51d0714a0a1c2abdee23f1e8d5b68d1491238cb68a824ebead71",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_4fd48c5b4e862ad494c3602c9e6404e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳李凯律师刑事法律在线咨询",
+        "platform": "douyin"
+      },
+      "body": "跑分车队，一道空降料， 获利80万U，会判多久？ 跑分车队涉嫌掩饰隐瞒犯罪所得收益罪，最高可判7年有期徒刑，大家千万不要做。#跑分 #掩饰隐瞒 #刑事律师 #深圳律师",
+      "finding_id": "finding:v2:f6263caab1b3576fd0e66d07979549b44dd4d4a62ae7615a444ddca4c325e0fc",
+      "id": "content:v2:888acd036b233bd0314d475f8208b2a151df43760cd72104a6c2addf57921322",
+      "revision_id": "content-revision:v2:62092fb4524afa87a584b2cfef7d17e9d34412ef43ea169eebc3369bec140865",
+      "source": {
+        "captured_at": "2026-07-10T01:32:15+08:00",
+        "platform": "douyin",
+        "published_at": "1728643582",
+        "url": "https://www.douyin.com/video/7424467034068618550"
+      },
+      "title": "跑分车队，一道空降料， 获利80万U，会判多久？ 跑分车队涉嫌掩饰隐瞒犯罪所得收益罪，最高可判7年有期徒刑，大家千万不要做。#跑分 #掩饰隐瞒 #刑事律师 #深圳律师"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:0bdbe475db782566648c3bffd878ff1a552f6985b19e748dcc29c10e7530d0e3",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813c001_ogADApgCvm6EAXF9fpQADdAC6HgfuDrUAH6IQD.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "刘济律师｜柳州",
+        "platform": "douyin"
+      },
+      "body": "都2024年了，居然还有人去“跑分”，跑几天的利润还抵不过被抓时候的法律成本#柳州 #柳州律师 #律师 #法律咨询",
+      "finding_id": "finding:v2:4e6821a32b53a66a6a53775d77021240300e9d955367514bb9909abc520a8a30",
+      "id": "content:v2:3f833a36c6c68f6c67a3099a8acc4618bc77d5aa5eeb3149536eda2d9c85fd27",
+      "revision_id": "content-revision:v2:ce2beb18d383c6a3e99b16266b166007f0d4bbdeb16bc5009f559025b26c3c2c",
+      "source": {
+        "captured_at": "2026-07-10T01:32:46+08:00",
+        "platform": "douyin",
+        "published_at": "1711474469",
+        "url": "https://www.douyin.com/video/7350726740110527807"
+      },
+      "title": "都2024年了，居然还有人去“跑分”，跑几天的利润还抵不过被抓时候的法律成本#柳州 #柳州律师 #律师 #法律咨询"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:12df5d908cee51d0714a0a1c2abdee23f1e8d5b68d1491238cb68a824ebead71",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_4fd48c5b4e862ad494c3602c9e6404e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳李凯律师刑事法律在线咨询",
+        "platform": "douyin"
+      },
+      "body": "用对公户跑分，博彩的流水，会要判刑吗？ #跑分 #深圳律师 #开设赌场罪 #刑事律师",
+      "finding_id": "finding:v2:5c28fbcd175070f82ac5302bbfd94d7b225a39d177297b40bb585911fd53439c",
+      "id": "content:v2:37febbf5e9e8ae5b05a8da73f07d7720cd1b0c20dfa71d74e87436e0434fe144",
+      "revision_id": "content-revision:v2:5043db388f38fb1bccb261454f5004d124c0c04e32a799116b015d542387fcb3",
+      "source": {
+        "captured_at": "2026-07-10T01:33:16+08:00",
+        "platform": "douyin",
+        "published_at": "1733216874",
+        "url": "https://www.douyin.com/video/7444109685201866024"
+      },
+      "title": "用对公户跑分，博彩的流水，会要判刑吗？ #跑分 #深圳律师 #开设赌场罪 #刑事律师"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:1e4ae5e545ca9525b74b0766e283f253496f33790c87f748a204ba1617c9d212",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_bdfd1a1fa34dadf5f0c22ca127a3dfe1.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "成都中院",
+        "platform": "douyin"
+      },
+      "body": "独家对话：跑分团队！ #抖来普法2024 #电信诈骗 #诈骗 #成都中院 #熊猫法官普法",
+      "finding_id": "finding:v2:7e7c6adc21b08db1b0c088c8bb60023597af7920b0ef8d220dfa00ba20bf36d6",
+      "id": "content:v2:d0b38c0ac875151bafc35c2031f69a8320cbb79c139d00aa78e5fc88c079b26e",
+      "revision_id": "content-revision:v2:1b6df6e4eaf66a1fbb23d575881ea2f975a04ee2998eeef632e500576ec657b5",
+      "source": {
+        "captured_at": "2026-07-10T01:33:46+08:00",
+        "platform": "douyin",
+        "published_at": "1725006682",
+        "url": "https://www.douyin.com/video/7408847218423237897"
+      },
+      "title": "独家对话：跑分团队！ #抖来普法2024 #电信诈骗 #诈骗 #成都中院 #熊猫法官普法"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:567076a67cc1a1a51985c3c7ae3a8333cfe42e3df35860bfc17ee6ef67c0c9b6",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813_bbb41b8839974a218d874eb1a1c6b9e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳刑事 陈成均律师",
+        "platform": "douyin"
+      },
+      "body": "介绍五人跑分1500万 后果有多严重？ 定罪量刑插翅难逃#陈成均律师 #昭冠律所 #法律咨询 #跑分 #洗钱罪",
+      "finding_id": "finding:v2:8bf4d158a3ca78cf91b88201b69e5c9220d89cea7d15c893cfdc79a75bf3058b",
+      "id": "content:v2:4effca9e5d1542134b2dd42a3c13fd607c6117d13d830d0ab2df0c13b7dc6a8a",
+      "revision_id": "content-revision:v2:007ceb33363ddecccc4402ec0f354890e98c41180b2805ef04abcc04ca7d6387",
+      "source": {
+        "captured_at": "2026-07-10T01:34:16+08:00",
+        "platform": "douyin",
+        "published_at": "1780719900",
+        "url": "https://www.douyin.com/video/7647917326494403883"
+      },
+      "title": "介绍五人跑分1500万 后果有多严重？ 定罪量刑插翅难逃#陈成均律师 #昭冠律所 #法律咨询 #跑分 #洗钱罪"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:5f2bab0a84d8e67adb1a29cb91ae993a3d4a7c101b8954a8dc29ee672ac4cbd5",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_d4ee84aa6f513e0a81278e94d01f786c.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "广州刑事律师邹佳沛",
+        "platform": "douyin"
+      },
+      "body": "飞机软件里纯菠菜料，为什么被按头？ 给赌博平台跑分的车队，风险同样大，涉嫌帮信罪、掩隐罪、开设赌场罪#内容启发搜索 #抖音创作季 #灰黑产专业律师",
+      "finding_id": "finding:v2:c3ecb8d7ed398158587a2c43b1c7e7ac6ab83d9650757ae2c81008f81af5d3d5",
+      "id": "content:v2:586fcb05c2da1cf5030e6380ed65040b21349283bf65ab8b1a66ad28a8c6d329",
+      "revision_id": "content-revision:v2:5eda61081656ae678fad3f12f4e16ca19c2cb0fd791e3546299dcae7095217de",
+      "source": {
+        "captured_at": "2026-07-10T01:35:50+08:00",
+        "platform": "douyin",
+        "published_at": "1741590208",
+        "url": "https://www.douyin.com/video/7480072933214407995"
+      },
+      "title": "飞机软件里纯菠菜料，为什么被按头？ 给赌博平台跑分的车队，风险同样大，涉嫌帮信罪、掩隐罪、开设赌场罪#内容启发搜索 #抖音创作季 #灰黑产专业律师"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:5f2bab0a84d8e67adb1a29cb91ae993a3d4a7c101b8954a8dc29ee672ac4cbd5",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_d4ee84aa6f513e0a81278e94d01f786c.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "广州刑事律师邹佳沛",
+        "platform": "douyin"
+      },
+      "body": "灰黑产案件口供定乾坤！签认与事实不符的口供会有大麻烦！#取保黄金期 #跑分#上下分#灰黑产邹律师",
+      "finding_id": "finding:v2:1e99bb5d8d4c2acb2ea3569c232363c7082951f5db00eaec3e39f4e0ac7091de",
+      "id": "content:v2:69fd7b5d77ee01b965524c73f401bc430a6209fb3b0679617e7effeaaabbaa49",
+      "revision_id": "content-revision:v2:1b251d976830a6169ca47fd4f6d777e12145b5e147fd02fabd6ad5a7aee329e0",
+      "source": {
+        "captured_at": "2026-07-10T01:36:20+08:00",
+        "platform": "douyin",
+        "published_at": "1778226663",
+        "url": "https://www.douyin.com/video/7637425360771311525"
+      },
+      "title": "灰黑产案件口供定乾坤！签认与事实不符的口供会有大麻烦！#取保黄金期 #跑分#上下分#灰黑产邹律师"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:3839a37d4625e75e077c2406c45169c6c5db224be23fd723f53288c4eb1982f4",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813_cb3eb5de83754ca78492aab4d76bf496.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "富源警方",
+        "platform": "douyin"
+      },
+      "body": "跑分洗钱？赚最少的钱，坐最长的牢！#政媒原创作者联盟 #反诈者集合 #剧情",
+      "finding_id": "finding:v2:9d93226140a6fb7383b528fd5ee812b68ef1942f42e3a06157e0ebf8262e3232",
+      "id": "content:v2:7ef2fb34523541566335c821a847925d1de358280d2eff4fcfb3c9647a51ab34",
+      "revision_id": "content-revision:v2:6675a69834ee34f19f0ec3e1f676b7d48beeceec1cc897cedf44219cea4c6236",
+      "source": {
+        "captured_at": "2026-07-10T01:38:05+08:00",
+        "platform": "douyin",
+        "published_at": "1652960089",
+        "url": "https://www.douyin.com/video/7099409512225934622"
+      },
+      "title": "跑分洗钱？赚最少的钱，坐最长的牢！#政媒原创作者联盟 #反诈者集合 #剧情"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:12df5d908cee51d0714a0a1c2abdee23f1e8d5b68d1491238cb68a824ebead71",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_4fd48c5b4e862ad494c3602c9e6404e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳李凯律师刑事法律在线咨询",
+        "platform": "douyin"
+      },
+      "body": "30岁对接15个盘口，一道空降料，，获利20万U，会判多久？ #跑分 #刑事律师 #深圳律师",
+      "finding_id": "finding:v2:ab8fb0a128c083683c7501d9822540faed3f744c2c9ced6d119b6c0e5a46ade6",
+      "id": "content:v2:89195eb91688bcbd8f7889730c910b83f3725cbbecc1884b223d3e727377a617",
+      "revision_id": "content-revision:v2:6440adfc33fae8d82f105b74fe8ed9c1dfddd966c4e686f9a9b415526677a4d0",
+      "source": {
+        "captured_at": "2026-07-10T01:38:39+08:00",
+        "platform": "douyin",
+        "published_at": "1728119633",
+        "url": "https://www.douyin.com/video/7422217194647358772"
+      },
+      "title": "30岁对接15个盘口，一道空降料，，获利20万U，会判多久？ #跑分 #刑事律师 #深圳律师"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:eb1fd140f9ebc160568abd9affc48aaf8da3452d0f36ec8560e53e681c766283",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813c001_o4gBIAamA6Ejhx2vgAiADSzWEVAA1bsIPPiRH.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "成都刑事律师陈鹏",
+        "platform": "douyin"
+      },
+      "body": "卡接回U，取现回U的区别 #成都刑事律师  #车队取现  #跑分 #掩隐 #usdt",
+      "finding_id": "finding:v2:d900fdce29e459c99dd5239aedfdd80083936a2ed4b22ac5007554eef4dcc7cf",
+      "id": "content:v2:ecd34e2961b521d4a32c593692fdb5a6ff9bdf914f92d514e632b9a99abe372c",
+      "revision_id": "content-revision:v2:3f1a624319c1f0ad2aae4a8745cee1549fb9416e027b27dbc0cb43b967e9635a",
+      "source": {
+        "captured_at": "2026-07-10T01:39:33+08:00",
+        "platform": "douyin",
+        "published_at": "1769851801",
+        "url": "https://www.douyin.com/video/7601367767320775988"
+      },
+      "title": "卡接回U，取现回U的区别 #成都刑事律师  #车队取现  #跑分 #掩隐 #usdt"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:12df5d908cee51d0714a0a1c2abdee23f1e8d5b68d1491238cb68a824ebead71",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_4fd48c5b4e862ad494c3602c9e6404e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳李凯律师刑事法律在线咨询",
+        "platform": "douyin"
+      },
+      "body": "26岁跑分，流水950亿 获利460亿，会判多久 #跑分 #刑事律师 #深圳律师",
+      "finding_id": "finding:v2:72b497c51b30c20b8adc434128ad25de88942b0a19ddd3f875364cf0512ea629",
+      "id": "content:v2:ae345dd5e8cb3da5c42713d8738b9fa6dd01d02a0e2ffa5c38852042fd3dc7eb",
+      "revision_id": "content-revision:v2:bc05453627a31942fe8cc1f61ad978b394a2dd7c07a4e411477a9adc7fd25272",
+      "source": {
+        "captured_at": "2026-07-10T01:41:38+08:00",
+        "platform": "douyin",
+        "published_at": "1716120152",
+        "url": "https://www.douyin.com/video/7370679687556648233"
+      },
+      "title": "26岁跑分，流水950亿 获利460亿，会判多久 #跑分 #刑事律师 #深圳律师"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:69cc421c0886a0f210a505b52f5fe228bbbcc53e5ad32c22725077037beda4b0",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_87d0f79dc66aa3ff82e538a3af64a0fe.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "建水警方",
+        "platform": "douyin"
+      },
+      "body": "#帮信罪 涉案上千万，他们说的实话，你们总该相信了吧！#严厉打击违法犯罪 #防范电信诈骗 #警民dou平安 #跑分 @中国警察网 @红河警方 @云南警方 @国家反诈中心 @DOU+小助手",
+      "finding_id": "finding:v2:99696548fb4885983f529fecdfbf9d1d62f9b11c455e61095ac7e8f541b655c1",
+      "id": "content:v2:272edb46d72b4514f63a57652c7f7060d692b90440c4bbd2b8f2507db1dfa0e4",
+      "revision_id": "content-revision:v2:b1dbd80a2f7dc8244c9e1b363278de55dcb0d6dfb7e691b265919a3df5197d8a",
+      "source": {
+        "captured_at": "2026-07-10T01:43:55+08:00",
+        "platform": "douyin",
+        "published_at": "1676625059",
+        "url": "https://www.douyin.com/video/7201049752975248672"
+      },
+      "title": "#帮信罪 涉案上千万，他们说的实话，你们总该相信了吧！#严厉打击违法犯罪 #防范电信诈骗 #警民dou平安 #跑分 @中国警察网 @红河警方 @云南警方 @国家反诈中心 @DOU+小助手"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:db4950794e5d1f1b142706f5150ab59be28987a56ddad72502218cc1cbff7d66",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813_ookfOAYVyaAeIDgMBJ8bBEAauUIAnIQx7AnoBf.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "法律人小彭律师",
+        "platform": "douyin"
+      },
+      "body": "跑分一般多少金额定罪 #法律 #法律咨询 #创作灵感 #律师 #刑事律师",
+      "finding_id": "finding:v2:82121bacd24491d233cc20dca1a8f742703b12a65b7abadf54edf1f998f29a28",
+      "id": "content:v2:357bc1938d196c5ab512c638a5b19afa365a01b6cd7608e6d37db27f22404fc2",
+      "revision_id": "content-revision:v2:56c55038b7e7b0cc18f38680d0228656e02f589730b1b8e468affe80373a0384",
+      "source": {
+        "captured_at": "2026-07-10T01:44:46+08:00",
+        "platform": "douyin",
+        "published_at": "1727623975",
+        "url": "https://www.douyin.com/video/7420088362649865483"
+      },
+      "title": "跑分一般多少金额定罪 #法律 #法律咨询 #创作灵感 #律师 #刑事律师"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:4affc7d3cb29507262d4ce869c526d88a1d440244ca02a29ee105ac895861747",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-avt-0015_6d3ee1526b0e3ab6dc53286281d6810b.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "人生玩家🎮",
+        "platform": "douyin"
+      },
+      "body": "跑分仔 人生副本之跑分仔。#人生副本#灰产#防诈骗#精神小伙",
+      "finding_id": "finding:v2:9e8d11b86486ccf844f7c438bc7cd3e085ed2e080295e09dc84373fe61681cc8",
+      "id": "content:v2:ba82065df1a419b556d8196c1e94e39c92cf9a392447dec5d834f2f5f5e31c82",
+      "revision_id": "content-revision:v2:1448e7bc1bb833e5b48961861b16a543feb5f3c9553a38d89cd3e5673ed34348",
+      "source": {
+        "captured_at": "2026-07-10T01:45:52+08:00",
+        "platform": "douyin",
+        "published_at": "1781438298",
+        "url": "https://www.douyin.com/video/7651219167357586723"
+      },
+      "title": "跑分仔 人生副本之跑分仔。#人生副本#灰产#防诈骗#精神小伙"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:567076a67cc1a1a51985c3c7ae3a8333cfe42e3df35860bfc17ee6ef67c0c9b6",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813_bbb41b8839974a218d874eb1a1c6b9e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳刑事 陈成均律师",
+        "platform": "douyin"
+      },
+      "body": "日赚10万抽佣500万流水 日赚10万抽佣500万流水\n跑分中介张三的疯狂72小时#跑分 #犯罪 #非法 #案件",
+      "finding_id": "finding:v2:b2aaf36acabb3f91fef0652a6155f687aabc04d22fabaa87e1ce4570e433ec08",
+      "id": "content:v2:668cf4902901b47df42e7ea903a87b063ba6dcad2c950248677d5e801055f345",
+      "revision_id": "content-revision:v2:4bfffbabf49069e574efc99facdd39ff69d0a342ea30e40925f8645490e34037",
+      "source": {
+        "captured_at": "2026-07-10T01:49:22+08:00",
+        "platform": "douyin",
+        "published_at": "1741860827",
+        "url": "https://www.douyin.com/video/7481234656487066916"
+      },
+      "title": "日赚10万抽佣500万流水 日赚10万抽佣500万流水\n跑分中介张三的疯狂72小时#跑分 #犯罪 #非法 #案件"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:0ad5069be1f5b850a42aac8a18c06c6b4d64063a86ace8d7cd2985d79ba9f27b",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813c001_oAevAzeEMQPuQAIeg8ELpBsGEDAkng75HIEAAB.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "门老师",
+        "platform": "douyin"
+      },
+      "body": "经典黑产套路：无押跑分骗局 无押跑分骗局是最常见的黑产套路，目的就是骗那些想挣块钱的大笨蛋的 #跑分是什么意思 #跑分骗局 #黑产揭秘 #跑分 #套路揭秘",
+      "finding_id": "finding:v2:96b46a632e2cb9f21f736d86d59d8e68a18e15f37a4100ffdf7a562478175228",
+      "id": "content:v2:0daee07891af4bb0ea0b440c52255e24892486c68eee57e07768deaa4e7673a5",
+      "revision_id": "content-revision:v2:d38b43853ecdd835830162ae4ddb021810d967791a6b3453ba4027f4b80cdcee",
+      "source": {
+        "captured_at": "2026-07-10T01:51:45+08:00",
+        "platform": "douyin",
+        "published_at": "1756083600",
+        "url": "https://www.douyin.com/video/7542215449006574874"
+      },
+      "title": "经典黑产套路：无押跑分骗局 无押跑分骗局是最常见的黑产套路，目的就是骗那些想挣块钱的大笨蛋的 #跑分是什么意思 #跑分骗局 #黑产揭秘 #跑分 #套路揭秘"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:567076a67cc1a1a51985c3c7ae3a8333cfe42e3df35860bfc17ee6ef67c0c9b6",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813_bbb41b8839974a218d874eb1a1c6b9e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳刑事 陈成均律师",
+        "platform": "douyin"
+      },
+      "body": "跑分 5000 多万获利 500 万 跑分 5000 多万获利 500 万，四人车队一人被抓，谜团待解？#车队 #亿元 #博彩虾王 #案件",
+      "finding_id": "finding:v2:ee22a7dba71b1bb9db5ce5391fa6c63afc1465ec27addfea3931db15c5ac0b93",
+      "id": "content:v2:15058b2d59aae803782a34852665a5078302203509f6594e4b944eb7c03bf010",
+      "revision_id": "content-revision:v2:23aff40afb350115a2f01c52dd9faa4e4649eb2321b6f68c2c290926cd96a08a",
+      "source": {
+        "captured_at": "2026-07-10T01:52:21+08:00",
+        "platform": "douyin",
+        "published_at": "1738557549",
+        "url": "https://www.douyin.com/video/7467046424610458907"
+      },
+      "title": "跑分 5000 多万获利 500 万 跑分 5000 多万获利 500 万，四人车队一人被抓，谜团待解？#车队 #亿元 #博彩虾王 #案件"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:567076a67cc1a1a51985c3c7ae3a8333cfe42e3df35860bfc17ee6ef67c0c9b6",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813_bbb41b8839974a218d874eb1a1c6b9e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳刑事 陈成均律师",
+        "platform": "douyin"
+      },
+      "body": "绿泡泡破风+白日过百万 找尿某症多人孤证能判我吗 常在河边走哪有不湿鞋#陈成均律师 #昭冠律所 #法律咨询 #尿毒症 #跑分",
+      "finding_id": "finding:v2:1d23854cafebdba548d671cc884cb7583e3f136a8f9fe25cd8b4a348b55ffcd3",
+      "id": "content:v2:c8ae4ee64db0f43e2dee5ce42f98b54fa42756d6dbf16d2e8dbe7d49474b4fa6",
+      "revision_id": "content-revision:v2:18aaf57c81e9e9c62b293daa1dffb1c510926b6f05cbcde3ed8f3404322d5cc0",
+      "source": {
+        "captured_at": "2026-07-10T01:54:24+08:00",
+        "platform": "douyin",
+        "published_at": "1782382200",
+        "url": "https://www.douyin.com/video/7654886733040864527"
+      },
+      "title": "绿泡泡破风+白日过百万 找尿某症多人孤证能判我吗 常在河边走哪有不湿鞋#陈成均律师 #昭冠律所 #法律咨询 #尿毒症 #跑分"
+    },
+    {
+      "author": {
+        "account_id": "account:v2:567076a67cc1a1a51985c3c7ae3a8333cfe42e3df35860bfc17ee6ef67c0c9b6",
+        "avatar_url": "https://p3-pc.douyinpic.com/aweme/100x100/aweme-avatar/tos-cn-i-0813_bbb41b8839974a218d874eb1a1c6b9e4.jpeg?card_type=153&column_n=0&from=327834062",
+        "display_name": "深圳刑事 陈成均律师",
+        "platform": "douyin"
+      },
+      "body": "日吞2000万！小镇青年7天洗出北上广一套房#赚钱 #公户 #法律咨询 #跑分",
+      "finding_id": "finding:v2:915841c7954cd7467075a65329cf9bc201c63574a93b1416d75d785ba32ed232",
+      "id": "content:v2:67b33b80f35d19de777f8f1184b8fe9952acdc2ab12f05dcc41041de9a8cb179",
+      "revision_id": "content-revision:v2:9bd615b1643e5e9050ae7395e5b06694d840522740f227397364fcd4bf97c8ec",
+      "source": {
+        "captured_at": "2026-07-10T01:56:46+08:00",
+        "platform": "douyin",
+        "published_at": "1754304539",
+        "url": "https://www.douyin.com/video/7534680536669768998"
+      },
+      "title": "日吞2000万！小镇青年7天洗出北上广一套房#赚钱 #公户 #法律咨询 #跑分"
+    }
+  ],
+  "provenance": {
+    "projection_contract": "investigation-domain/v2",
+    "projection_counts": {
+      "evidence": 56,
+      "findings": 24,
+      "posts": 24
+    },
+    "projection_manifest_hash": "ff505a4e3f5963292220415dfe0eebfb74ac2b612133fd89efe842cdb401eebb",
+    "projection_snapshot_id": "frozen-snapshot:v2:ff505a4e3f5963292220415dfe0eebfb74ac2b612133fd89efe842cdb401eebb",
+    "source_scope_ref": "task:2272c3692807",
+    "source_task_id": "2272c3692807",
+    "source_workspace_head": "cd62a96e1e04609d346001be613ec1c2544c1e73"
+  },
+  "report_version": {
+    "case_ids": [
+      "report-case:v2:8f6bcb77b8dd37d6970dcbc61d75496ea546044db6a66b285178c74d9b564c8f",
+      "report-case:v2:ba2dc92287055061cd59d1f0346cef4ccf20d6ee0966f3d9102c85734a9a8804",
+      "report-case:v2:4de3dea9dabd50ac0eefe5d5ed54905793e68eb393c9b26ffe3f5784e51584db"
+    ],
+    "id": "report-version:v2:745050b70d41529fb7e96c7f4c456c75c54ae3b9898d21d3bf7dcf33ea7c3fe4",
+    "overview": "基于冻结快照，对24篇跑分相关帖子及其有效审核结果进行分类展示。报告包含拒绝、需复核和通过三类，Evidence仅在按帖子查询时逐步加载。",
+    "public_revision": "published-v1",
+    "published_at": "2026-07-10T04:27:53+08:00",
+    "report_id": "report:v2:3cb1f7f3423f8c6ab2c10a7d2010e77a6b87354b0bf6c5f0b3b3d88c9ac5724a",
+    "revision": "2b6087a3002cd1102ab3972a4a393d69a733c72c74bdc4349f89614a320364a5",
+    "snapshot_id": "frozen-snapshot:v2:ff505a4e3f5963292220415dfe0eebfb74ac2b612133fd89efe842cdb401eebb",
+    "statistics": {
+      "case_count": 3,
+      "decision_counts": {
+        "pass": 6,
+        "reject": 1,
+        "review": 17
+      },
+      "evidence_count": 56,
+      "evidence_type_counts": {
+        "asr": 11,
+        "comment": 14,
+        "keyframe": 4,
+        "ocr": 9,
+        "text": 18
+      },
+      "finding_count": 24,
+      "post_count": 24,
+      "risk_counts": {
+        "high": 1,
+        "low": 15,
+        "medium": 2,
+        "none": 6
+      }
+    },
+    "title": "跑分相关内容审核报告"
+  },
+  "schema_version": "hermes-investigation-fixture/v1",
+  "snapshot": {
+    "captured_through": "2026-07-10T04:27:53+08:00",
+    "evidence_ids": [
+      "evidence:v2:09f2452cf79e94b9f8ece1a3506fb4447eeacc4c6a1e19b58730ece724e3da84",
+      "evidence:v2:1256ff7459e496c15c5a6925967c111f1abd7182ec8ba6c10ddae25d17c09b32",
+      "evidence:v2:126bfeb0e3fbf4ad211bab70aac96252cb004dc51e3a5481a6906743c76141e8",
+      "evidence:v2:18e0dd9850a396ff2efbf93477683de25fefd7bdec5e028122056347881f0c89",
+      "evidence:v2:18fe5bd70da9e25ba8476620de305e835fa465998a233e03139c70201ed964b9",
+      "evidence:v2:1d7cb5e31c797f82d55e4a550a197c33482fe647caa8fbfb224ba33e0e0794c1",
+      "evidence:v2:1f66cd05b5437540bcc5bb26343a30d57a4bf0072228aebc44269d4c2e63636c",
+      "evidence:v2:218fa8b06075eedcf48586042fccfadbbff03e03d7f0d8d20a2d0b534184f438",
+      "evidence:v2:29492f4cc4e361f7ed7138be6eec75dee8440c747cc9a784012233a3a60da3f7",
+      "evidence:v2:2ae72cbfcba28519be4473e20415ab40acbfb457c5d8407d22cf8b8670c1ab0d",
+      "evidence:v2:2cff80dcdcbb95a4445bd3fb07f35d1ce27298edc6d49fce44b7e4fce81c3fe8",
+      "evidence:v2:307d258c3fb8c9fd105d50c23e0f840abe675b3fadcee4dfeeb5e44089e7abe7",
+      "evidence:v2:32636f44ec90460f757ace77da88170ad1a4b8eb443060f6eca16eb894f66b51",
+      "evidence:v2:33259f6d4233248101b9e01577ecdb500e638aa0e80000fc520dc7f2ec4013c0",
+      "evidence:v2:39527ad7992790684158ff036b9363d2bb400d79417aeffff22ec4a002e5d6cf",
+      "evidence:v2:3a1f48660b3f8fa39b7f39acdfa160d3403d1620da5022afbb52569a40cb288b",
+      "evidence:v2:3afe342db5b94a4dd28667253803d26feb4c21e5d77bf8e3748d845503ce67db",
+      "evidence:v2:3dc9c25df546f14076b36f4331860196da1986a4d480c592afbe1eb17d73f072",
+      "evidence:v2:46dfc8c8c6a3d2b22a607e04bfcb53c3be9550eb2a48d4eb214cb7be42d66d8f",
+      "evidence:v2:4fb67e7f283c72ba247194613bfbd4c31e1d7bb13625392e9496c4244946c098",
+      "evidence:v2:56d9cff3f507bc4ec0201a581f567ad4952da6fa115de48c002e13106c3bdec8",
+      "evidence:v2:573928a2f871441f342dc319cb31caf1f3d64c230021cafddabb43a3c9dd0088",
+      "evidence:v2:59065eeed2cd88ce41f21060ca123e3da72d58f72c6d2a1dfcb17013944353aa",
+      "evidence:v2:629a5c4f65e4d5dfd05ca97b428033a7b29a553aa0531b5f2c63b1b69d1cb050",
+      "evidence:v2:62a2770e58fa3d05fab2e6bcdc79b0db18dc77f062f661b09162de90b3a0c69d",
+      "evidence:v2:632c67a5f704863b5f39d38b42041d08ae6a928e5acd42a90aa1678b51e8f990",
+      "evidence:v2:6cf2b9f912b414085fffaf49bb60f796ef478575b41a702b4f45426b11dc64f6",
+      "evidence:v2:7433f51ccb8587430276089d5941ccf40df505871a809238dcb51f1dafb11686",
+      "evidence:v2:777e56133f40dbacabeae3d99bf63e5340fcc0e0199f024fbfd87a19a76a7afb",
+      "evidence:v2:77e6f8b46d92ef67cb95395031035109b7070805a0419fd8426a380944aafd98",
+      "evidence:v2:7d9ce6288ba00ec15afdbc715a4ef278a086b8e14a6541be0501ca5e1ef6c0f6",
+      "evidence:v2:80a59a8122181ff6e6bf85237813829a68f036cb85ded12edbae9842fff3592f",
+      "evidence:v2:8897738a93e3f015a67c449b244370e10476c5e444e3700ef3a85ce0c3f4f100",
+      "evidence:v2:90896b19ad4948f3351e3d66fa63c542290e095dd2e0ceffc3030cd4de213344",
+      "evidence:v2:9c10294047becfa811459f3a28548afda94eba9792ef89d42d530c0cd6538ed0",
+      "evidence:v2:9ca73f07782c911935787e4cbb87f6e24bf7ff86fc3abef84971066bbc4855a0",
+      "evidence:v2:9eef92b9f43872378aa992a75badeec122e0c97522a3b1ba7ae0646c16ff65a2",
+      "evidence:v2:9f7a7398f3e6a2bbfb91c6d9e4fbe48c9fb625c20036504f60046af2f472aebe",
+      "evidence:v2:af89b51202c0e8d3c3cd31b4ff744213cb9cef2b93a1cad40f95b98cb80c88cf",
+      "evidence:v2:b0323cb326215babd1accaa2a8aa5ae9f51910d04571eb4ee5a473491de868e0",
+      "evidence:v2:b5018ce6cc2994f61d0c8064d8b8fe71a373b66fe578f81662fbe44b8f69d2d1",
+      "evidence:v2:bb425bcd52afac932e0c495e07d4d99d95e2b7b0f9bf6a588860f6e03607ffad",
+      "evidence:v2:c4ef8e1f417deb7666a55fc33268373628d7161ad40743b6935c4b159f1741ad",
+      "evidence:v2:c8bb3817d17f3d5f6bf484c4247d4f1f18e6935f791752b0ed942933c3b3e7aa",
+      "evidence:v2:d70d78e6908db42305ea1ce1e164c3de242556c219729e58e40a34704562c0ae",
+      "evidence:v2:db9ae20bee141a27a3b034d117ccab91b0f4d4c87083132f311a4658fb4f8c42",
+      "evidence:v2:de622567aa1257853b52043a0bf5ec89aa69592944ca03326bfad656bd413019",
+      "evidence:v2:e0ef58e76d7c6c3ae903209d85fd35407caa75ece95e16aa6e2fea6dd4c5350b",
+      "evidence:v2:e67c457ca2c8687405800da8373268e4490f7749510b4afe921f1fb617333116",
+      "evidence:v2:e9625c36e64bb69cfe1ec071b5383d57f133639fff3f8c3fbf05591766014dd4",
+      "evidence:v2:ec5946ef3e337271a6203ce412c35f8a254e66ba6e441a25a74cbdee2ea8b2bc",
+      "evidence:v2:f11d61d916d967098e5ef7fe7e2c8db88384eb01c7ff8558ff58a5c25b02b0c2",
+      "evidence:v2:f4f156d06feb7eddd43071f2665212565e3fce2be1a1bcab1a5e2adb5cbf952f",
+      "evidence:v2:fdc4429bfbe6f55b16227b2b6b3df8d78a3a25d7ac20036d9caad8d5cff89fc4",
+      "evidence:v2:fe96595793d9a1eeb2f391844277a80547cd140491abd501f2085f3fcc3a086e",
+      "evidence:v2:ff8538d5c74ec5eb2c3534cbe4df6caa9b7515c94ce3f41739416e4fab30be97"
+    ],
+    "finding_ids": [
+      "finding:v2:17166421ec36b61f4adf338a6e6e4793a6e91497755a5f4adea0cd6be9d3cfb3",
+      "finding:v2:1d23854cafebdba548d671cc884cb7583e3f136a8f9fe25cd8b4a348b55ffcd3",
+      "finding:v2:1e99bb5d8d4c2acb2ea3569c232363c7082951f5db00eaec3e39f4e0ac7091de",
+      "finding:v2:2cb409b675f12611e539baf57bff3b8cd7b82db29b79230cc60ec342e98f9e58",
+      "finding:v2:4e6821a32b53a66a6a53775d77021240300e9d955367514bb9909abc520a8a30",
+      "finding:v2:5633e8d74b4491998168606cc89aab42e385aa745ba376aa0c5efdb8c9c20dce",
+      "finding:v2:5c28fbcd175070f82ac5302bbfd94d7b225a39d177297b40bb585911fd53439c",
+      "finding:v2:72b497c51b30c20b8adc434128ad25de88942b0a19ddd3f875364cf0512ea629",
+      "finding:v2:7e7c6adc21b08db1b0c088c8bb60023597af7920b0ef8d220dfa00ba20bf36d6",
+      "finding:v2:82121bacd24491d233cc20dca1a8f742703b12a65b7abadf54edf1f998f29a28",
+      "finding:v2:8bf4d158a3ca78cf91b88201b69e5c9220d89cea7d15c893cfdc79a75bf3058b",
+      "finding:v2:915841c7954cd7467075a65329cf9bc201c63574a93b1416d75d785ba32ed232",
+      "finding:v2:96b46a632e2cb9f21f736d86d59d8e68a18e15f37a4100ffdf7a562478175228",
+      "finding:v2:99696548fb4885983f529fecdfbf9d1d62f9b11c455e61095ac7e8f541b655c1",
+      "finding:v2:9d93226140a6fb7383b528fd5ee812b68ef1942f42e3a06157e0ebf8262e3232",
+      "finding:v2:9e8d11b86486ccf844f7c438bc7cd3e085ed2e080295e09dc84373fe61681cc8",
+      "finding:v2:ab8fb0a128c083683c7501d9822540faed3f744c2c9ced6d119b6c0e5a46ade6",
+      "finding:v2:b2aaf36acabb3f91fef0652a6155f687aabc04d22fabaa87e1ce4570e433ec08",
+      "finding:v2:c334554ec258b92a803bb82267b299cad94fcab897b242855ac8253a8009a9c4",
+      "finding:v2:c3ecb8d7ed398158587a2c43b1c7e7ac6ab83d9650757ae2c81008f81af5d3d5",
+      "finding:v2:c8de4be9da466ad5afe39b4ba1c7f81cbeb98f9e8766286599e6f617bf57b1c5",
+      "finding:v2:d900fdce29e459c99dd5239aedfdd80083936a2ed4b22ac5007554eef4dcc7cf",
+      "finding:v2:ee22a7dba71b1bb9db5ce5391fa6c63afc1465ec27addfea3931db15c5ac0b93",
+      "finding:v2:f6263caab1b3576fd0e66d07979549b44dd4d4a62ae7615a444ddca4c325e0fc"
+    ],
+    "id": "frozen-snapshot:v2:ff505a4e3f5963292220415dfe0eebfb74ac2b612133fd89efe842cdb401eebb",
+    "post_ids": [
+      "content:v2:0daee07891af4bb0ea0b440c52255e24892486c68eee57e07768deaa4e7673a5",
+      "content:v2:12062a136671f8f4e452e0e5a33b772f1380e28452b54dfe72fc2028261f312e",
+      "content:v2:15058b2d59aae803782a34852665a5078302203509f6594e4b944eb7c03bf010",
+      "content:v2:17e52ce30cf4220122d6842f29468b77520ab1fb48fca030bb17557c271328a3",
+      "content:v2:272edb46d72b4514f63a57652c7f7060d692b90440c4bbd2b8f2507db1dfa0e4",
+      "content:v2:2a7d5915e1afc925f7374e23fbe311175671461152690d2285d89d3407ff7313",
+      "content:v2:357bc1938d196c5ab512c638a5b19afa365a01b6cd7608e6d37db27f22404fc2",
+      "content:v2:37febbf5e9e8ae5b05a8da73f07d7720cd1b0c20dfa71d74e87436e0434fe144",
+      "content:v2:3f833a36c6c68f6c67a3099a8acc4618bc77d5aa5eeb3149536eda2d9c85fd27",
+      "content:v2:4a904a6bdaead3b8aa053bf57644c50b7484f6c61faa7d59f859201ad57bb733",
+      "content:v2:4effca9e5d1542134b2dd42a3c13fd607c6117d13d830d0ab2df0c13b7dc6a8a",
+      "content:v2:586fcb05c2da1cf5030e6380ed65040b21349283bf65ab8b1a66ad28a8c6d329",
+      "content:v2:668cf4902901b47df42e7ea903a87b063ba6dcad2c950248677d5e801055f345",
+      "content:v2:67b33b80f35d19de777f8f1184b8fe9952acdc2ab12f05dcc41041de9a8cb179",
+      "content:v2:69fd7b5d77ee01b965524c73f401bc430a6209fb3b0679617e7effeaaabbaa49",
+      "content:v2:7ef2fb34523541566335c821a847925d1de358280d2eff4fcfb3c9647a51ab34",
+      "content:v2:888acd036b233bd0314d475f8208b2a151df43760cd72104a6c2addf57921322",
+      "content:v2:89195eb91688bcbd8f7889730c910b83f3725cbbecc1884b223d3e727377a617",
+      "content:v2:ae345dd5e8cb3da5c42713d8738b9fa6dd01d02a0e2ffa5c38852042fd3dc7eb",
+      "content:v2:ba82065df1a419b556d8196c1e94e39c92cf9a392447dec5d834f2f5f5e31c82",
+      "content:v2:c8ae4ee64db0f43e2dee5ce42f98b54fa42756d6dbf16d2e8dbe7d49474b4fa6",
+      "content:v2:d0b38c0ac875151bafc35c2031f69a8320cbb79c139d00aa78e5fc88c079b26e",
+      "content:v2:e70b63c7ad53e0d5e14e971855dcbc5c15f9bac7e13002af24ad6f4343df5d21",
+      "content:v2:ecd34e2961b521d4a32c593692fdb5a6ff9bdf914f92d514e632b9a99abe372c"
+    ],
+    "post_revision_ids": [
+      "content-revision:v2:007ceb33363ddecccc4402ec0f354890e98c41180b2805ef04abcc04ca7d6387",
+      "content-revision:v2:1448e7bc1bb833e5b48961861b16a543feb5f3c9553a38d89cd3e5673ed34348",
+      "content-revision:v2:18aaf57c81e9e9c62b293daa1dffb1c510926b6f05cbcde3ed8f3404322d5cc0",
+      "content-revision:v2:1b251d976830a6169ca47fd4f6d777e12145b5e147fd02fabd6ad5a7aee329e0",
+      "content-revision:v2:1b6df6e4eaf66a1fbb23d575881ea2f975a04ee2998eeef632e500576ec657b5",
+      "content-revision:v2:1c39ae5dd0265a9dedd1110d53bb5282e4ddbe37cac7ae3fd496c37c035c1020",
+      "content-revision:v2:23aff40afb350115a2f01c52dd9faa4e4649eb2321b6f68c2c290926cd96a08a",
+      "content-revision:v2:3f1a624319c1f0ad2aae4a8745cee1549fb9416e027b27dbc0cb43b967e9635a",
+      "content-revision:v2:4bfffbabf49069e574efc99facdd39ff69d0a342ea30e40925f8645490e34037",
+      "content-revision:v2:5043db388f38fb1bccb261454f5004d124c0c04e32a799116b015d542387fcb3",
+      "content-revision:v2:5647564dd84fe3c1d451d8d46e7a964b62e465d1e50f43abe0566157205f3cc8",
+      "content-revision:v2:56c55038b7e7b0cc18f38680d0228656e02f589730b1b8e468affe80373a0384",
+      "content-revision:v2:5eda61081656ae678fad3f12f4e16ca19c2cb0fd791e3546299dcae7095217de",
+      "content-revision:v2:62092fb4524afa87a584b2cfef7d17e9d34412ef43ea169eebc3369bec140865",
+      "content-revision:v2:6440adfc33fae8d82f105b74fe8ed9c1dfddd966c4e686f9a9b415526677a4d0",
+      "content-revision:v2:6675a69834ee34f19f0ec3e1f676b7d48beeceec1cc897cedf44219cea4c6236",
+      "content-revision:v2:9bd615b1643e5e9050ae7395e5b06694d840522740f227397364fcd4bf97c8ec",
+      "content-revision:v2:aa95ccde71b6db9ccc9ce8a58e59257e7026e109b6492466e69fdb0f46b26bf4",
+      "content-revision:v2:b1dbd80a2f7dc8244c9e1b363278de55dcb0d6dfb7e691b265919a3df5197d8a",
+      "content-revision:v2:bc05453627a31942fe8cc1f61ad978b394a2dd7c07a4e411477a9adc7fd25272",
+      "content-revision:v2:ce2beb18d383c6a3e99b16266b166007f0d4bbdeb16bc5009f559025b26c3c2c",
+      "content-revision:v2:d38b43853ecdd835830162ae4ddb021810d967791a6b3453ba4027f4b80cdcee",
+      "content-revision:v2:d684b7f8268651aa7d5bff3393275fd0d47ce6393641965fd75fee45edf60603",
+      "content-revision:v2:db948b32d95a450d310412984bdb095774fd9a1c214d41fab415d3d72b517ec1"
+    ]
+  }
+}
