@@ -4,7 +4,7 @@ Clean-room run on 2026-08-26 using the candidate-local `.venv-r0` and no
 provider credentials:
 
 ```text
-Ran 213 tests in 35.004s
+Ran 216 tests in 36.0s
 OK (skipped=4)
 ```
 

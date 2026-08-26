@@ -1,6 +1,6 @@
 # R0 Compatibility Test Report
 
-- Python backend: 213 selected deterministic tests passed; 4 real-data tests
+- Python backend: 216 selected deterministic tests passed; 4 real-data tests
   skipped by their existing `skipUnless`/availability guards.
 - Hermes offline smoke: M0 fixture tools, M1 report navigation, and M2.2
   Account corpus overview/occurrence projection passed from candidate-local
