@@ -23,6 +23,7 @@ tests/test_stage_3b_api.py
 tests/test_domain_evidence_adapter.py
 tests/test_domain_query_service.py
 tests/test_domain_repository.py
+tests/test_hermes_m1_m22_offline.py
 ```
 
 Provider calls, live SQLite databases, real MediaCrawler processes, and
