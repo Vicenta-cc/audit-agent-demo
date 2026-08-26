@@ -1,0 +1,684 @@
+{
+  "schema_version": "planner-shadow-eval-v1",
+  "frozen_prompt_version": "turn-planner-shadow-v1.2",
+  "suites": {
+    "blind": {
+      "groups": [
+        {
+          "slice": "blind_report_general",
+          "tags": ["baseline", "report_presentation"],
+          "context": {
+            "active_focus_exists": false,
+            "active_focus_type": "",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "report_presentation",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-001", "message": "这份调查最后得出了什么总体结论？"},
+            {"id": "v12-blind-002", "message": "按报告结构给我讲一遍主要内容。"},
+            {"id": "v12-blind-003", "message": "提炼一下整份分析里的核心风险。"},
+            {"id": "v12-blind-004", "message": "用简短的话介绍报告的整体发现。"},
+            {"id": "v12-blind-005", "message": "给我展示一个有代表性的案例。"},
+            {"id": "v12-blind-006", "message": "报告里有没有合适的示例案例？"}
+          ]
+        },
+        {
+          "slice": "blind_report_reselection",
+          "tags": ["baseline", "report_presentation", "cross_requirement_contrast"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "case",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "case"
+          },
+          "expected": {
+            "requirement_kind": "report_presentation",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-007", "message": "上一个例子不够合适，请重新挑一个。"},
+            {"id": "v12-blind-008", "message": "再找一则更典型的案例。"},
+            {"id": "v12-blind-009", "message": "这个样本代表性不强，换掉吧。"},
+            {"id": "v12-blind-010", "message": "给我改选另一个案例。"}
+          ]
+        },
+        {
+          "slice": "blind_focused_support_with_focus",
+          "tags": ["baseline", "focused_claim_support"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "claim",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "claim"
+          },
+          "expected": {
+            "requirement_kind": "focused_claim_support",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-011", "message": "这个风险结论为什么能够成立？"},
+            {"id": "v12-blind-012", "message": "当前案例是怎么被判成这个性质的？"},
+            {"id": "v12-blind-013", "message": "解释一下这里的判断逻辑。"},
+            {"id": "v12-blind-014", "message": "为什么会对这个案例作出这样的定性？"},
+            {"id": "v12-blind-015", "message": "这个结论是怎样推导出来的？"},
+            {"id": "v12-blind-016", "message": "说明一下当前判定成立的原因。"}
+          ]
+        },
+        {
+          "slice": "blind_focused_support_without_focus",
+          "tags": ["baseline", "focused_claim_support"],
+          "context": {
+            "active_focus_exists": false,
+            "active_focus_type": "",
+            "resolved_referent_status": "unresolved",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "focused_claim_support",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-017", "message": "为什么会这么认定？"},
+            {"id": "v12-blind-018", "message": "这个判断的逻辑是什么？"},
+            {"id": "v12-blind-019", "message": "怎么得出这种定性的？"},
+            {"id": "v12-blind-020", "message": "为何认为它存在风险？"}
+          ]
+        },
+        {
+          "slice": "blind_asr_collection_discovery",
+          "tags": ["collection_detail", "asr", "typed_evidence", "coverage_discovery"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["asr"],
+            "coverage": "discovery",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-021", "message": "我想先浏览语音识别出来的文字材料。"},
+            {"id": "v12-blind-022", "message": "有哪些说话内容的转写可以查看？"},
+            {"id": "v12-blind-023", "message": "给几份音频转成的文本记录。"},
+            {"id": "v12-blind-024", "message": "语音这部分有些什么转录材料？"},
+            {"id": "v12-blind-025", "message": "先调一些 ASR 内容出来。"}
+          ]
+        },
+        {
+          "slice": "blind_asr_collection_complete",
+          "tags": ["collection_detail", "asr", "typed_evidence", "coverage_complete"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["asr"],
+            "coverage": "complete",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-026", "message": "音频转写材料全部展开。"},
+            {"id": "v12-blind-027", "message": "所有语音识别文本都提供出来。"},
+            {"id": "v12-blind-028", "message": "ASR 相关记录不要遗漏。"},
+            {"id": "v12-blind-029", "message": "把说话内容的转写完整列清楚。"},
+            {"id": "v12-blind-030", "message": "每一份语音转录记录都展示。"}
+          ]
+        },
+        {
+          "slice": "blind_comment_collection_discovery",
+          "tags": ["collection_detail", "comment", "typed_evidence", "coverage_discovery"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["comment"],
+            "coverage": "discovery",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-031", "message": "让我看一些评论区留言。"},
+            {"id": "v12-blind-032", "message": "回复内容这块先取几条。"}
+          ]
+        },
+        {
+          "slice": "blind_comment_collection_complete",
+          "tags": ["collection_detail", "comment", "typed_evidence", "coverage_complete"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["comment"],
+            "coverage": "complete",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-033", "message": "所有用户留言完整列出。"},
+            {"id": "v12-blind-034", "message": "评论和回复一条都别落下。"}
+          ]
+        },
+        {
+          "slice": "blind_text_collection_discovery",
+          "tags": ["collection_detail", "text", "typed_evidence", "coverage_discovery"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["text"],
+            "coverage": "discovery",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-035", "message": "帖子正文方面先给我几份材料。"},
+            {"id": "v12-blind-036", "message": "看看标题和文案里能找到什么。"}
+          ]
+        },
+        {
+          "slice": "blind_text_collection_complete",
+          "tags": ["collection_detail", "text", "typed_evidence", "coverage_complete"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["text"],
+            "coverage": "complete",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-037", "message": "把全部帖子正文资料列出来。"},
+            {"id": "v12-blind-038", "message": "标题和文案证据都要，不能缺。"}
+          ]
+        },
+        {
+          "slice": "blind_ocr_collection_discovery",
+          "tags": ["collection_detail", "ocr", "typed_evidence", "coverage_discovery"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["ocr"],
+            "coverage": "discovery",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-039", "message": "先看看画面里识别出的文字。"},
+            {"id": "v12-blind-040", "message": "取几项 OCR 文字材料给我。"}
+          ]
+        },
+        {
+          "slice": "blind_ocr_collection_complete",
+          "tags": ["collection_detail", "ocr", "typed_evidence", "coverage_complete"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["ocr"],
+            "coverage": "complete",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-041", "message": "图片识别出的文字全部给出。"},
+            {"id": "v12-blind-042", "message": "OCR 材料完整汇总，一个也不要少。"}
+          ]
+        },
+        {
+          "slice": "blind_visual_collection_discovery",
+          "tags": ["collection_detail", "visual", "typed_evidence", "coverage_discovery"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["visual"],
+            "coverage": "discovery",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-043", "message": "画面本身有哪些可用的线索？"},
+            {"id": "v12-blind-044", "message": "先抽几项视觉内容看看。"}
+          ]
+        },
+        {
+          "slice": "blind_visual_collection_complete",
+          "tags": ["collection_detail", "visual", "typed_evidence", "coverage_complete"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["visual"],
+            "coverage": "complete",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-045", "message": "视觉画面材料全部展示出来。"},
+            {"id": "v12-blind-046", "message": "把画面表达的内容完整列齐。"}
+          ]
+        },
+        {
+          "slice": "blind_keyframe_collection_discovery",
+          "tags": ["collection_detail", "keyframe", "typed_evidence", "coverage_discovery"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["keyframe"],
+            "coverage": "discovery",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-047", "message": "先挑几张视频关键帧看看。"},
+            {"id": "v12-blind-048", "message": "有哪些抽帧图片可以参考？"}
+          ]
+        },
+        {
+          "slice": "blind_keyframe_collection_complete",
+          "tags": ["collection_detail", "keyframe", "typed_evidence", "coverage_complete"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["keyframe"],
+            "coverage": "complete",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-049", "message": "所有关键帧图片都调出来。"},
+            {"id": "v12-blind-050", "message": "视频抽出的帧完整展示。"}
+          ]
+        },
+        {
+          "slice": "blind_multi_type_collection_discovery",
+          "tags": ["collection_detail", "typed_evidence", "multi_evidence_type", "coverage_discovery"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "mixed",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["text", "ocr"],
+            "coverage": "discovery",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-051", "message": "先取一些正文和 OCR 资料。"},
+            {
+              "id": "v12-blind-052",
+              "message": "评论与画面线索各挑几项。",
+              "expected": {"evidence_types": ["comment", "visual"]}
+            },
+            {
+              "id": "v12-blind-053",
+              "message": "语音转写和关键帧先给部分内容。",
+              "expected": {"evidence_types": ["asr", "keyframe"]}
+            }
+          ]
+        },
+        {
+          "slice": "blind_multi_type_collection_complete",
+          "tags": ["collection_detail", "typed_evidence", "multi_evidence_type", "coverage_complete"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "mixed",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["text", "comment"],
+            "coverage": "complete",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-054", "message": "文本和评论相关的材料全部列齐。"},
+            {
+              "id": "v12-blind-055",
+              "message": "OCR 与关键帧证据都要完整给出。",
+              "expected": {"evidence_types": ["ocr", "keyframe"]}
+            },
+            {
+              "id": "v12-blind-056",
+              "message": "ASR 和视觉内容一项不要漏。",
+              "expected": {"evidence_types": ["asr", "visual"]}
+            }
+          ]
+        },
+        {
+          "slice": "blind_untyped_collection_discovery",
+          "tags": ["collection_detail", "untyped_evidence", "coverage_discovery"],
+          "context": {
+            "active_focus_exists": false,
+            "active_focus_type": "",
+            "resolved_referent_status": "unresolved",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": null,
+            "coverage": "discovery",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-057", "message": "先给我几项支持材料。"},
+            {"id": "v12-blind-058", "message": "目前能看到哪些证据？"}
+          ]
+        },
+        {
+          "slice": "blind_untyped_collection_complete",
+          "tags": ["collection_detail", "untyped_evidence", "coverage_complete"],
+          "context": {
+            "active_focus_exists": false,
+            "active_focus_type": "",
+            "resolved_referent_status": "unresolved",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": null,
+            "coverage": "complete",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-059", "message": "把支撑结论的材料全部列全。"},
+            {"id": "v12-blind-060", "message": "当前发现下的所有证据都给我。"}
+          ]
+        },
+        {
+          "slice": "blind_asr_detail",
+          "tags": ["collection_detail", "asr", "evidence_detail"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "evidence",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "evidence"
+          },
+          "expected": {
+            "requirement_kind": "evidence_detail",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-061", "message": "刚才第 2 条语音识别结果逐字是什么？"},
+            {"id": "v12-blind-062", "message": "这条转写记录里的原话是什么？"},
+            {"id": "v12-blind-063", "message": "展开那条 ASR 的具体文本。"},
+            {"id": "v12-blind-064", "message": "把指定的那份音频转写完整展开。"},
+            {"id": "v12-blind-065", "message": "上面那条说话记录对应的时间戳呢？"}
+          ]
+        },
+        {
+          "slice": "blind_comment_detail",
+          "tags": ["collection_detail", "comment", "evidence_detail"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "evidence",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "evidence"
+          },
+          "expected": {
+            "requirement_kind": "evidence_detail",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-066", "message": "这条留言当时的原话是什么？"},
+            {"id": "v12-blind-067", "message": "把刚才那条回复完整展开。"},
+            {"id": "v12-blind-068", "message": "第 4 条评论具体写了什么？"}
+          ]
+        },
+        {
+          "slice": "blind_text_detail",
+          "tags": ["collection_detail", "text", "evidence_detail"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "evidence",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "evidence"
+          },
+          "expected": {
+            "requirement_kind": "evidence_detail",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-069", "message": "那条正文证据的完整段落是什么？"},
+            {"id": "v12-blind-070", "message": "展开刚提到的那条帖子文案。"},
+            {"id": "v12-blind-071", "message": "第 1 条文本材料的具体内容呢？"}
+          ]
+        },
+        {
+          "slice": "blind_ocr_detail",
+          "tags": ["collection_detail", "ocr", "evidence_detail"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "evidence",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "evidence"
+          },
+          "expected": {
+            "requirement_kind": "evidence_detail",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-072", "message": "那条 OCR 识别文字完整是什么？"},
+            {"id": "v12-blind-073", "message": "刚才框选的那条画面文字是什么？"},
+            {"id": "v12-blind-074", "message": "把第 2 条 OCR 结果展开。"}
+          ]
+        },
+        {
+          "slice": "blind_visual_detail",
+          "tags": ["collection_detail", "visual", "evidence_detail"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "evidence",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "evidence"
+          },
+          "expected": {
+            "requirement_kind": "evidence_detail",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-075", "message": "这条画面证据具体表现了什么？"},
+            {"id": "v12-blind-076", "message": "刚才那一张画面的完整内容呢？"},
+            {"id": "v12-blind-077", "message": "第 3 条视觉证据是什么场景？"}
+          ]
+        },
+        {
+          "slice": "blind_keyframe_detail",
+          "tags": ["collection_detail", "keyframe", "evidence_detail"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "evidence",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "evidence"
+          },
+          "expected": {
+            "requirement_kind": "evidence_detail",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-078", "message": "那张关键帧原图里有什么？"},
+            {"id": "v12-blind-079", "message": "刚才那一帧的具体画面是什么？"},
+            {"id": "v12-blind-080", "message": "展开第 5 张关键帧。"}
+          ]
+        },
+        {
+          "slice": "blind_none_without_focus",
+          "tags": ["baseline", "none"],
+          "context": {
+            "active_focus_exists": false,
+            "active_focus_type": "",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "none",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-081", "message": "今天先到这里。"},
+            {"id": "v12-blind-082", "message": "我知道了，多谢。"},
+            {"id": "v12-blind-083", "message": "行，清楚了。"},
+            {"id": "v12-blind-084", "message": "先这样吧。"},
+            {"id": "v12-blind-085", "message": "辛苦了。"}
+          ]
+        },
+        {
+          "slice": "blind_none_with_focus",
+          "tags": ["baseline", "none"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "case",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "none",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-blind-086", "message": "好的，谢谢。"},
+            {"id": "v12-blind-087", "message": "嗯嗯。"},
+            {"id": "v12-blind-088", "message": "回头再看。"},
+            {"id": "v12-blind-089", "message": "没问题。"},
+            {"id": "v12-blind-090", "message": "了解。"}
+          ]
+        },
+        {
+          "slice": "blind_case_selection_and_evidence",
+          "tags": ["cross_requirement", "unsupported"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "case",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "case"
+          },
+          "expected": {
+            "requirement_kind": "unsupported",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": "multiple_source_requirements"
+          },
+          "cases": [
+            {"id": "v12-blind-091", "message": "请另选一则代表案例，随后调出它的评论资料。"},
+            {"id": "v12-blind-092", "message": "找个最典型的案例，并把它的画面线索列出来。"},
+            {"id": "v12-blind-093", "message": "换到新的案例，再列齐那个案例的 ASR 材料。"},
+            {"id": "v12-blind-094", "message": "给我挑一个违规样本，同时展示其关键帧。"},
+            {"id": "v12-blind-095", "message": "重选一个例子，再提供它的 OCR 和正文证据。"}
+          ]
+        },
+        {
+          "slice": "blind_report_and_evidence",
+          "tags": ["cross_requirement", "unsupported"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "unsupported",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": "multiple_source_requirements"
+          },
+          "cases": [
+            {"id": "v12-blind-096", "message": "先归纳整份报告，再调出评论区材料。"},
+            {"id": "v12-blind-097", "message": "介绍整体发现，并把所有 OCR 内容给我。"},
+            {"id": "v12-blind-098", "message": "总结报告重点，同时展示画面证据。"}
+          ]
+        },
+        {
+          "slice": "blind_support_and_detail",
+          "tags": ["cross_requirement", "unsupported"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "claim",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "evidence"
+          },
+          "expected": {
+            "requirement_kind": "unsupported",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": "multiple_source_requirements"
+          },
+          "cases": [
+            {"id": "v12-blind-099", "message": "说明这个结论为什么成立，再把指定那条评论原话给我。"},
+            {"id": "v12-blind-100", "message": "解释当前判定过程，并展开刚才那条语音转写。"}
+          ]
+        }
+      ]
+    }
+  }
+}

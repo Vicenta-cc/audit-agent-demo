@@ -1,0 +1,347 @@
+{
+  "schema_version": "planner-shadow-eval-v1",
+  "frozen_prompt_version": "turn-planner-shadow-v1.1",
+  "suites": {
+    "blind": {
+      "groups": [
+        {
+          "slice": "report_presentation_general",
+          "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "report_presentation", "evidence_types": null, "coverage": null, "reason": null},
+          "cases": [
+            {"id": "v11-001", "message": "用一句话说说这份报告的核心发现。"},
+            {"id": "v11-002", "message": "帮我梳理一下报告的主要内容。"},
+            {"id": "v11-003", "message": "报告整体在讲哪类风险？"},
+            {"id": "v11-004", "message": "先给我一个报告层面的摘要。"},
+            {"id": "v11-005", "message": "这份分析最后说了些什么？"},
+            {"id": "v11-006", "message": "从报告里选一个最有代表性的案例给我。"},
+            {"id": "v11-007", "message": "挑个能体现主要问题的案例。"},
+            {"id": "v11-008", "message": "我想先看一个典型的风险案例。"},
+            {"id": "v11-009", "message": "报告的总体判断和重点是什么？"},
+            {"id": "v11-010", "message": "先介绍一下这份报告。"}
+          ]
+        },
+        {
+          "slice": "report_presentation_replacement",
+          "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "resolved", "resolved_referent_type": "case"},
+          "expected": {"requirement_kind": "report_presentation", "evidence_types": null, "coverage": null, "reason": null},
+          "cases": [
+            {"id": "v11-011", "message": "刚才那个例子不合适，另挑一个。"},
+            {"id": "v11-012", "message": "换个更有代表性的案例。"},
+            {"id": "v11-013", "message": "这个案例先放一边，看看别的。"},
+            {"id": "v11-014", "message": "再选一个不同的案例给我。"},
+            {"id": "v11-015", "message": "不要刚才那个，改看另一个案例。"}
+          ]
+        },
+        {
+          "slice": "focused_claim_support_with_focus",
+          "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "resolved", "resolved_referent_type": "case"},
+          "expected": {"requirement_kind": "focused_claim_support", "evidence_types": null, "coverage": null, "reason": null},
+          "cases": [
+            {"id": "v11-016", "message": "这个案例为什么会被认定有风险？"},
+            {"id": "v11-017", "message": "这里的风险结论是如何得出的？"},
+            {"id": "v11-018", "message": "判定这个案例违规的理由是什么？"},
+            {"id": "v11-019", "message": "为什么认为这个案例存在问题？"},
+            {"id": "v11-020", "message": "这项风险判断的推理依据是什么？"},
+            {"id": "v11-021", "message": "这个结论成立的原因是什么？"},
+            {"id": "v11-022", "message": "为什么给它这样的风险等级？"},
+            {"id": "v11-023", "message": "这个案例的问题具体是怎么判断出来的？"},
+            {"id": "v11-024", "message": "你们凭什么得出这个结论？"},
+            {"id": "v11-025", "message": "这条判定背后的逻辑是什么？"}
+          ]
+        },
+        {
+          "slice": "focused_claim_support_without_focus",
+          "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "unresolved", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "focused_claim_support", "evidence_types": null, "coverage": null, "reason": null},
+          "cases": [
+            {"id": "v11-026", "message": "为何会作出这样的判断？"},
+            {"id": "v11-027", "message": "这个风险结论怎么来的？"},
+            {"id": "v11-028", "message": "为什么会判成这样？"},
+            {"id": "v11-029", "message": "作出这项认定的原因呢？"},
+            {"id": "v11-030", "message": "这结论为什么成立？"}
+          ]
+        },
+        {
+          "slice": "evidence_comment_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["comment"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-031", "message": "评论区里有哪些内容可以支撑这个发现？"},
+            {"id": "v11-032", "message": "先找几条用户回复给我看看。"},
+            {"id": "v11-033", "message": "我只需要留言方面的材料。"},
+            {"id": "v11-034", "message": "把评论相关的代表性记录列几条。"}
+          ]
+        },
+        {
+          "slice": "evidence_text_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["text"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-035", "message": "帖子标题和正文方面有哪些材料？"},
+            {"id": "v11-036", "message": "先看几段帖子文案相关的证据。"},
+            {"id": "v11-037", "message": "我只核对发布内容本身的文字材料。"},
+            {"id": "v11-038", "message": "从标题或正文里挑几项依据。"}
+          ]
+        },
+        {
+          "slice": "evidence_ocr_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["ocr"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-039", "message": "画面里识别出的文字有哪些证据？"},
+            {"id": "v11-040", "message": "先列几段屏幕文字识别结果。"},
+            {"id": "v11-041", "message": "我只想核对图片上的文字识别材料。"},
+            {"id": "v11-042", "message": "从视频画面读出的字给我看几项。"}
+          ]
+        },
+        {
+          "slice": "evidence_asr_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["asr"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-043", "message": "语音转写方面先给我几段。"},
+            {"id": "v11-044", "message": "只看视频里说话内容的转写材料。"},
+            {"id": "v11-045", "message": "挑几项音频识别出来的文字给我。"},
+            {"id": "v11-046", "message": "我想核对语音内容对应的文本记录。"}
+          ]
+        },
+        {
+          "slice": "evidence_visual_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["visual"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-047", "message": "画面本身有哪些内容能说明问题？"},
+            {"id": "v11-048", "message": "先看几项视觉表现方面的依据。"},
+            {"id": "v11-049", "message": "我只关心视频画面呈现出的证据。"},
+            {"id": "v11-050", "message": "从画面内容里挑些代表性材料。"}
+          ]
+        },
+        {
+          "slice": "evidence_keyframe_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["keyframe"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-051", "message": "抽取出的关键帧先给我看几张。"},
+            {"id": "v11-052", "message": "我只需要视频关键帧方面的材料。"},
+            {"id": "v11-053", "message": "列几项关键画面截图作为依据。"},
+            {"id": "v11-054", "message": "从关键帧图片里挑些代表性的。"}
+          ]
+        },
+        {
+          "slice": "evidence_multi_comment_keyframe_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["comment", "keyframe"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-055", "message": "评论区和关键帧方面分别给我几项材料。"},
+            {"id": "v11-056", "message": "先看一些用户回复以及视频关键帧。"}
+          ]
+        },
+        {
+          "slice": "evidence_multi_text_ocr_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["text", "ocr"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-057", "message": "帖子正文和画面识别文字都给我看几段。"},
+            {"id": "v11-058", "message": "我想核对文案与 OCR 两类材料。"}
+          ]
+        },
+        {
+          "slice": "evidence_multi_comment_visual_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["comment", "visual"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-059", "message": "先看看评论内容和画面表现方面的依据。"},
+            {"id": "v11-060", "message": "用户留言与视频视觉内容各挑几项。"}
+          ]
+        },
+        {
+          "slice": "evidence_multi_asr_ocr_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["asr", "ocr"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-061", "message": "语音转写和画面文字识别都列一些。"},
+            {"id": "v11-062", "message": "给我几段 ASR 与 OCR 相关材料。"}
+          ]
+        },
+        {
+          "slice": "evidence_untyped_discovery",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": null, "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-063", "message": "这个发现目前有什么支撑材料？"},
+            {"id": "v11-064", "message": "先给我看几项相关依据。"},
+            {"id": "v11-065", "message": "拿一些能支撑它的材料出来。"},
+            {"id": "v11-066", "message": "这个问题下面收集到了什么？"},
+            {"id": "v11-067", "message": "我想了解支撑这个发现的信息。", "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "unresolved", "resolved_referent_type": ""}},
+            {"id": "v11-068", "message": "先展示几项代表性证据。", "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""}}
+          ]
+        },
+        {
+          "slice": "evidence_comment_negated_complete",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["comment"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-069", "message": "评论不用全列，挑几条就够了。"},
+            {"id": "v11-070", "message": "别把留言全倒出来，给我一些代表性的。"}
+          ]
+        },
+        {
+          "slice": "evidence_text_visual_negated_complete",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["text", "visual"], "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-071", "message": "正文和画面证据不用完整，分别看几项。"},
+            {"id": "v11-072", "message": "文字内容与视觉材料各挑一点，不要全量。"}
+          ]
+        },
+        {
+          "slice": "evidence_untyped_negated_complete",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": null, "coverage": "discovery", "reason": null},
+          "cases": [
+            {"id": "v11-073", "message": "不需要完整清单，先看部分支撑材料。"},
+            {"id": "v11-074", "message": "不用一次给全，展示几项即可。", "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""}}
+          ]
+        },
+        {
+          "slice": "evidence_comment_complete",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["comment"], "coverage": "complete", "reason": null},
+          "cases": [
+            {"id": "v11-075", "message": "评论区相关材料必须全部列出。"},
+            {"id": "v11-076", "message": "把所有用户回复都给我，不要遗漏。"}
+          ]
+        },
+        {
+          "slice": "evidence_text_complete",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["text"], "coverage": "complete", "reason": null},
+          "cases": [
+            {"id": "v11-077", "message": "帖子标题和正文证据要完整清单。"},
+            {"id": "v11-078", "message": "发布文案相关材料全部展开。"}
+          ]
+        },
+        {
+          "slice": "evidence_ocr_complete",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["ocr"], "coverage": "complete", "reason": null},
+          "cases": [
+            {"id": "v11-079", "message": "画面文字识别结果全部列清楚。"},
+            {"id": "v11-080", "message": "OCR 证据一个都不要省略。"}
+          ]
+        },
+        {
+          "slice": "evidence_asr_complete",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["asr"], "coverage": "complete", "reason": null},
+          "cases": [
+            {"id": "v11-081", "message": "把语音转写材料完整给我。"},
+            {"id": "v11-082", "message": "所有 ASR 片段都列出来。"}
+          ]
+        },
+        {
+          "slice": "evidence_visual_keyframe_complete",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["visual", "keyframe"], "coverage": "complete", "reason": null},
+          "cases": [
+            {"id": "v11-083", "message": "视觉内容和关键帧证据都要完整列出。"},
+            {"id": "v11-084", "message": "把画面表现与关键帧材料全部展开。"}
+          ]
+        },
+        {
+          "slice": "evidence_text_ocr_complete",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["text", "ocr"], "coverage": "complete", "reason": null},
+          "cases": [
+            {"id": "v11-085", "message": "正文与 OCR 两类证据全部给我。"},
+            {"id": "v11-086", "message": "帖子文字和画面识别文字都要完整清单。"}
+          ]
+        },
+        {
+          "slice": "evidence_untyped_complete",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": null, "coverage": "complete", "reason": null},
+          "cases": [
+            {"id": "v11-087", "message": "把这个发现关联的证据完整展开。"},
+            {"id": "v11-088", "message": "相关支撑材料全部列出，不要遗漏。"},
+            {"id": "v11-089", "message": "我要查看这个发现下的完整证据集合。"},
+            {"id": "v11-090", "message": "所有相关材料都给我。", "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""}}
+          ]
+        },
+        {
+          "slice": "evidence_detail",
+          "context": {"active_focus_exists": true, "active_focus_type": "evidence", "resolved_referent_status": "resolved", "resolved_referent_type": "evidence"},
+          "expected": {"requirement_kind": "evidence_detail", "evidence_types": null, "coverage": null, "reason": null},
+          "cases": [
+            {"id": "v11-091", "message": "刚才那条评论的完整原话是什么？"},
+            {"id": "v11-092", "message": "把引用的那句回复逐字给我。"},
+            {"id": "v11-093", "message": "这条留言原文请完整展示。"},
+            {"id": "v11-094", "message": "那个 OCR 片段具体识别出了什么字？"},
+            {"id": "v11-095", "message": "把这条画面文字的完整识别结果给我。"},
+            {"id": "v11-096", "message": "那段语音转写的完整内容是什么？"},
+            {"id": "v11-097", "message": "这条 ASR 记录对应的视频时间点在哪？"},
+            {"id": "v11-098", "message": "刚才那一帧的完整画面内容是什么？"},
+            {"id": "v11-099", "message": "这项证据的原始内容请展开。"},
+            {"id": "v11-100", "message": "引用的那段文案原句是什么？"}
+          ]
+        },
+        {
+          "slice": "none_without_focus",
+          "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "none", "evidence_types": null, "coverage": null, "reason": null},
+          "cases": [
+            {"id": "v11-101", "message": "下午好。"},
+            {"id": "v11-102", "message": "明白了。"},
+            {"id": "v11-103", "message": "好的，先这样。"},
+            {"id": "v11-104", "message": "辛苦了，谢谢。"},
+            {"id": "v11-105", "message": "我知道了。"}
+          ]
+        },
+        {
+          "slice": "none_with_focus",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "none", "evidence_types": null, "coverage": null, "reason": null},
+          "cases": [
+            {"id": "v11-106", "message": "稍后再继续。"},
+            {"id": "v11-107", "message": "先暂停一下。"},
+            {"id": "v11-108", "message": "收到。"},
+            {"id": "v11-109", "message": "暂时不用了。"},
+            {"id": "v11-110", "message": "今天先看到这里。"}
+          ]
+        },
+        {
+          "slice": "unsupported_report_and_collection",
+          "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "resolved", "resolved_referent_type": "finding"},
+          "expected": {"requirement_kind": "unsupported", "evidence_types": null, "coverage": null, "reason": "multiple_source_requirements"},
+          "cases": [
+            {"id": "v11-111", "message": "先概括报告，再把评论方面的证据列出来。"},
+            {"id": "v11-112", "message": "介绍报告整体内容，同时给出全部关键帧证据。"},
+            {"id": "v11-113", "message": "挑一个典型案例，并展示它的 OCR 材料。"},
+            {"id": "v11-114", "message": "换一个案例，再列出这个案例的评论内容。"}
+          ]
+        },
+        {
+          "slice": "unsupported_support_and_detail",
+          "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "mixed", "resolved_referent_type": ""},
+          "expected": {"requirement_kind": "unsupported", "evidence_types": null, "coverage": null, "reason": "multiple_source_requirements"},
+          "cases": [
+            {"id": "v11-115", "message": "解释这个案例为何有风险，再贴出那条评论原文。"},
+            {"id": "v11-116", "message": "说明风险判断的理由，并展开某条 ASR 的完整内容。"},
+            {"id": "v11-117", "message": "告诉我结论怎么来的，同时给出那张关键帧的详情。"}
+          ]
+        },
+        {
+          "slice": "unsupported_report_and_support",
+          "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "resolved", "resolved_referent_type": "case"},
+          "expected": {"requirement_kind": "unsupported", "evidence_types": null, "coverage": null, "reason": "multiple_source_requirements"},
+          "cases": [
+            {"id": "v11-118", "message": "总结整份报告，并解释当前案例为什么违规。"},
+            {"id": "v11-119", "message": "介绍报告重点，同时说明这个风险结论如何形成。"},
+            {"id": "v11-120", "message": "先说报告总体情况，再分析这个案例为何有问题。"}
+          ]
+        }
+      ]
+    }
+  }
+}

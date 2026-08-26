@@ -1,0 +1,244 @@
+{
+  "schema_version": "planner-shadow-eval-v1",
+  "frozen_prompt_version": "turn-planner-shadow-v1.2",
+  "suites": {
+    "regression": {
+      "groups": [
+        {
+          "slice": "regression_asr_collection_discovery",
+          "tags": ["collection_detail", "asr"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["asr"],
+            "coverage": "discovery",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-reg-001", "message": "我想核对语音内容对应的文本记录。"},
+            {"id": "v12-reg-002", "message": "语音转写材料有哪些？"},
+            {"id": "v12-reg-003", "message": "先看看语音识别出的文本材料。"}
+          ]
+        },
+        {
+          "slice": "regression_asr_collection_complete",
+          "tags": ["collection_detail", "asr"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["asr"],
+            "coverage": "complete",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-reg-004", "message": "把语音转写材料完整给我。"},
+            {"id": "v12-reg-005", "message": "所有 ASR 证据都列出来。"},
+            {"id": "v12-reg-006", "message": "语音转写内容一条不漏地给我。"}
+          ]
+        },
+        {
+          "slice": "regression_asr_detail",
+          "tags": ["collection_detail", "asr"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "evidence",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "evidence"
+          },
+          "expected": {
+            "requirement_kind": "evidence_detail",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-reg-007", "message": "把刚才那条语音转写完整给我。"},
+            {"id": "v12-reg-008", "message": "这条 ASR 的原文是什么？"},
+            {"id": "v12-reg-009", "message": "展开第 3 条语音转写。"}
+          ]
+        },
+        {
+          "slice": "regression_typed_collection",
+          "tags": ["collection_detail", "typed_evidence"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["comment"],
+            "coverage": "complete",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-reg-010", "message": "把评论原文全部列出来。"},
+            {
+              "id": "v12-reg-011",
+              "message": "OCR 文字完整列出。",
+              "expected": {"evidence_types": ["ocr"]}
+            },
+            {
+              "id": "v12-reg-012",
+              "message": "帖子正文材料都给我。",
+              "expected": {"evidence_types": ["text"]}
+            },
+            {
+              "id": "v12-reg-013",
+              "message": "画面证据全部展示。",
+              "expected": {"evidence_types": ["visual"]}
+            },
+            {
+              "id": "v12-reg-014",
+              "message": "关键帧图片完整给出。",
+              "expected": {"evidence_types": ["keyframe"]}
+            },
+            {
+              "id": "v12-reg-015",
+              "message": "不用全部，看看评论材料。",
+              "expected": {"coverage": "discovery"}
+            }
+          ]
+        },
+        {
+          "slice": "regression_typed_detail",
+          "tags": ["collection_detail", "typed_evidence"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "evidence",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "evidence"
+          },
+          "expected": {
+            "requirement_kind": "evidence_detail",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-reg-016", "message": "那条评论原文是什么？"},
+            {"id": "v12-reg-017", "message": "刚才那条 OCR 的完整文字是什么？"},
+            {"id": "v12-reg-018", "message": "展开这条帖子正文证据。"}
+          ]
+        },
+        {
+          "slice": "regression_case_selection_and_evidence",
+          "tags": ["cross_requirement", "unsupported"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "finding"
+          },
+          "expected": {
+            "requirement_kind": "unsupported",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": "multiple_source_requirements"
+          },
+          "cases": [
+            {"id": "v12-reg-019", "message": "挑一个典型案例，并展示它的 OCR 材料。"},
+            {"id": "v12-reg-020", "message": "换个案例，再把那个案例的评论证据给我。"},
+            {"id": "v12-reg-021", "message": "找一个代表案例，同时列出它的关键帧证据。"}
+          ]
+        },
+        {
+          "slice": "regression_report_and_evidence",
+          "tags": ["cross_requirement", "unsupported"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "finding",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "unsupported",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": "multiple_source_requirements"
+          },
+          "cases": [
+            {"id": "v12-reg-022", "message": "概括报告，再列出全部评论证据。"},
+            {"id": "v12-reg-023", "message": "先说报告重点，同时展示 OCR 材料。"}
+          ]
+        },
+        {
+          "slice": "regression_support_and_detail",
+          "tags": ["cross_requirement", "unsupported"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "claim",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "evidence"
+          },
+          "expected": {
+            "requirement_kind": "unsupported",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": "multiple_source_requirements"
+          },
+          "cases": [
+            {"id": "v12-reg-024", "message": "解释为什么有风险，并给出那条评论原文。"},
+            {"id": "v12-reg-025", "message": "说明结论依据，同时展开刚才那条 ASR。"}
+          ]
+        },
+        {
+          "slice": "regression_current_case_evidence_only",
+          "tags": ["cross_requirement_contrast", "typed_evidence"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "case",
+            "resolved_referent_status": "resolved",
+            "resolved_referent_type": "case"
+          },
+          "expected": {
+            "requirement_kind": "finding_evidence_collection",
+            "evidence_types": ["ocr"],
+            "coverage": "discovery",
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-reg-026", "message": "展示这个案例的 OCR 材料。"},
+            {
+              "id": "v12-reg-027",
+              "message": "看看当前案例的评论证据。",
+              "expected": {"evidence_types": ["comment"]}
+            }
+          ]
+        },
+        {
+          "slice": "regression_selection_only",
+          "tags": ["cross_requirement_contrast"],
+          "context": {
+            "active_focus_exists": true,
+            "active_focus_type": "case",
+            "resolved_referent_status": "not_applicable",
+            "resolved_referent_type": ""
+          },
+          "expected": {
+            "requirement_kind": "report_presentation",
+            "evidence_types": null,
+            "coverage": null,
+            "reason": null
+          },
+          "cases": [
+            {"id": "v12-reg-028", "message": "换一个案例。"},
+            {"id": "v12-reg-029", "message": "挑个更有代表性的案例。"},
+            {"id": "v12-reg-030", "message": "重新选一个典型案例给我看。"}
+          ]
+        }
+      ]
+    }
+  }
+}
