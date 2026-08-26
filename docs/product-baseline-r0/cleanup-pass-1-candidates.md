@@ -1,6 +1,7 @@
 # Cleanup Pass 1 Candidates
 
-R0 does not delete these items. They are candidates for a later, separately
+R0 does not delete these items. The complete disposition is in
+`legacy-cleanup-matrix.md`; these are the immediate candidates for a later, separately
 approved cleanup pass after the baseline has been accepted.
 
 | Candidate | Reason | Required prerequisite |
