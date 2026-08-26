@@ -5,9 +5,12 @@
 - Required distribution: `hermes-agent==0.20.4`
 - Declared install: `requirements-hermes.txt`
 - Recorded source version: `0.20.4` from the local Hermes `pyproject.toml`
-- Recorded source commit: `e624e9fde561e1add9388384012b295fde669ade` (project
-  metadata only; the local source directory has no `.git`, so this is not
-  independently asserted as an upstream commit in R0)
+- Required source commit: `e624e9fde561e1add9388384012b295fde669ade`.
+  R0.1 independently fetches and checks out this exact commit from the
+  official repository. The earlier R0 `git ls-remote` observation is retained
+  only as an incomplete audit attempt, not as evidence that the commit is
+  missing. The R0.1 fetch attempt is documented in
+  `hermes-clean-room-report.md` and ended before any object was obtained.
 - Required Python: `>=3.11,<3.14`
 - Product imports only public `hermes_cli.plugins`, `model_tools` and
   `run_agent.AIAgent` through `backend/hermes_runtime/adapter.py`.
@@ -36,3 +39,8 @@ hermes_constants.py 58b8d5f17bc6d23dc192990bb71cb92725ed37b6c99a4a5b4cc97ac80784
 pyproject.toml 1f928b1560b0669291b3f7d562aa78c99ac4f927375939ca97fd3c3e7494cb91
 uv.lock 8fd868b9da8b6bc2f4aa94a845e210eccdd5e31be7a0b404f0a8527ced0fddec
 ```
+
+The hashes above are historical local-source audit values. R0.1 does not
+substitute them for official-commit hashes: exact-commit checkout and
+comparison of these registered files remain blocked by the failed network
+fetch. The official source must be used as-is when the gate is retried.

@@ -16,3 +16,12 @@ Every row remains recoverable through the Preservation Gate archive.
 
 The matrix is a plan, not an authorization to run `git worktree remove`, delete
 branches/tags, or delete artifacts/SQLite files.
+
+## R0.1 closure note
+
+No Cleanup Pass 1 action was performed. Hermes remains the canonical future
+Agent route, while pre-Hermes runtimes remain archival candidates or narrowly
+marked compatibility facades. The MediaCrawler dependency now has a recoverable
+source-only checkpoint; the original dirty worktree remains untouched. The
+candidate is retained without a baseline tag until the exact Hermes clean-room
+gate passes.
