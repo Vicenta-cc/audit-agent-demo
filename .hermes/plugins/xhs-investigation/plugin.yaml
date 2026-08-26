@@ -1,0 +1,14 @@
+manifest_version: 2
+api_version: 1
+name: xhs-investigation
+version: 0.1.0
+description: Canonical Hermes tools for the XHS product investigation baseline.
+author: Product Baseline R0
+kind: tool
+provides_tools:
+  - investigation
+python_dependencies: []
+tags:
+  - product-baseline-r0
+  - hermes-m1
+  - hermes-m2.2
