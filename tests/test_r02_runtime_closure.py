@@ -60,6 +60,7 @@ class _FakeAgent:
     def __init__(self, options: dict[str, object], *, fail: bool = False):
         self.options = options
         self.fail = fail
+        self._api_max_retries = 3
         self.execution_count = 0
         self.closed = False
 
@@ -135,6 +136,7 @@ class PromptAndPluginClosureTest(unittest.TestCase):
         self.assertEqual(captured["api_mode"], "chat_completions")
         self.assertEqual(captured["max_iterations"], 12)
         self.assertIsNone(captured["session_db"])
+        self.assertEqual(agent._api_max_retries, 1)
 
     def test_product_adapter_rejects_validation_only_task_mode(self):
         with patch.dict(

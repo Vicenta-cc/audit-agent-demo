@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import yaml
 
 from backend.api.investigation import create_investigation_router
 from backend.api.investigation_execution import InvestigationTurnExecutor
@@ -97,6 +98,7 @@ class _ConcurrentAgent:
         self.options = options
         self.barrier = barrier
         self.fail = fail
+        self._api_max_retries = 3
         self.execution_count = 0
         self.calls = []
 
@@ -151,6 +153,7 @@ class _ExecutorPathAgent:
     def __init__(self, options, *, fail: bool = False):
         self.options = options
         self.fail = fail
+        self._api_max_retries = 3
         self.execution_count = 0
         self.tool_result = None
 
@@ -301,15 +304,25 @@ class _ScopedToolService:
 
 
 class InvocationParityTest(unittest.TestCase):
+    def test_retry_parity_fails_closed_when_runtime_control_is_missing(self):
+        binding = HermesRuntimeBinding()
+        with self.assertRaisesRegex(
+            RuntimeError, "does not expose the canonical retry control"
+        ):
+            binding.create_agent(
+                session_id="missing-retry-control",
+                agent_factory=lambda **_options: SimpleNamespace(),
+            )
+
     def test_frozen_runner_and_product_invocation_are_equivalent(self):
         captured = {}
 
         def factory(**options):
             captured.update(options)
-            return SimpleNamespace()
+            return SimpleNamespace(_api_max_retries=3)
 
         binding = HermesRuntimeBinding()
-        binding.create_agent(
+        agent = binding.create_agent(
             session_id="product-session",
             agent_factory=factory,
             base_url="https://example.invalid/v1",
@@ -346,6 +359,7 @@ class InvocationParityTest(unittest.TestCase):
         self.assertIsNone(captured["session_db"])
         self.assertNotIn("ephemeral_system_prompt", captured)
         self.assertTrue(callable(captured["stream_delta_callback"]))
+        self.assertEqual(agent._api_max_retries, 1)
 
         prompt_bytes = (ROOT / "hermes_m0/account_activity_prompt.txt").read_bytes()
         injected_prompt = binding.product_system_prompt()
@@ -389,7 +403,12 @@ class InvocationParityTest(unittest.TestCase):
                 self.assertEqual(agent.model, "qwen3.7-plus")
                 self.assertEqual(agent.api_mode, "chat_completions")
                 self.assertEqual(agent.max_iterations, 12)
+                self.assertEqual(agent._api_max_retries, 1)
                 self.assertIsNone(agent._session_db)
+                config = yaml.safe_load(
+                    (Path(directory) / "config.yaml").read_text(encoding="utf-8")
+                )
+                self.assertEqual(config["agent"]["api_max_retries"], 1)
                 agent.close()
         self.assertEqual(len(definitions), 11)
         self.assertEqual(

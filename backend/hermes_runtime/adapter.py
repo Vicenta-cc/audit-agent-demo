@@ -28,6 +28,7 @@ PRODUCT_TOOLSET = "investigation"
 PRODUCT_PLUGIN = "xhs-investigation"
 PRODUCT_PROVIDER = "alibaba"
 PRODUCT_MODEL = "qwen3.7-plus"
+CANONICAL_API_MAX_RETRIES = 1
 
 _LEGACY_MODE_FLAGS = (
     "HERMES_INVESTIGATION_TASK_MODE",
@@ -98,6 +99,13 @@ class HermesRuntimeBinding:
                 raise HermesRuntimeUnavailable("Hermes product config must be a mapping")
         else:
             raw = {}
+        changed = False
+        agent_config = raw.setdefault("agent", {})
+        if not isinstance(agent_config, dict):
+            raise HermesRuntimeUnavailable("Hermes agent config must be a mapping")
+        if agent_config.get("api_max_retries") != CANONICAL_API_MAX_RETRIES:
+            agent_config["api_max_retries"] = CANONICAL_API_MAX_RETRIES
+            changed = True
         plugins = raw.setdefault("plugins", {})
         if not isinstance(plugins, dict):
             raise HermesRuntimeUnavailable("Hermes plugins config must be a mapping")
@@ -106,6 +114,8 @@ class HermesRuntimeBinding:
             raise HermesRuntimeUnavailable("Hermes plugins.enabled must be a list")
         if PRODUCT_PLUGIN not in enabled:
             enabled.append(PRODUCT_PLUGIN)
+            changed = True
+        if changed:
             fd, temporary_name = tempfile.mkstemp(
                 prefix=".config.", suffix=".yaml", dir=product_home
             )
@@ -179,7 +189,36 @@ class HermesRuntimeBinding:
             "skip_background_review": True,
         }
         options.update(overrides)
-        return constructor(**options)
+        agent = constructor(**options)
+        if self.expected_version != EXPECTED_HERMES_VERSION:
+            self._close_failed_agent(agent)
+            raise HermesRuntimeUnavailable(
+                "canonical retry fence is only defined for Hermes Agent 0.20.4"
+            )
+        if not hasattr(agent, "_api_max_retries"):
+            self._close_failed_agent(agent)
+            raise HermesRuntimeUnavailable(
+                "Hermes Agent 0.20.4 does not expose the canonical retry control"
+            )
+        try:
+            agent._api_max_retries = CANONICAL_API_MAX_RETRIES
+        except Exception as exc:
+            self._close_failed_agent(agent)
+            raise HermesRuntimeUnavailable(
+                "Hermes Agent 0.20.4 canonical retry control could not be set"
+            ) from exc
+        if agent._api_max_retries != CANONICAL_API_MAX_RETRIES:
+            self._close_failed_agent(agent)
+            raise HermesRuntimeUnavailable(
+                "Hermes Agent 0.20.4 canonical retry control did not take effect"
+            )
+        return agent
+
+    @staticmethod
+    def _close_failed_agent(agent: Any) -> None:
+        close = getattr(agent, "close", None)
+        if callable(close):
+            close()
 
     def bind_published_report_session(
         self,
