@@ -85,7 +85,12 @@ class _FakeAgent:
                         }
                     ],
                 },
-                {"role": "tool", "name": "read_report", "content": "{}"},
+                {
+                    "role": "tool",
+                    "tool_call_id": "call-1",
+                    "name": "read_report",
+                    "content": "{}",
+                },
                 {"role": "assistant", "content": answer},
             ],
             "api_calls": 1,

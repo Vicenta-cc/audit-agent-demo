@@ -34,6 +34,7 @@ The product path matches the final M2.2 held-out runner:
 | provider / model | `alibaba` / `qwen3.7-plus` |
 | API mode | `chat_completions` |
 | max iterations | `12` |
+| Provider retry | `_api_max_retries=1` |
 | enabled toolsets | `investigation` |
 | context files / memory / soul / background | skipped / skipped / not loaded / skipped |
 | Prompt injection | `run_conversation(system_message=...)` |
@@ -49,6 +50,9 @@ The 11-source-schema hash remains
 Hermes 0.20.4 returns the Qwen-visible definitions in name order; their exact
 serialized hash is
 `5d4b9a27e004ef8c9043b3d4c3cd9ee09831634877ad79ab6cb10a180d10a821`.
+The product Hermes home also records `agent.api_max_retries: 1`. The 0.20.4
+version-fenced constructor sets and immediately verifies the same effective
+value; a missing or ineffective runtime control fails closed.
 
 ## Transcript and compatibility
 
@@ -58,6 +62,21 @@ integrity field. The next Turn reads this private JSON directly. It never
 reconstructs Hermes history from the public Message DTO. Returned history must
 preserve the supplied transcript prefix and current user message or the Turn is
 marked unknown-outcome and no transcript is written.
+
+Completed transcripts accept the Hermes 0.20.4 no-Tool, single-call,
+multi-round, and grouped multi-call message shapes. Persistence rejects
+non-object or unsupported-role messages, malformed/duplicate ToolCalls,
+orphaned/duplicate/unmatched/out-of-order ToolResults, dangling calls, a missing
+final assistant, or a final assistant inconsistent with `final_response`.
+Messages are never silently dropped, trimmed, or reordered.
+
+Validation, JSON serialization, SHA-256 generation, private transcript insert,
+public Product message writes, and completed Turn transition share the same
+fail-closed boundary. A failure before transaction commit leaves the Turn
+`interrupted` with `hermes_unknown_outcome` and preserves the prior completed
+transcript. An explicit Hermes interruption instead uses
+`hermes_interrupted`. Once the transaction commits, later observer/SSE
+notification failure cannot reverse the completed Product fact.
 
 Completed replay returns the persisted Product result without Agent or Tool
 execution. Interrupted and unknown outcomes do not replace the latest completed

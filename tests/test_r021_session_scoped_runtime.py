@@ -21,7 +21,8 @@ from backend.api.investigation_execution import InvestigationTurnExecutor
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 from backend.investigation.contracts import PublishedReportContext
-from backend.investigation.errors import ConcurrentTurnError
+from backend.investigation.errors import ConcurrentTurnError, ToolProtocolError
+from backend.investigation.protocol import validate_hermes_transcript_messages
 from backend.investigation.store import InvestigationStore
 from hermes_m0.plugin import _handler, _idempotent_tool_execution
 from hermes_m0.runtime import (
@@ -46,6 +47,14 @@ CANONICAL_TOOL_SCHEMA_SHA256 = (
 CANONICAL_TOOL_DEFINITIONS_SHA256 = (
     "5d4b9a27e004ef8c9043b3d4c3cd9ee09831634877ad79ab6cb10a180d10a821"
 )
+CANONICAL_TRANSCRIPT_PROVENANCE = {
+    "source_commit": "0a5090579c4cfcda1208269814f32fbe77da4c86",
+    "hermes_version": "0.20.4",
+    "accepted_raw_sha256": (
+        "e61356c193cbbd7eccb1d52112bd2832c29d4fdd110f1d0c6eb5bbfd83354c56"
+    ),
+    "multiple_call_contract": "Hermes 0.20.4 chat-completions tool protocol",
+}
 CANONICAL_SCHEMA_SOURCE_ORDER = (
     "read_report",
     "list_finding_posts",
@@ -60,6 +69,26 @@ CANONICAL_SCHEMA_SOURCE_ORDER = (
     "read_account_post",
 )
 CANONICAL_QWEN_TOOL_ORDER = tuple(sorted(CANONICAL_SCHEMA_SOURCE_ORDER))
+
+
+def _canonical_tool_call(call_id: str, name: str = "read_report") -> dict:
+    return {
+        "id": call_id,
+        "call_id": call_id,
+        "response_item_id": None,
+        "type": "function",
+        "function": {"name": name, "arguments": "{}"},
+    }
+
+
+def _canonical_tool_result(call_id: str, name: str = "read_report") -> dict:
+    return {
+        "role": "tool",
+        "tool_call_id": call_id,
+        "tool_name": name,
+        "name": name,
+        "content": "{}",
+    }
 
 
 def _context(label: str) -> PublishedReportContext:
@@ -110,6 +139,9 @@ class _ConcurrentAgent:
             raise RuntimeError("injected unknown outcome")
         history = [dict(item) for item in kwargs.get("conversation_history") or []]
         answer = f"answer:{self.options['session_id']}"
+        tool_call_id = (
+            f"call:{self.options['session_id']}:{self.execution_count}"
+        )
         return {
             "final_response": answer,
             "messages": [
@@ -120,7 +152,7 @@ class _ConcurrentAgent:
                     "content": "",
                     "tool_calls": [
                         {
-                            "id": f"call:{self.options['session_id']}",
+                            "id": tool_call_id,
                             "function": {
                                 "name": "read_report",
                                 "arguments": {},
@@ -130,7 +162,7 @@ class _ConcurrentAgent:
                 },
                 {
                     "role": "tool",
-                    "tool_call_id": f"call:{self.options['session_id']}",
+                    "tool_call_id": tool_call_id,
                     "name": "read_report",
                     "content": json.dumps(
                         {"private_report": self.options["session_id"]}
@@ -456,10 +488,10 @@ class InvocationParityTest(unittest.TestCase):
             )
             self.assertEqual(
                 first_transcript[1]["tool_calls"][0]["id"],
-                f"call:{session.id}",
+                f"call:{session.id}:1",
             )
             self.assertEqual(
-                first_transcript[2]["tool_call_id"], f"call:{session.id}"
+                first_transcript[2]["tool_call_id"], f"call:{session.id}:1"
             )
 
             second, _ = service.accept_message(
@@ -482,8 +514,16 @@ class InvocationParityTest(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             serialized = response.text
             self.assertNotIn("tool_call_id", serialized)
-            self.assertNotIn(f"call:{session.id}", serialized)
+            self.assertNotIn(f"call:{session.id}:1", serialized)
             self.assertNotIn("private_report", serialized)
+
+            serialized_events = json.dumps(
+                service.store.list_public_turn_events(second.id),
+                ensure_ascii=False,
+            )
+            self.assertNotIn("tool_call_id", serialized_events)
+            self.assertNotIn(f"call:{session.id}:2", serialized_events)
+            self.assertNotIn("private_report", serialized_events)
 
     def test_unknown_outcome_does_not_replace_completed_transcript(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -512,8 +552,323 @@ class InvocationParityTest(unittest.TestCase):
             )
             with self.assertRaisesRegex(RuntimeError, "unknown outcome"):
                 service.execute_turn(failed.id)
+            interrupted = service.store.get_turn(failed.id)
+            self.assertEqual(interrupted.status, "interrupted")
+            self.assertEqual(interrupted.error_code, "hermes_unknown_outcome")
             self.assertEqual(
                 service.store.latest_completed_hermes_transcript(session.id), before
+            )
+
+
+class TranscriptIntegrityTest(unittest.TestCase):
+    @staticmethod
+    def _service(directory: str):
+        agents = []
+
+        def factory(**options):
+            agent = _ConcurrentAgent(options, Barrier(1))
+            agents.append(agent)
+            return agent
+
+        service = HermesInvestigationAgentService(
+            report_facade=_MultiReportFacade(),
+            store=InvestigationStore(Path(directory) / "investigation.sqlite3"),
+            agent_factory=factory,
+            bind_runtime=False,
+            hermes_state_dir=Path(directory) / "hermes",
+        )
+        session = service.create_session(_context("a").report_version_id)
+        return service, session, agents
+
+    @staticmethod
+    def _complete_first(service, session):
+        turn, _ = service.accept_message(
+            session.id,
+            client_message_id="completed-before-failure",
+            content="completed before failure",
+        )
+        service.execute_turn(turn.id)
+        return service.store.latest_completed_hermes_transcript(session.id)
+
+    def test_canonical_transcript_shapes_are_accepted(self):
+        self.assertEqual(CANONICAL_TRANSCRIPT_PROVENANCE["hermes_version"], "0.20.4")
+        # The accepted raw hash covers no-tool, single-tool, and multi-round
+        # shapes; the installed Hermes contract additionally permits grouped calls.
+        no_tool = [
+            {"role": "user", "content": "question"},
+            {"role": "assistant", "content": "answer"},
+        ]
+        single_tool = [
+            {"role": "user", "content": "question"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [_canonical_tool_call("call-1")],
+            },
+            _canonical_tool_result("call-1"),
+            {"role": "assistant", "content": "answer"},
+        ]
+        multiple_rounds = [
+            {"role": "user", "content": "question"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [_canonical_tool_call("call-1")],
+            },
+            _canonical_tool_result("call-1"),
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [_canonical_tool_call("call-2", "read_posts")],
+            },
+            _canonical_tool_result("call-2", "read_posts"),
+            {"role": "assistant", "content": "answer"},
+        ]
+        multiple_calls = [
+            {"role": "user", "content": "question"},
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    _canonical_tool_call("call-1"),
+                    _canonical_tool_call("call-2", "read_posts"),
+                ],
+            },
+            _canonical_tool_result("call-1"),
+            _canonical_tool_result("call-2", "read_posts"),
+            {"role": "assistant", "content": "answer"},
+        ]
+        for name, messages in {
+            "accepted-no-tool": no_tool,
+            "accepted-single-tool": single_tool,
+            "accepted-multiple-rounds": multiple_rounds,
+            "hermes-0.20.4-multiple-calls": multiple_calls,
+        }.items():
+            with self.subTest(name=name):
+                validated = HermesInvestigationAgentService._validate_completed_transcript(
+                    {"messages": messages, "final_response": "answer"},
+                    history=None,
+                    user_message="question",
+                )
+                self.assertEqual(validated, messages)
+
+    def test_invalid_transcript_shapes_fail_closed(self):
+        call = _canonical_tool_call("call-1")
+        result = _canonical_tool_result("call-1")
+        invalid = {
+            "non-dict-message": [
+                {"role": "user", "content": "question"},
+                "not-a-message",
+                {"role": "assistant", "content": "answer"},
+            ],
+            "illegal-role": [
+                {"role": "system", "content": "not persisted here"},
+                {"role": "assistant", "content": "answer"},
+            ],
+            "orphan-result": [
+                {"role": "user", "content": "question"},
+                result,
+                {"role": "assistant", "content": "answer"},
+            ],
+            "duplicate-result": [
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "", "tool_calls": [call]},
+                result,
+                result,
+                {"role": "assistant", "content": "answer"},
+            ],
+            "unmatched-result": [
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "", "tool_calls": [call]},
+                _canonical_tool_result("different-call"),
+                {"role": "assistant", "content": "answer"},
+            ],
+            "dangling-call": [
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "", "tool_calls": [call]},
+                {"role": "assistant", "content": "answer"},
+            ],
+            "duplicate-call-id": [
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "", "tool_calls": [call]},
+                result,
+                {"role": "assistant", "content": "", "tool_calls": [call]},
+                result,
+                {"role": "assistant", "content": "answer"},
+            ],
+            "missing-final-assistant": [
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "", "tool_calls": [call]},
+                result,
+            ],
+        }
+        for name, messages in invalid.items():
+            with self.subTest(name=name), self.assertRaises(ToolProtocolError):
+                validate_hermes_transcript_messages(messages)
+
+        with self.assertRaisesRegex(RuntimeError, "does not match"):
+            HermesInvestigationAgentService._validate_completed_transcript(
+                {
+                    "messages": [
+                        {"role": "user", "content": "question"},
+                        {"role": "assistant", "content": "different"},
+                    ],
+                    "final_response": "answer",
+                },
+                history=None,
+                user_message="question",
+            )
+
+        history = [
+            {"role": "user", "content": "old question"},
+            {"role": "assistant", "content": "old answer"},
+        ]
+        with self.assertRaisesRegex(RuntimeError, "preserve its input history"):
+            HermesInvestigationAgentService._validate_completed_transcript(
+                {
+                    "messages": [
+                        {"role": "user", "content": "changed question"},
+                        {"role": "assistant", "content": "old answer"},
+                        {"role": "user", "content": "question"},
+                        {"role": "assistant", "content": "answer"},
+                    ],
+                    "final_response": "answer",
+                },
+                history=history,
+                user_message="question",
+            )
+
+    def test_serialization_failure_is_unknown_and_preserves_completed_transcript(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, session, _agents = self._service(directory)
+            before = self._complete_first(service, session)
+            failed, _ = service.accept_message(
+                session.id,
+                client_message_id="serialization-failure",
+                content="serialization failure",
+            )
+            with patch.object(
+                service.store,
+                "_hermes_transcript_json",
+                side_effect=TypeError("injected serialization failure"),
+            ), self.assertRaisesRegex(RuntimeError, "unknown outcome"):
+                service.execute_turn(failed.id)
+            current = service.store.get_turn(failed.id)
+            self.assertEqual(current.status, "interrupted")
+            self.assertEqual(current.error_code, "hermes_unknown_outcome")
+            self.assertEqual(
+                service.store.latest_completed_hermes_transcript(session.id), before
+            )
+
+    def test_incomplete_completed_transcript_is_unknown_and_not_persisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, session, agents = self._service(directory)
+            before = self._complete_first(service, session)
+            failed, _ = service.accept_message(
+                session.id,
+                client_message_id="incomplete-transcript",
+                content="incomplete transcript",
+            )
+
+            def incomplete(message, **kwargs):
+                history = [
+                    dict(item)
+                    for item in kwargs.get("conversation_history") or []
+                ]
+                return {
+                    "final_response": "untrusted answer",
+                    "messages": [
+                        *history,
+                        {"role": "user", "content": message},
+                        {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [_canonical_tool_call("incomplete-call")],
+                        },
+                        _canonical_tool_result("incomplete-call"),
+                    ],
+                    "completed": True,
+                    "failed": False,
+                    "interrupted": False,
+                }
+
+            with patch.object(
+                agents[0], "run_conversation", side_effect=incomplete
+            ), self.assertRaisesRegex(RuntimeError, "unknown outcome"):
+                service.execute_turn(failed.id)
+            current = service.store.get_turn(failed.id)
+            self.assertEqual(current.status, "interrupted")
+            self.assertEqual(current.error_code, "hermes_unknown_outcome")
+            self.assertEqual(
+                service.store.latest_completed_hermes_transcript(session.id), before
+            )
+
+    def test_database_failure_rolls_back_transcript_and_completed_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, session, _agents = self._service(directory)
+            before = self._complete_first(service, session)
+            failed, _ = service.accept_message(
+                session.id,
+                client_message_id="database-failure",
+                content="database failure",
+            )
+            with patch.object(
+                service.store,
+                "_insert_query_receipts",
+                side_effect=RuntimeError("injected database persistence failure"),
+            ), self.assertRaisesRegex(RuntimeError, "unknown outcome"):
+                service.execute_turn(failed.id)
+            current = service.store.get_turn(failed.id)
+            self.assertEqual(current.status, "interrupted")
+            self.assertEqual(current.error_code, "hermes_unknown_outcome")
+            self.assertEqual(
+                service.store.latest_completed_hermes_transcript(session.id), before
+            )
+            with service.store._connect() as connection:
+                count = connection.execute(
+                    "SELECT COUNT(*) FROM investigation_hermes_transcripts WHERE turn_id = ?",
+                    (failed.id,),
+                ).fetchone()[0]
+            self.assertEqual(count, 0)
+
+    def test_explicit_interruption_has_distinct_error_code(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, session, _agents = self._service(directory)
+            turn, _ = service.accept_message(
+                session.id,
+                client_message_id="explicit-interruption",
+                content="explicit interruption",
+            )
+            agent = service._agent(session.id)
+            with patch.object(
+                agent,
+                "run_conversation",
+                return_value={"interrupted": True, "completed": False},
+            ), self.assertRaisesRegex(RuntimeError, "was interrupted"):
+                service.execute_turn(turn.id)
+            current = service.store.get_turn(turn.id)
+            self.assertEqual(current.status, "interrupted")
+            self.assertEqual(current.error_code, "hermes_interrupted")
+
+    def test_post_commit_notification_failure_keeps_completed_result(self):
+        with tempfile.TemporaryDirectory() as directory:
+            service, session, _agents = self._service(directory)
+            turn, _ = service.accept_message(
+                session.id,
+                client_message_id="notification-failure",
+                content="notification failure",
+            )
+
+            def observer(_turn_id, node_name):
+                if node_name == "persist_turn":
+                    raise RuntimeError("injected notification failure")
+
+            service.add_turn_node_observer(observer)
+            result = service.execute_turn(turn.id)
+            self.assertEqual(result.status, "completed")
+            self.assertEqual(service.store.get_turn(turn.id).status, "completed")
+            self.assertIsNotNone(
+                service.store.latest_completed_hermes_transcript(session.id)
             )
 
 
