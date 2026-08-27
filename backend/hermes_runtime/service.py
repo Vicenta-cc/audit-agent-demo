@@ -15,6 +15,7 @@ from backend.investigation.contracts import (
     TurnResult,
 )
 from backend.investigation.errors import InvestigationTurnNotFoundError
+from backend.investigation.protocol import validate_hermes_transcript_messages
 from backend.investigation.report_query import ReportQueryFacade
 from backend.investigation.store import InvestigationStore
 
@@ -122,11 +123,8 @@ class HermesInvestigationAgentService:
                 conversation_history=history,
                 task_id=turn.id,
             )
-            self._validate_completed_transcript(
-                result,
-                history=history,
-                user_message=user_message,
-            )
+            if not isinstance(result, dict):
+                raise RuntimeError("Hermes returned a non-object Turn result")
         except Exception as exc:
             self.store.mark_interrupted(
                 turn.id,
@@ -135,9 +133,44 @@ class HermesInvestigationAgentService:
                 retryable=True,
             )
             raise RuntimeError("Hermes Turn ended with an unknown outcome") from exc
-        return self._persist_result(
-            turn.id, result, previous_message_count=len(history or [])
-        )
+        if bool(result.get("interrupted")):
+            self.store.mark_interrupted(
+                turn.id,
+                error_code="hermes_interrupted",
+                safe_message="调查执行被中断，可以安全恢复。",
+                retryable=True,
+            )
+            raise RuntimeError("Hermes Turn was interrupted")
+        if bool(result.get("failed")) or not bool(result.get("completed", True)):
+            return self._persist_result(
+                turn.id,
+                result,
+                previous_message_count=len(history or []),
+                transcript=None,
+            )
+        try:
+            transcript = self._validate_completed_transcript(
+                result,
+                history=history,
+                user_message=user_message,
+            )
+            return self._persist_result(
+                turn.id,
+                result,
+                previous_message_count=len(history or []),
+                transcript=transcript,
+            )
+        except Exception as exc:
+            current = self.store.get_turn(turn.id)
+            if current.status == "completed":
+                return self.store.turn_result(turn.id)
+            self.store.mark_interrupted(
+                turn.id,
+                error_code="hermes_unknown_outcome",
+                safe_message="调查执行结果暂时无法确认，可以安全恢复。",
+                retryable=True,
+            )
+            raise RuntimeError("Hermes Turn ended with an unknown outcome") from exc
 
     def accept_resume(self, turn_id: str) -> tuple[InvestigationTurn, bool]:
         turn = self.store.get_turn(turn_id)
@@ -243,15 +276,8 @@ class HermesInvestigationAgentService:
         result: dict[str, Any],
         *,
         previous_message_count: int,
+        transcript: list[dict[str, Any]] | None,
     ) -> TurnResult:
-        if bool(result.get("interrupted")):
-            self.store.mark_interrupted(
-                turn_id,
-                error_code="hermes_interrupted",
-                safe_message="调查执行被中断，可以安全恢复。",
-                retryable=True,
-            )
-            raise RuntimeError("Hermes Turn was interrupted")
         answer = str(result.get("final_response") or "").strip()
         if bool(result.get("failed")) or not bool(result.get("completed", True)):
             self.store.fail_turn(
@@ -266,11 +292,8 @@ class HermesInvestigationAgentService:
                 stop_reason=str(result.get("turn_exit_reason") or "failed"),
             )
             return self.store.turn_result(turn_id)
-        transcript = [
-            dict(item)
-            for item in result.get("messages") or []
-            if isinstance(item, dict)
-        ]
+        if transcript is None:
+            raise RuntimeError("completed Hermes result requires a validated transcript")
         new_messages = transcript[previous_message_count:]
         trace_messages = [
             item
@@ -326,12 +349,11 @@ class HermesInvestigationAgentService:
         *,
         history: list[dict[str, Any]] | None,
         user_message: str,
-    ) -> None:
-        if not bool(result.get("completed", True)) or bool(result.get("failed")):
-            return
+    ) -> list[dict[str, Any]]:
         transcript = result.get("messages")
         if not isinstance(transcript, list):
             raise RuntimeError("Hermes did not return a complete message transcript")
+        validate_hermes_transcript_messages(transcript)
         expected_history = history or []
         if transcript[: len(expected_history)] != expected_history:
             raise RuntimeError("Hermes transcript did not preserve its input history")
@@ -344,6 +366,12 @@ class HermesInvestigationAgentService:
             or current_user.get("content") != user_message
         ):
             raise RuntimeError("Hermes transcript changed the current user message")
+        final_content = transcript[-1].get("content")
+        if final_content != result.get("final_response"):
+            raise RuntimeError(
+                "Hermes final assistant does not match the completed response"
+            )
+        return [dict(item) for item in transcript]
 
     @staticmethod
     def _tool_calls(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:

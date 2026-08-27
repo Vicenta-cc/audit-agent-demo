@@ -41,6 +41,7 @@ from backend.investigation.errors import (
     InvestigationSessionNotFoundError,
     InvestigationTurnNotFoundError,
 )
+from backend.investigation.protocol import validate_hermes_transcript_messages
 
 
 def utc_now() -> str:
@@ -1343,20 +1344,19 @@ class InvestigationStore:
         value = json.loads(serialized)
         if not isinstance(value, list):
             raise InvestigationTurnNotFoundError("private Hermes transcript is invalid")
+        try:
+            validate_hermes_transcript_messages(value)
+        except Exception as exc:
+            raise InvestigationTurnNotFoundError(
+                "private Hermes transcript failed protocol validation"
+            ) from exc
         return [dict(item) for item in value]
 
     @staticmethod
     def _hermes_transcript_json(messages: list[dict[str, Any]]) -> str:
-        normalized: list[dict[str, Any]] = []
-        for message in messages:
-            if not isinstance(message, dict):
-                raise ValueError("Hermes transcript messages must be JSON objects")
-            role = str(message.get("role") or "")
-            if role not in {"user", "assistant", "tool"}:
-                raise ValueError(f"unsupported Hermes transcript role: {role!r}")
-            normalized.append(dict(message))
+        validate_hermes_transcript_messages(messages)
         return json.dumps(
-            normalized,
+            messages,
             ensure_ascii=False,
             separators=(",", ":"),
         )
