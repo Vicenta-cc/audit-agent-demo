@@ -109,11 +109,11 @@ class HermesInvestigationAgentService:
         try:
             self._bind_session(session)
             agent = self._agent(session.id)
+            history = self._conversation_history(session.id)
             result = agent.run_conversation(
                 self.store.get_user_message_for_turn(turn.id).content,
-                conversation_history=self._conversation_history(
-                    session.id, turn.id
-                ),
+                system_message=self.runtime_binding.product_system_prompt(),
+                conversation_history=history,
                 task_id=turn.id,
             )
         except Exception as exc:
@@ -124,7 +124,9 @@ class HermesInvestigationAgentService:
                 retryable=True,
             )
             raise RuntimeError("Hermes Turn ended with an unknown outcome") from exc
-        return self._persist_result(turn.id, result)
+        return self._persist_result(
+            turn.id, result, previous_message_count=len(history or [])
+        )
 
     def accept_resume(self, turn_id: str) -> tuple[InvestigationTurn, bool]:
         turn = self.store.get_turn(turn_id)
@@ -157,10 +159,9 @@ class HermesInvestigationAgentService:
                 agent = self.runtime_binding.create_agent(
                     session_id=session_id,
                     agent_factory=self.agent_factory,
-                    provider="alibaba",
                     base_url=settings.dashscope_base_url,
                     api_key=settings.dashscope_api_key,
-                    model=settings.qwen_text_model,
+                    stream_delta_callback=lambda _delta: None,
                 )
                 self._agents[session_id] = agent
             return agent
@@ -210,18 +211,17 @@ class HermesInvestigationAgentService:
             )
 
     def _conversation_history(
-        self, session_id: str, current_turn_id: str
-    ) -> list[dict[str, str]]:
-        return [
-            {"role": item.role, "content": item.content}
-            for item in self.store.list_messages(
-                session_id, include_tool_messages=False
-            )
-            if item.turn_id != current_turn_id
-            and item.role in {"user", "assistant"}
-        ]
+        self, session_id: str
+    ) -> list[dict[str, Any]] | None:
+        return self.store.latest_completed_hermes_transcript(session_id)
 
-    def _persist_result(self, turn_id: str, result: dict[str, Any]) -> TurnResult:
+    def _persist_result(
+        self,
+        turn_id: str,
+        result: dict[str, Any],
+        *,
+        previous_message_count: int,
+    ) -> TurnResult:
         if bool(result.get("interrupted")):
             self.store.mark_interrupted(
                 turn_id,
@@ -244,21 +244,29 @@ class HermesInvestigationAgentService:
                 stop_reason=str(result.get("turn_exit_reason") or "failed"),
             )
             return self.store.turn_result(turn_id)
-        messages = [
+        transcript = [
             dict(item)
             for item in result.get("messages") or []
-            if isinstance(item, dict) and item.get("role") in {"assistant", "tool"}
+            if isinstance(item, dict)
         ]
-        tool_calls = self._tool_calls(messages)
+        new_messages = transcript[previous_message_count:]
+        trace_messages = [
+            item
+            for item in new_messages
+            if item.get("role") in {"assistant", "tool"}
+        ]
+        tool_calls = self._tool_calls(trace_messages)
         session = self.store.get_session(self.store.get_turn(turn_id).session_id)
         self.store.complete_turn(
             turn_id,
             answer=answer,
-            trace_messages=messages,
+            trace_messages=trace_messages,
             pending_sources=[],
             grounding_validation={
                 "status": "passed",
-                "source_count": sum(item.get("role") == "tool" for item in messages),
+                "source_count": sum(
+                    item.get("role") == "tool" for item in trace_messages
+                ),
                 "warnings": [],
             },
             resolved_references=[],
@@ -285,6 +293,7 @@ class HermesInvestigationAgentService:
             scope_repaired_draft="",
             scope_initial_issues=[],
             scope_remaining_issues=[],
+            hermes_transcript=transcript,
         )
         self._notify(turn_id, "persist_turn")
         return self.store.turn_result(turn_id)

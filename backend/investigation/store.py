@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -131,6 +132,21 @@ class InvestigationStore:
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_investigation_client_message
                 ON investigation_messages(session_id, client_message_id)
                 WHERE role = 'user' AND client_message_id <> '';
+
+                CREATE TABLE IF NOT EXISTS investigation_hermes_transcripts (
+                    turn_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    report_version_id TEXT NOT NULL,
+                    snapshot_hash TEXT NOT NULL,
+                    messages_json TEXT NOT NULL,
+                    messages_sha256 TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(turn_id) REFERENCES investigation_turns(id),
+                    FOREIGN KEY(session_id) REFERENCES investigation_sessions(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_investigation_hermes_transcripts_session
+                ON investigation_hermes_transcripts(session_id, created_at, turn_id);
 
                 CREATE TABLE IF NOT EXISTS investigation_public_turn_events (
                     event_id TEXT PRIMARY KEY,
@@ -826,8 +842,14 @@ class InvestigationStore:
         scope_repaired_draft: str,
         scope_initial_issues: list[dict[str, Any]],
         scope_remaining_issues: list[dict[str, Any]],
+        hermes_transcript: list[dict[str, Any]] | None = None,
     ) -> tuple[InvestigationTurn, InvestigationMessage, tuple[SourceLedgerEntry, ...]]:
         now = utc_now()
+        transcript_json = (
+            None
+            if hermes_transcript is None
+            else self._hermes_transcript_json(hermes_transcript)
+        )
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             turn_row = connection.execute(
@@ -850,6 +872,33 @@ class InvestigationStore:
             if str(turn_row["status"]) != "running":
                 raise InvestigationTurnNotFoundError("turn is not running")
             session_id = str(turn_row["session_id"])
+            if transcript_json is not None:
+                session_identity = connection.execute(
+                    """
+                    SELECT report_version_id, snapshot_hash
+                    FROM investigation_sessions WHERE id = ?
+                    """,
+                    (session_id,),
+                ).fetchone()
+                if session_identity is None:
+                    raise InvestigationSessionNotFoundError(session_id)
+                connection.execute(
+                    """
+                    INSERT INTO investigation_hermes_transcripts (
+                        turn_id, session_id, report_version_id, snapshot_hash,
+                        messages_json, messages_sha256, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        turn_id,
+                        session_id,
+                        str(session_identity["report_version_id"]),
+                        str(session_identity["snapshot_hash"]),
+                        transcript_json,
+                        hashlib.sha256(transcript_json.encode("utf-8")).hexdigest(),
+                        now,
+                    ),
+                )
             self._insert_query_receipts(
                 connection,
                 session_id=session_id,
@@ -1264,6 +1313,53 @@ class InvestigationStore:
             {"role": str(row["role"]), "content": str(row["content"])}
             for row in reversed(rows)
         ]
+
+    def latest_completed_hermes_transcript(
+        self, session_id: str
+    ) -> list[dict[str, Any]] | None:
+        """Return a private full Hermes transcript, never a public DTO projection."""
+
+        self.get_session(session_id)
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT h.messages_json, h.messages_sha256
+                FROM investigation_hermes_transcripts h
+                JOIN investigation_turns t ON t.id = h.turn_id
+                WHERE h.session_id = ? AND t.status = 'completed'
+                ORDER BY t.completed_at DESC, h.turn_id DESC
+                LIMIT 1
+                """,
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        serialized = str(row["messages_json"])
+        actual_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+        if actual_hash != str(row["messages_sha256"]):
+            raise InvestigationTurnNotFoundError(
+                "private Hermes transcript failed its integrity check"
+            )
+        value = json.loads(serialized)
+        if not isinstance(value, list):
+            raise InvestigationTurnNotFoundError("private Hermes transcript is invalid")
+        return [dict(item) for item in value]
+
+    @staticmethod
+    def _hermes_transcript_json(messages: list[dict[str, Any]]) -> str:
+        normalized: list[dict[str, Any]] = []
+        for message in messages:
+            if not isinstance(message, dict):
+                raise ValueError("Hermes transcript messages must be JSON objects")
+            role = str(message.get("role") or "")
+            if role not in {"user", "assistant", "tool"}:
+                raise ValueError(f"unsupported Hermes transcript role: {role!r}")
+            normalized.append(dict(message))
+        return json.dumps(
+            normalized,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
 
     def list_ledger(
         self,

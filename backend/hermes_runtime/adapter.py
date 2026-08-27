@@ -26,6 +26,8 @@ PRODUCT_PROMPT_SHA256 = (
 )
 PRODUCT_TOOLSET = "investigation"
 PRODUCT_PLUGIN = "xhs-investigation"
+PRODUCT_PROVIDER = "alibaba"
+PRODUCT_MODEL = "qwen3.7-plus"
 
 _LEGACY_MODE_FLAGS = (
     "HERMES_INVESTIGATION_TASK_MODE",
@@ -66,7 +68,7 @@ class HermesRuntimeBinding:
             raise HermesRuntimeUnavailable(
                 "canonical Hermes product prompt failed its SHA-256 fence"
             )
-        return prompt
+        return prompt.strip()
 
     @staticmethod
     def activate_product_mode() -> None:
@@ -142,6 +144,7 @@ class HermesRuntimeBinding:
             model_tools.get_tool_definitions(
                 enabled_toolsets=enabled_toolsets,
                 quiet_mode=True,
+                skip_tool_search_assembly=True,
             )
         )
 
@@ -163,13 +166,15 @@ class HermesRuntimeBinding:
 
         constructor = agent_factory or self.agent_factory()
         options = {
+            "provider": PRODUCT_PROVIDER,
+            "model": PRODUCT_MODEL,
             "session_id": session_id,
+            "session_db": None,
             "enabled_toolsets": [PRODUCT_TOOLSET],
-            "ephemeral_system_prompt": self.product_system_prompt(),
+            "api_mode": "chat_completions",
+            "max_iterations": 12,
             "quiet_mode": True,
-            "platform": "api",
             "skip_context_files": True,
-            "load_soul_identity": False,
             "skip_memory": True,
             "skip_background_review": True,
         }
