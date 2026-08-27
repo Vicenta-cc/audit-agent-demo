@@ -1998,21 +1998,32 @@ class ReportStore:
         return str(row["internal_account_ref"])
 
     def get_frontend_report(self, report_version_id: str) -> dict[str, Any]:
+        from backend.reporting.structured_contract import (
+            validate_structured_report_document,
+        )
+
         version = self.get_version(report_version_id)
         if version is None or version.get("status") != "published":
             raise ReportGenerationError("published ReportVersion was not found")
         # `_decode_json_fields` exposes the JSON column as `body`; keep this
         # frontend API independent of the SQLite column naming convention.
-        document = (version.get("body") or {}).get("report_document")
+        body = version.get("body") or {}
+        document = body.get("report_document")
         if not isinstance(document, dict):
             raise ReportGenerationError(
                 "ReportVersion has no structured frontend report document"
+            )
+        account_model = body.get("account_model")
+        if not isinstance(account_model, dict):
+            raise ReportGenerationError(
+                "ReportVersion has no structured Account model"
             )
         output = json.loads(self._json(document))
         metadata = dict(output.get("report_metadata") or {})
         metadata["content_hash"] = version["content_hash"]
         metadata["published_at"] = version["published_at"]
         output["report_metadata"] = metadata
+        validate_structured_report_document(output, account_model=account_model)
         return output
 
     def get_run(self, run_id: str) -> dict[str, Any] | None:

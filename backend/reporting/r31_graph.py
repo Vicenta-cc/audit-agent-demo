@@ -13,9 +13,7 @@ from backend.reporting.account_overview import (
 from backend.reporting.errors import ReportValidationError
 from backend.reporting.r2_graph import RiskFindingReportGraph
 from backend.reporting.r3_graph import AccountEntryReportGraph
-
-
-STRUCTURED_REPORT_SCHEMA_VERSION = "structured-report-r3.1/v1"
+from backend.reporting.structured_contract import STRUCTURED_REPORT_SCHEMA_VERSION
 
 
 class AccountOverviewReportGraph(AccountEntryReportGraph):

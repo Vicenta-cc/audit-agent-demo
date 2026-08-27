@@ -14,11 +14,16 @@ from backend.api.contracts import (
     ReportVersionSummaryResponse,
 )
 from backend.reporting.contracts import HumanReportDTO
+from backend.reporting.errors import ReportGenerationError
+from backend.reporting.runtime import R31ReportRuntime
 from backend.reporting.store import ReportStore
 
 
-def create_reporting_router(store: ReportStore) -> APIRouter:
+def create_reporting_router(
+    store: ReportStore, runtime: R31ReportRuntime | None = None
+) -> APIRouter:
     router = APIRouter(tags=["reports"])
+    structured_runtime = runtime or R31ReportRuntime(store)
 
     @router.get(
         "/api/tasks/{task_id}/report-versions",
@@ -68,6 +73,15 @@ def create_reporting_router(store: ReportStore) -> APIRouter:
             published_at=str(version.get("published_at") or ""),
             presentation=_presentation_response(presentation),
         )
+
+    @router.get("/api/report-versions/{report_version_id}/structured-report")
+    def get_structured_report_version(report_version_id: str) -> dict[str, object]:
+        try:
+            return structured_runtime.get_frontend_report(report_version_id)
+        except ReportGenerationError as exc:
+            message = str(exc)
+            status = 404 if "not found" in message.lower() else 500
+            raise HTTPException(status_code=status, detail=message) from exc
 
     return router
 
@@ -139,4 +153,3 @@ def _presentation_response(
             text=presentation.data_quality_note.text
         ),
     )
-
