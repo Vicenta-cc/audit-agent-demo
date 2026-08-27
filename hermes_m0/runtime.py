@@ -44,6 +44,7 @@ class ReportRuntimeBinding:
     snapshot_hash: str
     content_hash: str
     database_sha256: str
+    authorized_report_sources: tuple[tuple[str, str, str, str], ...]
     service: ReportTaskInvestigationToolService
 
 
@@ -202,6 +203,19 @@ def bind_report_task_session(
         snapshot_hash=scope.snapshot_hash,
         content_hash=scope.content_hash,
         database_sha256=database_sha256,
+        authorized_report_sources=tuple(
+            (
+                item.fixture.report_version.id,
+                str(item.snapshot_hash),
+                str(item.content_hash),
+                str(item.database_sha256),
+            )
+            for item in (
+                service.account_activity.authorized_report_repositories
+                if service.account_activity is not None
+                else (service.repository,)
+            )
+        ),
         service=service,
     )
     with _lock:
@@ -213,6 +227,7 @@ def bind_report_task_session(
                 existing.snapshot_hash,
                 existing.content_hash,
                 existing.database_sha256,
+                existing.authorized_report_sources,
             )
             candidate_identity = (
                 candidate.report_version_id,
@@ -220,6 +235,7 @@ def bind_report_task_session(
                 candidate.snapshot_hash,
                 candidate.content_hash,
                 candidate.database_sha256,
+                candidate.authorized_report_sources,
             )
             if existing_identity != candidate_identity:
                 raise RuntimeError(

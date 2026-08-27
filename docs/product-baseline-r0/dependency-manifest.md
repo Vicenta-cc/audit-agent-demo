@@ -2,8 +2,8 @@
 
 | Dependency | Boundary | Version / source | Reproducibility status |
 |---|---|---|---|
-| Product Python/FastAPI stack | `requirements.txt` | Python 3.12.10; resolved manifest `python-resolved-dependencies-r0-2.txt` | Candidate environment recorded. Source requirements still contain ranges, so the resolved manifest does not guarantee future resolver equivalence |
-| Hermes Agent | `backend/hermes_runtime`, `requirements-hermes.txt` | Requirement pins `e624e9fde561e1add9388384012b295fde669ade`; installed frozen runtime is 0.20.4 | Candidate-local non-editable wheel; public imports and all registered critical hashes verified; no runtime dependency on the source directory or `PYTHONPATH` |
+| Product Python/FastAPI stack | `requirements.txt` | Python 3.12.10; R0.2.1 resolved manifest `python-resolved-dependencies-r0-2-1.txt` | Product direct pins were aligned with the fixed Hermes metadata; candidate-local `pip check` is clean |
+| Hermes Agent | `backend/hermes_runtime`, `requirements-hermes.txt` | Requirement pins `e624e9fde561e1add9388384012b295fde669ade`; installed frozen runtime is 0.20.4 | Candidate-local non-editable wheel; public imports and all registered packaged critical hashes verified; official fetch failed in this run, so fresh Git provenance remains open |
 | Hermes product plugin | `.hermes/plugins/xhs-investigation` | Manifest v2, plugin 0.3.0 | Real discovery: enabled, 11 final M2.2 tools, one execution middleware |
 | Hermes M1/M2.2 domain tools | `hermes_m0/` whitelist | Hermes worktree `0a50905` | Included, fixture hashes recorded |
 | MediaCrawler | `backend/audit_agent/crawler_adapter.py` | Source-only checkpoint `a77d8f4ad99b692641711c8e170c73dc7ebdf627`, based on tracked HEAD `ec56ebfe638dcfc8680f41711215ee9618a843e2` | Reproducible source checkpoint; offline auth/rate-limit tests `8 passed`; no live collection |

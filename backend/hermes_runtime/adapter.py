@@ -14,7 +14,7 @@ from importlib.resources import files
 import os
 from pathlib import Path
 import tempfile
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 import yaml
 
@@ -190,6 +190,7 @@ class HermesRuntimeBinding:
         content_hash: str,
         snapshot_hash: str,
         ledger_path: Path,
+        additional_report_contexts: Iterable[Any] = (),
     ) -> None:
         """Bind canonical read-only M1/M2.2 tools to one published ReportVersion."""
 
@@ -197,6 +198,29 @@ class HermesRuntimeBinding:
         report_path = database_path.expanduser().resolve(strict=True)
         database_hash = sha256(report_path.read_bytes()).hexdigest()
         runtime = import_module("hermes_m0.runtime")
+        additional_report_contexts = tuple(additional_report_contexts)
+        additional_sources = tuple(
+            runtime.AuthorizedReportSource(
+                database_path=report_path,
+                report_version_id=item.report_version_id,
+                database_sha256=database_hash,
+                content_hash=item.content_hash,
+                snapshot_hash=item.snapshot_hash,
+            )
+            for item in additional_report_contexts
+        )
+        expected_authorized_sources = (
+            (report_version_id, snapshot_hash, content_hash, database_hash),
+            *(
+                (
+                    item.report_version_id,
+                    item.snapshot_hash,
+                    item.content_hash,
+                    database_hash,
+                )
+                for item in additional_report_contexts
+            ),
+        )
         existing = runtime.report_runtime_binding_for_session(session_id)
         if existing is not None:
             expected_identity = (
@@ -216,7 +240,9 @@ class HermesRuntimeBinding:
                     "product Session cannot be rebound to a different ReportVersion "
                     "or FrozenSnapshot"
                 )
-            return
+            if existing.authorized_report_sources == expected_authorized_sources:
+                return
+            runtime.release_report_task_session(session_id)
         service = runtime.configure_real_report_runtime(
             report_path,
             report_version_id=report_version_id,
@@ -227,6 +253,7 @@ class HermesRuntimeBinding:
             account_corpus_path=import_module(
                 "hermes_m0.account_activity_repository"
             ).DEFAULT_ACCOUNT_CORPUS_PATH,
+            additional_account_report_sources=additional_sources,
         )
         runtime.bind_report_task_session(session_id, service=service)
 

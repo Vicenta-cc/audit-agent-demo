@@ -45,5 +45,7 @@ All nine registered files in the frozen source match the hashes above. The
 installed runtime reported 0.20.4; `hermes_cli.plugins`, `model_tools`, and
 `run_agent.AIAgent` loaded from the candidate-local virtual environment.
 Actual discovery enabled `xhs-investigation` and registered exactly the 11
-M2.2 product tools. A constructor-only `AIAgent` smoke used the canonical
-System Prompt and did not contact a Provider.
+M2.2 product tools. A constructor-only `AIAgent` smoke fixed the held-out
+provider/model/API/iteration settings and disabled Hermes SessionDB. The
+canonical System Prompt is supplied per Turn as `run_conversation`'s
+`system_message`; neither smoke nor deterministic tests contacted a Provider.

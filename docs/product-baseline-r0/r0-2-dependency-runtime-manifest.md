@@ -22,3 +22,14 @@ manifest records this acceptance environment but is not a cryptographic
 transitive lock. Python SQLite 3.49.1 triggered Hermes' upstream WAL warning;
 the isolated smoke selected DELETE journaling and made no concurrent or
 production write.
+
+## R0.2.1 addendum
+
+R0.2.1 aligns the three conflicting direct product pins (`requests`,
+`python-dotenv`, `cryptography`) with Hermes 0.20.4 and records the combined
+98-package environment in `python-resolved-dependencies-r0-2-1.txt`.
+`uv pip check` reports no incompatibilities. The official exact-commit fetch
+failed with an HTTP/2 framing error, so this run installed the preserved
+non-editable wheel and verified all seven packaged critical hashes. No local
+source path or `PYTHONPATH` is used. Fresh commit-attested wheel acquisition
+remains a provenance limitation, not an observed runtime-content mismatch.

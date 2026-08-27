@@ -49,11 +49,16 @@ class HermesInvestigationAgentService:
         with self._agent_lock:
             agents = tuple(self._agents.items())
             self._agents.clear()
+        released_sessions = set()
         for session_id, agent in agents:
             close = getattr(agent, "close", None)
             if callable(close):
                 close()
             if self.bind_runtime:
+                self.runtime_binding.release_published_report_session(session_id)
+                released_sessions.add(session_id)
+        if self.bind_runtime:
+            for session_id in self._bound_sessions - released_sessions:
                 self.runtime_binding.release_published_report_session(session_id)
         self._bound_sessions.clear()
 
@@ -110,11 +115,17 @@ class HermesInvestigationAgentService:
             self._bind_session(session)
             agent = self._agent(session.id)
             history = self._conversation_history(session.id)
+            user_message = self.store.get_user_message_for_turn(turn.id).content
             result = agent.run_conversation(
-                self.store.get_user_message_for_turn(turn.id).content,
+                user_message,
                 system_message=self.runtime_binding.product_system_prompt(),
                 conversation_history=history,
                 task_id=turn.id,
+            )
+            self._validate_completed_transcript(
+                result,
+                history=history,
+                user_message=user_message,
             )
         except Exception as exc:
             self.store.mark_interrupted(
@@ -172,13 +183,23 @@ class HermesInvestigationAgentService:
         is_bound = getattr(
             self.runtime_binding, "is_published_report_session_bound", None
         )
-        if session.id in self._bound_sessions and (
-            not callable(is_bound) or bool(is_bound(session.id))
-        ):
+        if session.id in self._bound_sessions and not callable(is_bound):
             return
         with self._agent_lock:
             self.runtime_binding.configure_product_home(self.hermes_state_dir)
             self.runtime_binding.discover_plugins(force=not self._bound_sessions)
+        additional_contexts = []
+        seen_tasks = {session.task_id}
+        for report_version_id in settings.hermes_authorized_report_version_ids:
+            if report_version_id == session.report_version_id:
+                continue
+            context = self.report_facade.get_published_report_context(report_version_id)
+            if context.task_id in seen_tasks:
+                raise InvestigationTurnNotFoundError(
+                    "authorized Account report sources must have unique tasks"
+                )
+            seen_tasks.add(context.task_id)
+            additional_contexts.append(context)
         self.runtime_binding.bind_published_report_session(
             session_id=session.id,
             database_path=self.report_facade.db_path,
@@ -188,6 +209,7 @@ class HermesInvestigationAgentService:
             ).content_hash,
             snapshot_hash=session.snapshot_hash,
             ledger_path=self.hermes_state_dir / f"{session.id}.sqlite3",
+            additional_report_contexts=tuple(additional_contexts),
         )
         self._bound_sessions.add(session.id)
 
@@ -297,6 +319,31 @@ class HermesInvestigationAgentService:
         )
         self._notify(turn_id, "persist_turn")
         return self.store.turn_result(turn_id)
+
+    @staticmethod
+    def _validate_completed_transcript(
+        result: dict[str, Any],
+        *,
+        history: list[dict[str, Any]] | None,
+        user_message: str,
+    ) -> None:
+        if not bool(result.get("completed", True)) or bool(result.get("failed")):
+            return
+        transcript = result.get("messages")
+        if not isinstance(transcript, list):
+            raise RuntimeError("Hermes did not return a complete message transcript")
+        expected_history = history or []
+        if transcript[: len(expected_history)] != expected_history:
+            raise RuntimeError("Hermes transcript did not preserve its input history")
+        if len(transcript) <= len(expected_history):
+            raise RuntimeError("Hermes transcript omitted the current user message")
+        current_user = transcript[len(expected_history)]
+        if (
+            not isinstance(current_user, dict)
+            or current_user.get("role") != "user"
+            or current_user.get("content") != user_message
+        ):
+            raise RuntimeError("Hermes transcript changed the current user message")
 
     @staticmethod
     def _tool_calls(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:

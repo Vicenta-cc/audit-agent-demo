@@ -12,8 +12,12 @@ existing sequence/replay/resume tests passed. Focused R0.2 tests prove:
 - completed client-message replay executes AIAgent once;
 - interrupted/unknown outcomes remain retryable;
 - completed turn replay returns the persisted result;
-- session switching rebinds the process-level canonical report runtime;
-- the report binding and AIAgent call are atomic across concurrent sessions.
+- each Session is permanently anchored to one ReportVersion/FrozenSnapshot;
+- the Product Store unique running-Turn constraint rejects same-Session overlap;
+- different Sessions execute AIAgent and Tool calls concurrently without a
+  process-wide execution lock;
+- public Message and SSE projections exclude private Hermes ToolResult and
+  tool-call identifiers.
 
 The legacy `backend/investigation` implementation remains in the tree for
 contracts and storage compatibility, but the formal route no longer

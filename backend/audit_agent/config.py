@@ -19,6 +19,11 @@ class Settings:
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     ).rstrip("/")
     qwen_text_model = os.getenv("QWEN_TEXT_MODEL", "qwen3.7-plus")
+    hermes_authorized_report_version_ids = tuple(
+        item.strip()
+        for item in os.getenv("HERMES_AUTHORIZED_REPORT_VERSION_IDS", "").split(",")
+        if item.strip()
+    )
     qwen_report_model = os.getenv("QWEN_REPORT_MODEL", qwen_text_model).strip()
     report_prompt_version = os.getenv("REPORT_PROMPT_VERSION", "report-v2-human").strip()
     report_request_timeout = int(os.getenv("REPORT_REQUEST_TIMEOUT", "180"))

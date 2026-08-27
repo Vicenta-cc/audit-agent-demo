@@ -67,9 +67,13 @@ class _FakeAgent:
         self.execution_count += 1
         if self.fail:
             raise RuntimeError("unknown provider outcome")
+        answer = "报告写道当前样本存在已记录风险。"
+        history = [dict(item) for item in kwargs.get("conversation_history") or []]
         return {
-            "final_response": "报告写道当前样本存在已记录风险。",
+            "final_response": answer,
             "messages": [
+                *history,
+                {"role": "user", "content": message},
                 {
                     "role": "assistant",
                     "content": "",
@@ -81,6 +85,7 @@ class _FakeAgent:
                     ],
                 },
                 {"role": "tool", "name": "read_report", "content": "{}"},
+                {"role": "assistant", "content": answer},
             ],
             "api_calls": 1,
             "completed": True,
@@ -120,11 +125,16 @@ class PromptAndPluginClosureTest(unittest.TestCase):
         agent = binding.create_agent(
             session_id="session-r02", agent_factory=factory
         )
-        prompt = str(captured["ephemeral_system_prompt"])
         self.assertIsInstance(agent, _FakeAgent)
-        self.assertEqual(hashlib.sha256(prompt.encode()).hexdigest(), PRODUCT_PROMPT_SHA256)
-        self.assertNotIn("PLANNER_SYSTEM_PROMPT", prompt)
+        prompt_bytes = (ROOT / "hermes_m0/account_activity_prompt.txt").read_bytes()
+        self.assertEqual(hashlib.sha256(prompt_bytes).hexdigest(), PRODUCT_PROMPT_SHA256)
+        self.assertNotIn("ephemeral_system_prompt", captured)
         self.assertEqual(captured["enabled_toolsets"], ["investigation"])
+        self.assertEqual(captured["provider"], "alibaba")
+        self.assertEqual(captured["model"], "qwen3.7-plus")
+        self.assertEqual(captured["api_mode"], "chat_completions")
+        self.assertEqual(captured["max_iterations"], 12)
+        self.assertIsNone(captured["session_db"])
 
     def test_product_adapter_rejects_validation_only_task_mode(self):
         with patch.dict(
@@ -246,11 +256,13 @@ class HermesSessionTurnClosureTest(unittest.TestCase):
         )
         first = SimpleNamespace(
             id="session-first",
+            task_id="task:first",
             report_version_id="report-version:first",
             snapshot_hash="snapshot:first",
         )
         second = SimpleNamespace(
             id="session-second",
+            task_id="task:second",
             report_version_id="report-version:second",
             snapshot_hash="snapshot:second",
         )
@@ -260,7 +272,7 @@ class HermesSessionTurnClosureTest(unittest.TestCase):
         service._bind_session(first)
         self.assertEqual(
             binding.bound,
-            ["session-first", "session-second", "session-first"],
+            ["session-first", "session-second"],
         )
 
 
