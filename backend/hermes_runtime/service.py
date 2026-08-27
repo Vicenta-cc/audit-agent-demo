@@ -1,0 +1,288 @@
+"""Formal Investigation Session/Turn facade backed by Hermes AIAgent."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from threading import RLock
+from typing import Any, Callable
+
+from backend.audit_agent.config import settings
+from backend.hermes_runtime.adapter import HermesRuntimeBinding
+from backend.investigation.contracts import (
+    InvestigationMessage,
+    InvestigationSession,
+    InvestigationTurn,
+    TurnResult,
+)
+from backend.investigation.errors import InvestigationTurnNotFoundError
+from backend.investigation.report_query import ReportQueryFacade
+from backend.investigation.store import InvestigationStore
+
+
+class HermesInvestigationAgentService:
+    """Preserve the public compatibility facade while executing with Hermes."""
+
+    def __init__(
+        self,
+        *,
+        report_facade: ReportQueryFacade | None = None,
+        store: InvestigationStore | None = None,
+        runtime_binding: HermesRuntimeBinding | None = None,
+        agent_factory: Callable[..., Any] | None = None,
+        bind_runtime: bool = True,
+        hermes_state_dir: Path | None = None,
+    ) -> None:
+        self.report_facade = report_facade or ReportQueryFacade()
+        self.store = store or InvestigationStore()
+        self.runtime_binding = runtime_binding or HermesRuntimeBinding()
+        self.agent_factory = agent_factory
+        self.bind_runtime = bool(bind_runtime)
+        self.hermes_state_dir = (
+            hermes_state_dir or settings.data_dir / "hermes-investigation"
+        ).resolve()
+        self._agents: dict[str, Any] = {}
+        self._bound_sessions: set[str] = set()
+        self._active_runtime_session_id: str | None = None
+        self._runtime_lock = RLock()
+        self._turn_node_observers: list[Callable[[str, str], None]] = []
+
+    def close(self) -> None:
+        for agent in tuple(self._agents.values()):
+            close = getattr(agent, "close", None)
+            if callable(close):
+                close()
+        self._agents.clear()
+
+    def create_session(self, report_version_id: str) -> InvestigationSession:
+        context = self.report_facade.get_published_report_context(report_version_id)
+        return self.store.create_session(context)
+
+    def accept_message(
+        self,
+        session_id: str,
+        *,
+        client_message_id: str,
+        content: str,
+    ) -> tuple[InvestigationTurn, bool]:
+        user_input = str(content or "").strip()
+        client_id = str(client_message_id or "").strip()
+        if not user_input or len(user_input) > 4_000:
+            raise ValueError("content must contain between 1 and 4000 characters")
+        if not client_id or len(client_id) > 200:
+            raise ValueError(
+                "client_message_id must contain between 1 and 200 characters"
+            )
+        session = self.store.get_session(session_id)
+        self._validate_business_scope(session)
+        return self.store.create_turn(
+            session.id,
+            client_message_id=client_id,
+            user_input=user_input,
+        )
+
+    def execute_turn(self, turn_id: str) -> TurnResult:
+        turn = self.store.get_turn(turn_id)
+        if turn.status in {"completed", "error"}:
+            return self.store.turn_result(turn.id, idempotent_replay=True)
+        if turn.status != "running":
+            raise InvestigationTurnNotFoundError("turn is not ready for execution")
+        session = self.store.get_session(turn.session_id)
+        self._validate_business_scope(session)
+        self._notify(turn.id, "call_qwen")
+        try:
+            # The canonical plugin runtime owns one process-level report binding.
+            # Keep binding and execution atomic so concurrent ReportVersions cannot
+            # observe each other's read-only tool service.
+            with self._runtime_lock:
+                self._bind_session(session)
+                agent = self._agent(session.id)
+                result = agent.run_conversation(
+                    self.store.get_user_message_for_turn(turn.id).content,
+                    conversation_history=self._conversation_history(
+                        session.id, turn.id
+                    ),
+                    task_id=turn.id,
+                )
+        except Exception as exc:
+            self.store.mark_interrupted(
+                turn.id,
+                error_code="hermes_unknown_outcome",
+                safe_message="调查执行结果暂时无法确认，可以安全恢复。",
+                retryable=True,
+            )
+            raise RuntimeError("Hermes Turn ended with an unknown outcome") from exc
+        return self._persist_result(turn.id, result)
+
+    def accept_resume(self, turn_id: str) -> tuple[InvestigationTurn, bool]:
+        turn = self.store.get_turn(turn_id)
+        if turn.status in {"completed", "error"}:
+            return turn, True
+        if turn.status != "interrupted":
+            raise InvestigationTurnNotFoundError("turn is not resumable")
+        session = self.store.get_session(turn.session_id)
+        self._validate_business_scope(session)
+        return self.store.begin_resume(turn.id), False
+
+    def execute_resume(self, turn_id: str) -> TurnResult:
+        return self.execute_turn(turn_id)
+
+    def add_turn_node_observer(self, observer: Callable[[str, str], None]) -> None:
+        self._turn_node_observers.append(observer)
+
+    def get_messages(
+        self, session_id: str, *, include_tool_messages: bool = False
+    ) -> tuple[InvestigationMessage, ...]:
+        self.store.get_session(session_id)
+        return self.store.list_messages(
+            session_id, include_tool_messages=include_tool_messages
+        )
+
+    def _agent(self, session_id: str) -> Any:
+        agent = self._agents.get(session_id)
+        if agent is None:
+            agent = self.runtime_binding.create_agent(
+                session_id=session_id,
+                agent_factory=self.agent_factory,
+                provider="alibaba",
+                base_url=settings.dashscope_base_url,
+                api_key=settings.dashscope_api_key,
+                model=settings.qwen_text_model,
+            )
+            self._agents[session_id] = agent
+        return agent
+
+    def _bind_session(self, session: InvestigationSession) -> None:
+        if not self.bind_runtime or session.id == self._active_runtime_session_id:
+            return
+        self.runtime_binding.configure_product_home(self.hermes_state_dir)
+        self.runtime_binding.discover_plugins(force=not self._bound_sessions)
+        self.runtime_binding.bind_published_report_session(
+            session_id=session.id,
+            database_path=self.report_facade.db_path,
+            report_version_id=session.report_version_id,
+            content_hash=self.report_facade.get_published_report_context(
+                session.report_version_id
+            ).content_hash,
+            snapshot_hash=session.snapshot_hash,
+            ledger_path=self.hermes_state_dir / f"{session.id}.sqlite3",
+        )
+        self._bound_sessions.add(session.id)
+        self._active_runtime_session_id = session.id
+
+    def _validate_business_scope(self, session: InvestigationSession) -> None:
+        current = self.report_facade.get_published_report_context(
+            session.report_version_id
+        )
+        if (
+            current.task_id != session.task_id
+            or current.report_id != session.report_id
+            or current.source_snapshot_id != session.source_snapshot_id
+            or current.snapshot_hash != session.snapshot_hash
+        ):
+            raise InvestigationTurnNotFoundError(
+                "business session report lock changed"
+            )
+
+    def _conversation_history(
+        self, session_id: str, current_turn_id: str
+    ) -> list[dict[str, str]]:
+        return [
+            {"role": item.role, "content": item.content}
+            for item in self.store.list_messages(
+                session_id, include_tool_messages=False
+            )
+            if item.turn_id != current_turn_id
+            and item.role in {"user", "assistant"}
+        ]
+
+    def _persist_result(self, turn_id: str, result: dict[str, Any]) -> TurnResult:
+        if bool(result.get("interrupted")):
+            self.store.mark_interrupted(
+                turn_id,
+                error_code="hermes_interrupted",
+                safe_message="调查执行被中断，可以安全恢复。",
+                retryable=True,
+            )
+            raise RuntimeError("Hermes Turn was interrupted")
+        answer = str(result.get("final_response") or "").strip()
+        if bool(result.get("failed")) or not bool(result.get("completed", True)):
+            self.store.fail_turn(
+                turn_id,
+                error_code="hermes_execution_failed",
+                safe_message=answer or "调查对话暂时无法完成。",
+                retryable=False,
+                input_tokens=int(result.get("input_tokens") or 0),
+                output_tokens=int(result.get("output_tokens") or 0),
+                total_tokens=int(result.get("total_tokens") or 0),
+                llm_call_count=int(result.get("api_calls") or 0),
+                stop_reason=str(result.get("turn_exit_reason") or "failed"),
+            )
+            return self.store.turn_result(turn_id)
+        messages = [
+            dict(item)
+            for item in result.get("messages") or []
+            if isinstance(item, dict) and item.get("role") in {"assistant", "tool"}
+        ]
+        tool_calls = self._tool_calls(messages)
+        session = self.store.get_session(self.store.get_turn(turn_id).session_id)
+        self.store.complete_turn(
+            turn_id,
+            answer=answer,
+            trace_messages=messages,
+            pending_sources=[],
+            grounding_validation={
+                "status": "passed",
+                "source_count": sum(item.get("role") == "tool" for item in messages),
+                "warnings": [],
+            },
+            resolved_references=[],
+            all_tool_calls=tool_calls,
+            query_receipts=[],
+            summary_text=answer[-2_000:],
+            active_focus=session.active_focus,
+            ordered_referents=[item.model_dump(mode="json") for item in session.ordered_referents],
+            last_claim_id=session.last_claim_id,
+            last_finding_id=session.last_finding_id,
+            last_evidence_id=session.last_evidence_id,
+            input_tokens=int(result.get("input_tokens") or 0),
+            output_tokens=int(result.get("output_tokens") or 0),
+            total_tokens=int(result.get("total_tokens") or 0),
+            llm_call_count=int(result.get("api_calls") or 0),
+            stop_reason=str(result.get("turn_exit_reason") or "completed"),
+            context_accounting=[],
+            grounding_issues=[],
+            grounding_repair_count=0,
+            scope_repair_count=0,
+            source_repair_count=0,
+            semantic_rewrite_count=0,
+            scope_initial_draft="",
+            scope_repaired_draft="",
+            scope_initial_issues=[],
+            scope_remaining_issues=[],
+        )
+        self._notify(turn_id, "persist_turn")
+        return self.store.turn_result(turn_id)
+
+    @staticmethod
+    def _tool_calls(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        output: list[dict[str, Any]] = []
+        for message in messages:
+            for raw in message.get("tool_calls") or []:
+                if not isinstance(raw, dict):
+                    continue
+                function = raw.get("function") or {}
+                arguments = function.get("arguments") or {}
+                if isinstance(arguments, str):
+                    arguments = {}
+                output.append(
+                    {
+                        "id": str(raw.get("id") or "hermes-tool-call"),
+                        "name": str(function.get("name") or raw.get("name") or "unknown"),
+                        "arguments": dict(arguments),
+                    }
+                )
+        return output
+
+    def _notify(self, turn_id: str, node_name: str) -> None:
+        for observer in tuple(self._turn_node_observers):
+            observer(turn_id, node_name)

@@ -33,7 +33,8 @@ from .audit_agent.rule_compiler import (
     normalize_library_ids,
 )
 from .reporting.store import ReportStore
-from .investigation.agent import InvestigationAgentService
+from .reporting.runtime import R31ReportRuntime
+from .hermes_runtime.service import HermesInvestigationAgentService
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,9 +63,10 @@ lexicon_store = LexiconStore()
 audit_policy_store = AuditPolicyStore()
 audit_config_revision_store = TaskAuditConfigRevisionStore()
 report_store = ReportStore()
-investigation_agent_service = InvestigationAgentService()
+r31_report_runtime = R31ReportRuntime(report_store)
+investigation_agent_service = HermesInvestigationAgentService()
 investigation_turn_executor = InvestigationTurnExecutor(investigation_agent_service)
-app.include_router(create_reporting_router(report_store))
+app.include_router(create_reporting_router(report_store, r31_report_runtime))
 app.include_router(
     create_investigation_router(
         investigation_agent_service,
