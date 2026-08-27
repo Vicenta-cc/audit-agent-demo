@@ -74,6 +74,7 @@ class InvestigationStore:
                     report_version_id TEXT NOT NULL,
                     source_snapshot_id TEXT NOT NULL,
                     snapshot_hash TEXT NOT NULL,
+                    anchor_key TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL CHECK(status IN ('active', 'closed')),
                     summary_text TEXT NOT NULL DEFAULT '',
                     active_focus_json TEXT NOT NULL DEFAULT '{}',
@@ -269,6 +270,28 @@ class InvestigationStore:
                 ON investigation_tool_query_receipts(turn_id, executed_at, receipt_id);
                 CREATE INDEX IF NOT EXISTS idx_investigation_planner_traces_session
                 ON investigation_planner_shadow_traces(session_id, created_at, trace_id);
+                """
+            )
+            # Serialize additive DDL and re-check columns after the write lock is
+            # acquired. This prevents concurrent process startup from both
+            # attempting the same ALTER TABLE.
+            connection.execute("BEGIN IMMEDIATE")
+            session_columns = {
+                str(row[1])
+                for row in connection.execute(
+                    "PRAGMA table_info(investigation_sessions)"
+                ).fetchall()
+            }
+            if "anchor_key" not in session_columns:
+                connection.execute(
+                    "ALTER TABLE investigation_sessions "
+                    "ADD COLUMN anchor_key TEXT NOT NULL DEFAULT ''"
+                )
+            connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_investigation_session_anchor
+                ON investigation_sessions(anchor_key)
+                WHERE anchor_key <> ''
                 """
             )
             ledger_columns = {
@@ -483,28 +506,63 @@ class InvestigationStore:
             connection.execute("RELEASE SAVEPOINT investigation_source_shadow_phase3")
             raise
 
-    def create_session(self, context: PublishedReportContext) -> InvestigationSession:
+    def create_session(
+        self,
+        context: PublishedReportContext,
+        *,
+        anchor_key: str = "",
+    ) -> InvestigationSession:
         now = utc_now()
         session_id = f"investigation-session:{uuid4().hex}"
+        normalized_anchor = str(anchor_key or "").strip()
         with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO investigation_sessions (
-                    id, task_id, report_id, report_version_id, source_snapshot_id,
-                    snapshot_hash, status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-                """,
-                (
-                    session_id,
+            connection.execute("BEGIN IMMEDIATE")
+            existing = None
+            if normalized_anchor:
+                existing = connection.execute(
+                    "SELECT * FROM investigation_sessions WHERE anchor_key = ?",
+                    (normalized_anchor,),
+                ).fetchone()
+            if existing is not None:
+                expected_scope = (
                     context.task_id,
                     context.report_id,
                     context.report_version_id,
                     context.source_snapshot_id,
                     context.snapshot_hash,
-                    now,
-                    now,
-                ),
-            )
+                )
+                existing_scope = (
+                    str(existing["task_id"]),
+                    str(existing["report_id"]),
+                    str(existing["report_version_id"]),
+                    str(existing["source_snapshot_id"]),
+                    str(existing["snapshot_hash"]),
+                )
+                if existing_scope != expected_scope:
+                    raise ValueError(
+                        "investigation Session anchor cannot be rebound to another report scope"
+                    )
+                session_id = str(existing["id"])
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO investigation_sessions (
+                        id, task_id, report_id, report_version_id, source_snapshot_id,
+                        snapshot_hash, anchor_key, status, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+                    """,
+                    (
+                        session_id,
+                        context.task_id,
+                        context.report_id,
+                        context.report_version_id,
+                        context.source_snapshot_id,
+                        context.snapshot_hash,
+                        normalized_anchor,
+                        now,
+                        now,
+                    ),
+                )
         return self.get_session(session_id)
 
     def get_session(self, session_id: str) -> InvestigationSession:
@@ -515,6 +573,7 @@ class InvestigationStore:
         if row is None:
             raise InvestigationSessionNotFoundError(session_id)
         record = dict(row)
+        record.pop("anchor_key", None)
         referents = self._json(record.pop("ordered_referents_json"), [])
         focus = self._json(record.pop("active_focus_json"), {})
         return InvestigationSession(

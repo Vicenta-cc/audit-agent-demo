@@ -172,9 +172,14 @@ class InvestigationAgentService:
     def close(self) -> None:
         self._checkpoint_connection.close()
 
-    def create_session(self, report_version_id: str) -> InvestigationSession:
+    def create_session(
+        self,
+        report_version_id: str,
+        *,
+        anchor_key: str = "",
+    ) -> InvestigationSession:
         context = self.report_facade.get_published_report_context(report_version_id)
-        return self.store.create_session(context)
+        return self.store.create_session(context, anchor_key=anchor_key)
 
     def send_message(
         self,

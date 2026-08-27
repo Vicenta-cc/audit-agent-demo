@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import threading
@@ -471,6 +472,75 @@ class TaskAuditConfigRevisionStore:
                 (revision_id,),
             ).fetchone()
             return self._row_to_revision(row)
+
+    def create_or_get(self, *, job_id: str, created_by: str = "", **payload) -> dict:
+        """Idempotently persist one revision identity per Job/config hash."""
+
+        config_hash = str(payload.get("config_hash") or "").strip()
+        if not config_hash:
+            raise ValueError("config_hash is required for idempotent revision creation")
+        digest = hashlib.sha256(f"{job_id}\0{config_hash}".encode("utf-8")).hexdigest()
+        revision_id = f"audit-config-revision:{digest[:32]}"
+        now = utc_now()
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            existing = conn.execute(
+                """
+                SELECT * FROM task_audit_config_revisions
+                WHERE job_id = ? AND config_hash = ?
+                ORDER BY version, rowid
+                LIMIT 1
+                """,
+                (job_id, config_hash),
+            ).fetchone()
+            if existing is not None:
+                return self._row_to_revision(existing)
+            row = conn.execute(
+                """
+                SELECT COALESCE(MAX(version), 0) AS version
+                FROM task_audit_config_revisions WHERE job_id = ?
+                """,
+                (job_id,),
+            ).fetchone()
+            version = int(row["version"] or 0) + 1
+            conn.execute(
+                """
+                INSERT INTO task_audit_config_revisions (
+                    id, job_id, version, source_policy_id, source_policy_name,
+                    source_policy_version, audit_config_json,
+                    knowledge_package_snapshots_json, rule_snapshot_json,
+                    prompt_profile_snapshot_json, config_hash, effective_from,
+                    created_at, created_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    revision_id,
+                    job_id,
+                    version,
+                    payload.get("source_policy_id"),
+                    payload.get("source_policy_name"),
+                    payload.get("source_policy_version"),
+                    json.dumps(payload.get("audit_config") or {}, ensure_ascii=False),
+                    json.dumps(
+                        payload.get("knowledge_package_snapshots") or [],
+                        ensure_ascii=False,
+                    ),
+                    json.dumps(payload.get("rule_snapshot") or {}, ensure_ascii=False),
+                    json.dumps(
+                        payload.get("prompt_profile_snapshot") or {},
+                        ensure_ascii=False,
+                    ),
+                    config_hash,
+                    now,
+                    now,
+                    created_by,
+                ),
+            )
+            created = conn.execute(
+                "SELECT * FROM task_audit_config_revisions WHERE id = ?",
+                (revision_id,),
+            ).fetchone()
+            return self._row_to_revision(created)
 
     def list_for_job(self, job_id: str) -> list[dict]:
         with self._lock, self._connect() as conn:

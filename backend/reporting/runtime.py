@@ -49,6 +49,7 @@ class R31ReportRuntime:
         source: CanonicalReportSource | None = None,
         model_client: Any | None = None,
         checkpoint_path: Path | None = None,
+        on_generation_created: Callable[[dict[str, Any]], None] | None = None,
     ) -> Any:
         graph = self.generation_graph(
             source=source,
@@ -56,6 +57,32 @@ class R31ReportRuntime:
             checkpoint_path=checkpoint_path,
         )
         try:
+            if on_generation_created is not None:
+                graph_hook = graph._on_generation_created
+
+                def notify(generation: dict[str, Any]) -> None:
+                    graph_hook(generation)
+                    on_generation_created(generation)
+
+                graph._on_generation_created = notify
             return graph.generate(task_id)
+        finally:
+            graph.close()
+
+    def resume(
+        self,
+        run_id: str,
+        *,
+        source: CanonicalReportSource | None = None,
+        model_client: Any | None = None,
+        checkpoint_path: Path | None = None,
+    ) -> Any:
+        graph = self.generation_graph(
+            source=source,
+            model_client=model_client,
+            checkpoint_path=checkpoint_path,
+        )
+        try:
+            return graph.resume(run_id)
         finally:
             graph.close()

@@ -231,12 +231,12 @@ class JobStore:
                 if column not in related_columns:
                     conn.execute(f"ALTER TABLE suspected_related_accounts ADD COLUMN {column} {definition}")
 
-    def create(self, **kwargs) -> dict:
+    def create(self, *, job_id: str | None = None, **kwargs) -> dict:
         with self._lock, self._connect() as conn:
             now = datetime.now().isoformat(timespec="seconds")
-            job_id = uuid4().hex[:12]
+            resolved_job_id = str(job_id or "").strip() or uuid4().hex[:12]
             job = {
-                "id": job_id,
+                "id": resolved_job_id,
                 "status": "queued",
                 "created_at": now,
                 "updated_at": now,

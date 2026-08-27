@@ -63,9 +63,14 @@ class HermesInvestigationAgentService:
                 self.runtime_binding.release_published_report_session(session_id)
         self._bound_sessions.clear()
 
-    def create_session(self, report_version_id: str) -> InvestigationSession:
+    def create_session(
+        self,
+        report_version_id: str,
+        *,
+        anchor_key: str = "",
+    ) -> InvestigationSession:
         context = self.report_facade.get_published_report_context(report_version_id)
-        return self.store.create_session(context)
+        return self.store.create_session(context, anchor_key=anchor_key)
 
     def close_session(self, session_id: str) -> InvestigationSession:
         session = self.store.close_session(session_id)

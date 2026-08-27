@@ -11,11 +11,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .api.investigation import create_investigation_router
+from .api.investigation_creation import create_investigation_creation_router
 from .api.investigation_execution import InvestigationTurnExecutor
 from .api.reporting import create_reporting_router
 from .audit_agent.audit_policy_store import AuditPolicyStore, TaskAuditConfigRevisionStore
 from .audit_agent.config import settings
 from .audit_agent.crawler_account_store import crawler_account_store
+from .audit_agent.creator_url import (
+    CreatorUrlValidationError,
+    validate_creator_url as validate_creator_url_contract,
+)
 from .audit_agent.crawler_login_manager import crawler_account_login_manager
 from .audit_agent.crawler_adapter import SUPPORTED_PLATFORMS, MediaCrawlerAdapter
 from .audit_agent.evidence_groups import build_evidence_groups
@@ -35,6 +40,12 @@ from .audit_agent.rule_compiler import (
 from .reporting.store import ReportStore
 from .reporting.runtime import R31ReportRuntime
 from .hermes_runtime.service import HermesInvestigationAgentService
+from .investigation_creation.adapters import (
+    InvestigationConfigurationResolver,
+    InvestigationRunProjector,
+)
+from .investigation_creation.service import InvestigationCreationService
+from .investigation_creation.store import InvestigationCreationStore
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,11 +76,28 @@ audit_config_revision_store = TaskAuditConfigRevisionStore()
 report_store = ReportStore()
 r31_report_runtime = R31ReportRuntime(report_store)
 investigation_agent_service = HermesInvestigationAgentService()
+investigation_creation_store = InvestigationCreationStore()
+investigation_creation_service = InvestigationCreationService(
+    investigation_creation_store,
+    configuration_resolver=InvestigationConfigurationResolver(
+        lexicon_store=lexicon_store,
+        policy_store=audit_policy_store,
+        crawler_account_store=crawler_account_store,
+    ),
+    run_projector=InvestigationRunProjector(
+        job_store=job_store,
+        ingestion_store=ingestion_store,
+        report_store=report_store,
+    ),
+)
 investigation_turn_executor = InvestigationTurnExecutor(
     investigation_agent_service,
     max_workers=settings.hermes_investigation_max_workers,
 )
 app.include_router(create_reporting_router(report_store, r31_report_runtime))
+app.include_router(
+    create_investigation_creation_router(investigation_creation_service)
+)
 app.include_router(
     create_investigation_router(
         investigation_agent_service,
@@ -535,33 +563,14 @@ def parse_form_dict(value: str) -> dict:
 
 
 def validate_creator_url(platform: str, creator_url: str, *, allow_legacy_id: bool = False) -> str:
-    value = creator_url.strip()
-    if not value:
-        raise HTTPException(status_code=400, detail="creator_url is required when crawl_mode is creator")
-
-    if platform == "xhs":
-        is_pure_user_id = len(value) == 24 and all(ch in "0123456789abcdef" for ch in value)
-        is_profile_url = "xiaohongshu.com/user/profile/" in value
-        if not is_profile_url and not (allow_legacy_id and is_pure_user_id):
-            raise HTTPException(
-                status_code=400,
-                detail="小红书创作者抓取请填写完整主页 URL。",
-            )
-        if is_profile_url and ("xsec_token=" not in value or "xsec_source=" not in value):
-            raise HTTPException(
-                status_code=400,
-                detail="小红书主页 URL 建议包含 xsec_token 和 xsec_source；请从网页端打开主页后复制完整地址。",
-            )
-    elif platform == "dy":
-        is_profile_url = "douyin.com/user/" in value
-        if not is_profile_url and not allow_legacy_id:
-            raise HTTPException(status_code=400, detail="抖音创作者抓取请填写完整主页 URL。")
-    elif platform == "ks":
-        is_profile_url = "kuaishou.com/profile/" in value
-        if not is_profile_url and not allow_legacy_id:
-            raise HTTPException(status_code=400, detail="快手创作者抓取请填写完整主页 URL。")
-
-    return value
+    try:
+        return validate_creator_url_contract(
+            platform,
+            creator_url,
+            allow_legacy_id=allow_legacy_id,
+        )
+    except CreatorUrlValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def normalize_relation_context(value: dict | None) -> dict:

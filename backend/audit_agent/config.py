@@ -10,8 +10,10 @@ load_dotenv(ROOT / ".env")
 
 class Settings:
     root_dir = ROOT
-    data_dir = ROOT / "data"
-    outputs_dir = ROOT / "outputs"
+    data_dir = Path(os.getenv("XHS_AUDIT_DATA_DIR", str(ROOT / "data"))).expanduser()
+    outputs_dir = Path(
+        os.getenv("XHS_AUDIT_OUTPUTS_DIR", str(ROOT / "outputs"))
+    ).expanduser()
 
     dashscope_api_key = os.getenv("DASHSCOPE_API_KEY", "")
     dashscope_base_url = os.getenv(
