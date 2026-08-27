@@ -11,7 +11,7 @@ package inputs, not live data and not credentials.
 | `tests/fixtures/planner_shadow_v1_1_blind.json` | `05d0e5d3174885872538219375f4c20770df92492c92ec70d5ccc4c0112eca8d` | deterministic held-out fixture |
 | `tests/fixtures/planner_shadow_v1_2_regression.json` | `424ec8a679b667581bf903ea50f5b5bc7df769684d678f9347df43d6bc708659` | deterministic regression fixture |
 | `tests/fixtures/planner_shadow_v1_2_blind.json` | `8e346a329e4d2221bf4de0faaf6ee3eaa007d14fda8f9ffb6923cf64f959d1ce` | deterministic held-out fixture |
-| `artifacts/m22_unified_account_risk_navigation_20260826/frozen/questions.json` | `4c3110f330d5edf6d8df4ad3aabeeb64e5b42cc387c2b4846c953ad19a87` | read-only M2.2 acceptance evidence; not a production runtime dependency |
+| `artifacts/m22_unified_account_risk_navigation_20260826/frozen/questions.json` | `4c3110f330d5edf6d8df4ad56da3aabeeb64e5b42cc387c2b4846c953ad19a87` | read-only M2.2 acceptance evidence; not a production runtime dependency |
 | `artifacts/m22_unified_account_risk_navigation_20260826/frozen/oracle.json` | `9ddb428c1c5be2dc20527f865f690401b47486c5c41eb5593a5473949f177d05` | read-only M2.2 acceptance evidence; not a production runtime dependency |
 
 The R3.1 report SQLite files and frontend JSON are registered as read-only

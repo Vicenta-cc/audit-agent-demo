@@ -5,12 +5,13 @@
 - Required distribution: `hermes-agent==0.20.4`
 - Declared install: `requirements-hermes.txt`
 - Recorded source version: `0.20.4` from the local Hermes `pyproject.toml`
-- Required source commit: `e624e9fde561e1add9388384012b295fde669ade`.
-  R0.1 independently fetches and checks out this exact commit from the
-  official repository. The earlier R0 `git ls-remote` observation is retained
-  only as an incomplete audit attempt, not as evidence that the commit is
-  missing. The R0.1 fetch attempt is documented in
-  `hermes-clean-room-report.md` and ended before any object was obtained.
+- Required source commit in `requirements-hermes.txt`:
+  `e624e9fde561e1add9388384012b295fde669ade`.
+- R0.2 used the already frozen 0.20.4 local source required by the execution
+  brief, built a non-editable wheel into the candidate-local virtual
+  environment, and ran without `PYTHONPATH`. The frozen source has no Git
+  metadata, so R0.2 does not claim a new independent Git attestation; it does
+  verify every critical runtime hash registered below.
 - Required Python: `>=3.11,<3.14`
 - Product imports only public `hermes_cli.plugins`, `model_tools` and
   `run_agent.AIAgent` through `backend/hermes_runtime/adapter.py`.
@@ -40,7 +41,9 @@ pyproject.toml 1f928b1560b0669291b3f7d562aa78c99ac4f927375939ca97fd3c3e7494cb91
 uv.lock 8fd868b9da8b6bc2f4aa94a845e210eccdd5e31be7a0b404f0a8527ced0fddec
 ```
 
-The hashes above are historical local-source audit values. R0.1 does not
-substitute them for official-commit hashes: exact-commit checkout and
-comparison of these registered files remain blocked by the failed network
-fetch. The official source must be used as-is when the gate is retried.
+All nine registered files in the frozen source match the hashes above. The
+installed runtime reported 0.20.4; `hermes_cli.plugins`, `model_tools`, and
+`run_agent.AIAgent` loaded from the candidate-local virtual environment.
+Actual discovery enabled `xhs-investigation` and registered exactly the 11
+M2.2 product tools. A constructor-only `AIAgent` smoke used the canonical
+System Prompt and did not contact a Provider.

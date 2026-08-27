@@ -12,7 +12,7 @@ Every row remains recoverable through the Preservation Gate archive.
 | Account A0/A1/A2 worktrees | Excluded, archival candidate | Superseded by Hermes M2.2 Account path | Keep branches/bundle until consumers are disproven |
 | Demo `experiments/` and results | Excluded, evidence/archive only | Provider traces and one-off evaluation outputs | Do not delete evidence in R0 |
 | Dirty MediaCrawler worktree | External compatibility blocker | Required changes are uncommitted and not reproducible | Publish source-only checkpoint before integration |
-| External `hermes-agent-main` source tree | External dependency, not copied | No `.git`; version/source hashes recorded only | Verify install/commit in a fresh environment |
+| Frozen Hermes 0.20.4 source | Build input only, not copied | No `.git`; version and all registered runtime hashes match | Keep requirement commit pin; runtime uses the candidate-local non-editable install |
 
 The matrix is a plan, not an authorization to run `git worktree remove`, delete
 branches/tags, or delete artifacts/SQLite files.
@@ -25,3 +25,10 @@ marked compatibility facades. The MediaCrawler dependency now has a recoverable
 source-only checkpoint; the original dirty worktree remains untouched. The
 candidate is retained without a baseline tag until the exact Hermes clean-room
 gate passes.
+
+## R0.2 closure note
+
+No cleanup action was performed. Formal API execution now enters Hermes while
+the pre-Hermes implementation remains only as a compatibility facade and test
+history. TASK_MODE and its missing cross-dataset fixture remain
+validation-only; no historical runtime or fixture was reintroduced.

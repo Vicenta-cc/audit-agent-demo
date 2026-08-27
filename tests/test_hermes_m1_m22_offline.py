@@ -7,11 +7,13 @@ import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
 
+from hermes_m0.account_activity_service import AccountActivityToolService
 from hermes_m0.account_activity_repository import AccountActivityRepository
 from hermes_m0.account_corpus import AccountCorpus
 from hermes_m0.ledger import ToolExecutionLedger
-from hermes_m0.refs import SessionReferenceRegistry
+from hermes_m0.refs import ReferenceError, SessionReferenceRegistry
 from hermes_m0.report_task_refs import ReportTaskReferenceRegistry
 from hermes_m0.report_task_service import ReportTaskInvestigationToolService
 from hermes_m0.repository import InvestigationRepository
@@ -182,6 +184,161 @@ class HermesOfflineSmokeTest(unittest.TestCase):
             report_risk_post_keys=frozenset({str(risk_occurrence["post"]["content_key"])}),
         )
         self.assertTrue(risk_preview["parent_post_in_current_report_risk_summary"])
+
+    def test_m0_cross_session_and_stale_refs_fail_closed(self):
+        refs = SessionReferenceRegistry(nonce="r0-ref")
+        for session_id in ("session-a", "session-b"):
+            refs.bind(
+                session_id=session_id,
+                report_version_id="report-version:r0",
+                snapshot_id="snapshot:r0",
+                domain_revision="revision:r0",
+            )
+        batch = refs.batch("session-a")
+        post_ref = batch.expose(
+            kind="post",
+            object_id="post:r0",
+            parent_id=None,
+            source_tool="read_posts",
+            result_kind="post_detail",
+            content_state="complete",
+        )
+        batch.commit()
+
+        with self.assertRaises(ReferenceError) as cross_session:
+            refs.resolve("session-b", post_ref, expected_kind="post")
+        self.assertEqual(cross_session.exception.code, "cross_scope_ref")
+
+        refs.bind(
+            session_id="session-a",
+            report_version_id="report-version:r0",
+            snapshot_id="snapshot:r0",
+            domain_revision="revision:r0",
+            force_new_generation=True,
+        )
+        with self.assertRaises(ReferenceError) as stale:
+            refs.resolve("session-a", post_ref, expected_kind="post")
+        self.assertEqual(stale.exception.code, "stale_revision_ref")
+
+    def test_m22_target_and_risk_filters_compose_without_identity_leaks(self):
+        corpus = AccountCorpus.load(ACCOUNT_FIXTURE)
+        repository = AccountActivityRepository(corpus)
+        selected = None
+        for account in corpus.accounts:
+            account_id = str(account["account_ref"])
+            overview = repository.overview(account_id)
+            for target in overview["comment_target_distribution"]:
+                target_id = str(target["account_id"])
+                matches = repository.ordered_occurrences(
+                    account_id,
+                    kind="comment_author",
+                    comment_target_account_id=target_id,
+                    risk_filter="risk_only",
+                )
+                if matches:
+                    selected = (account_id, target_id, matches)
+                    break
+            if selected is not None:
+                break
+        self.assertIsNotNone(selected)
+        account_id, target_id, expected = selected
+
+        report_repository = SimpleNamespace(
+            report=SimpleNamespace(title="R0.2 offline report"),
+            fixture=SimpleNamespace(
+                provenance=SimpleNamespace(source_task_id="task:r0")
+            ),
+            risk_posts=lambda: (),
+        )
+        service = AccountActivityToolService(
+            report_repository,
+            repository_loader=lambda: repository,
+        )
+        service.bind_session(
+            "session-m22-filter",
+            task_id="task:r0",
+            report_version_id="report-version:r0",
+            snapshot_id="snapshot:r0",
+            report_revision="revision:r0",
+            snapshot_hash="snapshot-hash-r0",
+            content_hash="content-hash-r0",
+            force_new_generation=False,
+        )
+        account_ref = service.expose_account(
+            "session-m22-filter",
+            account_id,
+            source_tool="read_report",
+            content_state="current_investigation_account_card",
+            repository=repository,
+        )
+        overview_result = json.loads(
+            service.dispatch(
+                "get_account_overview",
+                {"account_ref": account_ref},
+                session_id="session-m22-filter",
+            )
+        )
+        raw_targets = repository.overview(account_id)["comment_target_distribution"]
+        target_position = next(
+            index
+            for index, item in enumerate(raw_targets)
+            if str(item["account_id"]) == target_id
+        )
+        target_ref = overview_result["data"]["comment_target_distribution"][
+            target_position
+        ]["comment_target_ref"]
+        directory = json.loads(
+            service.dispatch(
+                "list_account_occurrences",
+                {
+                    "account_ref": account_ref,
+                    "kind": "comment_author",
+                    "limit": 20,
+                    "comment_target_ref": target_ref,
+                    "risk_filter": "risk_only",
+                },
+                session_id="session-m22-filter",
+            )
+        )
+
+        self.assertTrue(directory["ok"])
+        self.assertEqual(directory["data"]["matched_count"], len(expected))
+        self.assertEqual(directory["data"]["risk_filter"], "risk_only")
+        self.assertTrue(
+            all(
+                item["audit_status"] == "completed"
+                and item["risk_level"] in {"low", "medium", "high"}
+                for item in directory["data"]["occurrences"]
+            )
+        )
+        first = directory["data"]["occurrences"][0]
+        detail = json.loads(
+            service.dispatch(
+                "read_account_occurrence",
+                {"occurrence_ref": first["ref"]},
+                session_id="session-m22-filter",
+            )
+        )
+        self.assertEqual(
+            detail["data"]["occurrence"]["role"],
+            "当前账号是评论者；不是父帖作者",
+        )
+        self.assertTrue(
+            overview_result["data"]["risk_statistics"][
+                "parent_post_risk_is_not_inherited"
+            ]
+        )
+        public_material = json.dumps(
+            [overview_result, directory, detail], ensure_ascii=False
+        )
+        for forbidden in (
+            '"task_id"',
+            '"account_id"',
+            '"content_key"',
+            "account:v2:",
+            "/Users/",
+        ):
+            self.assertNotIn(forbidden, public_material)
 
     def test_recovery_failed_turn_and_completed_replay_are_once_only(self):
         with tempfile.TemporaryDirectory() as directory:
