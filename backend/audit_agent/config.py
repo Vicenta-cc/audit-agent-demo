@@ -24,6 +24,10 @@ class Settings:
         for item in os.getenv("HERMES_AUTHORIZED_REPORT_VERSION_IDS", "").split(",")
         if item.strip()
     )
+    hermes_investigation_max_workers = max(
+        2,
+        int(os.getenv("HERMES_INVESTIGATION_MAX_WORKERS", "2")),
+    )
     qwen_report_model = os.getenv("QWEN_REPORT_MODEL", qwen_text_model).strip()
     report_prompt_version = os.getenv("REPORT_PROMPT_VERSION", "report-v2-human").strip()
     report_request_timeout = int(os.getenv("REPORT_REQUEST_TIMEOUT", "180"))

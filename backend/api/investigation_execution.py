@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class InvestigationTurnExecutor:
     """Application-scoped durable executor for public investigation Turns."""
 
-    def __init__(self, service: Any, *, max_workers: int = 1):
+    def __init__(self, service: Any, *, max_workers: int = 2):
         self.service = service
         self.store = service.store
         self._pool = ThreadPoolExecutor(

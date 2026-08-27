@@ -5,7 +5,7 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Event, Lock
 import tempfile
 import time
 from types import SimpleNamespace
@@ -16,12 +16,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api.investigation import create_investigation_router
+from backend.api.investigation_execution import InvestigationTurnExecutor
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 from backend.investigation.contracts import PublishedReportContext
 from backend.investigation.errors import ConcurrentTurnError
 from backend.investigation.store import InvestigationStore
-from hermes_m0.plugin import _handler
+from hermes_m0.plugin import _handler, _idempotent_tool_execution
 from hermes_m0.runtime import (
     bind_report_task_session,
     release_all_report_task_sessions,
@@ -146,6 +147,85 @@ class _ConcurrentAgent:
         return None
 
 
+class _ExecutorPathAgent:
+    def __init__(self, options, *, fail: bool = False):
+        self.options = options
+        self.fail = fail
+        self.execution_count = 0
+        self.tool_result = None
+
+    def run_conversation(self, message, **kwargs):
+        self.execution_count += 1
+        session_id = self.options["session_id"]
+        tool_call_id = f"call:{session_id}"
+        handler = _handler("read_report")
+        raw_result = _idempotent_tool_execution(
+            tool_name="read_report",
+            args={},
+            session_id=session_id,
+            task_id=kwargs["task_id"],
+            tool_call_id=tool_call_id,
+            next_call=lambda args: handler(
+                args,
+                session_id=session_id,
+                task_id=kwargs["task_id"],
+            ),
+        )
+        self.tool_result = json.loads(raw_result)
+        if self.fail:
+            raise RuntimeError("injected executor-path failure")
+        history = [dict(item) for item in kwargs.get("conversation_history") or []]
+        answer = f"answer:{self.tool_result['report']}"
+        return {
+            "final_response": answer,
+            "messages": [
+                *history,
+                {"role": "user", "content": message},
+                {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": tool_call_id,
+                            "type": "function",
+                            "function": {"name": "read_report", "arguments": {}},
+                        }
+                    ],
+                },
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "name": "read_report",
+                    "content": raw_result,
+                },
+                {"role": "assistant", "content": answer},
+            ],
+            "api_calls": 1,
+            "completed": True,
+            "failed": False,
+            "interrupted": False,
+            "turn_exit_reason": "text_response",
+        }
+
+    def close(self):
+        return None
+
+
+class _ObservedExecutor(InvestigationTurnExecutor):
+    def __init__(self, service, *, max_workers: int):
+        self.terminal_turns = set()
+        self.terminal_event = Event()
+        self.terminal_lock = Lock()
+        super().__init__(service, max_workers=max_workers)
+
+    def _append_terminal_event(self, turn_id: str) -> None:
+        super()._append_terminal_event(turn_id)
+        with self.terminal_lock:
+            self.terminal_turns.add(turn_id)
+            if len(self.terminal_turns) >= 2:
+                self.terminal_event.set()
+
+
 class _FakeRefs:
     def __init__(self, session_id: str, scope) -> None:
         self.session_id = session_id
@@ -168,6 +248,7 @@ class _ScopedToolService:
         self.label = label
         self.session_id = session_id
         self.barrier = barrier
+        self.execution_count = 0
         self.repository = SimpleNamespace(
             database_sha256=token * 64,
             snapshot_hash=token * 64,
@@ -215,6 +296,7 @@ class _ScopedToolService:
         )
 
     def execute_tool_call(self, *, args, next_call, **_kwargs):
+        self.execution_count += 1
         return next_call(args)
 
 
@@ -419,6 +501,99 @@ class InvocationParityTest(unittest.TestCase):
 class SessionScopedConcurrencyTest(unittest.TestCase):
     def tearDown(self):
         release_all_report_task_sessions()
+
+    def test_formal_api_executor_concurrently_isolates_sessions_and_replay(self):
+        with tempfile.TemporaryDirectory() as directory:
+            barrier = Barrier(2)
+            agents = {}
+            facade = _MultiReportFacade()
+
+            def factory(**options):
+                agent = _ExecutorPathAgent(
+                    options,
+                    fail=options["session_id"] == session_a.id,
+                )
+                agents[options["session_id"]] = agent
+                return agent
+
+            service = HermesInvestigationAgentService(
+                report_facade=facade,
+                store=InvestigationStore(Path(directory) / "investigation.sqlite3"),
+                agent_factory=factory,
+                bind_runtime=False,
+            )
+            session_a = service.create_session(_context("a").report_version_id)
+            session_b = service.create_session(_context("b").report_version_id)
+            tool_service_a = _ScopedToolService("A", session_a.id, barrier)
+            tool_service_b = _ScopedToolService("B", session_b.id, barrier)
+            bind_report_task_session(session_a.id, service=tool_service_a)
+            bind_report_task_session(session_b.id, service=tool_service_b)
+
+            executor = _ObservedExecutor(service, max_workers=2)
+            app = FastAPI()
+            app.include_router(create_investigation_router(service, executor))
+            environment = {"HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE": "1"}
+            try:
+                with patch.dict(os.environ, environment, clear=False):
+                    with TestClient(app) as client:
+                        accepted_a = client.post(
+                            f"/api/investigation-sessions/{session_a.id}/turns",
+                            json={"client_message_id": "a-1", "content": "report a"},
+                        )
+                        self.assertEqual(accepted_a.status_code, 202)
+                        conflict = client.post(
+                            f"/api/investigation-sessions/{session_a.id}/turns",
+                            json={"client_message_id": "a-2", "content": "conflict"},
+                        )
+                        self.assertEqual(conflict.status_code, 409)
+                        accepted_b = client.post(
+                            f"/api/investigation-sessions/{session_b.id}/turns",
+                            json={"client_message_id": "b-1", "content": "report b"},
+                        )
+                        self.assertEqual(accepted_b.status_code, 202)
+                        self.assertTrue(executor.terminal_event.wait(timeout=3))
+
+                        turn_a_id = accepted_a.json()["turn_id"]
+                        turn_b_id = accepted_b.json()["turn_id"]
+                        self.assertEqual(service.store.get_turn(turn_a_id).status, "interrupted")
+                        self.assertEqual(service.store.get_turn(turn_b_id).status, "completed")
+                        self.assertEqual(agents[session_a.id].tool_result["report"], "A")
+                        self.assertEqual(agents[session_b.id].tool_result["report"], "B")
+                        self.assertEqual(tool_service_a.execution_count, 1)
+                        self.assertEqual(tool_service_b.execution_count, 1)
+
+                        tool_service_a.barrier = None
+                        tool_service_b.barrier = None
+                        cross_scope = json.loads(
+                            _handler("read_report")(
+                                {"ref": agents[session_a.id].tool_result["ref"]},
+                                session_id=session_b.id,
+                                task_id="cross-session",
+                            )
+                        )
+                        self.assertEqual(
+                            cross_scope["error"]["code"], "cross_scope_ref"
+                        )
+
+                        with patch.object(
+                            executor,
+                            "_submit_locked",
+                            wraps=executor._submit_locked,
+                        ) as submit:
+                            replay = client.post(
+                                f"/api/investigation-sessions/{session_b.id}/turns",
+                                json={
+                                    "client_message_id": "b-1",
+                                    "content": "report b",
+                                },
+                            )
+                        self.assertEqual(replay.status_code, 202)
+                        self.assertEqual(replay.json()["turn_id"], turn_b_id)
+                        submit.assert_not_called()
+                        self.assertEqual(agents[session_b.id].execution_count, 1)
+                        self.assertEqual(tool_service_b.execution_count, 1)
+            finally:
+                executor.shutdown(wait=True)
 
     def test_tool_registry_is_concurrent_isolated_and_fail_closed(self):
         release_all_report_task_sessions()

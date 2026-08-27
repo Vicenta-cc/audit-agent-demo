@@ -65,7 +65,10 @@ audit_config_revision_store = TaskAuditConfigRevisionStore()
 report_store = ReportStore()
 r31_report_runtime = R31ReportRuntime(report_store)
 investigation_agent_service = HermesInvestigationAgentService()
-investigation_turn_executor = InvestigationTurnExecutor(investigation_agent_service)
+investigation_turn_executor = InvestigationTurnExecutor(
+    investigation_agent_service,
+    max_workers=settings.hermes_investigation_max_workers,
+)
 app.include_router(create_reporting_router(report_store, r31_report_runtime))
 app.include_router(
     create_investigation_router(
