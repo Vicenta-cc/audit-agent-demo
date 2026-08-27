@@ -42,20 +42,37 @@ class HermesInvestigationAgentService:
         ).resolve()
         self._agents: dict[str, Any] = {}
         self._bound_sessions: set[str] = set()
-        self._active_runtime_session_id: str | None = None
-        self._runtime_lock = RLock()
+        self._agent_lock = RLock()
         self._turn_node_observers: list[Callable[[str, str], None]] = []
 
     def close(self) -> None:
-        for agent in tuple(self._agents.values()):
+        with self._agent_lock:
+            agents = tuple(self._agents.items())
+            self._agents.clear()
+        for session_id, agent in agents:
             close = getattr(agent, "close", None)
             if callable(close):
                 close()
-        self._agents.clear()
+            if self.bind_runtime:
+                self.runtime_binding.release_published_report_session(session_id)
+        self._bound_sessions.clear()
 
     def create_session(self, report_version_id: str) -> InvestigationSession:
         context = self.report_facade.get_published_report_context(report_version_id)
         return self.store.create_session(context)
+
+    def close_session(self, session_id: str) -> InvestigationSession:
+        session = self.store.close_session(session_id)
+        with self._agent_lock:
+            agent = self._agents.pop(session_id, None)
+        if agent is not None:
+            close = getattr(agent, "close", None)
+            if callable(close):
+                close()
+        self._bound_sessions.discard(session_id)
+        if self.bind_runtime:
+            self.runtime_binding.release_published_report_session(session_id)
+        return session
 
     def accept_message(
         self,
@@ -90,19 +107,15 @@ class HermesInvestigationAgentService:
         self._validate_business_scope(session)
         self._notify(turn.id, "call_qwen")
         try:
-            # The canonical plugin runtime owns one process-level report binding.
-            # Keep binding and execution atomic so concurrent ReportVersions cannot
-            # observe each other's read-only tool service.
-            with self._runtime_lock:
-                self._bind_session(session)
-                agent = self._agent(session.id)
-                result = agent.run_conversation(
-                    self.store.get_user_message_for_turn(turn.id).content,
-                    conversation_history=self._conversation_history(
-                        session.id, turn.id
-                    ),
-                    task_id=turn.id,
-                )
+            self._bind_session(session)
+            agent = self._agent(session.id)
+            result = agent.run_conversation(
+                self.store.get_user_message_for_turn(turn.id).content,
+                conversation_history=self._conversation_history(
+                    session.id, turn.id
+                ),
+                task_id=turn.id,
+            )
         except Exception as exc:
             self.store.mark_interrupted(
                 turn.id,
@@ -138,24 +151,33 @@ class HermesInvestigationAgentService:
         )
 
     def _agent(self, session_id: str) -> Any:
-        agent = self._agents.get(session_id)
-        if agent is None:
-            agent = self.runtime_binding.create_agent(
-                session_id=session_id,
-                agent_factory=self.agent_factory,
-                provider="alibaba",
-                base_url=settings.dashscope_base_url,
-                api_key=settings.dashscope_api_key,
-                model=settings.qwen_text_model,
-            )
-            self._agents[session_id] = agent
-        return agent
+        with self._agent_lock:
+            agent = self._agents.get(session_id)
+            if agent is None:
+                agent = self.runtime_binding.create_agent(
+                    session_id=session_id,
+                    agent_factory=self.agent_factory,
+                    provider="alibaba",
+                    base_url=settings.dashscope_base_url,
+                    api_key=settings.dashscope_api_key,
+                    model=settings.qwen_text_model,
+                )
+                self._agents[session_id] = agent
+            return agent
 
     def _bind_session(self, session: InvestigationSession) -> None:
-        if not self.bind_runtime or session.id == self._active_runtime_session_id:
+        if not self.bind_runtime:
             return
-        self.runtime_binding.configure_product_home(self.hermes_state_dir)
-        self.runtime_binding.discover_plugins(force=not self._bound_sessions)
+        is_bound = getattr(
+            self.runtime_binding, "is_published_report_session_bound", None
+        )
+        if session.id in self._bound_sessions and (
+            not callable(is_bound) or bool(is_bound(session.id))
+        ):
+            return
+        with self._agent_lock:
+            self.runtime_binding.configure_product_home(self.hermes_state_dir)
+            self.runtime_binding.discover_plugins(force=not self._bound_sessions)
         self.runtime_binding.bind_published_report_session(
             session_id=session.id,
             database_path=self.report_facade.db_path,
@@ -167,9 +189,13 @@ class HermesInvestigationAgentService:
             ledger_path=self.hermes_state_dir / f"{session.id}.sqlite3",
         )
         self._bound_sessions.add(session.id)
-        self._active_runtime_session_id = session.id
 
     def _validate_business_scope(self, session: InvestigationSession) -> None:
+        if session.status != "active":
+            if self.bind_runtime:
+                self.runtime_binding.release_published_report_session(session.id)
+            self._bound_sessions.discard(session.id)
+            raise InvestigationTurnNotFoundError("session is not active")
         current = self.report_facade.get_published_report_context(
             session.report_version_id
         )

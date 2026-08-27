@@ -45,6 +45,12 @@ def _handler(tool_name: str):
                 session_id=session_id,
                 turn_id=str(kwargs.get("task_id") or ""),
             )
+        if os.environ.get("HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE") == "1":
+            return error_result(
+                tool=tool_name,
+                code="product_session_unbound",
+                message="The product Investigation Session has no authorized report binding.",
+            )
         task_runtime = task_runtime_for_session(session_id)
         if task_runtime is not None:
             return task_runtime.dispatch(
@@ -70,11 +76,17 @@ def _idempotent_tool_execution(**kwargs: Any) -> Any:
         return next_call(args)
     try:
         session_id = str(kwargs.get("session_id") or "")
-        runtime = (
-            report_task_runtime_for_session(session_id)
-            or task_runtime_for_session(session_id)
-            or get_runtime()
-        )
+        runtime = report_task_runtime_for_session(session_id)
+        if (
+            runtime is None
+            and os.environ.get("HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE") == "1"
+        ):
+            return error_result(
+                tool=tool_name,
+                code="product_session_unbound",
+                message="The product Investigation Session has no authorized report binding.",
+            )
+        runtime = runtime or task_runtime_for_session(session_id) or get_runtime()
         return runtime.execute_tool_call(
             session_id=session_id,
             tool_call_id=str(kwargs.get("tool_call_id") or ""),

@@ -22,7 +22,7 @@ from hermes_m0.task_service import TaskInvestigationToolService
 _lock = threading.RLock()
 _service: InvestigationToolService | None = None
 _task_service: TaskInvestigationToolService | None = None
-_report_task_service: ReportTaskInvestigationToolService | None = None
+_report_task_services: dict[str, "ReportRuntimeBinding"] = {}
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,19 @@ class AuthorizedReportSource:
     database_sha256: str
     content_hash: str
     snapshot_hash: str
+
+
+@dataclass(frozen=True)
+class ReportRuntimeBinding:
+    """Worker-local cache entry for one product Investigation Session."""
+
+    session_id: str
+    report_version_id: str
+    snapshot_id: str
+    snapshot_hash: str
+    content_hash: str
+    database_sha256: str
+    service: ReportTaskInvestigationToolService
 
 
 def configure_runtime(
@@ -91,14 +104,10 @@ def configure_report_task_runtime(
     *,
     ledger_path: Path | str | None = None,
 ) -> ReportTaskInvestigationToolService:
-    global _report_task_service
-    service = ReportTaskInvestigationToolService(
+    return ReportTaskInvestigationToolService(
         InvestigationRepository.load(fixture_path),
         ledger=ToolExecutionLedger(ledger_path or default_report_task_ledger_path()),
     )
-    with _lock:
-        _report_task_service = service
-    return service
 
 
 def configure_real_report_runtime(
@@ -114,7 +123,6 @@ def configure_real_report_runtime(
 ) -> ReportTaskInvestigationToolService:
     """Bind M1/M2 to one verified published report without mutating its store."""
 
-    global _report_task_service
     report_path = Path(database_path).expanduser().resolve(strict=True)
     execution_ledger_path = Path(
         ledger_path or default_real_report_ledger_path()
@@ -167,38 +175,93 @@ def configure_real_report_runtime(
         ledger=ToolExecutionLedger(execution_ledger_path),
         account_activity=account_activity,
     )
-    with _lock:
-        _report_task_service = service
     return service
 
 
-def get_report_task_runtime() -> ReportTaskInvestigationToolService:
-    global _report_task_service
-    with _lock:
-        if _report_task_service is None:
-            _report_task_service = ReportTaskInvestigationToolService(
-                InvestigationRepository.load(),
-                ledger=ToolExecutionLedger(default_report_task_ledger_path()),
-            )
-        return _report_task_service
-
-
 def bind_report_task_session(
-    session_id: str, *, force_new_generation: bool = False
+    session_id: str,
+    *,
+    service: ReportTaskInvestigationToolService,
+    force_new_generation: bool = False,
 ):
-    return get_report_task_runtime().bind_session(
-        session_id, force_new_generation=force_new_generation
+    """Atomically bind one service to one immutable product Session identity."""
+
+    normalized_session_id = str(session_id or "").strip()
+    if not normalized_session_id:
+        raise ValueError("session_id is required for report runtime binding")
+    scope = service.bind_session(
+        normalized_session_id, force_new_generation=force_new_generation
     )
+    database_sha256 = str(
+        getattr(service.repository, "database_sha256", "validation-fixture")
+    )
+    candidate = ReportRuntimeBinding(
+        session_id=normalized_session_id,
+        report_version_id=scope.report_version_id,
+        snapshot_id=scope.snapshot_id,
+        snapshot_hash=scope.snapshot_hash,
+        content_hash=scope.content_hash,
+        database_sha256=database_sha256,
+        service=service,
+    )
+    with _lock:
+        existing = _report_task_services.get(normalized_session_id)
+        if existing is not None:
+            existing_identity = (
+                existing.report_version_id,
+                existing.snapshot_id,
+                existing.snapshot_hash,
+                existing.content_hash,
+                existing.database_sha256,
+            )
+            candidate_identity = (
+                candidate.report_version_id,
+                candidate.snapshot_id,
+                candidate.snapshot_hash,
+                candidate.content_hash,
+                candidate.database_sha256,
+            )
+            if existing_identity != candidate_identity:
+                raise RuntimeError(
+                    "product Session cannot be rebound to a different ReportVersion "
+                    "or FrozenSnapshot"
+                )
+            return existing.service.refs.scope(normalized_session_id)
+        _report_task_services[normalized_session_id] = candidate
+    return scope
 
 
 def report_task_runtime_for_session(
     session_id: str,
 ) -> ReportTaskInvestigationToolService | None:
     with _lock:
-        service = _report_task_service
-    if service is not None and service.has_session(session_id):
-        return service
+        binding = _report_task_services.get(session_id)
+    if binding is not None and binding.service.has_session(session_id):
+        return binding.service
     return None
+
+
+def report_runtime_binding_for_session(
+    session_id: str,
+) -> ReportRuntimeBinding | None:
+    with _lock:
+        return _report_task_services.get(session_id)
+
+
+def release_report_task_session(session_id: str) -> bool:
+    """Release one worker-local cache entry without changing product state."""
+
+    with _lock:
+        return _report_task_services.pop(session_id, None) is not None
+
+
+def release_all_report_task_sessions() -> tuple[str, ...]:
+    """Release all worker-local bindings during service shutdown."""
+
+    with _lock:
+        session_ids = tuple(sorted(_report_task_services))
+        _report_task_services.clear()
+    return session_ids
 
 
 def bind_task_session(

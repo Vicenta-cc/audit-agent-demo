@@ -192,7 +192,27 @@ class HermesRuntimeBinding:
         report_path = database_path.expanduser().resolve(strict=True)
         database_hash = sha256(report_path.read_bytes()).hexdigest()
         runtime = import_module("hermes_m0.runtime")
-        runtime.configure_real_report_runtime(
+        existing = runtime.report_runtime_binding_for_session(session_id)
+        if existing is not None:
+            expected_identity = (
+                report_version_id,
+                snapshot_hash,
+                content_hash,
+                database_hash,
+            )
+            actual_identity = (
+                existing.report_version_id,
+                existing.snapshot_hash,
+                existing.content_hash,
+                existing.database_sha256,
+            )
+            if actual_identity != expected_identity:
+                raise RuntimeError(
+                    "product Session cannot be rebound to a different ReportVersion "
+                    "or FrozenSnapshot"
+                )
+            return
+        service = runtime.configure_real_report_runtime(
             report_path,
             report_version_id=report_version_id,
             expected_database_sha256=database_hash,
@@ -203,4 +223,14 @@ class HermesRuntimeBinding:
                 "hermes_m0.account_activity_repository"
             ).DEFAULT_ACCOUNT_CORPUS_PATH,
         )
-        runtime.bind_report_task_session(session_id)
+        runtime.bind_report_task_session(session_id, service=service)
+
+    @staticmethod
+    def is_published_report_session_bound(session_id: str) -> bool:
+        runtime = import_module("hermes_m0.runtime")
+        return runtime.report_runtime_binding_for_session(session_id) is not None
+
+    @staticmethod
+    def release_published_report_session(session_id: str) -> bool:
+        runtime = import_module("hermes_m0.runtime")
+        return bool(runtime.release_report_task_session(session_id))
