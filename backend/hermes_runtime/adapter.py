@@ -35,6 +35,8 @@ _LEGACY_MODE_FLAGS = (
     "HERMES_INVESTIGATION_REPORT_TASK_MODE",
     "HERMES_INVESTIGATION_REAL_REPORT_MODE",
 )
+_ACCOUNT_ACTIVITY_MODE_FLAG = "HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE"
+_CREATION_MODE_FLAG = "HERMES_INVESTIGATION_CREATION_MODE"
 
 
 class HermesRuntimeUnavailable(RuntimeError):
@@ -72,18 +74,31 @@ class HermesRuntimeBinding:
         return prompt.strip()
 
     @staticmethod
-    def activate_product_mode() -> None:
+    def activate_product_mode(mode: str = "account-activity") -> None:
         """Select the sole product catalog and reject historical optional modes."""
 
+        if mode not in {"account-activity", "creation"}:
+            raise HermesRuntimeUnavailable(f"unsupported Hermes product mode: {mode}")
         enabled_legacy = [
             name for name in _LEGACY_MODE_FLAGS if os.environ.get(name) == "1"
         ]
-        if enabled_legacy:
+        if mode == "account-activity" and enabled_legacy:
             raise HermesRuntimeUnavailable(
                 "validation-only Hermes mode cannot be enabled by the product adapter: "
                 + ", ".join(enabled_legacy)
             )
-        os.environ["HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE"] = "1"
+        for name in (
+            *_LEGACY_MODE_FLAGS,
+            _ACCOUNT_ACTIVITY_MODE_FLAG,
+            _CREATION_MODE_FLAG,
+        ):
+            os.environ[name] = "0"
+        selected_flag = (
+            _CREATION_MODE_FLAG
+            if mode == "creation"
+            else _ACCOUNT_ACTIVITY_MODE_FLAG
+        )
+        os.environ[selected_flag] = "1"
         os.environ["HERMES_ENABLE_PROJECT_PLUGINS"] = "1"
 
     def configure_product_home(self, home: Path) -> None:
@@ -137,18 +152,28 @@ class HermesRuntimeBinding:
             )
         return cli
 
-    def discover_plugins(self, *, force: bool = False) -> None:
+    def discover_plugins(
+        self,
+        *,
+        force: bool = False,
+        product_mode: str = "account-activity",
+    ) -> None:
         """Load Hermes plugins using its public, idempotent discovery API."""
 
-        self.activate_product_mode()
+        self.activate_product_mode(product_mode)
         self._verify_version()
         plugins = _load_module("hermes_cli.plugins")
         plugins.discover_plugins(force=force)
 
-    def tool_definitions(self, *, enabled_toolsets: list[str] | None = None) -> list[dict[str, Any]]:
+    def tool_definitions(
+        self,
+        *,
+        enabled_toolsets: list[str] | None = None,
+        product_mode: str = "account-activity",
+    ) -> list[dict[str, Any]]:
         """Return OpenAI-format tool definitions after plugin discovery."""
 
-        self.discover_plugins()
+        self.discover_plugins(product_mode=product_mode)
         model_tools = _load_module("model_tools")
         return list(
             model_tools.get_tool_definitions(
@@ -158,10 +183,12 @@ class HermesRuntimeBinding:
             )
         )
 
-    def agent_factory(self) -> Callable[..., Any]:
+    def agent_factory(
+        self, *, product_mode: str = "account-activity"
+    ) -> Callable[..., Any]:
         """Return the public Hermes ``AIAgent`` constructor without instantiation."""
 
-        self.discover_plugins()
+        self.discover_plugins(product_mode=product_mode)
         run_agent = _load_module("run_agent")
         return run_agent.AIAgent
 
@@ -170,11 +197,13 @@ class HermesRuntimeBinding:
         *,
         session_id: str,
         agent_factory: Callable[..., Any] | None = None,
+        product_mode: str = "account-activity",
         **overrides: Any,
     ) -> Any:
         """Construct the formal product AIAgent without making a Provider call."""
 
-        constructor = agent_factory or self.agent_factory()
+        self.activate_product_mode(product_mode)
+        constructor = agent_factory or self.agent_factory(product_mode=product_mode)
         options = {
             "provider": PRODUCT_PROVIDER,
             "model": PRODUCT_MODEL,

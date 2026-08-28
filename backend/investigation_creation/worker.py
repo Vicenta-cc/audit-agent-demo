@@ -19,10 +19,10 @@ from .adapters import (
     R31ReportAdapter,
 )
 from .contracts import (
-    ConfirmedConfigurationSnapshot,
     InvestigationRun,
     ResolvedExecutionConfiguration,
     RunStatus,
+    parse_confirmed_configuration_snapshot,
 )
 from .errors import LeaseLostError
 from .ports import ExecutionAdapter, ReportAdapter, ReportSessionAdapter
@@ -365,7 +365,7 @@ class InvestigationWorker:
         self, run: InvestigationRun
     ) -> dict[str, Any] | InvestigationRun:
         try:
-            snapshot = ConfirmedConfigurationSnapshot.model_validate(
+            snapshot = parse_confirmed_configuration_snapshot(
                 run.confirmed_configuration
             )
             return ResolvedExecutionConfiguration.model_validate(

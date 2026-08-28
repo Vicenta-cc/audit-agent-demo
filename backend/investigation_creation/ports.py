@@ -1,12 +1,45 @@
 from __future__ import annotations
 
+from contextlib import AbstractContextManager
+import sqlite3
 from typing import Any, Callable, Protocol
 
-from .contracts import InvestigationConfiguration, InvestigationRun
+from .contracts import (
+    ConfirmationPreview,
+    ConfirmationResolution,
+    InvestigationDraft,
+    InvestigationOptions,
+    InvestigationConfiguration,
+    InvestigationRun,
+    QueryInvestigationOptions,
+)
+from .principal import Principal
 
 
 class ConfigurationResolver(Protocol):
     def resolve(self, configuration: InvestigationConfiguration) -> dict[str, Any]: ...
+
+
+class ResourceService(Protocol):
+    def query_options(
+        self, query: QueryInvestigationOptions, *, principal: Principal
+    ) -> InvestigationOptions: ...
+
+    def confirmation_preview(
+        self, draft: InvestigationDraft, *, principal: Principal
+    ) -> ConfirmationPreview: ...
+
+    def confirmation_fence(
+        self,
+    ) -> AbstractContextManager[sqlite3.Connection]: ...
+
+    def resolve_confirmation(
+        self,
+        draft: InvestigationDraft,
+        *,
+        principal: Principal,
+        resource_connection: sqlite3.Connection | None = None,
+    ) -> ConfirmationResolution: ...
 
 
 class RunProjector(Protocol):

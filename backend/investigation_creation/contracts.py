@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Literal
+import hashlib
+import json
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -64,6 +66,111 @@ class AnalysisCapability(str, Enum):
     ASR = "asr"
     VISION = "vision"
     COMMENT = "comment"
+
+
+InvestigationBlockerCode = Literal[
+    "NO_PUBLISHED_AUDIT_POLICY",
+    "INVALID_RULESET_REFERENCE",
+    "RESOURCE_STALE",
+    "NO_SEARCH_TERMS",
+    "PLATFORM_MISMATCH",
+    "INVALID_CREATOR_URL",
+    "CONFIRMATION_REQUIRED",
+    "IDEMPOTENCY_CONFLICT",
+]
+
+
+class ExistingLexiconRecallPlan(StrictModel):
+    strategy: Literal["existing_lexicon"]
+    lexicon_id: StrictStr = Field(min_length=1, max_length=160)
+    expected_runtime_content_hash: StrictStr = Field(
+        pattern=r"^[0-9a-f]{64}$"
+    )
+
+    @field_validator("lexicon_id", "expected_runtime_content_hash", mode="before")
+    @classmethod
+    def strip_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+class TemporaryTermsRecallPlan(StrictModel):
+    strategy: Literal["temporary_terms"]
+    terms: list[StrictStr] = Field(default_factory=list, max_length=100)
+    source_lexicon_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
+
+    @field_validator("terms", "source_lexicon_ids", mode="before")
+    @classmethod
+    def normalize_terms(cls, values: object) -> object:
+        if not isinstance(values, (list, tuple)):
+            return values
+        seen: set[str] = set()
+        normalized: list[object] = []
+        for value in values:
+            if not isinstance(value, str):
+                normalized.append(value)
+                continue
+            text = value.strip()
+            if text and text not in seen:
+                seen.add(text)
+                normalized.append(text)
+        return normalized
+
+
+RecallPlan = Annotated[
+    ExistingLexiconRecallPlan | TemporaryTermsRecallPlan,
+    Field(discriminator="strategy"),
+]
+
+
+class SearchInvestigationMode(StrictModel):
+    mode: Literal["search"]
+    recall_plan: RecallPlan
+
+
+class CreatorInvestigationMode(StrictModel):
+    mode: Literal["creator"]
+    creator_url: StrictStr = Field(max_length=2_000)
+
+    @field_validator("creator_url", mode="before")
+    @classmethod
+    def strip_creator_url(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+InvestigationMode = Annotated[
+    SearchInvestigationMode | CreatorInvestigationMode,
+    Field(discriminator="mode"),
+]
+
+
+class AuditPolicySelection(StrictModel):
+    id: StrictStr = Field(min_length=1, max_length=160)
+    expected_published_version: StrictStr = Field(min_length=1, max_length=80)
+    expected_published_config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_ruleset_revision_id: StrictStr = Field(min_length=1, max_length=240)
+    expected_ruleset_version: StrictInt = Field(ge=1)
+    expected_ruleset_content_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator(
+        "id",
+        "expected_published_version",
+        "expected_published_config_hash",
+        "expected_ruleset_revision_id",
+        "expected_ruleset_content_hash",
+        mode="before",
+    )
+    @classmethod
+    def strip_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+class InvestigationDraftConfiguration(StrictModel):
+    schema_version: Literal["investigation-draft-config-v3"] = (
+        "investigation-draft-config-v3"
+    )
+    platform: Platform
+    investigation: InvestigationMode
+    audit_policy: AuditPolicySelection | None = None
 
 
 class CollectionConfiguration(StrictModel):
@@ -174,6 +281,143 @@ class InvestigationConfiguration(StrictModel):
         return self
 
 
+DraftConfiguration = InvestigationDraftConfiguration | InvestigationConfiguration
+
+
+class InvestigationBlocker(StrictModel):
+    code: InvestigationBlockerCode
+    message: StrictStr
+    resource_type: StrictStr = ""
+    resource_id: StrictStr = ""
+    latest_safe_summary: dict[str, Any] = Field(default_factory=dict)
+    management_url: StrictStr = ""
+
+
+class PlatformOption(StrictModel):
+    id: Platform
+    name: StrictStr
+    available: StrictBool = True
+
+
+class RuleSetRevisionSummary(StrictModel):
+    id: StrictStr
+    ruleset_id: StrictStr
+    name: StrictStr
+    domain: StrictStr
+    version: StrictInt = Field(ge=1)
+    content_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+    enabled_rule_count: StrictInt = Field(ge=0)
+    available: StrictBool = True
+
+
+class AuditPolicySummary(StrictModel):
+    id: StrictStr
+    name: StrictStr
+    description: StrictStr = ""
+    published_version: StrictStr
+    published_config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+    ruleset_revision_id: StrictStr
+    ruleset_version: StrictInt = Field(ge=1)
+    ruleset_content_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+    domain: StrictStr
+    available: StrictBool = True
+
+
+class RecallLexiconSummary(StrictModel):
+    id: StrictStr
+    title: StrictStr = ""
+    risk_label: StrictStr = ""
+    enabled_main_term_count: StrictInt = Field(ge=0)
+    runtime_content_hash: StrictStr = ""
+    enabled_main_terms: list[StrictStr] = Field(default_factory=list)
+    enabled_main_terms_returned: StrictInt = Field(default=0, ge=0)
+    terms_included: StrictBool = False
+    terms_truncated: StrictBool = False
+    available: StrictBool = True
+
+
+class QueryInvestigationOptions(StrictModel):
+    domain_hint: StrictStr = Field(default="", max_length=200)
+    platform: Platform | None = None
+    audit_policy_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
+    lexicon_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
+    include_lexicon_terms_for_ids: list[StrictStr] = Field(
+        default_factory=list, max_length=10
+    )
+    page_size: StrictInt = Field(default=20, ge=1, le=50)
+    lexicon_term_limit: StrictInt = Field(default=50, ge=1, le=100)
+    cursor: StrictStr = Field(default="", max_length=40)
+
+    @field_validator(
+        "audit_policy_ids",
+        "lexicon_ids",
+        "include_lexicon_terms_for_ids",
+        mode="before",
+    )
+    @classmethod
+    def normalize_ids(cls, values: object) -> object:
+        if not isinstance(values, (list, tuple)):
+            return values
+        seen: set[str] = set()
+        normalized: list[object] = []
+        for value in values:
+            if not isinstance(value, str):
+                normalized.append(value)
+                continue
+            text = value.strip()
+            if text and text not in seen:
+                seen.add(text)
+                normalized.append(text)
+        return normalized
+
+    @field_validator("domain_hint", "cursor", mode="before")
+    @classmethod
+    def strip_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+class InvestigationOptions(StrictModel):
+    platforms: list[PlatformOption]
+    audit_policies: list[AuditPolicySummary]
+    ruleset_revisions: list[RuleSetRevisionSummary]
+    recall_lexicons: list[RecallLexiconSummary]
+    blockers: list[InvestigationBlocker] = Field(default_factory=list)
+    next_cursor: StrictStr = ""
+    management_url: StrictStr = "/rule-assistant/rulesets?return_to=/investigation"
+
+
+class RecallPlanPreview(StrictModel):
+    strategy: Literal["existing_lexicon", "temporary_terms", "none"]
+    lexicon_id: StrictStr = ""
+    lexicon_title: StrictStr = ""
+    runtime_content_hash: StrictStr = ""
+    enabled_main_term_count: StrictInt = Field(default=0, ge=0)
+    temporary_terms: list[StrictStr] = Field(default_factory=list)
+    source_lexicon_ids: list[StrictStr] = Field(default_factory=list)
+
+
+class ConfirmationPreview(StrictModel):
+    draft_id: StrictStr
+    draft_revision: StrictInt = Field(ge=1)
+    title: StrictStr
+    objective: StrictStr
+    mode: Literal["search", "creator"]
+    platform: Platform
+    resolved_search_terms: list[StrictStr] = Field(default_factory=list)
+    creator_url: StrictStr = ""
+    recall_plan: RecallPlanPreview
+    audit_policy: AuditPolicySummary | None = None
+    ruleset_revision: RuleSetRevisionSummary | None = None
+    max_notes: Literal[1] = 1
+    blockers: list[InvestigationBlocker] = Field(default_factory=list)
+    can_confirm: StrictBool
+
+
+class InvestigationDraftView(StrictModel):
+    draft: "InvestigationDraft"
+    confirmation_preview: ConfirmationPreview
+
+
 class AuditConfigRevisionSnapshot(StrictModel):
     source_policy_id: StrictStr = ""
     source_policy_name: StrictStr
@@ -226,6 +470,70 @@ class ResolvedExecutionConfiguration(StrictModel):
         return self
 
 
+class ConfirmedRecallPlanSnapshot(StrictModel):
+    strategy: Literal["existing_lexicon", "temporary_terms"]
+    lexicon_id: StrictStr = ""
+    runtime_content_hash: StrictStr = ""
+    enabled_main_terms: list[StrictStr] = Field(default_factory=list)
+    temporary_terms: list[StrictStr] = Field(default_factory=list)
+    source_lexicon_ids: list[StrictStr] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_strategy(self) -> "ConfirmedRecallPlanSnapshot":
+        if self.strategy == "existing_lexicon":
+            if not self.lexicon_id or not self.runtime_content_hash:
+                raise ValueError("existing_lexicon snapshot requires id and hash")
+            if not self.enabled_main_terms:
+                raise ValueError("existing_lexicon snapshot requires enabled main terms")
+            if self.temporary_terms:
+                raise ValueError("existing_lexicon snapshot cannot contain temporary terms")
+        else:
+            if self.lexicon_id or self.runtime_content_hash or self.enabled_main_terms:
+                raise ValueError("temporary_terms snapshot cannot contain a lexicon snapshot")
+            if not self.temporary_terms:
+                raise ValueError("temporary_terms snapshot requires confirmed terms")
+        return self
+
+
+class ConfirmationResolution(StrictModel):
+    mode: Literal["search", "creator"]
+    platform: Platform
+    resolved_search_terms: list[StrictStr] = Field(default_factory=list)
+    creator_url: StrictStr = ""
+    recall_plan: ConfirmedRecallPlanSnapshot | None = None
+    audit_policy: AuditPolicySummary
+    ruleset_revision: RuleSetRevisionSummary
+    execution: ResolvedExecutionConfiguration
+    config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_resolution(self) -> "ConfirmationResolution":
+        if self.mode == "search":
+            if not self.resolved_search_terms or self.creator_url or self.recall_plan is None:
+                raise ValueError("search resolution requires terms and a recall plan")
+        elif self.resolved_search_terms or self.recall_plan is not None or not self.creator_url:
+            raise ValueError("creator resolution requires only a creator URL")
+        expected = confirmed_configuration_hash(
+            {
+                "mode": self.mode,
+                "platform": self.platform.value,
+                "resolved_search_terms": self.resolved_search_terms,
+                "creator_url": self.creator_url,
+                "recall_plan": (
+                    self.recall_plan.model_dump(mode="json")
+                    if self.recall_plan is not None
+                    else None
+                ),
+                "audit_policy": self.audit_policy.model_dump(mode="json"),
+                "ruleset_revision": self.ruleset_revision.model_dump(mode="json"),
+                "execution": self.execution.model_dump(mode="json"),
+            }
+        )
+        if self.config_hash != expected:
+            raise ValueError("confirmation resolution config_hash does not match")
+        return self
+
+
 class ConfirmedConfigurationSnapshot(StrictModel):
     schema_version: Literal["investigation-run-config-v2"]
     draft_id: StrictStr
@@ -251,10 +559,84 @@ class ConfirmedConfigurationSnapshot(StrictModel):
         return self
 
 
+class ConfirmedConfigurationSnapshotV3(StrictModel):
+    schema_version: Literal["investigation-run-config-v3"]
+    draft_id: StrictStr
+    draft_revision: StrictInt = Field(ge=1)
+    title: StrictStr
+    objective: StrictStr
+    mode: Literal["search", "creator"]
+    platform: Platform
+    resolved_search_terms: list[StrictStr] = Field(default_factory=list)
+    creator_url: StrictStr = ""
+    recall_plan: ConfirmedRecallPlanSnapshot | None = None
+    audit_policy: AuditPolicySummary
+    ruleset_revision: RuleSetRevisionSummary
+    max_notes: Literal[1]
+    execution: ResolvedExecutionConfiguration
+    config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+    confirmed_by: StrictStr
+    confirmed_at: StrictStr
+
+    @model_validator(mode="after")
+    def validate_snapshot(self) -> "ConfirmedConfigurationSnapshotV3":
+        ConfirmationResolution.model_validate(
+            {
+                key: value
+                for key, value in self.model_dump(mode="json").items()
+                if key
+                in {
+                    "mode",
+                    "platform",
+                    "resolved_search_terms",
+                    "creator_url",
+                    "recall_plan",
+                    "audit_policy",
+                    "ruleset_revision",
+                    "execution",
+                    "config_hash",
+                }
+            }
+        )
+        if not all(
+            value.strip()
+            for value in (
+                self.draft_id,
+                self.title,
+                self.objective,
+                self.confirmed_by,
+                self.confirmed_at,
+            )
+        ):
+            raise ValueError("confirmed snapshot identity fields must not be blank")
+        if self.execution.max_notes != 1:
+            raise ValueError("confirmed execution max_notes must be 1")
+        return self
+
+
+def confirmed_configuration_hash(value: dict[str, Any]) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def parse_confirmed_configuration_snapshot(
+    value: dict[str, Any],
+) -> ConfirmedConfigurationSnapshot | ConfirmedConfigurationSnapshotV3:
+    if value.get("schema_version") == "investigation-run-config-v3":
+        return ConfirmedConfigurationSnapshotV3.model_validate(value)
+    return ConfirmedConfigurationSnapshot.model_validate(value)
+
+
 class CreateDraftCommand(StrictModel):
     title: str = Field(min_length=1, max_length=300)
     objective: str = Field(min_length=1, max_length=4_000)
-    configuration: InvestigationConfiguration
+    configuration: DraftConfiguration
 
     @field_validator("title", "objective", mode="before")
     @classmethod
@@ -267,7 +649,7 @@ class UpdateDraftCommand(StrictModel):
     expected_revision: int = Field(ge=1)
     title: str | None = Field(default=None, min_length=1, max_length=300)
     objective: str | None = Field(default=None, min_length=1, max_length=4_000)
-    configuration: InvestigationConfiguration | None = None
+    configuration: DraftConfiguration | None = None
 
     @field_validator("draft_id", "title", "objective", mode="before")
     @classmethod
@@ -300,7 +682,7 @@ class InvestigationDraft(StrictModel):
     current_revision: int = Field(ge=1)
     title: str
     objective: str
-    configuration: InvestigationConfiguration
+    configuration: DraftConfiguration
     created_by: str
     updated_by: str
     created_at: str

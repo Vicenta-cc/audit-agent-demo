@@ -29,11 +29,11 @@ from backend.reporting.store import ReportStore
 from backend.rulesets.service import RuleSetService
 
 from .contracts import (
-    ConfirmedConfigurationSnapshot,
     InvestigationConfiguration,
     InvestigationRun,
     ResolvedExecutionConfiguration,
     RunStatus,
+    parse_confirmed_configuration_snapshot,
 )
 from .errors import ConfigurationValidationError
 
@@ -57,7 +57,11 @@ class InvestigationConfigurationResolver:
         self.principal_provider = principal_provider
 
     def resolve(
-        self, configuration: InvestigationConfiguration
+        self,
+        configuration: InvestigationConfiguration,
+        *,
+        principal: Any | None = None,
+        resource_connection: sqlite3.Connection | None = None,
     ) -> dict[str, Any]:
         validated = InvestigationConfiguration.model_validate(
             configuration.model_dump(mode="json")
@@ -67,7 +71,11 @@ class InvestigationConfigurationResolver:
         analysis = validated.analysis
         crawl_mode = collection.crawl_mode.value
         policy_id = analysis.policy_id
-        policy = self.policy_store.get(policy_id) if policy_id else None
+        policy = (
+            self.policy_store.get(policy_id, connection=resource_connection)
+            if policy_id
+            else None
+        )
         if policy_id and policy is None:
             raise ConfigurationValidationError(f"audit policy not found: {policy_id}")
         policy_config = self.policy_store.config_for_use(policy) if policy else {}
@@ -99,7 +107,9 @@ class InvestigationConfigurationResolver:
                 raise ConfigurationValidationError(
                     "RuleSet-backed policy must be published before it can be frozen"
                 )
-            if self.ruleset_service is None or self.principal_provider is None:
+            if self.ruleset_service is None or (
+                principal is None and self.principal_provider is None
+            ):
                 raise ConfigurationValidationError(
                     "RuleSet-backed policy requires the RuleSet application service"
                 )
@@ -125,7 +135,12 @@ class InvestigationConfigurationResolver:
                         or DEFAULT_THRESHOLDS,
                         "policy_config": policy_config,
                     },
-                    principal=self.principal_provider(),
+                    principal=(
+                        principal
+                        if principal is not None
+                        else self.principal_provider()
+                    ),
+                    connection=resource_connection,
                 )
             except Exception as exc:
                 raise ConfigurationValidationError(str(exc)) from exc
@@ -373,7 +388,7 @@ class AuditPipelineExecutionAdapter:
 
     @staticmethod
     def _execution_configuration(run: InvestigationRun) -> dict[str, Any]:
-        snapshot = ConfirmedConfigurationSnapshot.model_validate(
+        snapshot = parse_confirmed_configuration_snapshot(
             run.confirmed_configuration
         )
         return snapshot.execution.model_dump(mode="json")

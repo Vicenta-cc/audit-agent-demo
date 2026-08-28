@@ -2,15 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator
 
 from backend.investigation_creation.contracts import (
     ConfirmAndQueueCommand,
+    ConfirmationPreview,
     CreateDraftCommand,
-    InvestigationConfiguration,
+    DraftConfiguration,
     InvestigationDraft,
+    InvestigationOptions,
     InvestigationRunProjection,
+    Platform,
+    QueryInvestigationOptions,
     UpdateDraftCommand,
 )
 from backend.investigation_creation.errors import (
@@ -20,6 +24,8 @@ from backend.investigation_creation.errors import (
     DraftNotFoundError,
     DraftRevisionConflictError,
     IdempotencyConflictError,
+    InvestigationCreationError,
+    ResourceStaleError,
     RunNotFoundError,
     PrincipalAccessDeniedError,
 )
@@ -37,7 +43,7 @@ class RequestModel(BaseModel):
 class CreateDraftRequest(RequestModel):
     title: str = Field(min_length=1, max_length=300)
     objective: str = Field(min_length=1, max_length=4_000)
-    configuration: InvestigationConfiguration
+    configuration: DraftConfiguration
 
     @field_validator("title", "objective", mode="before")
     @classmethod
@@ -49,7 +55,7 @@ class UpdateDraftRequest(RequestModel):
     expected_revision: int = Field(ge=1)
     title: str | None = Field(default=None, min_length=1, max_length=300)
     objective: str | None = Field(default=None, min_length=1, max_length=4_000)
-    configuration: InvestigationConfiguration | None = None
+    configuration: DraftConfiguration | None = None
 
     @field_validator("title", "objective", mode="before")
     @classmethod
@@ -69,6 +75,38 @@ def create_investigation_creation_router(
 ) -> APIRouter:
     router = APIRouter(tags=["investigation-creation"])
     provide_principal = principal_provider or LocalPrincipalProvider()
+
+    @router.get(
+        "/api/investigation-options",
+        response_model=InvestigationOptions,
+    )
+    def query_options(
+        domain_hint: str = Query(default="", max_length=200),
+        platform: Platform | None = Query(default=None),
+        audit_policy_ids: list[str] = Query(default=[]),
+        lexicon_ids: list[str] = Query(default=[]),
+        include_lexicon_terms_for_ids: list[str] = Query(default=[]),
+        page_size: int = Query(default=20, ge=1, le=50),
+        lexicon_term_limit: int = Query(default=50, ge=1, le=100),
+        cursor: str = Query(default="", max_length=40),
+        principal: Principal = Depends(provide_principal),
+    ) -> InvestigationOptions:
+        try:
+            return service.query_investigation_options(
+                QueryInvestigationOptions(
+                    domain_hint=domain_hint,
+                    platform=platform,
+                    audit_policy_ids=audit_policy_ids,
+                    lexicon_ids=lexicon_ids,
+                    include_lexicon_terms_for_ids=include_lexicon_terms_for_ids,
+                    page_size=page_size,
+                    lexicon_term_limit=lexicon_term_limit,
+                    cursor=cursor,
+                ),
+                principal=principal,
+            )
+        except Exception as exc:
+            _raise_public_error(exc)
 
     @router.post(
         "/api/investigation-drafts",
@@ -116,6 +154,21 @@ def create_investigation_creation_router(
         except Exception as exc:
             _raise_public_error(exc)
 
+    @router.get(
+        "/api/investigation-drafts/{draft_id}/confirmation-preview",
+        response_model=ConfirmationPreview,
+    )
+    def get_confirmation_preview(
+        draft_id: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> ConfirmationPreview:
+        try:
+            return service.get_confirmation_preview(
+                draft_id, principal=principal
+            )
+        except Exception as exc:
+            _raise_public_error(exc)
+
     @router.post(
         "/api/investigation-drafts/{draft_id}/confirm-and-queue",
         response_model=InvestigationRunProjection,
@@ -157,21 +210,31 @@ def create_investigation_creation_router(
 
 
 def _raise_public_error(exc: Exception) -> None:
+    detail = (
+        {
+            "code": exc.code,
+            "message": str(exc),
+            "details": exc.details,
+        }
+        if isinstance(exc, InvestigationCreationError)
+        else str(exc)
+    )
     if isinstance(exc, (DraftNotFoundError, RunNotFoundError)):
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail) from exc
     if isinstance(
         exc,
         (
             DraftRevisionConflictError,
             DraftAlreadyConfirmedError,
             IdempotencyConflictError,
+            ResourceStaleError,
         ),
     ):
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=detail) from exc
     if isinstance(exc, PrincipalAccessDeniedError):
         raise HTTPException(status_code=403, detail="resource is not owned by principal") from exc
     if isinstance(exc, ValidationError):
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
     if isinstance(exc, (ConfirmationRequiredError, ConfigurationValidationError, ValueError)):
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
     raise exc

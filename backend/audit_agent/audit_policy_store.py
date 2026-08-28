@@ -240,18 +240,44 @@ class AuditPolicyStore:
             (utc_now(),),
         )
 
-    def list(self, include_drafts: bool = True) -> list[dict]:
+    def list(
+        self,
+        include_drafts: bool = True,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> list[dict]:
+        if connection is not None:
+            return self._list_with_connection(connection, include_drafts=include_drafts)
         with self._lock, self._connect() as conn:
-            where = "" if include_drafts else "WHERE published_version != ''"
-            rows = conn.execute(
-                f"SELECT * FROM audit_policies {where} ORDER BY updated_at DESC"
-            ).fetchall()
-            return [self._row_to_policy(row) for row in rows]
+            return self._list_with_connection(conn, include_drafts=include_drafts)
 
-    def get(self, policy_id: str) -> dict | None:
+    def _list_with_connection(
+        self, connection: sqlite3.Connection, *, include_drafts: bool
+    ) -> list[dict]:
+        where = "" if include_drafts else "WHERE published_version != ''"
+        rows = connection.execute(
+            f"SELECT * FROM audit_policies {where} ORDER BY updated_at DESC"
+        ).fetchall()
+        return [self._row_to_policy(row) for row in rows]
+
+    def get(
+        self,
+        policy_id: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict | None:
+        if connection is not None:
+            return self._get_with_connection(connection, policy_id)
         with self._lock, self._connect() as conn:
-            row = conn.execute("SELECT * FROM audit_policies WHERE id = ?", (policy_id,)).fetchone()
-            return self._row_to_policy(row) if row else None
+            return self._get_with_connection(conn, policy_id)
+
+    def _get_with_connection(
+        self, connection: sqlite3.Connection, policy_id: str
+    ) -> dict | None:
+        row = connection.execute(
+            "SELECT * FROM audit_policies WHERE id = ?", (policy_id,)
+        ).fetchone()
+        return self._row_to_policy(row) if row else None
 
     def create(self, **kwargs) -> dict:
         now = utc_now()

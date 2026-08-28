@@ -3,18 +3,29 @@ from __future__ import annotations
 from typing import Any
 
 from .contracts import (
+    ConfirmationPreview,
     ConfirmAndQueueCommand,
     CreateDraftCommand,
+    InvestigationDraftConfiguration,
+    InvestigationDraftView,
+    InvestigationOptions,
     InvestigationDraft,
     InvestigationRun,
     InvestigationRunProjection,
+    QueryInvestigationOptions,
     ResolvedExecutionConfiguration,
     UpdateDraftCommand,
+    confirmed_configuration_hash,
 )
-from .errors import ConfirmationRequiredError, DraftRevisionConflictError
+from .errors import (
+    ConfigurationValidationError,
+    ConfirmationRequiredError,
+    DraftRevisionConflictError,
+)
 from .ports import (
     ConfigurationResolver,
     EmptyRunProjector,
+    ResourceService,
     RunProjector,
 )
 from .store import InvestigationCreationStore
@@ -29,10 +40,12 @@ class InvestigationCreationService:
         store: InvestigationCreationStore,
         *,
         configuration_resolver: ConfigurationResolver,
+        resource_service: ResourceService | None = None,
         run_projector: RunProjector | None = None,
     ) -> None:
         self.store = store
         self.configuration_resolver = configuration_resolver
+        self.resource_service = resource_service
         self.run_projector = run_projector or EmptyRunProjector()
 
     def create_draft(
@@ -71,24 +84,63 @@ class InvestigationCreationService:
             principal=principal.id,
         )
 
+    def get_confirmation_preview(
+        self, draft_id: str, *, principal: Principal
+    ) -> ConfirmationPreview:
+        draft = self.get_draft(draft_id, principal=principal)
+        if not isinstance(draft.configuration, InvestigationDraftConfiguration):
+            raise ConfigurationValidationError(
+                "confirmation preview is not available for a legacy Draft",
+                code="CONFIGURATION_INVALID",
+            )
+        if self.resource_service is None:
+            raise ConfigurationValidationError(
+                "investigation resource service is not configured"
+            )
+        return self.resource_service.confirmation_preview(
+            draft, principal=principal
+        )
+
+    def get_draft_view(
+        self, draft_id: str, *, principal: Principal
+    ) -> InvestigationDraftView:
+        draft = self.get_draft(draft_id, principal=principal)
+        return InvestigationDraftView(
+            draft=draft,
+            confirmation_preview=self.get_confirmation_preview(
+                draft.id, principal=principal
+            ),
+        )
+
+    def query_investigation_options(
+        self,
+        query: QueryInvestigationOptions,
+        *,
+        principal: Principal,
+    ) -> InvestigationOptions:
+        if self.resource_service is None:
+            raise ConfigurationValidationError(
+                "investigation resource service is not configured"
+            )
+        return self.resource_service.query_options(
+            QueryInvestigationOptions.model_validate(
+                query.model_dump(mode="json", warnings=False)
+            ),
+            principal=principal,
+        )
+
     def confirm_and_queue(
         self, command: ConfirmAndQueueCommand, *, principal: Principal
     ) -> InvestigationRun:
         command = ConfirmAndQueueCommand.model_validate(
             command.model_dump(mode="json", warnings=False)
         )
-        fingerprint = self.store.confirmation_fingerprint(
-            principal=principal.id,
-            draft_id=command.draft_id,
-            expected_revision=command.expected_revision,
-            confirmed=command.confirmed,
-        )
-        replay = self.store.replay_confirmation(
+        replay = self.store.replay_confirmation_identity(
             command.draft_id,
             principal=principal.id,
             expected_revision=command.expected_revision,
+            confirmed=command.confirmed,
             idempotency_key=command.idempotency_key,
-            request_fingerprint=fingerprint,
         )
         if replay is not None:
             return replay
@@ -105,9 +157,70 @@ class InvestigationCreationService:
         draft_configuration = type(draft.configuration).model_validate(
             draft.configuration.model_dump(mode="json")
         )
-        resolved = ResolvedExecutionConfiguration.model_validate(
-            self.configuration_resolver.resolve(draft_configuration)
-        ).model_dump(mode="json")
+        confirmation_resolution = None
+        if isinstance(draft_configuration, InvestigationDraftConfiguration):
+            if self.resource_service is None:
+                raise ConfigurationValidationError(
+                    "investigation resource service is not configured"
+                )
+            with self.resource_service.confirmation_fence() as resource_connection:
+                replay = self.store.replay_confirmation_identity(
+                    command.draft_id,
+                    principal=principal.id,
+                    expected_revision=command.expected_revision,
+                    confirmed=command.confirmed,
+                    idempotency_key=command.idempotency_key,
+                )
+                if replay is not None:
+                    return replay
+                resolution = self.resource_service.resolve_confirmation(
+                    draft,
+                    principal=principal,
+                    resource_connection=resource_connection,
+                )
+                return self._store_confirmation(
+                    command,
+                    principal=principal,
+                    resolved_model=resolution.execution,
+                    configuration_hash=resolution.config_hash,
+                    confirmation_resolution=resolution.model_dump(mode="json"),
+                )
+        else:
+            resolved_model = ResolvedExecutionConfiguration.model_validate(
+                self.configuration_resolver.resolve(draft_configuration)
+            ).model_copy(update={"max_notes": 1})
+            configuration_hash = confirmed_configuration_hash(
+                {"execution": resolved_model.model_dump(mode="json")}
+            )
+        return self._store_confirmation(
+            command,
+            principal=principal,
+            resolved_model=resolved_model,
+            configuration_hash=configuration_hash,
+            confirmation_resolution=confirmation_resolution,
+        )
+
+    def _store_confirmation(
+        self,
+        command: ConfirmAndQueueCommand,
+        *,
+        principal: Principal,
+        resolved_model: ResolvedExecutionConfiguration,
+        configuration_hash: str,
+        confirmation_resolution: dict[str, Any] | None,
+    ) -> InvestigationRun:
+        resolved = resolved_model.model_copy(update={"max_notes": 1}).model_dump(
+            mode="json"
+        )
+        if confirmation_resolution is not None:
+            confirmation_resolution["execution"] = resolved
+        fingerprint = self.store.confirmation_fingerprint(
+            principal=principal.id,
+            draft_id=command.draft_id,
+            expected_revision=command.expected_revision,
+            confirmed=command.confirmed,
+            confirmed_configuration_hash=configuration_hash,
+        )
         return self.store.confirm_and_queue(
             command.draft_id,
             principal=principal.id,
@@ -116,6 +229,7 @@ class InvestigationCreationService:
             idempotency_key=command.idempotency_key,
             request_fingerprint=fingerprint,
             resolved_configuration=resolved,
+            confirmation_resolution=confirmation_resolution,
         )
 
     def get_run(

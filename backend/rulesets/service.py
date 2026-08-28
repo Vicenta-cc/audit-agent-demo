@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from typing import Protocol
 
 from .compiler import (
@@ -108,9 +109,15 @@ class RuleSetService:
         del principal
         return self.store.list_published(ruleset_id=ruleset_id)
 
-    def get_published(self, revision_id: str, *, principal: Principal) -> dict:
+    def get_published(
+        self,
+        revision_id: str,
+        *,
+        principal: Principal,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict:
         del principal
-        return self.store.get_published(revision_id)
+        return self.store.get_published(revision_id, connection=connection)
 
     def compile_preview(
         self,
@@ -150,10 +157,13 @@ class RuleSetService:
         *,
         audit_policy: dict,
         principal: Principal,
+        connection: sqlite3.Connection | None = None,
         system_template_version: str = SYSTEM_TEMPLATE_VERSION,
         compiler_version: str = COMPILER_VERSION,
     ) -> dict:
-        revision = self.get_published(revision_id, principal=principal)
+        revision = self.get_published(
+            revision_id, principal=principal, connection=connection
+        )
         return compile_ruleset_revision(
             revision,
             audit_policy=audit_policy,

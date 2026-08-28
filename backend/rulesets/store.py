@@ -412,9 +412,16 @@ class RuleSetStore:
                 ).fetchall()
             return [self._row_to_revision(row) for row in rows]
 
-    def get_published(self, revision_id: str) -> dict:
-        with self._lock, self._connect() as connection:
+    def get_published(
+        self,
+        revision_id: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict:
+        if connection is not None:
             return self._get_published_with_connection(connection, revision_id)
+        with self._lock, self._connect() as store_connection:
+            return self._get_published_with_connection(store_connection, revision_id)
 
     def _get_published_with_connection(
         self,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import threading
@@ -345,15 +346,26 @@ class LexiconStore:
                 ),
             )
 
-    def list_categories(self) -> list[dict]:
+    def list_categories(
+        self, *, connection: sqlite3.Connection | None = None
+    ) -> list[dict]:
+        if connection is not None:
+            return self._list_categories_with_connection(connection)
         with self._lock, self._connect() as conn:
-            categories = conn.execute(
-                "SELECT * FROM lexicon_categories ORDER BY sort_order ASC, title ASC"
-            ).fetchall()
-            rows = conn.execute(
-                "SELECT * FROM lexicon_keywords ORDER BY category_id ASC, id ASC"
-            ).fetchall()
-            profile_rows = conn.execute("SELECT * FROM lexicon_prompt_profiles").fetchall()
+            return self._list_categories_with_connection(conn)
+
+    def _list_categories_with_connection(
+        self, connection: sqlite3.Connection
+    ) -> list[dict]:
+        categories = connection.execute(
+            "SELECT * FROM lexicon_categories ORDER BY sort_order ASC, title ASC"
+        ).fetchall()
+        rows = connection.execute(
+            "SELECT * FROM lexicon_keywords ORDER BY category_id ASC, id ASC"
+        ).fetchall()
+        profile_rows = connection.execute(
+            "SELECT * FROM lexicon_prompt_profiles"
+        ).fetchall()
 
         keywords_by_category: dict[str, list[dict]] = {}
         for row in rows:
@@ -472,8 +484,13 @@ class LexiconStore:
                 )
         return self.get_category(cleaned_id)
 
-    def get_category(self, category_id: str) -> dict:
-        for category in self.list_categories():
+    def get_category(
+        self,
+        category_id: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict:
+        for category in self.list_categories(connection=connection):
             if category["id"] == category_id:
                 return category
         raise KeyError(category_id)
@@ -726,6 +743,74 @@ class LexiconStore:
                 (category_id,),
             ).fetchall()
         return [str(row["keyword"]) for row in rows]
+
+    def enabled_main_terms(
+        self,
+        category_id: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> list[str]:
+        """Project collection-safe main terms without variants or tag entries."""
+
+        if connection is not None:
+            rows = self._enabled_main_term_rows(connection, category_id)
+        else:
+            with self._lock, self._connect() as conn:
+                rows = self._enabled_main_term_rows(conn, category_id)
+        seen: set[str] = set()
+        terms: list[str] = []
+        for row in rows:
+            match_type = str(row["match_type"] or "").strip().lower()
+            if match_type in {"平台标签", "tag"}:
+                continue
+            note = str(row["note"] or "").strip()
+            if note:
+                try:
+                    metadata = json.loads(note)
+                except (TypeError, json.JSONDecodeError):
+                    metadata = {}
+                if isinstance(metadata, dict) and metadata.get("variant_of"):
+                    continue
+            term = str(row["keyword"] or "").strip()
+            if term and term not in seen:
+                seen.add(term)
+                terms.append(term)
+        return terms
+
+    @staticmethod
+    def _enabled_main_term_rows(
+        connection: sqlite3.Connection, category_id: str
+    ) -> list[sqlite3.Row]:
+        category = connection.execute(
+            "SELECT id FROM lexicon_categories WHERE id = ?",
+            (category_id,),
+        ).fetchone()
+        if category is None:
+            raise KeyError(category_id)
+        return connection.execute(
+            """
+            SELECT keyword, match_type, note
+            FROM lexicon_keywords
+            WHERE category_id = ? AND enabled = 1
+            ORDER BY id ASC
+            """,
+            (category_id,),
+        ).fetchall()
+
+    def runtime_content_hash(
+        self,
+        category_id: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> str:
+        terms = self.enabled_main_terms(category_id, connection=connection)
+        payload = json.dumps(
+            {"category_id": category_id, "enabled_main_terms": terms},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
 
     def add_keyword(
         self,

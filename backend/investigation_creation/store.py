@@ -8,9 +8,14 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
+from pydantic import TypeAdapter
+
 from backend.audit_agent.config import settings
 
 from .contracts import (
+    ConfirmationResolution,
+    ConfirmedConfigurationSnapshotV3,
+    DraftConfiguration,
     DraftStatus,
     InvestigationConfiguration,
     InvestigationDraft,
@@ -29,6 +34,9 @@ from .errors import (
     RunNotFoundError,
 )
 from .principal import LOCAL_PRINCIPAL_ID
+
+
+_DRAFT_CONFIGURATION_ADAPTER = TypeAdapter(DraftConfiguration)
 
 
 def utc_now() -> datetime:
@@ -270,7 +278,7 @@ class InvestigationCreationStore:
         principal: str,
         title: str,
         objective: str,
-        configuration: InvestigationConfiguration,
+        configuration: DraftConfiguration,
     ) -> InvestigationDraft:
         draft_id = f"investigation-draft:{uuid4().hex}"
         now = self._now_text()
@@ -315,7 +323,7 @@ class InvestigationCreationStore:
         expected_revision: int,
         title: str | None = None,
         objective: str | None = None,
-        configuration: InvestigationConfiguration | None = None,
+        configuration: DraftConfiguration | None = None,
     ) -> InvestigationDraft:
         now = self._now_text()
         with self._connect() as connection:
@@ -393,6 +401,7 @@ class InvestigationCreationStore:
         idempotency_key: str,
         request_fingerprint: str,
         resolved_configuration: dict[str, Any],
+        confirmation_resolution: dict[str, Any] | None = None,
     ) -> InvestigationRun:
         if not confirmed:
             raise ConfirmationRequiredError("explicit confirmation is required")
@@ -435,18 +444,36 @@ class InvestigationCreationStore:
                 )
                 return self._run(existing)
 
-            draft_configuration = InvestigationConfiguration.model_validate_json(
-                str(draft["configuration_json"])
-            )
-            snapshot = {
-                "schema_version": "investigation-run-config-v2",
-                "draft_id": draft_id,
-                "draft_revision": expected_revision,
-                "title": str(draft["title"]),
-                "objective": str(draft["objective"]),
-                "draft_configuration": draft_configuration.model_dump(mode="json"),
-                "execution": resolved_configuration,
-            }
+            if confirmation_resolution is None:
+                draft_configuration = InvestigationConfiguration.model_validate_json(
+                    str(draft["configuration_json"])
+                )
+                snapshot = {
+                    "schema_version": "investigation-run-config-v2",
+                    "draft_id": draft_id,
+                    "draft_revision": expected_revision,
+                    "title": str(draft["title"]),
+                    "objective": str(draft["objective"]),
+                    "draft_configuration": draft_configuration.model_dump(mode="json"),
+                    "execution": resolved_configuration,
+                }
+            else:
+                resolution = ConfirmationResolution.model_validate(
+                    confirmation_resolution
+                )
+                snapshot = ConfirmedConfigurationSnapshotV3.model_validate(
+                    {
+                        "schema_version": "investigation-run-config-v3",
+                        "draft_id": draft_id,
+                        "draft_revision": expected_revision,
+                        "title": str(draft["title"]),
+                        "objective": str(draft["objective"]),
+                        **resolution.model_dump(mode="json"),
+                        "max_notes": 1,
+                        "confirmed_by": principal,
+                        "confirmed_at": now,
+                    }
+                ).model_dump(mode="json")
             connection.execute(
                 """
                 INSERT INTO investigation_runs (
@@ -500,6 +527,82 @@ class InvestigationCreationStore:
                 raise DraftRevisionConflictError(draft_id)
         return self.get_run(run_id, principal=principal)
 
+    def replay_confirmation_identity(
+        self,
+        draft_id: str,
+        *,
+        principal: str,
+        expected_revision: int,
+        confirmed: bool,
+        idempotency_key: str,
+    ) -> InvestigationRun | None:
+        """Replay a completed confirmation before consulting mutable resources."""
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            key = connection.execute(
+                """
+                SELECT * FROM investigation_run_idempotency_keys
+                WHERE idempotency_key = ?
+                """,
+                (idempotency_key,),
+            ).fetchone()
+            if key is not None:
+                if (
+                    not confirmed
+                    or str(key["principal"]) != principal
+                    or str(key["draft_id"]) != draft_id
+                    or int(key["draft_revision"]) != expected_revision
+                ):
+                    raise IdempotencyConflictError(
+                        "idempotency key is already bound to a different request"
+                    )
+                run = connection.execute(
+                    """
+                    SELECT * FROM investigation_runs
+                    WHERE id = ? AND owner_principal = ?
+                    """,
+                    (str(key["run_id"]), principal),
+                ).fetchone()
+                if run is None:
+                    raise IdempotencyConflictError(
+                        "idempotency key does not resolve to an owned Run"
+                    )
+                return self._run(run)
+
+            self._owned_draft_row(connection, draft_id, principal)
+            existing = connection.execute(
+                """
+                SELECT * FROM investigation_runs
+                WHERE owner_principal = ? AND draft_id = ? AND draft_revision = ?
+                """,
+                (principal, draft_id, expected_revision),
+            ).fetchone()
+            if existing is None or not confirmed:
+                return None
+            snapshot = self._load_json(
+                str(existing["confirmed_configuration_json"])
+            )
+            config_hash = self._snapshot_config_hash(snapshot)
+            fingerprint = self.confirmation_fingerprint(
+                principal=principal,
+                draft_id=draft_id,
+                expected_revision=expected_revision,
+                confirmed=True,
+                confirmed_configuration_hash=config_hash,
+            )
+            self._record_idempotency_key(
+                connection,
+                idempotency_key=idempotency_key,
+                principal=principal,
+                request_fingerprint=fingerprint,
+                run_id=str(existing["id"]),
+                draft_id=draft_id,
+                draft_revision=expected_revision,
+                created_at=self._now_text(),
+            )
+            return self._run(existing)
+
     def replay_confirmation(
         self,
         draft_id: str,
@@ -544,7 +647,12 @@ class InvestigationCreationStore:
 
     @staticmethod
     def confirmation_fingerprint(
-        *, principal: str, draft_id: str, expected_revision: int, confirmed: bool
+        *,
+        principal: str,
+        draft_id: str,
+        expected_revision: int,
+        confirmed: bool,
+        confirmed_configuration_hash: str = "",
     ) -> str:
         payload = json.dumps(
             {
@@ -553,11 +661,19 @@ class InvestigationCreationStore:
                 "draft_id": draft_id,
                 "draft_revision": expected_revision,
                 "confirmed": confirmed,
+                "confirmed_configuration_hash": confirmed_configuration_hash,
             },
             sort_keys=True,
             separators=(",", ":"),
         ).encode("utf-8")
         return hashlib.sha256(payload).hexdigest()
+
+    @classmethod
+    def _snapshot_config_hash(cls, snapshot: dict[str, Any]) -> str:
+        stored = str(snapshot.get("config_hash") or "").strip()
+        if stored:
+            return stored
+        return hashlib.sha256(cls._json(snapshot).encode("utf-8")).hexdigest()
 
     def _idempotent_replay(
         self,
@@ -1116,7 +1232,7 @@ class InvestigationCreationStore:
     @classmethod
     def _draft(cls, row: sqlite3.Row) -> InvestigationDraft:
         record = dict(row)
-        record["configuration"] = InvestigationConfiguration.model_validate_json(
+        record["configuration"] = _DRAFT_CONFIGURATION_ADAPTER.validate_json(
             record.pop("configuration_json")
         )
         return InvestigationDraft.model_validate(record)

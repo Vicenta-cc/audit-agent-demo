@@ -57,6 +57,11 @@ from .investigation_creation.adapters import (
     InvestigationRunProjector,
 )
 from .investigation_creation.service import InvestigationCreationService
+from .investigation_creation.resources import InvestigationResourceService
+from .investigation_creation.tools import (
+    InvestigationCreationToolService,
+    configure_hermes_investigation_creation_tools,
+)
 from .investigation_creation.store import InvestigationCreationStore
 from .investigation_creation.principal import LocalPrincipalProvider
 
@@ -93,20 +98,35 @@ report_store = ReportStore()
 r31_report_runtime = R31ReportRuntime(report_store)
 investigation_agent_service = HermesInvestigationAgentService()
 investigation_creation_store = InvestigationCreationStore()
+investigation_configuration_resolver = InvestigationConfigurationResolver(
+    lexicon_store=lexicon_store,
+    policy_store=audit_policy_store,
+    crawler_account_store=crawler_account_store,
+    ruleset_service=ruleset_service,
+    principal_provider=principal_provider,
+)
+investigation_resource_service = InvestigationResourceService(
+    lexicon_store=lexicon_store,
+    policy_store=audit_policy_store,
+    ruleset_service=ruleset_service,
+    configuration_resolver=investigation_configuration_resolver,
+)
 investigation_creation_service = InvestigationCreationService(
     investigation_creation_store,
-    configuration_resolver=InvestigationConfigurationResolver(
-        lexicon_store=lexicon_store,
-        policy_store=audit_policy_store,
-        crawler_account_store=crawler_account_store,
-        ruleset_service=ruleset_service,
-        principal_provider=principal_provider,
-    ),
+    configuration_resolver=investigation_configuration_resolver,
+    resource_service=investigation_resource_service,
     run_projector=InvestigationRunProjector(
         job_store=job_store,
         ingestion_store=ingestion_store,
         report_store=report_store,
     ),
+)
+investigation_creation_tool_service = InvestigationCreationToolService(
+    investigation_creation_service
+)
+configure_hermes_investigation_creation_tools(
+    investigation_creation_tool_service,
+    principal_provider=principal_provider,
 )
 investigation_turn_executor = InvestigationTurnExecutor(
     investigation_agent_service,
