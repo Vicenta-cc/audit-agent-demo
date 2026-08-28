@@ -57,6 +57,10 @@ class FusionAuditTimeoutError(RuntimeError):
     pass
 
 
+class FusionAuditContractError(RuntimeError):
+    pass
+
+
 def _severity_rank(severity) -> int:
     return {"high": 3, "medium": 2, "low": 1}.get(str(severity).lower(), 0)
 
@@ -864,6 +868,104 @@ class AuditPipeline:
             "exemption_rules": [],
         }]
 
+    def _is_ruleset_v2(self) -> bool:
+        snapshot = getattr(self, "rule_snapshot", {}) or {}
+        try:
+            return int(snapshot.get("schema_version") or 0) == 2
+        except (TypeError, ValueError):
+            return False
+
+    def _stage_rule_ids(self, stage: str) -> set[str]:
+        if not self._is_ruleset_v2():
+            return set()
+        routes = self.rule_snapshot.get("stage_routes") or {}
+        values = routes.get(stage) if isinstance(routes, dict) else []
+        return {str(value) for value in (values or []) if str(value).strip()}
+
+    def _normalize_stage_rule_id(self, value, stage: str) -> str:
+        rule_id = str(value or "").strip()
+        if not self._is_ruleset_v2():
+            return rule_id
+        return rule_id if rule_id in self._stage_rule_ids(stage) else ""
+
+    def _filter_stage_risk_items(self, values, stage: str) -> list[dict]:
+        items = [dict(item) for item in (values or []) if isinstance(item, dict)]
+        if not self._is_ruleset_v2():
+            return items
+        output = []
+        for item in items:
+            rule_id = self._normalize_stage_rule_id(
+                item.get("rule_id") or item.get("id"),
+                stage,
+            )
+            if not rule_id:
+                raise FusionAuditContractError(
+                    f"{stage} non-none result has an invalid rule_id"
+                )
+            item["rule_id"] = rule_id
+            level_field = "severity" if stage == "image_evidence" else "risk_level"
+            item[level_field] = self._strict_v2_risk_level(
+                item.get(level_field),
+                field=f"{stage}.{level_field}",
+                allow_none=False,
+            )
+            matched_exemption_ids = self._normalize_matched_exemption_ids(
+                rule_id,
+                item.get("matched_exemption_ids"),
+            )
+            if matched_exemption_ids:
+                continue
+            item.pop("matched_exemption_ids", None)
+            output.append(item)
+        return output
+
+    def _matched_stage_exemption_ids(self, values, stage: str) -> list[str]:
+        if not self._is_ruleset_v2():
+            return []
+        output: list[str] = []
+        for item in values or []:
+            if not isinstance(item, dict):
+                continue
+            rule_id = self._normalize_stage_rule_id(
+                item.get("rule_id") or item.get("id"),
+                stage,
+            )
+            if not rule_id:
+                continue
+            for exemption_id in self._normalize_matched_exemption_ids(
+                rule_id,
+                item.get("matched_exemption_ids"),
+            ):
+                if exemption_id not in output:
+                    output.append(exemption_id)
+        return output
+
+    def _normalize_matched_exemption_ids(self, rule_id: str, values) -> list[str]:
+        if not self._is_ruleset_v2():
+            return []
+        if isinstance(values, str):
+            values = [values]
+        allowed = {
+            str(item.get("exemption_id") or "")
+            for item in self.rule_snapshot.get("general_exemptions") or []
+            if isinstance(item, dict) and item.get("exemption_id")
+        }
+        for rule in self.rule_snapshot.get("decision_rules") or []:
+            if not isinstance(rule, dict) or str(rule.get("rule_id") or "") != rule_id:
+                continue
+            allowed.update(
+                str(item.get("exemption_id") or "")
+                for item in rule.get("rule_exemptions") or []
+                if isinstance(item, dict) and item.get("exemption_id")
+            )
+            break
+        output = []
+        for value in values or []:
+            exemption_id = str(value or "").strip()
+            if exemption_id in allowed and exemption_id not in output:
+                output.append(exemption_id)
+        return output
+
     def _active_library_policies(self, modalities: list[str]) -> list[dict]:
         policies = [
             compact_library_policy(library, modalities=modalities)
@@ -1211,7 +1313,16 @@ class AuditPipeline:
         evidence_index = self._build_evidence_index(subject, image_analyses, video_results, audited_comments)
         evidence_index_path = self._write_evidence_index(subject.note_id, evidence_index)
         prompt = self._render_compact_fusion_prompt(subject, evidence_index, audited_comments)
-        audit = self._run_fusion_audit(subject.note_id, prompt)
+        audit = self._run_fusion_audit(
+            subject.note_id,
+            prompt,
+            contract_validator=(
+                lambda value: self._validate_v2_fusion_contract(
+                    self._recover_truncated_fusion_audit(value),
+                    evidence_index,
+                )
+            ) if self._is_ruleset_v2() else None,
+        )
         audit = self._recover_truncated_fusion_audit(audit)
         audit["content_title"] = self._ensure_content_title(audit, subject, evidence_index)
         elapsed = perf_counter() - started_at
@@ -1225,11 +1336,12 @@ class AuditPipeline:
             comments=audited_comments,
         )
         existing_evidence_ids = {str(item.get("evidence_id") or "") for item in evidence_items}
-        evidence_items.extend(
-            item
-            for item in self._comment_evidence_items(audited_comments)
-            if str(item.get("evidence_id") or "") not in existing_evidence_ids
-        )
+        if not self._is_ruleset_v2():
+            evidence_items.extend(
+                item
+                for item in self._comment_evidence_items(audited_comments)
+                if str(item.get("evidence_id") or "") not in existing_evidence_ids
+            )
         evidence_index["final_evidence_refs"] = [
             str(item.get("evidence_id") or "")
             for item in evidence_items
@@ -1250,7 +1362,17 @@ class AuditPipeline:
             if item.get("primary_modality") != "comment"
         }
         rule_matches = self._rule_matches_for_evidence_ids(rule_matches, all_evidence_ids)
-        scoring = self._score_rule_matches(rule_matches)
+        scoring = (
+            {
+                "score_breakdown": [],
+                "category_scores": [],
+                "risk_score": 0,
+                "risk_level": "none",
+                "decision": "pass",
+            }
+            if self._is_ruleset_v2()
+            else self._score_rule_matches(rule_matches)
+        )
         evidence_risk = self._risk_from_evidence_items(evidence_items)
         main_evidence_risk = self._risk_from_evidence_items([
             item for item in evidence_items if item.get("primary_modality") != "comment"
@@ -1263,7 +1385,41 @@ class AuditPipeline:
         primary_risk = str(audit.get("primary_risk") or "")
         suggested_categories = audit.get("categories") if isinstance(audit.get("categories"), list) else []
         category_labels = suggested_categories or self._category_labels_from_evidence_items(evidence_items) or ([primary_risk] if primary_risk else [])
-        if evidence_risk["risk_level"] != "none":
+        if self._is_ruleset_v2():
+            risk_level = evidence_risk["risk_level"]
+            risk_score = self._risk_score_for_level(risk_level)
+            comment_dominant = (
+                risk_level != "none"
+                and self._risk_level_rank(comment_evidence_risk["risk_level"])
+                > self._risk_level_rank(main_evidence_risk["risk_level"])
+            )
+            decision = (
+                "review"
+                if comment_dominant
+                else self._decision_for_level(risk_level)
+            )
+            risk_basis = (
+                "comment_evidence"
+                if comment_dominant and not main_evidence_ids
+                else "comment_evidence_dominant"
+                if comment_dominant
+                else "max_evidence_risk"
+                if risk_level != "none"
+                else "validated_no_risk"
+            )
+            category_scores = self._normalize_category_scores(
+                [],
+                category_labels,
+                risk_score,
+                risk_level,
+            )
+            score_breakdown = []
+            if risk_level == "none":
+                primary_risk = ""
+                suggested_categories = []
+                category_labels = []
+                category_scores = []
+        elif evidence_risk["risk_level"] != "none":
             risk_score = evidence_risk["risk_score"]
             risk_level = evidence_risk["risk_level"]
             comment_dominant = (
@@ -1326,7 +1482,11 @@ class AuditPipeline:
             risk_evidence=risk_evidence,
             audit_summary=audit.get("summary", ""),
         )
-        risk_images = self._collect_risk_images(image_analyses, job_root)
+        risk_images = (
+            []
+            if self._is_ruleset_v2() and risk_level == "none"
+            else self._collect_risk_images(image_analyses, job_root)
+        )
         has_risk = bool(risk_evidence) or bool(risk_frames) or bool(risk_images) or decision in ("review", "reject")
 
         return {
@@ -1351,7 +1511,7 @@ class AuditPipeline:
             "risk_basis": risk_basis,
             "evidence_items": evidence_items,
             "rule_matches": rule_matches,
-            "evidence": audit.get("evidence", []),
+            "evidence": [] if self._is_ruleset_v2() else audit.get("evidence", []),
             "risk_evidence": risk_evidence,
             "risk_frames": risk_frames,
             "risk_images": risk_images,
@@ -1572,6 +1732,161 @@ class AuditPipeline:
             })
         return out
 
+    def _validate_v2_fusion_contract(self, audit: dict, evidence_index: dict) -> dict:
+        if not isinstance(audit, dict):
+            raise FusionAuditContractError("fusion response is not a JSON object")
+        required_fields = {
+            "schema_version",
+            "content_title",
+            "summary",
+            "decision_suggestion",
+            "risk_level_suggestion",
+            "primary_risk",
+            "categories",
+            "evidence_items",
+            "rule_matches",
+        }
+        missing_fields = sorted(required_fields - set(audit))
+        if missing_fields:
+            raise FusionAuditContractError(
+                "fusion response is missing fields: " + ", ".join(missing_fields)
+            )
+        if audit.get("schema_version") != "audit_fusion_v4":
+            raise FusionAuditContractError("fusion schema_version must be audit_fusion_v4")
+        if not isinstance(audit.get("categories"), list):
+            raise FusionAuditContractError("fusion categories must be an array")
+        if not isinstance(audit.get("evidence_items"), list):
+            raise FusionAuditContractError("fusion evidence_items must be an array")
+        if not isinstance(audit.get("rule_matches"), list):
+            raise FusionAuditContractError("fusion rule_matches must be an array")
+        catalog_ids = {
+            str(item.get("evidence_id") or "")
+            for item in evidence_index.get("evidence_catalog") or []
+            if isinstance(item, dict) and item.get("evidence_id")
+        }
+        allowed_rule_ids = self._stage_rule_ids("fusion_audit")
+        legal_matches: list[dict] = []
+        exempted_evidence_ids: set[str] = set()
+        applied_exemption_ids: list[str] = []
+        for raw_match in audit.get("rule_matches") or []:
+            if not isinstance(raw_match, dict):
+                raise FusionAuditContractError("fusion rule_match is not an object")
+            rule_id = str(raw_match.get("rule_id") or "").strip()
+            if rule_id not in allowed_rule_ids:
+                raise FusionAuditContractError("fusion rule_match has an invalid rule_id")
+            raw_evidence_ids = raw_match.get("evidence_ids")
+            if not isinstance(raw_evidence_ids, list):
+                raise FusionAuditContractError("fusion evidence_ids must be an array")
+            evidence_ids = []
+            for value in raw_evidence_ids:
+                evidence_id = str(value or "").strip()
+                if evidence_id not in catalog_ids:
+                    raise FusionAuditContractError(
+                        "fusion rule_match references an invalid evidence_id"
+                    )
+                if evidence_id not in evidence_ids:
+                    evidence_ids.append(evidence_id)
+            if not evidence_ids:
+                raise FusionAuditContractError("fusion rule_match has no evidence_ids")
+            matched_exemption_ids = self._normalize_matched_exemption_ids(
+                rule_id,
+                raw_match.get("matched_exemption_ids"),
+            )
+            if matched_exemption_ids:
+                exempted_evidence_ids.update(evidence_ids)
+                for exemption_id in matched_exemption_ids:
+                    if exemption_id not in applied_exemption_ids:
+                        applied_exemption_ids.append(exemption_id)
+                continue
+            legal_matches.append({
+                **raw_match,
+                "rule_id": rule_id,
+                "evidence_ids": evidence_ids,
+            })
+
+        match_by_evidence_id: dict[str, dict] = {}
+        for match in legal_matches:
+            for evidence_id in match["evidence_ids"]:
+                match_by_evidence_id.setdefault(evidence_id, match)
+
+        legal_evidence: list[dict] = []
+        for raw_item in audit.get("evidence_items") or []:
+            if not isinstance(raw_item, dict):
+                raise FusionAuditContractError("fusion evidence_item is not an object")
+            evidence_id = str(raw_item.get("evidence_id") or "").strip()
+            if evidence_id not in catalog_ids:
+                raise FusionAuditContractError(
+                    "fusion evidence_item references an invalid evidence_id"
+                )
+            if evidence_id in exempted_evidence_ids:
+                continue
+            match = match_by_evidence_id.get(evidence_id)
+            if match is None:
+                raise FusionAuditContractError(
+                    "fusion evidence_item has no valid rule/evidence closure"
+                )
+            risk_level = self._strict_v2_risk_level(
+                raw_item.get("evidence_risk_level"),
+                field="fusion.evidence_risk_level",
+                allow_none=False,
+            )
+            legal_evidence.append({
+                **raw_item,
+                "evidence_id": evidence_id,
+                "rule_id": match["rule_id"],
+                "evidence_risk_level": risk_level,
+            })
+
+        retained_ids = {item["evidence_id"] for item in legal_evidence}
+        legal_matches = [
+            {**match, "evidence_ids": [value for value in match["evidence_ids"] if value in retained_ids]}
+            for match in legal_matches
+        ]
+        legal_matches = [match for match in legal_matches if match["evidence_ids"]]
+        decision = str(audit.get("decision_suggestion") or "").strip().lower()
+        risk_level = str(audit.get("risk_level_suggestion") or "").strip().lower()
+        if decision not in {"pass", "review", "reject"} or risk_level not in {
+            "none",
+            "low",
+            "medium",
+            "high",
+        }:
+            raise FusionAuditContractError("fusion decision/risk enum is invalid")
+        declares_pass = decision == "pass" and risk_level == "none"
+        declares_risk = decision in {"review", "reject"} and risk_level in {
+            "low",
+            "medium",
+            "high",
+        }
+        if not declares_pass and not declares_risk:
+            raise FusionAuditContractError("fusion decision and risk level are inconsistent")
+        if declares_pass and legal_evidence:
+            raise FusionAuditContractError("pass/none retained risk evidence")
+        if declares_risk and not legal_evidence:
+            if not applied_exemption_ids:
+                raise FusionAuditContractError(
+                    "non-pass fusion result has no valid rule/evidence closure"
+                )
+            decision = "pass"
+            risk_level = "none"
+
+        cleaned = {
+            **audit,
+            "decision_suggestion": decision,
+            "risk_level_suggestion": risk_level,
+            "evidence_items": legal_evidence,
+            "rule_matches": legal_matches,
+        }
+        if applied_exemption_ids:
+            cleaned["matched_exemption_ids"] = applied_exemption_ids
+        for key in ("evidence", "score_breakdown", "category_scores"):
+            cleaned.pop(key, None)
+        if decision == "pass":
+            cleaned["primary_risk"] = ""
+            cleaned["categories"] = []
+            cleaned["risk_score"] = 0
+        return cleaned
+
     def _normalize_evidence_items(
         self,
         audit: dict,
@@ -1611,6 +1926,22 @@ class AuditPipeline:
             enriched["primary_modality"] = primary_modality
             enriched["modality"] = primary_modality
             enriched["source"] = source or self._default_source_for_modality(primary_modality)
+            if self._is_ruleset_v2():
+                rule_id = self._normalize_stage_rule_id(
+                    enriched.get("rule_id"),
+                    "fusion_audit",
+                )
+                if rule_id:
+                    enriched["rule_id"] = rule_id
+                else:
+                    continue
+                matched_exemption_ids = self._normalize_matched_exemption_ids(
+                    rule_id,
+                    enriched.get("matched_exemption_ids"),
+                )
+                if matched_exemption_ids:
+                    continue
+                enriched.pop("matched_exemption_ids", None)
             self._fill_original_evidence(enriched, subject, comments_by_id, evidence_index)
             enriched["evidence_risk_level"] = self._normalize_evidence_risk_level(
                 enriched.get("evidence_risk_level")
@@ -1684,6 +2015,21 @@ class AuditPipeline:
         return aliases.get(text, "none")
 
     @staticmethod
+    def _strict_v2_risk_level(
+        value,
+        *,
+        field: str,
+        allow_none: bool,
+    ) -> str:
+        level = str(value or "").strip().lower()
+        allowed = {"low", "medium", "high"}
+        if allow_none:
+            allowed.add("none")
+        if level not in allowed:
+            raise FusionAuditContractError(f"{field} is missing or invalid")
+        return level
+
+    @staticmethod
     def _risk_level_rank(level: str) -> int:
         return {"none": 0, "low": 1, "medium": 2, "high": 3}.get(str(level or ""), 0)
 
@@ -1699,7 +2045,7 @@ class AuditPipeline:
             return "review"
         return "pass"
 
-    def _run_fusion_audit(self, note_id: str, prompt: str) -> dict:
+    def _run_fusion_audit(self, note_id: str, prompt: str, *, contract_validator=None) -> dict:
         retries = max(0, settings.fusion_timeout_retries)
         attempts = retries + 1
         timeout = max(1, settings.fusion_request_timeout)
@@ -1742,6 +2088,20 @@ class AuditPipeline:
                 raise FusionAuditTimeoutError(
                     f"连续 {attempts} 次调用超时，单次上限 {timeout}s"
                 ) from exc
+
+            try:
+                if contract_validator is not None:
+                    audit = contract_validator(audit)
+            except FusionAuditContractError as exc:
+                elapsed = perf_counter() - started_at
+                job_store.log(
+                    self.job_id,
+                    f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} contract-invalid，"
+                    f"耗时={elapsed:.1f}s，error={exc}",
+                )
+                if attempt < attempts:
+                    continue
+                raise
 
             elapsed = perf_counter() - started_at
             llm_meta = (
@@ -2016,15 +2376,22 @@ class AuditPipeline:
     def _compact_signature(value) -> str:
         return "".join(str(value or "").split()).lower()[:120]
 
-    @staticmethod
-    def _normalize_rule_matches(audit: dict) -> list[dict]:
+    def _normalize_rule_matches(self, audit: dict) -> list[dict]:
         values = audit.get("rule_matches") if isinstance(audit.get("rule_matches"), list) else []
         out: list[dict] = []
+        allowed_rule_ids = self._stage_rule_ids("fusion_audit")
         for item in values:
             if not isinstance(item, dict):
                 continue
             rule_id = str(item.get("rule_id") or item.get("id") or "").strip()
             if not rule_id:
+                continue
+            if self._is_ruleset_v2() and rule_id not in allowed_rule_ids:
+                continue
+            if self._normalize_matched_exemption_ids(
+                rule_id,
+                item.get("matched_exemption_ids"),
+            ):
                 continue
             evidence_ids = item.get("evidence_ids") if isinstance(item.get("evidence_ids"), list) else []
             out.append({
@@ -2038,6 +2405,25 @@ class AuditPipeline:
         return out
 
     def _infer_rule_matches_from_evidence_items(self, evidence_items: list[dict]) -> list[dict]:
+        if self._is_ruleset_v2():
+            allowed_rule_ids = self._stage_rule_ids("fusion_audit")
+            matches = []
+            for item in evidence_items:
+                if not isinstance(item, dict):
+                    continue
+                rule_id = str(item.get("rule_id") or "").strip()
+                evidence_id = str(item.get("evidence_id") or item.get("id") or "").strip()
+                if rule_id not in allowed_rule_ids or not evidence_id:
+                    continue
+                matches.append({
+                    "rule_id": rule_id,
+                    "rule_name": "",
+                    "modality": str(item.get("primary_modality") or item.get("modality") or ""),
+                    "evidence_ids": [evidence_id],
+                    "confidence": str(item.get("confidence") or ""),
+                    "features": item.get("features") if isinstance(item.get("features"), list) else [],
+                })
+            return matches
         rules = self._active_scoring_rules()
         if not rules:
             return []
@@ -2471,13 +2857,27 @@ class AuditPipeline:
                 "ocr_confidence": image.get("ocr_confidence", 0.0),
                 "visual_summary": image.get("visual_summary", ""),
                 "benign_context": image.get("benign_context", ""),
-                "risk_items": self._compact_risk_items(image.get("risk_items") or []),
+                "risk_items": self._compact_risk_items(
+                    image.get("risk_items") or [],
+                    application_stage="image_evidence",
+                ),
                 "error": image.get("error", ""),
             }
             image_units.append(unit)
             for risk_index, risk in enumerate(unit["risk_items"], start=1):
-                score = self._normalize_risk_score(risk.get("score"), risk.get("severity") or "low")
-                evidence_catalog.append({
+                if self._is_ruleset_v2():
+                    risk_level = self._strict_v2_risk_level(
+                        risk.get("severity"),
+                        field="image_evidence.severity",
+                        allow_none=False,
+                    )
+                    score = self._risk_score_for_level(risk_level)
+                else:
+                    score = self._normalize_risk_score(
+                        risk.get("score"), risk.get("severity") or "low"
+                    )
+                    risk_level = self._level_from_score(score, thresholds)
+                catalog_item = {
                     "evidence_id": f"{source}/risk:{risk_index}",
                     "source": source,
                     "primary_modality": "vision",
@@ -2488,8 +2888,11 @@ class AuditPipeline:
                     "risk_type": risk.get("risk_type", ""),
                     "reason": risk.get("reason") or risk.get("evidence", ""),
                     "risk_score": score,
-                    "evidence_risk_level": self._level_from_score(score, thresholds),
-                })
+                    "evidence_risk_level": risk_level,
+                }
+                if self._is_ruleset_v2():
+                    catalog_item["rule_id"] = risk.get("rule_id", "")
+                evidence_catalog.append(catalog_item)
 
         for video_offset, video in enumerate(video_results, start=1):
             video_ref = f"video:{int(video.get('index', video_offset - 1) or 0) + 1}"
@@ -2579,6 +2982,10 @@ class AuditPipeline:
                     "asr_risks": analysis.get("asr_risks") or [],
                     "library_reviews": segment.get("library_reviews") or [],
                 }
+                if self._is_ruleset_v2():
+                    compact_segment["matched_exemption_ids"] = (
+                        analysis.get("matched_exemption_ids") or []
+                    )
                 segment_reviews.append(compact_segment)
                 video_segment_reviews.append(compact_segment)
 
@@ -2695,9 +3102,15 @@ class AuditPipeline:
                 "evidence_quote": comment.get("evidence_quote", ""),
                 "audit_status": comment.get("audit_status", "failed"),
             }
+            if self._is_ruleset_v2():
+                unit["rule_id"] = comment.get("rule_id", "")
             comment_units.append(unit)
-            if unit["audit_status"] == "completed" and int(unit.get("risk_score") or 0) >= review_threshold:
-                evidence_catalog.append({
+            if unit["audit_status"] == "completed" and (
+                int(unit.get("risk_score") or 0) > 0
+                if self._is_ruleset_v2()
+                else int(unit.get("risk_score") or 0) >= review_threshold
+            ):
+                catalog_item = {
                     "evidence_id": f"comment:{comment_id}",
                     "source": f"comment:{comment_id}",
                     "primary_modality": "comment",
@@ -2713,7 +3126,10 @@ class AuditPipeline:
                     "exemption_basis": unit["exemption_basis"],
                     "risk_score": unit["risk_score"],
                     "evidence_risk_level": unit["risk_level"],
-                })
+                }
+                if self._is_ruleset_v2():
+                    catalog_item["rule_id"] = unit["rule_id"]
+                evidence_catalog.append(catalog_item)
 
         return {
             "text_context": {
@@ -2760,7 +3176,10 @@ class AuditPipeline:
                 "ocr_confidence": image.get("ocr_confidence", 0.0),
                 "visual_summary": image.get("visual_summary", ""),
                 "benign_context": image.get("benign_context", ""),
-                "risk_items": self._compact_risk_items(image.get("risk_items") or []),
+                "risk_items": self._compact_risk_items(
+                    image.get("risk_items") or [],
+                    application_stage="image_evidence",
+                ),
                 "error": image.get("error", ""),
             })
 
@@ -3310,10 +3729,19 @@ class AuditPipeline:
             )
 
         batch_size = max(1, settings.comment_audit_batch_size)
-        batches = [
-            comments_for_model[offset : offset + batch_size]
-            for offset in range(0, len(comments_for_model), batch_size)
-        ]
+        if self._is_ruleset_v2():
+            batches, oversized = self._pack_v2_comment_audit_batches(
+                subject,
+                media_summary,
+                comments_for_model,
+                max_batch_size=min(20, batch_size),
+            )
+            audited_by_id.update(oversized)
+        else:
+            batches = [
+                comments_for_model[offset : offset + batch_size]
+                for offset in range(0, len(comments_for_model), batch_size)
+            ]
 
         def audit_batch(index_and_batch: tuple[int, list[dict]]) -> dict[str, dict]:
             batch_index, batch = index_and_batch
@@ -3359,6 +3787,79 @@ class AuditPipeline:
             f"翻译成功={stats['translation_completed']}，翻译失败={stats['translation_failed']}",
         )
         return output
+
+    def _pack_v2_comment_audit_batches(
+        self,
+        subject: AuditSubject,
+        media_summary: str,
+        comments: list[dict],
+        *,
+        max_batch_size: int,
+    ) -> tuple[list[list[dict]], dict[str, dict]]:
+        batches: list[list[dict]] = []
+        oversized: dict[str, dict] = {}
+        current: list[dict] = []
+        batch_limit = max(1, min(20, max_batch_size))
+
+        for comment in comments:
+            if len(current) >= batch_limit:
+                batches.append(current)
+                current = []
+
+            candidate = [*current, comment]
+            try:
+                self._render_comment_audit_prompt(subject, media_summary, candidate)
+            except FusionAuditContractError as exc:
+                if current:
+                    batches.append(current)
+                    current = []
+                    try:
+                        self._render_comment_audit_prompt(
+                            subject,
+                            media_summary,
+                            [comment],
+                        )
+                    except FusionAuditContractError as single_exc:
+                        oversized.update(
+                            self._oversized_comment_audit_result(comment, single_exc)
+                        )
+                    else:
+                        current = [comment]
+                else:
+                    oversized.update(
+                        self._oversized_comment_audit_result(comment, exc)
+                    )
+            else:
+                current = candidate
+
+        if current:
+            batches.append(current)
+        return batches, oversized
+
+    def _oversized_comment_audit_result(
+        self,
+        comment: dict,
+        error: Exception,
+    ) -> dict[str, dict]:
+        comment_id = str(comment.get("comment_id") or "")
+        result = {
+            "audit_status": "failed",
+            "audit_error": self._truncate_text(
+                f"single comment cannot fit V2 prompt budget: {error}",
+                180,
+            ),
+        }
+        if comment.get("translation_required") and not comment.get("translation_zh"):
+            result.update({
+                "translation_status": "failed",
+                "translation_error": "comment was not sent because its prompt exceeded the budget",
+            })
+        job_store.log(
+            self.job_id,
+            f"评论 {comment_id} 在保留 source_text/translation_zh 各最多300字后仍超过 "
+            "V2 Prompt 总预算，已仅标记该条审核失败",
+        )
+        return {comment_id: result}
 
     def _audit_comment_batch_with_fallback(
         self,
@@ -3510,6 +4011,11 @@ class AuditPipeline:
         media_summary: str,
         comments: list[dict],
     ) -> str:
+        def comment_text(value) -> str:
+            if self._is_ruleset_v2():
+                return self._comment_prompt_text(value)
+            return self._truncate_text(value, 300)
+
         payload = {
             "post_context": {
                 "title": self._truncate_text(subject.title, 180),
@@ -3522,10 +4028,10 @@ class AuditPipeline:
             "comments": [
                 {
                     "comment_id": comment.get("comment_id"),
-                    "source_text": self._truncate_text(comment.get("source_text", ""), 300),
+                    "source_text": comment_text(comment.get("source_text", "")),
                     "translation_required": bool(comment.get("translation_required")),
                     **(
-                        {"translation_zh": self._truncate_text(comment.get("translation_zh", ""), 300)}
+                        {"translation_zh": comment_text(comment.get("translation_zh", ""))}
                         if comment.get("translation_zh")
                         else {}
                     ),
@@ -3533,6 +4039,19 @@ class AuditPipeline:
                 for comment in comments
             ],
         }
+        comment_template = str(
+            (getattr(self, "prompt_profile_snapshot", {}) or {}).get(
+                "comment_prompt_template"
+            )
+            or ""
+        )
+        if self._is_ruleset_v2() and comment_template:
+            return self._render_v2_json_prompt(
+                comment_template,
+                payload,
+                limit=settings.comment_audit_prompt_max_chars,
+                kind="comment",
+            )
         return (
             "你是评论区逐条审核器。必须结合帖子标题、正文和媒体摘要，独立判断每一条评论，"
             "不要把多条评论聚成一个结论；一条评论可以独立触发召回。"
@@ -3563,6 +4082,132 @@ class AuditPipeline:
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
 
+    @staticmethod
+    def _comment_prompt_text(value) -> str:
+        return str(value or "").strip()[:300]
+
+    def _render_v2_json_prompt(
+        self,
+        fixed_prompt: str,
+        payload: dict,
+        *,
+        limit: int,
+        kind: str,
+    ) -> str:
+        separator = "\n输入 JSON：\n"
+        fixed_size = len(fixed_prompt) + len(separator)
+        if limit > 0 and fixed_size > limit:
+            raise FusionAuditContractError(
+                f"{kind} fixed prompt exceeds runtime budget: {fixed_size}/{limit}"
+            )
+        value = json.loads(json.dumps(payload, ensure_ascii=False))
+
+        def render() -> str:
+            return fixed_prompt + separator + json.dumps(
+                value,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+
+        prompt = render()
+        if limit <= 0 or len(prompt) <= limit:
+            return prompt
+        original_size = len(prompt)
+        if kind == "comment":
+            post = value.get("post_context") or {}
+            for text_limit in (220, 140, 90, 50, 24):
+                post["title"] = self._truncate_text(post.get("title", ""), text_limit)
+                post["desc"] = self._truncate_text(post.get("desc", ""), text_limit * 2)
+                post["media_summary"] = self._truncate_text(
+                    post.get("media_summary", ""), text_limit * 2
+                )
+                prompt = render()
+                if len(prompt) <= limit:
+                    break
+        elif kind == "fusion":
+            for keep_comments, keep_media, evidence_text, keep_evidence in (
+                (10, 8, 120, 120),
+                (5, 4, 80, 80),
+                (2, 2, 48, 50),
+                (0, 0, 24, 30),
+            ):
+                value["top_comments"] = (value.get("top_comments") or [])[:keep_comments]
+                value["media_summaries"] = (value.get("media_summaries") or [])[:keep_media]
+                compact_catalog = []
+                for item in (value.get("evidence_catalog") or [])[:keep_evidence]:
+                    compact = dict(item)
+                    for key in (
+                        "text",
+                        "ocr_text_zh",
+                        "translation_zh",
+                        "visual_summary",
+                        "reason",
+                    ):
+                        if compact.get(key):
+                            compact[key] = self._truncate_text(compact[key], evidence_text)
+                    compact_catalog.append(compact)
+                value["evidence_catalog"] = compact_catalog
+                post = value.get("post") or {}
+                post["title"] = self._truncate_text(post.get("title", ""), evidence_text * 2)
+                post["title_zh"] = self._truncate_text(post.get("title_zh", ""), evidence_text * 2)
+                post["desc"] = self._truncate_text(post.get("desc", ""), evidence_text * 4)
+                post["desc_zh"] = self._truncate_text(post.get("desc_zh", ""), evidence_text * 4)
+                prompt = render()
+                if len(prompt) <= limit:
+                    break
+        elif kind == "frame":
+            text_keys = {
+                "text",
+                "text_zh",
+                "source_text",
+                "source_text_dolphin",
+                "source_text_mms",
+                "translation_zh",
+                "summary",
+                "description",
+                "audit_goal",
+            }
+
+            def trim_frame_text(node, text_limit: int):
+                if isinstance(node, list):
+                    return [trim_frame_text(item, text_limit) for item in node]
+                if not isinstance(node, dict):
+                    return node
+                return {
+                    key: (
+                        self._truncate_text(item, text_limit)
+                        if key in text_keys and isinstance(item, str)
+                        else trim_frame_text(item, text_limit)
+                    )
+                    for key, item in node.items()
+                }
+
+            for keep_chunks, text_limit in ((16, 180), (12, 120), (8, 80), (4, 48)):
+                value["title"] = self._truncate_text(value.get("title", ""), text_limit)
+                value["desc"] = self._truncate_text(value.get("desc", ""), text_limit * 2)
+                value["ocr_chunks"] = trim_frame_text(
+                    (value.get("ocr_chunks") or [])[:keep_chunks],
+                    text_limit,
+                )
+                value["asr_chunks"] = trim_frame_text(
+                    (value.get("asr_chunks") or [])[:keep_chunks],
+                    text_limit,
+                )
+                prompt = render()
+                if len(prompt) <= limit:
+                    break
+        if len(prompt) > limit:
+            raise FusionAuditContractError(
+                f"{kind} dynamic input cannot fit prompt budget: {len(prompt)}/{limit}"
+            )
+        job_store.log(
+            self.job_id,
+            f"{kind} Prompt 超过总长度上限，已裁剪动态输入："
+            f"{original_size} -> {len(prompt)} / {limit} 字符",
+        )
+        return prompt
+
     def _normalize_comment_audit_results(self, raw: dict, comments: list[dict]) -> dict[str, dict]:
         valid = {
             str(comment.get("comment_id") or ""): comment
@@ -3587,6 +4232,32 @@ class AuditPipeline:
             except (KeyError, TypeError, ValueError):
                 continue
             score = self._normalize_risk_score(raw_score, "none")
+            v2_risk_level = "none"
+            if self._is_ruleset_v2():
+                try:
+                    v2_risk_level = self._strict_v2_risk_level(
+                        row.get("risk_level"),
+                        field="comment_audit.risk_level",
+                        allow_none=True,
+                    )
+                except FusionAuditContractError:
+                    continue
+            rule_id = self._normalize_stage_rule_id(
+                row.get("rule_id") or row.get("rid"),
+                "comment_audit",
+            )
+            if self._is_ruleset_v2() and v2_risk_level != "none" and not rule_id:
+                continue
+            matched_exemption_ids = self._normalize_matched_exemption_ids(
+                rule_id,
+                row.get("matched_exemption_ids"),
+            )
+            if self._is_ruleset_v2():
+                if matched_exemption_ids:
+                    v2_risk_level = "none"
+                score = self._risk_score_for_level(v2_risk_level)
+            elif matched_exemption_ids:
+                score = 0
             quote = self._truncate_text(row.get("q") or row.get("evidence_quote", ""), 80)
             source_text = str(source.get("source_text") or "")
             if quote and quote not in source_text:
@@ -3609,24 +4280,48 @@ class AuditPipeline:
             )
             if not risk_library_id:
                 risk_library_label = ""
+            risk_type = self._truncate_text(row.get("t") or row.get("risk_type", ""), 50)
+            risk_basis = self._truncate_text(row.get("rb") or row.get("risk_basis", ""), 30)
+            if self._is_ruleset_v2() and v2_risk_level != "none" and (
+                not risk_library_id or not risk_type or not risk_basis or not quote
+            ):
+                continue
             secondary_library_ids = self._normalize_secondary_library_ids(
                 row.get("sec") if "sec" in row else row.get("secondary_library_ids"),
                 primary=risk_library_id,
             )
-            output[comment_id] = {
+            normalized = {
                 "audit_status": "completed",
                 "risk_score": score,
-                "risk_level": self._level_from_score(score, thresholds),
+                "risk_level": (
+                    v2_risk_level
+                    if self._is_ruleset_v2()
+                    else self._level_from_score(score, thresholds)
+                ),
                 "risk_library_id": risk_library_id,
                 "risk_library_label": risk_library_label,
                 "secondary_library_ids": secondary_library_ids,
-                "risk_type": self._truncate_text(row.get("t") or row.get("risk_type", ""), 50),
-                "risk_basis": self._truncate_text(row.get("rb") or row.get("risk_basis", ""), 30),
+                "risk_type": risk_type,
+                "risk_basis": risk_basis,
                 "exemption_basis": self._truncate_text(row.get("eb") or row.get("exemption_basis", ""), 30),
                 "evidence_quote": quote,
                 "translation_zh": translation_zh,
                 "translation_status": "completed" if translation_zh else "not_needed",
             }
+            if self._is_ruleset_v2():
+                normalized["rule_id"] = rule_id
+                normalized["matched_exemption_ids"] = matched_exemption_ids
+            if self._is_ruleset_v2() and score == 0:
+                normalized.update({
+                    "risk_library_id": "",
+                    "risk_library_label": "",
+                    "secondary_library_ids": [],
+                    "risk_type": "",
+                    "rule_id": "",
+                    "risk_basis": "",
+                    "evidence_quote": "",
+                })
+            output[comment_id] = normalized
         return output
 
     def _normalize_comment_library_id(self, value, score: int) -> str:
@@ -3677,6 +4372,12 @@ class AuditPipeline:
         }
 
     def _compact_audit_policy(self) -> dict:
+        if self._is_ruleset_v2():
+            return {
+                "category": getattr(self.prompt_set, "category", "")
+                if hasattr(self, "prompt_set")
+                else "",
+            }
         return {
             "category": getattr(self.prompt_set, "category", "") if hasattr(self, "prompt_set") else "",
             "thresholds": self._active_thresholds(),
@@ -3699,10 +4400,14 @@ class AuditPipeline:
             if comment.get("audit_status") != "completed":
                 continue
             score = int(comment.get("risk_score") or 0)
-            if score < review_threshold:
+            if (
+                score <= 0
+                if self._is_ruleset_v2()
+                else score < review_threshold
+            ):
                 continue
             comment_id = str(comment.get("comment_id") or "")
-            out.append({
+            item = {
                 "evidence_id": f"comment:{comment_id}",
                 "id": f"comment:{comment_id}",
                 "primary_modality": "comment",
@@ -3722,7 +4427,10 @@ class AuditPipeline:
                 "evidence_quote": comment.get("evidence_quote", ""),
                 "risk_score": score,
                 "evidence_risk_level": comment.get("risk_level", "none"),
-            })
+            }
+            if self._is_ruleset_v2():
+                item["rule_id"] = comment.get("rule_id", "")
+            out.append(item)
         return out
 
     def _format_frame_evidence_for_prompt(self, video_results: list[dict]) -> str:
@@ -3742,7 +4450,10 @@ class AuditPipeline:
                         settings.fusion_frame_summary_max_chars,
                     ),
                 }
-                risk_items = self._compact_risk_items(frame.get("risk_items") or [])
+                risk_items = self._compact_risk_items(
+                    frame.get("risk_items") or [],
+                    application_stage="video_frame_evidence",
+                )
                 if risk_items:
                     item["risk_items"] = risk_items
                 ocr_text = self._truncate_text(
@@ -3777,18 +4488,32 @@ class AuditPipeline:
             text = self._trim_frame_evidence_to_limit(videos_out, limit, total_frames)
         return text
 
-    def _compact_risk_items(self, risk_items: list[dict]) -> list[dict]:
+    def _compact_risk_items(
+        self,
+        risk_items: list[dict],
+        *,
+        application_stage: str = "",
+    ) -> list[dict]:
         compact: list[dict] = []
-        ordered = sorted(risk_items, key=lambda item: _severity_rank(item.get("severity")), reverse=True)
+        values = (
+            self._filter_stage_risk_items(risk_items, application_stage)
+            if application_stage
+            else [item for item in risk_items if isinstance(item, dict)]
+        )
+        ordered = sorted(values, key=lambda item: _severity_rank(item.get("severity")), reverse=True)
         for item in ordered[: max(0, settings.fusion_frame_max_risk_items)]:
-            compact.append({
+            row = {
                 "severity": item.get("severity", ""),
                 "risk_library_id": self._truncate_text(item.get("risk_library_id", ""), 40),
                 "risk_library_label": self._truncate_text(item.get("risk_library_label", ""), 40),
                 "risk_type": self._truncate_text(item.get("risk_type", ""), 80),
                 "evidence": self._truncate_text(item.get("evidence", ""), 140),
                 "reason": self._truncate_text(item.get("reason", ""), 160),
-            })
+            }
+            rule_id = self._truncate_text(item.get("rule_id", ""), 120)
+            if self._is_ruleset_v2() and rule_id:
+                row["rule_id"] = rule_id
+            compact.append(row)
         return compact
 
     def _compact_external_ocr(self, external_ocr: list[dict]) -> list[dict]:
@@ -3991,6 +4716,7 @@ class AuditPipeline:
                     "risk_library_id",
                     "risk_library_label",
                     "secondary_library_ids",
+                    "rule_id",
                     "risk_type",
                     "reason",
                     "risk_score",
@@ -4055,6 +4781,11 @@ class AuditPipeline:
                     "risk_library_id": item.get("risk_library_id", ""),
                     "risk_library_label": item.get("risk_library_label", ""),
                     "secondary_library_ids": item.get("secondary_library_ids") or [],
+                    **(
+                        {"rule_id": item.get("rule_id", "")}
+                        if self._is_ruleset_v2()
+                        else {}
+                    ),
                     "risk_type": item.get("risk_type", ""),
                     "risk_basis": item.get("risk_basis", ""),
                     "exemption_basis": item.get("exemption_basis", ""),
@@ -4065,6 +4796,20 @@ class AuditPipeline:
             ],
             "scoring_rules": scoring_rules,
         }
+        fusion_template = str(
+            (getattr(self, "prompt_profile_snapshot", {}) or {}).get(
+                "fusion_prompt_template"
+            )
+            or ""
+        )
+        if self._is_ruleset_v2() and fusion_template:
+            payload["scoring_rules"] = []
+            return self._render_v2_json_prompt(
+                fusion_template,
+                payload,
+                limit=settings.fusion_prompt_max_chars,
+                kind="fusion",
+            )
         return (
             "你是全帖审核融合器。只校准已有证据在跨分段和跨模态语境中的含义，不重新分析原始媒体。"
             "重点识别引用、反讽、批判、否定、新闻、科普和风险提示等豁免语境。"
@@ -4257,7 +5002,10 @@ class AuditPipeline:
             ocr_text = self._truncate_text(image.get("ocr_text_zh") or image.get("ocr_text") or "", text_chars)
             if ocr_text:
                 item["ocr_text"] = ocr_text
-            risks = self._compact_risk_items((image.get("risk_items") or [])[: max(0, risk_limit)])
+            risks = self._compact_risk_items(
+                (image.get("risk_items") or [])[: max(0, risk_limit)],
+                application_stage="image_evidence",
+            )
             if risks:
                 item["risk_items"] = risks
             error = self._truncate_text(image.get("error", ""), 120)
@@ -4382,6 +5130,18 @@ class AuditPipeline:
                     self.prompt_set.image_prompt,
                     model=settings.qwen_image_audit_model,
                 )
+                analysis = dict(analysis or {})
+                raw_risk_items = analysis.get("risk_items")
+                analysis["risk_items"] = self._filter_stage_risk_items(
+                    raw_risk_items,
+                    "image_evidence",
+                )
+                matched_exemption_ids = self._matched_stage_exemption_ids(
+                    raw_risk_items,
+                    "image_evidence",
+                )
+                if matched_exemption_ids:
+                    analysis["matched_exemption_ids"] = matched_exemption_ids
                 results.append({
                     "index": idx,
                     "evidence_id": f"image:{idx}",
@@ -4442,6 +5202,18 @@ class AuditPipeline:
                     self.prompt_set.image_prompt,
                     model=settings.qwen_image_audit_model,
                 )
+                analysis = dict(analysis or {})
+                raw_risk_items = analysis.get("risk_items")
+                analysis["risk_items"] = self._filter_stage_risk_items(
+                    raw_risk_items,
+                    "image_evidence",
+                )
+                matched_exemption_ids = self._matched_stage_exemption_ids(
+                    raw_risk_items,
+                    "image_evidence",
+                )
+                if matched_exemption_ids:
+                    analysis["matched_exemption_ids"] = matched_exemption_ids
                 results.append({
                     "index": idx,
                     "evidence_id": f"image:{idx}",
@@ -4825,6 +5597,16 @@ class AuditPipeline:
                             "segment_score": analysis.get("segment_score", 0),
                             "segment_level": analysis.get("segment_level", "none"),
                             "segment_summary": analysis.get("segment_summary", ""),
+                            **(
+                                {
+                                    "matched_exemption_ids": analysis.get(
+                                        "matched_exemption_ids"
+                                    )
+                                    or []
+                                }
+                                if self._is_ruleset_v2()
+                                else {}
+                            ),
                         }
                         for analysis in analyses
                     ],
@@ -5167,6 +5949,13 @@ class AuditPipeline:
             "ocr_chunks": segment.get("ocr_chunks") or [],
             "asr_chunks": segment.get("asr_chunks") or [],
         }
+        if self._is_ruleset_v2():
+            return self._render_v2_json_prompt(
+                self.prompt_set.frame_prompt,
+                payload,
+                limit=settings.frame_audit_prompt_max_chars,
+                kind="frame",
+            )
         return (
             "你是视频内容审核器。输入图片是一张按真实时间排序的 4x4 contact sheet；空白格不代表视频内容。"
             "请只按输入 JSON 中 risk_library 指定的风险库审核本分段，并结合帖子上下文、逐帧 OCR 原文/中文译文和对应时间范围内的 ASR 大段。\n"
@@ -5221,81 +6010,202 @@ class AuditPipeline:
         def normalized_score(item: dict) -> int:
             return self._normalize_risk_score(item.get("score"), item.get("risk_level") or "none")
 
+        def is_v2_none_item(item: dict) -> bool:
+            if not self._is_ruleset_v2():
+                return False
+            raw_score = item.get("score")
+            if isinstance(raw_score, bool):
+                raise FusionAuditContractError(
+                    "video_frame_evidence score is missing or invalid"
+                )
+            try:
+                score_value = float(raw_score)
+            except (TypeError, ValueError) as exc:
+                raise FusionAuditContractError(
+                    "video_frame_evidence score is missing or invalid"
+                ) from exc
+            if not 0 <= score_value <= 100:
+                raise FusionAuditContractError(
+                    "video_frame_evidence score is outside 0-100"
+                )
+            if "risk_level" not in item and score_value == 0:
+                return True
+            if "risk_level" in item:
+                return (
+                    self._strict_v2_risk_level(
+                        item.get("risk_level"),
+                        field="video_frame_evidence.risk_level",
+                        allow_none=True,
+                    )
+                    == "none"
+                )
+            return False
+
+        applied_exemption_ids: list[str] = []
+
+        def normalize_v2_rule(item: dict) -> tuple[str, bool]:
+            if not self._is_ruleset_v2():
+                return "", False
+            rule_id = self._normalize_stage_rule_id(
+                item.get("rule_id") or item.get("id"),
+                "video_frame_evidence",
+            )
+            if not rule_id:
+                raise FusionAuditContractError(
+                    "video_frame_evidence non-none result has an invalid rule_id"
+                )
+            matched = self._normalize_matched_exemption_ids(
+                rule_id,
+                item.get("matched_exemption_ids"),
+            )
+            if matched:
+                for exemption_id in matched:
+                    if exemption_id not in applied_exemption_ids:
+                        applied_exemption_ids.append(exemption_id)
+            return rule_id, bool(matched)
+
+        def normalized_level_and_score(item: dict, rule_id: str) -> tuple[str, int]:
+            if not self._is_ruleset_v2():
+                score = normalized_score(item)
+                return self._level_from_score(score, thresholds), score
+            risk_level = self._strict_v2_risk_level(
+                item.get("risk_level"),
+                field="video_frame_evidence.risk_level",
+                allow_none=False,
+            )
+            return risk_level, self._risk_score_for_level(risk_level)
+
         visual_risks = []
         for item in analysis.get("visual_risks") or []:
             if not isinstance(item, dict):
                 continue
+            if is_v2_none_item(item):
+                continue
             frame_ids = self._valid_reference_ids(item.get("frame_ids") or item.get("frame_id"), valid_frame_ids)
             if not frame_ids:
+                if self._is_ruleset_v2():
+                    raise FusionAuditContractError(
+                        "video_frame_evidence visual risk has invalid frame_ids"
+                    )
                 continue
-            score = normalized_score(item)
-            visual_risks.append({
+            rule_id, exempted = normalize_v2_rule(item)
+            risk_level, score = normalized_level_and_score(item, rule_id)
+            if exempted:
+                continue
+            normalized = {
                 "frame_ids": frame_ids,
                 "score": score,
-                "risk_level": self._level_from_score(score, thresholds),
+                "risk_level": risk_level,
                 "risk_library_id": risk_library_id,
                 "risk_library_label": risk_library_label,
                 "risk_type": self._truncate_text(item.get("risk_type", ""), 60),
                 "reason": self._truncate_text(item.get("reason", ""), 100),
-            })
+            }
+            if rule_id:
+                normalized["rule_id"] = rule_id
+            visual_risks.append(normalized)
 
         ocr_risks = []
         for item in analysis.get("ocr_risks") or []:
             if not isinstance(item, dict):
                 continue
+            if is_v2_none_item(item):
+                continue
             chunk_id = str(item.get("ocr_chunk_id") or "")
             chunk = ocr_by_id.get(chunk_id)
             if not chunk:
+                if self._is_ruleset_v2():
+                    raise FusionAuditContractError(
+                        "video_frame_evidence OCR risk has an invalid ocr_chunk_id"
+                    )
                 continue
             valid_chunk_frames = set(chunk.get("frame_ids") or []) & valid_frame_ids
             frame_ids = self._valid_reference_ids(item.get("frame_ids") or item.get("frame_id"), valid_chunk_frames)
             if not frame_ids:
+                if self._is_ruleset_v2():
+                    raise FusionAuditContractError(
+                        "video_frame_evidence OCR risk has invalid frame_ids"
+                    )
                 continue
-            score = normalized_score(item)
-            ocr_risks.append({
+            rule_id, exempted = normalize_v2_rule(item)
+            risk_level, score = normalized_level_and_score(item, rule_id)
+            if exempted:
+                continue
+            normalized = {
                 "ocr_chunk_id": chunk_id,
                 "frame_ids": frame_ids,
                 "score": score,
-                "risk_level": self._level_from_score(score, thresholds),
+                "risk_level": risk_level,
                 "risk_library_id": risk_library_id,
                 "risk_library_label": risk_library_label,
                 "risk_type": self._truncate_text(item.get("risk_type", ""), 60),
                 "reason": self._truncate_text(item.get("reason", ""), 100),
-            })
+            }
+            if rule_id:
+                normalized["rule_id"] = rule_id
+            ocr_risks.append(normalized)
 
         asr_risks = []
         for item in analysis.get("asr_risks") or []:
             if not isinstance(item, dict):
                 continue
+            if is_v2_none_item(item):
+                continue
             chunk_id = str(item.get("asr_chunk_id") or "")
             if chunk_id not in asr_by_id:
+                if self._is_ruleset_v2():
+                    raise FusionAuditContractError(
+                        "video_frame_evidence ASR risk has an invalid asr_chunk_id"
+                    )
                 continue
-            score = normalized_score(item)
-            asr_risks.append({
+            rule_id, exempted = normalize_v2_rule(item)
+            risk_level, score = normalized_level_and_score(item, rule_id)
+            if exempted:
+                continue
+            normalized = {
                 "asr_chunk_id": chunk_id,
                 "score": score,
-                "risk_level": self._level_from_score(score, thresholds),
+                "risk_level": risk_level,
                 "risk_library_id": risk_library_id,
                 "risk_library_label": risk_library_label,
                 "risk_type": self._truncate_text(item.get("risk_type", ""), 60),
                 "reason": self._truncate_text(item.get("reason", ""), 100),
-            })
+            }
+            if rule_id:
+                normalized["rule_id"] = rule_id
+            asr_risks.append(normalized)
 
-        segment_score = self._normalize_risk_score(analysis.get("segment_score"), "none")
+        segment_score = (
+            0
+            if self._is_ruleset_v2()
+            else self._normalize_risk_score(analysis.get("segment_score"), "none")
+        )
         segment_score = max(
             [segment_score]
             + [item["score"] for item in visual_risks + ocr_risks + asr_risks]
         )
-        return {
+        segment_level = (
+            max(
+                (item["risk_level"] for item in visual_risks + ocr_risks + asr_risks),
+                key=self._risk_level_rank,
+                default="none",
+            )
+            if self._is_ruleset_v2()
+            else self._level_from_score(segment_score, thresholds)
+        )
+        normalized = {
             "segment_summary": self._truncate_text(analysis.get("segment_summary") or analysis.get("summary", ""), 100),
             "segment_score": segment_score,
-            "segment_level": self._level_from_score(segment_score, thresholds),
+            "segment_level": segment_level,
             "risk_library_id": risk_library_id,
             "risk_library_label": risk_library_label,
             "visual_risks": visual_risks,
             "ocr_risks": ocr_risks,
             "asr_risks": asr_risks,
         }
+        if applied_exemption_ids:
+            normalized["matched_exemption_ids"] = applied_exemption_ids
+        return normalized
 
     def _merge_segment_reviews(self, analyses: list[dict]) -> dict:
         thresholds = self._active_thresholds()
@@ -5313,26 +6223,42 @@ class AuditPipeline:
         visual_risks = []
         ocr_risks = []
         asr_risks = []
+        matched_exemption_ids = []
         for analysis in cleaned:
             visual_risks.extend(analysis.get("visual_risks") or [])
             ocr_risks.extend(analysis.get("ocr_risks") or [])
             asr_risks.extend(analysis.get("asr_risks") or [])
+            for exemption_id in analysis.get("matched_exemption_ids") or []:
+                if exemption_id not in matched_exemption_ids:
+                    matched_exemption_ids.append(exemption_id)
         segment_score = max(
             [self._normalize_risk_score(item.get("segment_score"), item.get("segment_level") or "none") for item in cleaned]
             + [int(item.get("score") or 0) for item in visual_risks + ocr_risks + asr_risks]
         )
-        return {
+        segment_level = (
+            max(
+                (item.get("risk_level", "none") for item in visual_risks + ocr_risks + asr_risks),
+                key=self._risk_level_rank,
+                default="none",
+            )
+            if self._is_ruleset_v2()
+            else self._level_from_score(segment_score, thresholds)
+        )
+        merged = {
             "segment_summary": self._truncate_text(
                 top.get("segment_summary")
                 or next((item.get("segment_summary") for item in cleaned if item.get("segment_summary")), ""),
                 100,
             ),
             "segment_score": segment_score,
-            "segment_level": self._level_from_score(segment_score, thresholds),
+            "segment_level": segment_level,
             "visual_risks": visual_risks,
             "ocr_risks": ocr_risks,
             "asr_risks": asr_risks,
         }
+        if matched_exemption_ids:
+            merged["matched_exemption_ids"] = matched_exemption_ids
+        return merged
 
     @staticmethod
     def _valid_reference_ids(values, valid_ids: set[str]) -> list[str]:
@@ -5488,6 +6414,12 @@ class AuditPipeline:
         for item in analysis.get("risk_items") or []:
             if not isinstance(item, dict):
                 continue
+            rule_id = self._normalize_stage_rule_id(
+                item.get("rule_id") or item.get("id"),
+                "video_frame_evidence",
+            )
+            if self._is_ruleset_v2() and not rule_id:
+                continue
             frame_id = str(item.get("precise_frame_id") or item.get("frame_id") or "").strip()
             if frame_id not in valid_by_id:
                 nearest = min(
@@ -5503,6 +6435,11 @@ class AuditPipeline:
             except (TypeError, ValueError):
                 timestamp = float(frame.get("timestamp") or center_ts)
             risk_items.append({
+                **(
+                    {"rule_id": rule_id}
+                    if self._is_ruleset_v2() and rule_id
+                    else {}
+                ),
                 "risk_type": self._truncate_text(item.get("risk_type", ""), 80),
                 "evidence": self._truncate_text(item.get("evidence", ""), 180),
                 "reason": self._truncate_text(item.get("reason", ""), 180),

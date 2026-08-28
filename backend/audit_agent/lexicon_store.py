@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from .config import settings
 from .knowledge_packages import get_default_knowledge_package
+from .library_references import policy_reference_scopes
 from .prompts import DEFAULT_PROMPT_PROFILES, render_prompt_profile_preview
 
 
@@ -86,6 +87,25 @@ DEFAULT_LEXICON = [
         ],
     },
 ]
+
+
+def _loads_policy_config(value) -> dict:
+    if not value:
+        return {}
+    try:
+        decoded = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
+class LexiconCategoryReferenceConflictError(RuntimeError):
+    def __init__(self, category_id: str, references: list[dict]) -> None:
+        self.category_id = category_id
+        self.references = references
+        super().__init__(
+            f"Lexicon category is referenced by AuditPolicy: {category_id}"
+        )
 
 
 class LexiconStore:
@@ -797,17 +817,57 @@ class LexiconStore:
             raise KeyError(str(keyword_id))
 
     def delete_category(self, category_id: str) -> dict:
+        return self.delete_category_atomically(category_id)
+
+    def delete_category_atomically(self, category_id: str) -> dict:
+        """Delete an unreferenced category and its dependent rows atomically."""
         cleaned_id = str(category_id or "").strip()
         if not cleaned_id:
             raise KeyError(category_id)
         with self._lock, self._connect() as conn:
-            row = conn.execute("SELECT * FROM lexicon_categories WHERE id = ?", (cleaned_id,)).fetchone()
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT * FROM lexicon_categories WHERE id = ?",
+                (cleaned_id,),
+            ).fetchone()
             if not row:
                 raise KeyError(cleaned_id)
+            try:
+                policy_rows = conn.execute(
+                    "SELECT id, name, config_json, published_config_json FROM audit_policies"
+                ).fetchall()
+            except sqlite3.OperationalError as exc:
+                if "no such table" not in str(exc).lower():
+                    raise
+                policy_rows = []
+            references = []
+            for policy in policy_rows:
+                reference = policy_reference_scopes(
+                    policy_id=policy["id"],
+                    policy_name=policy["name"],
+                    draft_config=_loads_policy_config(policy["config_json"]),
+                    published_config=_loads_policy_config(policy["published_config_json"]),
+                    library_id=cleaned_id,
+                )
+                if reference:
+                    references.append(reference)
+            if references:
+                raise LexiconCategoryReferenceConflictError(cleaned_id, references)
             category = dict(row)
-            keyword_cursor = conn.execute("DELETE FROM lexicon_keywords WHERE category_id = ?", (cleaned_id,))
-            profile_cursor = conn.execute("DELETE FROM lexicon_prompt_profiles WHERE category_id = ?", (cleaned_id,))
-            conn.execute("DELETE FROM lexicon_categories WHERE id = ?", (cleaned_id,))
+            keyword_cursor = conn.execute(
+                "DELETE FROM lexicon_keywords WHERE category_id = ?",
+                (cleaned_id,),
+            )
+            profile_cursor = conn.execute(
+                "DELETE FROM lexicon_prompt_profiles WHERE category_id = ?",
+                (cleaned_id,),
+            )
+            deleted = conn.execute(
+                "DELETE FROM lexicon_categories WHERE id = ?",
+                (cleaned_id,),
+            )
+            if deleted.rowcount != 1:
+                raise KeyError(cleaned_id)
         return {
             "id": category["id"],
             "title": category["title"],

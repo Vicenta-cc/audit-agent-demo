@@ -14,7 +14,16 @@ from .api.investigation import create_investigation_router
 from .api.investigation_creation import create_investigation_creation_router
 from .api.investigation_execution import InvestigationTurnExecutor
 from .api.reporting import create_reporting_router
-from .audit_agent.audit_policy_store import AuditPolicyStore, TaskAuditConfigRevisionStore
+from .rulesets.api import create_ruleset_router
+from .rulesets.errors import RuleSetRevisionNotFoundError
+from .rulesets.service import RuleSetService
+from .rulesets.store import RuleSetStore
+from .audit_agent.audit_policy_store import (
+    AuditPolicyLibraryReferenceConflictError,
+    AuditPolicyRevisionConflictError,
+    AuditPolicyStore,
+    TaskAuditConfigRevisionStore,
+)
 from .audit_agent.config import settings
 from .audit_agent.crawler_account_store import crawler_account_store
 from .audit_agent.creator_url import (
@@ -26,7 +35,10 @@ from .audit_agent.crawler_adapter import SUPPORTED_PLATFORMS, MediaCrawlerAdapte
 from .audit_agent.evidence_groups import build_evidence_groups
 from .audit_agent.ingestion import AuditResultStore, IngestionStore
 from .audit_agent.job_store import job_store
-from .audit_agent.lexicon_store import LexiconStore
+from .audit_agent.lexicon_store import (
+    LexiconCategoryReferenceConflictError,
+    LexiconStore,
+)
 from .audit_agent.pipeline import AuditPipeline, AUDIO_FILE_SIGNATURES, AUDIO_URL_EXTENSIONS
 from .audit_agent.rule_compiler import (
     DEFAULT_CAPABILITIES,
@@ -46,6 +58,7 @@ from .investigation_creation.adapters import (
 )
 from .investigation_creation.service import InvestigationCreationService
 from .investigation_creation.store import InvestigationCreationStore
+from .investigation_creation.principal import LocalPrincipalProvider
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +84,9 @@ app.mount(
 ingestion_store = IngestionStore()
 audit_result_store = AuditResultStore()
 lexicon_store = LexiconStore()
+principal_provider = LocalPrincipalProvider()
+ruleset_store = RuleSetStore()
+ruleset_service = RuleSetService(ruleset_store)
 audit_policy_store = AuditPolicyStore()
 audit_config_revision_store = TaskAuditConfigRevisionStore()
 report_store = ReportStore()
@@ -83,6 +99,8 @@ investigation_creation_service = InvestigationCreationService(
         lexicon_store=lexicon_store,
         policy_store=audit_policy_store,
         crawler_account_store=crawler_account_store,
+        ruleset_service=ruleset_service,
+        principal_provider=principal_provider,
     ),
     run_projector=InvestigationRunProjector(
         job_store=job_store,
@@ -96,8 +114,12 @@ investigation_turn_executor = InvestigationTurnExecutor(
 )
 app.include_router(create_reporting_router(report_store, r31_report_runtime))
 app.include_router(
-    create_investigation_creation_router(investigation_creation_service)
+    create_investigation_creation_router(
+        investigation_creation_service,
+        principal_provider=principal_provider,
+    )
 )
+app.include_router(create_ruleset_router(ruleset_service, principal_provider=principal_provider))
 app.include_router(
     create_investigation_router(
         investigation_agent_service,
@@ -311,12 +333,12 @@ class AuditPolicyRequest(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     scoring_template: str = "balanced"
     rule_snapshot: dict = Field(default_factory=dict)
+    ruleset_revision_id: str = ""
     config: dict = Field(default_factory=dict)
 
 
 class AuditConfigRevisionRequest(BaseModel):
     policy_id: str
-    created_by: str = ""
 
 
 class MonitoredUserFromAuditResultRequest(BaseModel):
@@ -481,6 +503,76 @@ def build_audit_config_revision_payload(
 
 def build_revision_payload_from_policy(policy: dict) -> dict:
     config = audit_policy_store.config_for_use(policy)
+    ruleset_revision_id = str(config.get("ruleset_revision_id") or "").strip()
+    if ruleset_revision_id:
+        if not policy.get("published_config") or not policy.get("published_version"):
+            raise HTTPException(
+                status_code=409,
+                detail="RuleSet-backed policy must be published before it can be frozen",
+            )
+        validate_audit_policy_ruleset_reference(config)
+        thresholds = config.get("rule_snapshot", {}).get("thresholds")
+        if not isinstance(thresholds, dict):
+            thresholds = DEFAULT_THRESHOLDS
+        policy_version = audit_policy_store.version_for_use(policy)
+        compiled = ruleset_service.compile_for_execution(
+            ruleset_revision_id,
+            audit_policy={
+                "policy_id": str(policy.get("id") or ""),
+                "policy_name": str(policy.get("name") or "研判方案"),
+                "policy_version": policy_version,
+                "ruleset_revision_id": ruleset_revision_id,
+                "policy_config": config,
+                "library_ids": config.get("library_ids") or [],
+                "capabilities": config.get("capabilities") or [],
+                "scoring_template": str(config.get("scoring_template") or "balanced"),
+                "thresholds": thresholds,
+            },
+            principal=principal_provider(),
+        )
+        prompt_snapshot = compiled["prompt_profile_snapshot"]
+        rule_snapshot = compiled["rule_snapshot"]
+        library_ids = normalize_library_ids(
+            config.get("library_ids") or [],
+            str(config.get("lexicon_category") or "gambling"),
+        )
+        capabilities = normalize_capabilities(config.get("capabilities") or [])
+        scoring_template = (
+            str(config.get("scoring_template") or "balanced")
+            if str(config.get("scoring_template") or "balanced") in TEMPLATE_IMPORTANCE
+            else "balanced"
+        )
+        audit_config = {
+            "schema_version": 2,
+            "source_policy_id": str(policy.get("id") or ""),
+            "source_policy_name": str(policy.get("name") or "研判方案"),
+            "source_policy_version": policy_version,
+            "ruleset_ref": rule_snapshot["ruleset_ref"],
+            "library_ids": library_ids,
+            "capabilities": capabilities,
+            "scoring_template": scoring_template,
+            "thresholds": rule_snapshot["thresholds"],
+            "prompt_version": prompt_snapshot["prompt_version"],
+            "system_template_version": prompt_snapshot["system_template_version"],
+            "compiler_version": prompt_snapshot["compiler_version"],
+        }
+        return {
+            "source_policy_id": audit_config["source_policy_id"],
+            "source_policy_name": audit_config["source_policy_name"],
+            "source_policy_version": audit_config["source_policy_version"],
+            "audit_config": audit_config,
+            "knowledge_package_snapshots": [],
+            "rule_snapshot": rule_snapshot,
+            "prompt_profile_snapshot": prompt_snapshot,
+            "config_hash": compiled["config_hash"],
+            "context": {
+                "library_ids": library_ids,
+                "capabilities": capabilities,
+                "scoring_template": scoring_template,
+                "rule_snapshot": rule_snapshot,
+                "prompt_profile_snapshot": prompt_snapshot,
+            },
+        }
     return build_audit_config_revision_payload(
         source_policy_id=str(policy.get("id") or ""),
         source_policy_name=str(policy.get("name") or "研判方案"),
@@ -523,6 +615,33 @@ def create_revision_from_payload(job_id: str, payload: dict, *, created_by: str 
     )
     activate_audit_config_revision(job_id, revision)
     return revision
+
+
+def validate_audit_policy_ruleset_reference(config: dict) -> None:
+    revision_id = str((config or {}).get("ruleset_revision_id") or "").strip()
+    if not revision_id:
+        return
+    try:
+        compiled = ruleset_service.compile_for_execution(
+            revision_id,
+            audit_policy={
+                "ruleset_revision_id": revision_id,
+                "policy_config": config,
+                "library_ids": config.get("library_ids") or [],
+                "capabilities": config.get("capabilities") or [],
+                "scoring_template": str(config.get("scoring_template") or "balanced"),
+                "thresholds": (config.get("rule_snapshot") or {}).get("thresholds")
+                if isinstance(config.get("rule_snapshot"), dict)
+                else DEFAULT_THRESHOLDS,
+            },
+            principal=principal_provider(),
+        )
+    except RuleSetRevisionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Published RuleSetRevision not found") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if str(compiled["audit_policy_snapshot"].get("ruleset_revision_id") or "") != revision_id:
+        raise HTTPException(status_code=400, detail="RuleSet Foundation pilot only supports gambling")
 
 
 def enabled_keywords_for_categories(category_ids: list[str]) -> list[str]:
@@ -1001,15 +1120,20 @@ def create_audit_policy(request: AuditPolicyRequest):
     if not config:
         config = {
             "library_ids": request.library_ids,
+            "ruleset_revision_id": request.ruleset_revision_id,
             "capabilities": request.capabilities,
             "scoring_template": request.scoring_template,
             "rule_snapshot": request.rule_snapshot,
         }
-    return audit_policy_store.create(
-        name=request.name,
-        description=request.description,
-        config=config,
-    )
+    validate_audit_policy_ruleset_reference(config)
+    try:
+        return audit_policy_store.create(
+            name=request.name,
+            description=request.description,
+            config=config,
+        )
+    except AuditPolicyLibraryReferenceConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.patch("/api/audit-policies/{policy_id}")
@@ -1021,27 +1145,43 @@ def update_audit_policy(policy_id: str, request: AuditPolicyRequest):
     if not config:
         config = {
             "library_ids": request.library_ids,
+            "ruleset_revision_id": request.ruleset_revision_id,
             "capabilities": request.capabilities,
             "scoring_template": request.scoring_template,
             "rule_snapshot": request.rule_snapshot,
         }
     try:
+        validate_audit_policy_ruleset_reference(config or existing.get("config") or {})
         return audit_policy_store.update(
             policy_id,
             name=request.name or existing.get("name"),
             description=request.description if request.description else existing.get("description", ""),
             config=config or existing.get("config") or {},
         )
+    except AuditPolicyLibraryReferenceConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except KeyError:
         raise HTTPException(status_code=404, detail="Audit policy not found")
 
 
 @app.post("/api/audit-policies/{policy_id}/publish")
 def publish_audit_policy(policy_id: str):
+    policy = audit_policy_store.get(policy_id)
+    if not policy:
+        raise HTTPException(status_code=404, detail="Audit policy not found")
+    expected_draft_hash = audit_policy_store.draft_hash(policy)
+    validate_audit_policy_ruleset_reference(policy.get("config") or {})
     try:
-        return audit_policy_store.publish(policy_id)
+        return audit_policy_store.publish(
+            policy_id,
+            expected_draft_hash=expected_draft_hash,
+        )
     except KeyError:
         raise HTTPException(status_code=404, detail="Audit policy not found")
+    except AuditPolicyLibraryReferenceConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AuditPolicyRevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.delete("/api/audit-policies/{policy_id}")
@@ -1097,15 +1237,25 @@ def update_lexicon_category(category_id: str, request: LexiconCategoryRequest):
 @app.delete("/api/lexicons/{category_id}")
 def delete_lexicon_category(category_id: str):
     try:
-        category = lexicon_store.delete_category(category_id)
+        category = lexicon_store.delete_category_atomically(category_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Lexicon category not found")
-    affected_policies = audit_policy_store.remove_library_references(category_id)
+    except LexiconCategoryReferenceConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": (
+                    "Lexicon category is referenced by Draft or Published AuditPolicy; "
+                    "update and publish those policies before deleting it"
+                ),
+                "policy_references": exc.references,
+            },
+        ) from exc
     return {
         "ok": True,
         "id": category_id,
         "category": category,
-        "affected_policy_count": affected_policies,
+        "affected_policy_count": 0,
         "categories": lexicon_store.list_categories(),
     }
 
@@ -1365,7 +1515,11 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
             rule_snapshot=request.rule_snapshot,
             force_composite=force_composite,
         )
-    revision = create_revision_from_payload(job["id"], revision_payload, created_by="api")
+    revision = create_revision_from_payload(
+        job["id"],
+        revision_payload,
+        created_by="api",
+    )
     job_store.log(
         job["id"],
         f"生成任务审核配置 Revision {revision.get('version')}：{revision.get('source_policy_name') or '自定义审核配置'}",
@@ -1458,7 +1612,11 @@ async def create_local_video_job(
             rule_snapshot=context["rule_snapshot"],
             force_composite=force_composite,
         )
-    revision = create_revision_from_payload(job["id"], revision_payload, created_by="api")
+    revision = create_revision_from_payload(
+        job["id"],
+        revision_payload,
+        created_by="api",
+    )
     job_store.log(
         job["id"],
         f"生成任务审核配置 Revision {revision.get('version')}：{revision.get('source_policy_name') or '自定义审核配置'}",
@@ -1522,7 +1680,11 @@ def create_job_audit_config_revision(job_id: str, request: AuditConfigRevisionRe
         payload = build_revision_payload_from_policy(policy)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=f"Lexicon category not found: {exc}")
-    revision = create_revision_from_payload(job_id, payload, created_by=request.created_by or "api")
+    revision = create_revision_from_payload(
+        job_id,
+        payload,
+        created_by="api",
+    )
     job_store.log(
         job_id,
         f"更新审核策略：Revision {revision.get('version')} · {revision.get('source_policy_name')} {revision.get('source_policy_version')}",

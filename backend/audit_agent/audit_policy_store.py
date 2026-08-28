@@ -8,7 +8,13 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from backend.rulesets.gambling_v1 import GAMBLING_RULESET_REVISION_ID
+
 from .config import settings
+from .library_references import (
+    policy_reference_scopes,
+    referenced_library_ids,
+)
 
 
 def utc_now() -> str:
@@ -72,9 +78,10 @@ DEFAULT_POLICY_CONFIGS = [
         "id": "policy_gambling",
         "name": "赌博博彩研判方案",
         "description": "识别投注平台、盘口赔率、上分提现、代理推广和群聊导流。",
-        "published_version": "v1.0",
+        "published_version": "v2.0",
         "config": {
             "library_ids": ["gambling"],
+            "ruleset_revision_id": GAMBLING_RULESET_REVISION_ID,
             "capabilities": ["text", "ocr", "asr", "vision", "comment"],
             "scoring_template": "balanced",
             "rule_snapshot": {"thresholds": {"high": 80, "medium": 60, "review": 40}},
@@ -110,12 +117,36 @@ DEFAULT_POLICY_CONFIGS = [
 ]
 
 
+class AuditPolicyRevisionConflictError(RuntimeError):
+    pass
+
+
+class AuditPolicyLibraryReferenceConflictError(AuditPolicyRevisionConflictError):
+    def __init__(self, missing_library_ids: list[str] | tuple[str, ...]) -> None:
+        self.missing_library_ids = tuple(missing_library_ids)
+        joined = ", ".join(self.missing_library_ids)
+        super().__init__(f"AuditPolicy references missing lexicon categories: {joined}")
+
+
 class AuditPolicyStore:
     def __init__(self, db_path: Path | None = None):
         self.db_path = db_path or (settings.data_dir / "audit_index.sqlite3")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._ensure_lexicon_store()
         self._init_db()
+
+    def _ensure_lexicon_store(self) -> None:
+        """Ensure shared policy/lexicon databases have the category table."""
+        with sqlite3.connect(self.db_path) as conn:
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'lexicon_categories'"
+            ).fetchone()
+        if exists:
+            return
+        from .lexicon_store import LexiconStore
+
+        LexiconStore(self.db_path)
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
@@ -229,6 +260,8 @@ class AuditPolicyStore:
         description = str(kwargs.get("description") or "").strip()
         config = kwargs.get("config") if isinstance(kwargs.get("config"), dict) else {}
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            self._raise_if_missing_library_ids(conn, config)
             conn.execute(
                 """
                 INSERT INTO audit_policies (
@@ -260,20 +293,34 @@ class AuditPolicyStore:
         values.append(utc_now())
         values.append(policy_id)
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if "config" in kwargs:
+                config = kwargs.get("config") if isinstance(kwargs.get("config"), dict) else {}
+                self._raise_if_missing_library_ids(conn, config)
             conn.execute(f"UPDATE audit_policies SET {', '.join(fields)} WHERE id = ?", values)
             row = conn.execute("SELECT * FROM audit_policies WHERE id = ?", (policy_id,)).fetchone()
             if not row:
                 raise KeyError(policy_id)
             return self._row_to_policy(row)
 
-    def publish(self, policy_id: str) -> dict:
+    def publish(self, policy_id: str, *, expected_draft_hash: str) -> dict:
         now = utc_now()
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             row = conn.execute("SELECT * FROM audit_policies WHERE id = ?", (policy_id,)).fetchone()
             if not row:
                 raise KeyError(policy_id)
+            current_hash = self._draft_hash_from_row(row)
+            if not expected_draft_hash or current_hash != expected_draft_hash:
+                raise AuditPolicyRevisionConflictError(
+                    "AuditPolicy draft changed after validation"
+                )
+            self._raise_if_missing_library_ids(
+                conn,
+                self._loads_json_value(row["config_json"], {}),
+            )
             next_version = self._next_version(row["published_version"])
-            conn.execute(
+            updated = conn.execute(
                 """
                 UPDATE audit_policies
                 SET status = 'published',
@@ -282,12 +329,46 @@ class AuditPolicyStore:
                     published_config_json = config_json,
                     updated_at = ?,
                     published_at = ?
-                WHERE id = ?
+                WHERE id = ? AND name = ? AND description = ?
+                  AND config_json = ? AND updated_at = ?
                 """,
-                (next_version, next_version, now, now, policy_id),
+                (
+                    next_version,
+                    next_version,
+                    now,
+                    now,
+                    policy_id,
+                    row["name"],
+                    row["description"],
+                    row["config_json"],
+                    row["updated_at"],
+                ),
             )
+            if updated.rowcount != 1:
+                raise AuditPolicyRevisionConflictError(
+                    "AuditPolicy draft changed after validation"
+                )
             row = conn.execute("SELECT * FROM audit_policies WHERE id = ?", (policy_id,)).fetchone()
             return self._row_to_policy(row)
+
+    @classmethod
+    def draft_hash(cls, policy: dict) -> str:
+        payload = {
+            "name": str(policy.get("name") or ""),
+            "description": str(policy.get("description") or ""),
+            "config": policy.get("config") if isinstance(policy.get("config"), dict) else {},
+        }
+        return hashlib.sha256(
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+
+    @classmethod
+    def _draft_hash_from_row(cls, row: sqlite3.Row) -> str:
+        return cls.draft_hash({
+            "name": row["name"],
+            "description": row["description"],
+            "config": cls._loads_json_value(row["config_json"], {}),
+        })
 
     def delete(self, policy_id: str) -> dict:
         with self._lock, self._connect() as conn:
@@ -308,26 +389,42 @@ class AuditPolicyStore:
             rows = conn.execute("SELECT * FROM audit_policies").fetchall()
             for row in rows:
                 draft = self._loads_json(row["config_json"], {})
-                published = self._loads_json(row["published_config_json"], {})
                 new_draft, draft_changed = self._without_library(draft, target)
-                new_published, published_changed = self._without_library(published, target)
-                if not draft_changed and not published_changed:
+                if not draft_changed:
                     continue
                 affected += 1
                 conn.execute(
                     """
                     UPDATE audit_policies
-                    SET config_json = ?, published_config_json = ?, updated_at = ?
+                    SET config_json = ?, updated_at = ?
                     WHERE id = ?
                     """,
                     (
                         json.dumps(new_draft, ensure_ascii=False),
-                        json.dumps(new_published, ensure_ascii=False),
                         now,
                         row["id"],
                     ),
                 )
         return affected
+
+    def find_library_references(self, library_id: str) -> list[dict]:
+        target = str(library_id or "").strip()
+        if not target:
+            return []
+        references: list[dict] = []
+        with self._lock, self._connect() as conn:
+            rows = conn.execute("SELECT * FROM audit_policies").fetchall()
+        for row in rows:
+            reference = policy_reference_scopes(
+                policy_id=row["id"],
+                policy_name=row["name"],
+                draft_config=self._loads_json(row["config_json"], {}),
+                published_config=self._loads_json(row["published_config_json"], {}),
+                library_id=target,
+            )
+            if reference:
+                references.append(reference)
+        return references
 
     @staticmethod
     def config_for_use(policy: dict) -> dict:
@@ -357,6 +454,10 @@ class AuditPolicyStore:
         return f"v{major}.{minor + 1}"
 
     def _loads_json(self, value, fallback):
+        return self._loads_json_value(value, fallback)
+
+    @staticmethod
+    def _loads_json_value(value, fallback):
         if not value:
             return fallback
         try:
@@ -388,6 +489,29 @@ class AuditPolicyStore:
                     changed = True
             out["rule_snapshot"] = new_snapshot
         return out, changed
+
+    def _raise_if_missing_library_ids(
+        self,
+        conn: sqlite3.Connection,
+        config: object,
+    ) -> None:
+        library_ids = referenced_library_ids(config)
+        if not library_ids:
+            return
+        placeholders = ", ".join("?" for _ in library_ids)
+        try:
+            rows = conn.execute(
+                f"SELECT id FROM lexicon_categories WHERE id IN ({placeholders})",
+                tuple(library_ids),
+            ).fetchall()
+        except sqlite3.OperationalError as exc:
+            if "no such table" not in str(exc).lower():
+                raise
+            rows = []
+        existing = {str(row["id"]) for row in rows}
+        missing = [library_id for library_id in library_ids if library_id not in existing]
+        if missing:
+            raise AuditPolicyLibraryReferenceConflictError(missing)
 
 
 class TaskAuditConfigRevisionStore:

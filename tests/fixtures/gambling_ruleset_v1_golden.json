@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "ruleset_revision_id": "ruleset-revision:gambling:v2",
+  "cases": [
+    {
+      "id": "high_risk_closed_loop",
+      "semantic": "投注平台入口与充值提现形成高风险闭环",
+      "evidence_catalog": [
+        {"evidence_id": "image:1", "source": "image:1", "primary_modality": "vision", "text": "投注平台二维码"},
+        {"evidence_id": "text:desc", "source": "desc", "primary_modality": "text", "text": "扫码上分，随时提现"}
+      ],
+      "fixed_provider_response": {
+        "schema_version": "audit_fusion_v4",
+        "content_title": "投注平台资金闭环",
+        "summary": "投注平台入口与充值提现路径形成闭环",
+        "decision_suggestion": "reject",
+        "risk_level_suggestion": "high",
+        "primary_risk": "投注平台导流",
+        "categories": ["投注平台导流", "资金结算"],
+        "evidence_items": [
+          {"evidence_id": "image:1", "evidence_risk_level": "high", "reason": "提供投注平台入口"},
+          {"evidence_id": "text:desc", "evidence_risk_level": "high", "reason": "提供充值提现路径"}
+        ],
+        "rule_matches": [
+          {"rule_id": "gambling.platform_entry_and_funding", "evidence_ids": ["image:1", "text:desc"]}
+        ]
+      },
+      "expected_evidence_ids": ["image:1", "text:desc"],
+      "expected_rule_matches": ["gambling.platform_entry_and_funding"],
+      "expected_decision": "reject"
+    },
+    {
+      "id": "ordinary_sports",
+      "semantic": "普通体育赛事讨论，无投注或资金路径",
+      "evidence_catalog": [
+        {"evidence_id": "text:desc", "source": "desc", "primary_modality": "text", "text": "今晚比赛胜率讨论"}
+      ],
+      "fixed_provider_response": {
+        "schema_version": "audit_fusion_v4",
+        "content_title": "普通体育赛事讨论",
+        "summary": "只讨论赛事结果，没有投注或资金路径",
+        "decision_suggestion": "pass",
+        "risk_level_suggestion": "none",
+        "primary_risk": "",
+        "categories": [],
+        "evidence_items": [],
+        "rule_matches": []
+      },
+      "expected_evidence_ids": [],
+      "expected_rule_matches": [],
+      "expected_decision": "pass"
+    },
+    {
+      "id": "anti_gambling_news",
+      "semantic": "反赌新闻与普法内容应适用通用豁免",
+      "evidence_catalog": [
+        {"evidence_id": "text:desc", "source": "desc", "primary_modality": "text", "text": "警方通报网络赌博案件，提醒远离博彩"}
+      ],
+      "fixed_provider_response": {
+        "schema_version": "audit_fusion_v4",
+        "content_title": "反赌新闻风险提示",
+        "summary": "新闻普法提醒用户远离赌博",
+        "decision_suggestion": "pass",
+        "risk_level_suggestion": "none",
+        "primary_risk": "",
+        "categories": [],
+        "evidence_items": [],
+        "rule_matches": []
+      },
+      "expected_evidence_ids": [],
+      "expected_rule_matches": [],
+      "expected_decision": "pass"
+    },
+    {
+      "id": "warning_qr",
+      "semantic": "被骗曝光中的二维码仅作为警示取证材料",
+      "evidence_catalog": [
+        {"evidence_id": "image:1", "source": "image:1", "primary_modality": "vision", "text": "诈骗博彩群二维码截图"},
+        {"evidence_id": "text:title", "source": "title", "primary_modality": "text", "text": "曝光这个赌博群，大家不要扫码"}
+      ],
+      "fixed_provider_response": {
+        "schema_version": "audit_fusion_v4",
+        "content_title": "博彩二维码警示曝光",
+        "summary": "二维码仅作为被骗曝光和警示材料",
+        "decision_suggestion": "pass",
+        "risk_level_suggestion": "none",
+        "primary_risk": "",
+        "categories": [],
+        "evidence_items": [],
+        "rule_matches": []
+      },
+      "expected_evidence_ids": [],
+      "expected_rule_matches": [],
+      "expected_decision": "pass"
+    },
+    {
+      "id": "third_party_comment",
+      "semantic": "孤立第三方求带评论只能触发评论来源复核，不直接归责作者",
+      "evidence_catalog": [
+        {"evidence_id": "comment:c1", "source": "comment:c1", "primary_modality": "comment", "text": "求群号，带我上车"}
+      ],
+      "fixed_provider_response": {
+        "schema_version": "audit_fusion_v4",
+        "content_title": "评论区求群参与",
+        "summary": "风险来自评论区，不归责主帖作者",
+        "decision_suggestion": "review",
+        "risk_level_suggestion": "low",
+        "primary_risk": "评论组织参与",
+        "categories": ["评论组织参与"],
+        "evidence_items": [
+          {"evidence_id": "comment:c1", "evidence_risk_level": "low", "reason": "第三方评论求带"}
+        ],
+        "rule_matches": [
+          {"rule_id": "gambling.comment_organized_participation", "evidence_ids": ["comment:c1"]}
+        ]
+      },
+      "expected_evidence_ids": ["comment:c1"],
+      "expected_rule_matches": ["gambling.comment_organized_participation"],
+      "expected_decision": "review",
+      "attribution_boundary": "third_party_comment_only"
+    },
+    {
+      "id": "weak_keyword",
+      "semantic": "单个盘口关键词缺少交易链路时不得升级为高风险",
+      "evidence_catalog": [
+        {"evidence_id": "text:title", "source": "title", "primary_modality": "text", "text": "聊聊今晚盘口"}
+      ],
+      "fixed_provider_response": {
+        "schema_version": "audit_fusion_v4",
+        "content_title": "盘口词语语境待核",
+        "summary": "只有盘口弱关键词，缺少交易链路",
+        "decision_suggestion": "review",
+        "risk_level_suggestion": "low",
+        "primary_risk": "盘口赔率",
+        "categories": ["盘口赔率"],
+        "evidence_items": [
+          {"evidence_id": "text:title", "evidence_risk_level": "low", "reason": "弱关键词需核查上下文"}
+        ],
+        "rule_matches": [
+          {"rule_id": "gambling.weak_keyword_context", "evidence_ids": ["text:title"]}
+        ]
+      },
+      "expected_evidence_ids": ["text:title"],
+      "expected_rule_matches": ["gambling.weak_keyword_context"],
+      "expected_decision": "review"
+    },
+    {
+      "id": "multimodal_closed_loop",
+      "semantic": "OCR 平台入口与口播资金路径共同指向同一活动",
+      "evidence_catalog": [
+        {"evidence_id": "video:1/frame:3", "source": "video_frame:3", "primary_modality": "ocr", "text": "平台二维码和赔率表"},
+        {"evidence_id": "video:1/asr:1", "source": "video_audio:1", "primary_modality": "asr", "text": "进群充值，赢了随时提现"}
+      ],
+      "fixed_provider_response": {
+        "schema_version": "audit_fusion_v4",
+        "content_title": "跨模态赌博参与闭环",
+        "summary": "画面入口与口播资金路径指向同一活动",
+        "decision_suggestion": "reject",
+        "risk_level_suggestion": "high",
+        "primary_risk": "投注平台导流",
+        "categories": ["投注平台导流", "资金结算"],
+        "evidence_items": [
+          {"evidence_id": "video:1/frame:3", "evidence_risk_level": "high", "reason": "画面提供入口"},
+          {"evidence_id": "video:1/asr:1", "evidence_risk_level": "high", "reason": "口播提供资金路径"}
+        ],
+        "rule_matches": [
+          {"rule_id": "gambling.multimodal_closed_loop", "evidence_ids": ["video:1/frame:3", "video:1/asr:1"]}
+        ]
+      },
+      "expected_evidence_ids": ["video:1/frame:3", "video:1/asr:1"],
+      "expected_rule_matches": ["gambling.multimodal_closed_loop"],
+      "expected_decision": "reject"
+    }
+  ]
+}

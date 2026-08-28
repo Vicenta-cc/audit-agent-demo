@@ -26,6 +26,7 @@ from backend.audit_agent.rule_compiler import (
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 from backend.reporting.runtime import R31ReportRuntime
 from backend.reporting.store import ReportStore
+from backend.rulesets.service import RuleSetService
 
 from .contracts import (
     ConfirmedConfigurationSnapshot,
@@ -46,10 +47,14 @@ class InvestigationConfigurationResolver:
         lexicon_store: LexiconStore | None = None,
         policy_store: AuditPolicyStore | None = None,
         crawler_account_store: CrawlerAccountStore | None = None,
+        ruleset_service: RuleSetService | None = None,
+        principal_provider: Callable[[], Any] | None = None,
     ) -> None:
         self.lexicon_store = lexicon_store or LexiconStore()
         self.policy_store = policy_store or AuditPolicyStore()
         self.crawler_account_store = crawler_account_store or CrawlerAccountStore()
+        self.ruleset_service = ruleset_service
+        self.principal_provider = principal_provider
 
     def resolve(
         self, configuration: InvestigationConfiguration
@@ -86,23 +91,67 @@ class InvestigationConfigurationResolver:
         )
         if scoring_template not in TEMPLATE_IMPORTANCE:
             scoring_template = "balanced"
-        incoming_rule_snapshot = policy_config.get("rule_snapshot") or {}
-        try:
-            knowledge_packages = self.lexicon_store.get_knowledge_packages(library_ids)
-        except KeyError as exc:
-            raise ConfigurationValidationError(
-                f"recall library not found: {exc.args[0]}"
-            ) from exc
-        compiled = compile_rule_profile(
-            libraries=knowledge_packages,
-            capabilities=capabilities,
-            scoring_template=scoring_template,
-            rule_snapshot=incoming_rule_snapshot,
-        )
-        rule_snapshot = dict(compiled.get("rule_snapshot") or {})
-        prompt_profile_snapshot = {
-            key: value for key, value in compiled.items() if key != "rule_snapshot"
-        }
+        ruleset_revision_id = str(policy_config.get("ruleset_revision_id") or "")
+        if ruleset_revision_id:
+            if not (policy or {}).get("published_config") or not (policy or {}).get(
+                "published_version"
+            ):
+                raise ConfigurationValidationError(
+                    "RuleSet-backed policy must be published before it can be frozen"
+                )
+            if self.ruleset_service is None or self.principal_provider is None:
+                raise ConfigurationValidationError(
+                    "RuleSet-backed policy requires the RuleSet application service"
+                )
+            try:
+                policy_rule_snapshot = policy_config.get("rule_snapshot")
+                policy_thresholds = (
+                    policy_rule_snapshot.get("thresholds")
+                    if isinstance(policy_rule_snapshot, dict)
+                    else None
+                )
+                compiled = self.ruleset_service.compile_for_execution(
+                    ruleset_revision_id,
+                    audit_policy={
+                        "id": policy_id,
+                        "name": source_policy_name,
+                        "version": source_policy_version,
+                        "ruleset_revision_id": ruleset_revision_id,
+                        "library_ids": library_ids,
+                        "capabilities": capabilities,
+                        "scoring_template": scoring_template,
+                        "thresholds": policy_thresholds
+                        or policy_config.get("thresholds")
+                        or DEFAULT_THRESHOLDS,
+                        "policy_config": policy_config,
+                    },
+                    principal=self.principal_provider(),
+                )
+            except Exception as exc:
+                raise ConfigurationValidationError(str(exc)) from exc
+            knowledge_packages: list[dict[str, Any]] = []
+            rule_snapshot = dict(compiled["rule_snapshot"])
+            prompt_profile_snapshot = dict(compiled["prompt_profile_snapshot"])
+        else:
+            incoming_rule_snapshot = policy_config.get("rule_snapshot") or {}
+            try:
+                knowledge_packages = self.lexicon_store.get_knowledge_packages(
+                    library_ids
+                )
+            except KeyError as exc:
+                raise ConfigurationValidationError(
+                    f"recall library not found: {exc.args[0]}"
+                ) from exc
+            compiled = compile_rule_profile(
+                libraries=knowledge_packages,
+                capabilities=capabilities,
+                scoring_template=scoring_template,
+                rule_snapshot=incoming_rule_snapshot,
+            )
+            rule_snapshot = dict(compiled.get("rule_snapshot") or {})
+            prompt_profile_snapshot = {
+                key: value for key, value in compiled.items() if key != "rule_snapshot"
+            }
 
         keyword_source = collection.keyword_source.value
         keywords = list(collection.keywords)
@@ -138,7 +187,7 @@ class InvestigationConfigurationResolver:
         run_crawler = collection.run_crawler
         source_output_id = collection.source_output_id or ""
         audit_config = {
-            "schema_version": "1.0",
+            "schema_version": 2 if ruleset_revision_id else "1.0",
             "source_policy_id": policy_id,
             "source_policy_name": source_policy_name,
             "source_policy_version": source_policy_version,
@@ -149,6 +198,16 @@ class InvestigationConfigurationResolver:
             "scoring_rules": rule_snapshot.get("scoring_rules") or [],
             "prompt_version": str(prompt_profile_snapshot.get("prompt_version") or ""),
         }
+        if ruleset_revision_id:
+            audit_config.update(
+                {
+                    "ruleset_ref": rule_snapshot["ruleset_ref"],
+                    "system_template_version": prompt_profile_snapshot[
+                        "system_template_version"
+                    ],
+                    "compiler_version": prompt_profile_snapshot["compiler_version"],
+                }
+            )
         revision_payload = {
             "source_policy_id": policy_id,
             "source_policy_name": source_policy_name,
@@ -158,7 +217,11 @@ class InvestigationConfigurationResolver:
             "rule_snapshot": rule_snapshot,
             "prompt_profile_snapshot": prompt_profile_snapshot,
         }
-        revision_payload["config_hash"] = self._hash(revision_payload)
+        revision_payload["config_hash"] = (
+            str(compiled["config_hash"])
+            if ruleset_revision_id
+            else self._hash(revision_payload)
+        )
         resolved = {
             "platform": platform,
             "display_name": collection.display_name,

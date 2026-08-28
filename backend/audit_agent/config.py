@@ -220,6 +220,12 @@ class Settings:
     comment_audit_batch_size = int(os.getenv("COMMENT_AUDIT_BATCH_SIZE", "20"))
     comment_audit_concurrency = int(os.getenv("COMMENT_AUDIT_CONCURRENCY", "4"))
     comment_audit_max_tokens = int(os.getenv("COMMENT_AUDIT_MAX_TOKENS", "6000"))
+    comment_audit_prompt_max_chars = int(
+        os.getenv("COMMENT_AUDIT_PROMPT_MAX_CHARS", "16000")
+    )
+    frame_audit_prompt_max_chars = int(
+        os.getenv("FRAME_AUDIT_PROMPT_MAX_CHARS", "16000")
+    )
     comment_fusion_top_k = int(os.getenv("COMMENT_FUSION_TOP_K", "20"))
     ffmpeg_path = os.getenv("FFMPEG_PATH", "").strip()
 
