@@ -41,6 +41,7 @@ class Platform(str, Enum):
     XHS = "xhs"
     DOUYIN = "dy"
     KUAISHOU = "ks"
+    WEIBO = "wb"
 
 
 class CrawlMode(str, Enum):

@@ -130,16 +130,21 @@ M3_TOOL_DESCRIPTIONS = {
     "query_investigation_options": (
         "Query bounded real platform, published AuditPolicy/RuleSet, and recall lexicon "
         "options. Request enabled main terms only for explicit candidate lexicon IDs. "
+        "Every investigation-creation request must call this before creating a Draft. "
         "This query never creates a Draft, Run, or Job."
     ),
     "create_investigation_draft": (
-        "Create an editable Investigation Draft after discussing recommendations with "
-        "the user. This command never confirms or starts an investigation."
+        "Create an editable Investigation Draft from available query_investigation_options "
+        "candidates. If the user omitted a platform, select one legal non-wb candidate as "
+        "an editable recommendation; also select a published policy/ruleset, recommend a "
+        "recall lexicon, and record its ID when generating temporary terms. Do not require "
+        "the user to reselect recommended resources. This never confirms or starts a Run."
     ),
     "update_investigation_draft": (
         "Update an editable Investigation Draft at its expected revision. User changes "
-        "to lexicon terms must be represented as temporary_terms. This command never "
-        "starts an investigation."
+        "to platform, policy, lexicon, or terms are allowed before confirmation; edited "
+        "lexicon terms must be represented as temporary_terms. This command never confirms "
+        "or starts an investigation."
     ),
     "get_investigation_draft": (
         "Read the current Draft and its dynamic confirmation preview. Show that preview "
@@ -156,11 +161,29 @@ M3_TOOL_DESCRIPTIONS = {
 }
 
 
+def _creation_tool_schema(schema: type[StrictModel]) -> dict[str, Any]:
+    parameters = schema.model_json_schema()
+
+    def remove_legacy_platform(node: Any) -> None:
+        if isinstance(node, dict):
+            enum = node.get("enum")
+            if isinstance(enum, list) and "wb" in enum:
+                node["enum"] = [value for value in enum if value != "wb"]
+            for value in node.values():
+                remove_legacy_platform(value)
+        elif isinstance(node, list):
+            for value in node:
+                remove_legacy_platform(value)
+
+    remove_legacy_platform(parameters)
+    return parameters
+
+
 HERMES_M3_TOOL_SCHEMAS = tuple(
     {
         "name": name,
         "description": M3_TOOL_DESCRIPTIONS[name],
-        "parameters": schema.model_json_schema(),
+        "parameters": _creation_tool_schema(schema),
     }
     for name, schema in M3_TOOL_INPUTS.items()
 )

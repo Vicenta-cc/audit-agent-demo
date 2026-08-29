@@ -6,6 +6,8 @@ import {
   parseInvestigationSearchTerms
 } from "../src/features/investigation/confirmationView";
 import { mapInvestigationRunState } from "../src/features/investigation/investigationRunState";
+import { buildDraftSuggestionPlanView } from "../src/features/investigation/InvestigationContextDrawer";
+import { selectSingleSuggestionPlatform } from "../src/features/investigation/TaskSuggestionCard";
 import {
   buildNewInvestigationWorkspaceSession,
   buildWorkspaceRecoveryErrorSession,
@@ -18,6 +20,7 @@ import {
   getInvestigationWorkspaceState,
   getInvestigationWorkspace,
   getInvestigationWorkspacePublishedReport,
+  generateInvestigationConfirmationPreview,
   listInvestigationWorkspaceMessages,
   resumeInvestigationWorkspaceReportTurn,
   sendInvestigationWorkspaceReportTurn,
@@ -110,6 +113,27 @@ const publicDraft: PublicInvestigationDraft = {
   confirmed_at: ""
 };
 
+const suggestion = {
+  title: preview.title,
+  objective: preview.objective,
+  platform_options: [
+    { id: "dy" as const, name: "抖音", available: true },
+    { id: "xhs" as const, name: "小红书", available: true },
+    { id: "ks" as const, name: "快手", available: true }
+  ],
+  selected_platform: "xhs" as const,
+  search_terms: ["世界杯博彩", "看球下注"],
+  audit_policy: preview.audit_policy,
+  ruleset_revision: preview.ruleset_revision,
+  recall_lexicons: [{
+    id: "lexicon-1",
+    title: "博彩引流词库",
+    risk_label: "博彩引流",
+    enabled_main_term_count: 8,
+    available: true
+  }]
+};
+
 function workspaceState(
   overrides: Partial<InvestigationWorkspaceState> = {}
 ): InvestigationWorkspaceState {
@@ -131,7 +155,16 @@ function workspaceState(
       message_id: "message-assistant-1",
       turn_id: "turn-1",
       role: "assistant",
-      content: "调查方案已生成。",
+      content: "这段自然语言故意不包含任何可解析的任务字段。",
+      artifact: {
+        artifact_type: "investigation_draft",
+        presentation_stage: "suggestion",
+        draft_id: publicDraft.id,
+        draft_revision: publicDraft.current_revision,
+        draft: publicDraft,
+        confirmation_preview: preview,
+        suggestion
+      },
       sequence: 2,
       created_at: "2026-08-28T00:01:00Z"
     }],
@@ -147,10 +180,12 @@ function workspaceState(
     },
     draft_artifact: {
       artifact_type: "investigation_draft",
+      presentation_stage: "suggestion",
       draft_id: publicDraft.id,
       draft_revision: publicDraft.current_revision,
       draft: publicDraft,
-      confirmation_preview: preview
+      confirmation_preview: preview,
+      suggestion
     },
     run: null,
     report_messages: [],
@@ -262,18 +297,170 @@ test("new investigation uses the backend workspace identity as the route identit
   expect(session.creationBinding?.workspaceSessionId).toBe(session.id);
 });
 
-test("restores messages and the current Draft from backend state without sessionStorage", () => {
+test("restores the real suggestion card from structured artifact without parsing assistant text", () => {
   const session = restoreInvestigationWorkspace(workspaceState());
   expect(session.id).toBe("investigation-session:workspace-1");
   expect(session.messages.map((message) => message.id)).toEqual([
     "message-user-1",
-    "message-assistant-1",
-    "workspace-confirmation:draft-1:3"
+    "message-assistant-1"
   ]);
+  expect(session.messages[1]).toMatchObject({
+    type: "task_proposal",
+    proposalData: {
+      taskName: preview.title,
+      platformsSelected: ["xhs"]
+    }
+  });
+  expect(session.draft.keywords).toEqual(suggestion.search_terms);
+  expect(session.draft.recommendedRecallLexicons).toEqual(["博彩引流词库"]);
+  expect(session.creationBinding?.presentationStage).toBe("suggestion");
   expect(session.creationBinding?.draft).toEqual(publicDraft);
   expect(session.creationBinding?.confirmationPreview).toEqual(preview);
   expect(session.creationBinding?.confirmationKey).toContain("draft-1:3");
   expect(JSON.stringify(session)).not.toContain("report_session_id");
+});
+
+test("binds a recovered current public artifact to the last assistant message", () => {
+  const state = workspaceState();
+  const session = restoreInvestigationWorkspace(workspaceState({
+    messages: state.messages.map((message) => ({ ...message, artifact: null }))
+  }));
+
+  expect(session.messages[1]).toMatchObject({
+    type: "task_proposal",
+    proposalData: {
+      taskName: preview.title,
+      platformsSelected: ["xhs"]
+    }
+  });
+  expect(session.messages[1].content).toBe(
+    "这段自然语言故意不包含任何可解析的任务字段。"
+  );
+});
+
+test("replaces a legacy suggestion-null message artifact with the current projection", () => {
+  const state = workspaceState();
+  const legacyMessages = state.messages.map((message) => (
+    message.role === "assistant"
+      ? {
+          ...message,
+          artifact: {
+            ...state.draft_artifact!,
+            suggestion: null
+          }
+        }
+      : message
+  ));
+  const session = restoreInvestigationWorkspace(workspaceState({
+    messages: legacyMessages
+  }));
+
+  expect(session.messages[1]).toMatchObject({
+    type: "task_proposal",
+    proposalData: {
+      taskName: preview.title,
+      platformsSelected: ["xhs"]
+    }
+  });
+  expect(session.draft.recommendedRecallLexicons).toEqual(["博彩引流词库"]);
+});
+
+test("real analysis-plan drawer projects public resources without mock rule details", () => {
+  const view = buildDraftSuggestionPlanView(suggestion);
+
+  expect(view).toMatchObject({
+    policyName: "博彩引流审核策略",
+    ruleSetName: "博彩风险规则",
+    ruleSetVersion: 7,
+    recallLexicons: [{ title: "博彩引流词库" }],
+    searchTerms: ["世界杯博彩", "看球下注"]
+  });
+  expect(JSON.stringify(view)).not.toContain("generalExemptions");
+  expect(JSON.stringify(view)).not.toContain("categories");
+});
+
+test("restores the final confirmation card and selected platform after refresh", () => {
+  const state = workspaceState();
+  const confirmationArtifact = {
+    ...state.draft_artifact!,
+    presentation_stage: "confirmation" as const
+  };
+  const session = restoreInvestigationWorkspace(workspaceState({
+    messages: [
+      ...state.messages,
+      {
+        message_id: "message-user-confirmation",
+        turn_id: "turn-confirmation",
+        role: "user",
+        content: "生成任务配置",
+        sequence: 3,
+        created_at: "2026-08-28T00:02:00Z"
+      },
+      {
+        message_id: "message-assistant-confirmation",
+        turn_id: "turn-confirmation",
+        role: "assistant",
+        content: "配置已生成。",
+        artifact: confirmationArtifact,
+        sequence: 4,
+        created_at: "2026-08-28T00:02:01Z"
+      }
+    ],
+    draft_artifact: confirmationArtifact
+  }));
+
+  expect(session.creationBinding?.presentationStage).toBe("confirmation");
+  expect(session.messages.at(-1)?.type).toBe("task_confirmation");
+  expect(session.draft.platforms).toEqual(["xhs"]);
+  expect(session.status).toBe("等待确认");
+});
+
+test("restores both recovered suggestion and persisted confirmation artifacts", () => {
+  const state = workspaceState();
+  const confirmationArtifact = {
+    ...state.draft_artifact!,
+    presentation_stage: "confirmation" as const
+  };
+  const messages = [
+    ...state.messages.map((message) => ({ ...message, artifact: null })),
+    {
+      message_id: "message-user-confirmation-recovery",
+      turn_id: "turn-confirmation-recovery",
+      role: "user" as const,
+      content: "生成任务配置",
+      sequence: 3,
+      created_at: "2026-08-28T00:02:00Z"
+    },
+    {
+      message_id: "message-assistant-confirmation-recovery",
+      turn_id: "turn-confirmation-recovery",
+      role: "assistant" as const,
+      content: "配置已生成。",
+      artifact: confirmationArtifact,
+      sequence: 4,
+      created_at: "2026-08-28T00:02:01Z"
+    }
+  ];
+  const session = restoreInvestigationWorkspace(workspaceState({
+    messages,
+    draft_artifact: confirmationArtifact
+  }));
+
+  expect(session.messages.map((message) => message.type)).toEqual([
+    "text",
+    "task_proposal",
+    "text",
+    "task_confirmation"
+  ]);
+  expect(session.messages[1].proposalData?.platformsConfirmed).toBe(true);
+  expect(session.draft.platforms).toEqual(["xhs"]);
+});
+
+test("suggestion platform buttons are single-select and contain no Weibo candidate", () => {
+  expect(selectSingleSuggestionPlatform("xhs")).toEqual(["xhs"]);
+  expect(selectSingleSuggestionPlatform("ks")).toEqual(["ks"]);
+  expect(suggestion.platform_options.map((item) => item.id)).toEqual(["dy", "xhs", "ks"]);
+  expect(JSON.stringify(suggestion.platform_options)).not.toContain("wb");
 });
 
 test("restores a pending Turn without inventing a Draft or a replacement Turn", () => {
@@ -424,6 +611,48 @@ test("Draft edits use expected_revision and preserve structured 409 errors", asy
     configuration
   })).rejects.toMatchObject<ApiError>({ status: 409, code: "RESOURCE_STALE" });
   expect(JSON.parse(String(requests[0].init?.body))).toMatchObject({ expected_revision: 3 });
+});
+
+test("generate task configuration persists a real workspace confirmation-preview Turn", async () => {
+  let requestUrl = "";
+  let requestBody = "";
+  globalThis.fetch = async (input, init) => {
+    requestUrl = String(input);
+    requestBody = String(init?.body || "");
+    return new Response(JSON.stringify({
+      session_id: "investigation-session:workspace-1",
+      turn_id: "turn-confirmation-1",
+      status: "completed",
+      stage: "completed",
+      answer: "配置已生成。",
+      safe_message: "",
+      retryable: false,
+      updated_at: "2026-08-28T00:02:00Z",
+      artifact: {
+        ...workspaceState().draft_artifact,
+        presentation_stage: "confirmation"
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  const turn = await generateInvestigationConfirmationPreview(
+    "investigation-session:workspace-1",
+    {
+      clientMessageId: "confirmation-message-1",
+      draftId: "draft-1",
+      expectedRevision: 3
+    }
+  );
+  expect(requestUrl).toBe(
+    "http://api.test/api/investigation-workspaces/"
+      + "investigation-session%3Aworkspace-1/confirmation-preview"
+  );
+  expect(JSON.parse(requestBody)).toEqual({
+    client_message_id: "confirmation-message-1",
+    draft_id: "draft-1",
+    expected_revision: 3
+  });
+  expect(turn.artifact).toMatchObject({ presentation_stage: "confirmation" });
 });
 
 test("confirmation is explicit and reuses the caller's idempotency key", async () => {

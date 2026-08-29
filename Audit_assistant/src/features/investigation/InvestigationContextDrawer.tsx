@@ -1,5 +1,6 @@
 import { X, ShieldCheck, FileText, Search, Users, Sparkles, ArrowRight } from "lucide-react";
 import type { TaskDraft, ReportSummary, EvidenceItem, KeyUserProfile, AuditRuleSet } from "../../types/investigation";
+import type { InvestigationDraftSuggestion } from "../../types/investigationCreation";
 
 export type DrawerType =
   | "task_config"
@@ -19,7 +20,30 @@ interface InvestigationContextDrawerProps {
   evidenceItems?: EvidenceItem[];
   keyUsers?: KeyUserProfile[];
   activeRuleSet?: AuditRuleSet;
+  draftSuggestion?: InvestigationDraftSuggestion;
   onFollowUpUser?: (user: KeyUserProfile) => void;
+}
+
+export function buildDraftSuggestionPlanView(
+  suggestion: InvestigationDraftSuggestion
+) {
+  return {
+    policyName: suggestion.audit_policy?.name || "尚未选择审核策略",
+    policyDescription: suggestion.audit_policy?.description || "等待有效审核策略后方可确认。",
+    policyVersion: suggestion.audit_policy?.published_version || "",
+    policyDomain: suggestion.audit_policy?.domain || "",
+    ruleSetName: suggestion.ruleset_revision?.name || "尚未绑定规则集",
+    ruleSetVersion: suggestion.ruleset_revision?.version || null,
+    ruleSetDomain: suggestion.ruleset_revision?.domain || "",
+    enabledRuleCount: suggestion.ruleset_revision?.enabled_rule_count || 0,
+    recallLexicons: suggestion.recall_lexicons.map((lexicon) => ({
+      id: lexicon.id,
+      title: lexicon.title,
+      riskLabel: lexicon.risk_label,
+      enabledMainTermCount: lexicon.enabled_main_term_count
+    })),
+    searchTerms: suggestion.search_terms
+  };
 }
 
 export function InvestigationContextDrawer({
@@ -31,9 +55,13 @@ export function InvestigationContextDrawer({
   evidenceItems = [],
   keyUsers = [],
   activeRuleSet,
+  draftSuggestion,
   onFollowUpUser
 }: InvestigationContextDrawerProps) {
   if (!isOpen || !type) return null;
+  const draftSuggestionPlan = draftSuggestion
+    ? buildDraftSuggestionPlanView(draftSuggestion)
+    : null;
 
   const getTitle = () => {
     switch (type) {
@@ -247,8 +275,72 @@ export function InvestigationContextDrawer({
           </div>
         ) : null}
 
-        {/* RULESET VIEW */}
-        {type === "ruleset" && activeRuleSet ? (
+        {/* REAL CREATION RULESET VIEW */}
+        {type === "ruleset" && draftSuggestionPlan ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ padding: "12px 0 14px", borderBottom: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>
+                {draftSuggestionPlan.policyName}
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+                系统推荐 · 引用 {draftSuggestionPlan.ruleSetName}
+                {draftSuggestionPlan.ruleSetVersion ? ` v${draftSuggestionPlan.ruleSetVersion}` : ""}
+              </div>
+              <div style={{ fontSize: "12px", color: "#64748b", lineHeight: "1.55", marginTop: "8px" }}>
+                {draftSuggestionPlan.policyDescription}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>Published AuditPolicy</div>
+              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "8px 10px", borderRadius: "6px", fontSize: "12px" }}>
+                <div style={{ fontWeight: "700", color: "#0f172a" }}>
+                  {draftSuggestionPlan.policyName}
+                </div>
+                {draftSuggestionPlan.policyVersion ? (
+                  <div style={{ color: "#475569" }}>
+                    已发布版本 {draftSuggestionPlan.policyVersion} · {draftSuggestionPlan.policyDomain}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>Published RuleSetRevision</div>
+              <div style={{ background: "#ffffff", border: "1px solid #cbd5e1", padding: "10px", borderRadius: "6px", fontSize: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "800" }}>
+                  <span>{draftSuggestionPlan.ruleSetName}</span>
+                  {draftSuggestionPlan.ruleSetVersion ? <span style={{ color: "#2563eb" }}>v{draftSuggestionPlan.ruleSetVersion}</span> : null}
+                </div>
+                {draftSuggestionPlan.ruleSetVersion ? (
+                  <div style={{ color: "#334155", marginTop: "4px" }}>
+                    {draftSuggestionPlan.ruleSetDomain} · 启用规则 {draftSuggestionPlan.enabledRuleCount} 条
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>推荐召回词库 ({draftSuggestionPlan.recallLexicons.length} 个)</div>
+              {draftSuggestionPlan.recallLexicons.map((lexicon) => (
+                <div key={lexicon.id} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "8px 10px", borderRadius: "6px", marginBottom: "6px", fontSize: "12px" }}>
+                  <div style={{ fontWeight: "700", color: "#0f172a" }}>{lexicon.title}</div>
+                  <div style={{ color: "#475569" }}>{lexicon.riskLabel} · 启用主词 {lexicon.enabledMainTermCount} 条</div>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>本次临时搜索词</div>
+              <div style={{ color: "#334155", fontSize: "13px", lineHeight: "1.65" }}>
+                {draftSuggestionPlan.searchTerms.join("、")}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* V1 / MOCK RULESET VIEW */}
+        {type === "ruleset" && !draftSuggestion && activeRuleSet ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ padding: "12px 0 14px", borderBottom: "1px solid #e2e8f0" }}>
               <div style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>

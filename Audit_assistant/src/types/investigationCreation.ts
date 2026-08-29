@@ -1,6 +1,7 @@
 import type { InvestigationTurnResponse } from "./investigations";
 
-export type InvestigationPlatform = "xhs" | "dy" | "ks";
+export type InvestigationPlatform = "xhs" | "dy" | "ks" | "wb";
+export type InvestigationCreationPlatform = Exclude<InvestigationPlatform, "wb">;
 export type InvestigationRunStatus =
   | "QUEUED"
   | "RUNNING"
@@ -35,6 +36,31 @@ export interface RuleSetRevisionSummary {
   domain: string;
   version: number;
   enabled_rule_count: number;
+}
+
+export interface InvestigationPlatformOption {
+  id: InvestigationCreationPlatform;
+  name: string;
+  available: boolean;
+}
+
+export interface RecallLexiconSummary {
+  id: string;
+  title: string;
+  risk_label: string;
+  enabled_main_term_count: number;
+  available: boolean;
+}
+
+export interface InvestigationDraftSuggestion {
+  title: string;
+  objective: string;
+  platform_options: InvestigationPlatformOption[];
+  selected_platform: InvestigationCreationPlatform;
+  search_terms: string[];
+  audit_policy: AuditPolicySummary | null;
+  ruleset_revision: RuleSetRevisionSummary | null;
+  recall_lexicons: RecallLexiconSummary[];
 }
 
 export interface InvestigationDraftConfiguration {
@@ -105,10 +131,12 @@ export interface ConfirmationPreview {
 
 export interface InvestigationDraftArtifact {
   artifact_type: "investigation_draft";
+  presentation_stage: "suggestion" | "confirmation";
   draft_id: string;
   draft_revision: number;
   draft: PublicInvestigationDraft;
   confirmation_preview: ConfirmationPreview;
+  suggestion: InvestigationDraftSuggestion | null;
 }
 
 export interface InvestigationRunProjection {

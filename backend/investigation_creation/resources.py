@@ -42,6 +42,7 @@ from .principal import Principal
 
 
 _PLATFORM_NAMES = {"xhs": "小红书", "dy": "抖音", "ks": "快手"}
+_CREATION_PLATFORM_ORDER = ("dy", "xhs", "ks")
 _RULES_MANAGEMENT_PATH = "/rule-assistant/rulesets?return_to=/investigation"
 
 
@@ -214,7 +215,8 @@ class InvestigationResourceService:
                 id=Platform(value),
                 name=_PLATFORM_NAMES.get(value, value),
             )
-            for value in SUPPORTED_PLATFORMS
+            for value in _CREATION_PLATFORM_ORDER
+            if value in SUPPORTED_PLATFORMS
             if query.platform is None or value == query.platform.value
         ]
         return InvestigationOptions(

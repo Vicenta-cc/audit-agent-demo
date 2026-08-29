@@ -90,6 +90,12 @@ class CreateInvestigationTurnRequest(PublicApiModel):
     content: str = Field(min_length=1, max_length=4_000)
 
 
+class GenerateInvestigationConfirmationPreviewRequest(PublicApiModel):
+    client_message_id: str = Field(min_length=1, max_length=200)
+    draft_id: str = Field(min_length=1, max_length=160)
+    expected_revision: int = Field(ge=1)
+
+
 class InvestigationSessionResponse(PublicApiModel):
     session_id: str
     report_version_id: str

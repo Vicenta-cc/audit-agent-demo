@@ -12,6 +12,7 @@ from .contracts import (
     InvestigationDraft,
     InvestigationRun,
     InvestigationRunProjection,
+    Platform,
     QueryInvestigationOptions,
     ResolvedExecutionConfiguration,
     UpdateDraftCommand,
@@ -54,6 +55,7 @@ class InvestigationCreationService:
         command = CreateDraftCommand.model_validate(
             command.model_dump(mode="json", warnings=False)
         )
+        self._reject_legacy_creation_platform(command.configuration)
         return self.store.create_draft(
             principal=principal.id,
             title=command.title,
@@ -67,6 +69,8 @@ class InvestigationCreationService:
         command = UpdateDraftCommand.model_validate(
             command.model_dump(mode="json", warnings=False)
         )
+        if command.configuration is not None:
+            self._reject_legacy_creation_platform(command.configuration)
         return self.store.update_draft(
             command.draft_id,
             principal=principal.id,
@@ -128,6 +132,14 @@ class InvestigationCreationService:
             ),
             principal=principal,
         )
+
+    @staticmethod
+    def _reject_legacy_creation_platform(configuration: Any) -> None:
+        if getattr(configuration, "platform", None) is Platform.WEIBO:
+            raise ConfigurationValidationError(
+                "Weibo is retained only for historical Draft compatibility and cannot be selected for a new revision.",
+                code="PLATFORM_MISMATCH",
+            )
 
     def confirm_and_queue(
         self, command: ConfirmAndQueueCommand, *, principal: Principal

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.api.contracts import (
     CreateInvestigationTurnRequest,
+    GenerateInvestigationConfirmationPreviewRequest,
     InvestigationMessageResponse,
     InvestigationTurnAcceptedResponse,
     InvestigationTurnStatusResponse,
@@ -23,6 +24,10 @@ from backend.api.investigation import (
     _turn_status_response,
     turn_event_stream_response,
 )
+from backend.api.investigation_creation import (
+    _raise_public_error as _raise_creation_error,
+)
+from backend.investigation_creation.errors import InvestigationCreationError
 from backend.investigation_creation.principal import (
     LocalPrincipalProvider,
     Principal,
@@ -178,6 +183,29 @@ def create_investigation_conversation_router(
             return InvestigationTurnAcceptedResponse(
                 session_id=turn.session_id, turn_id=turn.id
             )
+        except Exception as exc:
+            _raise_public_error(exc)
+
+    @router.post(
+        "/api/investigation-workspaces/{workspace_session_id}/confirmation-preview",
+        response_model=InvestigationTurnStatusResponse,
+    )
+    def generate_confirmation_preview(
+        workspace_session_id: str,
+        request: GenerateInvestigationConfirmationPreviewRequest,
+        principal: Principal = Depends(provide_principal),
+    ) -> InvestigationTurnStatusResponse:
+        try:
+            turn = service.generate_confirmation_preview(
+                workspace_session_id,
+                client_message_id=request.client_message_id,
+                draft_id=request.draft_id,
+                expected_revision=request.expected_revision,
+                principal=principal,
+            )
+            return _turn_status_response(service, turn)
+        except InvestigationCreationError as exc:
+            _raise_creation_error(exc)
         except Exception as exc:
             _raise_public_error(exc)
 

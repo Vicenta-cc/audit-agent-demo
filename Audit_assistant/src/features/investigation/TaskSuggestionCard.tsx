@@ -3,12 +3,17 @@ import { Bot, Check } from "lucide-react";
 import type { PlatformCode, TaskDraft } from "../../types/investigation";
 import { StreamingAssistantText } from "./StreamingAssistantText";
 
-const platformOptions: Array<{ code: PlatformCode; label: string }> = [
+const defaultPlatformOptions: Array<{ code: PlatformCode; label: string }> = [
   { code: "dy", label: "抖音" },
   { code: "xhs", label: "小红书" },
-  { code: "ks", label: "快手" },
-  { code: "wb", label: "微博" }
+  { code: "ks", label: "快手" }
 ];
+
+export function selectSingleSuggestionPlatform(
+  platform: PlatformCode
+): PlatformCode[] {
+  return [platform];
+}
 
 interface TaskSuggestionCardProps {
   assistantContent: string;
@@ -16,6 +21,7 @@ interface TaskSuggestionCardProps {
   showSuggestionCard: boolean;
   onStreamingComplete: () => void;
   draft: TaskDraft;
+  platformOptions?: Array<{ code: PlatformCode; label: string }>;
   isReadOnly: boolean;
   onUpdatePlatforms: (platforms: PlatformCode[]) => void;
   onGenerateConfig: () => void;
@@ -28,6 +34,7 @@ export function TaskSuggestionCard({
   showSuggestionCard,
   onStreamingComplete,
   draft,
+  platformOptions = defaultPlatformOptions,
   isReadOnly,
   onUpdatePlatforms,
   onGenerateConfig,
@@ -56,10 +63,8 @@ export function TaskSuggestionCard({
 
   const handleTogglePlatform = (platform: PlatformCode) => {
     if (isReadOnly) return;
-    const nextPlatforms = draft.platforms.includes(platform)
-      ? draft.platforms.filter((item) => item !== platform)
-      : [...draft.platforms, platform];
-    onUpdatePlatforms(nextPlatforms);
+    if (draft.platforms[0] === platform) return;
+    onUpdatePlatforms(selectSingleSuggestionPlatform(platform));
   };
 
   return (
@@ -130,13 +135,16 @@ export function TaskSuggestionCard({
               </div>
               <p className="task-suggestion-help">
                 {draft.ruleSetDescription}
+                {draft.recommendedRecallLexicons?.length
+                  ? ` · 推荐召回词库：${draft.recommendedRecallLexicons.join("、")}`
+                  : ""}
               </p>
             </div>
           </section>
 
           <section className="task-suggestion-section">
             <div className="task-suggestion-label">采集平台</div>
-            <div className="task-suggestion-field-body task-suggestion-platforms" aria-label="采集平台多选">
+            <div className="task-suggestion-field-body task-suggestion-platforms" aria-label="采集平台单选">
               {platformOptions.map((platform) => {
                 const isSelected = draft.platforms.includes(platform.code);
                 return (

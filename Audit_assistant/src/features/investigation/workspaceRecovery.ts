@@ -5,6 +5,7 @@ import type {
   TaskDraft
 } from "../../types/investigation";
 import type {
+  InvestigationDraftArtifact,
   InvestigationWorkspaceMessage,
   InvestigationWorkspaceState
 } from "../../types/investigationCreation";
@@ -18,13 +19,72 @@ function messageTime(createdAt: string) {
     : value.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 }
 
-function publicMessage(message: InvestigationWorkspaceMessage): ChatMessage {
+function publicMessage(
+  message: InvestigationWorkspaceMessage,
+  confirmationVisible: boolean
+): ChatMessage {
+  const artifact = message.artifact?.artifact_type === "investigation_draft"
+    ? message.artifact
+    : null;
+  if (artifact?.presentation_stage === "suggestion" && artifact.suggestion) {
+    const suggestion = artifact.suggestion;
+    return {
+      id: message.message_id,
+      sender: message.role,
+      timestamp: messageTime(message.created_at),
+      content: message.content,
+      type: "task_proposal",
+      proposalData: {
+        taskName: suggestion.title,
+        taskType: "平台话题采集",
+        subject: suggestion.objective,
+        matchedRuleSet: suggestion.ruleset_revision?.name || "尚未绑定规则集",
+        ruleSetDescription: suggestion.audit_policy?.description || "等待有效审核策略后方可确认。",
+        platformsSelected: [suggestion.selected_platform],
+        platformsConfirmed: confirmationVisible,
+        interactionMode: "platform-selection"
+      }
+    };
+  }
+  if (artifact?.presentation_stage === "confirmation") {
+    return {
+      id: message.message_id,
+      sender: message.role,
+      timestamp: messageTime(message.created_at),
+      content: message.content,
+      type: "task_confirmation"
+    };
+  }
   return {
     id: message.message_id,
     sender: message.role,
     timestamp: messageTime(message.created_at),
     content: message.content,
     type: "text"
+  };
+}
+
+function taskDraftFromArtifact(artifact: InvestigationDraftArtifact): TaskDraft {
+  const preview = artifact.confirmation_preview;
+  const suggestion = artifact.suggestion;
+  return {
+    taskName: artifact.draft.title,
+    taskType: "平台话题采集",
+    subject: artifact.draft.objective,
+    platforms: [(suggestion?.selected_platform || preview.platform) as PlatformCode],
+    keywords: suggestion?.search_terms || preview.resolved_search_terms,
+    matchedRuleSet: suggestion?.ruleset_revision?.name
+      || preview.ruleset_revision?.name
+      || "尚未绑定规则集",
+    analysisPlanName: suggestion?.audit_policy?.name
+      || preview.audit_policy?.name
+      || "尚未选择审核策略",
+    ruleSetDescription: suggestion?.audit_policy?.description
+      || preview.audit_policy?.description
+      || "等待有效审核策略后方可确认。",
+    recommendedRecallLexicons: suggestion?.recall_lexicons.map((lexicon) => lexicon.title) || [],
+    status: artifact.presentation_stage === "confirmation" ? "等待确认" : "配置中",
+    confirmed: false
   };
 }
 
@@ -89,15 +149,34 @@ export function restoreInvestigationWorkspace(
   const preview = artifact?.confirmation_preview;
   const run = state.run;
   const runView = run ? mapInvestigationRunState(run) : null;
-  const messages = state.messages.map(publicMessage);
-  if (artifact) {
-    messages.push({
-      id: `workspace-confirmation:${artifact.draft_id}:${artifact.draft_revision}`,
-      sender: "assistant",
-      timestamp: messageTime(artifact.draft.updated_at),
-      type: "task_confirmation"
+  const confirmationVisible = artifact?.presentation_stage === "confirmation";
+  const hasSuggestionMessageArtifact = state.messages.some(
+    (message) => message.artifact?.artifact_type === "investigation_draft"
+      && message.artifact.presentation_stage === "suggestion"
+      && message.artifact.suggestion !== null
+  );
+  let artifactMessageIndex = -1;
+  if (artifact && !hasSuggestionMessageArtifact) {
+    const confirmationMessageIndex = state.messages.findIndex(
+      (message) => message.artifact?.artifact_type === "investigation_draft"
+        && message.artifact.presentation_stage === "confirmation"
+    );
+    state.messages.forEach((message, index) => {
+      if (
+        message.role === "assistant"
+        && (confirmationMessageIndex < 0 || index < confirmationMessageIndex)
+      ) artifactMessageIndex = index;
     });
   }
+  const recoveredSuggestionArtifact = artifact
+    ? { ...artifact, presentation_stage: "suggestion" as const }
+    : null;
+  const messages = state.messages.map((message, index) => publicMessage(
+    index === artifactMessageIndex
+      ? { ...message, artifact: recoveredSuggestionArtifact }
+      : message,
+    confirmationVisible
+  ));
   if (run) {
     messages.push({
       id: `workspace-run:${run.run_id}`,
@@ -115,19 +194,12 @@ export function restoreInvestigationWorkspace(
     });
   }
   const reportMessages = state.report_messages || [];
-  messages.push(...reportMessages.map(publicMessage));
+  messages.push(...reportMessages.map((message) => publicMessage(message, false)));
 
   const draft: TaskDraft = artifact && preview
     ? {
-        taskName: artifact.draft.title,
-        taskType: "平台话题采集",
-        subject: artifact.draft.objective,
-        platforms: [preview.platform as PlatformCode],
-        keywords: preview.resolved_search_terms,
-        matchedRuleSet: preview.ruleset_revision?.name || "尚未绑定规则集",
-        analysisPlanName: preview.audit_policy?.name || "尚未选择审核策略",
-        ruleSetDescription: preview.audit_policy?.description || "等待有效审核策略后方可确认。",
-        status: run ? "已创建" : "等待确认",
+        ...taskDraftFromArtifact(artifact),
+        status: run ? "已创建" : artifact.presentation_stage === "confirmation" ? "等待确认" : "配置中",
         confirmed: Boolean(run)
       }
     : emptyDraft();
@@ -155,7 +227,7 @@ export function restoreInvestigationWorkspace(
       : run
         ? "研判中"
         : artifact
-          ? "等待确认"
+          ? artifact.presentation_stage === "confirmation" ? "等待确认" : "配置中"
           : "配置中",
     updatedAt: "刚刚",
     draft,
@@ -166,6 +238,8 @@ export function restoreInvestigationWorkspace(
       workspaceSessionId,
       draft: artifact?.draft,
       confirmationPreview: preview,
+      suggestion: artifact?.suggestion || undefined,
+      presentationStage: artifact?.presentation_stage,
       pendingTurnId: pendingTurn?.turn_id,
       resumeAttempted: false,
       run: run || undefined,

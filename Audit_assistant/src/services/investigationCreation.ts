@@ -11,7 +11,8 @@ import type {
 } from "../types/investigationCreation";
 import type {
   InvestigationTurnAcceptedResponse,
-  InvestigationTurnEvent
+  InvestigationTurnEvent,
+  InvestigationTurnResponse
 } from "../types/investigations";
 import type { PublishedReportDetail } from "../types/reports";
 
@@ -102,6 +103,23 @@ export function getInvestigationDraft(draftId: string) {
 export function getConfirmationPreview(draftId: string) {
   return apiRequest<ConfirmationPreview>(
     `/api/investigation-drafts/${encodeURIComponent(draftId)}/confirmation-preview`
+  );
+}
+
+export function generateInvestigationConfirmationPreview(
+  workspaceSessionId: string,
+  request: { clientMessageId: string; draftId: string; expectedRevision: number }
+) {
+  return apiRequest<InvestigationTurnResponse>(
+    `/api/investigation-workspaces/${encodeURIComponent(workspaceSessionId)}/confirmation-preview`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        client_message_id: request.clientMessageId,
+        draft_id: request.draftId,
+        expected_revision: request.expectedRevision
+      })
+    }
   );
 }
 

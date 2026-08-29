@@ -18,6 +18,7 @@ from backend.api.investigation import create_investigation_router
 from backend.api.reporting import create_reporting_router
 from backend.audit_agent.audit_policy_store import AuditPolicyStore
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+from backend.audit_agent.job_store import JobStore
 from backend.audit_agent.lexicon_store import LexiconStore
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
 from backend.hermes_runtime.service import HermesInvestigationAgentService
@@ -98,6 +99,7 @@ class RecordingReportExecutor(InvestigationTurnExecutor):
 def creation_stack(tmp_path: Path) -> dict:
     resource_db = tmp_path / "resources.sqlite3"
     principals = MutablePrincipalProvider()
+    JobStore(resource_db)
     lexicons = LexiconStore(resource_db)
     policies = AuditPolicyStore(resource_db)
     rulesets = RuleSetService(RuleSetStore(resource_db))
@@ -202,6 +204,11 @@ def _run_count(store: InvestigationCreationStore) -> int:
         )
 
 
+def _job_count(resource_db: Path) -> int:
+    with sqlite3.connect(resource_db) as connection:
+        return int(connection.execute("SELECT COUNT(*) FROM jobs").fetchone()[0])
+
+
 def _create_completed_turn(stack: dict, *, workspace_key: str = "workspace-1") -> dict:
     client = stack["client"]
     workspace = client.post(
@@ -213,7 +220,7 @@ def _create_completed_turn(stack: dict, *, workspace_key: str = "workspace-1") -
         f"/api/investigation-workspaces/{workspace_id}/turns",
         json={
             "client_message_id": "message-1",
-            "content": "帮我调查小红书上世界杯期间的博彩引流，先生成方案，不要开始采集",
+            "content": "帮我调查世界杯期间的博彩引流",
         },
     )
     assert accepted.status_code == 202
@@ -295,12 +302,38 @@ def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
     terminal = result["terminal"]
     artifact = terminal["artifact"]
     assert artifact["artifact_type"] == "investigation_draft"
+    assert artifact["presentation_stage"] == "suggestion"
     assert artifact["draft_id"] == artifact["draft"]["id"]
     assert artifact["draft_revision"] == 1
     assert artifact["confirmation_preview"]["max_notes"] == 1
+    suggestion = artifact["suggestion"]
+    assert [item["id"] for item in suggestion["platform_options"]] == [
+        "dy",
+        "xhs",
+        "ks",
+    ]
+    assert suggestion["selected_platform"] in {"dy", "xhs", "ks"}
+    assert suggestion["search_terms"]
+    assert suggestion["audit_policy"]["published_version"]
+    assert suggestion["ruleset_revision"]["version"] >= 1
+    assert suggestion["recall_lexicons"]
+    transcript = creation_stack["conversation"].store.latest_completed_hermes_transcript(
+        result["workspace_id"]
+    )
+    assert transcript is not None
+    tool_names = [
+        call["function"]["name"]
+        for message in transcript
+        for call in message.get("tool_calls", [])
+    ]
+    assert tool_names[:2] == [
+        "query_investigation_options",
+        "create_investigation_draft",
+    ]
     assert artifact["draft_id"] not in terminal["answer"]
     assert _draft_count(creation_stack["creation_store"]) == 1
     assert _run_count(creation_stack["creation_store"]) == 0
+    assert _job_count(creation_stack["resource_db"]) == 0
     serialized = json.dumps(terminal, ensure_ascii=False)
     for forbidden in (
         "report_session_id",
@@ -319,7 +352,7 @@ def test_turn_and_sse_replay_do_not_create_a_second_draft(creation_stack: dict) 
         f"/api/investigation-workspaces/{workspace_id}/turns",
         json={
             "client_message_id": "message-1",
-            "content": "帮我调查小红书上世界杯期间的博彩引流，先生成方案，不要开始采集",
+            "content": "帮我调查世界杯期间的博彩引流",
         },
     )
     assert replay.status_code == 202
@@ -775,6 +808,232 @@ def test_workspace_state_restores_messages_current_draft_and_has_no_side_effects
     )
 
 
+def test_platform_edit_and_confirmation_preview_are_durable_without_run_or_job(
+    creation_stack: dict,
+) -> None:
+    result = _create_completed_turn(
+        creation_stack, workspace_key="durable-suggestion-flow"
+    )
+    client = creation_stack["client"]
+    artifact = result["terminal"]["artifact"]
+    assert artifact["suggestion"]["selected_platform"] == "dy"
+
+    updated_configuration = json.loads(
+        json.dumps(artifact["draft"]["configuration"])
+    )
+    updated_configuration["platform"] = "xhs"
+    updated = client.patch(
+        f"/api/investigation-drafts/{artifact['draft_id']}",
+        json={
+            "expected_revision": artifact["draft_revision"],
+            "title": artifact["draft"]["title"],
+            "objective": artifact["draft"]["objective"],
+            "configuration": updated_configuration,
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["current_revision"] == 2
+    assert updated.json()["configuration"]["platform"] == "xhs"
+
+    preview = client.get(
+        f"/api/investigation-drafts/{artifact['draft_id']}/confirmation-preview"
+    )
+    assert preview.status_code == 200
+    assert preview.json()["draft_revision"] == 2
+    assert preview.json()["platform"] == "xhs"
+    assert preview.json()["max_notes"] == 1
+
+    suggestion_state = client.get(
+        f"/api/investigation-workspaces/{result['workspace_id']}/state"
+    )
+    assert suggestion_state.status_code == 200
+    suggestion_artifact = suggestion_state.json()["draft_artifact"]
+    assert suggestion_artifact["presentation_stage"] == "suggestion"
+    assert suggestion_artifact["draft_revision"] == 2
+    assert suggestion_artifact["suggestion"]["selected_platform"] == "xhs"
+    assert _run_count(creation_stack["creation_store"]) == 0
+    assert _job_count(creation_stack["resource_db"]) == 0
+
+    generated = client.post(
+        f"/api/investigation-workspaces/{result['workspace_id']}"
+        "/confirmation-preview",
+        json={
+            "client_message_id": "generate-confirmation-preview-1",
+            "draft_id": artifact["draft_id"],
+            "expected_revision": 2,
+        },
+    )
+    assert generated.status_code == 200
+    assert generated.json()["artifact"]["presentation_stage"] == "confirmation"
+    assert generated.json()["artifact"]["confirmation_preview"]["platform"] == "xhs"
+
+    restored = client.get(
+        f"/api/investigation-workspaces/{result['workspace_id']}/state"
+    )
+    replay = client.get(
+        f"/api/investigation-workspaces/{result['workspace_id']}/state"
+    )
+    assert restored.status_code == 200
+    assert replay.json() == restored.json()
+    state = restored.json()
+    assert state["draft_artifact"]["presentation_stage"] == "confirmation"
+    assert state["draft_artifact"]["draft_revision"] == 2
+    assert state["draft_artifact"]["suggestion"]["selected_platform"] == "xhs"
+    assert [message["role"] for message in state["messages"]] == [
+        "user",
+        "assistant",
+        "user",
+        "assistant",
+    ]
+    assert state["run"] is None
+    assert _run_count(creation_stack["creation_store"]) == 0
+    assert _job_count(creation_stack["resource_db"]) == 0
+
+    creation_stack["principals"].current = Principal("principal-b")
+    assert client.post(
+        f"/api/investigation-workspaces/{result['workspace_id']}"
+        "/confirmation-preview",
+        json={
+            "client_message_id": "cross-principal-preview",
+            "draft_id": artifact["draft_id"],
+            "expected_revision": 2,
+        },
+    ).status_code == 404
+
+
+def test_real_hermes_meta_tool_results_verify_latest_draft_revision(
+    creation_stack: dict,
+) -> None:
+    result = _create_completed_turn(
+        creation_stack, workspace_key="real-meta-tool-result"
+    )
+    artifact = result["terminal"]["artifact"]
+    configuration = json.loads(json.dumps(artifact["draft"]["configuration"]))
+    configuration["platform"] = "xhs"
+    updated = creation_stack["client"].patch(
+        f"/api/investigation-drafts/{artifact['draft_id']}",
+        json={
+            "expected_revision": 1,
+            "title": artifact["draft"]["title"],
+            "objective": artifact["draft"]["objective"],
+            "configuration": configuration,
+        },
+    )
+    assert updated.status_code == 200
+
+    transcript = creation_stack["conversation"].store.latest_completed_hermes_transcript(
+        result["workspace_id"]
+    )
+    assert transcript is not None
+    meta_transcript = json.loads(json.dumps(transcript))
+    for message in meta_transcript:
+        for call in message.get("tool_calls", []):
+            call["function"]["name"] = "tool_call"
+    view = creation_stack["app_service"].get_draft_view(
+        artifact["draft_id"], principal=Principal("principal-a")
+    )
+    meta_transcript.extend([
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "id": "real-meta-update",
+                "type": "function",
+                "function": {"name": "tool_call", "arguments": {}},
+            }],
+        },
+        {
+            "role": "tool",
+            "tool_call_id": "real-meta-update",
+            "name": "update_investigation_draft",
+            "content": json.dumps({
+                "status": "ok",
+                "data": view.model_dump(mode="json"),
+            }),
+        },
+    ])
+
+    verified = creation_stack["conversation"]._verified_artifact(
+        meta_transcript, principal=Principal("principal-a")
+    )
+    assert verified["draft_revision"] == 2
+    assert verified["suggestion"]["selected_platform"] == "xhs"
+
+
+def test_workspace_state_recovers_public_draft_from_structured_hermes_transcript(
+    creation_stack: dict,
+) -> None:
+    result = _create_completed_turn(
+        creation_stack, workspace_key="structured-transcript-recovery"
+    )
+    with sqlite3.connect(creation_stack["conversation"].store.db_path) as connection:
+        connection.execute(
+            "UPDATE investigation_turns SET public_artifact_json = '{}' WHERE id = ?",
+            (result["turn_id"],),
+        )
+    original = result["terminal"]["artifact"]
+    configuration = json.loads(json.dumps(original["draft"]["configuration"]))
+    configuration["platform"] = "xhs"
+    updated = creation_stack["client"].patch(
+        f"/api/investigation-drafts/{original['draft_id']}",
+        json={
+            "expected_revision": 1,
+            "title": original["draft"]["title"],
+            "objective": original["draft"]["objective"],
+            "configuration": configuration,
+        },
+    )
+    assert updated.status_code == 200
+
+    restored = creation_stack["client"].get(
+        f"/api/investigation-workspaces/{result['workspace_id']}/state"
+    )
+    replay = creation_stack["client"].get(
+        f"/api/investigation-workspaces/{result['workspace_id']}/state"
+    )
+    assert restored.status_code == 200
+    assert replay.json() == restored.json()
+    artifact = restored.json()["draft_artifact"]
+    assert artifact["artifact_type"] == "investigation_draft"
+    assert artifact["presentation_stage"] == "suggestion"
+    assert artifact["draft_revision"] == 2
+    assert artifact["suggestion"]["selected_platform"] == "xhs"
+    assert artifact["suggestion"]["platform_options"]
+    assert restored.json()["run"] is None
+    assert _run_count(creation_stack["creation_store"]) == 0
+    assert _job_count(creation_stack["resource_db"]) == 0
+
+
+def test_new_drafts_cannot_write_wb_but_options_only_offer_creation_platforms(
+    creation_stack: dict,
+) -> None:
+    result = _create_completed_turn(creation_stack, workspace_key="reject-wb")
+    artifact = result["terminal"]["artifact"]
+    configuration = json.loads(json.dumps(artifact["draft"]["configuration"]))
+    configuration["platform"] = "wb"
+
+    rejected = creation_stack["client"].post(
+        "/api/investigation-drafts",
+        json={
+            "title": "不得创建的微博 Draft",
+            "objective": "验证历史平台不能用于新建",
+            "configuration": configuration,
+        },
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["detail"]["code"] == "PLATFORM_MISMATCH"
+    options = creation_stack["client"].get("/api/investigation-options")
+    assert options.status_code == 200
+    assert [item["id"] for item in options.json()["platforms"]] == [
+        "dy",
+        "xhs",
+        "ks",
+    ]
+    assert _draft_count(creation_stack["creation_store"]) == 1
+    assert _run_count(creation_stack["creation_store"]) == 0
+    assert _job_count(creation_stack["resource_db"]) == 0
+
+
 def test_workspace_state_restores_pending_turn_without_replaying_mutation(
     creation_stack: dict,
 ) -> None:
@@ -891,6 +1150,8 @@ def test_creation_mode_has_exactly_six_tools() -> None:
         "confirm_and_queue_investigation",
         "get_investigation_run",
     }
+    parameters = [schema["parameters"] for schema in HERMES_M3_TOOL_SCHEMAS]
+    assert '"wb"' not in json.dumps(parameters, sort_keys=True)
 
 
 def test_published_report_handoff_reuses_internal_run_anchor_without_exposing_session(

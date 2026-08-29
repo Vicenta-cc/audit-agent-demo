@@ -5,9 +5,15 @@ from typing import Annotated, Any, Literal
 from pydantic import Field
 
 from .contracts import (
+    AuditPolicySummary,
     ConfirmationPreview,
     DraftConfiguration,
     DraftStatus,
+    InvestigationOptions,
+    Platform,
+    PlatformOption,
+    RecallLexiconSummary,
+    RuleSetRevisionSummary,
     RunStatus,
     StrictModel,
 )
@@ -45,12 +51,25 @@ class PublicInvestigationRunProjection(StrictModel):
     completed_at: str = ""
 
 
+class InvestigationDraftSuggestion(StrictModel):
+    title: str
+    objective: str
+    platform_options: list[PlatformOption]
+    selected_platform: Platform
+    search_terms: list[str] = Field(default_factory=list)
+    audit_policy: AuditPolicySummary | None = None
+    ruleset_revision: RuleSetRevisionSummary | None = None
+    recall_lexicons: list[RecallLexiconSummary] = Field(default_factory=list)
+
+
 class InvestigationDraftArtifact(StrictModel):
     artifact_type: Literal["investigation_draft"] = "investigation_draft"
+    presentation_stage: Literal["suggestion", "confirmation"] = "suggestion"
     draft_id: str
     draft_revision: int = Field(ge=1)
     draft: PublicInvestigationDraft
     confirmation_preview: ConfirmationPreview
+    suggestion: InvestigationDraftSuggestion | None = None
 
 
 class InvestigationRunArtifact(StrictModel):
@@ -128,13 +147,46 @@ def public_run(run: Any) -> PublicInvestigationRunProjection:
     )
 
 
-def draft_artifact(view: Any) -> InvestigationDraftArtifact:
+def draft_artifact(
+    view: Any,
+    *,
+    options: InvestigationOptions | None = None,
+    recommended_lexicon_ids: set[str] | None = None,
+    presentation_stage: Literal["suggestion", "confirmation"] = "suggestion",
+) -> InvestigationDraftArtifact:
     draft = public_draft(view.draft)
+    preview = ConfirmationPreview.model_validate(view.confirmation_preview)
+    suggestion = None
+    if options is not None:
+        suggestion = InvestigationDraftSuggestion(
+            title=draft.title,
+            objective=draft.objective,
+            platform_options=[
+                option
+                for option in options.platforms
+                if option.available and option.id is not Platform.WEIBO
+            ],
+            selected_platform=preview.platform,
+            search_terms=list(preview.resolved_search_terms),
+            audit_policy=preview.audit_policy,
+            ruleset_revision=preview.ruleset_revision,
+            recall_lexicons=[
+                lexicon
+                for lexicon in options.recall_lexicons
+                if lexicon.available
+                and (
+                    recommended_lexicon_ids is None
+                    or lexicon.id in recommended_lexicon_ids
+                )
+            ],
+        )
     return InvestigationDraftArtifact(
+        presentation_stage=presentation_stage,
         draft_id=draft.id,
         draft_revision=draft.current_revision,
         draft=draft,
-        confirmation_preview=view.confirmation_preview,
+        confirmation_preview=preview,
+        suggestion=suggestion,
     )
 
 

@@ -18,6 +18,7 @@ import {
 import {
   confirmAndQueueInvestigation,
   createInvestigationWorkspace,
+  generateInvestigationConfirmationPreview,
   getConfirmationPreview,
   getInvestigationDraft,
   getInvestigationRun,
@@ -572,6 +573,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const runPollTimersRef = useRef(new Map<string, number>());
   const restoredWorkspaceIdsRef = useRef(new Set<string>());
   const recoveredReportVersionsRef = useRef(new Set<string>());
+  const generatingPreviewSessionsRef = useRef(new Set<string>());
 
   useEffect(() => {
     const prevTitle = document.title;
@@ -665,8 +667,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   }, [activeSessionId, investigationId, navigate, sessions]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
-  const activeRuleSet = mockAuditRuleSets.find((ruleSet) => ruleSet.name === activeSession.draft.matchedRuleSet)
-    || mockAuditRuleSets[0];
+  const activeRuleSet = activeSession.creationBinding
+    ? undefined
+    : mockAuditRuleSets.find((ruleSet) => ruleSet.name === activeSession.draft.matchedRuleSet)
+      || mockAuditRuleSets[0];
 
   // Helper to update state of active session
   const updateActiveSession = (updater: (prev: InvestigationSession) => InvestigationSession) => {
@@ -1053,6 +1057,14 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                 ...item.creationBinding,
                 draft: updated,
                 confirmationPreview: preview,
+                suggestion: item.creationBinding.suggestion
+                  ? {
+                      ...item.creationBinding.suggestion,
+                      search_terms: preview.resolved_search_terms,
+                      audit_policy: preview.audit_policy,
+                      ruleset_revision: preview.ruleset_revision
+                    }
+                  : undefined,
                 confirmationKey: buildConfirmationIdempotencyKey(
                   item.creationBinding.workspaceSessionId,
                   updated.id,
@@ -1078,6 +1090,17 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   ...item.creationBinding,
                   draft: currentDraft,
                   confirmationPreview: preview,
+                  suggestion: item.creationBinding.suggestion
+                    ? {
+                        ...item.creationBinding.suggestion,
+                        selected_platform: preview.platform === "wb"
+                          ? item.creationBinding.suggestion.selected_platform
+                          : preview.platform,
+                        search_terms: preview.resolved_search_terms,
+                        audit_policy: preview.audit_policy,
+                        ruleset_revision: preview.ruleset_revision
+                      }
+                    : undefined,
                   confirmationKey: buildConfirmationIdempotencyKey(
                     item.creationBinding.workspaceSessionId,
                     currentDraft.id,
@@ -1102,18 +1125,163 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     }
   };
 
-  // Update draft platforms
+  // Pilot creation Drafts use one real platform revision at a time.
   const handleUpdateDraftPlatforms = (platforms: PlatformCode[]) => {
-    updateActiveSession((session) => ({
-      ...session,
+    const session = activeSession;
+    const binding = session.creationBinding;
+    const creationDraft = binding?.draft;
+    const selected = platforms[0];
+    if (binding && creationDraft) {
+      const candidate = binding.suggestion?.platform_options.find(
+        (platform) => platform.id === selected && platform.available
+      );
+      if (!candidate || creationDraft.configuration.platform === candidate.id) return;
+      const configuration = {
+        ...creationDraft.configuration,
+        platform: candidate.id
+      };
+      void updateInvestigationDraft(creationDraft.id, {
+        expectedRevision: creationDraft.current_revision,
+        title: creationDraft.title,
+        objective: creationDraft.objective,
+        configuration
+      }).then(async (updated) => {
+        const preview = await getConfirmationPreview(updated.id);
+        setSessions((current) => current.map((item) => (
+          item.id === session.id && item.creationBinding
+            ? {
+                ...item,
+                draft: {
+                  ...item.draft,
+                  platforms: [candidate.id],
+                  keywords: preview.resolved_search_terms,
+                  matchedRuleSet: preview.ruleset_revision?.name || "尚未绑定规则集",
+                  analysisPlanName: preview.audit_policy?.name || "尚未选择审核策略"
+                },
+                creationBinding: {
+                  ...item.creationBinding,
+                  draft: updated,
+                  confirmationPreview: preview,
+                  suggestion: item.creationBinding.suggestion
+                    ? {
+                        ...item.creationBinding.suggestion,
+                        selected_platform: candidate.id,
+                        search_terms: preview.resolved_search_terms,
+                        audit_policy: preview.audit_policy,
+                        ruleset_revision: preview.ruleset_revision
+                      }
+                    : undefined,
+                  confirmationKey: buildConfirmationIdempotencyKey(
+                    item.creationBinding.workspaceSessionId,
+                    updated.id,
+                    updated.current_revision
+                  ),
+                  error: undefined
+                }
+              }
+            : item
+        )));
+      }).catch(async (error) => {
+        if (error instanceof ApiError && error.status === 409) {
+          const state = await getInvestigationWorkspaceState(binding.workspaceSessionId);
+          const restored = restoreInvestigationWorkspace(state);
+          setSessions((current) => current.map((item) => (
+            item.id === session.id
+              ? {
+                  ...restored,
+                  creationBinding: restored.creationBinding
+                    ? {
+                        ...restored.creationBinding,
+                        error: "平台配置已被更新，已重新载入最新 Draft/Preview。"
+                      }
+                    : restored.creationBinding
+                }
+              : item
+          )));
+          return;
+        }
+        const message = error instanceof Error ? error.message : "平台保存失败";
+        setSessions((current) => current.map((item) => (
+          item.id === session.id && item.creationBinding
+            ? {
+                ...item,
+                creationBinding: { ...item.creationBinding, error: message }
+              }
+            : item
+        )));
+      });
+      return;
+    }
+    updateActiveSession((current) => ({
+      ...current,
       draft: {
-        ...session.draft,
-        platforms
+        ...current.draft,
+        platforms: selected ? [selected] : []
       }
     }));
   };
 
   const handleGenerateTaskConfig = (proposalMessageId: string) => {
+    const creationSession = activeSession;
+    const binding = creationSession.creationBinding;
+    const creationDraft = binding?.draft;
+    if (binding && creationDraft) {
+      if (
+        binding.presentationStage === "confirmation"
+        || generatingPreviewSessionsRef.current.has(creationSession.id)
+      ) return;
+      generatingPreviewSessionsRef.current.add(creationSession.id);
+      const clientMessageId = createClientMessageId(creationSession.id);
+      void generateInvestigationConfirmationPreview(
+        binding.workspaceSessionId,
+        {
+          clientMessageId,
+          draftId: creationDraft.id,
+          expectedRevision: creationDraft.current_revision
+        }
+      ).then(async () => {
+        const state = await getInvestigationWorkspaceState(binding.workspaceSessionId);
+        const restored = restoreInvestigationWorkspace(state);
+        setSessions((current) => current.map((item) => (
+          item.id === creationSession.id ? restored : item
+        )));
+      }).catch(async (error) => {
+        if (error instanceof ApiError && error.status === 409) {
+          try {
+            const state = await getInvestigationWorkspaceState(binding.workspaceSessionId);
+            const restored = restoreInvestigationWorkspace(state);
+            setSessions((current) => current.map((item) => (
+              item.id === creationSession.id
+                ? {
+                    ...restored,
+                    creationBinding: restored.creationBinding
+                      ? {
+                          ...restored.creationBinding,
+                          error: "Draft revision 已变化，已重新载入当前建议，请再次生成任务配置。"
+                        }
+                      : restored.creationBinding
+                  }
+                : item
+            )));
+            return;
+          } catch {
+            // Fall through to the original structured error below.
+          }
+        }
+        const message = error instanceof Error ? error.message : "任务配置生成失败";
+        setSessions((current) => current.map((item) => (
+          item.id === creationSession.id && item.creationBinding
+            ? {
+                ...item,
+                creationBinding: { ...item.creationBinding, error: message }
+              }
+            : item
+        )));
+      }).finally(() => {
+        generatingPreviewSessionsRef.current.delete(creationSession.id);
+      });
+      return;
+    }
     updateActiveSession((session) => {
       if (session.draft.platforms.length === 0) return session;
 
@@ -1567,80 +1735,37 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         ? result.answer.trim()
         : result.safe_message.trim();
       if (!answer) throw new Error("调查方案生成未返回可展示结果");
-      setSessions((current) => current.map((item) => {
-        if (item.id !== uiSessionId || !item.creationBinding) return item;
-        const artifact = result.artifact;
-        if (artifact?.artifact_type === "investigation_draft") {
-          const preview = artifact.confirmation_preview;
-          const policyName = preview.audit_policy?.name || "尚未选择审核策略";
-          const rulesetName = preview.ruleset_revision?.name || "尚未绑定规则集";
-          return {
-            ...item,
-            title: artifact.draft.title,
-            status: "等待确认",
-            draft: {
-              ...item.draft,
-              taskName: artifact.draft.title,
-              subject: artifact.draft.objective,
-              platforms: [preview.platform],
-              keywords: preview.resolved_search_terms,
-              matchedRuleSet: rulesetName,
-              analysisPlanName: policyName,
-              ruleSetDescription: preview.audit_policy?.description || "等待有效审核策略后方可确认。",
-              status: "等待确认",
-              confirmed: false
-            },
-            messages: [
-              ...item.messages,
-              {
-                id: `msg-answer-${turnId}`,
-                sender: "assistant",
-                timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-                content: answer,
-                type: "text"
-              },
-              {
-                id: `msg-task-confirm-${turnId}`,
-                sender: "assistant",
-                timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-                type: "task_confirmation"
+      if (result.artifact) {
+        const currentState = await getInvestigationWorkspaceState(uiSessionId);
+        const restored = restoreInvestigationWorkspace(currentState);
+        setSessions((current) => current.map((item) => (
+          item.id === uiSessionId ? restored : item
+        )));
+      } else {
+        setSessions((current) => current.map((item) => (
+          item.id === uiSessionId && item.creationBinding
+            ? {
+                ...item,
+                messages: [
+                  ...item.messages,
+                  {
+                    id: `msg-answer-${turnId}`,
+                    sender: "assistant",
+                    timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+                    content: answer,
+                    type: "text"
+                  }
+                ],
+                creationBinding: {
+                  ...item.creationBinding,
+                  pendingTurnId: undefined,
+                  resumeAttempted: undefined,
+                  error: result.status === "completed" ? undefined : answer
+                }
               }
-            ],
-            creationBinding: {
-              ...item.creationBinding,
-              pendingTurnId: undefined,
-              resumeAttempted: undefined,
-              draft: artifact.draft,
-              confirmationPreview: preview,
-              confirmationKey: buildConfirmationIdempotencyKey(
-                item.creationBinding.workspaceSessionId,
-                artifact.draft_id,
-                artifact.draft_revision
-              ),
-              error: undefined
-            }
-          };
-        }
-        return {
-          ...item,
-          messages: [
-            ...item.messages,
-            {
-              id: `msg-answer-${turnId}`,
-              sender: "assistant",
-              timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-              content: answer,
-              type: "text"
-            }
-          ],
-          creationBinding: {
-            ...item.creationBinding,
-            pendingTurnId: undefined,
-            resumeAttempted: undefined,
-            error: result.status === "completed" ? undefined : answer
-          }
-        };
-      }));
+            : item
+        )));
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "调查方案生成失败";
       setSessions((current) => current.map((item) => (
@@ -2078,6 +2203,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         report={activeSession.messages.find((m) => m.type === "report_card")?.reportData}
         evidenceItems={activeSession.messages.find((m) => m.type === "evidence_list")?.evidenceItems}
         activeRuleSet={activeRuleSet}
+        draftSuggestion={activeSession.creationBinding?.suggestion}
       />
     </div>
   );

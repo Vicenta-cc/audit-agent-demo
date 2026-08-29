@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from backend.audit_agent.config import settings
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
@@ -22,8 +22,18 @@ from backend.investigation.errors import (
 )
 from backend.investigation.store import InvestigationStore
 
-from .contracts import ConfirmationPreview, InvestigationRunProjection
-from .errors import PrincipalAccessDeniedError, RunNotFoundError
+from .contracts import (
+    ConfirmationPreview,
+    InvestigationDraftConfiguration,
+    InvestigationRunProjection,
+    QueryInvestigationOptions,
+)
+from .errors import (
+    DraftAlreadyConfirmedError,
+    DraftRevisionConflictError,
+    PrincipalAccessDeniedError,
+    RunNotFoundError,
+)
 from .principal import Principal
 from .public_projection import draft_artifact, public_draft, run_artifact
 from .tools import (
@@ -33,11 +43,19 @@ from .tools import (
 
 
 CREATION_SYSTEM_PROMPT = """You configure a user-requested investigation before any collection begins.
-Use only the six investigation creation tools exposed in this mode. Query real options before
-creating or updating a Draft. Never infer confirmation: only call confirm_and_queue_investigation
-after an explicit user instruction to start, and pass confirmed=true with a stable idempotency key.
-Keep ordinary conversation and Draft edits free of Run, Job, crawler, audit, or report side effects.
-Briefly explain the proposed configuration in the user's language; ToolResults remain authoritative.
+Use only the six investigation creation tools exposed in this mode. Every investigation-creation
+request must first call query_investigation_options and use only available candidates from that
+ToolResult. When legal candidates exist, create an editable Draft instead of asking the user to
+reselect resources already recommended by the system. If the user did not name a platform, choose
+one legal platform (never wb/Weibo) as an editable recommendation. Select a published AuditPolicy
+and its RuleSetRevision, recommend at least one relevant recall lexicon, and generate temporary
+search terms for this request with the selected lexicon IDs recorded as source_lexicon_ids.
+Suggested platform, AuditPolicy, lexicon, and terms may all be revised before confirmation.
+Creating or updating a Draft is never confirmation. Never infer confirmation: only call
+confirm_and_queue_investigation after an explicit user instruction to confirm and start, and pass
+confirmed=true with a stable idempotency key. Keep ordinary conversation and Draft edits free of
+Run, Job, crawler, audit, or report side effects. Briefly explain the proposed configuration in the
+user's language; ToolResults and the public Draft artifact remain authoritative.
 """
 
 
@@ -80,15 +98,22 @@ class FakeCreationHermesAgent:
     ) -> dict[str, Any]:
         principal = self.principal_resolver(self.session_id)
         history = list(conversation_history or [])
-        option_args = {"platform": "xhs", "page_size": 20}
+        option_args = {
+            "domain_hint": "世界杯 博彩 引流",
+            "page_size": 20,
+        }
         options = self.tool_service.execute(
             "query_investigation_options", option_args, principal=principal
         )
         policy = (options.get("audit_policies") or [None])[0]
+        platform = (options.get("platforms") or [None])[0]
+        lexicon = (options.get("recall_lexicons") or [None])[0]
+        if platform is None:
+            raise RuntimeError("fake Draft creation requires an available platform")
         no_policy = "无审核策略" in message or "blocker" in message.lower()
         configuration: dict[str, Any] = {
             "schema_version": "investigation-draft-config-v3",
-            "platform": "xhs",
+            "platform": platform["id"],
             "investigation": {
                 "mode": "search",
                 "recall_plan": {
@@ -100,7 +125,7 @@ class FakeCreationHermesAgent:
                         "足球盘",
                         "外围下注",
                     ],
-                    "source_lexicon_ids": [],
+                    "source_lexicon_ids": [lexicon["id"]] if lexicon else [],
                 },
             },
             "audit_policy": None,
@@ -115,7 +140,7 @@ class FakeCreationHermesAgent:
                 "expected_ruleset_content_hash": policy["ruleset_content_hash"],
             }
         draft_args = {
-            "title": "世界杯期间小红书博彩引流调查",
+            "title": "世界杯期间博彩引流调查",
             "objective": message.strip(),
             "configuration": configuration,
         }
@@ -399,6 +424,43 @@ class InvestigationCreationConversationService:
             session_id, include_tool_messages=include_tool_messages
         )
 
+    def _draft_artifact_for(
+        self,
+        draft_id: str,
+        *,
+        principal: Principal,
+        presentation_stage: Literal["suggestion", "confirmation"],
+    ) -> dict[str, Any]:
+        application = self.tool_service.application_service
+        view = application.get_draft_view(draft_id, principal=principal)
+        configuration = view.draft.configuration
+        policy_ids: list[str] = []
+        lexicon_ids: list[str] = []
+        if isinstance(configuration, InvestigationDraftConfiguration):
+            if configuration.audit_policy is not None:
+                policy_ids = [configuration.audit_policy.id]
+            if configuration.investigation.mode == "search":
+                plan = configuration.investigation.recall_plan
+                lexicon_ids = (
+                    [plan.lexicon_id]
+                    if plan.strategy == "existing_lexicon"
+                    else list(plan.source_lexicon_ids)
+                )
+        options = application.query_investigation_options(
+            QueryInvestigationOptions(
+                audit_policy_ids=policy_ids,
+                lexicon_ids=lexicon_ids,
+                page_size=50,
+            ),
+            principal=principal,
+        )
+        return draft_artifact(
+            view,
+            options=options,
+            recommended_lexicon_ids=set(lexicon_ids),
+            presentation_stage=presentation_stage,
+        ).model_dump(mode="json")
+
     def get_workspace_state(
         self, session_id: str, *, principal: Principal
     ) -> InvestigationWorkspaceState:
@@ -409,16 +471,31 @@ class InvestigationCreationConversationService:
         latest_turn = turns[-1] if turns else None
         draft_id = ""
         artifact_run_id = ""
+        presentation_stage: Literal["suggestion", "confirmation"] = "suggestion"
         for turn in reversed(turns):
             artifact = turn.public_artifact or {}
             if artifact.get("artifact_type") == "investigation_draft":
                 draft_id = str(artifact.get("draft_id") or "")
                 if draft_id:
+                    if artifact.get("presentation_stage") == "confirmation":
+                        presentation_stage = "confirmation"
                     break
             if artifact.get("artifact_type") == "investigation_run":
                 artifact_run_id = str(artifact.get("run_id") or "")
                 if artifact_run_id:
                     break
+        if not draft_id and not artifact_run_id:
+            transcript = self.store.latest_completed_hermes_transcript(session_id)
+            if transcript is not None:
+                recovered_artifact = self._verified_artifact(
+                    transcript,
+                    principal=principal,
+                    allow_superseded_draft=True,
+                )
+                if recovered_artifact.get("artifact_type") == "investigation_draft":
+                    draft_id = str(recovered_artifact.get("draft_id") or "")
+                elif recovered_artifact.get("artifact_type") == "investigation_run":
+                    artifact_run_id = str(recovered_artifact.get("run_id") or "")
         current_artifact: dict[str, Any] = {}
         run = None
         report_messages: tuple[InvestigationMessage, ...] = ()
@@ -428,11 +505,13 @@ class InvestigationCreationConversationService:
                 artifact_run_id, principal=principal
             )
             draft_id = run.draft_id
+            presentation_stage = "confirmation"
         if draft_id:
-            view = self.tool_service.application_service.get_draft_view(
-                draft_id, principal=principal
+            current_artifact = self._draft_artifact_for(
+                draft_id,
+                principal=principal,
+                presentation_stage=presentation_stage,
             )
-            current_artifact = draft_artifact(view).model_dump(mode="json")
             if run is None:
                 run = self.tool_service.application_service.find_run_for_draft(
                     draft_id, principal=principal
@@ -462,6 +541,90 @@ class InvestigationCreationConversationService:
             report_messages=report_messages,
             latest_report_turn=latest_report_turn,
         )
+
+    def generate_confirmation_preview(
+        self,
+        session_id: str,
+        *,
+        client_message_id: str,
+        draft_id: str,
+        expected_revision: int,
+        principal: Principal,
+    ) -> InvestigationTurn:
+        state = self.get_workspace_state(session_id, principal=principal)
+        artifact = state.draft_artifact or {}
+        if str(artifact.get("draft_id") or "") != str(draft_id or "").strip():
+            raise InvestigationSessionNotFoundError(
+                "Draft is not associated with this creation workspace"
+            )
+        if state.run is not None:
+            raise DraftAlreadyConfirmedError(draft_id)
+        current_revision = int(artifact.get("draft_revision") or 0)
+        if current_revision != expected_revision:
+            raise DraftRevisionConflictError(
+                f"expected revision {expected_revision}, current revision is {current_revision}"
+            )
+        current_artifact = dict(artifact)
+        current_artifact["presentation_stage"] = "confirmation"
+        turn, _ = self.store.create_turn(
+            session_id,
+            client_message_id=str(client_message_id or "").strip(),
+            user_input="生成任务配置",
+        )
+        if turn.status == "completed":
+            return turn
+        if turn.status != "running":
+            raise InvestigationTurnNotFoundError(
+                "confirmation preview Turn is not writable"
+            )
+        answer = "已根据你的调查目标和平台选择生成任务配置，请确认。"
+        session = state.session
+        self.store.complete_turn(
+            turn.id,
+            answer=answer,
+            trace_messages=[],
+            pending_sources=[],
+            grounding_validation={
+                "status": "passed",
+                "source_count": 0,
+                "warnings": [],
+            },
+            resolved_references=[],
+            all_tool_calls=[],
+            query_receipts=[],
+            summary_text=session.summary_text,
+            active_focus=session.active_focus,
+            ordered_referents=[
+                item.model_dump(mode="json") for item in session.ordered_referents
+            ],
+            last_claim_id=session.last_claim_id,
+            last_finding_id=session.last_finding_id,
+            last_evidence_id=session.last_evidence_id,
+            input_tokens=0,
+            output_tokens=0,
+            total_tokens=0,
+            llm_call_count=0,
+            stop_reason="deterministic_confirmation_preview",
+            context_accounting=[],
+            grounding_issues=[],
+            grounding_repair_count=0,
+            scope_repair_count=0,
+            source_repair_count=0,
+            semantic_rewrite_count=0,
+            scope_initial_draft="",
+            scope_repaired_draft="",
+            scope_initial_issues=[],
+            scope_remaining_issues=[],
+            public_artifact=current_artifact,
+        )
+        completed = self.store.get_turn(turn.id)
+        self.store.append_public_turn_event(
+            completed.id,
+            stage="completed",
+            answer=answer,
+            artifact=current_artifact,
+        )
+        return completed
 
     def accept_resume(self, turn_id: str) -> tuple[InvestigationTurn, bool]:
         turn = self.store.get_turn(turn_id)
@@ -570,11 +733,15 @@ class InvestigationCreationConversationService:
             return agent
 
     def _verified_artifact(
-        self, messages: list[dict[str, Any]], *, principal: Principal
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        principal: Principal,
+        allow_superseded_draft: bool = False,
     ) -> dict[str, Any]:
         calls: dict[str, str] = {}
-        artifact: dict[str, Any] = {}
-        for message in messages:
+        successful_results: list[tuple[int, str, dict[str, Any]]] = []
+        for index, message in enumerate(messages):
             if message.get("role") == "assistant":
                 for call in message.get("tool_calls") or []:
                     function = call.get("function") or {}
@@ -582,41 +749,86 @@ class InvestigationCreationConversationService:
                 continue
             if message.get("role") != "tool":
                 continue
-            tool_name = calls.get(str(message.get("tool_call_id") or ""), "")
+            reported_name = str(message.get("name") or "")
+            tool_name = (
+                reported_name
+                if reported_name in self.tool_service.allowed_tool_names
+                else calls.get(str(message.get("tool_call_id") or ""), "")
+            )
             if tool_name not in self.tool_service.allowed_tool_names:
                 continue
             payload = json.loads(str(message.get("content") or "{}"))
             if payload.get("status") != "ok" or not isinstance(payload.get("data"), dict):
                 continue
-            data = payload["data"]
-            if tool_name in {
+            successful_results.append((index, tool_name, payload["data"]))
+
+        creation_positions = [
+            index
+            for index, name, _ in successful_results
+            if name == "create_investigation_draft"
+        ]
+        option_positions = [
+            index
+            for index, name, _ in successful_results
+            if name == "query_investigation_options"
+        ]
+        if creation_positions and not any(
+            option_index < creation_positions[0] for option_index in option_positions
+        ):
+            raise RuntimeError(
+                "Draft creation did not follow query_investigation_options"
+            )
+
+        artifact_results = [
+            (tool_name, data)
+            for _, tool_name, data in successful_results
+            if tool_name
+            in {
                 "create_investigation_draft",
                 "update_investigation_draft",
                 "get_investigation_draft",
-            }:
-                tool_draft = public_draft(data.get("draft") or {})
-                preview = ConfirmationPreview.model_validate(
-                    data.get("confirmation_preview")
-                )
-                if (
-                    preview.draft_id != tool_draft.id
-                    or preview.draft_revision != tool_draft.current_revision
-                ):
-                    raise RuntimeError("Draft ToolResult projection identity is inconsistent")
-                verified = self.tool_service.application_service.get_draft_view(
-                    tool_draft.id, principal=principal
-                )
-                artifact = draft_artifact(verified).model_dump(mode="json")
-            elif tool_name in {
                 "confirm_and_queue_investigation",
                 "get_investigation_run",
-            }:
-                projection = InvestigationRunProjection.model_validate(data)
-                verified = self.tool_service.application_service.get_run(
-                    projection.run_id, principal=principal
+            }
+        ]
+        if not artifact_results:
+            return {}
+        tool_name, data = artifact_results[-1]
+        if tool_name in {
+            "create_investigation_draft",
+            "update_investigation_draft",
+            "get_investigation_draft",
+        }:
+            tool_draft = public_draft(data.get("draft") or {})
+            preview = ConfirmationPreview.model_validate(
+                data.get("confirmation_preview")
+            )
+            if (
+                preview.draft_id != tool_draft.id
+                or preview.draft_revision != tool_draft.current_revision
+            ):
+                raise RuntimeError("Draft ToolResult projection identity is inconsistent")
+            verified = self.tool_service.application_service.get_draft_view(
+                tool_draft.id, principal=principal
+            )
+            if (
+                verified.draft.current_revision != tool_draft.current_revision
+                and not (
+                    allow_superseded_draft
+                    and verified.draft.current_revision > tool_draft.current_revision
                 )
-                artifact = run_artifact(verified).model_dump(mode="json")
-        return artifact
+            ):
+                raise RuntimeError("Draft ToolResult no longer matches Application state")
+            return self._draft_artifact_for(
+                tool_draft.id,
+                principal=principal,
+                presentation_stage="suggestion",
+            )
+        projection = InvestigationRunProjection.model_validate(data)
+        verified = self.tool_service.application_service.get_run(
+            projection.run_id, principal=principal
+        )
+        return run_artifact(verified).model_dump(mode="json")
 
     def _persist_result(
         self,

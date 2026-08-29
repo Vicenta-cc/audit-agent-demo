@@ -1,6 +1,7 @@
 import type { PublishedReportPresentation } from "./reports";
 import type {
   ConfirmationPreview,
+  InvestigationDraftSuggestion,
   InvestigationRunProjection,
   PublicInvestigationDraft
 } from "./investigationCreation";
@@ -69,6 +70,7 @@ export interface TaskDraft {
   matchedRuleSet: string;
   ruleSetDescription: string;
   analysisPlanName?: string;
+  recommendedRecallLexicons?: string[];
   scopeDescription?: string;
   reportSourceTaskId?: string;
   status: TaskSessionStatus;
@@ -193,6 +195,8 @@ export interface InvestigationSession {
     workspaceSessionId: string;
     draft?: PublicInvestigationDraft;
     confirmationPreview?: ConfirmationPreview;
+    suggestion?: InvestigationDraftSuggestion;
+    presentationStage?: "suggestion" | "confirmation";
     pendingTurnId?: string;
     resumeAttempted?: boolean;
     run?: InvestigationRunProjection;

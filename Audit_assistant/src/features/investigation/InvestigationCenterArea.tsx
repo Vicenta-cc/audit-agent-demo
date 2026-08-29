@@ -338,6 +338,10 @@ export function InvestigationCenterArea({
                       showSuggestionCard={streamingMessageId !== msg.id}
                       onStreamingComplete={() => handleStreamingComplete(msg.id)}
                       draft={session.draft}
+                      platformOptions={session.creationBinding?.suggestion?.platform_options.map((platform) => ({
+                        code: platform.id,
+                        label: platform.name
+                      }))}
                       isReadOnly={msg.proposalData.platformsConfirmed}
                       onUpdatePlatforms={onUpdateDraftPlatforms}
                       onGenerateConfig={() => onGenerateTaskConfig(msg.id)}
