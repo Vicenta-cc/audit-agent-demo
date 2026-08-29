@@ -175,16 +175,174 @@ def _existing_lexicon_configuration(
 
 def test_options_are_safe_bounded_and_have_no_m3_side_effects(m3_stack: dict):
     before = _counts(m3_stack["store"])
+    confirmation_before = _confirmation_side_effects(m3_stack)
     options = m3_stack["service"].query_investigation_options(
         QueryInvestigationOptions(page_size=2),
         principal=_principal(m3_stack),
     )
     assert _counts(m3_stack["store"]) == before == (0, 0)
+    assert _confirmation_side_effects(m3_stack) == confirmation_before == (0, 0, 0)
     assert [item.id for item in options.audit_policies] == ["policy_gambling"]
     assert len(options.ruleset_revisions) == 1
     serialized = json.dumps(options.model_dump(mode="json"), ensure_ascii=False)
     for forbidden in ("system_template", "source_mappings", "prompt_profile", "categories"):
         assert forbidden not in serialized
+
+
+@pytest.mark.parametrize(
+    "domain_hint",
+    ["世界杯 博彩 引流", "世界杯博彩引流", "gambling"],
+)
+def test_domain_hint_ranks_gambling_resources_without_filtering_valid_candidates(
+    m3_stack: dict, domain_hint: str
+):
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(domain_hint=domain_hint),
+        principal=_principal(m3_stack),
+    )
+
+    assert options.audit_policies[0].id == "policy_gambling"
+    assert options.ruleset_revisions[0].id == "ruleset-revision:gambling:v2"
+    assert options.recall_lexicons[0].id == "gambling"
+    assert "NO_PUBLISHED_AUDIT_POLICY" not in {
+        blocker.code for blocker in options.blockers
+    }
+
+
+def test_unrelated_domain_hint_falls_back_to_bounded_valid_candidates(
+    m3_stack: dict,
+):
+    before = _counts(m3_stack["store"])
+    confirmation_before = _confirmation_side_effects(m3_stack)
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(
+            domain_hint="completely unrelated astronomy",
+            page_size=1,
+        ),
+        principal=_principal(m3_stack),
+    )
+
+    assert [item.id for item in options.audit_policies] == ["policy_gambling"]
+    assert len(options.recall_lexicons) == 1
+    assert "NO_PUBLISHED_AUDIT_POLICY" not in {
+        blocker.code for blocker in options.blockers
+    }
+    assert _counts(m3_stack["store"]) == before == (0, 0)
+    assert _confirmation_side_effects(m3_stack) == confirmation_before == (0, 0, 0)
+
+
+def test_domain_hint_order_and_cursor_are_deterministic(m3_stack: dict):
+    source = m3_stack["policies"].get("policy_gambling")
+    policy = m3_stack["policies"].create(
+        id="policy_alpha",
+        name="Alpha candidate",
+        description="A deterministic secondary candidate.",
+        config=source["published_config"],
+    )
+    m3_stack["policies"].publish(
+        policy["id"],
+        expected_draft_hash=m3_stack["policies"].draft_hash(policy),
+    )
+
+    query = QueryInvestigationOptions(domain_hint="alpha", page_size=20)
+    first = m3_stack["service"].query_investigation_options(
+        query, principal=_principal(m3_stack)
+    )
+    second = m3_stack["service"].query_investigation_options(
+        query, principal=_principal(m3_stack)
+    )
+    first_ids = [item.id for item in first.audit_policies]
+    assert first_ids == ["policy_alpha", "policy_gambling"]
+    assert [item.id for item in second.audit_policies] == first_ids
+
+    first_page = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(domain_hint="alpha", page_size=1),
+        principal=_principal(m3_stack),
+    )
+    second_page = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(
+            domain_hint="alpha", page_size=1, cursor=first_page.next_cursor
+        ),
+        principal=_principal(m3_stack),
+    )
+    assert [item.id for item in first_page.audit_policies] == ["policy_alpha"]
+    assert [item.id for item in second_page.audit_policies] == ["policy_gambling"]
+
+
+def test_explicit_policy_request_is_strict_and_not_filtered_by_hint(m3_stack: dict):
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(
+            domain_hint="completely unrelated astronomy",
+            audit_policy_ids=["policy_gambling"],
+        ),
+        principal=_principal(m3_stack),
+    )
+    assert [item.id for item in options.audit_policies] == ["policy_gambling"]
+    assert options.blockers == []
+
+
+def test_no_valid_published_policy_still_returns_blocker(m3_stack: dict):
+    with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
+        connection.execute(
+            "UPDATE audit_policies SET status = 'draft' WHERE id = ?",
+            ("policy_gambling",),
+        )
+
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(domain_hint="世界杯 博彩 引流"),
+        principal=_principal(m3_stack),
+    )
+    assert options.audit_policies == []
+    assert "NO_PUBLISHED_AUDIT_POLICY" in {
+        blocker.code for blocker in options.blockers
+    }
+
+
+@pytest.mark.parametrize("policy_state", ["missing", "draft", "invalid_hash"])
+def test_explicit_invalid_policy_request_remains_fail_closed(
+    m3_stack: dict, policy_state: str
+):
+    requested_id = "policy_gambling"
+    with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
+        if policy_state == "missing":
+            requested_id = "policy_missing"
+        elif policy_state == "draft":
+            connection.execute(
+                "UPDATE audit_policies SET status = 'draft' WHERE id = ?",
+                (requested_id,),
+            )
+        else:
+            connection.execute("DROP TRIGGER immutable_rule_set_revisions_update")
+            connection.execute(
+                "UPDATE rule_set_revisions SET content_hash = ? WHERE id = ?",
+                ("0" * 64, "ruleset-revision:gambling:v2"),
+            )
+
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(
+            domain_hint="世界杯 博彩 引流",
+            audit_policy_ids=[requested_id],
+        ),
+        principal=_principal(m3_stack),
+    )
+    assert options.audit_policies == []
+    codes = {blocker.code for blocker in options.blockers}
+    assert "NO_PUBLISHED_AUDIT_POLICY" in codes
+    if policy_state == "invalid_hash":
+        assert "INVALID_RULESET_REFERENCE" in codes
+
+
+def test_explicit_missing_lexicon_remains_unavailable(m3_stack: dict):
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(
+            domain_hint="世界杯 博彩 引流",
+            lexicon_ids=["missing-lexicon"],
+        ),
+        principal=_principal(m3_stack),
+    )
+    assert len(options.recall_lexicons) == 1
+    assert options.recall_lexicons[0].id == "missing-lexicon"
+    assert not options.recall_lexicons[0].available
 
 
 def test_lexicon_options_only_return_enabled_main_terms(m3_stack: dict):
@@ -725,7 +883,7 @@ def test_request_principal_reaches_all_m3_resource_queries(tmp_path: Path):
     )
     request_owner = Principal("request-owner")
     options = service.query_investigation_options(
-        QueryInvestigationOptions(domain_hint="gambling"),
+        QueryInvestigationOptions(domain_hint="世界杯 博彩 引流"),
         principal=request_owner,
     )
     configuration = {

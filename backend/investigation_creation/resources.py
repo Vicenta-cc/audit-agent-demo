@@ -4,8 +4,10 @@ from contextlib import contextmanager
 import hashlib
 import json
 from pathlib import Path
+import re
 import sqlite3
 from typing import Any, Iterator
+import unicodedata
 
 from backend.audit_agent.audit_policy_store import AuditPolicyStore
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
@@ -101,7 +103,9 @@ class InvestigationResourceService:
             query.model_dump(mode="json")
         )
         offset = self._cursor_offset(query.cursor)
-        valid_policies: list[tuple[AuditPolicySummary, RuleSetRevisionSummary]] = []
+        valid_policies: list[
+            tuple[int, AuditPolicySummary, RuleSetRevisionSummary]
+        ] = []
         blockers: list[InvestigationBlocker] = []
         requested_policy_ids = set(query.audit_policy_ids)
 
@@ -116,13 +120,17 @@ class InvestigationResourceService:
                 continue
             if summary is None or ruleset is None:
                 continue
-            if query.domain_hint and not self._matches_domain_hint(
-                query.domain_hint, policy, summary, ruleset
-            ):
-                continue
-            valid_policies.append((summary, ruleset))
+            valid_policies.append(
+                (
+                    self._domain_hint_score(
+                        query.domain_hint, policy, summary, ruleset
+                    ),
+                    summary,
+                    ruleset,
+                )
+            )
 
-        found_policy_ids = {summary.id for summary, _ in valid_policies}
+        found_policy_ids = {summary.id for _, summary, _ in valid_policies}
         for policy_id in query.audit_policy_ids:
             if policy_id not in found_policy_ids and not any(
                 item.resource_id == policy_id for item in blockers
@@ -136,46 +144,59 @@ class InvestigationResourceService:
                     )
                 )
 
-        valid_policies.sort(key=lambda item: (item[0].name, item[0].id))
+        valid_policies.sort(key=lambda item: (-item[0], item[1].name, item[1].id))
         policy_page = valid_policies[offset : offset + query.page_size]
-        policy_summaries = [item[0] for item in policy_page]
-        rulesets_by_id = {item[1].id: item[1] for item in policy_page}
+        policy_summaries = [item[1] for item in policy_page]
+        rulesets_by_id = {item[2].id: item[2] for item in policy_page}
 
         requested_lexicon_ids = set(query.lexicon_ids)
         include_terms = set(query.include_lexicon_terms_for_ids)
-        lexicons: list[RecallLexiconSummary] = []
+        lexicons: list[tuple[int, RecallLexiconSummary]] = []
         categories = self.lexicon_store.list_categories()
         for category in categories:
             category_id = str(category.get("id") or "")
             if requested_lexicon_ids and category_id not in requested_lexicon_ids:
                 continue
-            if query.domain_hint and not self._matches_text(
-                query.domain_hint,
-                category_id,
-                category.get("title"),
-                category.get("risk_label"),
-            ):
-                continue
             lexicons.append(
-                self._lexicon_summary(
-                    category_id,
-                    category=category,
-                    include_terms=category_id in include_terms,
-                    term_limit=query.lexicon_term_limit,
+                (
+                    self._text_match_score(
+                        query.domain_hint,
+                        category_id,
+                        category.get("title"),
+                        category.get("risk_label"),
+                    ),
+                    self._lexicon_summary(
+                        category_id,
+                        category=category,
+                        include_terms=category_id in include_terms,
+                        term_limit=query.lexicon_term_limit,
+                    ),
                 )
             )
-        existing_lexicon_ids = {item.id for item in lexicons}
+        existing_lexicon_ids = {item.id for _, item in lexicons}
         for lexicon_id in query.lexicon_ids:
             if lexicon_id not in existing_lexicon_ids:
                 lexicons.append(
-                    RecallLexiconSummary(
-                        id=lexicon_id,
-                        enabled_main_term_count=0,
-                        available=False,
+                    (
+                        0,
+                        RecallLexiconSummary(
+                            id=lexicon_id,
+                            enabled_main_term_count=0,
+                            available=False,
+                        ),
                     )
                 )
-        lexicons.sort(key=lambda item: (not item.available, item.title, item.id))
-        lexicon_page = lexicons[offset : offset + query.page_size]
+        lexicons.sort(
+            key=lambda item: (
+                not item[1].available,
+                -item[0],
+                item[1].title,
+                item[1].id,
+            )
+        )
+        lexicon_page = [
+            item for _, item in lexicons[offset : offset + query.page_size]
+        ]
 
         if not valid_policies:
             blockers.append(
@@ -664,13 +685,13 @@ class InvestigationResourceService:
         )
 
     @staticmethod
-    def _matches_domain_hint(
+    def _domain_hint_score(
         hint: str,
         policy: dict[str, Any],
         summary: AuditPolicySummary,
         ruleset: RuleSetRevisionSummary,
-    ) -> bool:
-        return InvestigationResourceService._matches_text(
+    ) -> int:
+        return InvestigationResourceService._text_match_score(
             hint,
             summary.id,
             summary.name,
@@ -682,10 +703,54 @@ class InvestigationResourceService:
 
     @staticmethod
     def _matches_text(hint: str, *values: object) -> bool:
-        needle = str(hint or "").strip().casefold()
-        if not needle:
-            return True
-        return any(needle in str(value or "").casefold() for value in values)
+        return (
+            not InvestigationResourceService._normalize_search_text(hint)
+            or InvestigationResourceService._text_match_score(hint, *values) > 0
+        )
+
+    @staticmethod
+    def _text_match_score(hint: str, *values: object) -> int:
+        normalized_hint = InvestigationResourceService._normalize_search_text(hint)
+        if not normalized_hint:
+            return 0
+        normalized_values = [
+            InvestigationResourceService._normalize_search_text(value)
+            for value in values
+        ]
+        normalized_values = [value for value in normalized_values if value]
+        if not normalized_values:
+            return 0
+
+        compact_hint = normalized_hint.replace(" ", "")
+        score = 0
+        if any(normalized_hint in value for value in normalized_values):
+            score += 10_000
+        elif compact_hint and any(
+            compact_hint in value.replace(" ", "") for value in normalized_values
+        ):
+            score += 10_000
+
+        for term in InvestigationResourceService._hint_terms(normalized_hint):
+            if any(term in value.replace(" ", "") for value in normalized_values):
+                score += len(term) * len(term)
+        return score
+
+    @staticmethod
+    def _normalize_search_text(value: object) -> str:
+        normalized = unicodedata.normalize("NFKC", str(value or "")).casefold()
+        return " ".join(re.findall(r"[^\W_]+", normalized, flags=re.UNICODE))
+
+    @staticmethod
+    def _hint_terms(normalized_hint: str) -> tuple[str, ...]:
+        terms = set(normalized_hint.split())
+        for word in normalized_hint.split():
+            for sequence in re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+", word):
+                for width in range(2, min(4, len(sequence)) + 1):
+                    terms.update(
+                        sequence[index : index + width]
+                        for index in range(len(sequence) - width + 1)
+                    )
+        return tuple(sorted((term for term in terms if len(term) >= 2)))
 
     @staticmethod
     def _creator_blocker(
