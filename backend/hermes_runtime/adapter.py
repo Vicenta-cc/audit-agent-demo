@@ -7,14 +7,16 @@ not install the optional Hermes runtime (for example deterministic unit tests).
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from hashlib import sha256
 from importlib import import_module
 from importlib.resources import files
 import os
 from pathlib import Path
+from threading import RLock
 import tempfile
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
 
 import yaml
 
@@ -37,6 +39,7 @@ _LEGACY_MODE_FLAGS = (
 )
 _ACCOUNT_ACTIVITY_MODE_FLAG = "HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE"
 _CREATION_MODE_FLAG = "HERMES_INVESTIGATION_CREATION_MODE"
+_PRODUCT_MODE_EXECUTION_LOCK = RLock()
 
 
 class HermesRuntimeUnavailable(RuntimeError):
@@ -160,10 +163,22 @@ class HermesRuntimeBinding:
     ) -> None:
         """Load Hermes plugins using its public, idempotent discovery API."""
 
-        self.activate_product_mode(product_mode)
-        self._verify_version()
-        plugins = _load_module("hermes_cli.plugins")
-        plugins.discover_plugins(force=force)
+        with _PRODUCT_MODE_EXECUTION_LOCK:
+            self.activate_product_mode(product_mode)
+            self._verify_version()
+            plugins = _load_module("hermes_cli.plugins")
+            plugins.discover_plugins(force=force)
+
+    @contextmanager
+    def product_mode_execution(
+        self, home: Path, *, product_mode: str
+    ) -> Iterator[None]:
+        """Pin Hermes' process-global registry to one product mode for a whole Turn."""
+
+        with _PRODUCT_MODE_EXECUTION_LOCK:
+            self.configure_product_home(home)
+            self.discover_plugins(force=True, product_mode=product_mode)
+            yield
 
     def tool_definitions(
         self,

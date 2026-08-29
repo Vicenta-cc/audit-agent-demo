@@ -2526,6 +2526,10 @@ class InvestigationAgentService:
         return []
 
     def _validate_business_scope(self, session: InvestigationSession) -> None:
+        if session.scope_type != "report":
+            raise CheckpointScopeMismatchError(
+                "business session is not bound to a published report"
+            )
         current = self.report_facade.get_published_report_context(
             session.report_version_id
         )

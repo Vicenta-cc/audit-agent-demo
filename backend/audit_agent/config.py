@@ -30,6 +30,14 @@ class Settings:
         2,
         int(os.getenv("HERMES_INVESTIGATION_MAX_WORKERS", "2")),
     )
+    hermes_creation_fake_runtime = (
+        os.getenv("HERMES_CREATION_FAKE_RUNTIME", "false").lower() == "true"
+        or os.getenv("HERMES_CREATION_FAKE_RUNTIME", "") == "1"
+    )
+    hermes_creation_fake_stage_seconds = max(
+        0.05,
+        float(os.getenv("HERMES_CREATION_FAKE_STAGE_SECONDS", "1.2")),
+    )
     qwen_report_model = os.getenv("QWEN_REPORT_MODEL", qwen_text_model).strip()
     report_prompt_version = os.getenv("REPORT_PROMPT_VERSION", "report-v2-human").strip()
     report_request_timeout = int(os.getenv("REPORT_REQUEST_TIMEOUT", "180"))

@@ -16,4 +16,6 @@ artifacts/
 frontend-v2/artifacts/
 frontend-v2/dist/
 Audit_assistant/dist/
+Audit_assistant/test-results/
+Audit_assistant/playwright-report/
 scripts/com.xhs-audit-agent.backend.plist

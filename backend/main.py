@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .api.investigation import create_investigation_router
+from .api.investigation_conversation import create_investigation_conversation_router
 from .api.investigation_creation import create_investigation_creation_router
 from .api.investigation_execution import InvestigationTurnExecutor
 from .api.reporting import create_reporting_router
@@ -57,6 +58,11 @@ from .investigation_creation.adapters import (
     InvestigationRunProjector,
 )
 from .investigation_creation.service import InvestigationCreationService
+from .investigation_creation.conversation import InvestigationCreationConversationService
+from .investigation_creation.fake_runtime import (
+    FakeInvestigationRunProjector,
+    FakePublishedReportHermesAgent,
+)
 from .investigation_creation.resources import InvestigationResourceService
 from .investigation_creation.tools import (
     InvestigationCreationToolService,
@@ -96,7 +102,14 @@ audit_policy_store = AuditPolicyStore()
 audit_config_revision_store = TaskAuditConfigRevisionStore()
 report_store = ReportStore()
 r31_report_runtime = R31ReportRuntime(report_store)
-investigation_agent_service = HermesInvestigationAgentService()
+investigation_agent_service = (
+    HermesInvestigationAgentService(
+        agent_factory=FakePublishedReportHermesAgent,
+        bind_runtime=False,
+    )
+    if settings.hermes_creation_fake_runtime
+    else HermesInvestigationAgentService()
+)
 investigation_creation_store = InvestigationCreationStore()
 investigation_configuration_resolver = InvestigationConfigurationResolver(
     lexicon_store=lexicon_store,
@@ -111,28 +124,53 @@ investigation_resource_service = InvestigationResourceService(
     ruleset_service=ruleset_service,
     configuration_resolver=investigation_configuration_resolver,
 )
+investigation_run_projector = (
+    FakeInvestigationRunProjector(
+        report_store=report_store,
+        report_agent_service=investigation_agent_service,
+        stage_seconds=settings.hermes_creation_fake_stage_seconds,
+    )
+    if settings.hermes_creation_fake_runtime
+    else InvestigationRunProjector(
+        job_store=job_store,
+        ingestion_store=ingestion_store,
+        report_store=report_store,
+    )
+)
 investigation_creation_service = InvestigationCreationService(
     investigation_creation_store,
     configuration_resolver=investigation_configuration_resolver,
     resource_service=investigation_resource_service,
-    run_projector=InvestigationRunProjector(
-        job_store=job_store,
-        ingestion_store=ingestion_store,
-        report_store=report_store,
-    ),
+    run_projector=investigation_run_projector,
 )
 investigation_creation_tool_service = InvestigationCreationToolService(
     investigation_creation_service
 )
+investigation_creation_conversation_service = InvestigationCreationConversationService(
+    tool_service=investigation_creation_tool_service,
+    store=investigation_agent_service.store,
+    fake_runtime=settings.hermes_creation_fake_runtime,
+)
 configure_hermes_investigation_creation_tools(
     investigation_creation_tool_service,
-    principal_provider=principal_provider,
+    principal_provider=investigation_creation_conversation_service.principal_for_session,
 )
 investigation_turn_executor = InvestigationTurnExecutor(
     investigation_agent_service,
     max_workers=settings.hermes_investigation_max_workers,
 )
-app.include_router(create_reporting_router(report_store, r31_report_runtime))
+investigation_creation_turn_executor = InvestigationTurnExecutor(
+    investigation_creation_conversation_service,
+    max_workers=settings.hermes_investigation_max_workers,
+)
+app.include_router(
+    create_reporting_router(
+        report_store,
+        r31_report_runtime,
+        principal_provider=principal_provider,
+        m3_run_store=investigation_creation_store,
+    )
+)
 app.include_router(
     create_investigation_creation_router(
         investigation_creation_service,
@@ -144,6 +182,18 @@ app.include_router(
     create_investigation_router(
         investigation_agent_service,
         investigation_turn_executor,
+        report_store=report_store,
+        m3_run_store=investigation_creation_store,
+    )
+)
+app.include_router(
+    create_investigation_conversation_router(
+        investigation_creation_conversation_service,
+        investigation_creation_turn_executor,
+        principal_provider=principal_provider,
+        report_service=investigation_agent_service,
+        report_executor=investigation_turn_executor,
+        report_store=report_store,
     )
 )
 
@@ -897,13 +947,18 @@ def recover_interrupted_jobs():
     investigation_recovery = investigation_turn_executor.recover()
     if any(investigation_recovery.values()):
         print(f"[startup] investigation Turn recovery: {investigation_recovery}")
+    creation_recovery = investigation_creation_turn_executor.recover()
+    if any(creation_recovery.values()):
+        print(f"[startup] creation Turn recovery: {creation_recovery}")
 
 
 @app.on_event("shutdown")
 def stop_crawler_account_login_sessions():
     crawler_account_login_manager.shutdown()
     investigation_turn_executor.shutdown(wait=True)
+    investigation_creation_turn_executor.shutdown(wait=True)
     investigation_agent_service.close()
+    investigation_creation_conversation_service.close()
 
 
 @app.get("/")

@@ -5,14 +5,18 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator
 
+from backend.api.contracts import (
+    PublicInvestigationDraft,
+    PublicInvestigationRunProjection,
+)
+from backend.investigation_creation.public_projection import public_draft, public_run
+
 from backend.investigation_creation.contracts import (
     ConfirmAndQueueCommand,
     ConfirmationPreview,
     CreateDraftCommand,
     DraftConfiguration,
-    InvestigationDraft,
     InvestigationOptions,
-    InvestigationRunProjection,
     Platform,
     QueryInvestigationOptions,
     UpdateDraftCommand,
@@ -110,47 +114,51 @@ def create_investigation_creation_router(
 
     @router.post(
         "/api/investigation-drafts",
-        response_model=InvestigationDraft,
+        response_model=PublicInvestigationDraft,
         status_code=201,
     )
     def create_draft(
         request: CreateDraftRequest,
         principal: Principal = Depends(provide_principal),
-    ) -> InvestigationDraft:
+    ) -> PublicInvestigationDraft:
         try:
-            return service.create_draft(
-                CreateDraftCommand(**request.model_dump()), principal=principal
+            return public_draft(
+                service.create_draft(
+                    CreateDraftCommand(**request.model_dump()), principal=principal
+                )
             )
         except Exception as exc:
             _raise_public_error(exc)
 
     @router.patch(
         "/api/investigation-drafts/{draft_id}",
-        response_model=InvestigationDraft,
+        response_model=PublicInvestigationDraft,
     )
     def update_draft(
         draft_id: str,
         request: UpdateDraftRequest,
         principal: Principal = Depends(provide_principal),
-    ) -> InvestigationDraft:
+    ) -> PublicInvestigationDraft:
         try:
-            return service.update_draft(
-                UpdateDraftCommand(draft_id=draft_id, **request.model_dump()),
-                principal=principal,
+            return public_draft(
+                service.update_draft(
+                    UpdateDraftCommand(draft_id=draft_id, **request.model_dump()),
+                    principal=principal,
+                )
             )
         except Exception as exc:
             _raise_public_error(exc)
 
     @router.get(
         "/api/investigation-drafts/{draft_id}",
-        response_model=InvestigationDraft,
+        response_model=PublicInvestigationDraft,
     )
     def get_draft(
         draft_id: str,
         principal: Principal = Depends(provide_principal),
-    ) -> InvestigationDraft:
+    ) -> PublicInvestigationDraft:
         try:
-            return service.get_draft(draft_id, principal=principal)
+            return public_draft(service.get_draft(draft_id, principal=principal))
         except Exception as exc:
             _raise_public_error(exc)
 
@@ -171,7 +179,7 @@ def create_investigation_creation_router(
 
     @router.post(
         "/api/investigation-drafts/{draft_id}/confirm-and-queue",
-        response_model=InvestigationRunProjection,
+        response_model=PublicInvestigationRunProjection,
         status_code=202,
     )
     def confirm_and_queue(
@@ -179,7 +187,7 @@ def create_investigation_creation_router(
         request: ConfirmAndQueueRequest,
         idempotency_key: str = Header(alias="Idempotency-Key", min_length=1, max_length=200),
         principal: Principal = Depends(provide_principal),
-    ) -> InvestigationRunProjection:
+    ) -> PublicInvestigationRunProjection:
         try:
             run = service.confirm_and_queue(
                 ConfirmAndQueueCommand(
@@ -189,20 +197,20 @@ def create_investigation_creation_router(
                 ),
                 principal=principal,
             )
-            return service.get_run(run.id, principal=principal)
+            return public_run(service.get_run(run.id, principal=principal))
         except Exception as exc:
             _raise_public_error(exc)
 
     @router.get(
         "/api/investigation-runs/{run_id}",
-        response_model=InvestigationRunProjection,
+        response_model=PublicInvestigationRunProjection,
     )
     def get_run(
         run_id: str,
         principal: Principal = Depends(provide_principal),
-    ) -> InvestigationRunProjection:
+    ) -> PublicInvestigationRunProjection:
         try:
-            return service.get_run(run_id, principal=principal)
+            return public_run(service.get_run(run_id, principal=principal))
         except Exception as exc:
             _raise_public_error(exc)
 
@@ -232,7 +240,7 @@ def _raise_public_error(exc: Exception) -> None:
     ):
         raise HTTPException(status_code=409, detail=detail) from exc
     if isinstance(exc, PrincipalAccessDeniedError):
-        raise HTTPException(status_code=403, detail="resource is not owned by principal") from exc
+        raise HTTPException(status_code=404, detail="resource was not found") from exc
     if isinstance(exc, ValidationError):
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
     if isinstance(exc, (ConfirmationRequiredError, ConfigurationValidationError, ValueError)):

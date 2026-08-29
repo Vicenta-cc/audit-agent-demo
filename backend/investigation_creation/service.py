@@ -143,7 +143,7 @@ class InvestigationCreationService:
             idempotency_key=command.idempotency_key,
         )
         if replay is not None:
-            return replay
+            return self._prepare_run(replay)
         if not command.confirmed:
             raise ConfirmationRequiredError("explicit confirmation is required")
         draft = self.store.get_draft(command.draft_id, principal=principal.id)
@@ -172,19 +172,21 @@ class InvestigationCreationService:
                     idempotency_key=command.idempotency_key,
                 )
                 if replay is not None:
-                    return replay
-                resolution = self.resource_service.resolve_confirmation(
-                    draft,
-                    principal=principal,
-                    resource_connection=resource_connection,
-                )
-                return self._store_confirmation(
-                    command,
-                    principal=principal,
-                    resolved_model=resolution.execution,
-                    configuration_hash=resolution.config_hash,
-                    confirmation_resolution=resolution.model_dump(mode="json"),
-                )
+                    run = replay
+                else:
+                    resolution = self.resource_service.resolve_confirmation(
+                        draft,
+                        principal=principal,
+                        resource_connection=resource_connection,
+                    )
+                    run = self._store_confirmation(
+                        command,
+                        principal=principal,
+                        resolved_model=resolution.execution,
+                        configuration_hash=resolution.config_hash,
+                        confirmation_resolution=resolution.model_dump(mode="json"),
+                    )
+            return self._prepare_run(run)
         else:
             resolved_model = ResolvedExecutionConfiguration.model_validate(
                 self.configuration_resolver.resolve(draft_configuration)
@@ -192,13 +194,21 @@ class InvestigationCreationService:
             configuration_hash = confirmed_configuration_hash(
                 {"execution": resolved_model.model_dump(mode="json")}
             )
-        return self._store_confirmation(
-            command,
-            principal=principal,
-            resolved_model=resolved_model,
-            configuration_hash=configuration_hash,
-            confirmation_resolution=confirmation_resolution,
+        return self._prepare_run(
+            self._store_confirmation(
+                command,
+                principal=principal,
+                resolved_model=resolved_model,
+                configuration_hash=configuration_hash,
+                confirmation_resolution=confirmation_resolution,
+            )
         )
+
+    def _prepare_run(self, run: InvestigationRun) -> InvestigationRun:
+        prepare = getattr(self.run_projector, "prepare_run", None)
+        if callable(prepare):
+            prepare(run)
+        return run
 
     def _store_confirmation(
         self,
@@ -244,21 +254,34 @@ class InvestigationCreationService:
             run_id=run.id,
             draft_id=run.draft_id,
             draft_revision=run.draft_revision,
-            status=run.status,
-            job_id=run.job_id,
+            status=projected.get("status") or run.status,
+            job_id=str(projected.get("job_id") or run.job_id),
             crawl_status=str(projected.get("crawl_status") or "unknown"),
             analysis_status=str(projected.get("analysis_status") or "unknown"),
             task_stats=dict(projected.get("task_stats") or {}),
             report_status=str(projected.get("report_status") or "pending"),
-            report_version_id=run.report_version_id,
+            report_version_id=str(
+                projected.get("report_version_id") or run.report_version_id
+            ),
             report_session_id=run.report_session_id,
-            error_code=run.error_code,
-            error_message=run.error_message,
+            error_code=str(projected.get("error_code") or run.error_code),
+            error_message=str(projected.get("error_message") or run.error_message),
             created_at=run.created_at,
             updated_at=run.updated_at,
             started_at=run.started_at,
             completed_at=run.completed_at,
         )
+
+    def find_run_for_draft(
+        self, draft_id: str, *, principal: Principal
+    ) -> InvestigationRunProjection | None:
+        run = self.store.find_run_for_draft(
+            self._required_identifier(draft_id, "draft_id"),
+            principal=principal.id,
+        )
+        if run is None:
+            return None
+        return self.get_run(run.id, principal=principal)
 
     @staticmethod
     def _required_identifier(value: str, field_name: str) -> str:

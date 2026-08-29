@@ -69,6 +69,9 @@ class InvestigationStore:
                 """
                 CREATE TABLE IF NOT EXISTS investigation_sessions (
                     id TEXT PRIMARY KEY,
+                    scope_type TEXT NOT NULL DEFAULT 'report'
+                        CHECK(scope_type IN ('report', 'creation')),
+                    owner_principal TEXT NOT NULL DEFAULT '',
                     task_id TEXT NOT NULL,
                     report_id TEXT NOT NULL,
                     report_version_id TEXT NOT NULL,
@@ -119,6 +122,7 @@ class InvestigationStore:
                     error_code TEXT NOT NULL DEFAULT '',
                     safe_message TEXT NOT NULL DEFAULT '',
                     retryable INTEGER NOT NULL DEFAULT 0,
+                    public_artifact_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT NOT NULL,
                     started_at TEXT NOT NULL,
                     completed_at TEXT NOT NULL DEFAULT '',
@@ -162,6 +166,7 @@ class InvestigationStore:
                     answer TEXT NOT NULL DEFAULT '',
                     safe_message TEXT NOT NULL DEFAULT '',
                     retryable INTEGER NOT NULL DEFAULT 0,
+                    artifact_json TEXT NOT NULL DEFAULT '{}',
                     occurred_at TEXT NOT NULL,
                     UNIQUE(turn_id, sequence),
                     FOREIGN KEY(turn_id) REFERENCES investigation_turns(id)
@@ -286,6 +291,38 @@ class InvestigationStore:
                 connection.execute(
                     "ALTER TABLE investigation_sessions "
                     "ADD COLUMN anchor_key TEXT NOT NULL DEFAULT ''"
+                )
+            if "scope_type" not in session_columns:
+                connection.execute(
+                    "ALTER TABLE investigation_sessions "
+                    "ADD COLUMN scope_type TEXT NOT NULL DEFAULT 'report'"
+                )
+            if "owner_principal" not in session_columns:
+                connection.execute(
+                    "ALTER TABLE investigation_sessions "
+                    "ADD COLUMN owner_principal TEXT NOT NULL DEFAULT ''"
+                )
+            turn_columns = {
+                str(row[1])
+                for row in connection.execute(
+                    "PRAGMA table_info(investigation_turns)"
+                ).fetchall()
+            }
+            if "public_artifact_json" not in turn_columns:
+                connection.execute(
+                    "ALTER TABLE investigation_turns "
+                    "ADD COLUMN public_artifact_json TEXT NOT NULL DEFAULT '{}'"
+                )
+            public_event_columns = {
+                str(row[1])
+                for row in connection.execute(
+                    "PRAGMA table_info(investigation_public_turn_events)"
+                ).fetchall()
+            }
+            if "artifact_json" not in public_event_columns:
+                connection.execute(
+                    "ALTER TABLE investigation_public_turn_events "
+                    "ADD COLUMN artifact_json TEXT NOT NULL DEFAULT '{}'"
                 )
             connection.execute(
                 """
@@ -524,6 +561,10 @@ class InvestigationStore:
                     (normalized_anchor,),
                 ).fetchone()
             if existing is not None:
+                if str(existing["scope_type"]) != "report":
+                    raise ValueError(
+                        "investigation Session anchor cannot cross conversation scope"
+                    )
                 expected_scope = (
                     context.task_id,
                     context.report_id,
@@ -547,9 +588,10 @@ class InvestigationStore:
                 connection.execute(
                     """
                     INSERT INTO investigation_sessions (
-                        id, task_id, report_id, report_version_id, source_snapshot_id,
+                        id, scope_type, owner_principal, task_id, report_id,
+                        report_version_id, source_snapshot_id,
                         snapshot_hash, anchor_key, status, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+                    ) VALUES (?, 'report', '', ?, ?, ?, ?, ?, ?, 'active', ?, ?)
                     """,
                     (
                         session_id,
@@ -565,6 +607,54 @@ class InvestigationStore:
                 )
         return self.get_session(session_id)
 
+    def create_creation_session(
+        self,
+        *,
+        principal: str,
+        anchor_key: str = "",
+    ) -> InvestigationSession:
+        normalized_principal = str(principal or "").strip()
+        if not normalized_principal:
+            raise ValueError("creation Session principal is required")
+        normalized_anchor = str(anchor_key or "").strip()
+        now = utc_now()
+        session_id = f"investigation-session:{uuid4().hex}"
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = None
+            if normalized_anchor:
+                existing = connection.execute(
+                    "SELECT * FROM investigation_sessions WHERE anchor_key = ?",
+                    (normalized_anchor,),
+                ).fetchone()
+            if existing is not None:
+                if (
+                    str(existing["scope_type"]) != "creation"
+                    or str(existing["owner_principal"]) != normalized_principal
+                ):
+                    raise ValueError(
+                        "creation Session anchor cannot be rebound across scope or Principal"
+                    )
+                session_id = str(existing["id"])
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO investigation_sessions (
+                        id, scope_type, owner_principal, task_id, report_id,
+                        report_version_id, source_snapshot_id, snapshot_hash,
+                        anchor_key, status, created_at, updated_at
+                    ) VALUES (?, 'creation', ?, '', '', '', '', '', ?, 'active', ?, ?)
+                    """,
+                    (
+                        session_id,
+                        normalized_principal,
+                        normalized_anchor,
+                        now,
+                        now,
+                    ),
+                )
+        return self.get_session(session_id)
+
     def get_session(self, session_id: str) -> InvestigationSession:
         with self._connect() as connection:
             row = connection.execute(
@@ -572,14 +662,63 @@ class InvestigationStore:
             ).fetchone()
         if row is None:
             raise InvestigationSessionNotFoundError(session_id)
-        record = dict(row)
-        record.pop("anchor_key", None)
-        referents = self._json(record.pop("ordered_referents_json"), [])
-        focus = self._json(record.pop("active_focus_json"), {})
-        return InvestigationSession(
-            **record,
-            active_focus=focus if isinstance(focus, dict) else {},
-            ordered_referents=tuple(Referent.model_validate(item) for item in referents),
+        return self._session(row)
+
+    def find_session_by_anchor(self, anchor_key: str) -> InvestigationSession | None:
+        normalized_anchor = str(anchor_key or "").strip()
+        if not normalized_anchor:
+            return None
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM investigation_sessions WHERE anchor_key = ?",
+                (normalized_anchor,),
+            ).fetchone()
+        return self._session(row) if row is not None else None
+
+    def session_anchor(self, session_id: str) -> str:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT anchor_key FROM investigation_sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+        if row is None:
+            raise InvestigationSessionNotFoundError(session_id)
+        return str(row["anchor_key"] or "")
+
+    def conversation_snapshot(
+        self, session_id: str, *, include_tool_messages: bool = False
+    ) -> tuple[
+        InvestigationSession,
+        tuple[InvestigationMessage, ...],
+        tuple[InvestigationTurn, ...],
+    ]:
+        """Read one Session's public conversation inputs from one SQLite snapshot."""
+
+        message_where = "session_id = ?"
+        if not include_tool_messages:
+            message_where += " AND role IN ('user', 'assistant')"
+        with self._connect() as connection:
+            connection.execute("BEGIN")
+            session_row = connection.execute(
+                "SELECT * FROM investigation_sessions WHERE id = ?", (session_id,)
+            ).fetchone()
+            if session_row is None:
+                raise InvestigationSessionNotFoundError(session_id)
+            message_rows = connection.execute(
+                f"SELECT * FROM investigation_messages WHERE {message_where} ORDER BY sequence",
+                (session_id,),
+            ).fetchall()
+            turn_rows = connection.execute(
+                """
+                SELECT * FROM investigation_turns
+                WHERE session_id = ? ORDER BY created_at, id
+                """,
+                (session_id,),
+            ).fetchall()
+        return (
+            self._session(session_row),
+            tuple(self._message(row) for row in message_rows),
+            tuple(self._turn(row) for row in turn_rows),
         )
 
     def close_session(self, session_id: str) -> InvestigationSession:
@@ -684,6 +823,17 @@ class InvestigationStore:
             ).fetchone()
         return self._turn(row) if row else None
 
+    def list_turns(self, session_id: str) -> tuple[InvestigationTurn, ...]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM investigation_turns
+                WHERE session_id = ? ORDER BY created_at, id
+                """,
+                (session_id,),
+            ).fetchall()
+        return tuple(self._turn(row) for row in rows)
+
     def get_user_message_for_turn(self, turn_id: str) -> InvestigationMessage:
         with self._connect() as connection:
             row = connection.execute(
@@ -716,6 +866,7 @@ class InvestigationStore:
         answer: str = "",
         safe_message: str = "",
         retryable: bool = False,
+        artifact: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         allowed = {
             "accepted",
@@ -732,6 +883,8 @@ class InvestigationStore:
             raise ValueError("invalid public Turn stage")
         normalized_answer = str(answer or "")
         normalized_safe_message = str(safe_message or "")
+        normalized_artifact = dict(artifact or {})
+        artifact_json = self._dump(normalized_artifact)
         now = utc_now()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -752,6 +905,7 @@ class InvestigationStore:
                 and str(latest["answer"]) == normalized_answer
                 and str(latest["safe_message"]) == normalized_safe_message
                 and bool(latest["retryable"]) is bool(retryable)
+                and str(latest["artifact_json"]) == artifact_json
             ):
                 return self._public_turn_event(latest)
             sequence = int(latest["sequence"] if latest is not None else 0) + 1
@@ -769,8 +923,8 @@ class InvestigationStore:
                 """
                 INSERT INTO investigation_public_turn_events (
                     event_id, turn_id, sequence, stage, answer,
-                    safe_message, retryable, occurred_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    safe_message, retryable, artifact_json, occurred_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event_id,
@@ -780,6 +934,7 @@ class InvestigationStore:
                     normalized_answer,
                     normalized_safe_message,
                     int(retryable),
+                    artifact_json,
                     now,
                 ),
             )
@@ -903,6 +1058,7 @@ class InvestigationStore:
         scope_initial_issues: list[dict[str, Any]],
         scope_remaining_issues: list[dict[str, Any]],
         hermes_transcript: list[dict[str, Any]] | None = None,
+        public_artifact: dict[str, Any] | None = None,
     ) -> tuple[InvestigationTurn, InvestigationMessage, tuple[SourceLedgerEntry, ...]]:
         now = utc_now()
         transcript_json = (
@@ -1113,7 +1269,8 @@ class InvestigationStore:
                 UPDATE investigation_turns
                 SET assistant_message_id = ?, status = 'completed', current_node = 'persist_turn',
                     input_tokens = ?, output_tokens = ?, total_tokens = ?, llm_call_count = ?,
-                    stop_reason = ?, completed_at = ?, error_code = '', safe_message = '', retryable = 0
+                    stop_reason = ?, completed_at = ?, error_code = '', safe_message = '', retryable = 0,
+                    public_artifact_json = ?
                 WHERE id = ?
                 """,
                 (
@@ -1124,6 +1281,7 @@ class InvestigationStore:
                     llm_call_count,
                     stop_reason,
                     now,
+                    self._dump(public_artifact or {}),
                     turn_id,
                 ),
             )
@@ -2430,7 +2588,27 @@ class InvestigationStore:
     def _turn(row: sqlite3.Row) -> InvestigationTurn:
         record = dict(row)
         record["retryable"] = bool(record["retryable"])
+        raw_artifact = record.pop("public_artifact_json", "{}")
+        try:
+            parsed_artifact = json.loads(raw_artifact or "{}")
+        except (TypeError, json.JSONDecodeError):
+            parsed_artifact = {}
+        record["public_artifact"] = (
+            parsed_artifact if isinstance(parsed_artifact, dict) else {}
+        )
         return InvestigationTurn.model_validate(record)
+
+    @classmethod
+    def _session(cls, row: sqlite3.Row) -> InvestigationSession:
+        record = dict(row)
+        record.pop("anchor_key", None)
+        referents = cls._json(record.pop("ordered_referents_json"), [])
+        focus = cls._json(record.pop("active_focus_json"), {})
+        return InvestigationSession(
+            **record,
+            active_focus=focus if isinstance(focus, dict) else {},
+            ordered_referents=tuple(Referent.model_validate(item) for item in referents),
+        )
 
     @classmethod
     def _message(cls, row: sqlite3.Row) -> InvestigationMessage:
@@ -2469,6 +2647,7 @@ class InvestigationStore:
             "answer": str(row["answer"]),
             "safe_message": str(row["safe_message"]),
             "retryable": bool(row["retryable"]),
+            "artifact": InvestigationStore._json(row["artifact_json"], {}) or None,
             "occurred_at": str(row["occurred_at"]),
         }
 

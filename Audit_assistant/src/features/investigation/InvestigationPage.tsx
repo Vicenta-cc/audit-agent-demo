@@ -15,6 +15,23 @@ import {
   sendInvestigationTurn,
   waitForInvestigationTurn
 } from "../../services/investigations";
+import {
+  confirmAndQueueInvestigation,
+  createInvestigationWorkspace,
+  getConfirmationPreview,
+  getInvestigationDraft,
+  getInvestigationRun,
+  getInvestigationWorkspacePublishedReport,
+  getInvestigationWorkspaceState,
+  resumeInvestigationCreationTurn,
+  sendInvestigationCreationTurn,
+  updateInvestigationDraft,
+  sendInvestigationWorkspaceReportTurn,
+  resumeInvestigationWorkspaceReportTurn,
+  waitForInvestigationWorkspaceReportTurn,
+  waitForInvestigationCreationTurn
+} from "../../services/investigationCreation";
+import { ApiError } from "../../services/apiClient";
 import { fetchPublishedReportVersion, fetchPublishedReportVersions } from "../../services/reports";
 import { InvestigationSidebar, type SubViewType } from "./InvestigationSidebar";
 import { InvestigationCenterArea } from "./InvestigationCenterArea";
@@ -22,6 +39,13 @@ import { InvestigationContextDrawer, type DrawerType } from "./InvestigationCont
 import { FocusUsersPage } from "../focus-users/FocusUsersPage";
 import { CrawlerAccountsPage } from "../crawler-accounts/CrawlerAccountsPage";
 import { buildPublishedReportSummary } from "./publishedReportSession";
+import { mapInvestigationRunState } from "./investigationRunState";
+import { buildConfirmationIdempotencyKey } from "./confirmationView";
+import {
+  buildNewInvestigationWorkspaceSession,
+  buildWorkspaceRecoveryErrorSession,
+  restoreInvestigationWorkspace
+} from "./workspaceRecovery";
 
 interface InvestigationPageProps {
   initialSubView?: SubViewType;
@@ -541,9 +565,13 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     routeState.restoreInvestigationState?.activeSubView ?? initialSubView
   );
   const [sendingMessageSessionId, setSendingMessageSessionId] = useState("");
+  const [confirmingCreationSessionId, setConfirmingCreationSessionId] = useState("");
   const subViewScrollRef = useRef<HTMLDivElement>(null);
   const loadingPublishedReportsRef = useRef(new Set<string>());
   const pendingTurnControllersRef = useRef(new Map<string, AbortController>());
+  const runPollTimersRef = useRef(new Map<string, number>());
+  const restoredWorkspaceIdsRef = useRef(new Set<string>());
+  const recoveredReportVersionsRef = useRef(new Set<string>());
 
   useEffect(() => {
     const prevTitle = document.title;
@@ -554,8 +582,51 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   }, []);
 
   useEffect(() => {
+    const mobileViewport = window.matchMedia("(max-width: 760px)");
+    const collapseForMobile = (event?: MediaQueryListEvent) => {
+      if (event?.matches ?? mobileViewport.matches) {
+        setIsSidebarCollapsed(true);
+      }
+    };
+    collapseForMobile();
+    mobileViewport.addEventListener("change", collapseForMobile);
+    return () => mobileViewport.removeEventListener("change", collapseForMobile);
+  }, []);
+
+  useEffect(() => {
     storeSessions(sessions);
   }, [sessions]);
+
+  useEffect(() => {
+    if (
+      !investigationId?.startsWith("investigation-session:")
+      || restoredWorkspaceIdsRef.current.has(investigationId)
+    ) return;
+    restoredWorkspaceIdsRef.current.add(investigationId);
+    void getInvestigationWorkspaceState(investigationId).then((state) => {
+      const restored = restoreInvestigationWorkspace(state);
+      setSessions((current) => [
+        restored,
+        ...current.filter((session) => (
+          session.id !== restored.id
+          && session.creationBinding?.workspaceSessionId !== restored.id
+        ))
+      ]);
+      setActiveSessionId(restored.id);
+      setActiveDrawer(null);
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : "无法读取调查工作区";
+      const failed = buildWorkspaceRecoveryErrorSession(investigationId, message);
+      setSessions((current) => [
+        failed,
+        ...current.filter((session) => (
+          session.id !== investigationId
+          && session.creationBinding?.workspaceSessionId !== investigationId
+        ))
+      ]);
+      setActiveSessionId(investigationId);
+    });
+  }, [investigationId]);
 
   useEffect(() => {
     if (!activeSubView || !subViewScrollRef.current || routeState.restoreScrollTop === undefined) return;
@@ -573,7 +644,23 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   }, [activeSessionId, investigationId, sessions]);
 
   useEffect(() => {
-    if (!investigationId || sessions.some((session) => session.id === investigationId)) return;
+    if (!investigationId) return;
+    const cachedCreationSession = sessions.find(
+      (session) => session.id === investigationId && session.creationBinding
+    );
+    const cachedWorkspaceSessionId = cachedCreationSession?.creationBinding?.workspaceSessionId;
+    if (
+      cachedWorkspaceSessionId
+      && cachedWorkspaceSessionId !== investigationId
+    ) {
+      navigate(
+        `/investigation/${encodeURIComponent(cachedWorkspaceSessionId)}`,
+        { replace: true }
+      );
+      return;
+    }
+    if (sessions.some((session) => session.id === investigationId)) return;
+    if (investigationId.startsWith("investigation-session:")) return;
     navigate(`/investigation/${encodeURIComponent(activeSessionId)}`, { replace: true });
   }, [activeSessionId, investigationId, navigate, sessions]);
 
@@ -590,6 +677,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
 
   const continuePublishedReportTurn = useCallback(async (
     uiSessionId: string,
+    workspaceSessionId: string,
+    runId: string,
     turnId: string,
     resumeAttempted = false
   ) => {
@@ -598,11 +687,11 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     pendingTurnControllersRef.current.set(turnId, controller);
     setSendingMessageSessionId(uiSessionId);
 
-    const waitForTerminal = (afterSequence = 0, resumeReplay = false) => waitForInvestigationTurn(turnId, {
+    const waitOptions = (afterSequence = 0, resumeReplay = false) => ({
       signal: controller.signal,
       afterSequence,
       resumeReplay,
-      onEvent: (event) => {
+      onEvent: (event: import("../../types/investigations").InvestigationTurnEvent) => {
         setSessions((current) => current.map((item) => (
           item.id === uiSessionId
           && item.reportBinding?.pendingTurn?.turnId === turnId
@@ -620,6 +709,19 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         )));
       }
     });
+    const waitForTerminal = (afterSequence = 0, resumeReplay = false) => (
+      workspaceSessionId && runId
+        ? waitForInvestigationWorkspaceReportTurn(
+            workspaceSessionId,
+            runId,
+            turnId,
+            waitOptions(afterSequence, resumeReplay)
+          )
+        : waitForInvestigationTurn(
+            turnId,
+            waitOptions(afterSequence, resumeReplay)
+          )
+    );
 
     try {
       let result = await waitForTerminal();
@@ -641,7 +743,15 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
               }
             : item
         )));
-        await resumeInvestigationTurn(turnId);
+        if (workspaceSessionId && runId) {
+          await resumeInvestigationWorkspaceReportTurn(
+            workspaceSessionId,
+            runId,
+            turnId
+          );
+        } else {
+          await resumeInvestigationTurn(turnId);
+        }
         result = await waitForTerminal(
           result.event_sequence || 0,
           !result.event_sequence
@@ -718,6 +828,32 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     if (!binding) return;
 
     try {
+      if (session.creationBinding?.run) {
+        const result = await sendInvestigationWorkspaceReportTurn(
+          session.creationBinding.workspaceSessionId,
+          session.creationBinding.run.run_id,
+          { clientMessageId, content: text }
+        );
+        setSessions((current) => current.map((item) => (
+          item.id === session.id && item.reportBinding
+            ? {
+                ...item,
+                updatedAt: "刚刚",
+                reportBinding: {
+                  ...item.reportBinding,
+                  pendingTurn: {
+                    turnId: result.turn_id,
+                    clientMessageId,
+                    question: text,
+                    stage: "accepted"
+                  }
+                }
+              }
+            : item
+        )));
+        return;
+      }
+
       let investigationSessionId = binding.investigationSessionId;
       if (!investigationSessionId) {
         const created = await createInvestigationSession(binding.reportVersionId);
@@ -783,9 +919,13 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   useEffect(() => {
     sessions.forEach((session) => {
       const pending = session.reportBinding?.pendingTurn;
+      const creation = session.creationBinding;
+      const run = creation?.run;
       if (!pending || pendingTurnControllersRef.current.has(pending.turnId)) return;
       void continuePublishedReportTurn(
         session.id,
+        creation?.workspaceSessionId || "",
+        run?.run_id || "",
         pending.turnId,
         Boolean(pending.resumeAttempted)
       );
@@ -795,42 +935,51 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   useEffect(() => () => {
     pendingTurnControllersRef.current.forEach((controller) => controller.abort());
     pendingTurnControllersRef.current.clear();
+    runPollTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    runPollTimersRef.current.clear();
   }, []);
 
   // Session switching
   const handleSelectSession = (id: string) => {
     setActiveSessionId(id);
     setActiveDrawer(null);
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      setIsSidebarCollapsed(true);
+    }
     navigate(`/investigation/${encodeURIComponent(id)}`);
   };
 
   // Create new blank investigation session
-  const handleNewInvestigation = () => {
-    const newId = `session-new-${Date.now()}`;
-    const newSession: InvestigationSession = {
-      id: newId,
-      title: "新调查需求",
-      status: "配置中",
-      updatedAt: "刚刚",
-      draft: {
-        taskName: "自定义巡查任务",
-        taskType: "平台话题采集",
-        subject: "待确定",
-        platforms: [],
-        keywords: [],
-        matchedRuleSet: "赌博博彩风险规则集",
-        ruleSetDescription: "分析采集内容中是否存在相关违规风险要素。",
-        status: "配置中",
-        confirmed: false
-      },
-      executionPhase: "idle",
-      executionProgress: 0,
-      messages: []
-    };
+  const handleNewInvestigation = async () => {
+    let workspace;
+    try {
+      workspace = await createInvestigationWorkspace("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "无法创建调查工作区";
+      updateActiveSession((session) => ({
+        ...session,
+        messages: [
+          ...session.messages,
+          {
+            id: `msg-workspace-error-${Date.now()}`,
+            sender: "assistant",
+            timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+            content: `新调查创建失败：${message}`,
+            type: "text"
+          }
+        ]
+      }));
+      return;
+    }
+    const newId = workspace.workspace_session_id;
+    const newSession = buildNewInvestigationWorkspaceSession(newId);
 
     setSessions((prev) => [newSession, ...prev]);
     setActiveSessionId(newId);
     setActiveDrawer(null);
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      setIsSidebarCollapsed(true);
+    }
     navigate(`/investigation/${encodeURIComponent(newId)}`);
   };
 
@@ -866,6 +1015,91 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         keywords
       }
     }));
+  };
+
+  const handleUpdateCreationSearchTerms = async (keywords: string[]) => {
+    const session = activeSession;
+    const binding = session.creationBinding;
+    const draft = binding?.draft;
+    if (!binding || !draft || draft.configuration.investigation.mode !== "search") return;
+    const configuration = {
+      ...draft.configuration,
+      investigation: {
+        mode: "search" as const,
+        recall_plan: {
+          strategy: "temporary_terms" as const,
+          terms: keywords,
+          source_lexicon_ids:
+            draft.configuration.investigation.recall_plan.strategy === "temporary_terms"
+              ? draft.configuration.investigation.recall_plan.source_lexicon_ids
+              : [draft.configuration.investigation.recall_plan.lexicon_id]
+        }
+      }
+    };
+    try {
+      const updated = await updateInvestigationDraft(draft.id, {
+        expectedRevision: draft.current_revision,
+        title: draft.title,
+        objective: draft.objective,
+        configuration
+      });
+      const preview = await getConfirmationPreview(draft.id);
+      setSessions((current) => current.map((item) => (
+        item.id === session.id && item.creationBinding
+          ? {
+              ...item,
+              draft: { ...item.draft, keywords: preview.resolved_search_terms },
+              creationBinding: {
+                ...item.creationBinding,
+                draft: updated,
+                confirmationPreview: preview,
+                confirmationKey: buildConfirmationIdempotencyKey(
+                  item.creationBinding.workspaceSessionId,
+                  updated.id,
+                  updated.current_revision
+                ),
+                error: undefined
+              }
+            }
+          : item
+      )));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        const [currentDraft, preview] = await Promise.all([
+          getInvestigationDraft(draft.id),
+          getConfirmationPreview(draft.id)
+        ]);
+        setSessions((current) => current.map((item) => (
+          item.id === session.id && item.creationBinding
+            ? {
+                ...item,
+                draft: { ...item.draft, keywords: preview.resolved_search_terms },
+                creationBinding: {
+                  ...item.creationBinding,
+                  draft: currentDraft,
+                  confirmationPreview: preview,
+                  confirmationKey: buildConfirmationIdempotencyKey(
+                    item.creationBinding.workspaceSessionId,
+                    currentDraft.id,
+                    currentDraft.current_revision
+                  ),
+                  error: "配置已被更新，已重新载入最新 Draft/Preview，请确认后再次保存。"
+                }
+              }
+            : item
+        )));
+        return;
+      }
+      const message = error instanceof Error ? error.message : "搜索词保存失败";
+      setSessions((current) => current.map((item) => (
+        item.id === session.id && item.creationBinding
+          ? {
+              ...item,
+              creationBinding: { ...item.creationBinding, error: message }
+            }
+          : item
+      )));
+    }
   };
 
   // Update draft platforms
@@ -936,8 +1170,181 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     });
   };
 
-  // Start 4-Agent Execution
+  const pollCreationRun = (
+    uiSessionId: string,
+    workspaceSessionId: string,
+    runId: string
+  ) => {
+    if (runPollTimersRef.current.has(uiSessionId)) return;
+    runPollTimersRef.current.set(uiSessionId, 0);
+    const poll = async () => {
+      try {
+        const run = await getInvestigationRun(runId);
+        const view = mapInvestigationRunState(run);
+        setSessions((current) => current.map((item) => (
+          item.id === uiSessionId && item.creationBinding
+            ? {
+                ...item,
+                status: run.status === "PUBLISHED" ? "报告已生成" : "研判中",
+                executionPhase: view.phase,
+                executionProgress: run.status === "PUBLISHED" ? 100 : item.executionProgress,
+                creationBinding: {
+                  ...item.creationBinding,
+                  run,
+                  error: run.error_message || undefined
+                }
+              }
+            : item
+        )));
+        if (run.status === "PUBLISHED" && run.report_version_id) {
+          runPollTimersRef.current.delete(uiSessionId);
+          void attachPublishedReport(
+            uiSessionId,
+            "",
+            run.report_version_id,
+            workspaceSessionId,
+            runId
+          );
+          return;
+        }
+        if (run.status === "FAILED" || run.status === "INTERRUPTED") {
+          runPollTimersRef.current.delete(uiSessionId);
+          return;
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "调查状态读取失败";
+        setSessions((current) => current.map((item) => (
+          item.id === uiSessionId && item.creationBinding
+            ? {
+                ...item,
+                creationBinding: { ...item.creationBinding, error: message }
+              }
+            : item
+        )));
+      }
+      const timer = window.setTimeout(poll, 700);
+      runPollTimersRef.current.set(uiSessionId, timer);
+    };
+    void poll();
+  };
+
+  const confirmCreationInvestigation = async () => {
+    const session = activeSession;
+    const binding = session.creationBinding;
+    const draft = binding?.draft;
+    const preview = binding?.confirmationPreview;
+    if (!binding || !draft || !preview?.can_confirm || preview.blockers.length > 0) return;
+    const idempotencyKey = binding.confirmationKey
+      || buildConfirmationIdempotencyKey(
+        binding.workspaceSessionId,
+        draft.id,
+        draft.current_revision
+      );
+    setConfirmingCreationSessionId(session.id);
+    try {
+      const run = await confirmAndQueueInvestigation(draft.id, {
+        expectedRevision: draft.current_revision,
+        idempotencyKey
+      });
+      const view = mapInvestigationRunState(run);
+      setSessions((current) => current.map((item) => {
+        if (item.id !== session.id || !item.creationBinding) return item;
+        const hasExecutionMessage = item.messages.some(
+          (message) => message.type === "agent_collaboration"
+        );
+        return {
+          ...item,
+          status: "研判中",
+          executionPhase: view.phase,
+          draft: { ...item.draft, status: "已创建", confirmed: true },
+          messages: hasExecutionMessage
+            ? item.messages
+            : [
+                ...item.messages,
+                {
+                  id: `msg-agent-${run.run_id}`,
+                  sender: "assistant",
+                  timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+                  type: "agent_collaboration"
+                }
+              ],
+          creationBinding: {
+            ...item.creationBinding,
+            confirmationKey: idempotencyKey,
+            run,
+            error: undefined
+          }
+        };
+      }));
+      pollCreationRun(
+        session.id,
+        binding.workspaceSessionId,
+        run.run_id
+      );
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        const [currentDraft, currentPreview] = await Promise.all([
+          getInvestigationDraft(draft.id),
+          getConfirmationPreview(draft.id)
+        ]);
+        setSessions((current) => current.map((item) => (
+          item.id === session.id && item.creationBinding
+            ? {
+                ...item,
+                creationBinding: {
+                  ...item.creationBinding,
+                  draft: currentDraft,
+                  confirmationPreview: currentPreview,
+                  confirmationKey: buildConfirmationIdempotencyKey(
+                    item.creationBinding.workspaceSessionId,
+                    currentDraft.id,
+                    currentDraft.current_revision
+                  ),
+                  error: "确认时配置版本已变化，已载入最新 Draft/Preview，请重新核对。"
+                }
+              }
+            : item
+        )));
+      } else {
+        const message = error instanceof Error ? error.message : "确认调查失败";
+        setSessions((current) => current.map((item) => (
+          item.id === session.id && item.creationBinding
+            ? {
+                ...item,
+                creationBinding: { ...item.creationBinding, error: message }
+              }
+            : item
+        )));
+      }
+    } finally {
+      setConfirmingCreationSessionId("");
+    }
+  };
+
+  useEffect(() => {
+    sessions.forEach((session) => {
+      const binding = session.creationBinding;
+      const run = binding?.run;
+      if (
+        !binding
+        || !run
+        || ["PUBLISHED", "FAILED", "INTERRUPTED"].includes(run.status)
+        || runPollTimersRef.current.has(session.id)
+      ) return;
+      pollCreationRun(
+        session.id,
+        binding.workspaceSessionId,
+        run.run_id
+      );
+    });
+  }, [sessions]);
+
+  // Start execution. Creation-bound sessions always confirm through M3.
   const handleStartAgentExecution = () => {
+    if (activeSession.creationBinding) {
+      void confirmCreationInvestigation();
+      return;
+    }
     updateActiveSession((session) => {
       const hasExecutionMessage = session.messages.some((message) => message.type === "agent_collaboration");
       return {
@@ -964,22 +1371,48 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     });
   };
 
-  const attachPublishedReport = async (sessionId: string, taskId: string) => {
+  const attachPublishedReport = async (
+    sessionId: string,
+    taskId: string,
+    reportVersionId = "",
+    workspaceSessionId = "",
+    runId = ""
+  ) => {
     if (loadingPublishedReportsRef.current.has(sessionId)) return;
     loadingPublishedReportsRef.current.add(sessionId);
 
     try {
-      const versions = await fetchPublishedReportVersions(taskId);
-      if (!versions.latest_report_version_id) {
-        throw new Error("当前调查任务尚无已发布报告");
+      let selectedReportVersionId = reportVersionId;
+      if (!selectedReportVersionId) {
+        const versions = await fetchPublishedReportVersions(taskId);
+        if (!versions.latest_report_version_id) {
+          throw new Error("当前调查任务尚无已发布报告");
+        }
+        selectedReportVersionId = versions.latest_report_version_id;
       }
-      const report = await fetchPublishedReportVersion(versions.latest_report_version_id);
-      if (report.task_id !== taskId) {
+      const report = workspaceSessionId && runId
+        ? await getInvestigationWorkspacePublishedReport(workspaceSessionId, runId)
+        : await fetchPublishedReportVersion(selectedReportVersionId);
+      if (reportVersionId && report.report_version_id !== reportVersionId) {
+        throw new Error("发布报告与调查运行不匹配");
+      }
+      if (taskId && report.task_id !== taskId) {
         throw new Error("发布报告与调查任务不匹配");
       }
 
       setSessions((current) => current.map((session) => {
         if (session.id !== sessionId || session.reportBinding) return session;
+        const reportMessage = {
+          id: `msg-report-${report.report_version_id}`,
+          sender: "assistant" as const,
+          timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+          type: "report_card" as const,
+          reportData: buildPublishedReportSummary(report)
+        };
+        const hasReportPlaceholder = session.messages.some(
+          (message) => message.id === reportMessage.id
+        );
+        const pendingReportTurn = session.creationBinding?.pendingReportTurn;
         return {
           ...session,
           title: report.presentation.title,
@@ -992,22 +1425,21 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           },
           executionPhase: "completed",
           executionProgress: 100,
-          messages: [
-            ...session.messages,
-            {
-              id: `msg-report-${report.report_version_id}`,
-              sender: "assistant",
-              timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-              type: "report_card",
-              reportData: buildPublishedReportSummary(report)
-            }
-          ],
+          messages: hasReportPlaceholder
+            ? session.messages.map((message) => (
+                message.id === reportMessage.id ? reportMessage : message
+              ))
+            : [...session.messages, reportMessage],
+          creationBinding: session.creationBinding
+            ? { ...session.creationBinding, pendingReportTurn: undefined }
+            : session.creationBinding,
           reportBinding: {
             reportVersionId: report.report_version_id,
             reportId: report.report_id,
             taskId: report.task_id,
             versionNumber: report.version_number,
-            publishedAt: report.published_at
+            publishedAt: report.published_at,
+            pendingTurn: pendingReportTurn
           }
         };
       }));
@@ -1034,8 +1466,31 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     }
   };
 
+  useEffect(() => {
+    sessions.forEach((session) => {
+      const run = session.creationBinding?.run;
+      if (
+        !run
+        || run.status !== "PUBLISHED"
+        || !run.report_version_id
+        || session.reportBinding
+      ) return;
+      const recoveryKey = `${session.id}:${run.report_version_id}`;
+      if (recoveredReportVersionsRef.current.has(recoveryKey)) return;
+      recoveredReportVersionsRef.current.add(recoveryKey);
+      void attachPublishedReport(
+        session.id,
+        "",
+        run.report_version_id,
+        session.creationBinding!.workspaceSessionId,
+        run.run_id
+      );
+    });
+  }, [sessions]);
+
   // Handle phase changes during animation
   const handlePhaseChange = (phase: AgentExecutionPhase) => {
+    if (activeSession.creationBinding) return;
     if (
       phase === "completed"
       && activeSession.status !== "报告已生成"
@@ -1077,6 +1532,158 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     });
   };
 
+  const continueCreationTurn = async (
+    uiSessionId: string,
+    turnId: string,
+    resumeAttempted = false
+  ) => {
+    if (pendingTurnControllersRef.current.has(turnId)) return;
+    const controller = new AbortController();
+    pendingTurnControllersRef.current.set(turnId, controller);
+    try {
+      let result = await waitForInvestigationCreationTurn(turnId, {
+        signal: controller.signal
+      });
+      if (result.status === "interrupted" && result.retryable && !resumeAttempted) {
+        setSessions((current) => current.map((item) => (
+          item.id === uiSessionId && item.creationBinding
+            ? {
+                ...item,
+                creationBinding: {
+                  ...item.creationBinding,
+                  resumeAttempted: true
+                }
+              }
+            : item
+        )));
+        await resumeInvestigationCreationTurn(turnId);
+        result = await waitForInvestigationCreationTurn(turnId, {
+          signal: controller.signal,
+          afterSequence: result.event_sequence || 0,
+          resumeReplay: !result.event_sequence
+        });
+      }
+      const answer = result.status === "completed"
+        ? result.answer.trim()
+        : result.safe_message.trim();
+      if (!answer) throw new Error("调查方案生成未返回可展示结果");
+      setSessions((current) => current.map((item) => {
+        if (item.id !== uiSessionId || !item.creationBinding) return item;
+        const artifact = result.artifact;
+        if (artifact?.artifact_type === "investigation_draft") {
+          const preview = artifact.confirmation_preview;
+          const policyName = preview.audit_policy?.name || "尚未选择审核策略";
+          const rulesetName = preview.ruleset_revision?.name || "尚未绑定规则集";
+          return {
+            ...item,
+            title: artifact.draft.title,
+            status: "等待确认",
+            draft: {
+              ...item.draft,
+              taskName: artifact.draft.title,
+              subject: artifact.draft.objective,
+              platforms: [preview.platform],
+              keywords: preview.resolved_search_terms,
+              matchedRuleSet: rulesetName,
+              analysisPlanName: policyName,
+              ruleSetDescription: preview.audit_policy?.description || "等待有效审核策略后方可确认。",
+              status: "等待确认",
+              confirmed: false
+            },
+            messages: [
+              ...item.messages,
+              {
+                id: `msg-answer-${turnId}`,
+                sender: "assistant",
+                timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+                content: answer,
+                type: "text"
+              },
+              {
+                id: `msg-task-confirm-${turnId}`,
+                sender: "assistant",
+                timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+                type: "task_confirmation"
+              }
+            ],
+            creationBinding: {
+              ...item.creationBinding,
+              pendingTurnId: undefined,
+              resumeAttempted: undefined,
+              draft: artifact.draft,
+              confirmationPreview: preview,
+              confirmationKey: buildConfirmationIdempotencyKey(
+                item.creationBinding.workspaceSessionId,
+                artifact.draft_id,
+                artifact.draft_revision
+              ),
+              error: undefined
+            }
+          };
+        }
+        return {
+          ...item,
+          messages: [
+            ...item.messages,
+            {
+              id: `msg-answer-${turnId}`,
+              sender: "assistant",
+              timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+              content: answer,
+              type: "text"
+            }
+          ],
+          creationBinding: {
+            ...item.creationBinding,
+            pendingTurnId: undefined,
+            resumeAttempted: undefined,
+            error: result.status === "completed" ? undefined : answer
+          }
+        };
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "调查方案生成失败";
+      setSessions((current) => current.map((item) => (
+        item.id === uiSessionId && item.creationBinding
+          ? {
+              ...item,
+              messages: [
+                ...item.messages,
+                {
+                  id: `msg-creation-error-${turnId}`,
+                  sender: "assistant",
+                  timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+                  content: `调查方案生成失败：${message}`,
+                  type: "text"
+                }
+              ],
+              creationBinding: {
+                ...item.creationBinding,
+                pendingTurnId: undefined,
+                resumeAttempted: undefined,
+                error: message
+              }
+            }
+          : item
+      )));
+    } finally {
+      pendingTurnControllersRef.current.delete(turnId);
+      setSendingMessageSessionId((current) => current === uiSessionId ? "" : current);
+    }
+  };
+
+  useEffect(() => {
+    sessions.forEach((session) => {
+      const pendingTurnId = session.creationBinding?.pendingTurnId;
+      if (!pendingTurnId || pendingTurnControllersRef.current.has(pendingTurnId)) return;
+      void continueCreationTurn(
+        session.id,
+        pendingTurnId,
+        Boolean(session.creationBinding?.resumeAttempted)
+      );
+    });
+  }, [sessions]);
+
   // User sends text in input box
   const handleSendMessage = (text: string) => {
     const nowTime = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
@@ -1104,6 +1711,74 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           : item
       )));
       void sendPublishedReportQuestion(session, text, clientMessageId);
+      return;
+    }
+
+    if (activeSession.creationBinding) {
+      if (sendingMessageSessionId || activeSession.creationBinding.pendingTurnId) return;
+      const session = activeSession;
+      const creationBinding = activeSession.creationBinding;
+      const clientMessageId = createClientMessageId(session.id);
+      setSendingMessageSessionId(session.id);
+      setSessions((current) => current.map((item) => (
+        item.id === session.id
+          ? {
+              ...item,
+              updatedAt: "刚刚",
+              messages: [
+                ...item.messages,
+                {
+                  id: `msg-question-${clientMessageId}`,
+                  sender: "user",
+                  timestamp: nowTime,
+                  content: text
+                }
+              ],
+              creationBinding: item.creationBinding
+                ? { ...item.creationBinding, error: undefined }
+                : item.creationBinding
+            }
+          : item
+      )));
+      void sendInvestigationCreationTurn(
+        creationBinding.workspaceSessionId,
+        { clientMessageId, content: text }
+      ).then((accepted) => {
+        setSessions((current) => current.map((item) => (
+          item.id === session.id && item.creationBinding
+            ? {
+                ...item,
+                creationBinding: {
+                  ...item.creationBinding,
+                  pendingTurnId: accepted.turn_id,
+                  resumeAttempted: false
+                }
+              }
+            : item
+        )));
+        return continueCreationTurn(session.id, accepted.turn_id);
+      }).catch((error) => {
+        const message = error instanceof Error ? error.message : "调查方案请求失败";
+        setSessions((current) => current.map((item) => (
+          item.id === session.id && item.creationBinding
+            ? {
+                ...item,
+                messages: [
+                  ...item.messages,
+                  {
+                    id: `msg-creation-send-error-${clientMessageId}`,
+                    sender: "assistant",
+                    timestamp: nowTime,
+                    content: `调查方案请求失败：${message}`,
+                    type: "text"
+                  }
+                ],
+                creationBinding: { ...item.creationBinding, error: message }
+              }
+            : item
+        )));
+        setSendingMessageSessionId("");
+      });
       return;
     }
 
@@ -1367,9 +2042,11 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={() => setIsSidebarCollapsed(false)}
           onUpdateDraftKeywords={handleUpdateDraftKeywords}
+          onUpdateCreationSearchTerms={handleUpdateCreationSearchTerms}
           onUpdateDraftPlatforms={handleUpdateDraftPlatforms}
           onGenerateTaskConfig={handleGenerateTaskConfig}
           onStartAgentExecution={handleStartAgentExecution}
+          isConfirmingCreation={confirmingCreationSessionId === activeSession.id}
           onPhaseChange={handlePhaseChange}
           onSendMessage={handleSendMessage}
           onOpenDrawer={(type) => {

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, FileSearch, ListFilter, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileSearch, ListFilter, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { AgentExecutionPhase } from "../../types/investigation";
+import type { InvestigationRunProjection } from "../../types/investigationCreation";
+import { mapInvestigationRunState } from "./investigationRunState";
 import { AnalysisBasisDrawer } from "./AnalysisBasisDrawer";
 import {
   createAnalysisRecord,
@@ -25,27 +27,35 @@ interface AgentCollaborationCardProps {
   ruleSetName?: string;
   investigationId: string;
   investigationTitle: string;
+  authoritative?: boolean;
+  run?: InvestigationRunProjection;
 }
 
-export function EvidenceRelayPipeline({ isDone }: { isDone: boolean }) {
+export function EvidenceRelayPipeline({
+  isDone,
+  isStopped = false
+}: {
+  isDone: boolean;
+  isStopped?: boolean;
+}) {
   const relayStartDelays = [0, 1.9, 3.8];
 
   return (
     <div className="evidence-pipeline" aria-label="证据接力流水线">
       <svg
         viewBox="0 0 640 112"
-        className={`evidence-pipeline-svg ${isDone ? "is-done" : "is-running"}`}
+        className={`evidence-pipeline-svg ${isDone ? "is-done" : isStopped ? "is-stopped" : "is-running"}`}
         preserveAspectRatio="xMidYMid meet"
       >
         <text x="76" y="19" className="pipeline-node-label">数据采集</text>
-        <text x="236" y="19" className="pipeline-node-label">证据分析 Agent</text>
-        <text x="404" y="19" className="pipeline-node-label">风险研判 Agent</text>
-        <text x="564" y="19" className="pipeline-node-label">报告归纳 Agent</text>
+        <text x="236" y="19" className="pipeline-node-label">证据分析</text>
+        <text x="404" y="19" className="pipeline-node-label">风险研判</text>
+        <text x="564" y="19" className="pipeline-node-label">报告归纳</text>
 
         <line x1="100" y1="66" x2="212" y2="66" className="pipeline-track" />
         <line x1="260" y1="66" x2="380" y2="66" className="pipeline-track" />
         <line x1="428" y1="66" x2="540" y2="66" className="pipeline-track" />
-        {!isDone ? (
+        {!isDone && !isStopped ? (
           <g aria-hidden="true">
             <line x1="100" y1="66" x2="212" y2="66" className="pipeline-track-flow pipeline-track-flow--1" />
             <line x1="260" y1="66" x2="380" y2="66" className="pipeline-track-flow pipeline-track-flow--2" />
@@ -128,7 +138,9 @@ export function AgentCollaborationCard({
   onPhaseChange,
   onCompleted,
   investigationId,
-  investigationTitle
+  investigationTitle,
+  authoritative = false,
+  run
 }: AgentCollaborationCardProps) {
   const navigate = useNavigate();
   const scenario: AnalysisScenario = investigationTitle.includes("维汉民族关系")
@@ -138,7 +150,9 @@ export function AgentCollaborationCard({
   const timerRef = useRef<number | null>(null);
   const phaseRef = useRef(phase);
   const [analysisRecords, setAnalysisRecords] = useState<AnalysisRecord[]>(() => (
-    readStoredAnalysisRecords(investigationId)
+    authoritative
+      ? []
+      : readStoredAnalysisRecords(investigationId)
       || (phase === "completed"
         ? createCompletedAnalysisRecords(isEthnicRelationsDemo ? ETHNIC_RELATIONS_DEMO_RECORDS : 4, scenario)
         : [])
@@ -152,8 +166,9 @@ export function AgentCollaborationCard({
   phaseRef.current = phase;
 
   useEffect(() => {
+    if (authoritative) return;
     storeAnalysisRecords(investigationId, analysisRecords);
-  }, [analysisRecords, investigationId]);
+  }, [analysisRecords, authoritative, investigationId]);
 
   useEffect(() => {
     if (phase !== "collection_waking") return;
@@ -164,6 +179,7 @@ export function AgentCollaborationCard({
 
   // Auto progression through phases
   useEffect(() => {
+    if (authoritative) return;
     if (phase === "completed") return;
 
     const phaseTimings: Record<string, { next: AgentExecutionPhase; delay: number }> = {
@@ -197,9 +213,10 @@ export function AgentCollaborationCard({
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [isEthnicRelationsDemo, phase, onPhaseChange, onCompleted]);
+  }, [authoritative, isEthnicRelationsDemo, phase, onPhaseChange, onCompleted]);
 
   useEffect(() => {
+    if (authoritative) return;
     const isAnalysisPhase = isEthnicRelationsDemo
       ? phase === "audit_working"
       : phase.startsWith("audit") || phase.startsWith("report");
@@ -228,7 +245,7 @@ export function AgentCollaborationCard({
       cancelled = true;
       if (broadcastTimer) window.clearTimeout(broadcastTimer);
     };
-  }, [isEthnicRelationsDemo, phase, scenario]);
+  }, [authoritative, isEthnicRelationsDemo, phase, scenario]);
 
   // Determine active step (1-4)
   const getStepStatus = () => {
@@ -251,6 +268,8 @@ export function AgentCollaborationCard({
   };
 
   const { done } = getStepStatus();
+  const runView = run ? mapInvestigationRunState(run) : null;
+  const terminalError = runView?.terminal === "failed" || runView?.terminal === "interrupted";
   const visibleRecords = analysisRecords.slice(0, 3);
   const displayedAnalyzedCount = isEthnicRelationsDemo && (phase.startsWith("report") || done)
     ? ETHNIC_RELATIONS_TOTAL
@@ -275,15 +294,24 @@ export function AgentCollaborationCard({
   };
 
   return (
-    <div className="agent-exec-clean-card" aria-label="Agent 执行进度">
+    <div className="agent-exec-clean-card" aria-label="调查流水线执行进度">
       <div className="agent-exec-clean-head">
         <span className="agent-exec-title">
-          {done ? "Agent 协同研判完成" : "Agent 协同研判中"}
+          {done
+            ? "调查流水线已完成"
+            : terminalError
+              ? runView?.label
+              : "调查流水线运行中"}
         </span>
         {done ? (
           <span className="agent-exec-status-tag is-done">
             <CheckCircle2 size={13} />
             研判完成
+          </span>
+        ) : terminalError ? (
+          <span className="agent-exec-status-tag is-error">
+            <AlertTriangle size={13} />
+            {runView?.terminal === "failed" ? "失败" : "已中断"}
           </span>
         ) : (
           <span className="agent-exec-status-tag is-running">
@@ -293,7 +321,24 @@ export function AgentCollaborationCard({
         )}
       </div>
 
-      <EvidenceRelayPipeline isDone={done} />
+      {run && runView ? (
+        <div className={`investigation-run-projection is-${run.status.toLowerCase()}`}>
+          <strong>{runView.label}</strong>
+          <span>
+            采集 {run.crawl_status} · 分析 {run.analysis_status} · 报告 {run.report_status}
+          </span>
+          {run.error_message ? <p role="alert">{run.error_message}</p> : null}
+          {Object.keys(run.task_stats).length > 0 ? (
+            <span className="investigation-run-task-stats">
+              {Object.entries(run.task_stats)
+                .map(([key, value]) => `${key} ${String(value)}`)
+                .join(" · ")}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      <EvidenceRelayPipeline isDone={done} isStopped={terminalError} />
 
       {analysisRecords.length > 0 ? (
       <section className="analysis-feed" aria-label="最新分析进展">

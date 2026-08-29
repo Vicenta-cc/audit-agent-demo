@@ -1,4 +1,9 @@
 import type { PublishedReportPresentation } from "./reports";
+import type {
+  ConfirmationPreview,
+  InvestigationRunProjection,
+  PublicInvestigationDraft
+} from "./investigationCreation";
 
 export type TaskSessionStatus = "配置中" | "等待确认" | "研判中" | "报告已生成" | "已创建";
 
@@ -184,6 +189,23 @@ export interface InvestigationSession {
   executionPhase: AgentExecutionPhase;
   executionProgress: number;
   keyUsers?: KeyUserProfile[];
+  creationBinding?: {
+    workspaceSessionId: string;
+    draft?: PublicInvestigationDraft;
+    confirmationPreview?: ConfirmationPreview;
+    pendingTurnId?: string;
+    resumeAttempted?: boolean;
+    run?: InvestigationRunProjection;
+    confirmationKey?: string;
+    pendingReportTurn?: {
+      turnId: string;
+      clientMessageId: string;
+      question: string;
+      stage: import("./investigations").InvestigationTurnStage;
+      resumeAttempted?: boolean;
+    };
+    error?: string;
+  };
   reportBinding?: {
     reportVersionId: string;
     reportId: string;

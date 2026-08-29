@@ -52,6 +52,27 @@ export function waitForInvestigationTurn(
     resumeReplay?: boolean;
   } = {}
 ) {
+  return waitForTurn(
+    turnId,
+    {
+      statusPath: `/api/investigation-turns/${encodeURIComponent(turnId)}`,
+      eventPath: `/api/investigation-turns/${encodeURIComponent(turnId)}/events`
+    },
+    options
+  );
+}
+
+export function waitForTurn(
+  turnId: string,
+  paths: { statusPath: string; eventPath: string },
+  options: {
+    onEvent?: (event: InvestigationTurnEvent) => void;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    afterSequence?: number;
+    resumeReplay?: boolean;
+  } = {}
+) {
   return new Promise<InvestigationTurnResponse>((resolve, reject) => {
     const timeoutMs = options.timeoutMs ?? 180_000;
     const startedAt = Date.now();
@@ -60,7 +81,7 @@ export function waitForInvestigationTurn(
     let priorTerminalSeen = false;
     let resumeBoundaryReached = !options.resumeReplay;
     const eventPath = new URL(
-      `/api/investigation-turns/${encodeURIComponent(turnId)}/events`,
+      paths.eventPath,
       API_BASE()
     );
     if (options.afterSequence) {
@@ -115,6 +136,7 @@ export function waitForInvestigationTurn(
             answer: event.answer,
             safe_message: "",
             retryable: false,
+            artifact: event.artifact,
             updated_at: event.occurred_at,
             event_sequence: event.sequence
           });
@@ -127,6 +149,7 @@ export function waitForInvestigationTurn(
             answer: "",
             safe_message: event.safe_message,
             retryable: event.retryable,
+            artifact: event.artifact,
             updated_at: event.occurred_at,
             event_sequence: event.sequence
           });
@@ -142,7 +165,7 @@ export function waitForInvestigationTurn(
         return;
       }
       try {
-        const status = await getInvestigationTurn(turnId);
+        const status = await apiRequest<InvestigationTurnResponse>(paths.statusPath);
         if (status.status !== "running") {
           finish(status);
           return;

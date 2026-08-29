@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from threading import RLock
 from typing import Any
 
@@ -14,7 +15,37 @@ from .contracts import (
     StrictModel,
     UpdateDraftCommand,
 )
+from .errors import IdempotencyConflictError
 from .principal import Principal
+
+
+@dataclass(frozen=True)
+class HermesToolExecutionIdentity:
+    """Stable identity supplied by Hermes at the tool-execution boundary."""
+
+    session_id: str
+    turn_id: str
+    tool_call_id: str
+
+    @classmethod
+    def require(
+        cls,
+        *,
+        session_id: str,
+        turn_id: str,
+        tool_call_id: str,
+    ) -> "HermesToolExecutionIdentity":
+        identity = cls(
+            session_id=str(session_id or "").strip(),
+            turn_id=str(turn_id or "").strip(),
+            tool_call_id=str(tool_call_id or "").strip(),
+        )
+        if not identity.session_id or not identity.turn_id or not identity.tool_call_id:
+            raise IdempotencyConflictError(
+                "durable tool execution identity is required",
+                code="TOOL_EXECUTION_IDENTITY_REQUIRED",
+            )
+        return identity
 
 
 class CreateInvestigationDraftInput(StrictModel):
@@ -85,6 +116,14 @@ M3_TOOL_INPUTS: dict[str, type[StrictModel]] = {
     "confirm_and_queue_investigation": ConfirmAndQueueInvestigationInput,
     "get_investigation_run": GetInvestigationRunInput,
 }
+
+M3_MUTATION_TOOL_NAMES = frozenset(
+    {
+        "create_investigation_draft",
+        "update_investigation_draft",
+        "confirm_and_queue_investigation",
+    }
+)
 
 
 M3_TOOL_DESCRIPTIONS = {
@@ -196,6 +235,67 @@ class InvestigationCreationToolService:
             )
         return result.model_dump(mode="json", warnings=False)
 
+    def execute_with_identity(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+        *,
+        principal: Principal,
+        identity: HermesToolExecutionIdentity,
+    ) -> dict[str, Any]:
+        identity = HermesToolExecutionIdentity.require(
+            session_id=identity.session_id,
+            turn_id=identity.turn_id,
+            tool_call_id=identity.tool_call_id,
+        )
+        receipt: dict[str, Any] | None = None
+        try:
+            if tool_name in M3_MUTATION_TOOL_NAMES:
+                receipt = self.application_service.store.begin_tool_execution(
+                    session_id=identity.session_id,
+                    turn_id=identity.turn_id,
+                    tool_call_id=identity.tool_call_id,
+                    principal=principal.id,
+                    tool_name=tool_name,
+                    arguments=dict(arguments or {}),
+                    is_mutation=True,
+                )
+                if receipt["replay"]:
+                    if receipt["response"] is not None:
+                        return dict(receipt["response"])
+                    return {
+                        "status": "error",
+                        "error": {
+                            "code": "MUTATION_RESULT_UNKNOWN",
+                            "message": (
+                                "The mutation may already have executed and was not replayed. "
+                                "Query Application state before taking another action."
+                            ),
+                        },
+                    }
+            payload = self.execute(
+                tool_name,
+                dict(arguments or {}),
+                principal=principal,
+            )
+            result = {"status": "ok", "data": payload}
+        except Exception as exc:
+            result = {
+                "status": "error",
+                "error": {
+                    "code": str(getattr(exc, "code", "TOOL_EXECUTION_FAILED")),
+                    "message": str(exc),
+                    "details": dict(getattr(exc, "details", {}) or {}),
+                },
+            }
+        if receipt is not None:
+            self.application_service.store.complete_tool_execution(
+                receipt["receipt_id"],
+                response=result,
+                succeeded=result["status"] == "ok",
+            )
+        return result
+
 
 _binding_lock = RLock()
 _tool_service: InvestigationCreationToolService | None = None
@@ -214,7 +314,37 @@ def configure_hermes_investigation_creation_tools(
 
 
 def dispatch_hermes_investigation_creation_tool(
-    tool_name: str, arguments: dict[str, Any]
+    tool_name: str,
+    arguments: dict[str, Any],
+    *,
+    session_id: str = "",
+    turn_id: str = "",
+    tool_call_id: str = "",
+) -> str:
+    identity: HermesToolExecutionIdentity | None = None
+    if tool_name in M3_MUTATION_TOOL_NAMES:
+        try:
+            identity = HermesToolExecutionIdentity.require(
+                session_id=session_id,
+                turn_id=turn_id,
+                tool_call_id=tool_call_id,
+            )
+        except Exception as exc:
+            return _tool_error_json(exc)
+    return dispatch_hermes_investigation_creation_tool_with_identity(
+        tool_name,
+        arguments,
+        session_id=session_id,
+        identity=identity,
+    )
+
+
+def dispatch_hermes_investigation_creation_tool_with_identity(
+    tool_name: str,
+    arguments: dict[str, Any],
+    *,
+    session_id: str,
+    identity: HermesToolExecutionIdentity | None,
 ) -> str:
     with _binding_lock:
         tool_service = _tool_service
@@ -232,19 +362,53 @@ def dispatch_hermes_investigation_creation_tool(
             sort_keys=True,
         )
     try:
-        payload = tool_service.execute(
-            tool_name,
-            dict(arguments or {}),
-            principal=principal_provider(),
-        )
-        result = {"status": "ok", "data": payload}
+        if tool_name in M3_MUTATION_TOOL_NAMES and identity is None:
+            raise IdempotencyConflictError(
+                "durable tool execution identity is required",
+                code="TOOL_EXECUTION_IDENTITY_REQUIRED",
+            )
+        if (
+            identity is not None
+            and identity.session_id != str(session_id or "").strip()
+        ):
+            raise IdempotencyConflictError(
+                "tool execution identity does not match the dispatched Session"
+            )
+        try:
+            principal = principal_provider(session_id)
+        except TypeError:
+            principal = principal_provider()
+        if identity is None:
+            result = {
+                "status": "ok",
+                "data": tool_service.execute(
+                    tool_name,
+                    dict(arguments or {}),
+                    principal=principal,
+                ),
+            }
+        else:
+            result = tool_service.execute_with_identity(
+                tool_name,
+                dict(arguments or {}),
+                principal=principal,
+                identity=identity,
+            )
     except Exception as exc:
-        result = {
+        return _tool_error_json(exc)
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+def _tool_error_json(exc: Exception) -> str:
+    return json.dumps(
+        {
             "status": "error",
             "error": {
                 "code": str(getattr(exc, "code", "TOOL_EXECUTION_FAILED")),
                 "message": str(exc),
                 "details": dict(getattr(exc, "details", {}) or {}),
             },
-        }
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from pathlib import Path
 from threading import RLock
 from typing import Any, Callable
@@ -118,16 +119,24 @@ class HermesInvestigationAgentService:
         self._validate_business_scope(session)
         self._notify(turn.id, "call_qwen")
         try:
-            self._bind_session(session)
-            agent = self._agent(session.id)
-            history = self._conversation_history(session.id)
-            user_message = self.store.get_user_message_for_turn(turn.id).content
-            result = agent.run_conversation(
-                user_message,
-                system_message=self.runtime_binding.product_system_prompt(),
-                conversation_history=history,
-                task_id=turn.id,
+            mode_scope = (
+                self.runtime_binding.product_mode_execution(
+                    self.hermes_state_dir, product_mode="account-activity"
+                )
+                if self.bind_runtime
+                else nullcontext()
             )
+            with mode_scope:
+                self._bind_session(session)
+                agent = self._agent(session.id)
+                history = self._conversation_history(session.id)
+                user_message = self.store.get_user_message_for_turn(turn.id).content
+                result = agent.run_conversation(
+                    user_message,
+                    system_message=self.runtime_binding.product_system_prompt(),
+                    conversation_history=history,
+                    task_id=turn.id,
+                )
             if not isinstance(result, dict):
                 raise RuntimeError("Hermes returned a non-object Turn result")
         except Exception as exc:
@@ -193,6 +202,10 @@ class HermesInvestigationAgentService:
     def add_turn_node_observer(self, observer: Callable[[str, str], None]) -> None:
         self._turn_node_observers.append(observer)
 
+    def owns_turn(self, turn_id: str) -> bool:
+        turn = self.store.get_turn(turn_id)
+        return self.store.get_session(turn.session_id).scope_type == "report"
+
     def get_messages(
         self, session_id: str, *, include_tool_messages: bool = False
     ) -> tuple[InvestigationMessage, ...]:
@@ -252,6 +265,10 @@ class HermesInvestigationAgentService:
         self._bound_sessions.add(session.id)
 
     def _validate_business_scope(self, session: InvestigationSession) -> None:
+        if session.scope_type != "report":
+            raise InvestigationTurnNotFoundError(
+                "session is not a published-report investigation Session"
+            )
         if session.status != "active":
             if self.bind_runtime:
                 self.runtime_binding.release_published_report_session(session.id)

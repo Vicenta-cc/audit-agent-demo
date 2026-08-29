@@ -8,7 +8,10 @@ import os
 
 from backend.investigation_creation.tools import (
     HERMES_M3_TOOL_SCHEMAS,
+    M3_MUTATION_TOOL_NAMES,
+    HermesToolExecutionIdentity,
     dispatch_hermes_investigation_creation_tool,
+    dispatch_hermes_investigation_creation_tool_with_identity,
 )
 from hermes_m0.runtime import (
     get_runtime,
@@ -44,7 +47,13 @@ _M3_CREATION_TOOL_NAMES = frozenset(
 def _handler(tool_name: str):
     def handle(args: dict[str, Any], **kwargs: Any) -> str:
         if tool_name in _M3_CREATION_TOOL_NAMES:
-            return dispatch_hermes_investigation_creation_tool(tool_name, args)
+            return dispatch_hermes_investigation_creation_tool(
+                tool_name,
+                args,
+                session_id=str(kwargs.get("session_id") or ""),
+                turn_id=str(kwargs.get("task_id") or ""),
+                tool_call_id=str(kwargs.get("tool_call_id") or ""),
+            )
         session_id = str(kwargs.get("session_id") or "")
         report_task_runtime = report_task_runtime_for_session(session_id)
         if report_task_runtime is not None:
@@ -81,6 +90,28 @@ def _idempotent_tool_execution(**kwargs: Any) -> Any:
     tool_name = str(kwargs.get("tool_name") or "")
     args = kwargs.get("args")
     next_call = kwargs["next_call"]
+    if (
+        tool_name in M3_MUTATION_TOOL_NAMES
+        and os.environ.get("HERMES_INVESTIGATION_CREATION_MODE") == "1"
+    ):
+        try:
+            identity = HermesToolExecutionIdentity.require(
+                session_id=str(kwargs.get("session_id") or ""),
+                turn_id=str(kwargs.get("turn_id") or kwargs.get("task_id") or ""),
+                tool_call_id=str(kwargs.get("tool_call_id") or ""),
+            )
+            return dispatch_hermes_investigation_creation_tool_with_identity(
+                tool_name,
+                dict(args or {}),
+                session_id=identity.session_id,
+                identity=identity,
+            )
+        except Exception as exc:
+            return error_result(
+                tool=tool_name,
+                code=str(getattr(exc, "code", "idempotency_ledger_failure")),
+                message=str(exc),
+            )
     if tool_name not in _TOOL_NAMES:
         return next_call(args)
     try:

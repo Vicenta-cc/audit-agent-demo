@@ -1,3 +1,5 @@
+import type { InvestigationConversationArtifact } from "./investigationCreation";
+
 export interface InvestigationApiSession {
   session_id: string;
   report_version_id: string;
@@ -19,13 +21,14 @@ export type InvestigationTurnStage =
   | "failed";
 
 export interface InvestigationTurnResponse {
-  session_id: string;
+  session_id?: string;
   turn_id: string;
   status: InvestigationTurnStatus;
   stage: InvestigationTurnStage;
   answer: string;
   safe_message: string;
   retryable: boolean;
+  artifact?: InvestigationConversationArtifact | null;
   updated_at: string;
   event_sequence?: number;
 }
@@ -45,4 +48,5 @@ export interface InvestigationTurnEvent {
   answer: string;
   safe_message: string;
   retryable: boolean;
+  artifact?: InvestigationConversationArtifact | null;
 }

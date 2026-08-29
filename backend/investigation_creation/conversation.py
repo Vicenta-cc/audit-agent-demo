@@ -1,0 +1,683 @@
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from threading import RLock
+from typing import Any, Callable
+
+from backend.audit_agent.config import settings
+from backend.hermes_runtime.adapter import HermesRuntimeBinding
+from backend.hermes_runtime.service import HermesInvestigationAgentService
+from backend.investigation.contracts import (
+    InvestigationMessage,
+    InvestigationSession,
+    InvestigationTurn,
+    TurnResult,
+)
+from backend.investigation.errors import (
+    InvestigationSessionNotFoundError,
+    InvestigationTurnNotFoundError,
+    ReportScopeError,
+)
+from backend.investigation.store import InvestigationStore
+
+from .contracts import ConfirmationPreview, InvestigationRunProjection
+from .errors import PrincipalAccessDeniedError, RunNotFoundError
+from .principal import Principal
+from .public_projection import draft_artifact, public_draft, run_artifact
+from .tools import (
+    HermesToolExecutionIdentity,
+    InvestigationCreationToolService,
+)
+
+
+CREATION_SYSTEM_PROMPT = """You configure a user-requested investigation before any collection begins.
+Use only the six investigation creation tools exposed in this mode. Query real options before
+creating or updating a Draft. Never infer confirmation: only call confirm_and_queue_investigation
+after an explicit user instruction to start, and pass confirmed=true with a stable idempotency key.
+Keep ordinary conversation and Draft edits free of Run, Job, crawler, audit, or report side effects.
+Briefly explain the proposed configuration in the user's language; ToolResults remain authoritative.
+"""
+
+
+@dataclass(frozen=True)
+class InvestigationWorkspaceState:
+    session: InvestigationSession
+    messages: tuple[InvestigationMessage, ...]
+    latest_turn: InvestigationTurn | None
+    draft_artifact: dict[str, Any]
+    run: InvestigationRunProjection | None
+    report_messages: tuple[InvestigationMessage, ...] = ()
+    latest_report_turn: InvestigationTurn | None = None
+
+
+class FakeCreationHermesAgent:
+    """Deterministic local Hermes-shaped runtime; it never starts the investigation pipeline."""
+
+    def __init__(
+        self,
+        *,
+        session_id: str,
+        tool_service: InvestigationCreationToolService,
+        principal_resolver: Callable[[str], Principal],
+        **_: Any,
+    ) -> None:
+        self.session_id = session_id
+        self.tool_service = tool_service
+        self.principal_resolver = principal_resolver
+
+    def close(self) -> None:
+        return None
+
+    def run_conversation(
+        self,
+        message: str,
+        *,
+        conversation_history: list[dict[str, Any]] | None = None,
+        task_id: str,
+        **_: Any,
+    ) -> dict[str, Any]:
+        principal = self.principal_resolver(self.session_id)
+        history = list(conversation_history or [])
+        option_args = {"platform": "xhs", "page_size": 20}
+        options = self.tool_service.execute(
+            "query_investigation_options", option_args, principal=principal
+        )
+        policy = (options.get("audit_policies") or [None])[0]
+        no_policy = "无审核策略" in message or "blocker" in message.lower()
+        configuration: dict[str, Any] = {
+            "schema_version": "investigation-draft-config-v3",
+            "platform": "xhs",
+            "investigation": {
+                "mode": "search",
+                "recall_plan": {
+                    "strategy": "temporary_terms",
+                    "terms": [
+                        "世界杯博彩",
+                        "世界杯赌球",
+                        "博彩引流",
+                        "足球盘",
+                        "外围下注",
+                    ],
+                    "source_lexicon_ids": [],
+                },
+            },
+            "audit_policy": None,
+        }
+        if policy is not None and not no_policy:
+            configuration["audit_policy"] = {
+                "id": policy["id"],
+                "expected_published_version": policy["published_version"],
+                "expected_published_config_hash": policy["published_config_hash"],
+                "expected_ruleset_revision_id": policy["ruleset_revision_id"],
+                "expected_ruleset_version": policy["ruleset_version"],
+                "expected_ruleset_content_hash": policy["ruleset_content_hash"],
+            }
+        draft_args = {
+            "title": "世界杯期间小红书博彩引流调查",
+            "objective": message.strip(),
+            "configuration": configuration,
+        }
+        option_call_id = f"{task_id}:options"
+        create_call_id = f"{task_id}:create-draft"
+        create_result = self.tool_service.execute_with_identity(
+            "create_investigation_draft",
+            draft_args,
+            principal=principal,
+            identity=HermesToolExecutionIdentity.require(
+                session_id=self.session_id,
+                turn_id=task_id,
+                tool_call_id=create_call_id,
+            ),
+        )
+        if create_result.get("status") != "ok":
+            error = create_result.get("error") or {}
+            raise RuntimeError(
+                str(error.get("message") or "fake Draft creation did not complete")
+            )
+        view = create_result["data"]
+        explicit_confirm = (
+            ("确认并开始" in message or "确认开始调查" in message)
+            and "不要开始" not in message
+        )
+        confirm_call_id = f"{task_id}:confirm-run"
+        confirm_args = {
+            "draft_id": str((view.get("draft") or {}).get("id") or ""),
+            "expected_revision": int(
+                (view.get("draft") or {}).get("current_revision") or 0
+            ),
+            "confirmed": True,
+            "idempotency_key": f"fake-hermes-confirm:{task_id}",
+        }
+        confirm_result: dict[str, Any] | None = None
+        if explicit_confirm:
+            confirm_result = self.tool_service.execute_with_identity(
+                "confirm_and_queue_investigation",
+                confirm_args,
+                principal=principal,
+                identity=HermesToolExecutionIdentity.require(
+                    session_id=self.session_id,
+                    turn_id=task_id,
+                    tool_call_id=confirm_call_id,
+                ),
+            )
+            if confirm_result.get("status") != "ok":
+                error = confirm_result.get("error") or {}
+                raise RuntimeError(
+                    str(error.get("message") or "fake Run confirmation did not complete")
+                )
+        final = (
+            "调查方案已确认并进入调查队列。"
+            if explicit_confirm
+            else (
+                "调查方案已生成，尚未开始采集。请核对平台、审核策略、规则集和最终搜索词；"
+                "只有明确点击确认后才会排队执行。"
+            )
+        )
+        messages = [
+            *history,
+            {"role": "user", "content": message},
+            self._tool_call(option_call_id, "query_investigation_options", option_args),
+            self._tool_result(option_call_id, "query_investigation_options", options),
+            self._tool_call(create_call_id, "create_investigation_draft", draft_args),
+            {
+                "role": "tool",
+                "tool_call_id": create_call_id,
+                "name": "create_investigation_draft",
+                "content": json.dumps(
+                    create_result, ensure_ascii=False, sort_keys=True
+                ),
+            },
+            *(
+                [
+                    self._tool_call(
+                        confirm_call_id,
+                        "confirm_and_queue_investigation",
+                        confirm_args,
+                    ),
+                    {
+                        "role": "tool",
+                        "tool_call_id": confirm_call_id,
+                        "name": "confirm_and_queue_investigation",
+                        "content": json.dumps(
+                            confirm_result, ensure_ascii=False, sort_keys=True
+                        ),
+                    },
+                ]
+                if confirm_result is not None
+                else []
+            ),
+            {"role": "assistant", "content": final},
+        ]
+        return {
+            "completed": True,
+            "failed": False,
+            "interrupted": False,
+            "final_response": final,
+            "messages": messages,
+            "turn_exit_reason": "completed",
+            "api_calls": 0,
+        }
+
+    @staticmethod
+    def _tool_call(call_id: str, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {"name": name, "arguments": arguments},
+                }
+            ],
+        }
+
+    @staticmethod
+    def _tool_result(call_id: str, name: str, data: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "role": "tool",
+            "tool_call_id": call_id,
+            "name": name,
+            "content": json.dumps(
+                {"status": "ok", "data": data}, ensure_ascii=False, sort_keys=True
+            ),
+        }
+
+
+class InvestigationCreationConversationService:
+    """Creation-scoped facade over the shared durable Session/Turn transport."""
+
+    def __init__(
+        self,
+        *,
+        tool_service: InvestigationCreationToolService,
+        store: InvestigationStore | None = None,
+        runtime_binding: HermesRuntimeBinding | None = None,
+        agent_factory: Callable[..., Any] | None = None,
+        fake_runtime: bool = False,
+        hermes_state_dir: Path | None = None,
+    ) -> None:
+        self.tool_service = tool_service
+        self.store = store or InvestigationStore()
+        self.runtime_binding = runtime_binding or HermesRuntimeBinding()
+        self.agent_factory = agent_factory
+        self.fake_runtime = bool(fake_runtime)
+        self.hermes_state_dir = (
+            hermes_state_dir or settings.data_dir / "hermes-investigation-creation"
+        ).resolve()
+        self._agents: dict[str, Any] = {}
+        self._agent_lock = RLock()
+        self._turn_node_observers: list[Callable[[str, str], None]] = []
+
+    def close(self) -> None:
+        with self._agent_lock:
+            agents = tuple(self._agents.values())
+            self._agents.clear()
+        for agent in agents:
+            close = getattr(agent, "close", None)
+            if callable(close):
+                close()
+
+    def create_session(
+        self, *, principal: Principal, workspace_key: str = ""
+    ) -> InvestigationSession:
+        return self.store.create_creation_session(
+            principal=principal.id,
+            anchor_key=str(workspace_key or "").strip(),
+        )
+
+    def get_session(self, session_id: str, *, principal: Principal) -> InvestigationSession:
+        session = self.store.get_session(session_id)
+        self._authorize(session, principal)
+        return session
+
+    def principal_for_session(self, session_id: str) -> Principal:
+        session = self.store.get_session(session_id)
+        if session.scope_type != "creation" or not session.owner_principal:
+            raise InvestigationSessionNotFoundError("creation Session was not found")
+        return Principal(session.owner_principal)
+
+    def accept_message(
+        self,
+        session_id: str,
+        *,
+        client_message_id: str,
+        content: str,
+        principal: Principal,
+    ) -> tuple[InvestigationTurn, bool]:
+        user_input = str(content or "").strip()
+        client_id = str(client_message_id or "").strip()
+        if not user_input or len(user_input) > 4_000:
+            raise ValueError("content must contain between 1 and 4000 characters")
+        if not client_id or len(client_id) > 200:
+            raise ValueError("client_message_id must contain between 1 and 200 characters")
+        session = self.get_session(session_id, principal=principal)
+        return self.store.create_turn(
+            session.id,
+            client_message_id=client_id,
+            user_input=user_input,
+        )
+
+    def authorize_turn(self, turn_id: str, *, principal: Principal) -> InvestigationTurn:
+        turn = self.store.get_turn(turn_id)
+        self.get_session(turn.session_id, principal=principal)
+        return turn
+
+    def authorize_report_handoff(
+        self,
+        workspace_session_id: str,
+        run_id: str,
+        *,
+        principal: Principal,
+    ) -> Any:
+        self.get_session(workspace_session_id, principal=principal)
+        try:
+            run = self.tool_service.application_service.get_run(
+                run_id, principal=principal
+            )
+        except (PrincipalAccessDeniedError, RunNotFoundError) as exc:
+            raise InvestigationSessionNotFoundError(
+                "Run is not associated with this creation workspace"
+            ) from exc
+        _, _, turns = self.store.conversation_snapshot(
+            workspace_session_id, include_tool_messages=False
+        )
+        associated = any(
+            (
+                artifact.get("artifact_type") == "investigation_draft"
+                and str(artifact.get("draft_id") or "") == run.draft_id
+            )
+            or (
+                artifact.get("artifact_type") == "investigation_run"
+                and str(artifact.get("run_id") or "") == run.run_id
+            )
+            for turn in turns
+            for artifact in (turn.public_artifact or {},)
+        )
+        if not associated:
+            raise InvestigationSessionNotFoundError(
+                "Run is not associated with this creation workspace"
+            )
+        if run.status.value != "PUBLISHED" or not run.report_version_id:
+            raise ReportScopeError("Run has no published report yet")
+        return run
+
+    def authorize_report_turn(
+        self,
+        workspace_session_id: str,
+        run_id: str,
+        turn_id: str,
+        *,
+        principal: Principal,
+    ) -> InvestigationTurn:
+        run = self.authorize_report_handoff(
+            workspace_session_id, run_id, principal=principal
+        )
+        report_session = self.store.find_session_by_anchor(f"m3-run:{run.run_id}")
+        if (
+            report_session is None
+            or report_session.scope_type != "report"
+            or report_session.report_version_id != run.report_version_id
+        ):
+            raise InvestigationTurnNotFoundError("report Turn was not found")
+        turn = self.store.get_turn(turn_id)
+        if turn.session_id != report_session.id:
+            raise InvestigationTurnNotFoundError("report Turn was not found")
+        return turn
+
+    def get_messages(
+        self,
+        session_id: str,
+        *,
+        principal: Principal,
+        include_tool_messages: bool = False,
+    ) -> tuple[InvestigationMessage, ...]:
+        self.get_session(session_id, principal=principal)
+        return self.store.list_messages(
+            session_id, include_tool_messages=include_tool_messages
+        )
+
+    def get_workspace_state(
+        self, session_id: str, *, principal: Principal
+    ) -> InvestigationWorkspaceState:
+        session, messages, turns = self.store.conversation_snapshot(
+            session_id, include_tool_messages=False
+        )
+        self._authorize(session, principal)
+        latest_turn = turns[-1] if turns else None
+        draft_id = ""
+        artifact_run_id = ""
+        for turn in reversed(turns):
+            artifact = turn.public_artifact or {}
+            if artifact.get("artifact_type") == "investigation_draft":
+                draft_id = str(artifact.get("draft_id") or "")
+                if draft_id:
+                    break
+            if artifact.get("artifact_type") == "investigation_run":
+                artifact_run_id = str(artifact.get("run_id") or "")
+                if artifact_run_id:
+                    break
+        current_artifact: dict[str, Any] = {}
+        run = None
+        report_messages: tuple[InvestigationMessage, ...] = ()
+        latest_report_turn = None
+        if artifact_run_id:
+            run = self.tool_service.application_service.get_run(
+                artifact_run_id, principal=principal
+            )
+            draft_id = run.draft_id
+        if draft_id:
+            view = self.tool_service.application_service.get_draft_view(
+                draft_id, principal=principal
+            )
+            current_artifact = draft_artifact(view).model_dump(mode="json")
+            if run is None:
+                run = self.tool_service.application_service.find_run_for_draft(
+                    draft_id, principal=principal
+                )
+            if run is not None and run.report_version_id:
+                report_session = self.store.find_session_by_anchor(
+                    f"m3-run:{run.run_id}"
+                )
+                if report_session is not None:
+                    if (
+                        report_session.scope_type != "report"
+                        or report_session.report_version_id != run.report_version_id
+                    ):
+                        raise ReportScopeError(
+                            "Run report Session anchor does not match its published report"
+                        )
+                    _, report_messages, report_turns = self.store.conversation_snapshot(
+                        report_session.id, include_tool_messages=False
+                    )
+                    latest_report_turn = report_turns[-1] if report_turns else None
+        return InvestigationWorkspaceState(
+            session=session,
+            messages=messages,
+            latest_turn=latest_turn,
+            draft_artifact=current_artifact,
+            run=run,
+            report_messages=report_messages,
+            latest_report_turn=latest_report_turn,
+        )
+
+    def accept_resume(self, turn_id: str) -> tuple[InvestigationTurn, bool]:
+        turn = self.store.get_turn(turn_id)
+        self.principal_for_session(turn.session_id)
+        if turn.status in {"completed", "error"}:
+            return turn, True
+        if turn.status != "interrupted":
+            raise InvestigationTurnNotFoundError("turn is not resumable")
+        return self.store.begin_resume(turn.id), False
+
+    def execute_resume(self, turn_id: str) -> TurnResult:
+        return self.execute_turn(turn_id)
+
+    def execute_turn(self, turn_id: str) -> TurnResult:
+        turn = self.store.get_turn(turn_id)
+        if turn.status in {"completed", "error"}:
+            return self.store.turn_result(turn.id, idempotent_replay=True)
+        if turn.status != "running":
+            raise InvestigationTurnNotFoundError("turn is not ready for execution")
+        session = self.store.get_session(turn.session_id)
+        principal = self.principal_for_session(session.id)
+        history = self.store.latest_completed_hermes_transcript(session.id)
+        user_message = self.store.get_user_message_for_turn(turn.id).content
+        self._notify(turn.id, "call_qwen")
+        try:
+            if self.fake_runtime:
+                agent = self._agent(session.id)
+                result = agent.run_conversation(
+                    user_message,
+                    system_message=CREATION_SYSTEM_PROMPT,
+                    conversation_history=history,
+                    task_id=turn.id,
+                )
+            else:
+                with self.runtime_binding.product_mode_execution(
+                    self.hermes_state_dir, product_mode="creation"
+                ):
+                    agent = self._agent(session.id)
+                    result = agent.run_conversation(
+                        user_message,
+                        system_message=CREATION_SYSTEM_PROMPT,
+                        conversation_history=history,
+                        task_id=turn.id,
+                    )
+            if not isinstance(result, dict):
+                raise RuntimeError("Hermes returned a non-object Turn result")
+            if bool(result.get("interrupted")):
+                raise RuntimeError("Hermes creation Turn was interrupted")
+            if bool(result.get("failed")) or not bool(result.get("completed", True)):
+                self.store.fail_turn(
+                    turn.id,
+                    error_code="hermes_execution_failed",
+                    safe_message=(
+                        str(result.get("final_response") or "").strip()
+                        or "调查方案生成暂时无法完成。"
+                    ),
+                    retryable=False,
+                )
+                return self.store.turn_result(turn.id)
+            transcript = HermesInvestigationAgentService._validate_completed_transcript(
+                result, history=history, user_message=user_message
+            )
+            artifact = self._verified_artifact(
+                transcript[len(history or []):], principal=principal
+            )
+            return self._persist_result(turn, result, transcript, artifact)
+        except Exception as exc:
+            current = self.store.get_turn(turn.id)
+            if current.status == "completed":
+                return self.store.turn_result(turn.id)
+            self.store.mark_interrupted(
+                turn.id,
+                error_code="hermes_unknown_outcome",
+                safe_message="调查方案生成结果暂时无法确认，可以安全恢复。",
+                retryable=True,
+            )
+            raise RuntimeError("Hermes creation Turn ended with an unknown outcome") from exc
+
+    def add_turn_node_observer(self, observer: Callable[[str, str], None]) -> None:
+        self._turn_node_observers.append(observer)
+
+    def owns_turn(self, turn_id: str) -> bool:
+        turn = self.store.get_turn(turn_id)
+        return self.store.get_session(turn.session_id).scope_type == "creation"
+
+    def _agent(self, session_id: str) -> Any:
+        with self._agent_lock:
+            agent = self._agents.get(session_id)
+            if agent is None:
+                if self.fake_runtime:
+                    agent = FakeCreationHermesAgent(
+                        session_id=session_id,
+                        tool_service=self.tool_service,
+                        principal_resolver=self.principal_for_session,
+                    )
+                else:
+                    agent = self.runtime_binding.create_agent(
+                        session_id=session_id,
+                        agent_factory=self.agent_factory,
+                        product_mode="creation",
+                        base_url=settings.dashscope_base_url,
+                        api_key=settings.dashscope_api_key,
+                        stream_delta_callback=lambda _delta: None,
+                    )
+                self._agents[session_id] = agent
+            return agent
+
+    def _verified_artifact(
+        self, messages: list[dict[str, Any]], *, principal: Principal
+    ) -> dict[str, Any]:
+        calls: dict[str, str] = {}
+        artifact: dict[str, Any] = {}
+        for message in messages:
+            if message.get("role") == "assistant":
+                for call in message.get("tool_calls") or []:
+                    function = call.get("function") or {}
+                    calls[str(call.get("id") or "")] = str(function.get("name") or "")
+                continue
+            if message.get("role") != "tool":
+                continue
+            tool_name = calls.get(str(message.get("tool_call_id") or ""), "")
+            if tool_name not in self.tool_service.allowed_tool_names:
+                continue
+            payload = json.loads(str(message.get("content") or "{}"))
+            if payload.get("status") != "ok" or not isinstance(payload.get("data"), dict):
+                continue
+            data = payload["data"]
+            if tool_name in {
+                "create_investigation_draft",
+                "update_investigation_draft",
+                "get_investigation_draft",
+            }:
+                tool_draft = public_draft(data.get("draft") or {})
+                preview = ConfirmationPreview.model_validate(
+                    data.get("confirmation_preview")
+                )
+                if (
+                    preview.draft_id != tool_draft.id
+                    or preview.draft_revision != tool_draft.current_revision
+                ):
+                    raise RuntimeError("Draft ToolResult projection identity is inconsistent")
+                verified = self.tool_service.application_service.get_draft_view(
+                    tool_draft.id, principal=principal
+                )
+                artifact = draft_artifact(verified).model_dump(mode="json")
+            elif tool_name in {
+                "confirm_and_queue_investigation",
+                "get_investigation_run",
+            }:
+                projection = InvestigationRunProjection.model_validate(data)
+                verified = self.tool_service.application_service.get_run(
+                    projection.run_id, principal=principal
+                )
+                artifact = run_artifact(verified).model_dump(mode="json")
+        return artifact
+
+    def _persist_result(
+        self,
+        turn: InvestigationTurn,
+        result: dict[str, Any],
+        transcript: list[dict[str, Any]],
+        artifact: dict[str, Any],
+    ) -> TurnResult:
+        answer = str(result.get("final_response") or "").strip()
+        history_count = len(self.store.latest_completed_hermes_transcript(turn.session_id) or [])
+        trace_messages = [
+            item
+            for item in transcript[history_count:]
+            if item.get("role") in {"assistant", "tool"}
+        ]
+        tool_calls = HermesInvestigationAgentService._tool_calls(trace_messages)
+        session = self.store.get_session(turn.session_id)
+        self.store.complete_turn(
+            turn.id,
+            answer=answer,
+            trace_messages=trace_messages,
+            pending_sources=[],
+            grounding_validation={"status": "passed", "source_count": 0, "warnings": []},
+            resolved_references=[],
+            all_tool_calls=tool_calls,
+            query_receipts=[],
+            summary_text=answer[-2_000:],
+            active_focus=session.active_focus,
+            ordered_referents=[],
+            last_claim_id="",
+            last_finding_id="",
+            last_evidence_id="",
+            input_tokens=int(result.get("input_tokens") or 0),
+            output_tokens=int(result.get("output_tokens") or 0),
+            total_tokens=int(result.get("total_tokens") or 0),
+            llm_call_count=int(result.get("api_calls") or 0),
+            stop_reason=str(result.get("turn_exit_reason") or "completed"),
+            context_accounting=[],
+            grounding_issues=[],
+            grounding_repair_count=0,
+            scope_repair_count=0,
+            source_repair_count=0,
+            semantic_rewrite_count=0,
+            scope_initial_draft="",
+            scope_repaired_draft="",
+            scope_initial_issues=[],
+            scope_remaining_issues=[],
+            hermes_transcript=transcript,
+            public_artifact=artifact,
+        )
+        self._notify(turn.id, "persist_turn")
+        return self.store.turn_result(turn.id)
+
+    def _authorize(self, session: InvestigationSession, principal: Principal) -> None:
+        if (
+            session.scope_type != "creation"
+            or session.owner_principal != principal.id
+            or session.status != "active"
+        ):
+            raise InvestigationSessionNotFoundError("creation Session was not found")
+
+    def _notify(self, turn_id: str, node_name: str) -> None:
+        for observer in tuple(self._turn_node_observers):
+            observer(turn_id, node_name)

@@ -29,12 +29,14 @@ class InvestigationTurnExecutor:
         *,
         client_message_id: str,
         content: str,
+        **context: Any,
     ) -> Any:
         with self._lock:
             turn, replay = self.service.accept_message(
                 session_id,
                 client_message_id=client_message_id,
                 content=content,
+                **context,
             )
             if not self.store.list_public_turn_events(turn.id):
                 self.store.append_public_turn_event(turn.id, stage="accepted")
@@ -58,6 +60,9 @@ class InvestigationTurnExecutor:
         interrupted = 0
         with self._lock:
             for turn in self.store.list_running_turns():
+                owns_turn = getattr(self.service, "owns_turn", None)
+                if callable(owns_turn) and not owns_turn(turn.id):
+                    continue
                 if not self.store.list_public_turn_events(turn.id):
                     self.store.append_public_turn_event(turn.id, stage="accepted")
                 if turn.current_node:
@@ -117,7 +122,10 @@ class InvestigationTurnExecutor:
         if turn.status == "completed":
             result = self.store.turn_result(turn_id)
             self.store.append_public_turn_event(
-                turn_id, stage="completed", answer=result.answer
+                turn_id,
+                stage="completed",
+                answer=result.answer,
+                artifact=turn.public_artifact,
             )
             return
         if turn.status == "interrupted":

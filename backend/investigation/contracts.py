@@ -291,6 +291,8 @@ class GroundingIssue(StrictModel):
 
 class InvestigationSession(StrictModel):
     id: str
+    scope_type: Literal["report", "creation"] = "report"
+    owner_principal: str = Field(default="", exclude=True)
     task_id: str
     report_id: str
     report_version_id: str
@@ -306,6 +308,23 @@ class InvestigationSession(StrictModel):
     last_answer_message_id: str = ""
     created_at: str
     updated_at: str
+
+    @model_validator(mode="after")
+    def validate_scope_anchor(self) -> "InvestigationSession":
+        report_anchor = (
+            self.task_id,
+            self.report_id,
+            self.report_version_id,
+            self.source_snapshot_id,
+            self.snapshot_hash,
+        )
+        if self.scope_type == "report" and not all(report_anchor):
+            raise ValueError("report-scoped Session requires its complete immutable anchor")
+        if self.scope_type == "creation" and any(report_anchor):
+            raise ValueError("creation-scoped Session cannot carry a report anchor")
+        if self.scope_type == "creation" and not self.owner_principal:
+            raise ValueError("creation-scoped Session requires an owner Principal")
+        return self
 
 
 class InvestigationMessage(StrictModel):
@@ -338,6 +357,7 @@ class InvestigationTurn(StrictModel):
     error_code: str = ""
     safe_message: str = ""
     retryable: bool = False
+    public_artifact: dict[str, Any] = Field(default_factory=dict)
     created_at: str
     started_at: str
     completed_at: str = ""

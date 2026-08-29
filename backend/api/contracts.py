@@ -5,6 +5,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from backend.investigation_creation.public_projection import (
+    InvestigationConversationArtifact,
+    InvestigationDraftArtifact,
+    InvestigationRunArtifact,
+    PublicInvestigationDraft,
+    PublicInvestigationRunProjection,
+)
+
 
 class PublicApiModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -90,11 +98,19 @@ class InvestigationSessionResponse(PublicApiModel):
     updated_at: str
 
 
+class InvestigationWorkspaceSessionResponse(PublicApiModel):
+    workspace_session_id: str
+    status: Literal["active", "closed"]
+    created_at: str
+    updated_at: str
+
+
 class InvestigationMessageResponse(PublicApiModel):
     message_id: str
     turn_id: str = ""
     role: Literal["user", "assistant"]
     content: str
+    artifact: InvestigationConversationArtifact | None = None
     sequence: int = Field(ge=1)
     created_at: str
 
@@ -123,6 +139,11 @@ class InvestigationTurnAcceptedResponse(PublicApiModel):
     status: Literal[InvestigationTurnStatus.RUNNING] = InvestigationTurnStatus.RUNNING
 
 
+class InvestigationWorkspaceReportTurnAcceptedResponse(PublicApiModel):
+    turn_id: str
+    status: Literal[InvestigationTurnStatus.RUNNING] = InvestigationTurnStatus.RUNNING
+
+
 class InvestigationTurnStatusResponse(PublicApiModel):
     session_id: str
     turn_id: str
@@ -131,6 +152,7 @@ class InvestigationTurnStatusResponse(PublicApiModel):
     answer: str = ""
     safe_message: str = ""
     retryable: bool = False
+    artifact: InvestigationConversationArtifact | None = None
     updated_at: str
 
     @model_validator(mode="after")
@@ -145,6 +167,38 @@ class InvestigationTurnStatusResponse(PublicApiModel):
         return self
 
 
+class InvestigationWorkspaceTurnStatusResponse(PublicApiModel):
+    turn_id: str
+    status: InvestigationTurnStatus
+    stage: InvestigationPublicStage
+    answer: str = ""
+    safe_message: str = ""
+    retryable: bool = False
+    artifact: InvestigationConversationArtifact | None = None
+    updated_at: str
+
+    @model_validator(mode="after")
+    def validate_terminal_payload(self) -> "InvestigationWorkspaceTurnStatusResponse":
+        if self.status is InvestigationTurnStatus.COMPLETED and not self.answer.strip():
+            raise ValueError("completed turn requires an answer")
+        if self.status in {
+            InvestigationTurnStatus.INTERRUPTED,
+            InvestigationTurnStatus.ERROR,
+        } and not self.safe_message.strip():
+            raise ValueError("failed turn requires a safe message")
+        return self
+
+
+class InvestigationWorkspaceStateResponse(PublicApiModel):
+    workspace: InvestigationWorkspaceSessionResponse
+    messages: tuple[InvestigationMessageResponse, ...] = ()
+    latest_turn: InvestigationTurnStatusResponse | None = None
+    draft_artifact: InvestigationDraftArtifact | None = None
+    run: PublicInvestigationRunProjection | None = None
+    report_messages: tuple[InvestigationMessageResponse, ...] = ()
+    latest_report_turn: InvestigationWorkspaceTurnStatusResponse | None = None
+
+
 class InvestigationTurnEventResponse(PublicApiModel):
     event_id: str
     turn_id: str
@@ -154,6 +208,7 @@ class InvestigationTurnEventResponse(PublicApiModel):
     answer: str = ""
     safe_message: str = ""
     retryable: bool = False
+    artifact: InvestigationConversationArtifact | None = None
 
     @model_validator(mode="after")
     def validate_terminal_payload(self) -> "InvestigationTurnEventResponse":
@@ -165,4 +220,3 @@ class InvestigationTurnEventResponse(PublicApiModel):
         } and not self.safe_message.strip():
             raise ValueError("failed event requires a safe message")
         return self
-

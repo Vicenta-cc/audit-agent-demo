@@ -1,0 +1,525 @@
+import { expect, test } from "@playwright/test";
+import {
+  buildConfirmationCardView,
+  buildConfirmationIdempotencyKey,
+  formatConfirmationBlockerMessage,
+  parseInvestigationSearchTerms
+} from "../src/features/investigation/confirmationView";
+import { mapInvestigationRunState } from "../src/features/investigation/investigationRunState";
+import {
+  buildNewInvestigationWorkspaceSession,
+  buildWorkspaceRecoveryErrorSession,
+  restoreInvestigationWorkspace
+} from "../src/features/investigation/workspaceRecovery";
+import { ApiError } from "../src/services/apiClient";
+import {
+  confirmAndQueueInvestigation,
+  createInvestigationWorkspace,
+  getInvestigationWorkspaceState,
+  getInvestigationWorkspace,
+  getInvestigationWorkspacePublishedReport,
+  listInvestigationWorkspaceMessages,
+  resumeInvestigationWorkspaceReportTurn,
+  sendInvestigationWorkspaceReportTurn,
+  updateInvestigationDraft
+} from "../src/services/investigationCreation";
+import type { TaskDraft } from "../src/types/investigation";
+import type {
+  ConfirmationPreview,
+  InvestigationDraftConfiguration,
+  InvestigationRunProjection,
+  InvestigationWorkspaceState,
+  PublicInvestigationDraft
+} from "../src/types/investigationCreation";
+
+const draft: TaskDraft = {
+  taskName: "世界杯博彩引流调查",
+  taskType: "风险调查",
+  subject: "博彩引流",
+  platforms: ["xhs"],
+  keywords: ["世界杯博彩"],
+  matchedRuleSet: "博彩风险规则",
+  ruleSetDescription: "",
+  status: "等待确认",
+  confirmed: false
+};
+
+const preview: ConfirmationPreview = {
+  draft_id: "draft-1",
+  draft_revision: 3,
+  title: "世界杯博彩引流调查",
+  objective: "识别世界杯期间的小红书博彩引流",
+  mode: "search",
+  platform: "xhs",
+  resolved_search_terms: ["世界杯博彩", "看球下注"],
+  creator_url: "",
+  recall_plan: {
+    strategy: "temporary_terms",
+    lexicon_id: "",
+    lexicon_title: "",
+    enabled_main_term_count: 0,
+    temporary_terms: ["世界杯博彩", "看球下注"],
+    source_lexicon_ids: []
+  },
+  audit_policy: {
+    id: "policy-1",
+    name: "博彩引流审核策略",
+    description: "",
+    published_version: "v1",
+    ruleset_revision_id: "ruleset-rev-1",
+    ruleset_version: 7,
+    domain: "gambling"
+  },
+  ruleset_revision: {
+    id: "ruleset-rev-1",
+    ruleset_id: "ruleset-1",
+    name: "博彩风险规则",
+    domain: "gambling",
+    version: 7,
+    enabled_rule_count: 4
+  },
+  max_notes: 1,
+  blockers: [],
+  can_confirm: true
+};
+
+const configuration: InvestigationDraftConfiguration = {
+  schema_version: "investigation-draft-config-v3",
+  platform: "xhs",
+  investigation: {
+    mode: "search",
+    recall_plan: {
+      strategy: "temporary_terms",
+      terms: ["世界杯博彩"],
+      source_lexicon_ids: []
+    }
+  },
+  audit_policy: null
+};
+
+const publicDraft: PublicInvestigationDraft = {
+  id: "draft-1",
+  status: "DRAFT",
+  current_revision: 3,
+  title: preview.title,
+  objective: preview.objective,
+  configuration,
+  created_at: "2026-08-28T00:00:00Z",
+  updated_at: "2026-08-28T00:01:00Z",
+  confirmed_revision: null,
+  confirmed_at: ""
+};
+
+function workspaceState(
+  overrides: Partial<InvestigationWorkspaceState> = {}
+): InvestigationWorkspaceState {
+  return {
+    workspace: {
+      workspace_session_id: "investigation-session:workspace-1",
+      status: "active",
+      created_at: "2026-08-28T00:00:00Z",
+      updated_at: "2026-08-28T00:01:00Z"
+    },
+    messages: [{
+      message_id: "message-user-1",
+      turn_id: "turn-1",
+      role: "user",
+      content: "先生成方案，不要开始采集",
+      sequence: 1,
+      created_at: "2026-08-28T00:00:00Z"
+    }, {
+      message_id: "message-assistant-1",
+      turn_id: "turn-1",
+      role: "assistant",
+      content: "调查方案已生成。",
+      sequence: 2,
+      created_at: "2026-08-28T00:01:00Z"
+    }],
+    latest_turn: {
+      session_id: "investigation-session:workspace-1",
+      turn_id: "turn-1",
+      status: "completed",
+      stage: "completed",
+      answer: "调查方案已生成。",
+      safe_message: "",
+      retryable: false,
+      updated_at: "2026-08-28T00:01:00Z"
+    },
+    draft_artifact: {
+      artifact_type: "investigation_draft",
+      draft_id: publicDraft.id,
+      draft_revision: publicDraft.current_revision,
+      draft: publicDraft,
+      confirmation_preview: preview
+    },
+    run: null,
+    report_messages: [],
+    latest_report_turn: null,
+    ...overrides
+  };
+}
+
+function run(status: InvestigationRunProjection["status"], overrides = {}): InvestigationRunProjection {
+  return {
+    run_id: "run-1",
+    draft_id: "draft-1",
+    draft_revision: 3,
+    status,
+    job_id: "job-1",
+    crawl_status: "pending",
+    analysis_status: "pending",
+    task_stats: {},
+    report_status: "pending",
+    report_version_id: "",
+    error_code: "",
+    error_message: "",
+    created_at: "2026-08-28T00:00:00Z",
+    updated_at: "2026-08-28T00:00:00Z",
+    started_at: "",
+    completed_at: "",
+    ...overrides
+  };
+}
+
+test.beforeEach(() => {
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      XHS_AUDIT_API_BASE: "http://api.test",
+      location: { origin: "http://ui.test" }
+    }
+  });
+});
+
+test("renders real Draft and ConfirmationPreview fields", () => {
+  const view = buildConfirmationCardView(draft, preview);
+  expect(view).toMatchObject({
+    platform: "小红书",
+    objective: preview.objective,
+    auditPolicy: "博彩引流审核策略",
+    ruleSet: "博彩风险规则 · v7",
+    recallStrategy: "本次临时搜索词",
+    maxNotes: 1,
+    termsOrCreator: "世界杯博彩、看球下注",
+    canConfirm: true
+  });
+  expect(parseInvestigationSearchTerms("世界杯博彩、看球下注，外围盘; 世界杯博彩"))
+    .toEqual(["世界杯博彩", "看球下注", "外围盘"]);
+});
+
+test("reads the durable creation workspace and public messages", async () => {
+  const requestUrls: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    requestUrls.push(url);
+    const body = url.endsWith("/messages")
+      ? [{
+          message_id: "message-1",
+          turn_id: "turn-1",
+          role: "assistant",
+          content: "调查方案已生成。",
+          artifact: null,
+          sequence: 2,
+          created_at: "2026-08-28T00:00:00Z"
+        }]
+      : {
+          workspace_session_id: "workspace-1",
+          status: "active",
+          created_at: "2026-08-28T00:00:00Z",
+          updated_at: "2026-08-28T00:00:00Z"
+        };
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
+
+  const workspace = await getInvestigationWorkspace("workspace-1");
+  const messages = await listInvestigationWorkspaceMessages("workspace-1");
+  expect(workspace.workspace_session_id).toBe("workspace-1");
+  expect(messages[0]).toMatchObject({ role: "assistant", turn_id: "turn-1" });
+  expect(requestUrls).toEqual([
+    "http://api.test/api/investigation-workspaces/workspace-1",
+    "http://api.test/api/investigation-workspaces/workspace-1/messages"
+  ]);
+});
+
+test("new investigation uses the backend workspace identity as the route identity", async () => {
+  let requestBody = "";
+  globalThis.fetch = async (_input, init) => {
+    requestBody = String(init?.body || "");
+    return new Response(JSON.stringify({
+      workspace_session_id: "investigation-session:stable-1",
+      status: "active",
+      created_at: "2026-08-28T00:00:00Z",
+      updated_at: "2026-08-28T00:00:00Z"
+    }), { status: 201, headers: { "Content-Type": "application/json" } });
+  };
+  const workspace = await createInvestigationWorkspace("");
+  const session = buildNewInvestigationWorkspaceSession(workspace.workspace_session_id);
+  expect(JSON.parse(requestBody)).toEqual({ workspace_key: "" });
+  expect(session.id).toBe("investigation-session:stable-1");
+  expect(session.creationBinding?.workspaceSessionId).toBe(session.id);
+});
+
+test("restores messages and the current Draft from backend state without sessionStorage", () => {
+  const session = restoreInvestigationWorkspace(workspaceState());
+  expect(session.id).toBe("investigation-session:workspace-1");
+  expect(session.messages.map((message) => message.id)).toEqual([
+    "message-user-1",
+    "message-assistant-1",
+    "workspace-confirmation:draft-1:3"
+  ]);
+  expect(session.creationBinding?.draft).toEqual(publicDraft);
+  expect(session.creationBinding?.confirmationPreview).toEqual(preview);
+  expect(session.creationBinding?.confirmationKey).toContain("draft-1:3");
+  expect(JSON.stringify(session)).not.toContain("report_session_id");
+});
+
+test("restores a pending Turn without inventing a Draft or a replacement Turn", () => {
+  const pending = workspaceState({
+    messages: [workspaceState().messages[0]],
+    latest_turn: {
+      ...workspaceState().latest_turn!,
+      status: "running",
+      stage: "answering",
+      answer: ""
+    },
+    draft_artifact: null
+  });
+  const session = restoreInvestigationWorkspace(pending);
+  expect(session.creationBinding?.pendingTurnId).toBe("turn-1");
+  expect(session.creationBinding?.draft).toBeUndefined();
+  expect(session.messages).toHaveLength(1);
+
+  const interrupted = restoreInvestigationWorkspace(workspaceState({
+    messages: [workspaceState().messages[0]],
+    latest_turn: {
+      ...workspaceState().latest_turn!,
+      status: "interrupted",
+      stage: "interrupted",
+      answer: "",
+      safe_message: "结果未知，可以安全恢复。",
+      retryable: true
+    },
+    draft_artifact: null
+  }));
+  expect(interrupted.creationBinding?.pendingTurnId).toBe("turn-1");
+  expect(interrupted.creationBinding?.resumeAttempted).toBe(false);
+});
+
+test("restores the same confirmed Run and published report version in one workspace", () => {
+  const queued = restoreInvestigationWorkspace(workspaceState({ run: run("QUEUED") }));
+  expect(queued.creationBinding?.run?.run_id).toBe("run-1");
+  expect(queued.executionPhase).toBe("collection_waking");
+  const published = restoreInvestigationWorkspace(workspaceState({
+    run: run("PUBLISHED", {
+      report_status: "published",
+      report_version_id: "report-version:published-1"
+    })
+  }));
+  expect(published.id).toBe("investigation-session:workspace-1");
+  expect(published.status).toBe("报告已生成");
+  expect(published.creationBinding?.run?.report_version_id).toBe("report-version:published-1");
+  expect(JSON.stringify(published)).not.toContain("report_session_id");
+});
+
+test("restores report messages and a pending report Turn in the same workspace", () => {
+  const published = restoreInvestigationWorkspace(workspaceState({
+    run: run("PUBLISHED", {
+      report_status: "published",
+      report_version_id: "report-version:published-1"
+    }),
+    report_messages: [{
+      message_id: "report-question-1",
+      turn_id: "report-turn-1",
+      role: "user",
+      content: "报告中有哪些主要风险？",
+      sequence: 1,
+      created_at: "2026-08-28T00:02:00Z"
+    }],
+    latest_report_turn: {
+      turn_id: "report-turn-1",
+      status: "interrupted",
+      stage: "interrupted",
+      answer: "",
+      safe_message: "报告问答执行已中断，可以安全恢复。",
+      retryable: true,
+      updated_at: "2026-08-28T00:02:00Z"
+    }
+  }));
+
+  expect(published.messages.map((message) => message.id).slice(-2)).toEqual([
+    "msg-report-report-version:published-1",
+    "report-question-1"
+  ]);
+  expect(published.creationBinding?.pendingReportTurn).toMatchObject({
+    turnId: "report-turn-1",
+    question: "报告中有哪些主要风险？",
+    stage: "interrupted",
+    resumeAttempted: false
+  });
+  expect(JSON.stringify(published)).not.toContain("report_session_id");
+});
+
+test("workspace state API failures stay explicit and never produce a demo fallback", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    detail: "调查工作区不存在"
+  }), { status: 404, headers: { "Content-Type": "application/json" } });
+  await expect(getInvestigationWorkspaceState("investigation-session:missing"))
+    .rejects.toMatchObject<ApiError>({ status: 404 });
+  const failed = buildWorkspaceRecoveryErrorSession(
+    "investigation-session:missing",
+    "调查工作区不存在"
+  );
+  expect(failed.id).toBe("investigation-session:missing");
+  expect(failed.creationBinding?.error).toBe("调查工作区不存在");
+  expect(failed.messages[0].content).toContain("恢复失败");
+});
+
+test("blockers disable confirmation and expose the management URL", () => {
+  const blocked = {
+    ...preview,
+    audit_policy: null,
+    ruleset_revision: null,
+    can_confirm: false,
+    blockers: [{
+      code: "NO_PUBLISHED_AUDIT_POLICY",
+      message: "尚无已发布审核策略",
+      resource_type: "audit_policy",
+      resource_id: "",
+      latest_safe_summary: {},
+      management_url: "/rule-assistant/rulesets?return_to=/investigation"
+    }]
+  } satisfies ConfirmationPreview;
+  const view = buildConfirmationCardView(draft, blocked);
+  expect(view.canConfirm).toBe(false);
+  expect(view.auditPolicy).toBe("尚未选择审核策略");
+  expect(view.rulesManagementUrl).toBe(
+    "/rule-assistant/rulesets?return_to=/investigation"
+  );
+  expect(formatConfirmationBlockerMessage(
+    blocked.blockers[0].code,
+    "A valid published AuditPolicy must be selected before confirmation."
+  )).toBe("当前没有已发布的审核策略，无法确认执行。");
+});
+
+test("Draft edits use expected_revision and preserve structured 409 errors", async () => {
+  const requests: Array<{ url: string; init?: RequestInit }> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), init });
+    return new Response(JSON.stringify({
+      detail: {
+        code: "RESOURCE_STALE",
+        message: "Revision conflict",
+        details: { current_revision: 4 }
+      }
+    }), { status: 409, headers: { "Content-Type": "application/json" } });
+  };
+
+  await expect(updateInvestigationDraft("draft-1", {
+    expectedRevision: 3,
+    title: preview.title,
+    objective: preview.objective,
+    configuration
+  })).rejects.toMatchObject<ApiError>({ status: 409, code: "RESOURCE_STALE" });
+  expect(JSON.parse(String(requests[0].init?.body))).toMatchObject({ expected_revision: 3 });
+});
+
+test("confirmation is explicit and reuses the caller's idempotency key", async () => {
+  const requests: RequestInit[] = [];
+  globalThis.fetch = async (_input, init) => {
+    requests.push(init || {});
+    return new Response(JSON.stringify(run("QUEUED")), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
+  const key = buildConfirmationIdempotencyKey("workspace-1", "draft-1", 3);
+  await confirmAndQueueInvestigation("draft-1", { expectedRevision: 3, idempotencyKey: key });
+  await confirmAndQueueInvestigation("draft-1", { expectedRevision: 3, idempotencyKey: key });
+  for (const request of requests) {
+    expect(JSON.parse(String(request.body))).toMatchObject({ expected_revision: 3, confirmed: true });
+    expect(new Headers(request.headers).get("Idempotency-Key")).toBe(key);
+  }
+  expect(buildConfirmationIdempotencyKey("workspace-1", "draft-1", 4)).not.toBe(key);
+});
+
+test("maps only real Run projection states, including parallel crawl and analysis", () => {
+  expect(mapInvestigationRunState(run("QUEUED")).phase).toBe("collection_waking");
+  expect(mapInvestigationRunState(run("RUNNING", {
+    crawl_status: "running", analysis_status: "pending"
+  })).phase).toBe("collection_working");
+  expect(mapInvestigationRunState(run("RUNNING", {
+    crawl_status: "running", analysis_status: "running"
+  })).phase).toBe("audit_working");
+  expect(mapInvestigationRunState(run("RUNNING", {
+    crawl_status: "completed", analysis_status: "completed"
+  })).phase).toBe("audit_completed");
+  expect(mapInvestigationRunState(run("REPORT_GENERATING")).phase).toBe("report_generating");
+  expect(mapInvestigationRunState(run("PUBLISHED", {
+    report_status: "published", report_version_id: "report-version-1"
+  }))).toMatchObject({ phase: "completed", terminal: "published" });
+  expect(mapInvestigationRunState(run("FAILED"))).toMatchObject({ terminal: "failed" });
+  expect(mapInvestigationRunState(run("INTERRUPTED"))).toMatchObject({ terminal: "interrupted" });
+});
+
+test("published report questions use the workspace/run handoff without report_session_id", async () => {
+  const requestUrls: string[] = [];
+  globalThis.fetch = async (input) => {
+    requestUrls.push(String(input));
+    return new Response(JSON.stringify({ turn_id: "turn-report-1", status: "running" }), {
+      status: 202,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
+  const accepted = await sendInvestigationWorkspaceReportTurn(
+    "workspace-1",
+    "run-1",
+    { clientMessageId: "message-1", content: "报告中有哪些风险？" }
+  );
+  const resumed = await resumeInvestigationWorkspaceReportTurn(
+    "workspace-1",
+    "run-1",
+    "turn-report-1"
+  );
+  expect(requestUrls).toEqual([
+    "http://api.test/api/investigation-workspaces/workspace-1/runs/run-1/report-turns",
+    "http://api.test/api/investigation-workspaces/workspace-1/runs/run-1/report-turns/turn-report-1/resume"
+  ]);
+  expect(JSON.stringify(accepted)).not.toContain("session_id");
+  expect(JSON.stringify(resumed)).not.toContain("session_id");
+});
+
+test("published M3 report detail uses the Principal-scoped workspace/run route", async () => {
+  let requestUrl = "";
+  globalThis.fetch = async (input) => {
+    requestUrl = String(input);
+    return new Response(JSON.stringify({
+      report_version_id: "report-version-1",
+      report_id: "report-1",
+      task_id: "run-1",
+      version_number: 1,
+      status: "published",
+      title: "调查报告",
+      published_at: "2026-08-28T00:00:00Z",
+      presentation: {
+        presentation_version: "human-report-v1",
+        title: "调查报告",
+        summary: { text: "摘要" },
+        key_metrics: [],
+        sections: [],
+        case_blocks: [],
+        conclusion: { text: "结论" },
+        data_quality_note: { text: "说明" }
+      }
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+
+  const report = await getInvestigationWorkspacePublishedReport("workspace-1", "run-1");
+  expect(report.report_version_id).toBe("report-version-1");
+  expect(requestUrl).toBe(
+    "http://api.test/api/investigation-workspaces/workspace-1/runs/run-1/published-report"
+  );
+  expect(requestUrl).not.toContain("report_session_id");
+});

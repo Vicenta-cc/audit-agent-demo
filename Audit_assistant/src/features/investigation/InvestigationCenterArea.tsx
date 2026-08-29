@@ -30,9 +30,11 @@ interface InvestigationCenterAreaProps {
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onUpdateDraftKeywords: (keywords: string[]) => void;
+  onUpdateCreationSearchTerms: (keywords: string[]) => Promise<void>;
   onUpdateDraftPlatforms: (platforms: PlatformCode[]) => void;
   onGenerateTaskConfig: (proposalMessageId: string) => void;
   onStartAgentExecution: () => void;
+  isConfirmingCreation?: boolean;
   onPhaseChange: (phase: AgentExecutionPhase) => void;
   onSendMessage: (text: string) => void;
   onOpenDrawer: (type: "task_config" | "report" | "evidence" | "key_users" | "agent_logs" | "ruleset") => void;
@@ -111,9 +113,11 @@ export function InvestigationCenterArea({
   isSidebarCollapsed,
   onToggleSidebar,
   onUpdateDraftKeywords,
+  onUpdateCreationSearchTerms,
   onUpdateDraftPlatforms,
   onGenerateTaskConfig,
   onStartAgentExecution,
+  isConfirmingCreation = false,
   onPhaseChange,
   onSendMessage,
   onOpenDrawer,
@@ -273,7 +277,7 @@ export function InvestigationCenterArea({
               </div>
               <h2 className="inv-welcome-title">发起专项调查研判</h2>
               <p className="inv-welcome-desc">
-                输入调查主题或事件名称，系统将自动关联风险规则集并调度多 Agent 开展协同研判。
+                输入调查主题或事件名称，系统将自动关联风险规则集并调度既有调查流水线开展协同研判。
               </p>
 
               <div className="inv-example-prompts">
@@ -376,6 +380,10 @@ export function InvestigationCenterArea({
                     draft={session.draft}
                     onModifyConfig={() => onOpenDrawer("task_config")}
                     onStartExecution={onStartAgentExecution}
+                    preview={session.creationBinding?.confirmationPreview}
+                    onUpdateSearchTerms={session.creationBinding ? onUpdateCreationSearchTerms : undefined}
+                    isConfirming={isConfirmingCreation}
+                    error={session.creationBinding?.error}
                   />
                 );
               }
@@ -394,6 +402,8 @@ export function InvestigationCenterArea({
                     ).join("、")}
                     keywordsCount={session.draft.keywords.length}
                     ruleSetName={session.draft.matchedRuleSet}
+                    run={session.creationBinding?.run}
+                    authoritative={Boolean(session.creationBinding)}
                   />
                 );
               }

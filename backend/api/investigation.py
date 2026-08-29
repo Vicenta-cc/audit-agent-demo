@@ -24,9 +24,16 @@ from backend.investigation.errors import (
     ReportNotFoundError,
     ReportScopeError,
 )
+from backend.api.reporting import published_report_task_id
 
 
-def create_investigation_router(service: Any, executor: Any) -> APIRouter:
+def create_investigation_router(
+    service: Any,
+    executor: Any,
+    *,
+    report_store: Any | None = None,
+    m3_run_store: Any | None = None,
+) -> APIRouter:
     """Expose the 3A Agent without leaking its internal execution contracts."""
 
     router = APIRouter(tags=["investigation"])
@@ -36,6 +43,9 @@ def create_investigation_router(service: Any, executor: Any) -> APIRouter:
         response_model=InvestigationSessionResponse,
     )
     def create_session(report_version_id: str) -> InvestigationSessionResponse:
+        _reject_legacy_m3_session_creation(
+            report_store, m3_run_store, report_version_id
+        )
         try:
             session = service.create_session(report_version_id)
         except Exception as exc:
@@ -48,6 +58,9 @@ def create_investigation_router(service: Any, executor: Any) -> APIRouter:
     )
     def list_messages(session_id: str) -> tuple[InvestigationMessageResponse, ...]:
         try:
+            _reject_workspace_handoff_session(
+                service, session_id, report_store, m3_run_store
+            )
             messages = service.get_messages(session_id, include_tool_messages=False)
             return tuple(
                 InvestigationMessageResponse(
@@ -74,6 +87,9 @@ def create_investigation_router(service: Any, executor: Any) -> APIRouter:
         request: CreateInvestigationTurnRequest,
     ) -> InvestigationTurnAcceptedResponse:
         try:
+            _reject_workspace_handoff_session(
+                service, session_id, report_store, m3_run_store
+            )
             turn = executor.accept_turn(
                 session_id,
                 client_message_id=request.client_message_id,
@@ -93,6 +109,9 @@ def create_investigation_router(service: Any, executor: Any) -> APIRouter:
     def get_turn(turn_id: str) -> InvestigationTurnStatusResponse:
         try:
             turn = service.store.get_turn(turn_id)
+            _reject_workspace_handoff_session(
+                service, turn.session_id, report_store, m3_run_store
+            )
             return _turn_status_response(service, turn)
         except Exception as exc:
             _raise_public_error(exc)
@@ -105,61 +124,19 @@ def create_investigation_router(service: Any, executor: Any) -> APIRouter:
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     ) -> StreamingResponse:
         try:
-            service.store.get_turn(turn_id)
-            cursor = int(after_sequence)
-            if last_event_id:
-                cursor = max(
-                    cursor,
-                    service.store.get_public_turn_event_sequence(
-                        turn_id, last_event_id
-                    ),
-                )
+            turn = service.store.get_turn(turn_id)
+            _reject_workspace_handoff_session(
+                service, turn.session_id, report_store, m3_run_store
+            )
+            return turn_event_stream_response(
+                service,
+                turn_id,
+                request,
+                after_sequence=after_sequence,
+                last_event_id=last_event_id,
+            )
         except Exception as exc:
             _raise_public_error(exc)
-
-        async def event_stream():
-            nonlocal cursor
-            idle_ticks = 0
-            while True:
-                events = service.store.list_public_turn_events(
-                    turn_id, after_sequence=cursor
-                )
-                for index, raw_event in enumerate(events):
-                    event = InvestigationTurnEventResponse.model_validate(raw_event)
-                    cursor = event.sequence
-                    idle_ticks = 0
-                    yield (
-                        f"id: {event.event_id}\n"
-                        "event: turn\n"
-                        f"data: {event.model_dump_json()}\n\n"
-                    )
-                    if event.stage in {
-                        InvestigationPublicStage.COMPLETED,
-                        InvestigationPublicStage.INTERRUPTED,
-                        InvestigationPublicStage.FAILED,
-                    } and _is_current_terminal_event(
-                        service,
-                        turn_id,
-                        event.stage,
-                        is_latest_in_batch=index == len(events) - 1,
-                    ):
-                        return
-                if await request.is_disconnected():
-                    return
-                idle_ticks += 1
-                if idle_ticks >= 60:
-                    idle_ticks = 0
-                    yield ": keep-alive\n\n"
-                await asyncio.sleep(0.25)
-
-        return StreamingResponse(
-            event_stream(),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
-            },
-        )
 
     @router.post(
         "/api/investigation-turns/{turn_id}/resume",
@@ -168,6 +145,10 @@ def create_investigation_router(service: Any, executor: Any) -> APIRouter:
     )
     def resume_turn(turn_id: str) -> InvestigationTurnAcceptedResponse:
         try:
+            turn = service.store.get_turn(turn_id)
+            _reject_workspace_handoff_session(
+                service, turn.session_id, report_store, m3_run_store
+            )
             turn = executor.resume_turn(turn_id)
         except Exception as exc:
             _raise_public_error(exc)
@@ -177,6 +158,41 @@ def create_investigation_router(service: Any, executor: Any) -> APIRouter:
         )
 
     return router
+
+
+def _reject_legacy_m3_session_creation(
+    report_store: Any | None,
+    m3_run_store: Any | None,
+    report_version_id: str,
+) -> None:
+    if report_store is None or m3_run_store is None:
+        return
+    task_id = published_report_task_id(report_store, report_version_id)
+    owners = m3_run_store.owner_principals_for_report(
+        report_version_id=report_version_id, task_id=task_id
+    )
+    if owners:
+        raise HTTPException(status_code=404, detail="Published report version not found")
+
+
+def _reject_workspace_handoff_session(
+    service: Any,
+    session_id: str,
+    report_store: Any | None = None,
+    m3_run_store: Any | None = None,
+) -> None:
+    read_anchor = getattr(service.store, "session_anchor", None)
+    if callable(read_anchor) and read_anchor(session_id).startswith("m3-run:"):
+        raise InvestigationSessionNotFoundError("investigation Session was not found")
+    if report_store is None or m3_run_store is None:
+        return
+    session = service.store.get_session(session_id)
+    task_id = published_report_task_id(report_store, session.report_version_id)
+    owners = m3_run_store.owner_principals_for_report(
+        report_version_id=session.report_version_id, task_id=task_id
+    )
+    if owners:
+        raise InvestigationSessionNotFoundError("investigation Session was not found")
 
 
 def _session_response(session: Any) -> InvestigationSessionResponse:
@@ -216,6 +232,7 @@ def _terminal_turn_response(result: Any, turn: Any) -> InvestigationTurnStatusRe
         answer=result.answer if completed else "",
         safe_message="" if completed else (result.answer or "调查对话暂时无法完成。"),
         retryable=bool(turn.retryable),
+        artifact=getattr(turn, "public_artifact", None) or None,
         updated_at=turn.completed_at or turn.started_at or turn.created_at,
     )
 
@@ -245,11 +262,70 @@ def _turn_status_response(service: Any, turn: Any) -> InvestigationTurnStatusRes
             (turn.safe_message or "调查执行已中断。") if interrupted else ""
         ),
         retryable=bool(turn.retryable),
+        artifact=getattr(turn, "public_artifact", None) or None,
         updated_at=(
             str(latest["occurred_at"])
             if latest
             else turn.completed_at or turn.started_at or turn.created_at
         ),
+    )
+
+
+def turn_event_stream_response(
+    service: Any,
+    turn_id: str,
+    request: Request,
+    *,
+    after_sequence: int = 0,
+    last_event_id: str | None = None,
+) -> StreamingResponse:
+    service.store.get_turn(turn_id)
+    cursor = int(after_sequence)
+    if last_event_id:
+        cursor = max(
+            cursor,
+            service.store.get_public_turn_event_sequence(turn_id, last_event_id),
+        )
+
+    async def event_stream():
+        nonlocal cursor
+        idle_ticks = 0
+        while True:
+            events = service.store.list_public_turn_events(
+                turn_id, after_sequence=cursor
+            )
+            for index, raw_event in enumerate(events):
+                event = InvestigationTurnEventResponse.model_validate(raw_event)
+                cursor = event.sequence
+                idle_ticks = 0
+                yield (
+                    f"id: {event.event_id}\n"
+                    "event: turn\n"
+                    f"data: {event.model_dump_json()}\n\n"
+                )
+                if event.stage in {
+                    InvestigationPublicStage.COMPLETED,
+                    InvestigationPublicStage.INTERRUPTED,
+                    InvestigationPublicStage.FAILED,
+                } and _is_current_terminal_event(
+                    service,
+                    turn_id,
+                    event.stage,
+                    is_latest_in_batch=index == len(events) - 1,
+                ):
+                    return
+            if await request.is_disconnected():
+                return
+            idle_ticks += 1
+            if idle_ticks >= 60:
+                idle_ticks = 0
+                yield ": keep-alive\n\n"
+            await asyncio.sleep(0.25)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

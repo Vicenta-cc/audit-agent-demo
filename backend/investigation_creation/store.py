@@ -161,6 +161,26 @@ class InvestigationCreationStore:
 
                 CREATE INDEX IF NOT EXISTS idx_investigation_runs_status
                 ON investigation_runs(status, created_at, id);
+
+                CREATE TABLE IF NOT EXISTS investigation_creation_tool_receipts (
+                    receipt_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    turn_id TEXT NOT NULL,
+                    tool_call_id TEXT NOT NULL,
+                    principal TEXT NOT NULL,
+                    tool_name TEXT NOT NULL,
+                    arguments_fingerprint TEXT NOT NULL,
+                    is_mutation INTEGER NOT NULL CHECK(is_mutation IN (0, 1)),
+                    status TEXT NOT NULL CHECK(status IN ('STARTED', 'SUCCEEDED', 'FAILED')),
+                    response_json TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    completed_at TEXT NOT NULL DEFAULT '',
+                    UNIQUE(session_id, turn_id, tool_call_id)
+                );
+
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_creation_turn_mutation_tool
+                ON investigation_creation_tool_receipts(session_id, turn_id, tool_name)
+                WHERE is_mutation = 1;
                 """
             )
 
@@ -271,6 +291,129 @@ class InvestigationCreationStore:
         }
         if column not in columns:
             connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+    @staticmethod
+    def tool_arguments_fingerprint(arguments: dict[str, Any]) -> str:
+        return hashlib.sha256(
+            json.dumps(
+                arguments,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+
+    def begin_tool_execution(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        tool_call_id: str,
+        principal: str,
+        tool_name: str,
+        arguments: dict[str, Any],
+        is_mutation: bool,
+    ) -> dict[str, Any]:
+        identity = {
+            "session_id": str(session_id or "").strip(),
+            "turn_id": str(turn_id or "").strip(),
+            "tool_call_id": str(tool_call_id or "").strip(),
+            "principal": str(principal or "").strip(),
+            "tool_name": str(tool_name or "").strip(),
+        }
+        if not all(identity.values()):
+            raise IdempotencyConflictError(
+                "durable tool execution identity is required",
+                code="TOOL_EXECUTION_IDENTITY_REQUIRED",
+            )
+        fingerprint = self.tool_arguments_fingerprint(arguments)
+        now = self.clock().isoformat()
+        receipt_id = f"creation-tool-receipt:{uuid4().hex}"
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """
+                SELECT * FROM investigation_creation_tool_receipts
+                WHERE session_id = ? AND turn_id = ? AND tool_call_id = ?
+                """,
+                (identity["session_id"], identity["turn_id"], identity["tool_call_id"]),
+            ).fetchone()
+            if row is None and is_mutation:
+                row = connection.execute(
+                    """
+                    SELECT * FROM investigation_creation_tool_receipts
+                    WHERE session_id = ? AND turn_id = ? AND tool_name = ?
+                      AND is_mutation = 1
+                    """,
+                    (identity["session_id"], identity["turn_id"], identity["tool_name"]),
+                ).fetchone()
+            if row is not None:
+                if (
+                    str(row["principal"]) != identity["principal"]
+                    or str(row["tool_name"]) != identity["tool_name"]
+                    or str(row["arguments_fingerprint"]) != fingerprint
+                ):
+                    raise IdempotencyConflictError(
+                        "tool execution identity was reused with different input"
+                    )
+                response_json = str(row["response_json"] or "")
+                return {
+                    "receipt_id": str(row["receipt_id"]),
+                    "status": str(row["status"]),
+                    "response": json.loads(response_json) if response_json else None,
+                    "replay": True,
+                }
+            connection.execute(
+                """
+                INSERT INTO investigation_creation_tool_receipts (
+                    receipt_id, session_id, turn_id, tool_call_id, principal,
+                    tool_name, arguments_fingerprint, is_mutation, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'STARTED', ?)
+                """,
+                (
+                    receipt_id,
+                    identity["session_id"],
+                    identity["turn_id"],
+                    identity["tool_call_id"],
+                    identity["principal"],
+                    identity["tool_name"],
+                    fingerprint,
+                    int(is_mutation),
+                    now,
+                ),
+            )
+        return {
+            "receipt_id": receipt_id,
+            "status": "STARTED",
+            "response": None,
+            "replay": False,
+        }
+
+    def complete_tool_execution(
+        self,
+        receipt_id: str,
+        *,
+        response: dict[str, Any],
+        succeeded: bool,
+    ) -> None:
+        with self._connect() as connection:
+            updated = connection.execute(
+                """
+                UPDATE investigation_creation_tool_receipts
+                SET status = ?, response_json = ?, completed_at = ?
+                WHERE receipt_id = ? AND status = 'STARTED'
+                """,
+                (
+                    "SUCCEEDED" if succeeded else "FAILED",
+                    json.dumps(response, ensure_ascii=False, sort_keys=True),
+                    self.clock().isoformat(),
+                    receipt_id,
+                ),
+            ).rowcount
+        if not updated:
+            raise IdempotencyConflictError(
+                "tool execution receipt is no longer writable"
+            )
 
     def create_draft(
         self,
@@ -752,6 +895,36 @@ class InvestigationCreationStore:
                     raise PrincipalAccessDeniedError(run_id)
                 raise RunNotFoundError(run_id)
         return self._run(row)
+
+    def find_run_for_draft(
+        self, draft_id: str, *, principal: str
+    ) -> InvestigationRun | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM investigation_runs
+                WHERE draft_id = ? AND owner_principal = ?
+                ORDER BY created_at DESC, id DESC LIMIT 1
+                """,
+                (draft_id, principal),
+            ).fetchone()
+        return self._run(row) if row is not None else None
+
+    def owner_principals_for_report(
+        self, *, report_version_id: str, task_id: str
+    ) -> frozenset[str]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT owner_principal
+                FROM investigation_runs
+                WHERE (report_version_id <> '' AND report_version_id = ?)
+                   OR (job_id <> '' AND job_id = ?)
+                   OR id = ?
+                """,
+                (report_version_id, task_id, task_id),
+            ).fetchall()
+        return frozenset(str(row["owner_principal"]) for row in rows)
 
     def get_run_for_worker(self, run_id: str) -> InvestigationRun:
         with self._connect() as connection:

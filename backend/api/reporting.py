@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from fastapi import Depends
 
 from backend.api.contracts import (
     PublishedReportDetailResponse,
@@ -17,20 +18,42 @@ from backend.reporting.contracts import HumanReportDTO
 from backend.reporting.errors import ReportGenerationError
 from backend.reporting.runtime import R31ReportRuntime
 from backend.reporting.store import ReportStore
+from backend.investigation_creation.principal import (
+    LocalPrincipalProvider,
+    Principal,
+    PrincipalProvider,
+)
 
 
 def create_reporting_router(
-    store: ReportStore, runtime: R31ReportRuntime | None = None
+    store: ReportStore,
+    runtime: R31ReportRuntime | None = None,
+    *,
+    principal_provider: PrincipalProvider | None = None,
+    m3_run_store: object | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["reports"])
     structured_runtime = runtime or R31ReportRuntime(store)
+    provide_principal = principal_provider or LocalPrincipalProvider()
 
     @router.get(
         "/api/tasks/{task_id}/report-versions",
         response_model=ReportVersionListResponse,
     )
-    def list_published_report_versions(task_id: str) -> ReportVersionListResponse:
-        versions = store.list_published_versions_for_task(task_id)
+    def list_published_report_versions(
+        task_id: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> ReportVersionListResponse:
+        versions = tuple(
+            version
+            for version in store.list_published_versions_for_task(task_id)
+            if can_read_m3_report(
+                m3_run_store,
+                principal,
+                report_version_id=str(version["id"]),
+                task_id=task_id,
+            )
+        )
         items = tuple(_summary_response(item, task_id=task_id) for item in versions)
         return ReportVersionListResponse(
             task_id=task_id,
@@ -44,38 +67,33 @@ def create_reporting_router(
     )
     def get_published_report_version(
         report_version_id: str,
+        principal: Principal = Depends(provide_principal),
     ) -> PublishedReportDetailResponse:
-        version = store.get_version(report_version_id)
-        if version is None or version.get("status") != "published":
+        task_id = published_report_task_id(store, report_version_id)
+        if not can_read_m3_report(
+            m3_run_store,
+            principal,
+            report_version_id=report_version_id,
+            task_id=task_id,
+        ):
             raise HTTPException(status_code=404, detail="Published report version not found")
-        human_report = store.get_human_report(report_version_id)
-        if human_report is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Published report presentation is unavailable",
-            )
-        try:
-            presentation = HumanReportDTO.model_validate(human_report)
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=500,
-                detail="Published report presentation is invalid",
-            ) from exc
-        report = store.get_report(str(version["report_id"]))
-        if report is None:
-            raise HTTPException(status_code=500, detail="Published report metadata is unavailable")
-        return PublishedReportDetailResponse(
-            report_version_id=str(version["id"]),
-            report_id=str(version["report_id"]),
-            task_id=str(report["task_id"]),
-            version_number=int(version["version_number"]),
-            title=str(version.get("title") or presentation.title),
-            published_at=str(version.get("published_at") or ""),
-            presentation=_presentation_response(presentation),
+        return published_report_detail_response(
+            store, report_version_id
         )
 
     @router.get("/api/report-versions/{report_version_id}/structured-report")
-    def get_structured_report_version(report_version_id: str) -> dict[str, object]:
+    def get_structured_report_version(
+        report_version_id: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> dict[str, object]:
+        task_id = published_report_task_id(store, report_version_id)
+        if not can_read_m3_report(
+            m3_run_store,
+            principal,
+            report_version_id=report_version_id,
+            task_id=task_id,
+        ):
+            raise HTTPException(status_code=404, detail="Published report version not found")
         try:
             return structured_runtime.get_frontend_report(report_version_id)
         except ReportGenerationError as exc:
@@ -84,6 +102,68 @@ def create_reporting_router(
             raise HTTPException(status_code=status, detail=message) from exc
 
     return router
+
+
+def published_report_detail_response(
+    store: ReportStore, report_version_id: str
+) -> PublishedReportDetailResponse:
+    version = store.get_version(report_version_id)
+    if version is None or version.get("status") != "published":
+        raise HTTPException(status_code=404, detail="Published report version not found")
+    human_report = store.get_human_report(report_version_id)
+    if human_report is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Published report presentation is unavailable",
+        )
+    try:
+        presentation = HumanReportDTO.model_validate(human_report)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Published report presentation is invalid",
+        ) from exc
+    report = store.get_report(str(version["report_id"]))
+    if report is None:
+        raise HTTPException(
+            status_code=500, detail="Published report metadata is unavailable"
+        )
+    return PublishedReportDetailResponse(
+        report_version_id=str(version["id"]),
+        report_id=str(version["report_id"]),
+        task_id=str(report["task_id"]),
+        version_number=int(version["version_number"]),
+        title=str(version.get("title") or presentation.title),
+        published_at=str(version.get("published_at") or ""),
+        presentation=_presentation_response(presentation),
+    )
+
+
+def published_report_task_id(store: ReportStore, report_version_id: str) -> str:
+    version = store.get_version(report_version_id)
+    if version is None or version.get("status") != "published":
+        raise HTTPException(status_code=404, detail="Published report version not found")
+    report = store.get_report(str(version["report_id"]))
+    if report is None:
+        raise HTTPException(
+            status_code=500, detail="Published report metadata is unavailable"
+        )
+    return str(report["task_id"])
+
+
+def can_read_m3_report(
+    run_store: object | None,
+    principal: Principal,
+    *,
+    report_version_id: str,
+    task_id: str,
+) -> bool:
+    if run_store is None:
+        return True
+    owners = run_store.owner_principals_for_report(
+        report_version_id=report_version_id, task_id=task_id
+    )
+    return not owners or owners == frozenset({principal.id})
 
 
 def _summary_response(
