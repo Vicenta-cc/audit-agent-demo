@@ -26,6 +26,18 @@ class Settings:
         for item in os.getenv("HERMES_AUTHORIZED_REPORT_VERSION_IDS", "").split(",")
         if item.strip()
     )
+    _historical_report_a_db_value = os.getenv("HISTORICAL_REPORT_A_DB", "").strip()
+    historical_report_a_db = (
+        Path(_historical_report_a_db_value).expanduser()
+        if _historical_report_a_db_value
+        else None
+    )
+    _historical_report_b_db_value = os.getenv("HISTORICAL_REPORT_B_DB", "").strip()
+    historical_report_b_db = (
+        Path(_historical_report_b_db_value).expanduser()
+        if _historical_report_b_db_value
+        else None
+    )
     hermes_investigation_max_workers = max(
         2,
         int(os.getenv("HERMES_INVESTIGATION_MAX_WORKERS", "2")),

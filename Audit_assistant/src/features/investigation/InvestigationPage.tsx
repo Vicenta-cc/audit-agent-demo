@@ -10,11 +10,11 @@ import type {
 } from "../../types/investigation";
 import { initialSessions, mockAuditRuleSets, platformOptionsList } from "../../mocks/investigationMocks";
 import {
-  createInvestigationSession,
-  resumeInvestigationTurn,
-  sendInvestigationTurn,
-  waitForInvestigationTurn
-} from "../../services/investigations";
+  fetchHistoricalReportWorkspaces,
+  resumeHistoricalReportTurn,
+  sendHistoricalReportTurn,
+  waitForHistoricalReportTurn
+} from "../../services/historicalReports";
 import {
   confirmAndQueueInvestigation,
   createInvestigationWorkspace,
@@ -40,6 +40,11 @@ import { InvestigationContextDrawer, type DrawerType } from "./InvestigationCont
 import { FocusUsersPage } from "../focus-users/FocusUsersPage";
 import { CrawlerAccountsPage } from "../crawler-accounts/CrawlerAccountsPage";
 import { buildPublishedReportSummary } from "./publishedReportSession";
+import { buildHistoricalReportSession } from "./historicalReportWorkspace";
+import {
+  clearHistoricalPendingTurn,
+  storeHistoricalPendingTurn
+} from "./historicalReportPending";
 import { mapInvestigationRunState } from "./investigationRunState";
 import { buildConfirmationIdempotencyKey } from "./confirmationView";
 import {
@@ -64,7 +69,6 @@ interface InvestigationRouteState {
   restoreScrollTop?: number;
 }
 
-const INVESTIGATION_SESSIONS_STORAGE_KEY = "xhs-audit:investigation-sessions:v1";
 const GAMBLING_REPORT_DEMO_TASK_ID = "2272c3692807";
 
 function createClientMessageId(sessionId: string) {
@@ -78,42 +82,6 @@ function createInitialSessions() {
   return [...initialSessions].sort((left, right) => (
     left.id === "session-ethnic-relations" ? -1 : right.id === "session-ethnic-relations" ? 1 : 0
   ));
-}
-
-function readStoredSessions(): InvestigationSession[] | null {
-  try {
-    const raw = window.sessionStorage.getItem(INVESTIGATION_SESSIONS_STORAGE_KEY);
-    if (!raw) return null;
-    const stored = JSON.parse(raw) as { version?: number; sessions?: InvestigationSession[] };
-    if (
-      stored.version !== 1
-      || !Array.isArray(stored.sessions)
-      || stored.sessions.length === 0
-      || !stored.sessions.every((session) => (
-        typeof session?.id === "string"
-        && typeof session.title === "string"
-        && typeof session.executionPhase === "string"
-        && Array.isArray(session.messages)
-        && typeof session.draft === "object"
-        && session.draft !== null
-      ))
-    ) return null;
-    const sessions = stored.sessions.filter((session) => !session.id.startsWith("session-report-"));
-    return sessions.length ? sessions : null;
-  } catch {
-    return null;
-  }
-}
-
-function storeSessions(sessions: InvestigationSession[]) {
-  try {
-    window.sessionStorage.setItem(
-      INVESTIGATION_SESSIONS_STORAGE_KEY,
-      JSON.stringify({ version: 1, sessions })
-    );
-  } catch {
-    // The investigation still works when browser storage is unavailable.
-  }
 }
 
 function isEthnicRelationsSession(session: InvestigationSession) {
@@ -545,7 +513,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const routeState = (location.state || {}) as InvestigationRouteState;
   const [sessions, setSessions] = useState<InvestigationSession[]>(() => (
     restoreSessionFromAnalysisProgress(
-      readStoredSessions() || createInitialSessions(),
+      createInitialSessions(),
       investigationId,
       routeState.restoreAnalysisProgress
     )
@@ -567,6 +535,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   );
   const [sendingMessageSessionId, setSendingMessageSessionId] = useState("");
   const [confirmingCreationSessionId, setConfirmingCreationSessionId] = useState("");
+  const [historicalWorkspacesLoaded, setHistoricalWorkspacesLoaded] = useState(false);
   const subViewScrollRef = useRef<HTMLDivElement>(null);
   const loadingPublishedReportsRef = useRef(new Set<string>());
   const pendingTurnControllersRef = useRef(new Map<string, AbortController>());
@@ -574,6 +543,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const restoredWorkspaceIdsRef = useRef(new Set<string>());
   const recoveredReportVersionsRef = useRef(new Set<string>());
   const generatingPreviewSessionsRef = useRef(new Set<string>());
+  const loadingHistoricalWorkspacesRef = useRef(false);
 
   useEffect(() => {
     const prevTitle = document.title;
@@ -596,8 +566,37 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   }, []);
 
   useEffect(() => {
-    storeSessions(sessions);
-  }, [sessions]);
+    if (loadingHistoricalWorkspacesRef.current) return;
+    loadingHistoricalWorkspacesRef.current = true;
+    void fetchHistoricalReportWorkspaces().then(async ({ items }) => {
+      const historicalSessions = await Promise.all(items.map(async (workspace) => {
+        const report = await fetchPublishedReportVersion(workspace.report_version_id);
+        return buildHistoricalReportSession(workspace, report);
+      }));
+      setSessions((current) => [
+        ...historicalSessions,
+        ...current.filter((session) => (
+          Boolean(session.creationBinding)
+          && !historicalSessions.some((historical) => historical.id === session.id)
+        ))
+      ]);
+      const requestedHistorical = investigationId
+        ? historicalSessions.find((session) => session.id === investigationId)
+        : null;
+      if (requestedHistorical) {
+        setActiveSessionId(requestedHistorical.id);
+      } else if (!investigationId && historicalSessions[0]) {
+        setActiveSessionId(historicalSessions[0].id);
+        navigate(`/investigation/${encodeURIComponent(historicalSessions[0].id)}`, {
+          replace: true
+        });
+      }
+    }).catch((error) => {
+      console.error("Failed to load historical report workspaces", error);
+    }).finally(() => {
+      setHistoricalWorkspacesLoaded(true);
+    });
+  }, [investigationId, navigate]);
 
   useEffect(() => {
     if (
@@ -663,8 +662,12 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     }
     if (sessions.some((session) => session.id === investigationId)) return;
     if (investigationId.startsWith("investigation-session:")) return;
+    if (
+      investigationId.startsWith("historical-report-")
+      && !historicalWorkspacesLoaded
+    ) return;
     navigate(`/investigation/${encodeURIComponent(activeSessionId)}`, { replace: true });
-  }, [activeSessionId, investigationId, navigate, sessions]);
+  }, [activeSessionId, historicalWorkspacesLoaded, investigationId, navigate, sessions]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
   const activeRuleSet = activeSession.creationBinding
@@ -683,7 +686,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     uiSessionId: string,
     workspaceSessionId: string,
     runId: string,
+    historicalWorkspaceId: string,
     turnId: string,
+    clientMessageId: string,
+    initialAfterSequence = 0,
     resumeAttempted = false
   ) => {
     if (pendingTurnControllersRef.current.has(turnId)) return;
@@ -705,12 +711,20 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   ...item.reportBinding,
                   pendingTurn: {
                     ...item.reportBinding.pendingTurn,
-                    stage: event.stage
+                    stage: event.stage,
+                    afterSequence: event.sequence
                   }
                 }
               }
             : item
         )));
+        if (historicalWorkspaceId && clientMessageId) {
+          storeHistoricalPendingTurn(historicalWorkspaceId, {
+            client_message_id: clientMessageId,
+            turn_id: turnId,
+            after_sequence: event.sequence
+          });
+        }
       }
     });
     const waitForTerminal = (afterSequence = 0, resumeReplay = false) => (
@@ -721,14 +735,17 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             turnId,
             waitOptions(afterSequence, resumeReplay)
           )
-        : waitForInvestigationTurn(
-            turnId,
-            waitOptions(afterSequence, resumeReplay)
-          )
+        : historicalWorkspaceId
+          ? waitForHistoricalReportTurn(
+              historicalWorkspaceId,
+              turnId,
+              waitOptions(afterSequence, resumeReplay)
+            )
+          : Promise.reject(new Error("Published report workspace is unavailable"))
     );
 
     try {
-      let result = await waitForTerminal();
+      let result = await waitForTerminal(initialAfterSequence);
       if (result.status === "interrupted" && result.retryable && !resumeAttempted) {
         resumeAttempted = true;
         setSessions((current) => current.map((item) => (
@@ -753,8 +770,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             runId,
             turnId
           );
+        } else if (historicalWorkspaceId) {
+          await resumeHistoricalReportTurn(historicalWorkspaceId, turnId);
         } else {
-          await resumeInvestigationTurn(turnId);
+          throw new Error("Published report workspace is unavailable");
         }
         result = await waitForTerminal(
           result.event_sequence || 0,
@@ -766,6 +785,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         ? result.answer.trim()
         : result.safe_message.trim();
       if (!answer) throw new Error("Investigation Turn returned no public answer");
+      if (historicalWorkspaceId) clearHistoricalPendingTurn(historicalWorkspaceId);
       setSessions((current) => current.map((item) => {
         if (item.id !== uiSessionId || !item.reportBinding) return item;
         const answerId = `msg-answer-${turnId}`;
@@ -793,6 +813,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     } catch (error) {
       if (!controller.signal.aborted) {
         console.error("Failed to finish published report question", error);
+        if (historicalWorkspaceId) clearHistoricalPendingTurn(historicalWorkspaceId);
         setSessions((current) => current.map((item) => {
           if (item.id !== uiSessionId || !item.reportBinding) return item;
           const answerId = `msg-answer-error-${turnId}`;
@@ -848,8 +869,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   pendingTurn: {
                     turnId: result.turn_id,
                     clientMessageId,
-                    question: text,
-                    stage: "accepted"
+                    stage: "accepted",
+                    afterSequence: 0
                   }
                 }
               }
@@ -858,26 +879,17 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         return;
       }
 
-      let investigationSessionId = binding.investigationSessionId;
-      if (!investigationSessionId) {
-        const created = await createInvestigationSession(binding.reportVersionId);
-        investigationSessionId = created.session_id;
-        setSessions((current) => current.map((item) => (
-          item.id === session.id && item.reportBinding
-            ? {
-                ...item,
-                reportBinding: {
-                  ...item.reportBinding,
-                  investigationSessionId: created.session_id
-                }
-              }
-            : item
-        )));
+      if (!binding.workspaceId) {
+        throw new Error("Historical report workspace is unavailable");
       }
-
-      const result = await sendInvestigationTurn(investigationSessionId, {
+      const result = await sendHistoricalReportTurn(binding.workspaceId, {
         clientMessageId,
         content: text
+      });
+      storeHistoricalPendingTurn(binding.workspaceId, {
+        client_message_id: clientMessageId,
+        turn_id: result.turn_id,
+        after_sequence: 0
       });
       setSessions((current) => current.map((item) => (
         item.id === session.id && item.reportBinding
@@ -886,12 +898,11 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
               updatedAt: "刚刚",
               reportBinding: {
                 ...item.reportBinding,
-                investigationSessionId,
                 pendingTurn: {
                   turnId: result.turn_id,
                   clientMessageId,
-                  question: text,
-                  stage: "accepted"
+                  stage: "accepted",
+                  afterSequence: 0
                 }
               }
             }
@@ -930,8 +941,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         session.id,
         creation?.workspaceSessionId || "",
         run?.run_id || "",
+        session.reportBinding?.workspaceId || "",
         pending.turnId,
-        Boolean(pending.resumeAttempted)
+        pending.clientMessageId,
+        pending.afterSequence || 0
       );
     });
   }, [continuePublishedReportTurn, sessions]);
@@ -1608,6 +1621,13 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             versionNumber: report.version_number,
             publishedAt: report.published_at,
             pendingTurn: pendingReportTurn
+              ? {
+                  turnId: pendingReportTurn.turnId,
+                  clientMessageId: pendingReportTurn.clientMessageId,
+                  stage: pendingReportTurn.stage,
+                  afterSequence: 0
+                }
+              : undefined
           }
         };
       }));
@@ -2175,8 +2195,16 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           onPhaseChange={handlePhaseChange}
           onSendMessage={handleSendMessage}
           onOpenDrawer={(type) => {
-            if (type === "report" && isEthnicRelationsSession(activeSession)) {
-              navigate(`/investigation/${encodeURIComponent(activeSession.id)}/report`);
+            if (
+              type === "report"
+              && (isEthnicRelationsSession(activeSession) || activeSession.reportBinding)
+            ) {
+              const reportQuery = activeSession.reportBinding
+                ? `?report=${encodeURIComponent(activeSession.reportBinding.reportVersionId)}`
+                : "";
+              navigate(
+                `/investigation/${encodeURIComponent(activeSession.id)}/report${reportQuery}`
+              );
               return;
             }
             setActiveDrawer(type);

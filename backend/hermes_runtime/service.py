@@ -33,6 +33,8 @@ class HermesInvestigationAgentService:
         agent_factory: Callable[..., Any] | None = None,
         bind_runtime: bool = True,
         hermes_state_dir: Path | None = None,
+        authorized_report_version_ids: tuple[str, ...] | None = None,
+        authorized_context_anchor_prefixes: tuple[str, ...] | None = None,
     ) -> None:
         self.report_facade = report_facade or ReportQueryFacade()
         self.store = store or InvestigationStore()
@@ -42,6 +44,16 @@ class HermesInvestigationAgentService:
         self.hermes_state_dir = (
             hermes_state_dir or settings.data_dir / "hermes-investigation"
         ).resolve()
+        self.authorized_report_version_ids = (
+            tuple(authorized_report_version_ids)
+            if authorized_report_version_ids is not None
+            else settings.hermes_authorized_report_version_ids
+        )
+        self.authorized_context_anchor_prefixes = (
+            tuple(authorized_context_anchor_prefixes)
+            if authorized_context_anchor_prefixes is not None
+            else None
+        )
         self._agents: dict[str, Any] = {}
         self._bound_sessions: set[str] = set()
         self._agent_lock = RLock()
@@ -239,18 +251,7 @@ class HermesInvestigationAgentService:
         with self._agent_lock:
             self.runtime_binding.configure_product_home(self.hermes_state_dir)
             self.runtime_binding.discover_plugins(force=not self._bound_sessions)
-        additional_contexts = []
-        seen_tasks = {session.task_id}
-        for report_version_id in settings.hermes_authorized_report_version_ids:
-            if report_version_id == session.report_version_id:
-                continue
-            context = self.report_facade.get_published_report_context(report_version_id)
-            if context.task_id in seen_tasks:
-                raise InvestigationTurnNotFoundError(
-                    "authorized Account report sources must have unique tasks"
-                )
-            seen_tasks.add(context.task_id)
-            additional_contexts.append(context)
+        additional_contexts = self._authorized_report_contexts(session)
         self.runtime_binding.bind_published_report_session(
             session_id=session.id,
             database_path=self.report_facade.db_path,
@@ -260,9 +261,34 @@ class HermesInvestigationAgentService:
             ).content_hash,
             snapshot_hash=session.snapshot_hash,
             ledger_path=self.hermes_state_dir / f"{session.id}.sqlite3",
-            additional_report_contexts=tuple(additional_contexts),
+            additional_report_contexts=additional_contexts,
         )
         self._bound_sessions.add(session.id)
+
+    def _authorized_report_contexts(
+        self, session: InvestigationSession
+    ) -> tuple[Any, ...]:
+        if self.authorized_context_anchor_prefixes is not None:
+            anchor = self.store.session_anchor(session.id)
+            if not any(
+                anchor.startswith(prefix)
+                for prefix in self.authorized_context_anchor_prefixes
+            ):
+                return ()
+
+        additional_contexts = []
+        seen_tasks = {session.task_id}
+        for report_version_id in self.authorized_report_version_ids:
+            if report_version_id == session.report_version_id:
+                continue
+            context = self.report_facade.get_published_report_context(report_version_id)
+            if context.task_id in seen_tasks:
+                raise InvestigationTurnNotFoundError(
+                    "authorized Account report sources must have unique tasks"
+                )
+            seen_tasks.add(context.task_id)
+            additional_contexts.append(context)
+        return tuple(additional_contexts)
 
     def _validate_business_scope(self, session: InvestigationSession) -> None:
         if session.scope_type != "report":

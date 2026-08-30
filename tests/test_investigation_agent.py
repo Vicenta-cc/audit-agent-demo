@@ -37,6 +37,7 @@ from backend.investigation.contracts import (
 )
 from backend.investigation.errors import (
     CheckpointScopeMismatchError,
+    ClientMessageConflictError,
     ConcurrentTurnError,
     QwenChatError,
     ReportNotFoundError,
@@ -1294,10 +1295,16 @@ class InvestigationStoreTest(InvestigationFixtureTest):
         )
         self.assertFalse(replay)
         same, replay = store.create_turn(
-            session.id, client_message_id="client-1", user_input="不会重复写入"
+            session.id, client_message_id="client-1", user_input="第一轮"
         )
         self.assertTrue(replay)
         self.assertEqual(same.id, turn.id)
+        with self.assertRaises(ClientMessageConflictError):
+            store.create_turn(
+                session.id,
+                client_message_id="client-1",
+                user_input="不会重复写入",
+            )
         with self.assertRaises(ConcurrentTurnError):
             store.create_turn(
                 session.id, client_message_id="client-2", user_input="并发轮次"

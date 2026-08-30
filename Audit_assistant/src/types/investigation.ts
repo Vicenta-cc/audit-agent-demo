@@ -157,7 +157,7 @@ export interface ChatMessage {
   sender: "user" | "assistant" | "system";
   timestamp: string;
   content?: string;
-  type?: "text" | "task_proposal" | "task_confirmation" | "agent_collaboration" | "report_card" | "evidence_list" | "comparison_list" | "grounded_answer";
+  type?: "text" | "task_proposal" | "task_confirmation" | "agent_collaboration" | "historical_progress" | "report_card" | "evidence_list" | "comparison_list" | "grounded_answer";
   proposalData?: {
     taskName: string;
     taskType: string;
@@ -211,17 +211,17 @@ export interface InvestigationSession {
     error?: string;
   };
   reportBinding?: {
+    workspaceId?: string;
     reportVersionId: string;
     reportId: string;
     taskId: string;
     versionNumber: number;
     publishedAt: string;
-    investigationSessionId?: string;
     pendingTurn?: {
       turnId: string;
       clientMessageId: string;
-      question: string;
       stage: import("./investigations").InvestigationTurnStage;
+      afterSequence?: number;
       resumeAttempted?: boolean;
     };
   };

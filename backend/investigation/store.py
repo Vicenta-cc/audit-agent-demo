@@ -38,6 +38,7 @@ from backend.investigation.errors import (
     ArtifactIntegrityError,
     ArtifactNotFoundError,
     ConcurrentTurnError,
+    ClientMessageConflictError,
     InvestigationSessionNotFoundError,
     InvestigationTurnNotFoundError,
 )
@@ -746,12 +747,22 @@ class InvestigationStore:
                 connection.execute("BEGIN IMMEDIATE")
                 existing = connection.execute(
                     """
-                    SELECT * FROM investigation_turns
-                    WHERE session_id = ? AND client_message_id = ?
+                    SELECT t.*
+                    FROM investigation_turns t
+                    WHERE t.session_id = ? AND t.client_message_id = ?
                     """,
                     (session_id, client_message_id),
                 ).fetchone()
                 if existing is not None:
+                    existing_content = connection.execute(
+                        "SELECT content FROM investigation_messages WHERE id = ?",
+                        (str(existing["user_message_id"]),),
+                    ).fetchone()
+                    if (
+                        existing_content is None
+                        or str(existing_content["content"]) != user_input
+                    ):
+                        raise ClientMessageConflictError()
                     return self._turn(existing), True
                 session = connection.execute(
                     "SELECT status FROM investigation_sessions WHERE id = ?", (session_id,)
@@ -796,6 +807,8 @@ class InvestigationStore:
             if "uq_investigation_running_turn" in str(exc) or "UNIQUE constraint failed" in str(exc):
                 existing = self.get_turn_by_client_message(session_id, client_message_id)
                 if existing is not None:
+                    if self.get_user_message_for_turn(existing.id).content != user_input:
+                        raise ClientMessageConflictError() from exc
                     return existing, True
                 raise ConcurrentTurnError() from exc
             raise

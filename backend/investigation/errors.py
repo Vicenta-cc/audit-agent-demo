@@ -51,6 +51,11 @@ class ConcurrentTurnError(InvestigationError):
     retryable = True
 
 
+class ClientMessageConflictError(InvestigationError):
+    code = "client_message_conflict"
+    safe_message = "该消息标识已用于另一条问题，已拒绝重复提交。"
+
+
 class CheckpointScopeMismatchError(InvestigationError):
     code = "checkpoint_scope_mismatch"
     safe_message = "恢复点与当前会话绑定的报告版本不一致，已停止恢复。"

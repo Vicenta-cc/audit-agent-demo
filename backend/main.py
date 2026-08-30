@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .api.investigation import create_investigation_router
+from .api.historical_reports import create_historical_report_router
 from .api.investigation_conversation import create_investigation_conversation_router
 from .api.investigation_creation import create_investigation_creation_router
 from .api.investigation_execution import InvestigationTurnExecutor
@@ -53,6 +54,11 @@ from .audit_agent.rule_compiler import (
 from .reporting.store import ReportStore
 from .reporting.runtime import R31ReportRuntime
 from .hermes_runtime.service import HermesInvestigationAgentService
+from .historical_reports import (
+    HISTORICAL_REPORT_SPECS,
+    HistoricalReportDemoService,
+    HistoricalReportWorkspaceStore,
+)
 from .investigation_creation.adapters import (
     InvestigationConfigurationResolver,
     InvestigationRunProjector,
@@ -106,9 +112,18 @@ investigation_agent_service = (
     HermesInvestigationAgentService(
         agent_factory=FakePublishedReportHermesAgent,
         bind_runtime=False,
+        authorized_report_version_ids=tuple(
+            item.report_version_id for item in HISTORICAL_REPORT_SPECS
+        ),
+        authorized_context_anchor_prefixes=("historical-report:",),
     )
     if settings.hermes_creation_fake_runtime
-    else HermesInvestigationAgentService()
+    else HermesInvestigationAgentService(
+        authorized_report_version_ids=tuple(
+            item.report_version_id for item in HISTORICAL_REPORT_SPECS
+        ),
+        authorized_context_anchor_prefixes=("historical-report:",),
+    )
 )
 investigation_creation_store = InvestigationCreationStore()
 investigation_configuration_resolver = InvestigationConfigurationResolver(
@@ -159,6 +174,14 @@ investigation_turn_executor = InvestigationTurnExecutor(
     investigation_agent_service,
     max_workers=settings.hermes_investigation_max_workers,
 )
+historical_report_workspace_store = HistoricalReportWorkspaceStore()
+historical_report_demo_service = HistoricalReportDemoService(
+    specs=HISTORICAL_REPORT_SPECS,
+    workspace_store=historical_report_workspace_store,
+    report_store=report_store,
+    report_service=investigation_agent_service,
+    executor=investigation_turn_executor,
+)
 investigation_creation_turn_executor = InvestigationTurnExecutor(
     investigation_creation_conversation_service,
     max_workers=settings.hermes_investigation_max_workers,
@@ -169,6 +192,7 @@ app.include_router(
         r31_report_runtime,
         principal_provider=principal_provider,
         m3_run_store=investigation_creation_store,
+        historical_report_service=historical_report_demo_service,
     )
 )
 app.include_router(
@@ -179,11 +203,18 @@ app.include_router(
 )
 app.include_router(create_ruleset_router(ruleset_service, principal_provider=principal_provider))
 app.include_router(
+    create_historical_report_router(
+        historical_report_demo_service,
+        principal_provider=principal_provider,
+    )
+)
+app.include_router(
     create_investigation_router(
         investigation_agent_service,
         investigation_turn_executor,
         report_store=report_store,
         m3_run_store=investigation_creation_store,
+        historical_report_service=historical_report_demo_service,
     )
 )
 app.include_router(

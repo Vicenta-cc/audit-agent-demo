@@ -17,6 +17,7 @@ from backend.api.contracts import (
     InvestigationTurnStatusResponse,
 )
 from backend.investigation.errors import (
+    ClientMessageConflictError,
     ConcurrentTurnError,
     InvestigationError,
     InvestigationSessionNotFoundError,
@@ -33,6 +34,7 @@ def create_investigation_router(
     *,
     report_store: Any | None = None,
     m3_run_store: Any | None = None,
+    historical_report_service: Any | None = None,
 ) -> APIRouter:
     """Expose the 3A Agent without leaking its internal execution contracts."""
 
@@ -44,7 +46,10 @@ def create_investigation_router(
     )
     def create_session(report_version_id: str) -> InvestigationSessionResponse:
         _reject_legacy_m3_session_creation(
-            report_store, m3_run_store, report_version_id
+            report_store,
+            m3_run_store,
+            report_version_id,
+            historical_report_service=historical_report_service,
         )
         try:
             session = service.create_session(report_version_id)
@@ -59,7 +64,11 @@ def create_investigation_router(
     def list_messages(session_id: str) -> tuple[InvestigationMessageResponse, ...]:
         try:
             _reject_workspace_handoff_session(
-                service, session_id, report_store, m3_run_store
+                service,
+                session_id,
+                report_store,
+                m3_run_store,
+                historical_report_service=historical_report_service,
             )
             messages = service.get_messages(session_id, include_tool_messages=False)
             return tuple(
@@ -88,7 +97,11 @@ def create_investigation_router(
     ) -> InvestigationTurnAcceptedResponse:
         try:
             _reject_workspace_handoff_session(
-                service, session_id, report_store, m3_run_store
+                service,
+                session_id,
+                report_store,
+                m3_run_store,
+                historical_report_service=historical_report_service,
             )
             turn = executor.accept_turn(
                 session_id,
@@ -110,7 +123,11 @@ def create_investigation_router(
         try:
             turn = service.store.get_turn(turn_id)
             _reject_workspace_handoff_session(
-                service, turn.session_id, report_store, m3_run_store
+                service,
+                turn.session_id,
+                report_store,
+                m3_run_store,
+                historical_report_service=historical_report_service,
             )
             return _turn_status_response(service, turn)
         except Exception as exc:
@@ -126,7 +143,11 @@ def create_investigation_router(
         try:
             turn = service.store.get_turn(turn_id)
             _reject_workspace_handoff_session(
-                service, turn.session_id, report_store, m3_run_store
+                service,
+                turn.session_id,
+                report_store,
+                m3_run_store,
+                historical_report_service=historical_report_service,
             )
             return turn_event_stream_response(
                 service,
@@ -147,7 +168,11 @@ def create_investigation_router(
         try:
             turn = service.store.get_turn(turn_id)
             _reject_workspace_handoff_session(
-                service, turn.session_id, report_store, m3_run_store
+                service,
+                turn.session_id,
+                report_store,
+                m3_run_store,
+                historical_report_service=historical_report_service,
             )
             turn = executor.resume_turn(turn_id)
         except Exception as exc:
@@ -164,7 +189,14 @@ def _reject_legacy_m3_session_creation(
     report_store: Any | None,
     m3_run_store: Any | None,
     report_version_id: str,
+    *,
+    historical_report_service: Any | None = None,
 ) -> None:
+    if (
+        historical_report_service is not None
+        and historical_report_service.is_historical_report_version(report_version_id)
+    ):
+        raise HTTPException(status_code=404, detail="Published report version not found")
     if report_store is None or m3_run_store is None:
         return
     task_id = published_report_task_id(report_store, report_version_id)
@@ -180,10 +212,14 @@ def _reject_workspace_handoff_session(
     session_id: str,
     report_store: Any | None = None,
     m3_run_store: Any | None = None,
+    *,
+    historical_report_service: Any | None = None,
 ) -> None:
     read_anchor = getattr(service.store, "session_anchor", None)
-    if callable(read_anchor) and read_anchor(session_id).startswith("m3-run:"):
-        raise InvestigationSessionNotFoundError("investigation Session was not found")
+    if callable(read_anchor):
+        anchor = read_anchor(session_id)
+        if anchor.startswith("m3-run:") or anchor.startswith("historical-report:"):
+            raise InvestigationSessionNotFoundError("investigation Session was not found")
     if report_store is None or m3_run_store is None:
         return
     session = service.store.get_session(session_id)
@@ -369,7 +405,9 @@ def _is_current_terminal_event(
 def _raise_public_error(exc: Exception) -> None:
     if isinstance(exc, (ReportNotFoundError, InvestigationSessionNotFoundError, InvestigationTurnNotFoundError)):
         raise HTTPException(status_code=404, detail=exc.safe_message) from exc
-    if isinstance(exc, (ConcurrentTurnError, ReportScopeError)):
+    if isinstance(
+        exc, (ClientMessageConflictError, ConcurrentTurnError, ReportScopeError)
+    ):
         raise HTTPException(status_code=409, detail=exc.safe_message) from exc
     if isinstance(exc, ValueError):
         raise HTTPException(status_code=422, detail="调查请求参数无效。") from exc

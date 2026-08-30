@@ -541,34 +541,22 @@ export function normalizeAnalysisRecords(records: readonly AnalysisRecord[]): An
   });
 }
 
-function storageKey(investigationId: string) {
-  return `xhs-audit:analysis-records:v4:${investigationId}`;
-}
+const analysisRecordCache = new Map<string, AnalysisRecord[]>();
 
 export function readStoredAnalysisRecords(investigationId: string): AnalysisRecord[] | null {
-  try {
-    const raw = window.sessionStorage.getItem(storageKey(investigationId));
-    if (!raw) return null;
-    const records = JSON.parse(raw) as AnalysisRecord[];
-    if (
-      !Array.isArray(records)
-      || !records.every((record) => (
-        record.catalogVersion === ANALYSIS_RECORD_CATALOG_VERSION
-        && Number.isInteger(record.itemNumber)
-      ))
-    ) {
-      return null;
-    }
-    return normalizeAnalysisRecords(records);
-  } catch {
+  const records = analysisRecordCache.get(investigationId);
+  if (
+    !records
+    || !records.every((record) => (
+      record.catalogVersion === ANALYSIS_RECORD_CATALOG_VERSION
+      && Number.isInteger(record.itemNumber)
+    ))
+  ) {
     return null;
   }
+  return normalizeAnalysisRecords(records);
 }
 
 export function storeAnalysisRecords(investigationId: string, records: AnalysisRecord[]) {
-  try {
-    window.sessionStorage.setItem(storageKey(investigationId), JSON.stringify(records));
-  } catch {
-    // Route navigation still works when session storage is unavailable.
-  }
+  analysisRecordCache.set(investigationId, records.map((record) => ({ ...record })));
 }

@@ -31,6 +31,7 @@ def create_reporting_router(
     *,
     principal_provider: PrincipalProvider | None = None,
     m3_run_store: object | None = None,
+    historical_report_service: object | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["reports"])
     structured_runtime = runtime or R31ReportRuntime(store)
@@ -44,6 +45,7 @@ def create_reporting_router(
         task_id: str,
         principal: Principal = Depends(provide_principal),
     ) -> ReportVersionListResponse:
+        require_historical_task_access(task_id, principal)
         versions = tuple(
             version
             for version in store.list_published_versions_for_task(task_id)
@@ -69,6 +71,7 @@ def create_reporting_router(
         report_version_id: str,
         principal: Principal = Depends(provide_principal),
     ) -> PublishedReportDetailResponse:
+        require_historical_report_access(report_version_id, principal)
         task_id = published_report_task_id(store, report_version_id)
         if not can_read_m3_report(
             m3_run_store,
@@ -86,6 +89,7 @@ def create_reporting_router(
         report_version_id: str,
         principal: Principal = Depends(provide_principal),
     ) -> dict[str, object]:
+        require_historical_report_access(report_version_id, principal)
         task_id = published_report_task_id(store, report_version_id)
         if not can_read_m3_report(
             m3_run_store,
@@ -104,6 +108,7 @@ def create_reporting_router(
     def require_published_access(
         report_version_id: str, principal: Principal
     ) -> None:
+        require_historical_report_access(report_version_id, principal)
         task_id = published_report_task_id(store, report_version_id)
         if not can_read_m3_report(
             m3_run_store,
@@ -112,6 +117,32 @@ def create_reporting_router(
             task_id=task_id,
         ):
             raise HTTPException(status_code=404, detail="Published report version not found")
+
+    def require_historical_report_access(
+        report_version_id: str, principal: Principal
+    ) -> None:
+        if historical_report_service is None:
+            return
+        try:
+            historical_report_service.require_report_access(
+                report_version_id, principal_id=principal.id
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=404, detail="Published report version not found"
+            ) from exc
+
+    def require_historical_task_access(task_id: str, principal: Principal) -> None:
+        if historical_report_service is None:
+            return
+        try:
+            historical_report_service.require_task_access(
+                task_id, principal_id=principal.id
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=404, detail="Published report version not found"
+            ) from exc
 
     def presentation_call(operation):
         try:
