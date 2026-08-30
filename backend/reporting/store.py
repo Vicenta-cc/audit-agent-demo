@@ -2026,6 +2026,146 @@ class ReportStore:
         validate_structured_report_document(output, account_model=account_model)
         return output
 
+    def get_presentation_projection(self, report_version_id: str) -> dict[str, Any]:
+        from backend.reporting.presentation_projection import (
+            build_presentation_projection,
+        )
+
+        document = self.get_frontend_report(report_version_id)
+        account_projection, account_repository, current_task_id = (
+            self._presentation_account_context(report_version_id)
+        )
+        return build_presentation_projection(
+            document,
+            snapshot=self.load_immutable_snapshot(report_version_id),
+            account_projection=account_projection,
+            account_repository=account_repository,
+            current_task_id=current_task_id,
+        )
+
+    def list_presentation_account_entries(
+        self,
+        report_version_id: str,
+        *,
+        role: str | None = None,
+        account_filter: str | None = None,
+        search: str | None = None,
+        sort_order: str | None = None,
+        limit: int = 20,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        from backend.reporting.presentation_projection import (
+            build_account_index_page,
+            build_filtered_account_index_page,
+        )
+
+        if role is not None and account_filter is not None:
+            raise ReportGenerationError(
+                "ReportAccountEntry role and presentation filters are mutually exclusive"
+            )
+        if account_filter is not None:
+            projection, account_repository, current_task_id = (
+                self._presentation_account_context(report_version_id)
+            )
+            return build_filtered_account_index_page(
+                projection,
+                account_repository=account_repository,
+                current_task_id=current_task_id,
+                account_filter=account_filter,
+                limit=limit,
+                cursor=cursor,
+                search=search,
+                sort_order=sort_order,
+            )
+
+        if search is not None or sort_order is not None:
+            raise ReportGenerationError(
+                "ReportAccountEntry search and sort require a presentation filter"
+            )
+
+        page = self.list_report_account_entries(
+            report_version_id, role=role, limit=limit, cursor=cursor
+        )
+        return build_account_index_page(page, role=role)
+
+    def get_presentation_account_detail(
+        self, report_version_id: str, *, entry_ref: str
+    ) -> dict[str, Any]:
+        from backend.reporting.presentation_projection import build_account_detail
+        projection, account_repository, current_task_id = (
+            self._presentation_account_context(report_version_id)
+        )
+        if projection is None:
+            raise ReportGenerationError("ReportVersion has no Account projection")
+
+        return build_account_detail(
+            projection,
+            entry_ref=entry_ref,
+            account_repository=account_repository,
+            current_task_id=current_task_id,
+        )
+
+    def _presentation_account_context(
+        self, report_version_id: str
+    ) -> tuple[dict[str, Any] | None, Any | None, str]:
+        from backend.reporting.account_entries import DEFAULT_ACCOUNT_FIXTURE_PATH
+        from hermes_m0.account_activity_repository import AccountActivityRepository
+
+        projection = self.get_report_account_projection(
+            report_version_id, include_internal=True
+        )
+        version = self.get_version(report_version_id)
+        report = (
+            self.get_report(str(version["report_id"])) if version is not None else None
+        )
+        if report is None:
+            raise ReportGenerationError("published ReportVersion metadata was not found")
+        try:
+            account_repository = AccountActivityRepository.load(
+                DEFAULT_ACCOUNT_FIXTURE_PATH
+            )
+        except (OSError, ValueError, KeyError):
+            account_repository = None
+        return projection, account_repository, str(report["task_id"])
+
+    def get_presentation_post_detail(
+        self, report_version_id: str, *, post_ref: str
+    ) -> dict[str, Any]:
+        from backend.reporting.presentation_projection import build_post_detail
+
+        return build_post_detail(
+            self.get_frontend_report(report_version_id), post_ref=post_ref
+        )
+
+    def get_presentation_finding_evidence(
+        self, report_version_id: str, *, investigation_finding_ref: str
+    ) -> dict[str, Any]:
+        from backend.reporting.presentation_projection import build_finding_evidence
+
+        return build_finding_evidence(
+            self.get_frontend_report(report_version_id),
+            investigation_finding_ref=investigation_finding_ref,
+        )
+
+    def get_presentation_appendix(
+        self,
+        report_version_id: str,
+        *,
+        view: str = "posts",
+        finding_ref: str | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        from backend.reporting.presentation_projection import build_appendix_page
+
+        return build_appendix_page(
+            self.get_frontend_report(report_version_id),
+            view=view,
+            finding_ref=finding_ref,
+            limit=limit,
+            cursor=cursor,
+        )
+
     def get_run(self, run_id: str) -> dict[str, Any] | None:
         with self._connect() as connection:
             row = connection.execute(

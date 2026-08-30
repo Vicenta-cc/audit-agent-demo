@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi import Depends
 
 from backend.api.contracts import (
@@ -100,6 +100,127 @@ def create_reporting_router(
             message = str(exc)
             status = 404 if "not found" in message.lower() else 500
             raise HTTPException(status_code=status, detail=message) from exc
+
+    def require_published_access(
+        report_version_id: str, principal: Principal
+    ) -> None:
+        task_id = published_report_task_id(store, report_version_id)
+        if not can_read_m3_report(
+            m3_run_store,
+            principal,
+            report_version_id=report_version_id,
+            task_id=task_id,
+        ):
+            raise HTTPException(status_code=404, detail="Published report version not found")
+
+    def presentation_call(operation):
+        try:
+            return operation()
+        except ReportGenerationError as exc:
+            message = str(exc)
+            status = 404 if "not found" in message.lower() else 400
+            raise HTTPException(status_code=status, detail=message) from exc
+
+    @router.get(
+        "/api/report-versions/{report_version_id}/presentation-projection"
+    )
+    def get_presentation_projection(
+        report_version_id: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> dict[str, object]:
+        require_published_access(report_version_id, principal)
+        return presentation_call(
+            lambda: store.get_presentation_projection(report_version_id)
+        )
+
+    @router.get("/api/report-versions/{report_version_id}/accounts")
+    def list_presentation_accounts(
+        report_version_id: str,
+        role: str | None = None,
+        account_filter: str | None = Query(default=None, alias="filter"),
+        search: str | None = Query(default=None, max_length=80),
+        sort_order: str | None = Query(default=None, alias="sort"),
+        limit: int = Query(default=20, ge=1, le=100),
+        cursor: str | None = None,
+        principal: Principal = Depends(provide_principal),
+    ) -> dict[str, object]:
+        require_published_access(report_version_id, principal)
+        return presentation_call(
+            lambda: store.list_presentation_account_entries(
+                report_version_id,
+                role=role,
+                account_filter=account_filter,
+                search=search,
+                sort_order=sort_order,
+                limit=limit,
+                cursor=cursor,
+            )
+        )
+
+    @router.get(
+        "/api/report-versions/{report_version_id}/accounts/{entry_ref}"
+    )
+    def get_presentation_account(
+        report_version_id: str,
+        entry_ref: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> dict[str, object]:
+        require_published_access(report_version_id, principal)
+        return presentation_call(
+            lambda: store.get_presentation_account_detail(
+                report_version_id, entry_ref=entry_ref
+            )
+        )
+
+    @router.get("/api/report-versions/{report_version_id}/posts/{post_ref}")
+    def get_presentation_post(
+        report_version_id: str,
+        post_ref: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> dict[str, object]:
+        require_published_access(report_version_id, principal)
+        return presentation_call(
+            lambda: store.get_presentation_post_detail(
+                report_version_id, post_ref=post_ref
+            )
+        )
+
+    @router.get(
+        "/api/report-versions/{report_version_id}/findings/"
+        "{investigation_finding_ref}/evidence"
+    )
+    def get_presentation_finding_evidence(
+        report_version_id: str,
+        investigation_finding_ref: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> dict[str, object]:
+        require_published_access(report_version_id, principal)
+        return presentation_call(
+            lambda: store.get_presentation_finding_evidence(
+                report_version_id,
+                investigation_finding_ref=investigation_finding_ref,
+            )
+        )
+
+    @router.get("/api/report-versions/{report_version_id}/appendix")
+    def get_presentation_appendix(
+        report_version_id: str,
+        view: str = "posts",
+        finding_ref: str | None = None,
+        limit: int = Query(default=50, ge=1, le=100),
+        cursor: str | None = None,
+        principal: Principal = Depends(provide_principal),
+    ) -> dict[str, object]:
+        require_published_access(report_version_id, principal)
+        return presentation_call(
+            lambda: store.get_presentation_appendix(
+                report_version_id,
+                view=view,
+                finding_ref=finding_ref,
+                limit=limit,
+                cursor=cursor,
+            )
+        )
 
     return router
 

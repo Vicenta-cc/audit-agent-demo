@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 import hashlib
 import json
@@ -17,6 +17,8 @@ from hermes_m0.real_report_repository import PublishedReportRepository
 DEFAULT_ACCOUNT_CORPUS_PATH = (
     Path(__file__).with_name("fixtures") / "account_m22_corpus.json.gz"
 )
+RISK_LEVELS = frozenset({"low", "medium", "high"})
+RISK_POST_DECISIONS = frozenset({"review", "reject"})
 
 
 class AccountActivityLookupError(ValueError):
@@ -160,7 +162,6 @@ class AccountActivityRepository:
         self._require_account(account_id)
         occurrences = list(self.corpus.occurrences_for(account_id))
         comments = [item for item in occurrences if item["kind"] == "comment_author"]
-        posts = [item for item in occurrences if item["kind"] == "post_author"]
         source_task_ids = sorted({str(item["task_id"]) for item in occurrences})
         target_counts = Counter(
             str(item["parent_post_author_account_ref"])
@@ -177,6 +178,13 @@ class AccountActivityRepository:
                 "account_id": target_id,
                 "author_display_name": self.display_name(target_id),
                 "comment_count": count,
+                "commented_post_count": len(
+                    {
+                        (str(item["task_id"]), str(item["post"]["content_key"]))
+                        for item in comments
+                        if str(item["parent_post_author_account_ref"]) == target_id
+                    }
+                ),
             }
             for position, (target_id, count) in enumerate(ordered_targets, 1)
         ]
@@ -185,23 +193,12 @@ class AccountActivityRepository:
             task_occurrences = [
                 item for item in occurrences if str(item["task_id"]) == task_id
             ]
-            task_comments = [
-                item for item in task_occurrences if item["kind"] == "comment_author"
-            ]
-            task_posts = [
-                item for item in task_occurrences if item["kind"] == "post_author"
-            ]
+            task_statistics = _overview_statistics(task_occurrences)
             source_distribution.append(
                 {
                     "task_id": task_id,
                     "source_task": self.task_card(task_id),
-                    "comment_count": len(task_comments),
-                    "commented_post_count": len(
-                        {str(item["post"]["content_key"]) for item in task_comments}
-                    ),
-                    "published_post_count": len(task_posts),
-                    "earliest_activity_at": _activity_bounds(task_occurrences)[0],
-                    "latest_activity_at": _activity_bounds(task_occurrences)[1],
+                    **task_statistics,
                 }
             )
         source_distribution.sort(
@@ -214,23 +211,36 @@ class AccountActivityRepository:
         )
         return {
             "display_name": self.display_name(account_id),
-            "statistics": {
-                "comment_count": len(comments),
-                "commented_post_count": len(
-                    {
-                        (str(item["task_id"]), str(item["post"]["content_key"]))
-                        for item in comments
-                    }
-                ),
-                "commented_post_author_count": len(target_counts),
-                "earliest_activity_at": _activity_bounds(occurrences)[0],
-                "latest_activity_at": _activity_bounds(occurrences)[1],
-                "published_post_count": len(posts),
-            },
+            "statistics": _overview_statistics(occurrences),
             "comment_target_distribution": target_distribution,
             "activity_source_distribution": source_distribution,
             "activity_source_tasks": [self.task_card(task_id) for task_id in source_task_ids],
+            "activity_source_count": len(source_task_ids),
             "authorized_task_count": len(self.corpus.authorized_task_ids),
+        }
+
+    def comment_investigation_counts(
+        self,
+        account_ids: Iterable[str],
+        *,
+        required_task_id: str | None = None,
+    ) -> dict[str, int]:
+        """Count authorized investigations containing Comment activity per Account."""
+
+        requested = {str(account_id) for account_id in account_ids if str(account_id)}
+        task_ids_by_account: dict[str, set[str]] = defaultdict(set)
+        for occurrence in self.corpus.occurrences:
+            account_id = str(occurrence.get("account_ref") or "")
+            if account_id in requested and occurrence.get("kind") == "comment_author":
+                task_ids_by_account[account_id].add(str(occurrence["task_id"]))
+        return {
+            account_id: (
+                len(task_ids_by_account.get(account_id, set()))
+                if required_task_id is None
+                or required_task_id in task_ids_by_account.get(account_id, set())
+                else 0
+            )
+            for account_id in requested
         }
 
     def ordered_occurrences(
@@ -571,6 +581,46 @@ def _activity_bounds(values: Iterable[dict[str, Any]]) -> tuple[str | None, str 
     if not timestamps:
         return None, None
     return min(timestamps), max(timestamps)
+
+
+def _overview_statistics(values: Iterable[dict[str, Any]]) -> dict[str, Any]:
+    occurrences = list(values)
+    comments = [item for item in occurrences if item["kind"] == "comment_author"]
+    posts = [item for item in occurrences if item["kind"] == "post_author"]
+    earliest, latest = _activity_bounds(occurrences)
+    _, latest_comment = _activity_bounds(comments)
+    _, latest_published = _activity_bounds(posts)
+    return {
+        "comment_count": len(comments),
+        # A Comment is risky only when its own frozen risk_level is risky.
+        "risk_comment_count": sum(
+            str(item.get("risk_level") or "").lower() in RISK_LEVELS
+            for item in comments
+        ),
+        "commented_post_count": len(
+            {
+                (str(item["task_id"]), str(item["post"]["content_key"]))
+                for item in comments
+            }
+        ),
+        "commented_post_author_count": len(
+            {
+                str(item["parent_post_author_account_ref"])
+                for item in comments
+                if item.get("parent_post_author_account_ref")
+            }
+        ),
+        "earliest_activity_at": earliest,
+        "latest_activity_at": latest,
+        "latest_comment_at": latest_comment,
+        "latest_published_at": latest_published,
+        "published_post_count": len(posts),
+        "risk_published_post_count": sum(
+            str(item.get("decision") or "").lower() in RISK_POST_DECISIONS
+            or str(item.get("risk_level") or "").lower() in RISK_LEVELS
+            for item in posts
+        ),
+    }
 
 
 def _preview(value: str, limit: int) -> str:

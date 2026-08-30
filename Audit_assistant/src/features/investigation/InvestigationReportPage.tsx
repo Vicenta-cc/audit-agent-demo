@@ -1,649 +1,1029 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
-  ArrowRight,
-  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Download,
   FileSearch,
-  MessageSquareText,
-  Network,
-  ShieldCheck,
-  Users,
+  List,
+  Search,
+  UserRound,
   X
 } from "lucide-react";
+import {
+  fetchReportAccountDetail,
+  fetchReportAccounts,
+  fetchReportFindingEvidence,
+  fetchReportPostDetail,
+  fetchReportPresentation
+} from "../../services/reports";
+import type {
+  AvailableFindingBinding,
+  ReportAccountDetail,
+  ReportAccountEntry,
+  ReportAccountFilter,
+  ReportAccountIndexPage,
+  ReportAccountMetricStatistics,
+  ReportAccountSort,
+  ReportEvidencePresentation,
+  ReportFindingEvidence,
+  ReportPostDetail,
+  ReportPostPresentation,
+  ReportPresentationProjection,
+  ReportPresentationSection
+} from "../../types/reports";
+import { resolvePublishedReportVersion } from "./reportRoute";
 
-type EvidenceTone = "high" | "medium" | "low" | "safe" | "clue";
+type DrawerState =
+  | { type: "account"; ref: string }
+  | { type: "account-index"; filter: ReportAccountFilter }
+  | { type: "evidence"; ref: string }
+  | { type: "post"; ref: string }
+  | null;
 
-interface ReportEvidenceDetail {
-  id: string;
-  sectionLabel: string;
-  title: string;
-  tone: EvidenceTone;
-  riskLabel: string;
-  subject: string;
-  meta: string;
-  summary: string;
-  originalText?: string;
-  translation?: string;
-  context: string;
-  basis: string[];
-  collectionLabel: string;
-  appendixLabel: string;
-  appendixSection: "normal" | "comments" | "identity" | "relations" | "cases";
-  appendixFocus?: string;
-  facts?: Array<{ label: string; value: string }>;
-  commentSamples?: Array<{
-    subject: string;
-    time: string;
-    content: string;
-    translation?: string;
-    riskLabel: string;
-  }>;
+const decisionLabels: Record<string, string> = {
+  pass: "通过",
+  reject: "拒绝"
+};
+
+const riskLabels: Record<string, string> = {
+  high: "高风险",
+  medium: "中风险",
+  low: "低风险",
+  none: "无风险"
+};
+
+function displayNumber(value: number | null | undefined) {
+  return value == null ? "暂不可用" : value.toLocaleString("zh-CN");
 }
 
-const reportEvidence: ReportEvidenceDetail[] = [
-  {
-    id: "normal-wedding",
-    sectionLabel: "正常内容样本",
-    title: "河南小伙与新疆古丽婚礼记录",
-    tone: "safe",
-    riskLabel: "无风险",
-    subject: "石榴红缘",
-    meta: "抖音 · 视频及评论 · 380 条评论",
-    summary: "视频记录河南男子与新疆阿克苏女子的婚礼现场，评论区以祝福、外貌评价和地域婚俗讨论为主。",
-    originalText: "河南小伙子跟新疆阿克苏古丽结婚了。",
-    context: "发布内容为婚礼生活记录，未出现排斥通婚、民族贬损或异常导流表达。",
-    basis: [
-      "原帖叙事聚焦婚礼过程与新人生活，没有将个体关系扩展为群体评价。",
-      "380 条评论未形成风险线索，整体互动为祝福和正常婚俗讨论。"
-    ],
-    collectionLabel: "已收录 641 条无风险内容",
-    appendixLabel: "查看全部 641 条内容",
-    appendixSection: "normal",
-    appendixFocus: "91"
-  },
-  {
-    id: "comment-attacks",
-    sectionLabel: "评论区风险样本",
-    title: "日常内容下聚集人身攻击与性羞辱评论",
-    tone: "high",
-    riskLabel: "高风险",
-    subject: "我的心好累",
-    meta: "抖音 · 评论证据 · 228 条评论中命中 8 条",
-    summary: "原帖为女子日常内容，风险集中在评论区，包含非人化辱骂、外貌年龄羞辱、人身攻击和低俗性羞辱。",
-    originalText: "ساراڭ ساراڭ ساراڭ ساراڭ ساراڭ ساراڭ",
-    translation: "疯子、疯子、疯子、疯子、疯子、疯子。",
-    context: "同一评论区另有“又丑又老”等外貌年龄羞辱，以及多条低俗性暗示评论。原帖发布者正文未表达相应风险。",
-    basis: [
-      "多条独立评论同时命中人身攻击、非人化辱骂、外貌羞辱与性羞辱。",
-      "风险来自评论互动而非原帖主题，研判时需要区分发布者与评论者责任。"
-    ],
-    collectionLabel: "已收录 46 条风险评论",
-    appendixLabel: "查看全部 46 条证据",
-    appendixSection: "comments",
-    appendixFocus: "758"
-  },
-  {
-    id: "ethnic-stereotype",
-    sectionLabel: "民族刻板印象样本",
-    title: "生育话题评论将个体经历泛化至民族群体",
-    tone: "medium",
-    riskLabel: "中风险",
-    subject: "麦热依姆古丽",
-    meta: "抖音 · 维吾尔语评论及译文 · 47 条评论",
-    summary: "原帖分享个人生育经历，一条评论将嫁给汉族与生育困难进行泛化关联。",
-    originalText: "بۇ خەنزۇلارغا تەگكەن باشقا ئاياللارنىمۇ ئاڭلاۋاتىمەن كۆرۈۋاتىمەن ...",
-    translation: "译文节选：其他嫁给汉族的女人也生不出孩子，我在网上看到、听到。",
-    context: "评论从个体身体和生育经历推及其他跨民族婚姻女性，形成以民族身份解释生育结果的刻板关联。",
-    basis: [
-      "表达对象从具体个人扩展至“嫁给汉族的女人”群体。",
-      "将民族身份与不孕进行因果式关联，超出个人经历讨论边界。"
-    ],
-    collectionLabel: "已收录 2 条民族与地域线索",
-    appendixLabel: "查看全部 2 条证据",
-    appendixSection: "identity",
-    appendixFocus: "372"
-  },
-  {
-    id: "regional-attack",
-    sectionLabel: "地域攻击样本",
-    title: "婚介服务视频下出现针对外来者的地域攻击",
-    tone: "medium",
-    riskLabel: "中风险",
-    subject: "麦热依姆古丽",
-    meta: "抖音 · 维吾尔语评论及译文 · 18 条评论",
-    summary: "原帖介绍和田婚介登记和对象匹配服务，一条评论将发布者描述为污染城市的外来者。",
-    originalText: "نېمىشقا كەلگەنسىز بۇ خوتەنگە شەھىرىنى بۇلغىغىلى كەلدىڭىزمۇ",
-    translation: "你来和田干嘛？是来把这座城市搞得乌烟瘴气的吗？",
-    context: "评论以发布者的地域流动身份为攻击基础，贬损其来到和田开展服务的行为。",
-    basis: [
-      "存在明确的排斥性地域指向。",
-      "使用“污染城市、搞得乌烟瘴气”等贬损性表达攻击具体人物。"
-    ],
-    collectionLabel: "已收录 2 条民族与地域线索",
-    appendixLabel: "查看全部 2 条证据",
-    appendixSection: "identity",
-    appendixFocus: "366"
-  },
-  {
-    id: "charity-content",
-    sectionLabel: "正向内容样本",
-    title: "为和田暴雨受灾家庭征集资助线索",
-    tone: "safe",
-    riskLabel: "无风险",
-    subject: "麦热依姆古丽",
-    meta: "抖音 · 视频及评论 · 335 条评论",
-    summary: "发布者计划资助十户困难家庭并向网友征集线索，评论区均为祝福、点赞和求助反馈。",
-    context: "内容目的为灾后互助，互动未出现民族排斥、人身攻击或异常导流。",
-    basis: [
-      "视频主题和行动指向公益互助。",
-      "335 条评论整体为正向回应，未发现风险表达。"
-    ],
-    collectionLabel: "已收录 641 条无风险内容",
-    appendixLabel: "查看全部 641 条内容",
-    appendixSection: "normal",
-    appendixFocus: "362"
-  },
-  {
-    id: "saya-cross-platform",
-    sectionLabel: "低风险边界样本",
-    title: "舞蹈视频画面出现跨平台账号信息",
-    tone: "low",
-    riskLabel: "低风险",
-    subject: "萨娅",
-    meta: "抖音 · OCR 画面文字 · 20 条评论",
-    summary: "户外舞蹈内容本身正常，视频画面叠加快手和小红书账号信息，形成低强度跨平台引流线索。",
-    originalText: "00:07 快手 @2458744520；00:09 小红书号：514089680",
-    context: "评论以赞美和表情互动为主，未发现民族关系或其他内容风险。该线索与民族议题无直接关联。",
-    basis: [
-      "两处 OCR 结果均为其他平台账号信息。",
-      "应作为跨平台账号线索单独观察，不应扩展为民族关系风险结论。"
-    ],
-    collectionLabel: "已收录 1 条低风险边界线索",
-    appendixLabel: "查看完整证据",
-    appendixSection: "cases",
-    appendixFocus: "21"
-  },
-  {
-    id: "shared-audience",
-    sectionLabel: "互动关系线索",
-    title: "跨对象互动更符合共同受众特征",
-    tone: "clue",
-    riskLabel: "关系线索",
-    subject: "四个重点对象",
-    meta: "评论账号交叉统计 · 7,450 个去重互动账号",
-    summary: "131 个账号曾在至少两个重点对象的评论区出现，其中仅 1 个覆盖三个对象，没有账号覆盖全部四个对象。",
-    context: "现有 46 条风险评论均来自单一对象评论区，没有风险评论账号跨对象出现，因此不能据此认定协同攻击或关联账号网络。",
-    basis: [
-      "“🌺🌹红花🌹🌺”在三个对象下共出现 56 次，是覆盖对象最多的普通互动账号。",
-      "“维汉胡胡~招红娘”在麦热依姆古丽任务内高频互动，并在个人资料中指向双方关系，只能列为需核验线索。"
-    ],
-    collectionLabel: "已统计 131 个跨对象互动账号",
-    appendixLabel: "查看完整共同互动统计",
-    appendixSection: "relations",
-    facts: [
-      { label: "跨两个及以上对象", value: "131 个账号" },
-      { label: "跨三个对象", value: "1 个账号" },
-      { label: "跨全部四个对象", value: "0 个账号" },
-      { label: "风险账号跨对象", value: "0 个账号" }
-    ],
-    commentSamples: [
-      {
-        subject: "我的心好累",
-        time: "2026-05-22",
-        content: "ئۈرۈك تۈكلۈك ئۈرۈك دەيمىز [呲牙][呲牙]",
-        translation: "我们叫它毛杏 [呲牙][呲牙]",
-        riskLabel: "无风险"
-      },
-      {
-        subject: "麦热依姆古丽",
-        time: "2026-02-03",
-        content: "مەن تونۇيمەن ئوبدان قىز بالا ئۇ [呲牙][呲牙][呲牙][呲牙]",
-        translation: "我认识她，是个好女孩 [呲牙][呲牙][呲牙][呲牙]",
-        riskLabel: "无风险"
-      },
-      {
-        subject: "麦热依姆古丽",
-        time: "2026-02-03",
-        content: "ئوخشايدىكەن سىلەر بىر جۈپ قوشماق لا 😊😊😊",
-        translation: "你们真像一对璧人 😊😊😊",
-        riskLabel: "无风险"
-      },
-      {
-        subject: "石榴红缘",
-        time: "2025-12-09",
-        content: "[咖啡][咖啡][咖啡][赞][赞][赞][玫瑰][玫瑰][玫瑰]",
-        riskLabel: "无风险"
-      }
-    ]
-  }
-];
+function displayTime(value: string | null | undefined) {
+  if (!value) return "暂不可用";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
+}
 
-const objectRows = [
-  { name: "我的心好累", contents: 201, comments: "2,446", risks: 13, detail: "高 2 · 中 5 · 低 6" },
-  { name: "麦热依姆古丽", contents: 304, comments: "12,133", risks: 12, detail: "高 2 · 中 2 · 低 8" },
-  { name: "石榴红缘", contents: 105, comments: "1,808", risks: 0, detail: "未发现风险" },
-  { name: "萨娅", contents: 57, comments: "2,344", risks: 1, detail: "低 1" }
-];
-
-const sectionNav = [
-  ["report-overview", "1. 调查概况"],
-  ["report-data", "2. 数据概览"],
-  ["report-judgment", "3. 综合研判"],
-  ["report-findings", "4. 主要调查发现"],
-  ["report-subjects", "5. 重点对象分析"],
-  ["report-relations", "6. 评论互动与关联线索"],
-  ["report-cases", "7. 典型内容与研判案例"],
-  ["report-conclusion", "8. 综合结论与建议"]
-] as const;
-
-function EvidenceLink({ evidenceId, children, onOpen }: {
-  evidenceId: string;
-  children: string;
-  onOpen: (evidenceId: string) => void;
+function StatBandItem({ label, value }: {
+  label: string;
+  value: number | null | undefined;
 }) {
   return (
-    <button type="button" className="ethnic-report-evidence-link" onClick={() => onOpen(evidenceId)}>
-      <FileSearch size={15} />
-      <span>{children}</span>
-    </button>
+    <div className="r31-stat-item">
+      <dt>{label}</dt>
+      <dd>{displayNumber(value)}</dd>
+    </div>
   );
 }
 
-function ReportEvidenceDrawer({ evidence, onClose, onViewAll }: {
-  evidence: ReportEvidenceDetail | null;
-  onClose: () => void;
-  onViewAll: (evidence: ReportEvidenceDetail) => void;
+function sectionDomId(sectionRef: string) {
+  return `report-${sectionRef}`;
+}
+
+function AccountMetricGrid({ statistics, includesPublishing, className = "" }: {
+  statistics: ReportAccountMetricStatistics;
+  includesPublishing: boolean;
+  className?: string;
 }) {
-  useEffect(() => {
-    if (!evidence) return;
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [evidence, onClose]);
+  return (
+    <span className={`r31-account-metrics ${includesPublishing ? "is-six" : "is-four"} ${className}`.trim()}>
+      <span><small>评论</small><b>{displayNumber(statistics.comment_count)}</b></span>
+      <span className={`is-risk ${statistics.risk_comment_count === 0 ? "is-none" : ""}`.trim()}><small>风险评论</small><b>{displayNumber(statistics.risk_comment_count)}</b></span>
+      {includesPublishing ? <span><small>发布</small><b>{displayNumber(statistics.published_post_count)}</b></span> : null}
+      {includesPublishing ? <span className={`is-risk ${statistics.risk_published_post_count === 0 ? "is-none" : ""}`.trim()}><small>风险帖子</small><b>{displayNumber(statistics.risk_published_post_count)}</b></span> : null}
+      <span><small>涉及帖子</small><b>{displayNumber(statistics.commented_post_count)}</b></span>
+      <span><small>评论对象</small><b>{displayNumber(statistics.commented_post_author_count)}</b></span>
+    </span>
+  );
+}
 
-  if (!evidence) return null;
+type AccountTableMode = "publishing" | "cross" | "risk";
 
-  return createPortal(
-    <div className="ethnic-evidence-layer" role="presentation">
-      <button type="button" className="ethnic-evidence-backdrop" aria-label="关闭证据详情" onClick={onClose} />
-      <aside className="ethnic-evidence-drawer" role="dialog" aria-modal="true" aria-labelledby="ethnic-evidence-title">
-        <header className="ethnic-evidence-header">
-          <div>
-            <span>代表性证据</span>
-            <h2 id="ethnic-evidence-title">支撑内容与研判依据</h2>
+const accountTableHeaders: Record<AccountTableMode, string[]> = {
+  publishing: ["账号", "评论", "风险评论", "发布", "风险帖子", "涉及帖子", "详情"],
+  cross: ["账号", "出现调查", "本次评论", "本次风险评论", "本次涉及帖子", "详情"],
+  risk: ["账号", "风险评论", "评论", "涉及帖子", "评论对象", "详情"]
+};
+
+function AccountTable({
+  entries,
+  mode,
+  onOpen
+}: {
+  entries: ReportAccountEntry[];
+  mode: AccountTableMode;
+  onOpen: (ref: string) => void;
+}) {
+  return (
+    <div className={`r31-account-table is-${mode}`} role="table">
+      <div className="r31-account-table-head" role="row">
+        {accountTableHeaders[mode].map((label) => <span key={label} role="columnheader">{label}</span>)}
+      </div>
+      <div className="r31-account-table-body" role="rowgroup">
+        {entries.map((entry) => {
+          const statistics = entry.statistics;
+          return (
+            <button
+              key={entry.entry_ref}
+              type="button"
+              className="r31-account-table-row"
+              role="row"
+              aria-label={`查看 ${entry.display_name} 的账号活动概览`}
+              onClick={() => onOpen(entry.entry_ref)}
+            >
+              <span className="r31-account-table-name" role="cell" title={entry.display_name}>
+                <span className="r31-account-avatar" aria-hidden="true"><UserRound size={15} /></span>
+                <strong>{entry.display_name}</strong>
+              </span>
+              {mode === "publishing" ? (
+                <>
+                  <span role="cell">{displayNumber(statistics.comment_count)}</span>
+                  <span role="cell" className={Number(statistics.risk_comment_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_comment_count)}</span>
+                  <span role="cell">{displayNumber(statistics.published_post_count)}</span>
+                  <span role="cell" className={Number(statistics.risk_published_post_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_published_post_count)}</span>
+                  <span role="cell">{displayNumber(statistics.commented_post_count)}</span>
+                </>
+              ) : null}
+              {mode === "cross" ? (
+                <>
+                  <span role="cell">{displayNumber(entry.comment_investigation_count)}</span>
+                  <span role="cell">{displayNumber(statistics.comment_count)}</span>
+                  <span role="cell">{displayNumber(statistics.risk_comment_count)}</span>
+                  <span role="cell">{displayNumber(statistics.commented_post_count)}</span>
+                </>
+              ) : null}
+              {mode === "risk" ? (
+                <>
+                  <span role="cell" className="is-risk">{displayNumber(statistics.risk_comment_count)}</span>
+                  <span role="cell">{displayNumber(statistics.comment_count)}</span>
+                  <span role="cell">{displayNumber(statistics.commented_post_count)}</span>
+                  <span role="cell">{displayNumber(statistics.commented_post_author_count)}</span>
+                </>
+              ) : null}
+              <span
+                className="r31-account-table-detail"
+                role="cell"
+                title="查看账号活动概览"
+              >
+                <ChevronRight size={15} aria-hidden="true" />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RiskTag({ risk }: { risk: string }) {
+  return <span className={`r31-risk-tag is-${risk || "none"}`}>{riskLabels[risk] || "未分级"}</span>;
+}
+
+function PostRow({ post, onOpen }: { post: ReportPostPresentation; onOpen: (ref: string) => void }) {
+  const decisionLabel = decisionLabels[post.decision];
+  return (
+    <div className="r31-post-row">
+      <div className="r31-post-row-head">
+        <div>
+          <strong>{post.title}</strong>
+          {post.author_display_name ? <small>作者：{post.author_display_name}</small> : null}
+        </div>
+        <RiskTag risk={post.risk_level} />
+      </div>
+      <p>{post.content_summary || post.audit_summary || "当前报告未提供内容摘要。"}</p>
+      <div className="r31-post-row-foot">
+        {decisionLabel ? <span>{decisionLabel}</span> : null}
+        <button type="button" onClick={() => onOpen(post.post_ref)}>
+          查看帖子详情 <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeading({ section }: { section: ReportPresentationSection }) {
+  return <h2><span>{section.section_number}</span>{section.title}</h2>;
+}
+
+function FormalParagraphs({ paragraphs }: { paragraphs: string[] }) {
+  return <>{paragraphs.filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</>;
+}
+
+interface SectionProps {
+  section: ReportPresentationSection;
+  report: ReportPresentationProjection;
+  onOpenAccount: (ref: string) => void;
+  onOpenAccountIndex: (filter: ReportAccountFilter) => void;
+  onOpenEvidence: (ref: string) => void;
+  onOpenPost: (ref: string) => void;
+  onOpenAppendix: (query?: Record<string, string>) => void;
+}
+
+function ReportSection({
+  section,
+  report,
+  onOpenAccount,
+  onOpenAccountIndex,
+  onOpenEvidence,
+  onOpenPost,
+  onOpenAppendix
+}: SectionProps) {
+  const statistics = report.statistics;
+  const metadata = report.report_metadata;
+
+  if (section.presentation_kind === "overview") {
+    return (
+      <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+        <SectionHeading section={section} />
+        <dl className="r31-metadata-table">
+          <div><dt>调查名称</dt><dd>{metadata.source_name || "暂不可用"}</dd></div>
+          <div><dt>平台</dt><dd>{metadata.platform.status === "available" ? metadata.platform.label : "暂不可用"}</dd></div>
+          <div><dt>报告状态</dt><dd>{metadata.status === "published" ? "已发布" : metadata.status}</dd></div>
+          <div><dt>发布时间</dt><dd>{displayTime(metadata.published_at)}</dd></div>
+        </dl>
+        <h3>调查摘要</h3>
+        <FormalParagraphs paragraphs={report.investigation_summary.paragraphs} />
+        {metadata.scope.status === "available" ? (
+          <>
+            <h3>资料范围</h3>
+            <p>{metadata.scope.text}</p>
+          </>
+        ) : null}
+      </section>
+    );
+  }
+
+  if (section.presentation_kind === "data_overview") {
+    return (
+      <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+        <SectionHeading section={section} />
+        <FormalParagraphs paragraphs={section.presentation_paragraphs || section.paragraphs} />
+      </section>
+    );
+  }
+
+  if (section.presentation_kind === "content_scale") {
+    return (
+      <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+        <SectionHeading section={section} />
+        {statistics.independently_reviewed_comments == null ? (
+          <FormalParagraphs paragraphs={section.paragraphs} />
+        ) : (
+          <dl className="r31-stat-band">
+            <StatBandItem label="纳入报告帖子" value={statistics.canonical_posts} />
+            <StatBandItem label="已完成独立审核评论" value={statistics.independently_reviewed_comments} />
+          </dl>
+        )}
+      </section>
+    );
+  }
+
+  if (section.presentation_kind === "audit_risk_statistics") {
+    return (
+      <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+        <SectionHeading section={section} />
+        <div className="r31-table-wrap">
+          <table className="r31-stat-table">
+            <tbody>
+              <tr><th>审核决定</th><td>通过 {displayNumber(statistics.decision.pass)}</td><td colSpan={2}>拒绝 {displayNumber(statistics.decision.reject)}</td></tr>
+              <tr><th>风险等级</th><td>高风险 {displayNumber(statistics.risk_level.high)}</td><td>中风险 {displayNumber(statistics.risk_level.medium)} · 低风险 {displayNumber(statistics.risk_level.low)}</td><td>无风险 {displayNumber(statistics.risk_level.none)}</td></tr>
+              <tr><th>评论审核</th><td colSpan={2}>已完成独立审核评论 {displayNumber(statistics.independently_reviewed_comments)}</td><td>评论自身风险 {displayNumber(statistics.comment_own_risk)}</td></tr>
+              <tr><th>审核材料</th><td>直接研判依据 {displayNumber(statistics.evidence.direct)}</td><td>辅助材料 {displayNumber(statistics.evidence.indirect)}</td><td>边界材料 {displayNumber(statistics.evidence.counter)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
+  }
+
+  if (section.presentation_kind === "account_activity_overview") {
+    const accounts = report.accounts;
+    if (accounts.status === "unavailable") {
+      return (
+        <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+          <SectionHeading section={section} />
+          <FormalParagraphs paragraphs={section.paragraphs} />
+          <p className="r31-availability-note">当前发布报告未提供结构化账号活动。</p>
+        </section>
+      );
+    }
+    return (
+      <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+        <SectionHeading section={section} />
+        <dl className="r31-account-coverage">
+          <StatBandItem label="调查目标" value={accounts.coverage?.target_account_count} />
+          <StatBandItem label="发布账号" value={accounts.coverage?.post_author_account_count} />
+          <StatBandItem label="评论账号" value={accounts.coverage?.comment_author_account_count} />
+          <StatBandItem label="去重账号" value={accounts.coverage?.distinct_account_count} />
+        </dl>
+        <div className="r31-publishing-account-groups">
+          <div className="r31-account-group is-first">
+            <h3>调查目标</h3>
+            {accounts.target_entries?.length
+              ? <AccountTable entries={accounts.target_entries} mode="publishing" onOpen={onOpenAccount} />
+              : <p className="r31-empty-line">本次调查没有结构化调查目标账号。</p>}
           </div>
-          <button type="button" aria-label="关闭" title="关闭" onClick={onClose}>
-            <X size={20} />
-          </button>
-        </header>
-
-        <div className="ethnic-evidence-body">
-          <div className="ethnic-evidence-collection">
-            <span>{evidence.sectionLabel}</span>
-            <strong>{evidence.collectionLabel}</strong>
+          <div className="r31-account-group">
+            <h3>其他发布账号</h3>
+            {accounts.post_author_entries?.length
+              ? <AccountTable entries={accounts.post_author_entries} mode="publishing" onOpen={onOpenAccount} />
+              : <p className="r31-empty-line">本次调查没有其他发布账号。</p>}
           </div>
-
-          <section className="ethnic-evidence-subject">
-            <div className="ethnic-evidence-title-row">
-              <h3>{evidence.title}</h3>
-              <span className={`is-${evidence.tone}`}>{evidence.riskLabel}</span>
-            </div>
-            <p>{evidence.subject} · {evidence.meta}</p>
-            <div>{evidence.summary}</div>
-          </section>
-
-          {evidence.facts ? (
-            <section className="ethnic-evidence-facts" aria-label="关系统计">
-              {evidence.facts.map((fact) => (
-                <div key={fact.label}>
-                  <span>{fact.label}</span>
-                  <strong>{fact.value}</strong>
-                </div>
-              ))}
-            </section>
+        </div>
+        <div className="r31-account-group r31-comment-account-panel r31-dynamic-commenters">
+          <div className="r31-group-heading">
+            <h3>跨调查评论账号</h3>
+            <span>{accounts.cross_investigation_commenters?.basis_label}</span>
+          </div>
+          {accounts.cross_investigation_commenters?.status === "available" ? (
+            <>
+              {accounts.cross_investigation_commenters.entries.length
+                ? <AccountTable entries={accounts.cross_investigation_commenters.entries} mode="cross" onOpen={onOpenAccount} />
+                : <p className="r31-empty-line">当前没有符合条件的跨调查评论账号。</p>}
+              <button
+                type="button"
+                className="r31-text-action"
+                onClick={() => onOpenAccountIndex("cross_investigation_commenter")}
+              >
+                {accounts.cross_investigation_commenters.action_label}（{displayNumber(accounts.cross_investigation_commenters.total_count)}） <ChevronRight size={15} />
+              </button>
+            </>
+          ) : (
+            <p className="r31-availability-note">
+              {accounts.cross_investigation_commenters?.unavailable_message || "当前可访问调查的账号活动暂时不可用。"}
+            </p>
+          )}
+        </div>
+        <div className="r31-account-group r31-comment-account-panel r31-risk-commenters">
+          <div className="r31-group-heading"><h3>风险评论账号</h3><span>{accounts.risk_commenters?.basis_label}</span></div>
+          {accounts.risk_commenters?.entries.length
+            ? <AccountTable entries={accounts.risk_commenters.entries} mode="risk" onOpen={onOpenAccount} />
+            : <p className="r31-empty-line">本次调查没有风险评论账号。</p>}
+          {accounts.risk_commenters?.status === "available" ? (
+            <button
+              type="button"
+              className="r31-text-action"
+              onClick={() => onOpenAccountIndex("risk_commenter")}
+            >
+              {accounts.risk_commenters.action_label}（{displayNumber(accounts.risk_commenters.total_count)}） <ChevronRight size={15} />
+            </button>
           ) : null}
+        </div>
+      </section>
+    );
+  }
 
-          {evidence.commentSamples ? (
-            <section className="ethnic-evidence-section ethnic-evidence-comments">
-              <div className="ethnic-evidence-comments-heading">
-                <h4>代表性评论</h4>
-                <span>展示 1 / 56 条</span>
-              </div>
-              {evidence.commentSamples.slice(0, 1).map((comment, index) => (
-                <article key={`${comment.subject}-${comment.time}-${index}`}>
-                  <header>
-                    <strong>{comment.subject}</strong>
-                    <span>{comment.time}</span>
-                    <em>{comment.riskLabel}</em>
-                  </header>
-                  <p lang="ug">{comment.content}</p>
-                  {comment.translation ? <p><b>译文：</b>{comment.translation}</p> : null}
+  if (section.presentation_kind === "investigation_findings") {
+    return (
+      <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+        <SectionHeading section={section} />
+        <p className="r31-finding-count">本报告形成 {displayNumber(statistics.investigation_finding_count)} 项主要调查发现。</p>
+        <FormalParagraphs paragraphs={section.paragraphs} />
+      </section>
+    );
+  }
+
+  if (section.presentation_kind === "investigation_finding") {
+    const binding = section.finding_binding;
+    if (!binding || binding.status === "unavailable") {
+      return (
+        <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section r31-finding-section">
+          <SectionHeading section={section} />
+          <FormalParagraphs paragraphs={section.paragraphs} />
+          <p className="r31-availability-note">本节关联资料暂不可用。</p>
+        </section>
+      );
+    }
+    return (
+      <FindingSection
+        section={section}
+        binding={binding}
+        onOpenEvidence={onOpenEvidence}
+        onOpenPost={onOpenPost}
+        onOpenAppendix={onOpenAppendix}
+      />
+    );
+  }
+
+  if (section.presentation_kind === "standalone_risk_posts") {
+    const items = section.standalone_items || [];
+    return (
+      <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+        <SectionHeading section={section} />
+        <p className="r31-section-intro">未形成共性调查发现、但仍需单独关注的内容</p>
+        {Number(section.standalone_count || 0) > 0 ? (
+          <>
+            <div className="r31-post-list">
+              {items.map((item) => (
+                <article className="r31-standalone-row" key={item.post_ref}>
+                  <PostRow post={item} onOpen={onOpenPost} />
+                  <p className="r31-disposition-note">{item.disposition_note || item.audit_summary}</p>
                 </article>
               ))}
-            </section>
-          ) : null}
+            </div>
+            <button type="button" className="r31-text-action" onClick={() => onOpenAppendix({ view: "standalone" })}>
+              查看全部独立风险帖子（{displayNumber(section.standalone_count)}） <ChevronRight size={15} />
+            </button>
+          </>
+        ) : <p className="r31-empty-state">当前报告没有其他独立风险事项。</p>}
+      </section>
+    );
+  }
 
-          {evidence.originalText ? (
-            <section className="ethnic-evidence-section">
-              <h4>原始内容</h4>
-              <blockquote lang="ug">{evidence.originalText}</blockquote>
-            </section>
-          ) : null}
+  if (section.presentation_kind === "conclusion") {
+    return (
+      <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section ethnic-report-conclusion">
+        <SectionHeading section={section} />
+        <h3>调查结论</h3>
+        <FormalParagraphs paragraphs={section.paragraphs} />
+      </section>
+    );
+  }
 
-          {evidence.translation ? (
-            <section className="ethnic-evidence-section">
-              <h4>中文译文</h4>
-              <blockquote>{evidence.translation}</blockquote>
-            </section>
-          ) : null}
+  return (
+    <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+      <SectionHeading section={section} />
+      <FormalParagraphs paragraphs={section.paragraphs} />
+    </section>
+  );
+}
 
-          <section className="ethnic-evidence-section">
-            <h4>上下文</h4>
-            <p>{evidence.context}</p>
-          </section>
-
-          <section className="ethnic-evidence-section">
-            <h4>研判依据</h4>
-            <ol>
-              {evidence.basis.map((item) => <li key={item}>{item}</li>)}
-            </ol>
-          </section>
-
-          <section className="ethnic-evidence-boundary">
-            <ShieldCheck size={17} />
-            <p>本证据仅支撑所列具体结论，不用于推断发布者整体立场或扩大至相关民族群体。</p>
-          </section>
+function FindingSection({
+  section,
+  binding,
+  onOpenEvidence,
+  onOpenPost,
+  onOpenAppendix
+}: {
+  section: ReportPresentationSection;
+  binding: AvailableFindingBinding;
+  onOpenEvidence: (ref: string) => void;
+  onOpenPost: (ref: string) => void;
+  onOpenAppendix: (query?: Record<string, string>) => void;
+}) {
+  return (
+    <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section r31-finding-section">
+      <SectionHeading section={section} />
+      <p>{binding.statement}</p>
+      <dl className="r31-finding-facts">
+        <StatBandItem label="相关帖子" value={binding.related_post_count} />
+        <StatBandItem label="代表帖子" value={binding.representative_post_count} />
+        <StatBandItem label="研判依据" value={binding.direct_evidence_count} />
+      </dl>
+      {binding.representative_posts.length ? (
+        <div className="r31-post-list">
+          {binding.representative_posts.map((post) => <PostRow key={post.post_ref} post={post} onOpen={onOpenPost} />)}
         </div>
-
-        <footer className="ethnic-evidence-footer">
-          <button type="button" onClick={() => onViewAll(evidence)}>
-            <span>{evidence.appendixLabel}</span>
-            <ArrowRight size={15} />
+      ) : null}
+      {binding.boundary_notes.length ? (
+        <aside className="r31-boundary-note">
+          <strong>研判边界</strong>
+          {binding.boundary_notes.map((note, index) => <p key={index}>{note}</p>)}
+        </aside>
+      ) : null}
+      <div className="r31-link-row">
+        <button type="button" onClick={() => onOpenAppendix({ finding_ref: binding.investigation_finding_ref })}>
+          查看本项全部相关帖子（{binding.related_post_count}）
+        </button>
+        {binding.direct_evidence_count > 0 ? (
+          <button type="button" onClick={() => onOpenEvidence(binding.investigation_finding_ref)}>
+            查看研判依据（{binding.direct_evidence_count}）
           </button>
-        </footer>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function DrawerShell({ title, onClose, children, className = "" }: { title: string; onClose: () => void; children: ReactNode; className?: string }) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarWidth > 0) {
+      const currentPadding = Number.parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
+      document.body.style.paddingRight = `${currentPadding + scrollbarWidth}px`;
+    }
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+      previousFocus?.focus();
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div className="ethnic-evidence-layer r31-drawer-layer" role="presentation" onMouseDown={(event) => {
+      if (event.currentTarget === event.target) onClose();
+    }}>
+      <aside className={`ethnic-evidence-drawer r31-drawer ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title}>
+        <header className="r31-drawer-header">
+          <div><span>调查报告</span><h2>{title}</h2></div>
+          <button ref={closeRef} type="button" onClick={onClose} aria-label="关闭" title="关闭"><X size={18} /></button>
+        </header>
+        <div className="r31-drawer-body">{children}</div>
       </aside>
     </div>,
     document.body
   );
 }
 
-export function InvestigationReportPage() {
-  const { investigationId = "session-ethnic-relations" } = useParams();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const requestedEvidenceId = searchParams.get("evidence");
-  const requestedSectionId = searchParams.get("section");
-  const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(() => requestedEvidenceId);
-  const selectedEvidence = reportEvidence.find((item) => item.id === selectedEvidenceId) || null;
+function AsyncState({ loading, error }: { loading: boolean; error: string }) {
+  if (loading) return <p className="r31-drawer-status" role="status">正在加载...</p>;
+  if (error) return <p className="r31-drawer-status is-error" role="alert">{error}</p>;
+  return null;
+}
+
+function DistributionMetrics({ statistics }: { statistics: ReportAccountMetricStatistics }) {
+  return (
+    <div className="r31-distribution-metrics">
+      <p><span>评论 <b>{displayNumber(statistics.comment_count)}</b></span><i>·</i><span>风险评论 <b className={Number(statistics.risk_comment_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_comment_count)}</b></span><i>·</i><span>发布 <b>{displayNumber(statistics.published_post_count)}</b></span></p>
+      <p><span>风险帖子 <b className={Number(statistics.risk_published_post_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_published_post_count)}</b></span><i>·</i><span>涉及帖子 <b>{displayNumber(statistics.commented_post_count)}</b></span><i>·</i><span>评论对象 <b>{displayNumber(statistics.commented_post_author_count)}</b></span></p>
+    </div>
+  );
+}
+
+function AccountOverviewContent({ reportVersionId, entryRef, onBack }: {
+  reportVersionId: string;
+  entryRef: string;
+  onBack?: () => void;
+}) {
+  const [detail, setDetail] = useState<ReportAccountDetail | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    setDetail(null);
+    setError("");
+    void fetchReportAccountDetail(reportVersionId, entryRef)
+      .then((value) => { if (active) setDetail(value); })
+      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "账号信息加载失败"); });
+    return () => { active = false; };
+  }, [entryRef, reportVersionId]);
+  return (
+    <>
+      {onBack ? (
+        <button type="button" className="r31-drawer-back" onClick={onBack}>
+          <ArrowLeft size={15} /> 返回评论账号索引
+        </button>
+      ) : null}
+      <AsyncState loading={!detail && !error} error={error} />
+      {detail ? (
+        <div className="r31-account-overview-drawer">
+          <div className="r31-account-identity"><UserRound size={20} /><div><strong>{detail.entry.display_name}</strong></div></div>
+          <section className="r31-drawer-section">
+            <div className="r31-drawer-section-title"><h3>本次调查</h3><span>当前发布报告</span></div>
+            <AccountMetricGrid statistics={detail.current_report.statistics} includesPublishing className="is-drawer" />
+          </section>
+          <section className="r31-drawer-section">
+            <div className="r31-drawer-section-title"><h3>全部已授权调查</h3>{detail.authorized_investigations.status === "available" ? <span>出现于 {displayNumber(detail.authorized_investigations.investigation_count)} 项调查</span> : null}</div>
+            {detail.authorized_investigations.status === "available" ? (
+              <>
+                <AccountMetricGrid statistics={detail.authorized_investigations.statistics} includesPublishing className="is-drawer" />
+                {detail.authorized_investigations.single_investigation_message
+                  ? <p className="r31-single-investigation-note">{detail.authorized_investigations.single_investigation_message}</p>
+                  : null}
+              </>
+            ) : <p className="r31-availability-note">{detail.authorized_investigations.unavailable_message}</p>}
+          </section>
+          <section className="r31-drawer-section">
+            <div className="r31-drawer-section-title"><h3>活跃情况</h3></div>
+            {detail.activity.status === "available" ? (
+              <dl className="r31-account-time-range is-activity">
+                {detail.activity.earliest_activity_at ? <div><dt>最早活动</dt><dd>{displayTime(detail.activity.earliest_activity_at)}</dd></div> : null}
+                {detail.activity.latest_activity_at ? <div><dt>最近活动</dt><dd>{displayTime(detail.activity.latest_activity_at)}</dd></div> : null}
+                {detail.activity.latest_comment_at ? <div><dt>最近评论时间</dt><dd>{displayTime(detail.activity.latest_comment_at)}</dd></div> : null}
+                {detail.activity.latest_published_at ? <div><dt>最近发布时间</dt><dd>{displayTime(detail.activity.latest_published_at)}</dd></div> : null}
+              </dl>
+            ) : <p className="r31-availability-note">{detail.activity.unavailable_message}</p>}
+          </section>
+          <section className="r31-drawer-section">
+            <div className="r31-drawer-section-title"><h3>相关调查分布</h3></div>
+            {detail.authorized_investigations.status === "available" ? (
+              <div className="r31-investigation-distribution">
+                {detail.investigation_distribution.map((item) => (
+                  <article key={`${item.investigation_name}-${item.is_current_report ? "current" : "authorized"}`}>
+                    <header><strong>{item.investigation_name}</strong>{item.is_current_report ? <span>当前报告</span> : null}</header>
+                    <DistributionMetrics statistics={item.statistics} />
+                  </article>
+                ))}
+              </div>
+            ) : <p className="r31-availability-note">当前授权调查活动暂时不可用。</p>}
+          </section>
+          <section className="r31-drawer-section">
+            <div className="r31-drawer-section-title"><h3>主要评论对象</h3></div>
+            {detail.authorized_investigations.status !== "available" ? (
+              <p className="r31-availability-note">当前授权调查活动暂时不可用。</p>
+            ) : detail.primary_comment_targets.length ? (
+              <div className="r31-comment-targets" role="table" aria-label="主要评论对象">
+                <div className="r31-comment-targets-head" role="row">
+                  <span role="columnheader">评论对象</span>
+                  <span role="columnheader">评论数</span>
+                  <span role="columnheader">涉及帖子数</span>
+                </div>
+                {detail.primary_comment_targets.map((item) => (
+                  <div key={item.target_ref} role="row">
+                    <strong role="cell" title={item.display_name}>{item.display_name}</strong>
+                    <span role="cell">{displayNumber(item.comment_count)}</span>
+                    <span role="cell">{displayNumber(item.commented_post_count)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="r31-empty-line">当前授权范围内没有评论对象记录。</p>}
+          </section>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function AccountDetailDrawer({ reportVersionId, entryRef, onClose }: { reportVersionId: string; entryRef: string; onClose: () => void }) {
+  return (
+    <DrawerShell title="账号活动概览" onClose={onClose} className="r31-account-detail-drawer">
+      <AccountOverviewContent reportVersionId={reportVersionId} entryRef={entryRef} />
+    </DrawerShell>
+  );
+}
+
+const accountSortOptions: Record<ReportAccountFilter, Array<{ value: ReportAccountSort; label: string }>> = {
+  cross_investigation_commenter: [
+    { value: "investigation_count", label: "调查数量优先" },
+    { value: "comment_count", label: "本次评论数量优先" },
+    { value: "risk_comment_count", label: "本次风险评论优先" },
+    { value: "latest_activity", label: "最近活动优先" }
+  ],
+  risk_commenter: [
+    { value: "risk_comment_count", label: "风险评论数量优先" },
+    { value: "comment_count", label: "评论数量优先" },
+    { value: "commented_post_count", label: "涉及帖子数量优先" },
+    { value: "latest_activity", label: "最近活动优先" }
+  ]
+};
+
+function defaultAccountSort(filter: ReportAccountFilter): ReportAccountSort {
+  return accountSortOptions[filter][0].value;
+}
+
+function AccountIndexDrawer({ reportVersionId, filter, onClose }: {
+  reportVersionId: string;
+  filter: ReportAccountFilter;
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<ReportAccountFilter>(filter);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<ReportAccountSort>(defaultAccountSort(filter));
+  const [page, setPage] = useState<ReportAccountIndexPage | null>(null);
+  const [filterCounts, setFilterCounts] = useState<ReportAccountIndexPage["filter_counts"] | null>(null);
+  const [cursorHistory, setCursorHistory] = useState<Array<string | null>>([null]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const [selectedEntryRef, setSelectedEntryRef] = useState("");
+  const [error, setError] = useState("");
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const savedListScrollTop = useRef(0);
+  const shouldRestoreListScroll = useRef(false);
+  const requestCursor = cursorHistory[pageIndex];
 
   useEffect(() => {
-    const previousTitle = document.title;
-    document.title = "维汉民族关系专项调查报告";
-    return () => {
-      document.title = previousTitle;
-    };
-  }, []);
+    const timeout = window.setTimeout(() => {
+      const normalized = searchInput.trim();
+      if (normalized !== search) {
+        setSearch(normalized);
+        setCursorHistory([null]);
+        setPageIndex(0);
+      }
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [search, searchInput]);
 
   useEffect(() => {
-    if (requestedEvidenceId && reportEvidence.some((item) => item.id === requestedEvidenceId)) {
-      setSelectedEvidenceId(requestedEvidenceId);
+    let active = true;
+    setPage(null);
+    setError("");
+    void fetchReportAccounts(reportVersionId, {
+      filter: mode,
+      search: search || undefined,
+      sort,
+      limit: 20,
+      cursor: requestCursor || undefined
+    })
+      .then((value) => {
+        if (active) {
+          setPage(value);
+          setFilterCounts(value.filter_counts);
+        }
+      })
+      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "账号索引加载失败"); });
+    return () => { active = false; };
+  }, [mode, reportVersionId, requestCursor, search, sort]);
+
+  useLayoutEffect(() => {
+    if (!selectedEntryRef && shouldRestoreListScroll.current && listScrollRef.current) {
+      listScrollRef.current.scrollTop = savedListScrollTop.current;
+      shouldRestoreListScroll.current = false;
     }
-    if (!requestedSectionId) return;
-    const frameId = window.requestAnimationFrame(() => {
-      document.getElementById(requestedSectionId)?.scrollIntoView({ block: "start" });
-    });
-    return () => window.cancelAnimationFrame(frameId);
-  }, [requestedEvidenceId, requestedSectionId]);
+  }, [selectedEntryRef]);
 
-  const openEvidence = (evidenceId: string) => setSelectedEvidenceId(evidenceId);
-  const openEvidenceAppendix = (evidence: ReportEvidenceDetail) => {
-    const params = new URLSearchParams({ section: evidence.appendixSection });
-    if (evidence.appendixFocus) params.set("focus", evidence.appendixFocus);
-    navigate(`/investigation/${encodeURIComponent(investigationId)}/report/evidence?${params.toString()}`);
+  const changeMode = (nextMode: ReportAccountFilter) => {
+    if (nextMode === mode) return;
+    setMode(nextMode);
+    setSort(defaultAccountSort(nextMode));
+    setCursorHistory([null]);
+    setPageIndex(0);
   };
-  const scrollToSection = (sectionId: string) => {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const changeSort = (nextSort: ReportAccountSort) => {
+    setSort(nextSort);
+    setCursorHistory([null]);
+    setPageIndex(0);
+  };
+  const openOverview = (entryRef: string) => {
+    savedListScrollTop.current = listScrollRef.current?.scrollTop || 0;
+    setSelectedEntryRef(entryRef);
+  };
+  const returnToIndex = () => {
+    shouldRestoreListScroll.current = true;
+    setSelectedEntryRef("");
+  };
+  const nextPage = () => {
+    if (!page?.next_cursor) return;
+    setCursorHistory((current) => [
+      ...current.slice(0, pageIndex + 1),
+      page.next_cursor
+    ]);
+    setPageIndex((current) => current + 1);
+  };
+  const previousPage = () => setPageIndex((current) => Math.max(0, current - 1));
+  const tableMode: AccountTableMode = mode === "risk_commenter" ? "risk" : "cross";
+  const modeCount = (value: ReportAccountFilter) => {
+    const count = filterCounts?.[value];
+    return count?.status === "available" ? ` ${displayNumber(count.total_count)}` : "";
   };
 
   return (
-    <main className="ethnic-report-page">
-      <header className="ethnic-report-toolbar">
-        <button
-          type="button"
-          className="ethnic-report-back"
-          onClick={() => navigate(`/investigation/${encodeURIComponent(investigationId)}`)}
-        >
-          <ArrowLeft size={17} />
-          <span>返回调查会话</span>
-        </button>
-        <div className="ethnic-report-toolbar-title">
-          <span>专项调查报告</span>
-          <strong>维汉民族关系专项调查</strong>
+    <DrawerShell
+      title={selectedEntryRef ? "账号活动概览" : "评论账号索引"}
+      onClose={onClose}
+      className={`r31-account-index-drawer ${selectedEntryRef ? "is-overview" : ""}`}
+    >
+      {selectedEntryRef ? (
+        <AccountOverviewContent
+          reportVersionId={reportVersionId}
+          entryRef={selectedEntryRef}
+          onBack={returnToIndex}
+        />
+      ) : (
+        <div className="r31-account-index-shell">
+          <div className="r31-account-index-controls">
+            <div className="r31-account-segments" role="group" aria-label="评论账号筛选">
+              <button type="button" className={mode === "cross_investigation_commenter" ? "is-active" : ""} onClick={() => changeMode("cross_investigation_commenter")}>跨调查评论账号{modeCount("cross_investigation_commenter")}</button>
+              <button type="button" className={mode === "risk_commenter" ? "is-active" : ""} onClick={() => changeMode("risk_commenter")}>风险评论账号{modeCount("risk_commenter")}</button>
+            </div>
+            <p className="r31-account-index-basis">{mode === "cross_investigation_commenter" ? "基于当前可访问调查" : "基于本次发布报告"}</p>
+            <div className="r31-account-index-toolbar">
+              <label className="r31-account-search">
+                <Search size={15} aria-hidden="true" />
+                <input type="search" aria-label="搜索账号显示名" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="搜索账号显示名" />
+              </label>
+              <label className="r31-account-sort">
+                <select aria-label="账号排序方式" value={sort} onChange={(event) => changeSort(event.target.value as ReportAccountSort)}>
+                  {accountSortOptions[mode].map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+              <span className="r31-index-count">当前结果 {displayNumber(page?.total_count)}</span>
+            </div>
+          </div>
+          <div ref={listScrollRef} className="r31-account-index-scroll">
+            <AsyncState loading={!page && !error} error={error} />
+            {page?.status === "unavailable" ? <p className="r31-availability-note">{page.unavailable_message}</p> : null}
+            {page?.status === "available" && page.entries.length ? (
+              <AccountTable entries={page.entries} mode={tableMode} onOpen={openOverview} />
+            ) : null}
+            {page?.status === "available" && page.entries.length === 0 ? <p className="r31-empty-line">当前筛选没有符合条件的账号。</p> : null}
+          </div>
+          <div className="r31-account-pagination" aria-label="账号索引分页">
+            <button type="button" disabled={pageIndex === 0 || !page} onClick={previousPage}><ChevronLeft size={14} />上一页</button>
+            <span>第 {displayNumber(pageIndex + 1)} 页</span>
+            <button type="button" disabled={!page?.has_more || !page.next_cursor} onClick={nextPage}>下一页<ChevronRight size={14} /></button>
+          </div>
         </div>
-        <button type="button" className="ethnic-report-export" onClick={() => window.print()}>
-          <Download size={16} />
-          <span>导出报告</span>
-        </button>
+      )}
+    </DrawerShell>
+  );
+}
+
+function EvidenceDrawer({ reportVersionId, findingRef, onClose, onViewAll }: { reportVersionId: string; findingRef: string; onClose: () => void; onViewAll: () => void }) {
+  const [detail, setDetail] = useState<ReportFindingEvidence | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    void fetchReportFindingEvidence(reportVersionId, findingRef)
+      .then((value) => { if (active) setDetail(value); })
+      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "研判依据加载失败"); });
+    return () => { active = false; };
+  }, [findingRef, reportVersionId]);
+  return (
+    <DrawerShell title="研判依据" onClose={onClose}>
+      <AsyncState loading={!detail && !error} error={error} />
+      {detail ? (
+        <>
+          <p className="r31-evidence-heading">{detail.title}</p>
+          <p className="r31-evidence-count">研判依据 {detail.direct_evidence_count} 条</p>
+          <EvidenceList items={detail.items} />
+          <button type="button" className="r31-load-more" onClick={onViewAll}>在附录中查看全部研判依据</button>
+        </>
+      ) : null}
+    </DrawerShell>
+  );
+}
+
+function EvidenceList({ items }: { items: ReportEvidencePresentation[] }) {
+  return <div className="r31-evidence-list">{items.map((item) => (
+    <article key={item.evidence_ref}>
+      <div><span>直接依据</span><small>{item.evidence_type || "审核材料"}</small></div>
+      <p>{item.summary}</p>
+      {item.original_text ? <details><summary>查看原文</summary><pre>{item.original_text}</pre></details> : null}
+      {item.translated_text ? <details><summary>查看译文</summary><pre>{item.translated_text}</pre></details> : null}
+    </article>
+  ))}</div>;
+}
+
+function PostDetailDrawer({ reportVersionId, postRef, onClose }: { reportVersionId: string; postRef: string; onClose: () => void }) {
+  const [detail, setDetail] = useState<ReportPostDetail | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    void fetchReportPostDetail(reportVersionId, postRef)
+      .then((value) => { if (active) setDetail(value); })
+      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "帖子详情加载失败"); });
+    return () => { active = false; };
+  }, [postRef, reportVersionId]);
+  return (
+    <DrawerShell title="帖子详情" onClose={onClose}>
+      <AsyncState loading={!detail && !error} error={error} />
+      {detail ? (
+        <>
+          <div className="r31-post-detail-head"><div><h3>{detail.title}</h3>{detail.author_display_name ? <span>作者：{detail.author_display_name}</span> : null}</div><RiskTag risk={detail.risk_level} /></div>
+          {detail.content_summary ? <section className="r31-drawer-section"><h3>内容摘要</h3><p>{detail.content_summary}</p></section> : null}
+          <section className="r31-drawer-section"><h3>审核结论</h3><p>{decisionLabels[detail.decision] ? `${decisionLabels[detail.decision]} · ` : ""}{riskLabels[detail.risk_level] || "未分级"}</p><p>{detail.audit_summary}</p></section>
+          {detail.direct_evidence.length ? <section className="r31-drawer-section"><h3>直接研判依据</h3><EvidenceList items={detail.direct_evidence} /></section> : null}
+        </>
+      ) : null}
+    </DrawerShell>
+  );
+}
+
+export function InvestigationReportPage() {
+  const { investigationId = "" } = useParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [reportVersionId, setReportVersionId] = useState("");
+  const [report, setReport] = useState<ReportPresentationProjection | null>(null);
+  const [error, setError] = useState("");
+  const [drawer, setDrawer] = useState<DrawerState>(null);
+  const [tocOpen, setTocOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState("");
+  const requestedSection = searchParams.get("section") || "";
+  const explicitReportVersion = searchParams.get("report") || "";
+
+  useEffect(() => {
+    let active = true;
+    setReport(null);
+    setError("");
+    void resolvePublishedReportVersion(investigationId, explicitReportVersion)
+      .then(async (version) => ({ version, projection: await fetchReportPresentation(version) }))
+      .then(({ version, projection }) => {
+        if (!active) return;
+        setReportVersionId(version);
+        setReport(projection);
+        setActiveSection(projection.ordered_sections[0]?.section_ref || "");
+      })
+      .catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : "调查报告加载失败");
+      });
+    return () => { active = false; };
+  }, [explicitReportVersion, investigationId]);
+
+  useEffect(() => {
+    if (!report) return;
+    const previousTitle = document.title;
+    document.title = report.report_metadata.title;
+    return () => { document.title = previousTitle; };
+  }, [report]);
+
+  useEffect(() => {
+    if (!report) return;
+    const targets = report.ordered_sections
+      .map((section) => document.getElementById(sectionDomId(section.section_ref)))
+      .filter((item): item is HTMLElement => Boolean(item));
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)[0];
+      if (visible) setActiveSection(visible.target.id.replace(/^report-/, ""));
+    }, { rootMargin: "-18% 0px -68% 0px", threshold: 0 });
+    targets.forEach((target) => observer.observe(target));
+    return () => observer.disconnect();
+  }, [report]);
+
+  useEffect(() => {
+    if (!report || !requestedSection) return;
+    const target = document.getElementById(sectionDomId(requestedSection));
+    if (target) window.requestAnimationFrame(() => target.scrollIntoView({ block: "start" }));
+  }, [report, requestedSection]);
+
+  const rootSections = useMemo(() => report?.ordered_sections || [], [report]);
+  const scrollToSection = (sectionRef: string) => {
+    document.getElementById(sectionDomId(sectionRef))?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTocOpen(false);
+  };
+  const openAppendix = (query: Record<string, string> = {}) => {
+    const params = new URLSearchParams({ report: reportVersionId, ...query });
+    navigate(`/investigation/${encodeURIComponent(investigationId)}/report/evidence?${params.toString()}`);
+  };
+
+  if (error) {
+    return <main className="ethnic-report-page"><div className="r31-report-load-state is-error" role="alert"><FileSearch size={22} /><strong>调查报告暂不可用</strong><p>{error}</p><button type="button" onClick={() => navigate(`/investigation/${encodeURIComponent(investigationId)}`)}>返回调查会话</button></div></main>;
+  }
+  if (!report) {
+    return <main className="ethnic-report-page"><div className="r31-report-load-state" role="status">正在加载已发布报告...</div></main>;
+  }
+
+  return (
+    <main className="ethnic-report-page r31-report-page">
+      <header className="ethnic-report-toolbar">
+        <button type="button" className="ethnic-report-back" aria-label="返回调查会话" title="返回调查会话" onClick={() => navigate(`/investigation/${encodeURIComponent(investigationId)}`)}><ArrowLeft size={17} /><span>返回调查会话</span></button>
+        <div className="ethnic-report-toolbar-title"><span>{report.report_metadata.source_name}</span><strong>{report.report_metadata.title}</strong></div>
+        <div className="r31-toolbar-actions">
+          <button type="button" className="r31-toc-toggle" aria-label="打开报告目录" title="打开报告目录" onClick={() => setTocOpen(true)}><List size={16} /><span>目录</span></button>
+          <button type="button" className="ethnic-report-export" aria-label="导出报告" title="导出报告" onClick={() => window.print()}><Download size={16} /><span>导出报告</span></button>
+        </div>
       </header>
 
       <div className="ethnic-report-layout">
-        <nav className="ethnic-report-toc" aria-label="报告目录">
-          <div>报告目录</div>
-          {sectionNav.map(([id, label]) => (
-            <button key={id} type="button" onClick={() => scrollToSection(id)}>{label}</button>
+        {tocOpen ? <button type="button" className="r31-toc-backdrop" aria-label="关闭目录" onClick={() => setTocOpen(false)} /> : null}
+        <nav className={`ethnic-report-toc r31-report-toc ${tocOpen ? "is-open" : ""}`} aria-label="报告目录">
+          <div className="r31-toc-heading"><span>报告目录</span><button type="button" onClick={() => setTocOpen(false)} aria-label="关闭目录"><X size={17} /></button></div>
+          {report.ordered_sections.map((section) => (
+            <button
+              key={section.section_ref}
+              type="button"
+              className={`${activeSection === section.section_ref ? "is-active" : ""} ${section.parent_section_ref ? "is-child" : ""}`}
+              aria-current={activeSection === section.section_ref ? "location" : undefined}
+              onClick={() => scrollToSection(section.section_ref)}
+            >
+              <span>{section.section_number}</span>{section.title}
+            </button>
           ))}
+          <button type="button" className="r31-toc-appendix" onClick={() => openAppendix()}><span>附录</span>报告附录</button>
         </nav>
 
-        <article className="ethnic-report-paper">
-          <header className="ethnic-report-cover">
-            <div className="ethnic-report-classification">内部研判资料</div>
-            <p>专项调查报告</p>
-            <h1>维汉民族关系专项调查报告</h1>
+        <article className="ethnic-report-paper r31-report-paper">
+          <header className="ethnic-report-cover r31-report-cover">
+            <p>调查报告</p>
+            <h1>{report.report_metadata.title}</h1>
             <div className="ethnic-report-title-rule" />
             <dl>
-              <div><dt>调查平台</dt><dd>抖音</dd></div>
-              <div><dt>重点对象</dt><dd>4 个</dd></div>
-              <div><dt>研判样本</dt><dd>667 条</dd></div>
-              <div><dt>报告日期</dt><dd>2026 年 7 月 29 日</dd></div>
+              <div><dt>来源调查</dt><dd>{report.report_metadata.source_name}</dd></div>
+              <div><dt>报告状态</dt><dd>{report.report_metadata.status === "published" ? "已发布" : report.report_metadata.status}</dd></div>
+              <div><dt>发布时间</dt><dd>{displayTime(report.report_metadata.published_at)}</dd></div>
+              {report.report_metadata.platform.status === "available" ? <div><dt>调查平台</dt><dd>{report.report_metadata.platform.label}</dd></div> : null}
             </dl>
           </header>
 
-          <section className="ethnic-report-executive">
-            <div className="ethnic-report-executive-label">摘要结论</div>
-            <p>
-              本次调查共研判四个重点对象的 667 条内容及 18,731 条评论。正常婚恋、家庭生活、情感表达和公益互助内容占明显主体；26 条风险内容主要由评论区触发，高中风险集中在人身攻击、低俗辱骂和性羞辱。现有样本中发现少量民族刻板印象、地域攻击及排斥通婚表达，但未形成跨对象协同传播证据，不宜将个别评论上升为对账号整体立场或群体关系的判断。
-            </p>
-          </section>
+          {rootSections.map((section) => (
+            <ReportSection
+              key={section.section_ref}
+              section={section}
+              report={report}
+              onOpenAccount={(ref) => setDrawer({ type: "account", ref })}
+              onOpenAccountIndex={(filter) => setDrawer({ type: "account-index", filter })}
+              onOpenEvidence={(ref) => setDrawer({ type: "evidence", ref })}
+              onOpenPost={(ref) => setDrawer({ type: "post", ref })}
+              onOpenAppendix={openAppendix}
+            />
+          ))}
 
-          <section id="report-overview" className="ethnic-report-section">
-            <h2><span>一</span>调查概况</h2>
-            <p>
-              本次专项调查围绕维汉婚恋、跨民族家庭互动及相关评论争议展开，重点查看公开内容中是否存在民族刻板印象、侮辱歧视、排斥通婚、煽动对立及由评论互动衍生的人身攻击风险。
-            </p>
-            <table className="ethnic-report-scope-table">
-              <tbody>
-                <tr><th>调查对象</th><td>我的心好累、麦热依姆古丽、石榴红缘、萨娅</td></tr>
-                <tr><th>内容范围</th><td>博主主页内容、视频与图文信息、评论及维吾尔语译文、已保存审核结果</td></tr>
-                <tr><th>研判方案</th><td>维汉民族关系专题研判方案，结合民族意识形态风险规则与上下文豁免条件</td></tr>
-                <tr><th>结论口径</th><td>以最终审核决定和风险等级为准，区分原帖发布者、评论者与互动账号</td></tr>
-              </tbody>
-            </table>
-          </section>
-
-          <section id="report-data" className="ethnic-report-section">
-            <h2><span>二</span>数据概览</h2>
-            <div className="ethnic-report-metrics">
-              <div><strong>4</strong><span>重点调查对象</span></div>
-              <div><strong>667</strong><span>研判内容</span></div>
-              <div><strong>18,731</strong><span>评论记录</span></div>
-              <div><strong>26</strong><span>风险内容</span></div>
-              <div><strong>7,450</strong><span>去重互动账号</span></div>
-            </div>
-
-            <h3>2.1 分对象统计</h3>
-            <div className="ethnic-report-table-wrap">
-              <table className="ethnic-report-data-table">
-                <thead><tr><th>重点对象</th><th>内容</th><th>评论</th><th>风险内容</th><th>风险构成</th></tr></thead>
-                <tbody>
-                  {objectRows.map((row) => (
-                    <tr key={row.name}>
-                      <td><strong>{row.name}</strong></td>
-                      <td>{row.contents}</td>
-                      <td>{row.comments}</td>
-                      <td className={row.risks > 0 ? "has-risk" : "is-safe"}>{row.risks}</td>
-                      <td>{row.detail}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot><tr><th>合计</th><th>667</th><th>18,731</th><th>26</th><th>高 4 · 中 7 · 低 15</th></tr></tfoot>
-              </table>
-            </div>
-
-            <h3>2.2 风险分布</h3>
-            <div className="ethnic-report-risk-chart">
-              <div className="ethnic-report-risk-summary">
-                <div><strong>96.1%</strong><span>无风险内容占比</span></div>
-                <p>641 条内容未发现风险，风险内容占全部样本的 3.9%。</p>
-              </div>
-              <div className="ethnic-report-bars" aria-label="风险等级分布">
-                <div><span>高风险</span><i><b style={{ width: "26.7%" }} /></i><strong>4</strong></div>
-                <div><span>中风险</span><i><b style={{ width: "46.7%" }} /></i><strong>7</strong></div>
-                <div><span>低风险</span><i><b style={{ width: "100%" }} /></i><strong>15</strong></div>
-              </div>
-            </div>
-          </section>
-
-          <section id="report-judgment" className="ethnic-report-section">
-            <h2><span>三</span>综合研判</h2>
-            <p>
-              四个重点对象的内容主题以婚恋家庭、日常生活、情感表达和公益互助为主，未发现发布者持续、系统性煽动民族对立的内容模式。风险主要发生在评论区，且多表现为针对具体人物的粗俗攻击、性羞辱、外貌年龄羞辱和非人化辱骂。
-            </p>
-            <p>
-              与民族关系直接相关的风险线索数量有限，主要是将跨民族婚姻与生育结果进行泛化关联、对外来者的地域攻击，以及少量排斥跨民族婚恋的表达。上述线索需要关注，但尚不足以支持“存在组织化对立传播”或“重点对象主动输出民族对立内容”的结论。
-            </p>
-            <div className="ethnic-report-judgment-box">
-              <ShieldCheck size={21} />
-              <div><strong>当前结论边界</strong><p>风险评论不等于原帖风险，共同评论账号不等于关联账号，个体负面表达不等于群体立场。</p></div>
-            </div>
-          </section>
-
-          <section id="report-findings" className="ethnic-report-section">
-            <h2><span>四</span>主要调查发现</h2>
-            <div className="ethnic-report-finding">
-              <strong>4.1 正常婚恋与家庭生活内容占绝对主体</strong>
-              <p>641 条内容未发现风险，典型内容包括跨民族婚礼、领证、夫妻日常、亲友互动和公益互助。石榴红缘的 105 条内容全部为无风险。</p>
-              <EvidenceLink evidenceId="normal-wedding" onOpen={openEvidence}>查看支撑该结论的内容</EvidenceLink>
-            </div>
-            <div className="ethnic-report-finding">
-              <strong>4.2 风险主要由评论互动触发，而非原帖主题</strong>
-              <p>26 条风险内容中有 25 条以评论为主要证据，共保存 46 条风险评论片段。高风险样本集中出现性羞辱、极端粗俗攻击和非人化辱骂。</p>
-              <EvidenceLink evidenceId="comment-attacks" onOpen={openEvidence}>查看相关评论与上下文</EvidenceLink>
-            </div>
-            <div className="ethnic-report-finding">
-              <strong>4.3 民族刻板印象和地域排斥为零散线索</strong>
-              <p>现有样本发现一条中风险民族刻板印象评论和一条中风险地域攻击评论，另有少量低风险排斥通婚表达，未见跨对象重复传播。</p>
-              <div className="ethnic-report-link-row">
-                <EvidenceLink evidenceId="ethnic-stereotype" onOpen={openEvidence}>查看民族刻板印象评论</EvidenceLink>
-                <EvidenceLink evidenceId="regional-attack" onOpen={openEvidence}>查看地域攻击评论</EvidenceLink>
-              </div>
-            </div>
-            <div className="ethnic-report-finding">
-              <strong>4.4 共同互动账号尚不能构成关联网络结论</strong>
-              <p>131 个账号跨至少两个对象互动，但 46 条风险评论均未跨对象出现。现有数据更符合共同受众特征，未发现协同攻击链路。</p>
-              <EvidenceLink evidenceId="shared-audience" onOpen={openEvidence}>查看共同评论统计</EvidenceLink>
-            </div>
-          </section>
-
-          <section id="report-subjects" className="ethnic-report-section">
-            <h2><span>五</span>重点对象分析</h2>
-            <div className="ethnic-report-subject-list">
-              <article>
-                <span>01</span><div><h3>我的心好累</h3><p>共研判 201 条内容，13 条存在风险，其中高风险 2 条、中风险 5 条、低风险 6 条。内容以个人情感和生活表达为主，风险集中于评论区对人物关系、年龄和外貌的攻击。</p><EvidenceLink evidenceId="comment-attacks" onOpen={openEvidence}>查看该对象的代表性风险内容</EvidenceLink></div>
-              </article>
-              <article>
-                <span>02</span><div><h3>麦热依姆古丽</h3><p>共研判 304 条内容，12 条存在风险，其中高风险 2 条、中风险 2 条、低风险 8 条。内容覆盖维汉家庭生活、婚介服务、个人经历和公益互助，评论量最大；风险同时包含粗俗攻击、地域攻击和民族刻板印象。</p><EvidenceLink evidenceId="charity-content" onOpen={openEvidence}>查看该对象的正常代表性内容</EvidenceLink></div>
-              </article>
-              <article>
-                <span>03</span><div><h3>石榴红缘</h3><p>共研判 105 条内容、1,808 条评论，未发现风险。内容主要记录维汉婚恋、领证和婚礼过程，评论互动以祝福和婚俗讨论为主。</p><EvidenceLink evidenceId="normal-wedding" onOpen={openEvidence}>查看该对象的代表性内容</EvidenceLink></div>
-              </article>
-              <article>
-                <span>04</span><div><h3>萨娅</h3><p>共研判 57 条内容，仅 1 条低风险，来自画面中的跨平台账号信息。该对象部分内容描述为哈汉夫妻日常，不应在缺少身份信息时直接归入维吾尔族博主结论。</p><EvidenceLink evidenceId="saya-cross-platform" onOpen={openEvidence}>查看低风险线索及结论边界</EvidenceLink></div>
-              </article>
-            </div>
-          </section>
-
-          <section id="report-relations" className="ethnic-report-section">
-            <h2><span>六</span>评论互动与关联线索</h2>
-            <div className="ethnic-report-relation-summary">
-              <div><Users size={20} /><strong>7,450</strong><span>去重互动账号</span></div>
-              <div><MessageSquareText size={20} /><strong>131</strong><span>跨对象评论账号</span></div>
-              <div><Network size={20} /><strong>0</strong><span>风险账号跨对象</span></div>
-            </div>
-            <p>
-              高频互动账号主要集中在单一对象评论区。覆盖范围最广的账号“🌺🌹红花🌹🌺”在三个对象下共出现 56 次，但其互动未命中风险。另有“维汉胡胡~招红娘”在麦热依姆古丽相关任务中发布 1 条内容并留下 187 条评论，个人资料指向双方关系，可作为需进一步核验的关系线索，不能直接认定为系统中的已确认关联账号。
-            </p>
-            <EvidenceLink evidenceId="shared-audience" onOpen={openEvidence}>查看共同评论记录与关系边界</EvidenceLink>
-          </section>
-
-          <section id="report-cases" className="ethnic-report-section">
-            <h2><span>七</span>典型内容与研判案例</h2>
-            <div className="ethnic-report-case-list">
-              {[
-                ["comment-attacks", "案例一", "高风险", "日常内容下的聚集性攻击", "8 条风险评论覆盖多种攻击类型，风险来自评论区。"],
-                ["ethnic-stereotype", "案例二", "中风险", "生育话题中的民族刻板印象", "个体经历被泛化至跨民族婚姻女性群体。"],
-                ["regional-attack", "案例三", "中风险", "婚介服务内容下的地域攻击", "评论以外来者身份贬损发布者。"],
-                ["normal-wedding", "案例四", "无风险", "跨民族婚礼记录", "原帖与评论整体为正常婚庆生活分享。"],
-                ["saya-cross-platform", "案例五", "低风险", "与民族议题无直接关联的引流线索", "OCR 识别到跨平台账号，需单独把握风险边界。"]
-              ].map(([id, no, level, title, summary]) => (
-                <article key={id}>
-                  <div><span>{no}</span><i className={`is-${reportEvidence.find((item) => item.id === id)?.tone}`}>{level}</i></div>
-                  <h3>{title}</h3>
-                  <p>{summary}</p>
-                  <EvidenceLink evidenceId={id} onOpen={openEvidence}>查看原文、译文与研判依据</EvidenceLink>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section id="report-conclusion" className="ethnic-report-section ethnic-report-conclusion">
-            <h2><span>八</span>综合结论与建议</h2>
-            <div className="ethnic-report-conclusion-box">
-              <CheckCircle2 size={24} />
-              <p>当前样本整体呈现正常婚恋、家庭生活与情感互动特征，暂未发现重点对象持续输出民族对立内容，也未发现跨对象协同传播风险。</p>
-            </div>
-            <h3>8.1 重点关注事项</h3>
-            <ol>
-              <li>优先复核 4 条高风险和 7 条中风险内容，重点核对维吾尔语原文、译文及评论上下文。</li>
-              <li>对集中出现人身攻击和性羞辱的评论区进行持续观察，区分原帖发布者与风险评论账号。</li>
-              <li>对“维汉胡胡~招红娘”等关系线索做身份核验，在确认前不进入已关联账号结论。</li>
-            </ol>
-            <h3>8.2 研判边界</h3>
-            <p>
-              本报告反映当前样本和已保存审核结果。共同互动只能说明受众交叉，不能证明账号协同；个别评论者的民族刻板印象和攻击性表达，不能代表发布者本人或相关民族群体的整体态度。萨娅样本中存在哈汉家庭表述，身份归类需以进一步核验为准。
-            </p>
-            <div className="ethnic-report-link-row">
-              <EvidenceLink evidenceId="comment-attacks" onOpen={openEvidence}>查看重点风险评论</EvidenceLink>
-              <EvidenceLink evidenceId="shared-audience" onOpen={openEvidence}>查看关联线索依据</EvidenceLink>
-            </div>
-          </section>
-
-          <footer className="ethnic-report-footer">
-            <span>维汉民族关系专项调查报告</span>
-            <span>内部研判资料 · 第 1 版</span>
-          </footer>
+          <footer className="ethnic-report-footer"><span>{report.report_metadata.title}</span><span>已发布调查报告</span></footer>
         </article>
       </div>
 
-      <ReportEvidenceDrawer
-        evidence={selectedEvidence}
-        onClose={() => setSelectedEvidenceId(null)}
-        onViewAll={openEvidenceAppendix}
-      />
+      {drawer?.type === "account" ? <AccountDetailDrawer reportVersionId={reportVersionId} entryRef={drawer.ref} onClose={() => setDrawer(null)} /> : null}
+      {drawer?.type === "account-index" ? <AccountIndexDrawer reportVersionId={reportVersionId} filter={drawer.filter} onClose={() => setDrawer(null)} /> : null}
+      {drawer?.type === "evidence" ? <EvidenceDrawer reportVersionId={reportVersionId} findingRef={drawer.ref} onClose={() => setDrawer(null)} onViewAll={() => { setDrawer(null); openAppendix({ view: "evidence", finding_ref: drawer.ref }); }} /> : null}
+      {drawer?.type === "post" ? <PostDetailDrawer reportVersionId={reportVersionId} postRef={drawer.ref} onClose={() => setDrawer(null)} /> : null}
     </main>
   );
 }
