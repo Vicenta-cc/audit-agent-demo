@@ -128,6 +128,7 @@ export function buildHistoricalReportSession(
               ? persisted.client_message_id
               : "",
             stage: pending.stage,
+            recovering: true,
             afterSequence: Math.max(
               pending.event_sequence,
               persisted?.turn_id === pending.turn_id ? persisted.after_sequence : 0

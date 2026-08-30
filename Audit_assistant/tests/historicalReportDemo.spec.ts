@@ -151,6 +151,80 @@ test("Display Timeline remains separate from the real report conversation", () =
   ]);
   expect(session.reportBinding).not.toHaveProperty("investigationSessionId");
   expect(JSON.stringify(session.reportBinding)).not.toContain("report_session_id");
+
+  const centerSource = readFileSync(
+    new URL("../src/features/investigation/InvestigationCenterArea.tsx", import.meta.url),
+    "utf8"
+  );
+  expect(centerSource).toContain('msg.type === "grounded_answer"');
+  expect(centerSource).toContain("<AssistantMarkdown");
+  expect(centerSource).toContain('className="inv-msg-asst-card inv-report-answer-pending-wrap"');
+  expect(centerSource).toContain('<div className="inv-msg-user-bubble">{msg.content}</div>');
+  expect(centerSource).toContain('behavior: showHistoricalPending ? "auto" : "smooth"');
+});
+
+test("both historical workspaces keep isolated real Assistant answer rendering", () => {
+  const workspaceA = workspace();
+  const workspaceB: HistoricalReportWorkspace = {
+    ...workspaceA,
+    workspace_id: "historical-report-b",
+    run_id: "historical-report-run-b",
+    title: "麦热依姆古丽监控任务2",
+    task_id: "8bc179209e1e",
+    report_version_id: "report-version:4e3ebeccd2ed4f0c9c9a750332d22585",
+    conversation: workspaceA.conversation.map((message) => ({
+      ...message,
+      message_id: `${message.message_id}-b`,
+      turn_id: "turn-b"
+    }))
+  };
+  const reportA = report();
+  const reportB: PublishedReportDetail = {
+    ...reportA,
+    report_version_id: workspaceB.report_version_id,
+    report_id: "report:demo-b",
+    task_id: workspaceB.task_id,
+    title: "麦热依姆古丽监控任务2调查报告"
+  };
+
+  const sessionA = buildHistoricalReportSession(workspaceA, reportA);
+  const sessionB = buildHistoricalReportSession(workspaceB, reportB);
+  expect(sessionA.id).toBe("historical-report-a");
+  expect(sessionB.id).toBe("historical-report-b");
+  expect(sessionA.reportBinding?.reportVersionId).toBe(workspaceA.report_version_id);
+  expect(sessionB.reportBinding?.reportVersionId).toBe(workspaceB.report_version_id);
+  expect(sessionA.messages.at(-1)?.type).toBe("grounded_answer");
+  expect(sessionB.messages.at(-1)?.type).toBe("grounded_answer");
+});
+
+test("refresh recovery marks the pending Turn without expanding storage", () => {
+  const pendingWorkspace = workspace();
+  pendingWorkspace.latest_turn = {
+    turn_id: "turn-pending",
+    status: "running",
+    stage: "answering",
+    answer: "",
+    safe_message: "",
+    retryable: true,
+    updated_at: "2026-08-25T00:07:00Z",
+    event_sequence: 3
+  };
+  storeHistoricalPendingTurn(pendingWorkspace.workspace_id, {
+    client_message_id: "client-pending",
+    turn_id: "turn-pending",
+    after_sequence: 3
+  });
+
+  const session = buildHistoricalReportSession(pendingWorkspace, report());
+  expect(session.reportBinding?.pendingTurn).toMatchObject({
+    turnId: "turn-pending",
+    clientMessageId: "client-pending",
+    afterSequence: 3,
+    recovering: true
+  });
+  expect(Object.keys(JSON.parse([...storage.values()][0])).sort()).toEqual([
+    "after_sequence", "client_message_id", "turn_id"
+  ]);
 });
 
 test("sessionStorage persists exactly the three pending-turn recovery fields", () => {

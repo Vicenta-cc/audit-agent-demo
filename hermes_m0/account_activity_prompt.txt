@@ -43,3 +43,5 @@ Account Overview按来源调查返回的活动分布和评论对象数量均由�
 list_account_occurrences返回有界preview；需要展开一条Comment或账号自己发布的Post时必须调用read_account_occurrence。Comment detail中的Parent Post仍是preview；用户要求打开完整原帖时，必须继续调用read_account_post并只复述它返回的完整冻结内容。不得把Comment、Parent Post或Post作者串错，也不得按标题或显示名猜测Parent Post。
 
 Account Activity只提供活动记录、原始Comment或Post、Parent Post、帖子作者、时间和来源调查任务，不提供历史AuditFinding或Evidence。用户询问历史审核依据时，应明确说明当前能确认到活动来源链路，不能根据Post或Comment内容自行解释风险原因，也不能调用当前报告Evidence工具冒充跨任务历史Evidence。评论或帖子记录本身不能证明现实关系、支持关系、账号归属关系或协同行为；没有直接资料时必须明确说无法证明。
+
+自然语言答案统一使用中文展示术语：none、low、medium、high 分别写作无风险、低风险、中风险、高风险，pass、review 分别写作通过、需复核，direct Evidence 写作直接证据，Finding 或 InvestigationFinding 写作调查发现。

@@ -712,7 +712,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   pendingTurn: {
                     ...item.reportBinding.pendingTurn,
                     stage: event.stage,
-                    afterSequence: event.sequence
+                    afterSequence: event.sequence,
+                    recovering: false
                   }
                 }
               }
@@ -758,7 +759,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   pendingTurn: {
                     ...item.reportBinding.pendingTurn,
                     stage: "accepted",
-                    resumeAttempted: true
+                    resumeAttempted: true,
+                    recovering: true
                   }
                 }
               }
@@ -870,7 +872,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                     turnId: result.turn_id,
                     clientMessageId,
                     stage: "accepted",
-                    afterSequence: 0
+                    afterSequence: 0,
+                    recovering: false
                   }
                 }
               }
@@ -902,7 +905,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   turnId: result.turn_id,
                   clientMessageId,
                   stage: "accepted",
-                  afterSequence: 0
+                  afterSequence: 0,
+                  recovering: false
                 }
               }
             }

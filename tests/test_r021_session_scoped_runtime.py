@@ -36,10 +36,10 @@ from hermes_m0.tool_results import error_result
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_PROMPT_FILE_SHA256 = (
-    "62768caf1e59d4783c8c8ca362e30dd5bbee05f232898631bd7d31512a360c9e"
+    "cb88e6281137e6ed1a0ecbf29ce8c1eb6f8fa9864e721f07ed00eb0cc8faf956"
 )
 CANONICAL_INJECTED_PROMPT_SHA256 = (
-    "c3e5d2d96d0beed0d803cefaf454d2e6c5f404474d1e022de895aaedc3cc78c1"
+    "24b5100e2c5c50f223a235422f6b4362fbff1dbe75bac2ec88853d1cbf167b23"
 )
 CANONICAL_TOOL_SCHEMA_SHA256 = (
     "8ff81c67592b9313b9368af0a846aafcefff9f8844f267c6bb2c8fb6eda0af7f"
@@ -400,6 +400,7 @@ class InvocationParityTest(unittest.TestCase):
             hashlib.sha256(injected_prompt.encode()).hexdigest(),
             CANONICAL_INJECTED_PROMPT_SHA256,
         )
+        self.assertIn("medium、high 分别写作无风险、低风险、中风险、高风险", injected_prompt)
         schemas = json.dumps(
             M2_ACCOUNT_ACTIVITY_TOOLS,
             ensure_ascii=False,

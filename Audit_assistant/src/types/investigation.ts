@@ -223,6 +223,7 @@ export interface InvestigationSession {
       stage: import("./investigations").InvestigationTurnStage;
       afterSequence?: number;
       resumeAttempted?: boolean;
+      recovering?: boolean;
     };
   };
 }

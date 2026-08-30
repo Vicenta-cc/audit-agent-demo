@@ -377,6 +377,7 @@
 
 .inv-timeline-inner {
   width: 100%;
+  min-width: 0;
   max-width: 900px;
   display: flex;
   flex-direction: column;
@@ -2670,6 +2671,203 @@
   color: #1e293b;
   font-size: 13.5px;
   line-height: 1.7;
+}
+
+/* Real historical-report answers keep the established Assistant message surface. */
+.inv-report-answer,
+.inv-report-answer-pending-wrap {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  align-self: stretch;
+}
+
+.inv-assistant-markdown {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  color: #243247;
+  font-size: 13.5px;
+  line-height: 1.72;
+  overflow-wrap: anywhere;
+}
+
+.inv-assistant-markdown > :first-child {
+  margin-top: 0;
+}
+
+.inv-assistant-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.inv-assistant-markdown h1,
+.inv-assistant-markdown h2,
+.inv-assistant-markdown h3,
+.inv-assistant-markdown h4,
+.inv-assistant-markdown h5,
+.inv-assistant-markdown h6 {
+  margin: 18px 0 8px;
+  color: #111c2e;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.inv-assistant-markdown h1 {
+  font-size: 15px;
+}
+
+.inv-assistant-markdown p {
+  margin: 0 0 11px;
+}
+
+.inv-assistant-markdown ul,
+.inv-assistant-markdown ol {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 12px;
+  padding-left: 22px;
+}
+
+.inv-assistant-markdown li {
+  padding-left: 2px;
+}
+
+.inv-assistant-markdown li > p {
+  margin: 0;
+}
+
+.inv-assistant-markdown strong {
+  color: #111c2e;
+  font-weight: 700;
+}
+
+.inv-assistant-markdown blockquote {
+  margin: 12px 0;
+  padding: 7px 12px;
+  color: #536174;
+  background: #f6f8fa;
+  border-left: 3px solid #b8c5d4;
+}
+
+.inv-assistant-markdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.inv-assistant-markdown hr {
+  height: 1px;
+  margin: 18px 0;
+  background: #dce3eb;
+  border: 0;
+}
+
+.inv-assistant-markdown :not(pre) > code {
+  padding: 1px 5px;
+  color: #25364c;
+  background: #edf1f5;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.inv-assistant-markdown pre {
+  max-width: 100%;
+  margin: 12px 0;
+  padding: 12px 14px;
+  overflow-x: auto;
+  color: #e8edf4;
+  background: #202a38;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.inv-assistant-markdown pre code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.inv-markdown-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  margin: 12px 0 15px;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  border: 1px solid #d7e0e9;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.inv-markdown-table-scroll:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.inv-markdown-table-scroll table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  table-layout: auto;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.inv-markdown-table-scroll th,
+.inv-markdown-table-scroll td {
+  min-width: 96px;
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  border-right: 1px solid #e3e9ef;
+  border-bottom: 1px solid #e3e9ef;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv-markdown-table-scroll th {
+  color: #27364a;
+  background: #f3f6f9;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.inv-markdown-table-scroll tr:last-child td {
+  border-bottom: 0;
+}
+
+.inv-markdown-table-scroll th:last-child,
+.inv-markdown-table-scroll td:last-child {
+  border-right: 0;
+}
+
+.inv-report-answer-pending {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 28px;
+  color: #5c6b7e;
+  font-size: 13px;
+}
+
+.inv-report-answer-pending > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+}
+
+.inv-report-answer-spinner {
+  flex: 0 0 auto;
+  color: #46719f;
+  animation: inv-report-answer-spin 1s linear infinite;
+}
+
+@keyframes inv-report-answer-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inv-report-answer-spinner {
+    animation: none;
+  }
 }
 
 .inv-grounded-compact {
@@ -6616,6 +6814,34 @@
 
   .ethnic-appendix-observations article > i {
     display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .inv-report-answer,
+  .inv-report-answer-pending-wrap {
+    width: 100%;
+  }
+
+  .inv-assistant-markdown {
+    width: 100%;
+    max-width: 100%;
+    font-size: 13px;
+    line-height: 1.68;
+  }
+
+  .inv-markdown-table-scroll table {
+    min-width: 520px;
+  }
+
+  .inv-markdown-table-scroll th,
+  .inv-markdown-table-scroll td {
+    min-width: 90px;
+    padding: 7px 9px;
+  }
+
+  .inv-input-bar-wrap {
+    padding: 10px 12px 14px;
   }
 }
 

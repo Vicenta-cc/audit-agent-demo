@@ -21,6 +21,9 @@ import { TaskSuggestionCard } from "./TaskSuggestionCard";
 import { TaskConfirmationCard } from "./TaskConfirmationCard";
 import { InvestigationReportCard } from "./InvestigationReportCard";
 import { StreamingAssistantText } from "./StreamingAssistantText";
+import { AssistantMarkdown } from "./AssistantMarkdown";
+import { HistoricalReportPendingStatus } from "./HistoricalReportPendingStatus";
+import { shouldShowHistoricalPending } from "./historicalReportPresentation";
 import { platformOptionsList } from "../../mocks/investigationMocks";
 
 interface InvestigationCenterAreaProps {
@@ -126,6 +129,11 @@ export function InvestigationCenterArea({
 }: InvestigationCenterAreaProps) {
   const [inputText, setInputText] = useState("");
   const isPublishedReportSession = Boolean(session.reportBinding);
+  const showHistoricalPending = shouldShowHistoricalPending(
+    isPublishedReportSession,
+    isSendingMessage,
+    Boolean(session.reportBinding?.pendingTurn)
+  );
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(() => (
     getInitialStreamingMessageId(session)
   ));
@@ -146,6 +154,7 @@ export function InvestigationCenterArea({
     const latestTextReply = [...newMessages].reverse().find((message) => (
       message.sender === "assistant"
       && Boolean(message.content)
+      && !(isPublishedReportSession && message.type === "grounded_answer")
       && (
         message.type === undefined
         || message.type === "text"
@@ -158,7 +167,7 @@ export function InvestigationCenterArea({
     if (latestTextReply) {
       setStreamingMessageId(latestTextReply.id);
     }
-  }, [session.id, session.messages]);
+  }, [isPublishedReportSession, session.id, session.messages]);
 
   const handleStreamingComplete = (messageId: string) => {
     setStreamingMessageId((currentMessageId) => (
@@ -174,11 +183,14 @@ export function InvestigationCenterArea({
         timeline.scrollTo({ top: 0, behavior: "auto" });
         return;
       }
-      timeline.scrollTo({ top: timeline.scrollHeight, behavior: "smooth" });
+      timeline.scrollTo({
+        top: timeline.scrollHeight,
+        behavior: showHistoricalPending ? "auto" : "smooth"
+      });
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [session.id, session.messages.length, session.reportBinding]);
+  }, [session.id, session.messages.length, session.reportBinding, showHistoricalPending]);
 
   const handleSend = () => {
     if (!inputText.trim() || isSendingMessage) return;
@@ -457,12 +469,19 @@ export function InvestigationCenterArea({
                       </span>
                     </div>
 
-                    <StreamingAssistantText
-                      text={msg.content || ""}
-                      shouldStream={streamingMessageId === msg.id}
-                      className="inv-grounded-content"
-                      onComplete={() => handleStreamingComplete(msg.id)}
-                    />
+                    {isPublishedReportSession ? (
+                      <AssistantMarkdown
+                        content={msg.content || ""}
+                        className="inv-grounded-content"
+                      />
+                    ) : (
+                      <StreamingAssistantText
+                        text={msg.content || ""}
+                        shouldStream={streamingMessageId === msg.id}
+                        className="inv-grounded-content"
+                        onComplete={() => handleStreamingComplete(msg.id)}
+                      />
+                    )}
 
                     {streamingMessageId === msg.id ? null : msg.groundingMode === "compact" ? (
                       <div className="inv-grounded-compact" aria-label="回答依据来源">
@@ -645,22 +664,42 @@ export function InvestigationCenterArea({
               }
 
               // Default text assistant message
+              const isHistoricalAnswer = isPublishedReportSession && msg.type === "grounded_answer";
               return (
-                <div key={msg.id} className="inv-msg-asst-card">
+                <div
+                  key={msg.id}
+                  className={`inv-msg-asst-card${isHistoricalAnswer ? " inv-report-answer" : ""}`}
+                >
                   <div className="inv-asst-head">
                     <Bot size={16} />
                     <span>研判助手</span>
                   </div>
-                  <StreamingAssistantText
-                    text={msg.content || ""}
-                    shouldStream={streamingMessageId === msg.id}
-                    className="inv-assistant-text"
-                    onComplete={() => handleStreamingComplete(msg.id)}
-                  />
+                  {isHistoricalAnswer ? (
+                    <AssistantMarkdown content={msg.content || ""} />
+                  ) : (
+                    <StreamingAssistantText
+                      text={msg.content || ""}
+                      shouldStream={streamingMessageId === msg.id}
+                      className="inv-assistant-text"
+                      onComplete={() => handleStreamingComplete(msg.id)}
+                    />
+                  )}
                 </div>
               );
             })
           )}
+          {showHistoricalPending ? (
+            <div className="inv-msg-asst-card inv-report-answer-pending-wrap">
+              <div className="inv-asst-head">
+                <Bot size={16} />
+                <span>研判助手</span>
+              </div>
+              <HistoricalReportPendingStatus
+                stage={sendingMessageStage}
+                recovering={session.reportBinding?.pendingTurn?.recovering}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
 
