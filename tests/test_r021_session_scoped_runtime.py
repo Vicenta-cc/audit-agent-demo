@@ -36,16 +36,15 @@ from hermes_m0.tool_results import error_result
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_PROMPT_FILE_SHA256 = (
-    "cb88e6281137e6ed1a0ecbf29ce8c1eb6f8fa9864e721f07ed00eb0cc8faf956"
+    "3bd437c4bcd970fbb31737a4ad3059bb0f12395a03af10c50ddf42e696719cd3"
 )
 CANONICAL_INJECTED_PROMPT_SHA256 = (
-    "24b5100e2c5c50f223a235422f6b4362fbff1dbe75bac2ec88853d1cbf167b23"
+    "7faa88a1a771cc02343f29126d96a65f7a8fec60732dcb83253cf96d2000bdd9"
 )
-CANONICAL_TOOL_SCHEMA_SHA256 = (
-    "8ff81c67592b9313b9368af0a846aafcefff9f8844f267c6bb2c8fb6eda0af7f"
-)
-CANONICAL_TOOL_DEFINITIONS_SHA256 = (
-    "5d4b9a27e004ef8c9043b3d4c3cd9ee09831634877ad79ab6cb10a180d10a821"
+# M1 intentionally adapts user-facing descriptions. This fence covers only the
+# independently extracted canonical name + parameters projection.
+CANONICAL_TOOL_PARAMETER_REFERENCE_SHA256 = (
+    "155ef8e4792d4be942ab0234603ffe9c38297fe224f05ea4ff7ee9e46818b238"
 )
 CANONICAL_TRANSCRIPT_PROVENANCE = {
     "source_commit": "0a5090579c4cfcda1208269814f32fbe77da4c86",
@@ -69,6 +68,28 @@ CANONICAL_SCHEMA_SOURCE_ORDER = (
     "read_account_post",
 )
 CANONICAL_QWEN_TOOL_ORDER = tuple(sorted(CANONICAL_SCHEMA_SOURCE_ORDER))
+CANONICAL_TOOL_PARAMETER_PROJECTION_PATH = (
+    ROOT / "tests/fixtures/canonical_m22_tool_parameter_projection.json"
+)
+
+
+def _parameter_projection(tools: list[dict]) -> list[list[object]]:
+    return [[item["name"], item["parameters"]] for item in tools]
+
+
+def _fixed_json(value: object) -> str:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _canonical_parameter_projection() -> list[list[object]]:
+    return json.loads(
+        CANONICAL_TOOL_PARAMETER_PROJECTION_PATH.read_text(encoding="utf-8")
+    )
 
 
 def _canonical_tool_call(call_id: str, name: str = "read_report") -> dict:
@@ -401,17 +422,23 @@ class InvocationParityTest(unittest.TestCase):
             CANONICAL_INJECTED_PROMPT_SHA256,
         )
         self.assertIn("medium、high 分别写作无风险、低风险、中风险、高风险", injected_prompt)
-        schemas = json.dumps(
-            M2_ACCOUNT_ACTIVITY_TOOLS,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-        self.assertEqual(hashlib.sha256(schemas).hexdigest(), CANONICAL_TOOL_SCHEMA_SHA256)
+        canonical_projection = _canonical_parameter_projection()
+        candidate_projection = _parameter_projection(M2_ACCOUNT_ACTIVITY_TOOLS)
+        canonical_names = tuple(item[0] for item in canonical_projection)
+        candidate_names = tuple(item[0] for item in candidate_projection)
+        self.assertEqual(set(candidate_names), set(canonical_names))
+        self.assertEqual(canonical_names, CANONICAL_SCHEMA_SOURCE_ORDER)
+        self.assertEqual(candidate_names, canonical_names)
+        canonical_hash = hashlib.sha256(
+            _fixed_json(canonical_projection).encode("utf-8")
+        ).hexdigest()
+        candidate_hash = hashlib.sha256(
+            _fixed_json(candidate_projection).encode("utf-8")
+        ).hexdigest()
         self.assertEqual(
-            tuple(item["name"] for item in M2_ACCOUNT_ACTIVITY_TOOLS),
-            CANONICAL_SCHEMA_SOURCE_ORDER,
+            canonical_hash, CANONICAL_TOOL_PARAMETER_REFERENCE_SHA256
         )
+        self.assertEqual(candidate_hash, canonical_hash)
 
     def test_real_hermes_qwen_visible_tool_definitions_match_heldout(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -444,20 +471,21 @@ class InvocationParityTest(unittest.TestCase):
                 self.assertEqual(config["agent"]["api_max_retries"], 1)
                 agent.close()
         self.assertEqual(len(definitions), 11)
+        canonical_projection = _canonical_parameter_projection()
+        expected_parameters = dict(canonical_projection)
+        canonical_runtime_order = tuple(
+            sorted(item[0] for item in canonical_projection)
+        )
+        self.assertEqual(canonical_runtime_order, CANONICAL_QWEN_TOOL_ORDER)
         self.assertEqual(
             tuple(item["function"]["name"] for item in definitions),
-            CANONICAL_QWEN_TOOL_ORDER,
+            canonical_runtime_order,
         )
-        serialized = json.dumps(
-            definitions,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-        self.assertEqual(
-            hashlib.sha256(serialized).hexdigest(),
-            CANONICAL_TOOL_DEFINITIONS_SHA256,
-        )
+        for definition in definitions:
+            function = definition["function"]
+            self.assertEqual(
+                function["parameters"], expected_parameters[function["name"]]
+            )
 
     def test_full_transcript_round_trip_and_public_projection(self):
         with tempfile.TemporaryDirectory() as directory:

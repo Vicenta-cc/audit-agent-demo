@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from hermes_m0.account_corpus import AccountCorpus
+from hermes_m0.display_labels import (
+    DECISION_LABELS,
+    PLATFORM_LABELS,
+    RISK_LEVEL_LABELS,
+    enum_label,
+)
 from hermes_m0.domain import Post
 from hermes_m0.real_report_repository import PublishedReportRepository
 
@@ -360,6 +366,10 @@ class AccountActivityRepository:
         return {
             "title": _post_title(post_occurrence["post"]),
             "display_title_source": _post_title_source(post_occurrence["post"]),
+            "platform": post_occurrence["post"].get("platform"),
+            "platform_label": enum_label(
+                PLATFORM_LABELS, post_occurrence["post"].get("platform")
+            ),
             "full_original_body": _full_post_body(content),
             "author_display_name": post.author.display_name,
             "published_at": post_occurrence["post"]["published_at"],
@@ -398,6 +408,10 @@ class AccountActivityRepository:
             "type": "account_activity_occurrence",
             "ref": occurrence_ref,
             "kind": occurrence["kind"],
+            "platform": occurrence["post"].get("platform"),
+            "platform_label": enum_label(
+                PLATFORM_LABELS, occurrence["post"].get("platform")
+            ),
             "activity_time": occurrence["occurred_at"],
             "source_task": self.task_card(str(occurrence["task_id"])),
             "preview_only": True,
@@ -410,6 +424,9 @@ class AccountActivityRepository:
                     "comment_preview": _preview(str(occurrence["comment"]["text"]), 160),
                     "audit_status": occurrence.get("audit_status"),
                     "risk_level": occurrence.get("risk_level"),
+                    "risk_level_label": enum_label(
+                        RISK_LEVEL_LABELS, occurrence.get("risk_level")
+                    ),
                     "risk_type": occurrence["comment"].get("risk_type"),
                     "parent_post": {
                         "title": _post_title(post),
@@ -433,7 +450,13 @@ class AccountActivityRepository:
                     },
                     "audit_status": occurrence.get("audit_status"),
                     "decision": occurrence.get("decision"),
+                    "decision_label": enum_label(
+                        DECISION_LABELS, occurrence.get("decision")
+                    ),
                     "risk_level": occurrence.get("risk_level"),
+                    "risk_level_label": enum_label(
+                        RISK_LEVEL_LABELS, occurrence.get("risk_level")
+                    ),
                     "post_in_current_report_risk_summary": (
                         str(post["content_key"]) in report_risk_post_keys
                     ),
@@ -455,6 +478,10 @@ class AccountActivityRepository:
             "type": "account_activity_occurrence",
             "ref": occurrence_ref,
             "kind": occurrence["kind"],
+            "platform": occurrence["post"].get("platform"),
+            "platform_label": enum_label(
+                PLATFORM_LABELS, occurrence["post"].get("platform")
+            ),
             "activity_time": occurrence["occurred_at"],
             "source_task": self.task_card(str(occurrence["task_id"])),
             "detail_loaded": True,
@@ -472,6 +499,9 @@ class AccountActivityRepository:
                         "published_at": occurrence["comment"]["comment_time"],
                         "audit_status": occurrence.get("audit_status"),
                         "risk_level": occurrence.get("risk_level"),
+                        "risk_level_label": enum_label(
+                            RISK_LEVEL_LABELS, occurrence.get("risk_level")
+                        ),
                         "risk_type": occurrence["comment"].get("risk_type"),
                     },
                     "parent_post": {
@@ -504,7 +534,13 @@ class AccountActivityRepository:
                         ),
                         "audit_status": occurrence.get("audit_status"),
                         "decision": occurrence.get("decision"),
+                        "decision_label": enum_label(
+                            DECISION_LABELS, occurrence.get("decision")
+                        ),
                         "risk_level": occurrence.get("risk_level"),
+                        "risk_level_label": enum_label(
+                            RISK_LEVEL_LABELS, occurrence.get("risk_level")
+                        ),
                         "author_display_name": self.display_name(
                             str(occurrence["account_ref"])
                         ),

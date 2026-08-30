@@ -324,10 +324,12 @@ LIST_FINDING_POSTS = {
     "description": (
         "用于浏览一个已经明确知道的InvestigationFinding或报告类别的关联帖子。仅当用户"
         "提到某个已知调查发现、报告类别，或询问‘这个发现涉及哪些帖子’时使用。读取该"
-        "发现涉及的全部报告关联帖子，而非仅正文展示成员；每篇标明是否为代表帖子，并返"
-        "回解释该Post为何属于当前Finding的专属AuditFinding摘要和有界membership Evidence"
-        "子集。此Evidence子集只能用于解释当前归类，不能冒充该Post的全部Evidence；若摘要"
-        "已足以回答归类原因可以直接复用，只有需要Evidence详情时才读取对应evidence_ref。"
+        "发现涉及的全部报告关联帖子，而非仅正文展示成员；每篇标明标题、发布作者、平台、"
+        "是否为代表帖子、整帖审核摘要和整帖审核等级，并返回解释该Post为何属于当前Finding"
+        "的专属AuditFinding摘要和有界membership Evidence子集。返回的membership_evidence_subset"
+        "只是用于支持当前调查发现的归类证据子集，并非每篇帖子的全部证据；post_total_evidence_count"
+        "是该帖冻结的全部direct Evidence数量，post_content_loaded=false表示尚未读取帖子正文。"
+        "若摘要已足以回答归类原因可以直接复用，只有需要Evidence详情时才读取对应evidence_ref。"
         "本工具不会按主题搜索，不负责判断语义相似性，也不会发现报告类别之外的新帖子。"
         "如果用户要求在当前调查中寻找某主题、类似风险内容或几篇相关风险帖子，必须使用"
         "search_posts。"
@@ -428,7 +430,8 @@ REAL_REPORT_LIST_EVIDENCE = {
         "的有来源摘要、类型和安全引用，足以比较该帖还有哪些风险；需要评论原文、完整"
         "翻译或详细审核理由时再调用read_evidence。Evidence的风险类型只能根据当前Evidence"
         "明确出现的内容判断；如果Evidence只提到年龄，不得扩展为外貌、婚史、生育或其他"
-        "风险类型，也不得把相邻主题、推测关系或可能含义写成已确认事实。"
+        "风险类型，也不得把相邻主题、推测关系或可能含义写成已确认事实。post_total_evidence_count"
+        "表示该帖冻结的全部direct Evidence数量；它不代表任何单一Finding的membership子集。"
     ),
 }
 
@@ -440,6 +443,11 @@ REAL_REPORT_READ_EVIDENCE = {
         "Evidence必须保持其来源范围，不得把membership子集表述为Post全部Evidence。Evidence"
         "的风险类型只能根据当前Evidence明确出现的内容判断；如果只提到年龄，不得扩展为"
         "外貌、婚史、生育或其他风险类型，也不得把相邻主题、推测关系或可能含义写成已确认事实。"
+        "若来源是Comment，source_comment.author只在同一ReportVersion、Snapshot、Parent Post下按"
+        "comment_id精确关联成功时返回；不得从评论文字、翻译、昵称或数组位置猜测。有display_name"
+        "时可回答昵称；有public_profile_identifier时按其中文label回答抖音号，缺失时说明当前冻结"
+        "资料未记录可公开展示的抖音号。用户追问账号活动时，仅在account_ref存在时调用现有"
+        "Account Activity，不得按昵称重新搜索。"
     ),
 }
 

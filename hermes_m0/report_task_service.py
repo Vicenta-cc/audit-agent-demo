@@ -11,6 +11,14 @@ from typing import Any, Callable
 from hermes_m0.account_activity_service import AccountActivityToolService
 from hermes_m0.account_activity_repository import AccountActivityLookupError
 from hermes_m0.domain import Evidence, Finding, Post, ReportCase
+from hermes_m0.display_labels import (
+    DECISION_LABELS,
+    EVIDENCE_TYPE_LABELS,
+    FINDING_TYPE_LABELS,
+    PLATFORM_LABELS,
+    RISK_LEVEL_LABELS,
+    enum_label,
+)
 from hermes_m0.ledger import ToolExecutionLedger
 from hermes_m0.refs import ReferenceError
 from hermes_m0.report_task_refs import (
@@ -342,6 +350,9 @@ class ReportTaskInvestigationToolService:
                 {
                     "position": finding.position,
                     "type": "investigation_finding",
+                    "type_label": enum_label(
+                        FINDING_TYPE_LABELS, "investigation_finding"
+                    ),
                     "name": finding.title,
                     "ref": finding_ref,
                     "report_statement": finding.statement,
@@ -370,13 +381,25 @@ class ReportTaskInvestigationToolService:
                 {
                     "position": position,
                     "type": "standalone_risk_post",
+                    "type_label": enum_label(
+                        FINDING_TYPE_LABELS, "standalone_risk_post"
+                    ),
                     "name": post.title,
                     "ref": post_ref,
                     "author_display_name": post.author.display_name,
                     "report_disposition": item.disposition_note,
                     "audit_finding_preview": {
+                        "type_label": enum_label(
+                            FINDING_TYPE_LABELS, "audit_finding"
+                        ),
                         "decision": finding.decision,
+                        "decision_label": enum_label(
+                            DECISION_LABELS, finding.decision
+                        ),
                         "risk_level": finding.risk_level,
+                        "risk_level_label": enum_label(
+                            RISK_LEVEL_LABELS, finding.risk_level
+                        ),
                         "categories": list(finding.categories),
                         "recorded_summary": _preview(finding.summary, 160),
                     },
@@ -502,6 +525,9 @@ class ReportTaskInvestigationToolService:
                         "post_evidence_position": item.ordinal,
                         "type": "evidence",
                         "evidence_type": item.type,
+                        "evidence_type_label": enum_label(
+                            EVIDENCE_TYPE_LABELS, item.type
+                        ),
                         "name": _evidence_name(item),
                         "ref": evidence_ref,
                         "recorded_summary": _preview(item.content.summary, 160),
@@ -519,16 +545,29 @@ class ReportTaskInvestigationToolService:
                         "ref": post_ref,
                         "author_display_name": post.author.display_name,
                         "platform": post.source.platform,
+                        "platform_label": enum_label(
+                            PLATFORM_LABELS, post.source.platform
+                        ),
                     },
                     "is_representative": membership.is_representative,
                     "membership_audit_finding": {
+                        "type_label": enum_label(
+                            FINDING_TYPE_LABELS, "audit_finding"
+                        ),
                         "decision": audit_finding["decision"],
+                        "decision_label": enum_label(
+                            DECISION_LABELS, audit_finding["decision"]
+                        ),
                         "risk_level": audit_finding["risk_level"],
+                        "risk_level_label": enum_label(
+                            RISK_LEVEL_LABELS, audit_finding["risk_level"]
+                        ),
                         "categories": audit_finding["categories"],
                         "recorded_summary": audit_finding["summary"],
                         "risk_basis": audit_finding["risk_basis"],
                         "scope": "post_effective_audit_finding_context",
                         "is_membership_evidence_subset": False,
+                        "scope_label": "整帖审核背景",
                     },
                     "membership_classification_basis": {
                         "source": "membership_evidence_subset",
@@ -539,6 +578,11 @@ class ReportTaskInvestigationToolService:
                     },
                     "membership_evidence_subset": evidence_cards,
                     "membership_evidence_count": len(evidence_cards),
+                    "post_total_evidence_count": repository.post_total_evidence_count(
+                        post.id
+                    ),
+                    "evidence_scope": "finding_membership_subset",
+                    "post_content_loaded": False,
                     "membership_evidence_subset_complete": True,
                     "membership_evidence_is_all_post_evidence": False,
                     "preview_only": True,
@@ -551,6 +595,9 @@ class ReportTaskInvestigationToolService:
             data={
                 "investigation_finding": {
                     "type": "investigation_finding",
+                    "type_label": enum_label(
+                        FINDING_TYPE_LABELS, "investigation_finding"
+                    ),
                     "name": finding.title,
                     "ref": finding_ref,
                 },
@@ -560,6 +607,7 @@ class ReportTaskInvestigationToolService:
                 "truncated_by_limit": len(cards) < len(finding.memberships),
                 "post_memberships_complete": len(cards) == len(finding.memberships),
                 "membership_scope": "all_report_post_memberships_for_this_finding",
+                "evidence_scope": "finding_membership_subset",
             },
             not_loaded=[
                 "Post body and full speech transcripts",
@@ -848,13 +896,23 @@ class ReportTaskInvestigationToolService:
             ),
             "risk_predicate": {
                 "decision": ["review", "reject"],
+                "decision_labels": [
+                    enum_label(DECISION_LABELS, item)
+                    for item in ("review", "reject")
+                ],
                 "risk_level": ["low", "medium", "high"],
+                "risk_level_labels": [
+                    enum_label(RISK_LEVEL_LABELS, item)
+                    for item in ("low", "medium", "high")
+                ],
                 "operator": "decision AND risk_level",
                 "source": "frozen effective Finding fields",
             },
             "applied_filters": {
                 "risk_level": risk_level,
+                "risk_level_label": enum_label(RISK_LEVEL_LABELS, risk_level),
                 "decision": decision,
+                "decision_label": enum_label(DECISION_LABELS, decision),
             },
             "ordering": "当前调查任务冻结帖子顺序",
             "server_semantic_matching_performed": False,
@@ -1019,6 +1077,22 @@ class ReportTaskInvestigationToolService:
                         else ""
                     ),
                 }
+            effective_finding = dict(effective_finding)
+            effective_finding["type_label"] = enum_label(
+                FINDING_TYPE_LABELS, "audit_finding"
+            )
+            effective_finding["decision_label"] = enum_label(
+                DECISION_LABELS, effective_finding.get("decision")
+            )
+            effective_finding["risk_level_label"] = enum_label(
+                RISK_LEVEL_LABELS, effective_finding.get("risk_level")
+            )
+            author["platform_label"] = enum_label(
+                PLATFORM_LABELS, author.get("platform")
+            )
+            natural_source["platform_label"] = enum_label(
+                PLATFORM_LABELS, natural_source.get("platform")
+            )
             groups.append(
                 {
                     "group_position": position,
@@ -1140,6 +1214,9 @@ class ReportTaskInvestigationToolService:
                 "text_complete": True,
                 "audit_status": comment.audit_status,
                 "risk_level": comment.risk_level,
+                "risk_level_label": enum_label(
+                    RISK_LEVEL_LABELS, comment.risk_level
+                ),
                 "risk_type": comment.risk_type,
                 "published_at": comment.published_at,
                 "published_at_availability": (
@@ -1179,6 +1256,10 @@ class ReportTaskInvestigationToolService:
                 "risk_predicate": {
                     "audit_status": "completed",
                     "own_risk_level": ["low", "medium", "high"],
+                    "own_risk_level_labels": [
+                        enum_label(RISK_LEVEL_LABELS, item)
+                        for item in ("low", "medium", "high")
+                    ],
                     "inherits_parent_post_risk": False,
                 },
             },
@@ -1272,7 +1353,11 @@ class ReportTaskInvestigationToolService:
                 },
                 "candidates": cards,
                 "matched_count": len(selected),
-                "post_total_evidence_count": len(all_items),
+                "post_total_evidence_count": (
+                    self._real_repository().post_total_evidence_count(post.id)
+                    if self.real_report_mode
+                    else len(all_items)
+                ),
                 "returned_count": len(cards),
                 "truncated": len(cards) < len(selected),
                 "directory_complete_for_post": (
@@ -1314,6 +1399,9 @@ class ReportTaskInvestigationToolService:
                     "evidence": {
                         "type": "evidence",
                         "evidence_type": item.type,
+                        "evidence_type_label": enum_label(
+                            EVIDENCE_TYPE_LABELS, item.type
+                        ),
                         "name": _evidence_name(item),
                         "ref": evidence_ref,
                         "full_original_text": item.content.original_text,
@@ -1328,6 +1416,13 @@ class ReportTaskInvestigationToolService:
                     "natural_source": _natural_source(item, post),
                 }
             )
+            groups[-1]["natural_source"]["platform_label"] = enum_label(
+                PLATFORM_LABELS, groups[-1]["natural_source"].get("platform")
+            )
+            if self.real_report_mode and item.type == "comment":
+                groups[-1]["source_comment"] = self._source_comment_projection(
+                    session_id, item, post
+                )
         return self._success(
             tool="read_evidence",
             result_kind="evidence_full_content",
@@ -1338,6 +1433,51 @@ class ReportTaskInvestigationToolService:
                 "The complete stored text record is returned; linked binary media is not loaded."
             ],
         )
+
+    def _source_comment_projection(
+        self, session_id: str, item: Evidence, post: Post
+    ) -> dict[str, Any]:
+        repository = self._real_repository()
+        comment = repository.comment_author_for_evidence(item.id)
+        author: dict[str, Any] = {
+            "display_name": None,
+            "public_profile_identifier": None,
+            "stable_identity_available": False,
+            "account_ref": None,
+        }
+        occurrence_ref = None
+        if comment is not None:
+            author["display_name"] = comment.author_display_name or None
+            if comment.author_public_identifier and comment.platform in {
+                "dy",
+                "douyin",
+            }:
+                author["public_profile_identifier"] = {
+                    "platform": "douyin",
+                    "platform_label": enum_label(PLATFORM_LABELS, "douyin"),
+                    "label": "抖音号",
+                    "value": comment.author_public_identifier,
+                }
+            if self.account_activity is not None:
+                task_id = repository.fixture.provenance.source_task_id
+                content_key = post.id.removeprefix("post:")
+                try:
+                    bridge = self.account_activity.expose_comment_evidence(
+                        session_id,
+                        task_id=task_id,
+                        content_key=content_key,
+                        comment_id=comment.id,
+                        text=comment.text,
+                        published_at=comment.published_at,
+                    )
+                except Exception:
+                    # Account bridging is optional; a corpus or authorization
+                    # failure must not hide the exact frozen Comment identity.
+                    bridge = {"account_ref": None, "account_occurrence_ref": None}
+                author["account_ref"] = bridge.get("account_ref")
+                occurrence_ref = bridge.get("account_occurrence_ref")
+            author["stable_identity_available"] = bool(author["account_ref"])
+        return {"author": author, "account_occurrence_ref": occurrence_ref}
 
     def _validate_category_record(
         self, record: ReportTaskReferenceRecord, category: ReportCase
@@ -1462,6 +1602,9 @@ class ReportTaskInvestigationToolService:
             self._validate_finding_record(record, finding.id)
             return {
                 "type": "investigation_finding",
+                "type_label": enum_label(
+                    FINDING_TYPE_LABELS, "investigation_finding"
+                ),
                 "name": finding.title,
                 "ref": context_ref,
                 "report_statement": finding.statement,
@@ -1490,7 +1633,13 @@ class ReportTaskInvestigationToolService:
                 "summary": _preview(finding.summary, 160),
                 "categories": list(finding.categories),
                 "risk_level": finding.risk_level,
+                "risk_level_label": enum_label(
+                    RISK_LEVEL_LABELS, finding.risk_level
+                ),
                 "decision": finding.decision,
+                "decision_label": enum_label(
+                    DECISION_LABELS, finding.decision
+                ),
             },
         }
 
@@ -1501,7 +1650,11 @@ class ReportTaskInvestigationToolService:
             "summary": _preview(finding.summary, 160),
             "categories": list(finding.categories),
             "risk_level": finding.risk_level,
+            "risk_level_label": enum_label(
+                RISK_LEVEL_LABELS, finding.risk_level
+            ),
             "decision": finding.decision,
+            "decision_label": enum_label(DECISION_LABELS, finding.decision),
         }
         if self.real_report_mode:
             finding_preview["primary_risk"] = (

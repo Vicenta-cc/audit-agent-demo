@@ -213,6 +213,60 @@ class AccountActivityToolService:
             }
         return output
 
+    def expose_comment_evidence(
+        self,
+        session_id: str,
+        *,
+        task_id: str,
+        content_key: str,
+        comment_id: str,
+        text: str,
+        published_at: str,
+    ) -> dict[str, str | None]:
+        """Bridge one exact Comment Evidence to existing Account Activity refs.
+
+        This lookup is deliberately independent of comment risk filtering. The
+        caller has already selected a precise frozen Evidence relation.
+        """
+        repository = self._load_repository()
+        occurrence = repository.comment_occurrence(task_id, content_key, comment_id)
+        frozen = occurrence["comment"]
+        if (
+            frozen.get("text") != text
+            or frozen.get("comment_time") != published_at
+            or str(occurrence.get("task_id")) != task_id
+            or str(occurrence.get("post", {}).get("content_key")) != content_key
+            or str(occurrence.get("source_locator", {}).get("comment_id")) != comment_id
+        ):
+            raise AccountActivityLookupError(
+                "snapshot_occurrence_mismatch",
+                "The frozen Report Comment and Account occurrence disagree.",
+            )
+        account_id = occurrence.get("account_ref")
+        account_token = None
+        occurrence_token = None
+        if account_id is not None:
+            account_token = self.expose_account(
+                session_id,
+                str(account_id),
+                source_tool="read_evidence",
+                content_state="comment_evidence_author",
+                repository=repository,
+            )
+            occurrence_token = self.refs.expose(
+                session_id,
+                kind="occurrence",
+                object_id=str(occurrence["occurrence_ref"]),
+                parent_account_id=str(account_id),
+                corpus_revision=repository.corpus_revision,
+                source_tool="read_evidence",
+                content_state="comment_evidence",
+            )
+        return {
+            "account_ref": account_token,
+            "account_occurrence_ref": occurrence_token,
+        }
+
     def _resolve_account(
         self,
         session_id: str,
@@ -514,15 +568,18 @@ class AccountActivityToolService:
             expected_kind="occurrence",
             corpus_revision=repository.corpus_revision,
         )
+        allowed_origins = {
+            ("list_account_occurrences", "preview"),
+            ("list_post_risk_comments", "preview"),
+            ("read_evidence", "comment_evidence"),
+        }
         if not any(
-            origin.content_state == "preview"
-            and origin.source_tool
-            in {"list_account_occurrences", "list_post_risk_comments"}
+            (origin.source_tool, origin.content_state) in allowed_origins
             for origin in occurrence_record.origins
-        ) or occurrence_record.source_tool not in {
-            "list_account_occurrences",
-            "list_post_risk_comments",
-        } or occurrence_record.content_state != "preview":
+        ) or (
+            occurrence_record.source_tool,
+            occurrence_record.content_state,
+        ) not in allowed_origins:
             raise ReferenceError(
                 "wrong_ref_source",
                 "The Account occurrence was not displayed by an authorized directory.",

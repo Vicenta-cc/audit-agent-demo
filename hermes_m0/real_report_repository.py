@@ -74,6 +74,20 @@ class FrozenReportComment:
     published_at: str
     author_display_name: str
     author_source_key: str
+    author_public_identifier: str = ""
+    platform: str = ""
+    raw_available: bool = False
+    identity_consistent: bool = True
+
+
+@dataclass(frozen=True)
+class FrozenEvidenceRelation:
+    evidence_id: str
+    report_version_id: str
+    snapshot_id: str
+    post_id: str
+    support_type: str
+    local_evidence_id: str
 
 
 @dataclass(frozen=True)
@@ -114,6 +128,7 @@ class PublishedReportRepository(InvestigationRepository):
         report_account_entries: tuple[PublishedReportAccountEntry, ...] = (),
         report_account_projection_hash: str = "",
         report_comments: tuple[FrozenReportComment, ...] = (),
+        evidence_relations: tuple[FrozenEvidenceRelation, ...] = (),
     ) -> None:
         super().__init__(fixture)
         self.database_path = database_path
@@ -139,6 +154,25 @@ class PublishedReportRepository(InvestigationRepository):
             {
                 post_id: tuple(
                     item for item in report_comments if item.parent_post_id == post_id
+                )
+                for post_id in fixture.snapshot.post_ids
+            }
+        )
+        self._evidence_relations = MappingProxyType(
+            {item.evidence_id: item for item in evidence_relations}
+        )
+        evidence_ids = {item.id for item in fixture.evidence}
+        relation_ids = [item.evidence_id for item in evidence_relations]
+        self._has_evidence_relation_projection = (
+            len(relation_ids) == len(set(relation_ids))
+            and set(relation_ids) == evidence_ids
+        )
+        self._direct_evidence_count_by_post = MappingProxyType(
+            {
+                post_id: sum(
+                    1
+                    for item in evidence_relations
+                    if item.post_id == post_id and item.support_type == "direct"
                 )
                 for post_id in fixture.snapshot.post_ids
             }
@@ -199,6 +233,7 @@ class PublishedReportRepository(InvestigationRepository):
                 "report_account_projection_hash"
             ],
             report_comments=loaded["report_comments"],
+            evidence_relations=loaded["evidence_relations"],
         )
 
     def post_content(self, post_id: str) -> dict[str, Any]:
@@ -238,6 +273,51 @@ class PublishedReportRepository(InvestigationRepository):
     ) -> tuple[Evidence, ...]:
         membership = self.finding_membership(finding_id, post_id)
         return tuple(self.evidence(item_id) for item_id in membership.evidence_ids)
+
+    def post_total_evidence_count(self, post_id: str) -> int | None:
+        """Return the frozen direct-Evidence count for one parent Post."""
+        self.post(post_id)
+        if not self._has_evidence_relation_projection:
+            return None
+        return int(self._direct_evidence_count_by_post.get(post_id, 0))
+
+    def comment_author_for_evidence(
+        self, evidence_id: str
+    ) -> FrozenReportComment | None:
+        """Resolve a Comment Evidence author only through its frozen relation."""
+        if not self._has_evidence_relation_projection:
+            return None
+        relation = self._evidence_relations.get(evidence_id)
+        if relation is None:
+            return None
+        try:
+            item = self.evidence(evidence_id)
+        except RepositoryLookupError:
+            return None
+        if (
+            item.type != "comment"
+            or relation.report_version_id != self.report.id
+            or relation.snapshot_id != self.snapshot.id
+            or relation.post_id != item.parent_post_id
+        ):
+            return None
+        local_id = relation.local_evidence_id.strip()
+        if not local_id.startswith("comment:"):
+            return None
+        comment_id = local_id[len("comment:") :]
+        if not comment_id or ":" in comment_id:
+            return None
+        matches = tuple(
+            item
+            for item in self._report_comments_by_post.get(relation.post_id, ())
+            if item.id == comment_id
+        )
+        if len(matches) != 1:
+            return None
+        comment = matches[0]
+        if not comment.raw_available or not comment.identity_consistent:
+            return None
+        return comment
 
     def standalone_risk_posts(self) -> tuple[StandaloneRiskPost, ...]:
         return self._standalone_risk_posts
@@ -451,6 +531,7 @@ def _load_report_graph(
         raise PublishedReportLoadError("Snapshot Finding/Post coverage is incomplete")
 
     evidence_by_post: dict[str, list[sqlite3.Row]] = defaultdict(list)
+    evidence_relations: list[FrozenEvidenceRelation] = []
     relations = []
     for row in evidence_rows:
         evidence_ref = str(row["evidence_ref"])
@@ -463,6 +544,17 @@ def _load_report_graph(
         ):
             raise PublishedReportLoadError("Snapshot Evidence parent is invalid")
         evidence_by_post[post_ref].append(row)
+        evidence_payload = evidence_payloads[evidence_ref]
+        evidence_relations.append(
+            FrozenEvidenceRelation(
+                evidence_id=evidence_ref,
+                report_version_id=report_version_id,
+                snapshot_id=str(manifest["id"]),
+                post_id=post_ref,
+                support_type=str(row["support_type"] or ""),
+                local_evidence_id=str(evidence_payload.get("local_evidence_id") or ""),
+            )
+        )
         relations.append(
             {
                 "post_ref": post_ref,
@@ -536,18 +628,14 @@ def _load_report_graph(
     posts: list[Post] = []
     post_content: dict[str, dict[str, Any]] = {}
     report_comments: list[FrozenReportComment] = []
-    report_comment_ids: set[str] = set()
     for row in post_rows:
         post_ref = str(row["post_ref"])
         payload = post_payloads[post_ref]
         projected_content = _project_post_content(payload)
         post_content[post_ref] = projected_content
-        for comment in _project_frozen_comments(post_ref, payload):
-            if comment.id in report_comment_ids:
-                raise PublishedReportLoadError(
-                    "Report Snapshot contains a duplicate Comment identity"
-                )
-            report_comment_ids.add(comment.id)
+        for comment in _project_frozen_comments(
+            post_ref, payload, platform=str(payload.get("platform") or "")
+        ):
             report_comments.append(comment)
         posts.append(
             Post(
@@ -724,6 +812,7 @@ def _load_report_graph(
                 ),
             )
         ),
+        "evidence_relations": tuple(evidence_relations),
     }
 
 
@@ -1286,28 +1375,58 @@ def _project_post_content(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _project_frozen_comments(
-    post_ref: str, payload: Mapping[str, Any]
+    post_ref: str,
+    payload: Mapping[str, Any],
+    *,
+    platform: str = "",
 ) -> tuple[FrozenReportComment, ...]:
-    comments = payload.get("comments")
-    if comments is None:
-        raw_payload = _require_object(
-            payload.get("raw_content_payload"), "Post raw content payload"
-        )
-        comments = raw_payload.get("comments") or []
-    if not isinstance(comments, list):
+    """Project compact and raw comments while retaining identity provenance.
+
+    The compact projection remains sufficient for the risk-comment directory. A
+    Comment Evidence author is only considered resolvable when its raw source
+    comment is present and compact/raw identity fields agree.
+    """
+
+    compact_values = payload.get("comments")
+    if compact_values is not None and not isinstance(compact_values, list):
         raise PublishedReportLoadError("Snapshot Comment projection is not an array")
+    raw_payload_value = payload.get("raw_content_payload")
+    raw_values: list[Any] | None = None
+    if raw_payload_value is not None:
+        raw_payload = _require_object(raw_payload_value, "Post raw content payload")
+        raw_candidate = raw_payload.get("comments")
+        if raw_candidate is not None and not isinstance(raw_candidate, list):
+            raise PublishedReportLoadError("Snapshot raw Comment projection is not an array")
+        raw_values = raw_candidate or []
+
+    def index(values: list[Any], label: str) -> dict[str, list[Mapping[str, Any]]]:
+        indexed: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+        for value in values:
+            comment = _require_object(value, label)
+            comment_id = normalize_source_id(comment.get("comment_id"))
+            if not comment_id:
+                raise PublishedReportLoadError(
+                    "Snapshot Comment identity must be non-empty"
+                )
+            indexed[comment_id].append(comment)
+        return indexed
+
+    compact_by_id = index(compact_values or [], "Snapshot Comment")
+    raw_by_id = index(raw_values or [], "Snapshot raw Comment") if raw_values is not None else {}
     output: list[FrozenReportComment] = []
-    seen: set[str] = set()
-    for value in comments:
-        comment = _require_object(value, "Snapshot Comment")
-        comment_id = normalize_source_id(comment.get("comment_id"))
-        if not comment_id or comment_id in seen:
-            raise PublishedReportLoadError(
-                "Snapshot Comment identities must be non-empty and unique per Post"
-            )
-        seen.add(comment_id)
-        audit_status = normalize_source_id(comment.get("audit_status")).lower()
-        risk_level = normalize_source_id(comment.get("risk_level")).lower()
+    for comment_id in sorted(set(compact_by_id) | set(raw_by_id)):
+        compact_candidates = compact_by_id.get(comment_id, [])
+        raw_candidates = raw_by_id.get(comment_id, [])
+        compact = compact_candidates[0] if compact_candidates else None
+        raw = raw_candidates[0] if raw_candidates else None
+        def value(field: str) -> Any:
+            for candidate in (raw, compact):
+                if candidate is not None and normalize_source_id(candidate.get(field)):
+                    return candidate.get(field)
+            return None
+
+        audit_status = normalize_source_id(value("audit_status")).lower()
+        risk_level = normalize_source_id(value("risk_level")).lower()
         if not audit_status and not risk_level:
             audit_status = "unavailable"
             risk_level = "unavailable"
@@ -1316,22 +1435,44 @@ def _project_frozen_comments(
         elif risk_level not in {"none", "low", "medium", "high"}:
             raise PublishedReportLoadError("Snapshot Comment risk level is invalid")
         try:
-            published_at = utc_timestamp(comment.get("create_time"))
+            published_at = utc_timestamp(value("create_time"))
         except ValueError as exc:
             raise PublishedReportLoadError(
                 "Snapshot Comment published_at is invalid"
             ) from exc
+        identity_consistent = True
+        if len(compact_candidates) > 1 or len(raw_candidates) > 1:
+            identity_consistent = False
+        for candidate in (compact, raw):
+            if candidate is None:
+                continue
+            aweme_id = normalize_source_id(candidate.get("aweme_id"))
+            if aweme_id and f"post:{aweme_id}" != post_ref:
+                identity_consistent = False
+        if compact is not None and raw is not None:
+            for field in ("nickname", "user_unique_id", "short_user_id", "sec_uid", "user_id"):
+                compact_value = normalize_source_id(compact.get(field))
+                raw_value = normalize_source_id(raw.get(field))
+                if compact_value and raw_value and compact_value != raw_value:
+                    identity_consistent = False
+                    break
         output.append(
             FrozenReportComment(
                 id=comment_id,
                 parent_post_id=post_ref,
-                text=str(comment.get("content") or ""),
+                text=str(value("content") or ""),
                 audit_status=audit_status,
                 risk_level=risk_level,
-                risk_type=normalize_source_id(comment.get("risk_type")),
+                risk_type=normalize_source_id(value("risk_type")),
                 published_at=published_at,
-                author_display_name=normalize_source_id(comment.get("nickname")),
-                author_source_key=normalize_source_id(comment.get("sec_uid")),
+                author_display_name=normalize_source_id(value("nickname")),
+                author_source_key=normalize_source_id(value("sec_uid")),
+                author_public_identifier=normalize_source_id(raw.get("user_unique_id"))
+                if raw is not None
+                else "",
+                platform=platform,
+                raw_available=len(raw_candidates) == 1,
+                identity_consistent=identity_consistent,
             )
         )
     return tuple(sorted(output, key=lambda item: (item.published_at, item.id)))

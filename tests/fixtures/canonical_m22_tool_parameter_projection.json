@@ -1,0 +1,225 @@
+[
+  [
+    "read_report",
+    {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    }
+  ],
+  [
+    "list_finding_posts",
+    {
+      "additionalProperties": false,
+      "properties": {
+        "finding_ref": {
+          "description": "read_report返回的当前会话安全InvestigationFinding引用。",
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": ["finding_ref"],
+      "type": "object"
+    }
+  ],
+  [
+    "search_posts",
+    {
+      "additionalProperties": false,
+      "properties": {
+        "context_ref": {
+          "description": "先前工具返回的当前帖子或InvestigationFinding引用。",
+          "type": "string"
+        },
+        "cursor": {
+          "description": "仅在还有未展示风险候选时由search_posts返回的稳定续取参数；不表示还有语义匹配结果。",
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        "filters": {
+          "additionalProperties": false,
+          "properties": {
+            "decision": {
+              "enum": ["review", "reject"],
+              "type": "string"
+            },
+            "risk_level": {
+              "enum": ["low", "medium", "high"],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "query_text": {
+          "description": "当前风险帖子发现目标；服务器只记录，不执行语义匹配。",
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "requested_count": {
+          "description": "用户希望最终获得的相关帖子数量；不控制服务器候选池大小。",
+          "maximum": 20,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": ["query_text", "requested_count"],
+      "type": "object"
+    }
+  ],
+  [
+    "read_posts",
+    {
+      "additionalProperties": false,
+      "properties": {
+        "post_refs": {
+          "description": "Session-safe post references from prior tool results.",
+          "items": {"type": "string"},
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": ["post_refs"],
+      "type": "object"
+    }
+  ],
+  [
+    "list_post_risk_comments",
+    {
+      "additionalProperties": false,
+      "properties": {
+        "cursor": {
+          "description": "上一页返回的同一Parent Post稳定续取引用。",
+          "type": "string"
+        },
+        "limit": {"maximum": 50, "minimum": 1, "type": "integer"},
+        "post_ref": {
+          "description": "当前Report工具先前返回且服务器验证过的Post引用。",
+          "type": "string"
+        }
+      },
+      "required": ["post_ref", "limit"],
+      "type": "object"
+    }
+  ],
+  [
+    "list_evidence",
+    {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {"maximum": 20, "minimum": 1, "type": "integer"},
+        "post_ref": {
+          "description": "Session-safe post reference from a prior tool result.",
+          "type": "string"
+        },
+        "types": {
+          "description": "Optional exact evidence types to include.",
+          "items": {
+            "enum": ["text", "comment", "asr", "ocr", "keyframe"],
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": ["post_ref"],
+      "type": "object"
+    }
+  ],
+  [
+    "read_evidence",
+    {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "description": "Session-safe evidence references from list_evidence.",
+          "items": {"type": "string"},
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": ["evidence_refs"],
+      "type": "object"
+    }
+  ],
+  [
+    "get_account_overview",
+    {
+      "additionalProperties": false,
+      "properties": {
+        "account_ref": {
+          "description": "服务器返回的当前会话Account引用或当前Report的稳定账号索引引用。",
+          "type": "string"
+        }
+      },
+      "required": ["account_ref"],
+      "type": "object"
+    }
+  ],
+  [
+    "list_account_occurrences",
+    {
+      "additionalProperties": false,
+      "properties": {
+        "account_ref": {"type": "string"},
+        "comment_target_ref": {
+          "description": "get_account_overview评论对象分布返回的当前会话安全短别名；仅用于筛选comment_author记录。",
+          "type": "string"
+        },
+        "cursor": {
+          "description": "上一页返回的当前会话稳定续取短别名。",
+          "type": "string"
+        },
+        "kind": {
+          "enum": ["comment_author", "post_author"],
+          "type": "string"
+        },
+        "limit": {"maximum": 20, "minimum": 1, "type": "integer"},
+        "risk_filter": {
+          "description": "可选；仅保留对象自身审核完成且自身有风险的记录。",
+          "enum": ["risk_only"],
+          "type": "string"
+        }
+      },
+      "required": ["account_ref", "kind", "limit"],
+      "type": "object"
+    }
+  ],
+  [
+    "read_account_occurrence",
+    {
+      "additionalProperties": false,
+      "properties": {
+        "occurrence_ref": {
+          "description": "list_account_occurrences返回的当前会话活动记录短别名。",
+          "type": "string"
+        }
+      },
+      "required": ["occurrence_ref"],
+      "type": "object"
+    }
+  ],
+  [
+    "read_account_post",
+    {
+      "additionalProperties": false,
+      "properties": {
+        "post_ref": {
+          "description": "read_account_occurrence返回的当前会话Parent Post安全短别名。",
+          "type": "string"
+        }
+      },
+      "required": ["post_ref"],
+      "type": "object"
+    }
+  ]
+]
