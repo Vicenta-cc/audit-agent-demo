@@ -49,12 +49,16 @@ export interface RecallLexiconSummary {
   title: string;
   risk_label: string;
   enabled_main_term_count: number;
+  runtime_content_hash: string;
+  enabled_main_terms: string[];
   available: boolean;
 }
 
 export interface InvestigationDraftSuggestion {
   title: string;
   objective: string;
+  mode: "search" | "creator";
+  creator_url: string;
   platform_options: InvestigationPlatformOption[];
   selected_platform: InvestigationCreationPlatform;
   search_terms: string[];
@@ -79,6 +83,7 @@ export interface InvestigationDraftConfiguration {
               strategy: "existing_lexicon";
               lexicon_id: string;
               expected_runtime_content_hash: string;
+              enabled_main_terms?: string[];
             };
       }
     | { mode: "creator"; creator_url: string };
@@ -119,6 +124,7 @@ export interface ConfirmationPreview {
     lexicon_id: string;
     lexicon_title: string;
     enabled_main_term_count: number;
+    enabled_main_terms: string[];
     temporary_terms: string[];
     source_lexicon_ids: string[];
   };

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import {
   buildConfirmationCardView,
   buildConfirmationIdempotencyKey,
@@ -6,8 +7,17 @@ import {
   parseInvestigationSearchTerms
 } from "../src/features/investigation/confirmationView";
 import { mapInvestigationRunState } from "../src/features/investigation/investigationRunState";
+import {
+  loadM3AnalysisRecords,
+  mapM3PostToAnalysisRecord,
+  mapReportEvidence,
+  readRunAnalysisCounts
+} from "../src/features/investigation/m3AnalysisRecords";
 import { buildDraftSuggestionPlanView } from "../src/features/investigation/InvestigationContextDrawer";
-import { selectSingleSuggestionPlatform } from "../src/features/investigation/TaskSuggestionCard";
+import {
+  buildSuggestionBlockerLink,
+  selectSingleSuggestionPlatform,
+} from "../src/features/investigation/TaskSuggestionCard";
 import {
   buildNewInvestigationWorkspaceSession,
   buildWorkspaceRecoveryErrorSession,
@@ -61,6 +71,7 @@ const preview: ConfirmationPreview = {
     lexicon_id: "",
     lexicon_title: "",
     enabled_main_term_count: 0,
+    enabled_main_terms: [],
     temporary_terms: ["世界杯博彩", "看球下注"],
     source_lexicon_ids: []
   },
@@ -116,6 +127,8 @@ const publicDraft: PublicInvestigationDraft = {
 const suggestion = {
   title: preview.title,
   objective: preview.objective,
+  mode: "search" as const,
+  creator_url: "",
   platform_options: [
     { id: "dy" as const, name: "抖音", available: true },
     { id: "xhs" as const, name: "小红书", available: true },
@@ -130,6 +143,8 @@ const suggestion = {
     title: "博彩引流词库",
     risk_label: "博彩引流",
     enabled_main_term_count: 8,
+    runtime_content_hash: "a".repeat(64),
+    enabled_main_terms: ["世界杯博彩", "看球下注"],
     available: true
   }]
 };
@@ -589,6 +604,74 @@ test("blockers disable confirmation and expose the management URL", () => {
     blocked.blockers[0].code,
     "A valid published AuditPolicy must be selected before confirmation."
   )).toBe("当前没有已发布的审核策略，无法确认执行。");
+
+  expect(buildSuggestionBlockerLink(blocked)).toEqual({
+    label: "编辑/新增研判方案",
+    managementUrl: "/rule-assistant/rulesets?return_to=/investigation"
+  });
+});
+
+test("creator workspace recovery preserves the homepage URL and carries no search terms", () => {
+  const creatorUrl = "https://www.douyin.com/user/MS4wLjABAAAA-valid";
+  const creatorDraft: PublicInvestigationDraft = {
+    ...publicDraft,
+    configuration: {
+      ...configuration,
+      platform: "dy",
+      investigation: { mode: "creator", creator_url: creatorUrl }
+    }
+  };
+  const creatorPreview: ConfirmationPreview = {
+    ...preview,
+    mode: "creator",
+    platform: "dy",
+    resolved_search_terms: [],
+    creator_url: creatorUrl,
+    recall_plan: {
+      strategy: "none",
+      lexicon_id: "",
+      lexicon_title: "",
+      enabled_main_term_count: 0,
+      enabled_main_terms: [],
+      temporary_terms: [],
+      source_lexicon_ids: []
+    }
+  };
+  const creatorSuggestion = {
+    ...suggestion,
+    mode: "creator" as const,
+    creator_url: creatorUrl,
+    selected_platform: "dy" as const,
+    platform_options: [{ id: "dy" as const, name: "抖音", available: true }],
+    search_terms: [],
+    recall_lexicons: []
+  };
+  const creatorState = workspaceState({
+    draft_artifact: {
+      ...workspaceState().draft_artifact!,
+      draft: creatorDraft,
+      confirmation_preview: creatorPreview,
+      suggestion: creatorSuggestion
+    },
+    messages: workspaceState().messages.map((message) => (
+      message.role === "assistant"
+        ? {
+            ...message,
+            artifact: {
+              ...workspaceState().draft_artifact!,
+              draft: creatorDraft,
+              confirmation_preview: creatorPreview,
+              suggestion: creatorSuggestion
+            }
+          }
+        : message
+    ))
+  });
+  const restored = restoreInvestigationWorkspace(creatorState);
+  expect(restored.draft.taskType).toBe("博主主页采集");
+  expect(restored.draft.keywords).toEqual([]);
+  expect(restored.creationBinding?.confirmationPreview?.creator_url).toBe(creatorUrl);
+  expect(restored.creationBinding?.suggestion?.recall_lexicons).toEqual([]);
 });
 
 test("Draft edits use expected_revision and preserve structured 409 errors", async () => {
@@ -675,22 +758,129 @@ test("confirmation is explicit and reuses the caller's idempotency key", async (
 });
 
 test("maps only real Run projection states, including parallel crawl and analysis", () => {
-  expect(mapInvestigationRunState(run("QUEUED")).phase).toBe("collection_waking");
+  expect(mapInvestigationRunState(run("QUEUED"))).toMatchObject({
+    phase: "collection_waking", step: 1, activity: "queued"
+  });
   expect(mapInvestigationRunState(run("RUNNING", {
     crawl_status: "running", analysis_status: "pending"
-  })).phase).toBe("collection_working");
+  }))).toMatchObject({ phase: "collection_working", step: 1, activity: "running" });
   expect(mapInvestigationRunState(run("RUNNING", {
     crawl_status: "running", analysis_status: "running"
-  })).phase).toBe("audit_working");
+  }))).toMatchObject({ phase: "evidence_working", step: 2, activity: "running" });
+  expect(mapInvestigationRunState(run("RUNNING", {
+    crawl_status: "completed", analysis_status: "pending"
+  }))).toMatchObject({ phase: "evidence_handoff", step: 2, activity: "queued" });
   expect(mapInvestigationRunState(run("RUNNING", {
     crawl_status: "completed", analysis_status: "completed"
-  })).phase).toBe("audit_completed");
-  expect(mapInvestigationRunState(run("REPORT_GENERATING")).phase).toBe("report_generating");
+  }))).toMatchObject({ phase: "audit_completed", step: 3, activity: "queued" });
+  expect(mapInvestigationRunState(run("REPORT_GENERATING"))).toMatchObject({
+    phase: "report_generating", step: 4, activity: "running"
+  });
   expect(mapInvestigationRunState(run("PUBLISHED", {
     report_status: "published", report_version_id: "report-version-1"
-  }))).toMatchObject({ phase: "completed", terminal: "published" });
-  expect(mapInvestigationRunState(run("FAILED"))).toMatchObject({ terminal: "failed" });
-  expect(mapInvestigationRunState(run("INTERRUPTED"))).toMatchObject({ terminal: "interrupted" });
+  }))).toMatchObject({ phase: "completed", terminal: "published", activity: "completed" });
+  expect(mapInvestigationRunState(run("FAILED"))).toMatchObject({ terminal: "failed", activity: "stopped" });
+  expect(mapInvestigationRunState(run("INTERRUPTED"))).toMatchObject({ terminal: "interrupted", activity: "stopped" });
+  expect(mapInvestigationRunState(run("RUNNING", {
+    crawl_status: "completed", analysis_status: "paused"
+  }))).toMatchObject({ terminal: "paused", activity: "stopped" });
+});
+
+test("maps one real report post and its five-category Evidence without invented task output ids", () => {
+  const evidence = [
+    ["post_text", "文本"],
+    ["ocr", "画面文字"],
+    ["asr_audio", "音频"],
+    ["comment_text", "评论"],
+    ["visual_frame", "视觉"]
+  ].map(([evidence_type, original_text], index) => ({
+    evidence_ref: `evidence-${index + 1}`,
+    post_ref: "post-1",
+    audit_finding_ref: "finding-1",
+    support_type: "direct" as const,
+    evidence_type,
+    original_text,
+    translated_text: index === 2 ? "中文音频译文" : "",
+    summary: `真实命中解释 ${index + 1}`
+  }));
+  const record = mapM3PostToAnalysisRecord({
+    post: {
+      post_ref: "post-1",
+      title: "真实采集内容",
+      content_summary: "真实分析摘要",
+      author_display_name: "真实作者",
+      audit_finding_ref: "finding-1",
+      decision: "reject",
+      risk_level: "high",
+      audit_summary: "真实研判结论",
+      investigation_finding_refs: ["finding-1"],
+      direct_evidence: evidence
+    },
+    itemNumber: 1,
+    platform: "小红书",
+    analyzedAt: "2026-08-30 23:00",
+    reportVersionId: "report-version-1"
+  });
+  expect(record).toMatchObject({
+    source: "m3-report",
+    itemNumber: 1,
+    riskLabel: "高风险",
+    summary: "真实分析摘要",
+    conclusion: "真实研判结论",
+    reportVersionId: "report-version-1",
+    postRef: "post-1",
+    findingRef: "finding-1",
+    evidenceCounts: { text: 1, ocr: 1, asr: 1, comment: 1, vision: 1 }
+  });
+  expect(record.taskId).toBeUndefined();
+  expect(record.outputId).toBeUndefined();
+  expect(mapReportEvidence(evidence[2])).toMatchObject({
+    type: "asr", translation: "中文音频译文", explanation: "真实命中解释 3"
+  });
+});
+
+test("analysis progress counts come only from Run task statistics", () => {
+  expect(readRunAnalysisCounts(run("RUNNING", {
+    task_stats: { ingested_count: 1, completed_analysis_count: 0 }
+  }))).toEqual({ completedCount: 0, totalCount: 1 });
+  expect(readRunAnalysisCounts(run("RUNNING", { task_stats: {} })))
+    .toEqual({ completedCount: 0, totalCount: 0 });
+});
+
+test("published M3 records fail closed when the ReportVersion has no structured report", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    detail: "ReportVersion has no structured frontend report document"
+  }), {
+    status: 400,
+    headers: { "Content-Type": "application/json" }
+  });
+
+  await expect(loadM3AnalysisRecords(run("PUBLISHED", {
+    report_status: "published",
+    report_version_id: "report-version-without-structured-report",
+    task_stats: { ingested_count: 1, completed_analysis_count: 1 }
+  }))).rejects.toThrow("ReportVersion has no structured frontend report document");
+});
+
+test("authoritative M3 progress is server-backed and reduced motion remains static", () => {
+  const cardSource = readFileSync(
+    new URL("../src/features/investigation/AgentCollaborationCard.tsx", import.meta.url),
+    "utf8"
+  );
+  const recordsPageSource = readFileSync(
+    new URL("../src/features/investigation/AnalysisRecordsPage.tsx", import.meta.url),
+    "utf8"
+  );
+  const styles = readFileSync(
+    new URL("../src/styles/investigation-workspace.css", import.meta.url),
+    "utf8"
+  );
+  expect(cardSource).toContain("loadM3AnalysisRecords(run)");
+  expect(cardSource).toContain("if (authoritative) return;");
+  expect(recordsPageSource).toContain("getInvestigationWorkspaceState(investigationId)");
+  expect(recordsPageSource).not.toContain("readStoredAnalysisRecords(investigationId)\n        || createCompletedAnalysisRecords()");
+  expect(styles).toContain(".evidence-pipeline-svg.is-done *");
+  expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.evidence-pipeline-svg \*/);
 });
 
 test("published report questions use the workspace/run handoff without report_session_id", async () => {

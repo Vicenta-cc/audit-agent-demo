@@ -128,7 +128,7 @@ export function TaskConfirmationCard({
           ))}
           {view.rulesManagementUrl ? (
             <a href={view.rulesManagementUrl}>
-              前往规则管理中心 <ExternalLink size={13} aria-hidden="true" />
+              编辑/新增研判方案 <ExternalLink size={13} aria-hidden="true" />
             </a>
           ) : null}
         </div>

@@ -121,15 +121,12 @@ class InvestigationResourceService:
                 continue
             if summary is None or ruleset is None:
                 continue
-            valid_policies.append(
-                (
-                    self._domain_hint_score(
-                        query.domain_hint, policy, summary, ruleset
-                    ),
-                    summary,
-                    ruleset,
-                )
+            match_score = self._domain_hint_score(
+                query.domain_hint, policy, summary, ruleset
             )
+            if query.domain_hint and not requested_policy_ids and match_score <= 0:
+                continue
+            valid_policies.append((match_score, summary, ruleset))
 
         found_policy_ids = {summary.id for _, summary, _ in valid_policies}
         for policy_id in query.audit_policy_ids:
@@ -153,7 +150,11 @@ class InvestigationResourceService:
         requested_lexicon_ids = set(query.lexicon_ids)
         include_terms = set(query.include_lexicon_terms_for_ids)
         lexicons: list[tuple[int, RecallLexiconSummary]] = []
-        categories = self.lexicon_store.list_categories()
+        categories = (
+            self.lexicon_store.list_categories()
+            if query.mode == "search"
+            else []
+        )
         for category in categories:
             category_id = str(category.get("id") or "")
             if requested_lexicon_ids and category_id not in requested_lexicon_ids:
@@ -203,7 +204,16 @@ class InvestigationResourceService:
             blockers.append(
                 self._blocker(
                     "NO_PUBLISHED_AUDIT_POLICY",
-                    "No valid published AuditPolicy is available for the requested scope.",
+                    "No matching published AuditPolicy is available for the requested scope.",
+                    management_url=_RULES_MANAGEMENT_PATH,
+                )
+            )
+        if query.mode == "search" and not any(item.available for _, item in lexicons):
+            blockers.append(
+                self._blocker(
+                    "NO_PUBLISHED_RECALL_LEXICON",
+                    "No available published recall lexicon exists for search mode.",
+                    resource_type="recall_lexicon",
                 )
             )
         has_more = (
@@ -324,13 +334,14 @@ class InvestigationResourceService:
                         enabled_main_term_count=0,
                         available=False,
                     )
-                resolved_terms = list(summary.enabled_main_terms)
+                resolved_terms = list(plan.enabled_main_terms)
                 recall_preview = RecallPlanPreview(
                     strategy="existing_lexicon",
                     lexicon_id=summary.id,
                     lexicon_title=summary.title,
                     runtime_content_hash=summary.runtime_content_hash,
                     enabled_main_term_count=summary.enabled_main_term_count,
+                    enabled_main_terms=list(plan.enabled_main_terms),
                 )
                 if (
                     summary.available
@@ -341,6 +352,18 @@ class InvestigationResourceService:
                         self._blocker(
                             "RESOURCE_STALE",
                             "The selected recall lexicon changed after the Draft was saved.",
+                            resource_type="recall_lexicon",
+                            resource_id=plan.lexicon_id,
+                            latest_safe_summary=summary.model_dump(mode="json"),
+                        )
+                    )
+                if summary.available and list(plan.enabled_main_terms) != list(
+                    summary.enabled_main_terms
+                ):
+                    blockers.append(
+                        self._blocker(
+                            "RESOURCE_STALE",
+                            "The saved enabled main-term snapshot no longer matches the selected recall lexicon.",
                             resource_type="recall_lexicon",
                             resource_id=plan.lexicon_id,
                             latest_safe_summary=summary.model_dump(mode="json"),
@@ -383,6 +406,48 @@ class InvestigationResourceService:
             ruleset_revision=ruleset_summary,
             blockers=blockers,
             can_confirm=not blockers,
+        )
+
+    def snapshot_draft_configuration(
+        self,
+        configuration: InvestigationDraftConfiguration,
+        *,
+        principal: Principal,
+    ) -> InvestigationDraftConfiguration:
+        """Freeze real search resource content into each persisted Draft revision."""
+
+        configuration = InvestigationDraftConfiguration.model_validate(
+            configuration.model_dump(mode="json")
+        )
+        if configuration.investigation.mode != "search":
+            return configuration
+        plan = configuration.investigation.recall_plan
+        if plan.strategy != "existing_lexicon":
+            return configuration
+        try:
+            summary = self._lexicon_summary(plan.lexicon_id, include_terms=True)
+        except KeyError as exc:
+            raise ConfigurationValidationError(
+                "The selected recall lexicon is not available.",
+                code="NO_PUBLISHED_RECALL_LEXICON",
+                details={"resource_id": plan.lexicon_id},
+            ) from exc
+        if plan.expected_runtime_content_hash != summary.runtime_content_hash:
+            raise ResourceStaleError(
+                "The selected recall lexicon changed before the Draft revision was saved.",
+                details={
+                    "resource": summary.model_dump(mode="json"),
+                },
+            )
+        frozen_plan = plan.model_copy(
+            update={"enabled_main_terms": list(summary.enabled_main_terms)}
+        )
+        return configuration.model_copy(
+            update={
+                "investigation": configuration.investigation.model_copy(
+                    update={"recall_plan": frozen_plan}
+                )
+            }
         )
 
     def resolve_confirmation(

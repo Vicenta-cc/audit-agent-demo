@@ -1732,9 +1732,20 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     if (pendingTurnControllersRef.current.has(turnId)) return;
     const controller = new AbortController();
     pendingTurnControllersRef.current.set(turnId, controller);
+    const handleCreationEvent = (event: import("../../types/investigations").InvestigationTurnEvent) => {
+      setSessions((current) => current.map((item) => (
+        item.id === uiSessionId && item.creationBinding
+          ? {
+              ...item,
+              creationBinding: { ...item.creationBinding, pendingTurnStage: event.stage }
+            }
+          : item
+      )));
+    };
     try {
       let result = await waitForInvestigationCreationTurn(turnId, {
-        signal: controller.signal
+        signal: controller.signal,
+        onEvent: handleCreationEvent
       });
       if (result.status === "interrupted" && result.retryable && !resumeAttempted) {
         setSessions((current) => current.map((item) => (
@@ -1752,7 +1763,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         result = await waitForInvestigationCreationTurn(turnId, {
           signal: controller.signal,
           afterSequence: result.event_sequence || 0,
-          resumeReplay: !result.event_sequence
+          resumeReplay: !result.event_sequence,
+          onEvent: handleCreationEvent
         });
       }
       const answer = result.status === "completed"
@@ -1783,6 +1795,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                 creationBinding: {
                   ...item.creationBinding,
                   pendingTurnId: undefined,
+                  pendingTurnStage: undefined,
                   resumeAttempted: undefined,
                   error: result.status === "completed" ? undefined : answer
                 }
@@ -1809,6 +1822,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
               creationBinding: {
                 ...item.creationBinding,
                 pendingTurnId: undefined,
+                pendingTurnStage: undefined,
                 resumeAttempted: undefined,
                 error: message
               }
@@ -1900,6 +1914,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                 creationBinding: {
                   ...item.creationBinding,
                   pendingTurnId: accepted.turn_id,
+                  pendingTurnStage: "accepted",
                   resumeAttempted: false
                 }
               }
@@ -2187,7 +2202,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         <InvestigationCenterArea
           session={activeSession}
           isSendingMessage={sendingMessageSessionId === activeSession.id}
-          sendingMessageStage={activeSession.reportBinding?.pendingTurn?.stage}
+          sendingMessageStage={
+            activeSession.reportBinding?.pendingTurn?.stage
+            || activeSession.creationBinding?.pendingTurnStage
+          }
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={() => setIsSidebarCollapsed(false)}
           onUpdateDraftKeywords={handleUpdateDraftKeywords}

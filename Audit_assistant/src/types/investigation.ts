@@ -198,6 +198,7 @@ export interface InvestigationSession {
     suggestion?: InvestigationDraftSuggestion;
     presentationStage?: "suggestion" | "confirmation";
     pendingTurnId?: string;
+    pendingTurnStage?: import("./investigations").InvestigationTurnStage;
     resumeAttempted?: boolean;
     run?: InvestigationRunProjection;
     confirmationKey?: string;

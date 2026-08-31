@@ -56,11 +56,20 @@ class InvestigationCreationService:
             command.model_dump(mode="json", warnings=False)
         )
         self._reject_legacy_creation_platform(command.configuration)
+        configuration = command.configuration
+        if isinstance(configuration, InvestigationDraftConfiguration):
+            if self.resource_service is None:
+                raise ConfigurationValidationError(
+                    "investigation resource service is not configured"
+                )
+            configuration = self.resource_service.snapshot_draft_configuration(
+                configuration, principal=principal
+            )
         return self.store.create_draft(
             principal=principal.id,
             title=command.title,
             objective=command.objective,
-            configuration=command.configuration,
+            configuration=configuration,
         )
 
     def update_draft(
@@ -71,13 +80,22 @@ class InvestigationCreationService:
         )
         if command.configuration is not None:
             self._reject_legacy_creation_platform(command.configuration)
+        configuration = command.configuration
+        if isinstance(configuration, InvestigationDraftConfiguration):
+            if self.resource_service is None:
+                raise ConfigurationValidationError(
+                    "investigation resource service is not configured"
+                )
+            configuration = self.resource_service.snapshot_draft_configuration(
+                configuration, principal=principal
+            )
         return self.store.update_draft(
             command.draft_id,
             principal=principal.id,
             expected_revision=command.expected_revision,
             title=command.title,
             objective=command.objective,
-            configuration=command.configuration,
+            configuration=configuration,
         )
 
     def get_draft(

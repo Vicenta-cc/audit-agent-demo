@@ -21,6 +21,14 @@ class ConfigurationResolver(Protocol):
 
 
 class ResourceService(Protocol):
+    def snapshot_draft_configuration(
+        self,
+        configuration: Any,
+        *,
+        principal: Any,
+    ) -> Any:
+        ...
+
     def query_options(
         self, query: QueryInvestigationOptions, *, principal: Principal
     ) -> InvestigationOptions: ...

@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowRight, FileSearch, X } from "lucide-react";
 import { fetchAuditResultDetail } from "../../services/jobs";
+import { fetchReportPostDetail } from "../../services/reports";
 import type { AuditEvidenceGroupItem } from "../../types/jobs";
 import type { AnalysisEvidenceType, AnalysisKeyEvidence, AnalysisRecord } from "./analysisRecords";
 import { analysisEvidenceTypes } from "./analysisRecords";
+import { mapReportEvidence } from "./m3AnalysisRecords";
 
 interface AnalysisBasisDrawerProps {
   record: AnalysisRecord | null;
@@ -33,27 +35,40 @@ export function AnalysisBasisDrawer({
   const [activeEvidenceType, setActiveEvidenceType] = useState<AnalysisEvidenceType>("text");
   const [completeEvidence, setCompleteEvidence] = useState<DrawerEvidence[] | null>(null);
   const [isEvidenceLoading, setIsEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState("");
+  const [loadRevision, setLoadRevision] = useState(0);
 
   useEffect(() => {
     if (!record) return;
     let isCurrent = true;
     setCompleteEvidence(null);
+    setEvidenceError("");
     setIsEvidenceLoading(true);
-    void fetchAuditResultDetail(record.outputId)
+    const request = record.source === "m3-report"
+      ? record.reportVersionId && record.postRef
+        ? fetchReportPostDetail(record.reportVersionId, record.postRef).then((detail) => (
+            detail.direct_evidence.map(mapReportEvidence).filter(Boolean) as DrawerEvidence[]
+          ))
+        : Promise.reject(new Error("当前记录缺少真实 ReportVersion 或帖子引用"))
+      : record.outputId
+        ? fetchAuditResultDetail(record.outputId).then((detail) => mapEvidenceGroups(detail.evidence_groups))
+        : Promise.reject(new Error("当前记录缺少真实任务输出引用"));
+    void request
       .then((detail) => {
         if (!isCurrent) return;
-        setCompleteEvidence(mapEvidenceGroups(detail.evidence_groups));
+        setCompleteEvidence(detail);
         setIsEvidenceLoading(false);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!isCurrent) return;
         setCompleteEvidence(null);
+        setEvidenceError(error instanceof Error ? error.message : "证据加载失败");
         setIsEvidenceLoading(false);
       });
     return () => {
       isCurrent = false;
     };
-  }, [record]);
+  }, [loadRevision, record]);
 
   useEffect(() => {
     if (!record) return;
@@ -79,8 +94,10 @@ export function AnalysisBasisDrawer({
   }, [onClose, record]);
 
   const evidence = useMemo<DrawerEvidence[]>(
-    () => completeEvidence ?? (isEvidenceLoading ? [] : record?.keyEvidence ?? []),
-    [completeEvidence, isEvidenceLoading, record]
+    () => completeEvidence ?? (isEvidenceLoading || evidenceError || record?.source === "m3-report"
+      ? []
+      : record?.keyEvidence ?? []),
+    [completeEvidence, evidenceError, isEvidenceLoading, record]
   );
   const evidenceCounts = useMemo(() => {
     if (isEvidenceLoading && record) return record.evidenceCounts;
@@ -186,6 +203,15 @@ export function AnalysisBasisDrawer({
                   <span />
                   <span />
                 </div>
+              ) : evidenceError ? (
+                <div className="analysis-evidence-error" role="alert">
+                  <strong>研判依据暂不可用</strong>
+                  <span>{evidenceError}</span>
+                  <div>
+                    <button type="button" onClick={() => setLoadRevision((current) => current + 1)}>重试</button>
+                    <button type="button" onClick={onClose}>关闭</button>
+                  </div>
+                </div>
               ) : visibleEvidence.map((evidence, index) => {
                 const typeLabel = analysisEvidenceTypes.find(({ type }) => type === evidence.type)?.label;
                 return (
@@ -217,24 +243,30 @@ export function AnalysisBasisDrawer({
                   </article>
                 );
               })}
-              {!isEvidenceLoading && visibleEvidence.length === 0 ? (
+              {!isEvidenceLoading && !evidenceError && visibleEvidence.length === 0 ? (
                 <div className="analysis-key-empty">该类型暂无风险证据</div>
               ) : null}
             </div>
           </section>
 
-          <section className="analysis-basis-section analysis-overall-judgment">
+          {record.source !== "m3-report" ? <section className="analysis-basis-section analysis-overall-judgment">
             <div className="analysis-basis-section-label">综合判断</div>
             <p>
               当前结论由多模态证据交叉形成，仍属于 Agent 自动研判结果；进入人工复核后再确定最终处理结论。
             </p>
-          </section>
+          </section> : null}
         </div>
 
         <footer className="analysis-basis-footer">
-          <button type="button" onClick={() => onViewCompleteEvidence(record)}>
+          <button
+            type="button"
+            disabled={record.source === "m3-report" && (!record.reportVersionId || !record.findingRef)}
+            onClick={() => onViewCompleteEvidence(record)}
+          >
             <FileSearch size={17} />
-            <span>查看完整证据</span>
+            <span>{record.source === "m3-report" && (!record.reportVersionId || !record.findingRef)
+              ? "研判依据暂不可用"
+              : "查看完整证据"}</span>
             <ArrowRight size={16} />
           </button>
         </footer>

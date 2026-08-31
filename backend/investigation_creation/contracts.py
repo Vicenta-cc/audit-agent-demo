@@ -71,6 +71,7 @@ class AnalysisCapability(str, Enum):
 
 InvestigationBlockerCode = Literal[
     "NO_PUBLISHED_AUDIT_POLICY",
+    "NO_PUBLISHED_RECALL_LEXICON",
     "INVALID_RULESET_REFERENCE",
     "RESOURCE_STALE",
     "NO_SEARCH_TERMS",
@@ -87,11 +88,17 @@ class ExistingLexiconRecallPlan(StrictModel):
     expected_runtime_content_hash: StrictStr = Field(
         pattern=r"^[0-9a-f]{64}$"
     )
+    enabled_main_terms: list[StrictStr] = Field(default_factory=list, max_length=100)
 
     @field_validator("lexicon_id", "expected_runtime_content_hash", mode="before")
     @classmethod
     def strip_text(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("enabled_main_terms", mode="before")
+    @classmethod
+    def normalize_enabled_main_terms(cls, values: object) -> object:
+        return TemporaryTermsRecallPlan.normalize_terms(values)
 
 
 class TemporaryTermsRecallPlan(StrictModel):
@@ -339,6 +346,7 @@ class RecallLexiconSummary(StrictModel):
 
 class QueryInvestigationOptions(StrictModel):
     domain_hint: StrictStr = Field(default="", max_length=200)
+    mode: Literal["search", "creator"] = "search"
     platform: Platform | None = None
     audit_policy_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
     lexicon_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
@@ -393,6 +401,7 @@ class RecallPlanPreview(StrictModel):
     lexicon_title: StrictStr = ""
     runtime_content_hash: StrictStr = ""
     enabled_main_term_count: StrictInt = Field(default=0, ge=0)
+    enabled_main_terms: list[StrictStr] = Field(default_factory=list)
     temporary_terms: list[StrictStr] = Field(default_factory=list)
     source_lexicon_ids: list[StrictStr] = Field(default_factory=list)
 

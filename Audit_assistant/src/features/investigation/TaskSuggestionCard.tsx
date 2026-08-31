@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Check } from "lucide-react";
+import { AlertTriangle, Bot, Check, ExternalLink } from "lucide-react";
 import type { PlatformCode, TaskDraft } from "../../types/investigation";
+import type { ConfirmationPreview } from "../../types/investigationCreation";
+import { formatConfirmationBlockerMessage } from "./confirmationView";
 import { StreamingAssistantText } from "./StreamingAssistantText";
 
 const defaultPlatformOptions: Array<{ code: PlatformCode; label: string }> = [
@@ -15,12 +17,20 @@ export function selectSingleSuggestionPlatform(
   return [platform];
 }
 
+export function buildSuggestionBlockerLink(preview?: ConfirmationPreview) {
+  const managementUrl = preview?.blockers.find((blocker) => blocker.management_url)?.management_url;
+  return managementUrl
+    ? { label: "编辑/新增研判方案", managementUrl }
+    : null;
+}
+
 interface TaskSuggestionCardProps {
   assistantContent: string;
   shouldStream: boolean;
   showSuggestionCard: boolean;
   onStreamingComplete: () => void;
   draft: TaskDraft;
+  preview?: ConfirmationPreview;
   platformOptions?: Array<{ code: PlatformCode; label: string }>;
   isReadOnly: boolean;
   onUpdatePlatforms: (platforms: PlatformCode[]) => void;
@@ -34,6 +44,7 @@ export function TaskSuggestionCard({
   showSuggestionCard,
   onStreamingComplete,
   draft,
+  preview,
   platformOptions = defaultPlatformOptions,
   isReadOnly,
   onUpdatePlatforms,
@@ -44,6 +55,7 @@ export function TaskSuggestionCard({
   const [isKeywordsOverflowing, setIsKeywordsOverflowing] = useState(false);
   const keywordsRef = useRef<HTMLParagraphElement>(null);
   const keywordsText = draft.keywords.join("、");
+  const blockerLink = buildSuggestionBlockerLink(preview);
 
   useEffect(() => {
     const element = keywordsRef.current;
@@ -59,7 +71,7 @@ export function TaskSuggestionCard({
     const observer = new ResizeObserver(measureOverflow);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [isKeywordsExpanded, keywordsText]);
+  }, [isKeywordsExpanded, keywordsText, preview?.creator_url]);
 
   const handleTogglePlatform = (platform: PlatformCode) => {
     if (isReadOnly) return;
@@ -86,22 +98,30 @@ export function TaskSuggestionCard({
         <div className="task-suggestion-header">
           <h3>{draft.taskName}</h3>
           <span className={`task-suggestion-status${isReadOnly ? " is-ready" : ""}`}>
-            {isReadOnly ? "已生成配置" : "待选择平台"}
+            {isReadOnly
+              ? "已生成配置"
+              : preview?.mode === "creator"
+                ? "待核对主页"
+                : "待选择平台"}
           </span>
         </div>
 
         <div className="task-suggestion-sections">
           <section className="task-suggestion-section">
             <div className="task-suggestion-label-row">
-              <span className="task-suggestion-label">本次搜索词</span>
-              <span className="task-suggestion-note">仅用于本次任务</span>
+              <span className="task-suggestion-label">
+                {preview?.mode === "creator" ? "博主主页 URL" : "本次启用主词"}
+              </span>
+              <span className="task-suggestion-note">
+                {preview?.mode === "creator" ? "主页采集" : "仅主词进入采集"}
+              </span>
             </div>
             <div className="task-suggestion-field-body">
               <p
                 ref={keywordsRef}
                 className={`task-suggestion-keywords${isKeywordsExpanded ? " is-expanded" : ""}`}
               >
-                {keywordsText}
+                {preview?.mode === "creator" ? preview.creator_url : keywordsText}
               </p>
               {isKeywordsOverflowing ? (
                 <button
@@ -165,11 +185,27 @@ export function TaskSuggestionCard({
           </section>
         </div>
 
+        {preview?.blockers.length ? (
+          <div className="task-suggestion-blockers" role="alert">
+            {preview.blockers.map((blocker) => (
+              <div key={`${blocker.code}-${blocker.resource_id}`}>
+                <AlertTriangle size={15} aria-hidden="true" />
+                <span>{formatConfirmationBlockerMessage(blocker.code, blocker.message)}</span>
+              </div>
+            ))}
+            {blockerLink ? (
+              <a href={blockerLink.managementUrl}>
+                {blockerLink.label} <ExternalLink size={13} aria-hidden="true" />
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="task-suggestion-actions">
           <button
             type="button"
             className="mt-button mt-button-primary"
-            disabled={isReadOnly || draft.platforms.length === 0}
+            disabled={isReadOnly || draft.platforms.length === 0 || Boolean(preview?.blockers.length)}
             onClick={onGenerateConfig}
           >
             生成任务配置

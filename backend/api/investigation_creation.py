@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator
@@ -86,6 +86,7 @@ def create_investigation_creation_router(
     )
     def query_options(
         domain_hint: str = Query(default="", max_length=200),
+        mode: Literal["search", "creator"] = Query(default="search"),
         platform: Platform | None = Query(default=None),
         audit_policy_ids: list[str] = Query(default=[]),
         lexicon_ids: list[str] = Query(default=[]),
@@ -99,6 +100,7 @@ def create_investigation_creation_router(
             return service.query_investigation_options(
                 QueryInvestigationOptions(
                     domain_hint=domain_hint,
+                    mode=mode,
                     platform=platform,
                     audit_policy_ids=audit_policy_ids,
                     lexicon_ids=lexicon_ids,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -20,6 +20,9 @@ import {
   type AnalysisRecord,
   type AnalysisRisk
 } from "./analysisRecords";
+import { getInvestigationWorkspaceState } from "../../services/investigationCreation";
+import { AnalysisBasisDrawer } from "./AnalysisBasisDrawer";
+import { loadM3AnalysisRecords } from "./m3AnalysisRecords";
 
 type RiskFilter = "all" | AnalysisRisk;
 type SortKey = "latest" | "risk";
@@ -43,13 +46,21 @@ export function AnalysisRecordsPage() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const routeState = (location.state || {}) as AnalysisRecordsRouteState;
-  const records = useMemo(() => (
-    routeState.records
-      ? normalizeAnalysisRecords(routeState.records)
-      : readStoredAnalysisRecords(investigationId)
-        || createCompletedAnalysisRecords()
-  ), [investigationId, routeState.records]);
-  const investigationTitle = routeState.investigationTitle || "世界杯博彩专题调查";
+  const authoritativeRunId = searchParams.get("run") || "";
+  const authoritative = Boolean(authoritativeRunId);
+  const [records, setRecords] = useState<AnalysisRecord[]>(() => (
+    authoritative
+      ? normalizeAnalysisRecords(routeState.records || [])
+      : routeState.records
+        ? normalizeAnalysisRecords(routeState.records)
+        : readStoredAnalysisRecords(investigationId) || createCompletedAnalysisRecords()
+  ));
+  const [recordsLoading, setRecordsLoading] = useState(authoritative);
+  const [recordsError, setRecordsError] = useState("");
+  const [selectedRecord, setSelectedRecord] = useState<AnalysisRecord | null>(null);
+  const [investigationTitle, setInvestigationTitle] = useState(
+    routeState.investigationTitle || "当前调查"
+  );
   const query = searchParams.get("q") || "";
   const riskParam = searchParams.get("risk") || "all";
   const normalizedRiskParam = riskParam === "review" ? "low" : riskParam;
@@ -66,6 +77,39 @@ export function AnalysisRecordsPage() {
       document.title = previousTitle;
     };
   }, [investigationTitle]);
+
+  useEffect(() => {
+    if (!authoritative) return;
+    let current = true;
+    setRecordsLoading(true);
+    setRecordsError("");
+    void getInvestigationWorkspaceState(investigationId)
+      .then((state) => {
+        if (!state.run || state.run.run_id !== authoritativeRunId) {
+          throw new Error("当前调查没有匹配的真实 Run");
+        }
+        const expectedReport = searchParams.get("report") || "";
+        if (expectedReport && state.run.report_version_id !== expectedReport) {
+          throw new Error("Run 与 ReportVersion 引用不一致");
+        }
+        setInvestigationTitle(state.draft_artifact?.draft.title || "当前调查");
+        return loadM3AnalysisRecords(state.run);
+      })
+      .then((result) => {
+        if (!current) return;
+        setRecords(result.records);
+        setRecordsLoading(false);
+      })
+      .catch((error) => {
+        if (!current) return;
+        setRecords([]);
+        setRecordsError(error instanceof Error ? error.message : "分析记录加载失败");
+        setRecordsLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [authoritative, authoritativeRunId, investigationId, searchParams]);
 
   const riskCounts = useMemo(() => (
     records.reduce<Record<AnalysisRisk, number>>((counts, record) => {
@@ -120,6 +164,11 @@ export function AnalysisRecordsPage() {
   };
 
   const handleViewEvidence = (record: AnalysisRecord) => {
+    if (authoritative) {
+      setSelectedRecord(record);
+      return;
+    }
+    if (!record.taskId || !record.outputId) return;
     const returnTo = `${location.pathname}${location.search}`;
     navigate(`/tasks/${encodeURIComponent(record.taskId)}/outputs/${encodeURIComponent(record.outputId)}`, {
       state: {
@@ -128,6 +177,16 @@ export function AnalysisRecordsPage() {
         returnTitle: investigationTitle
       }
     });
+  };
+
+  const handleViewCompleteEvidence = (record: AnalysisRecord) => {
+    setSelectedRecord(null);
+    if (!record.reportVersionId || !record.findingRef) return;
+    navigate(
+      `/investigation/${encodeURIComponent(investigationId)}/report/evidence`
+        + `?report=${encodeURIComponent(record.reportVersionId)}`
+        + `&finding_ref=${encodeURIComponent(record.findingRef)}&view=evidence`
+    );
   };
 
   return (
@@ -159,7 +218,7 @@ export function AnalysisRecordsPage() {
           <div className="analysis-records-title-block">
             <span>本轮调查</span>
             <h1>全部分析记录</h1>
-            <p>2026-07-29 · 本轮 Agent 研判批次</p>
+            <p>{records[0]?.analyzedAt.split(" ")[0] || "等待分析结果"} · 本轮 Agent 研判批次</p>
           </div>
           <div className="analysis-records-total">
             <BarChart3 size={20} />
@@ -225,7 +284,19 @@ export function AnalysisRecordsPage() {
           <span>当前显示 {filteredRecords.length} 条</span>
         </div>
 
-        {visibleRecords.length > 0 ? (
+        {recordsLoading ? (
+          <div className="analysis-records-empty" role="status">
+            <FileSearch size={22} />
+            <strong>正在加载当前 Run 的分析记录</strong>
+            <span>数据来自已发布的 ReportVersion。</span>
+          </div>
+        ) : recordsError ? (
+          <div className="analysis-records-empty is-error" role="alert">
+            <FileSearch size={22} />
+            <strong>分析记录暂不可用</strong>
+            <span>{recordsError}</span>
+          </div>
+        ) : visibleRecords.length > 0 ? (
           <section className="analysis-records-list" aria-label="完整分析结果列表">
             {visibleRecords.map((record) => (
               <article key={record.itemNumber} className="analysis-record-row">
@@ -263,7 +334,7 @@ export function AnalysisRecordsPage() {
                   onClick={() => handleViewEvidence(record)}
                 >
                   <FileSearch size={16} />
-                  <span>查看完整证据</span>
+                  <span>{authoritative ? "查看研判依据" : "查看完整证据"}</span>
                 </button>
               </article>
             ))}
@@ -300,6 +371,11 @@ export function AnalysisRecordsPage() {
           </div>
         </nav>
       </div>
+      <AnalysisBasisDrawer
+        record={selectedRecord}
+        onClose={() => setSelectedRecord(null)}
+        onViewCompleteEvidence={handleViewCompleteEvidence}
+      />
     </main>
   );
 }

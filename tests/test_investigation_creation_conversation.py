@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -53,6 +54,7 @@ from backend.investigation_creation.tools import (
 from backend.rulesets.service import RuleSetService
 from backend.rulesets.store import RuleSetStore
 from backend.reporting.store import ReportStore
+from backend.reporting.errors import ReportGenerationError
 from backend.investigation.protocol import validate_hermes_transcript_messages
 from hermes_m0.schemas import M2_ACCOUNT_ACTIVITY_TOOLS
 
@@ -209,7 +211,19 @@ def _job_count(resource_db: Path) -> int:
         return int(connection.execute("SELECT COUNT(*) FROM jobs").fetchone()[0])
 
 
-def _create_completed_turn(stack: dict, *, workspace_key: str = "workspace-1") -> dict:
+def _report_version_count(resource_db: Path) -> int:
+    with sqlite3.connect(resource_db) as connection:
+        return int(
+            connection.execute("SELECT COUNT(*) FROM report_versions").fetchone()[0]
+        )
+
+
+def _create_completed_turn(
+    stack: dict,
+    *,
+    workspace_key: str = "workspace-1",
+    content: str = "帮我调查世界杯期间的博彩引流",
+) -> dict:
     client = stack["client"]
     workspace = client.post(
         "/api/investigation-workspaces", json={"workspace_key": workspace_key}
@@ -220,7 +234,7 @@ def _create_completed_turn(stack: dict, *, workspace_key: str = "workspace-1") -
         f"/api/investigation-workspaces/{workspace_id}/turns",
         json={
             "client_message_id": "message-1",
-            "content": "帮我调查世界杯期间的博彩引流",
+            "content": content,
         },
     )
     assert accepted.status_code == 202
@@ -298,7 +312,15 @@ def test_creation_session_has_no_report_anchor_and_report_contract_is_unchanged(
 def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
     creation_stack: dict,
 ) -> None:
-    result = _create_completed_turn(creation_stack)
+    with (
+        patch("subprocess.run") as subprocess_run,
+        patch(
+            "backend.audit_agent.crawler_adapter.MediaCrawlerAdapter.run_search"
+        ) as crawler_run,
+    ):
+        result = _create_completed_turn(creation_stack)
+    subprocess_run.assert_not_called()
+    crawler_run.assert_not_called()
     terminal = result["terminal"]
     artifact = terminal["artifact"]
     assert artifact["artifact_type"] == "investigation_draft"
@@ -326,7 +348,8 @@ def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
         for message in transcript
         for call in message.get("tool_calls", [])
     ]
-    assert tool_names[:2] == [
+    assert tool_names[:3] == [
+        "query_investigation_options",
         "query_investigation_options",
         "create_investigation_draft",
     ]
@@ -334,6 +357,9 @@ def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
     assert _draft_count(creation_stack["creation_store"]) == 1
     assert _run_count(creation_stack["creation_store"]) == 0
     assert _job_count(creation_stack["resource_db"]) == 0
+    assert _report_version_count(creation_stack["resource_db"]) == 0
+    assert creation_stack["report_service"].calls == []
+    assert creation_stack["report_executor"].calls == []
     serialized = json.dumps(terminal, ensure_ascii=False)
     for forbidden in (
         "report_session_id",
@@ -343,6 +369,35 @@ def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
         "sqlite3",
     ):
         assert forbidden not in serialized
+
+
+def test_fake_creator_homepage_turn_uses_creator_draft_without_recall_or_run(
+    creation_stack: dict,
+) -> None:
+    creator_url = "https://www.douyin.com/user/MS4wLjABAAAA-valid"
+    result = _create_completed_turn(
+        creation_stack,
+        workspace_key="creator-workspace",
+        content=f"调查这个博主主页 {creator_url}",
+    )
+    artifact = result["terminal"]["artifact"]
+    assert artifact["draft"]["configuration"]["investigation"] == {
+        "mode": "creator",
+        "creator_url": creator_url,
+    }
+    preview = artifact["confirmation_preview"]
+    assert preview["mode"] == "creator"
+    assert preview["creator_url"] == creator_url
+    assert preview["resolved_search_terms"] == []
+    assert preview["recall_plan"]["strategy"] == "none"
+    assert artifact["suggestion"]["mode"] == "creator"
+    assert artifact["suggestion"]["creator_url"] == creator_url
+    assert artifact["suggestion"]["recall_lexicons"] == []
+    assert _run_count(creation_stack["creation_store"]) == 0
+    assert _job_count(creation_stack["resource_db"]) == 0
+    assert _report_version_count(creation_stack["resource_db"]) == 0
+    assert creation_stack["report_service"].calls == []
+    assert creation_stack["report_executor"].calls == []
 
 
 def test_turn_and_sse_replay_do_not_create_a_second_draft(creation_stack: dict) -> None:
@@ -1086,6 +1141,146 @@ def test_workspace_state_restores_confirmed_run_and_published_report_version(
     assert state["run"]["report_version_id"].startswith("report-version:")
     assert "report_session_id" not in response.text
     assert _run_count(stack["creation_store"]) == 1
+
+
+def test_fake_runtime_publishes_linked_structured_frontend_contract(
+    creation_stack: dict,
+) -> None:
+    result = _create_completed_turn(
+        creation_stack, workspace_key="structured-fixture-contract"
+    )
+    projection = _publish_fake_run(
+        creation_stack, result, idempotency_key="structured-fixture-confirm"
+    )
+    report_version_id = projection["report_version_id"]
+
+    assert projection["task_stats"]["ingested_count"] == 1
+    assert projection["task_stats"]["completed_analysis_count"] == 1
+
+    presentation = creation_stack["client"].get(
+        f"/api/report-versions/{report_version_id}/presentation-projection"
+    )
+    assert presentation.status_code == 200
+    assert presentation.json()["statistics"]["canonical_posts"] == 1
+    assert presentation.json()["statistics"]["risk_level"]["high"] == 1
+    assert presentation.json()["statistics"]["evidence"]["direct"] == 5
+
+    appendix = creation_stack["client"].get(
+        f"/api/report-versions/{report_version_id}/appendix",
+        params={"view": "posts", "limit": 100},
+    )
+    assert appendix.status_code == 200
+    post_page = appendix.json()
+    assert post_page["item_kind"] == "post"
+    assert post_page["matched_count"] == 1
+    post = post_page["items"][0]
+    assert post["decision"] == "reject"
+    assert post["risk_level"] == "high"
+    assert post["audit_summary"]
+    post_ref = post["post_ref"]
+    finding_ref = post["audit_finding_ref"]
+
+    detail = creation_stack["client"].get(
+        f"/api/report-versions/{report_version_id}/posts/{post_ref}"
+    )
+    assert detail.status_code == 200
+    post_detail = detail.json()
+    assert post_detail["post_ref"] == post_ref
+    assert post_detail["investigation_finding_refs"] == [finding_ref]
+    assert len(post_detail["direct_evidence"]) == 5
+    assert {
+        item["evidence_type"] for item in post_detail["direct_evidence"]
+    } == {"post_text", "ocr", "asr_audio", "comment_text", "visual_frame"}
+    evidence_refs = {
+        item["evidence_ref"] for item in post_detail["direct_evidence"]
+    }
+    assert len(evidence_refs) == 5
+    assert all(
+        item["post_ref"] == post_ref
+        and item["audit_finding_ref"] == finding_ref
+        and item["support_type"] == "direct"
+        for item in post_detail["direct_evidence"]
+    )
+
+    finding_evidence = creation_stack["client"].get(
+        f"/api/report-versions/{report_version_id}/findings/{finding_ref}/evidence"
+    )
+    assert finding_evidence.status_code == 200
+    finding_body = finding_evidence.json()
+    assert finding_body["investigation_finding_ref"] == finding_ref
+    assert finding_body["direct_evidence_count"] == 5
+    assert {item["evidence_ref"] for item in finding_body["items"]} == evidence_refs
+
+    evidence_appendix = creation_stack["client"].get(
+        f"/api/report-versions/{report_version_id}/appendix",
+        params={"view": "evidence", "finding_ref": finding_ref, "limit": 50},
+    )
+    assert evidence_appendix.status_code == 200
+    evidence_page = evidence_appendix.json()
+    assert evidence_page["item_kind"] == "evidence"
+    assert evidence_page["finding_ref"] == finding_ref
+    assert evidence_page["matched_count"] == 5
+    assert {item["evidence_ref"] for item in evidence_page["items"]} == evidence_refs
+
+    snapshot = creation_stack["report_store"].load_immutable_snapshot(
+        report_version_id
+    )
+    assert len(snapshot.posts) == 1
+    assert len(snapshot.findings) == 1
+    assert len(snapshot.evidence) == 5
+    assert snapshot.posts[0].ref == post_ref
+    assert snapshot.findings[0].ref == finding_ref
+    assert all(
+        item.post_ref == post_ref and item.finding_ref == finding_ref
+        for item in snapshot.evidence
+    )
+
+    replay = creation_stack["client"].get(
+        f"/api/investigation-runs/{projection['run_id']}"
+    )
+    assert replay.status_code == 200
+    assert replay.json()["report_version_id"] == report_version_id
+    assert _report_version_count(creation_stack["resource_db"]) == 1
+
+
+def test_published_report_without_structured_document_fails_closed(
+    tmp_path: Path,
+) -> None:
+    store = ReportStore(tmp_path / "missing-structured-report.sqlite3")
+    generation = store.create_generation(
+        "missing-structured-report", model="fixture", prompt_version="fixture-v1"
+    )
+    report_version_id = generation["report_version_id"]
+    store.save_source_snapshot(
+        {
+            "snapshot_id": "snapshot:missing-structured-report",
+            "report_version_id": report_version_id,
+            "task_id": "missing-structured-report",
+            "task_status": "completed",
+            "source_hash": "fixture-source-hash",
+            "configuration_revision_id": "",
+            "finding_ids": [],
+            "evidence_ids": [],
+            "data_quality_warnings": [],
+            "statistic_inputs": [],
+            "generated_at": "2026-08-31T00:00:00+00:00",
+            "snapshot_hash": "fixture-snapshot-hash",
+        }
+    )
+    store.publish_version(
+        report_version_id=report_version_id,
+        title="legacy fixture",
+        body_markdown="# legacy fixture",
+        body_json={"human_report": {}},
+        sections=[],
+        citation_details={},
+    )
+
+    with pytest.raises(
+        ReportGenerationError,
+        match="ReportVersion has no structured frontend report document",
+    ):
+        store.get_presentation_projection(report_version_id)
 
 
 def test_single_creation_turn_create_and_confirm_restores_workspace_run_and_report(

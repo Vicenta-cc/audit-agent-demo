@@ -209,7 +209,7 @@ def test_domain_hint_ranks_gambling_resources_without_filtering_valid_candidates
     }
 
 
-def test_unrelated_domain_hint_falls_back_to_bounded_valid_candidates(
+def test_unrelated_domain_hint_returns_no_policy_blocker_without_fallback(
     m3_stack: dict,
 ):
     before = _counts(m3_stack["store"])
@@ -222,9 +222,9 @@ def test_unrelated_domain_hint_falls_back_to_bounded_valid_candidates(
         principal=_principal(m3_stack),
     )
 
-    assert [item.id for item in options.audit_policies] == ["policy_gambling"]
+    assert options.audit_policies == []
     assert len(options.recall_lexicons) == 1
-    assert "NO_PUBLISHED_AUDIT_POLICY" not in {
+    assert "NO_PUBLISHED_AUDIT_POLICY" in {
         blocker.code for blocker in options.blockers
     }
     assert _counts(m3_stack["store"]) == before == (0, 0)
@@ -252,7 +252,7 @@ def test_domain_hint_order_and_cursor_are_deterministic(m3_stack: dict):
         query, principal=_principal(m3_stack)
     )
     first_ids = [item.id for item in first.audit_policies]
-    assert first_ids == ["policy_alpha", "policy_gambling"]
+    assert first_ids == ["policy_alpha"]
     assert [item.id for item in second.audit_policies] == first_ids
 
     first_page = m3_stack["service"].query_investigation_options(
@@ -266,7 +266,34 @@ def test_domain_hint_order_and_cursor_are_deterministic(m3_stack: dict):
         principal=_principal(m3_stack),
     )
     assert [item.id for item in first_page.audit_policies] == ["policy_alpha"]
-    assert [item.id for item in second_page.audit_policies] == ["policy_gambling"]
+    assert second_page.audit_policies == []
+
+
+def test_creator_options_never_require_or_return_recall_lexicons(m3_stack: dict):
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(mode="creator"),
+        principal=_principal(m3_stack),
+    )
+    assert options.audit_policies
+    assert options.recall_lexicons == []
+    assert "NO_PUBLISHED_RECALL_LEXICON" not in {
+        blocker.code for blocker in options.blockers
+    }
+
+
+def test_search_options_block_when_no_real_recall_lexicon_exists(m3_stack: dict):
+    with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
+        connection.execute("DELETE FROM lexicon_keywords")
+        connection.execute("DELETE FROM lexicon_prompt_profiles")
+        connection.execute("DELETE FROM lexicon_categories")
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(mode="search"),
+        principal=_principal(m3_stack),
+    )
+    assert options.recall_lexicons == []
+    assert "NO_PUBLISHED_RECALL_LEXICON" in {
+        blocker.code for blocker in options.blockers
+    }
 
 
 def test_explicit_policy_request_is_strict_and_not_filtered_by_hint(m3_stack: dict):
@@ -462,6 +489,24 @@ def test_creator_mode_has_no_recall_and_reports_platform_mismatch(m3_stack: dict
     assert preview.resolved_search_terms == []
     assert preview.recall_plan.strategy == "none"
 
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=1,
+            confirmed=True,
+            idempotency_key="creator-snapshot:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    snapshot = run.confirmed_configuration
+    assert snapshot["mode"] == "creator"
+    assert snapshot["creator_url"] == configuration["investigation"]["creator_url"]
+    assert snapshot["resolved_search_terms"] == []
+    assert snapshot["recall_plan"] is None
+    assert snapshot["execution"]["crawl_mode"] == "creator"
+    assert snapshot["execution"]["keyword"] == ""
+    assert snapshot["execution"]["max_notes"] == 1
+
     mismatched = dict(configuration)
     mismatched["platform"] = "xhs"
     bad_draft = _create_draft(m3_stack, mismatched)
@@ -469,6 +514,136 @@ def test_creator_mode_has_no_recall_and_reports_platform_mismatch(m3_stack: dict
         bad_draft.id, principal=_principal(m3_stack)
     )
     assert [item.code for item in bad_preview.blockers] == ["PLATFORM_MISMATCH"]
+
+    post_url_configuration = {
+        **configuration,
+        "investigation": {
+            "mode": "creator",
+            "creator_url": "https://www.douyin.com/video/1234567890",
+        },
+    }
+    post_url_draft = _create_draft(m3_stack, post_url_configuration)
+    post_url_preview = m3_stack["service"].get_confirmation_preview(
+        post_url_draft.id, principal=_principal(m3_stack)
+    )
+    assert [item.code for item in post_url_preview.blockers] == [
+        "INVALID_CREATOR_URL"
+    ]
+    assert _counts(m3_stack["store"])[1] == 1
+
+
+@pytest.mark.parametrize(
+    "investigation",
+    [
+        {
+            "mode": "search",
+            "creator_url": "https://www.douyin.com/user/MS4wLjABAAAA-valid",
+            "recall_plan": {
+                "strategy": "temporary_terms",
+                "terms": ["term"],
+                "source_lexicon_ids": [],
+            },
+        },
+        {
+            "mode": "creator",
+            "creator_url": "https://www.douyin.com/user/MS4wLjABAAAA-valid",
+            "recall_plan": {
+                "strategy": "temporary_terms",
+                "terms": ["term"],
+                "source_lexicon_ids": [],
+            },
+        },
+    ],
+)
+def test_modes_reject_cross_mode_fields(m3_stack: dict, investigation: dict):
+    with pytest.raises(ValidationError):
+        CreateDraftCommand.model_validate(
+            {
+                "title": "invalid cross-mode fields",
+                "objective": "reject ambiguous mode",
+                "configuration": {
+                    "platform": "dy",
+                    "investigation": investigation,
+                    "audit_policy": _selection(_policy(m3_stack)),
+                },
+            }
+        )
+
+
+def test_existing_lexicon_snapshot_and_explicit_term_edit_are_revisioned(
+    m3_stack: dict,
+):
+    m3_stack["lexicons"].upsert_category(
+        category_id="revisioned-recall",
+        title="Revisioned recall",
+        entries=[
+            {
+                "main_term": "enabled-main",
+                "variants": ["variant-must-not-crawl"],
+                "query_type": "keyword",
+                "enabled": True,
+            },
+            {
+                "main_term": "tag-must-not-crawl",
+                "variants": [],
+                "query_type": "tag",
+                "enabled": True,
+            },
+            {
+                "main_term": "disabled-must-not-crawl",
+                "variants": [],
+                "query_type": "keyword",
+                "enabled": False,
+            },
+        ],
+    )
+    runtime_hash = m3_stack["lexicons"].runtime_content_hash("revisioned-recall")
+    draft = _create_draft(
+        m3_stack,
+        _existing_lexicon_configuration(
+            m3_stack, "revisioned-recall", runtime_hash
+        ),
+    )
+    saved_plan = draft.configuration.investigation.recall_plan
+    assert saved_plan.strategy == "existing_lexicon"
+    assert saved_plan.expected_runtime_content_hash == runtime_hash
+    assert saved_plan.enabled_main_terms == ["enabled-main"]
+
+    temporary_configuration = draft.configuration.model_dump(mode="json")
+    temporary_configuration["investigation"]["recall_plan"] = {
+        "strategy": "temporary_terms",
+        "terms": ["user-edited-main"],
+        "source_lexicon_ids": ["revisioned-recall"],
+    }
+    updated = m3_stack["service"].update_draft(
+        UpdateDraftCommand(
+            draft_id=draft.id,
+            expected_revision=1,
+            configuration=temporary_configuration,
+        ),
+        principal=_principal(m3_stack),
+    )
+    assert updated.current_revision == 2
+    preview = m3_stack["service"].get_confirmation_preview(
+        draft.id, principal=_principal(m3_stack)
+    )
+    assert preview.resolved_search_terms == ["user-edited-main"]
+    assert preview.recall_plan.temporary_terms == ["user-edited-main"]
+    assert preview.recall_plan.source_lexicon_ids == ["revisioned-recall"]
+    assert _confirmation_side_effects(m3_stack) == (0, 0, 0)
+
+    with sqlite3.connect(m3_stack["store"].db_path) as connection:
+        revisions = connection.execute(
+            "SELECT revision, configuration_json FROM investigation_draft_revisions "
+            "WHERE draft_id = ? ORDER BY revision",
+            (draft.id,),
+        ).fetchall()
+    assert [row[0] for row in revisions] == [1, 2]
+    first_plan = json.loads(revisions[0][1])["investigation"]["recall_plan"]
+    second_plan = json.loads(revisions[1][1])["investigation"]["recall_plan"]
+    assert first_plan["enabled_main_terms"] == ["enabled-main"]
+    assert first_plan["expected_runtime_content_hash"] == runtime_hash
+    assert second_plan["terms"] == ["user-edited-main"]
 
 
 def test_missing_policy_keeps_draft_and_returns_management_url(m3_stack: dict):

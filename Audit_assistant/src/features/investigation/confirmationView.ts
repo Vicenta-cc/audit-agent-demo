@@ -31,9 +31,11 @@ export function buildConfirmationCardView(
     ruleSet: preview?.ruleset_revision
       ? `${preview.ruleset_revision.name} · v${preview.ruleset_revision.version}`
       : "尚未绑定",
-    recallStrategy: preview?.recall_plan.strategy === "temporary_terms"
-      ? "本次临时搜索词"
-      : preview?.recall_plan.lexicon_title || preview?.recall_plan.strategy || "",
+    recallStrategy: preview?.mode === "creator"
+      ? "主页模式不使用召回词"
+      : preview?.recall_plan.strategy === "temporary_terms"
+        ? "本次临时搜索词"
+        : preview?.recall_plan.lexicon_title || preview?.recall_plan.strategy || "",
     maxNotes: preview?.max_notes,
     canConfirm: preview ? preview.can_confirm && preview.blockers.length === 0 : true,
     rulesManagementUrl
@@ -60,6 +62,9 @@ export function parseInvestigationSearchTerms(value: string) {
 export function formatConfirmationBlockerMessage(code: string, message: string) {
   if (code === "NO_PUBLISHED_AUDIT_POLICY") {
     return "当前没有已发布的审核策略，无法确认执行。";
+  }
+  if (code === "NO_PUBLISHED_RECALL_LEXICON") {
+    return "当前没有可用的已发布召回词库，无法创建关键词调查。";
   }
   return message;
 }

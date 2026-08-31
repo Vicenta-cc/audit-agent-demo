@@ -86,10 +86,12 @@ export function resumeInvestigationCreationTurn(turnId: string) {
 
 export function queryInvestigationOptions(query: {
   domainHint?: string;
+  mode?: "search" | "creator";
   platform?: string;
 } = {}) {
   return apiRequest(withQuery("/api/investigation-options", {
     domain_hint: query.domainHint,
+    mode: query.mode,
     platform: query.platform
   }));
 }

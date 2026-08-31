@@ -23,8 +23,12 @@ export interface AnalysisRecord {
   analyzedAt: string;
   evidenceCounts: Record<AnalysisEvidenceType, number>;
   keyEvidence: AnalysisKeyEvidence[];
-  taskId: string;
-  outputId: string;
+  source?: "mock" | "m3-report";
+  taskId?: string;
+  outputId?: string;
+  reportVersionId?: string;
+  postRef?: string;
+  findingRef?: string;
 }
 
 export const analysisRiskOrder: Record<AnalysisRisk, number> = {
@@ -536,7 +540,9 @@ export function normalizeAnalysisRecords(records: readonly AnalysisRecord[]): An
       "21": { text: 0, ocr: 2, asr: 0, comment: 0, vision: 3 },
       "759": { text: 0, ocr: 0, asr: 0, comment: 7, vision: 0 }
     };
-    const evidenceCounts = correctedEvidenceCounts[normalizedRecord.outputId];
+    const evidenceCounts = normalizedRecord.outputId
+      ? correctedEvidenceCounts[normalizedRecord.outputId]
+      : undefined;
     return evidenceCounts ? { ...normalizedRecord, evidenceCounts } : normalizedRecord;
   });
 }

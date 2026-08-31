@@ -6,7 +6,8 @@ import {
   PanelLeft,
   ChevronRight,
   CheckCircle2,
-  FileSearch
+  FileSearch,
+  Loader2
 } from "lucide-react";
 import type {
   InvestigationSession,
@@ -134,6 +135,7 @@ export function InvestigationCenterArea({
     isSendingMessage,
     Boolean(session.reportBinding?.pendingTurn)
   );
+  const showCreationPending = Boolean(session.creationBinding && isSendingMessage && !session.reportBinding);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(() => (
     getInitialStreamingMessageId(session)
   ));
@@ -164,7 +166,7 @@ export function InvestigationCenterArea({
       )
     ));
 
-    if (latestTextReply) {
+    if (latestTextReply && !session.creationBinding) {
       setStreamingMessageId(latestTextReply.id);
     }
   }, [isPublishedReportSession, session.id, session.messages]);
@@ -346,10 +348,11 @@ export function InvestigationCenterArea({
                     <TaskSuggestionCard
                       key={msg.id}
                       assistantContent={msg.content || ""}
-                      shouldStream={streamingMessageId === msg.id}
-                      showSuggestionCard={streamingMessageId !== msg.id}
+                      shouldStream={!session.creationBinding && streamingMessageId === msg.id}
+                      showSuggestionCard={Boolean(session.creationBinding) || streamingMessageId !== msg.id}
                       onStreamingComplete={() => handleStreamingComplete(msg.id)}
                       draft={session.draft}
+                      preview={session.creationBinding?.confirmationPreview}
                       platformOptions={session.creationBinding?.suggestion?.platform_options.map((platform) => ({
                         code: platform.id,
                         label: platform.name
@@ -477,7 +480,7 @@ export function InvestigationCenterArea({
                     ) : (
                       <StreamingAssistantText
                         text={msg.content || ""}
-                        shouldStream={streamingMessageId === msg.id}
+                        shouldStream={!session.creationBinding && streamingMessageId === msg.id}
                         className="inv-grounded-content"
                         onComplete={() => handleStreamingComplete(msg.id)}
                       />
@@ -597,7 +600,7 @@ export function InvestigationCenterArea({
 
                     <StreamingAssistantText
                       text={msg.content || ""}
-                      shouldStream={streamingMessageId === msg.id}
+                      shouldStream={!session.creationBinding && streamingMessageId === msg.id}
                       className="inv-assistant-text"
                       onComplete={() => handleStreamingComplete(msg.id)}
                     />
@@ -679,7 +682,7 @@ export function InvestigationCenterArea({
                   ) : (
                     <StreamingAssistantText
                       text={msg.content || ""}
-                      shouldStream={streamingMessageId === msg.id}
+                      shouldStream={!session.creationBinding && streamingMessageId === msg.id}
                       className="inv-assistant-text"
                       onComplete={() => handleStreamingComplete(msg.id)}
                     />
@@ -698,6 +701,18 @@ export function InvestigationCenterArea({
                 stage={sendingMessageStage}
                 recovering={session.reportBinding?.pendingTurn?.recovering}
               />
+            </div>
+          ) : null}
+          {showCreationPending ? (
+            <div className="inv-msg-asst-card inv-creation-pending" role="status" aria-live="polite">
+              <div className="inv-asst-head">
+                <Bot size={16} />
+                <span>研判助手</span>
+              </div>
+              <div className="inv-creation-pending-status">
+                <Loader2 size={17} className="spin" />
+                <span>{creationPendingLabel(sendingMessageStage)}</span>
+              </div>
             </div>
           ) : null}
         </div>
@@ -729,4 +744,12 @@ export function InvestigationCenterArea({
       </div>
     </main>
   );
+}
+
+function creationPendingLabel(stage?: InvestigationTurnStage) {
+  if (stage === "planning") return "正在理解调查目标";
+  if (stage === "preparing_sources") return "正在查询可用研判资源";
+  if (stage === "acquiring_source") return "正在等待 Tool 和后端返回";
+  if (stage === "answering") return "正在整理调查方案";
+  return "正在思考";
 }

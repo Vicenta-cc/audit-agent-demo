@@ -694,6 +694,11 @@
   color: #b91c1c;
 }
 
+.agent-exec-status-tag.is-queued {
+  color: #475569;
+  background: #f1f5f9;
+}
+
 .evidence-pipeline {
   width: 100%;
   min-width: 0;
@@ -710,6 +715,14 @@
 
 .evidence-pipeline-svg.is-stopped * {
   animation-play-state: paused !important;
+}
+
+.evidence-pipeline-svg.is-done * {
+  animation: none !important;
+}
+
+.evidence-pipeline-svg.is-queued * {
+  animation: none !important;
 }
 
 .pipeline-node-label {
@@ -760,6 +773,18 @@
 
 .pipeline-node.is-done .pipeline-node-bg {
   stroke: #16a36a;
+}
+
+.pipeline-node.is-active .pipeline-node-bg {
+  fill: #eff6ff;
+  stroke: #2563eb;
+  stroke-width: 2.5;
+}
+
+.pipeline-node.is-active {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pipeline-active-pulse 1.4s ease-in-out infinite;
 }
 
 .pipeline-node.is-done {
@@ -938,6 +963,11 @@
 @keyframes pipeline-node-complete {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.08); }
+}
+
+@keyframes pipeline-active-pulse {
+  0%, 100% { opacity: 0.82; }
+  50% { opacity: 1; }
 }
 
 @keyframes pipeline-report-receive {
@@ -1148,6 +1178,41 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
   transition: height 0.38s cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.analysis-feed-window.is-count-0 {
+  height: 66px;
+}
+
+.analysis-feed-empty {
+  display: flex;
+  min-height: 66px;
+  align-items: center;
+  gap: 8px;
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.analysis-feed-empty.is-error {
+  color: #b91c1c;
+}
+
+.analysis-history-trigger:disabled {
+  color: #94a3b8;
+  cursor: wait;
+}
+
+.inv-creation-pending-status {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 9px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.inv-creation-pending-status svg {
+  color: #2563eb;
 }
 
 .analysis-feed-window.is-count-1 {
@@ -1892,7 +1957,8 @@
 }
 
 .task-final-term-editor button,
-.task-final-blockers a {
+.task-final-blockers a,
+.task-suggestion-blockers a {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
@@ -1908,7 +1974,8 @@
   text-decoration: none;
 }
 
-.task-final-blockers {
+.task-final-blockers,
+.task-suggestion-blockers {
   display: grid;
   gap: 8px;
   margin-top: 16px;
@@ -1918,7 +1985,8 @@
   background: #fffbeb;
 }
 
-.task-final-blockers > div {
+.task-final-blockers > div,
+.task-suggestion-blockers > div {
   display: flex;
   align-items: flex-start;
   gap: 7px;
@@ -1926,12 +1994,14 @@
   line-height: 1.5;
 }
 
-.task-final-blockers svg {
+.task-final-blockers svg,
+.task-suggestion-blockers svg {
   flex: 0 0 auto;
   margin-top: 2px;
 }
 
-.task-final-blockers a {
+.task-final-blockers a,
+.task-suggestion-blockers a {
   width: fit-content;
   min-height: 30px;
   border-color: #f0c36b;
@@ -4644,6 +4714,31 @@
   width: 64%;
 }
 
+.analysis-evidence-error {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  color: #991b1b;
+  background: #fff7f7;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.analysis-evidence-error > div {
+  display: flex;
+  gap: 8px;
+}
+
+.analysis-evidence-error button {
+  min-height: 30px;
+  padding: 0 10px;
+  color: #991b1b;
+  background: #ffffff;
+  border: 1px solid #fca5a5;
+  border-radius: 5px;
+}
+
 @keyframes analysis-evidence-pulse {
   from { opacity: 0.55; }
   to { opacity: 1; }
@@ -4698,6 +4793,13 @@
 .analysis-basis-footer button:hover {
   background: #1d4ed8;
   border-color: #1d4ed8;
+}
+
+.analysis-basis-footer button:disabled {
+  color: #64748b;
+  background: #e2e8f0;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
 }
 
 .analysis-basis-footer button svg:last-child {
@@ -5188,6 +5290,28 @@
 }
 
 @media (max-width: 560px) {
+  .agent-exec-clean-card {
+    overflow: hidden;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .agent-exec-clean-head {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .agent-exec-title {
+    min-width: 0;
+    line-height: 1.4;
+  }
+
+  .evidence-pipeline-svg {
+    height: auto;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
   .analysis-basis-drawer {
     width: 100%;
   }
@@ -5203,6 +5327,14 @@
   .analysis-basis-verdict p {
     padding-right: 0;
     padding-top: 26px;
+  }
+
+  .analysis-basis-body {
+    padding-bottom: max(28px, env(safe-area-inset-bottom));
+  }
+
+  .analysis-basis-footer {
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
   }
 
   .analysis-records-topbar {

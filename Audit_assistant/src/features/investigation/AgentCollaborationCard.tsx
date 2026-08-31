@@ -13,6 +13,7 @@ import {
   type AnalysisScenario,
   type AnalysisRecord
 } from "./analysisRecords";
+import { loadM3AnalysisRecords, readRunAnalysisCounts } from "./m3AnalysisRecords";
 
 const ETHNIC_RELATIONS_TOTAL = 667;
 const ETHNIC_RELATIONS_DEMO_RECORDS = 10;
@@ -33,10 +34,16 @@ interface AgentCollaborationCardProps {
 
 export function EvidenceRelayPipeline({
   isDone,
-  isStopped = false
+  isStopped = false,
+  authoritative = false,
+  activeStep = 1,
+  isQueued = false
 }: {
   isDone: boolean;
   isStopped?: boolean;
+  authoritative?: boolean;
+  activeStep?: 1 | 2 | 3 | 4;
+  isQueued?: boolean;
 }) {
   const relayStartDelays = [0, 1.9, 3.8];
 
@@ -44,7 +51,7 @@ export function EvidenceRelayPipeline({
     <div className="evidence-pipeline" aria-label="证据接力流水线">
       <svg
         viewBox="0 0 640 112"
-        className={`evidence-pipeline-svg ${isDone ? "is-done" : isStopped ? "is-stopped" : "is-running"}`}
+        className={`evidence-pipeline-svg ${isDone ? "is-done" : isStopped ? "is-stopped" : isQueued ? "is-queued" : "is-running"}`}
         preserveAspectRatio="xMidYMid meet"
       >
         <text x="76" y="19" className="pipeline-node-label">数据采集</text>
@@ -55,15 +62,15 @@ export function EvidenceRelayPipeline({
         <line x1="100" y1="66" x2="212" y2="66" className="pipeline-track" />
         <line x1="260" y1="66" x2="380" y2="66" className="pipeline-track" />
         <line x1="428" y1="66" x2="540" y2="66" className="pipeline-track" />
-        {!isDone && !isStopped ? (
+        {!isDone && !isStopped && !isQueued ? (
           <g aria-hidden="true">
-            <line x1="100" y1="66" x2="212" y2="66" className="pipeline-track-flow pipeline-track-flow--1" />
-            <line x1="260" y1="66" x2="380" y2="66" className="pipeline-track-flow pipeline-track-flow--2" />
-            <line x1="428" y1="66" x2="540" y2="66" className="pipeline-track-flow pipeline-track-flow--3" />
+            {(!authoritative || activeStep >= 2) ? <line x1="100" y1="66" x2="212" y2="66" className="pipeline-track-flow pipeline-track-flow--1" /> : null}
+            {(!authoritative || activeStep >= 3) ? <line x1="260" y1="66" x2="380" y2="66" className="pipeline-track-flow pipeline-track-flow--2" /> : null}
+            {(!authoritative || activeStep >= 4) ? <line x1="428" y1="66" x2="540" y2="66" className="pipeline-track-flow pipeline-track-flow--3" /> : null}
           </g>
         ) : null}
 
-        <g className="pipeline-node pipeline-node--source">
+        <g className={`pipeline-node pipeline-node--source ${isDone || activeStep > 1 ? "is-done" : ""} ${!isDone && !isStopped && !isQueued && activeStep === 1 ? "is-active" : ""}`}>
           <circle cx="76" cy="66" r="22" className="pipeline-node-bg" />
           <g transform="translate(76, 66)">
             <circle cx="0" cy="0" r="14" className="pipeline-radar-ring" />
@@ -73,7 +80,7 @@ export function EvidenceRelayPipeline({
           </g>
         </g>
 
-        <g className={`pipeline-node pipeline-node--analysis ${isDone ? "is-done" : ""}`}>
+        <g className={`pipeline-node pipeline-node--analysis ${isDone || activeStep > 2 ? "is-done" : ""} ${!isDone && !isStopped && !isQueued && activeStep === 2 ? "is-active" : ""}`}>
           <circle cx="236" cy="66" r="22" className="pipeline-node-bg" />
           <g transform="translate(236, 66)" className="pipeline-analysis-glyph">
             <path d="M 0 -9 L 8 0 L 0 9 L -8 0 Z" />
@@ -81,7 +88,7 @@ export function EvidenceRelayPipeline({
           </g>
         </g>
 
-        <g className={`pipeline-node pipeline-node--risk ${isDone ? "is-done" : ""}`}>
+        <g className={`pipeline-node pipeline-node--risk ${isDone || activeStep > 3 ? "is-done" : ""} ${!isDone && !isStopped && !isQueued && (activeStep === 3 || (authoritative && activeStep === 2)) ? "is-active" : ""}`}>
           <circle cx="404" cy="66" r="22" className="pipeline-node-bg" />
           <g transform="translate(404, 66)" className="pipeline-risk-glyph">
             <path d="M -9 1 A 9 9 0 0 1 9 1" />
@@ -91,7 +98,7 @@ export function EvidenceRelayPipeline({
           </g>
         </g>
 
-        <g className={`pipeline-node pipeline-node--report ${isDone ? "is-done" : ""}`}>
+        <g className={`pipeline-node pipeline-node--report ${isDone ? "is-done" : ""} ${!isDone && !isStopped && !isQueued && activeStep === 4 ? "is-active" : ""}`}>
           <circle cx="564" cy="66" r="22" className="pipeline-node-bg" />
           <g transform="translate(564, 66)" className="pipeline-report-glyph">
             <rect x="-7" y="-11" width="18" height="24" rx="2" className="pipeline-report-back" />
@@ -110,7 +117,7 @@ export function EvidenceRelayPipeline({
           </g>
         </g>
 
-        {!isDone ? (
+        {!authoritative && !isDone && !isStopped ? (
           <g className="pipeline-relay-layer" aria-hidden="true">
             {relayStartDelays.map((delay, index) => (
               <g key={index} className="pipeline-relay-item" style={{ animationDelay: `${delay}s` }}>
@@ -162,6 +169,11 @@ export function AgentCollaborationCard({
   );
   const [feedRevision, setFeedRevision] = useState(0);
   const [selectedRecord, setSelectedRecord] = useState<AnalysisRecord | null>(null);
+  const [authoritativeCounts, setAuthoritativeCounts] = useState(() => (
+    run ? readRunAnalysisCounts(run) : { completedCount: 0, totalCount: 0 }
+  ));
+  const [recordsLoading, setRecordsLoading] = useState(false);
+  const [recordsError, setRecordsError] = useState("");
 
   phaseRef.current = phase;
 
@@ -169,6 +181,39 @@ export function AgentCollaborationCard({
     if (authoritative) return;
     storeAnalysisRecords(investigationId, analysisRecords);
   }, [analysisRecords, authoritative, investigationId]);
+
+  useEffect(() => {
+    if (!authoritative || !run) return;
+    const runCounts = readRunAnalysisCounts(run);
+    setAuthoritativeCounts(runCounts);
+    setRecordsError("");
+    if (run.status !== "PUBLISHED" || !run.report_version_id) {
+      setAnalysisRecords([]);
+      setRecordsLoading(false);
+      return;
+    }
+    let current = true;
+    setRecordsLoading(true);
+    void loadM3AnalysisRecords(run)
+      .then((result) => {
+        if (!current) return;
+        setAnalysisRecords(result.records);
+        setAuthoritativeCounts({
+          completedCount: result.completedCount,
+          totalCount: result.totalCount
+        });
+        setRecordsLoading(false);
+      })
+      .catch((error) => {
+        if (!current) return;
+        setAnalysisRecords([]);
+        setRecordsError(error instanceof Error ? error.message : "分析记录加载失败");
+        setRecordsLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [authoritative, run?.run_id, run?.status, run?.report_version_id, run?.updated_at]);
 
   useEffect(() => {
     if (phase !== "collection_waking") return;
@@ -248,7 +293,7 @@ export function AgentCollaborationCard({
   }, [authoritative, isEthnicRelationsDemo, phase, scenario]);
 
   // Determine active step (1-4)
-  const getStepStatus = () => {
+  const getStepStatus = (): { step: 1 | 2 | 3 | 4; done: boolean } => {
     if (phase === "completed") {
       return { step: 4, done: true };
     }
@@ -267,15 +312,26 @@ export function AgentCollaborationCard({
     return { step: 1, done: false };
   };
 
-  const { done } = getStepStatus();
+  const legacyStep = getStepStatus();
   const runView = run ? mapInvestigationRunState(run) : null;
-  const terminalError = runView?.terminal === "failed" || runView?.terminal === "interrupted";
+  const done = authoritative ? runView?.activity === "completed" : legacyStep.done;
+  const activeStep = authoritative ? runView?.step || 1 : legacyStep.step;
+  const terminalError = runView?.activity === "stopped";
+  const queued = runView?.activity === "queued";
   const visibleRecords = analysisRecords.slice(0, 3);
   const displayedAnalyzedCount = isEthnicRelationsDemo && (phase.startsWith("report") || done)
     ? ETHNIC_RELATIONS_TOTAL
     : analysisRecords.length;
 
   const handleOpenAllRecords = () => {
+    if (authoritative && run) {
+      const query = new URLSearchParams({ run: run.run_id });
+      if (run.report_version_id) query.set("report", run.report_version_id);
+      navigate(`/investigation/${encodeURIComponent(investigationId)}/analysis-records?${query}`, {
+        state: { records: analysisRecords, investigationTitle }
+      });
+      return;
+    }
     storeAnalysisRecords(investigationId, analysisRecords);
     navigate(`/investigation/${encodeURIComponent(investigationId)}/analysis-records`, {
       state: { records: analysisRecords, investigationTitle }
@@ -284,6 +340,15 @@ export function AgentCollaborationCard({
 
   const handleViewCompleteEvidence = (record: AnalysisRecord) => {
     setSelectedRecord(null);
+    if (record.source === "m3-report" && record.reportVersionId && record.findingRef) {
+      navigate(
+        `/investigation/${encodeURIComponent(investigationId)}/report/evidence`
+          + `?report=${encodeURIComponent(record.reportVersionId)}`
+          + `&finding_ref=${encodeURIComponent(record.findingRef)}&view=evidence`
+      );
+      return;
+    }
+    if (!record.taskId || !record.outputId) return;
     navigate(`/tasks/${encodeURIComponent(record.taskId)}/outputs/${encodeURIComponent(record.outputId)}`, {
       state: {
         returnTo: `/investigation/${encodeURIComponent(investigationId)}`,
@@ -301,7 +366,9 @@ export function AgentCollaborationCard({
             ? "调查流水线已完成"
             : terminalError
               ? runView?.label
-              : "调查流水线运行中"}
+              : queued
+                ? runView?.label
+                : "调查流水线运行中"}
         </span>
         {done ? (
           <span className="agent-exec-status-tag is-done">
@@ -311,8 +378,10 @@ export function AgentCollaborationCard({
         ) : terminalError ? (
           <span className="agent-exec-status-tag is-error">
             <AlertTriangle size={13} />
-            {runView?.terminal === "failed" ? "失败" : "已中断"}
+            {runView?.terminal === "failed" ? "失败" : runView?.terminal === "paused" ? "已暂停" : "已中断"}
           </span>
+        ) : queued ? (
+          <span className="agent-exec-status-tag is-queued">等待中</span>
         ) : (
           <span className="agent-exec-status-tag is-running">
             <Loader2 size={13} className="spin" />
@@ -338,14 +407,24 @@ export function AgentCollaborationCard({
         </div>
       ) : null}
 
-      <EvidenceRelayPipeline isDone={done} isStopped={terminalError} />
+      <EvidenceRelayPipeline
+        isDone={Boolean(done)}
+        isStopped={terminalError}
+        authoritative={authoritative}
+        activeStep={activeStep}
+        isQueued={queued}
+      />
 
-      {analysisRecords.length > 0 ? (
+      {authoritative || analysisRecords.length > 0 ? (
       <section className="analysis-feed" aria-label="最新分析进展">
         <div className="analysis-feed-head">
           <div className="analysis-feed-heading">
             <strong>最新分析进展</strong>
-            {isEthnicRelationsDemo ? (
+            {authoritative && authoritativeCounts.totalCount > 0 ? (
+              <span className={`analysis-feed-count${authoritativeCounts.completedCount === authoritativeCounts.totalCount ? " is-complete" : ""}`}>
+                已完成 {authoritativeCounts.completedCount} / {authoritativeCounts.totalCount}
+              </span>
+            ) : isEthnicRelationsDemo ? (
               <span className={`analysis-feed-count${displayedAnalyzedCount === ETHNIC_RELATIONS_TOTAL ? " is-complete" : ""}`}>
                 已完成 {displayedAnalyzedCount} / {ETHNIC_RELATIONS_TOTAL}
               </span>
@@ -355,6 +434,7 @@ export function AgentCollaborationCard({
             type="button"
             className="analysis-history-trigger"
             onClick={handleOpenAllRecords}
+            disabled={authoritative && recordsLoading}
           >
             <ListFilter size={14} />
             查看全部分析记录
@@ -365,7 +445,13 @@ export function AgentCollaborationCard({
           className={`analysis-feed-window is-count-${Math.min(visibleRecords.length, 3)}`}
           aria-live="polite"
         >
-          {visibleRecords.map((record, index) => {
+          {recordsLoading ? (
+            <div className="analysis-feed-empty" role="status"><Loader2 size={16} className="spin" />正在加载分析结果</div>
+          ) : recordsError ? (
+            <div className="analysis-feed-empty is-error" role="alert">研判依据暂不可用：{recordsError}</div>
+          ) : visibleRecords.length === 0 ? (
+            <div className="analysis-feed-empty" role="status">正在等待分析结果</div>
+          ) : visibleRecords.map((record, index) => {
             const motionClass = index === 0 ? "is-latest" : "is-shifted";
 
             return (

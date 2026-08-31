@@ -69,7 +69,7 @@ function taskDraftFromArtifact(artifact: InvestigationDraftArtifact): TaskDraft 
   const suggestion = artifact.suggestion;
   return {
     taskName: artifact.draft.title,
-    taskType: "平台话题采集",
+    taskType: preview.mode === "creator" ? "博主主页采集" : "平台话题采集",
     subject: artifact.draft.objective,
     platforms: [(suggestion?.selected_platform || preview.platform) as PlatformCode],
     keywords: suggestion?.search_terms || preview.resolved_search_terms,
@@ -241,6 +241,7 @@ export function restoreInvestigationWorkspace(
       suggestion: artifact?.suggestion || undefined,
       presentationStage: artifact?.presentation_stage,
       pendingTurnId: pendingTurn?.turn_id,
+      pendingTurnStage: pendingTurn?.stage,
       resumeAttempted: false,
       run: run || undefined,
       confirmationKey: artifact

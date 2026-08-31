@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
 from typing import Any, Callable, Literal
+from urllib.parse import urlsplit
 
 from backend.audit_agent.config import settings
+from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 from backend.investigation.contracts import (
@@ -42,20 +45,30 @@ from .tools import (
 )
 
 
-CREATION_SYSTEM_PROMPT = """You configure a user-requested investigation before any collection begins.
-Use only the six investigation creation tools exposed in this mode. Every investigation-creation
-request must first call query_investigation_options and use only available candidates from that
-ToolResult. When legal candidates exist, create an editable Draft instead of asking the user to
-reselect resources already recommended by the system. If the user did not name a platform, choose
-one legal platform (never wb/Weibo) as an editable recommendation. Select a published AuditPolicy
-and its RuleSetRevision, recommend at least one relevant recall lexicon, and generate temporary
-search terms for this request with the selected lexicon IDs recorded as source_lexicon_ids.
-Suggested platform, AuditPolicy, lexicon, and terms may all be revised before confirmation.
-Creating or updating a Draft is never confirmation. Never infer confirmation: only call
-confirm_and_queue_investigation after an explicit user instruction to confirm and start, and pass
-confirmed=true with a stable idempotency key. Keep ordinary conversation and Draft edits free of
-Run, Job, crawler, audit, or report side effects. Briefly explain the proposed configuration in the
-user's language; ToolResults and the public Draft artifact remain authoritative.
+CREATION_SYSTEM_PROMPT = """You configure a user-requested investigation before collection begins.
+Use only the six investigation creation tools exposed in this mode. Always call
+query_investigation_options first and use only available candidates from that ToolResult.
+
+There are exactly two investigation modes. A creator mode request contains a valid creator homepage
+URL, never a post URL, post ID, or arbitrary webpage. Save it only as
+configuration.investigation.mode=creator with creator_url set to that homepage URL. Creator mode
+must not carry search terms, source lexicons, or recall plans, and must resolve to crawl_mode=creator.
+For search mode, choose a matching published AuditPolicy and its exact published RuleSetRevision,
+then choose an available real recall lexicon. Query that lexicon again with
+include_lexicon_terms_for_ids before creating the Draft. Save existing_lexicon with its ID,
+expected_runtime_content_hash, and the returned enabled_main_terms snapshot. Never expand variants,
+tag entries, query type, or order into crawler terms. Only when the user explicitly changes the
+main terms may update_investigation_draft replace existing_lexicon with temporary_terms containing
+exactly the user's edited terms and the source lexicon ID.
+
+If no matching published AuditPolicy exists, preserve and explain the
+NO_PUBLISHED_AUDIT_POLICY blocker. Do not pick an unrelated or mock policy and do not confirm. If no
+real recall lexicon is available in search mode, do not invent or hardcode one. Draft saves never
+publish or mutate shared lexicons. Creating or updating a Draft is never confirmation. Only call
+confirm_and_queue_investigation after an explicit user instruction to confirm and start, with
+confirmed=true and a stable idempotency key. Keep all pre-confirmation turns free of Run, Job,
+crawler, subprocess, provider, and report side effects. ToolResults and public artifacts are
+authoritative; briefly explain them in the user's language.
 """
 
 
@@ -98,8 +111,11 @@ class FakeCreationHermesAgent:
     ) -> dict[str, Any]:
         principal = self.principal_resolver(self.session_id)
         history = list(conversation_history or [])
+        creator_request = self._creator_request(message)
+        mode = "creator" if creator_request is not None else "search"
         option_args = {
-            "domain_hint": "世界杯 博彩 引流",
+            "domain_hint": "" if mode == "creator" else message.strip()[:200],
+            "mode": mode,
             "page_size": 20,
         }
         options = self.tool_service.execute(
@@ -110,27 +126,77 @@ class FakeCreationHermesAgent:
         lexicon = (options.get("recall_lexicons") or [None])[0]
         if platform is None:
             raise RuntimeError("fake Draft creation requires an available platform")
-        no_policy = "无审核策略" in message or "blocker" in message.lower()
+        if creator_request is not None:
+            creator_platform, creator_url = creator_request
+            matching_platform = next(
+                (
+                    item
+                    for item in options.get("platforms") or []
+                    if item.get("id") == creator_platform
+                ),
+                None,
+            )
+            platform = matching_platform or {"id": creator_platform}
+        lexicon_options = options
+        lexicon_option_args: dict[str, Any] | None = None
+        if mode == "search" and lexicon is not None:
+            lexicon_option_args = {
+                "domain_hint": message.strip()[:200],
+                "mode": "search",
+                "lexicon_ids": [lexicon["id"]],
+                "include_lexicon_terms_for_ids": [lexicon["id"]],
+                "page_size": 20,
+                "lexicon_term_limit": 100,
+            }
+            lexicon_options = self.tool_service.execute(
+                "query_investigation_options",
+                lexicon_option_args,
+                principal=principal,
+            )
+            lexicon = (lexicon_options.get("recall_lexicons") or [None])[0]
+        if mode == "search" and lexicon is None:
+            final = "当前没有可用的已发布召回词库，无法创建关键词调查 Draft。"
+            option_call_id = f"{task_id}:options"
+            messages = [
+                *history,
+                {"role": "user", "content": message},
+                self._tool_call(option_call_id, "query_investigation_options", option_args),
+                self._tool_result(option_call_id, "query_investigation_options", options),
+                {"role": "assistant", "content": final},
+            ]
+            return {
+                "completed": True,
+                "failed": False,
+                "interrupted": False,
+                "final_response": final,
+                "messages": messages,
+                "turn_exit_reason": "blocked_no_recall_lexicon",
+                "api_calls": 0,
+            }
         configuration: dict[str, Any] = {
             "schema_version": "investigation-draft-config-v3",
             "platform": platform["id"],
-            "investigation": {
-                "mode": "search",
-                "recall_plan": {
-                    "strategy": "temporary_terms",
-                    "terms": [
-                        "世界杯博彩",
-                        "世界杯赌球",
-                        "博彩引流",
-                        "足球盘",
-                        "外围下注",
-                    ],
-                    "source_lexicon_ids": [lexicon["id"]] if lexicon else [],
-                },
-            },
+            "investigation": (
+                {
+                    "mode": "creator",
+                    "creator_url": creator_request[1],
+                }
+                if creator_request is not None
+                else {
+                    "mode": "search",
+                    "recall_plan": {
+                        "strategy": "existing_lexicon",
+                        "lexicon_id": lexicon["id"],
+                        "expected_runtime_content_hash": lexicon[
+                            "runtime_content_hash"
+                        ],
+                        "enabled_main_terms": lexicon["enabled_main_terms"],
+                    },
+                }
+            ),
             "audit_policy": None,
         }
-        if policy is not None and not no_policy:
+        if policy is not None:
             configuration["audit_policy"] = {
                 "id": policy["id"],
                 "expected_published_version": policy["published_version"],
@@ -140,11 +206,16 @@ class FakeCreationHermesAgent:
                 "expected_ruleset_content_hash": policy["ruleset_content_hash"],
             }
         draft_args = {
-            "title": "世界杯期间博彩引流调查",
+            "title": (
+                "博主主页调查"
+                if mode == "creator"
+                else "关键词风险调查"
+            ),
             "objective": message.strip(),
             "configuration": configuration,
         }
         option_call_id = f"{task_id}:options"
+        lexicon_option_call_id = f"{task_id}:lexicon-options"
         create_call_id = f"{task_id}:create-draft"
         create_result = self.tool_service.execute_with_identity(
             "create_investigation_draft",
@@ -176,7 +247,10 @@ class FakeCreationHermesAgent:
             "idempotency_key": f"fake-hermes-confirm:{task_id}",
         }
         confirm_result: dict[str, Any] | None = None
-        if explicit_confirm:
+        can_confirm = bool(
+            (view.get("confirmation_preview") or {}).get("can_confirm")
+        )
+        if explicit_confirm and can_confirm:
             confirm_result = self.tool_service.execute_with_identity(
                 "confirm_and_queue_investigation",
                 confirm_args,
@@ -194,9 +268,11 @@ class FakeCreationHermesAgent:
                 )
         final = (
             "调查方案已确认并进入调查队列。"
-            if explicit_confirm
+            if explicit_confirm and can_confirm
             else (
-                "调查方案已生成，尚未开始采集。请核对平台、审核策略、规则集和最终搜索词；"
+                "调查方案已生成，但当前 blocker 禁止确认。请先编辑或新增匹配的研判方案。"
+                if not can_confirm
+                else "调查方案已生成，尚未开始采集。请核对真实资源和确认预览；"
                 "只有明确点击确认后才会排队执行。"
             )
         )
@@ -205,6 +281,22 @@ class FakeCreationHermesAgent:
             {"role": "user", "content": message},
             self._tool_call(option_call_id, "query_investigation_options", option_args),
             self._tool_result(option_call_id, "query_investigation_options", options),
+            *(
+                [
+                    self._tool_call(
+                        lexicon_option_call_id,
+                        "query_investigation_options",
+                        lexicon_option_args,
+                    ),
+                    self._tool_result(
+                        lexicon_option_call_id,
+                        "query_investigation_options",
+                        lexicon_options,
+                    ),
+                ]
+                if lexicon_option_args is not None
+                else []
+            ),
             self._tool_call(create_call_id, "create_investigation_draft", draft_args),
             {
                 "role": "tool",
@@ -244,6 +336,33 @@ class FakeCreationHermesAgent:
             "turn_exit_reason": "completed",
             "api_calls": 0,
         }
+
+    @staticmethod
+    def _creator_request(message: str) -> tuple[str, str] | None:
+        candidates = re.findall(r"https?://[^\s]+", str(message or ""))
+        for candidate in candidates:
+            url = candidate.rstrip("，。！？、,;；)]】}")
+            for platform in ("xhs", "dy", "ks"):
+                try:
+                    return platform, validate_creator_url(platform, url)
+                except CreatorUrlValidationError:
+                    continue
+            hostname = (urlsplit(url).hostname or "").lower()
+            known_platform = next(
+                (
+                    platform
+                    for platform, domain in (
+                        ("xhs", "xiaohongshu.com"),
+                        ("dy", "douyin.com"),
+                        ("ks", "kuaishou.com"),
+                    )
+                    if hostname == domain or hostname.endswith(f".{domain}")
+                ),
+                None,
+            )
+            if known_platform is not None:
+                return known_platform, url
+        return None
 
     @staticmethod
     def _tool_call(call_id: str, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -448,6 +567,17 @@ class InvestigationCreationConversationService:
                 )
         options = application.query_investigation_options(
             QueryInvestigationOptions(
+                mode=(
+                    configuration.investigation.mode
+                    if isinstance(configuration, InvestigationDraftConfiguration)
+                    else "search"
+                ),
+                platform=(
+                    configuration.platform
+                    if isinstance(configuration, InvestigationDraftConfiguration)
+                    and configuration.investigation.mode == "creator"
+                    else None
+                ),
                 audit_policy_ids=policy_ids,
                 lexicon_ids=lexicon_ids,
                 page_size=50,

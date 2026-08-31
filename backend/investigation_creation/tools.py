@@ -129,15 +129,17 @@ M3_MUTATION_TOOL_NAMES = frozenset(
 M3_TOOL_DESCRIPTIONS = {
     "query_investigation_options": (
         "Query bounded real platform, published AuditPolicy/RuleSet, and recall lexicon "
-        "options. Request enabled main terms only for explicit candidate lexicon IDs. "
+        "options for search or creator mode. Creator mode never requires recall lexicons. "
+        "For search, request enabled main terms only for explicit candidate lexicon IDs. "
         "Every investigation-creation request must call this before creating a Draft. "
         "This query never creates a Draft, Run, or Job."
     ),
     "create_investigation_draft": (
         "Create an editable Investigation Draft from available query_investigation_options "
         "candidates. If the user omitted a platform, select one legal non-wb candidate as "
-        "an editable recommendation; also select a published policy/ruleset, recommend a "
-        "recall lexicon, and record its ID when generating temporary terms. Do not require "
+        "an editable recommendation; also select a published policy/ruleset. Search Drafts "
+        "must freeze a real existing_lexicon ID, hash, and enabled_main_terms snapshot; creator "
+        "Drafts must contain only a validated creator homepage URL and no recall plan. Do not require "
         "the user to reselect recommended resources. This never confirms or starts a Run."
     ),
     "update_investigation_draft": (

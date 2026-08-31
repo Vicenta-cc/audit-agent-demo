@@ -54,6 +54,8 @@ class PublicInvestigationRunProjection(StrictModel):
 class InvestigationDraftSuggestion(StrictModel):
     title: str
     objective: str
+    mode: Literal["search", "creator"]
+    creator_url: str = ""
     platform_options: list[PlatformOption]
     selected_platform: Platform
     search_terms: list[str] = Field(default_factory=list)
@@ -161,6 +163,8 @@ def draft_artifact(
         suggestion = InvestigationDraftSuggestion(
             title=draft.title,
             objective=draft.objective,
+            mode=preview.mode,
+            creator_url=preview.creator_url,
             platform_options=[
                 option
                 for option in options.platforms
