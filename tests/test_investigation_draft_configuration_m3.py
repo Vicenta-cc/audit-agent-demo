@@ -1,11 +1,26 @@
 from __future__ import annotations
 
+import atexit
 import json
 import os
+import shutil
 import sqlite3
+import sys
+import tempfile
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
+
+_M3_TEST_ROOT = Path(tempfile.mkdtemp(prefix="m3-contract-tests-", dir="/tmp"))
+os.environ["XHS_AUDIT_DATA_DIR"] = str(_M3_TEST_ROOT / "data")
+os.environ["XHS_AUDIT_OUTPUTS_DIR"] = str(_M3_TEST_ROOT / "outputs")
+os.environ["PYTHONPYCACHEPREFIX"] = str(_M3_TEST_ROOT / "pycache")
+sys.pycache_prefix = os.environ["PYTHONPYCACHEPREFIX"]
+os.environ["TMPDIR"] = str(_M3_TEST_ROOT / "tmp")
+os.environ["HERMES_HOME"] = str(_M3_TEST_ROOT / "hermes")
+(_M3_TEST_ROOT / "tmp").mkdir(parents=True, exist_ok=True)
+atexit.register(shutil.rmtree, _M3_TEST_ROOT, True)
 
 import pytest
 from fastapi import FastAPI
@@ -14,24 +29,39 @@ from pydantic import ValidationError
 
 from backend.api.investigation_creation import create_investigation_creation_router
 from backend.audit_agent.audit_policy_store import AuditPolicyStore
+from backend.audit_agent.audit_policy_store import TaskAuditConfigRevisionStore
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+from backend.audit_agent.crawler_adapter import CrawlOutput, MediaCrawlerAdapter
+from backend.audit_agent.ingestion import AuditResultStore, BatchWriter, IngestionStore
+from backend.audit_agent.job_store import JobStore
 from backend.audit_agent.lexicon_store import LexiconStore
-from backend.investigation_creation.adapters import InvestigationConfigurationResolver
+import backend.audit_agent.pipeline as audit_pipeline_module
+from backend.audit_agent.pipeline import AuditPipeline
+from backend.investigation_creation.adapters import (
+    AuditPipelineExecutionAdapter,
+    InvestigationConfigurationResolver,
+    InvestigationRunProjector,
+)
 from backend.investigation_creation.contracts import (
     ConfirmAndQueueCommand,
+    ConfirmedConfigurationSnapshotV3,
     CreateDraftCommand,
+    InvestigationDraftConfiguration,
     QueryInvestigationOptions,
     UpdateDraftCommand,
+    confirmed_configuration_hash,
 )
 from backend.investigation_creation.errors import (
     ConfigurationValidationError,
     ResourceStaleError,
 )
 from backend.investigation_creation.principal import LocalPrincipalProvider, Principal
+from backend.investigation_creation.public_projection import public_run
 from backend.investigation_creation.resources import InvestigationResourceService
 from backend.investigation_creation.service import InvestigationCreationService
 from backend.investigation_creation.store import InvestigationCreationStore
 from backend.investigation_creation.tools import InvestigationCreationToolService
+from backend.investigation_creation.worker import InvestigationWorker
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
 from backend.rulesets.service import RuleSetService
 from backend.rulesets.store import RuleSetStore
@@ -46,10 +76,17 @@ def m3_stack(tmp_path: Path) -> dict:
     policies = AuditPolicyStore(resource_db)
     rulesets = RuleSetService(RuleSetStore(resource_db))
     principals = LocalPrincipalProvider()
+    crawler_accounts = CrawlerAccountStore(resource_db)
+    for platform in ("xhs", "dy", "ks"):
+        account = crawler_accounts.create(
+            platform=platform,
+            display_name=f"{platform} fixture account",
+        )
+        crawler_accounts.save_auth_state(account["id"], "synthetic-fixture-ciphertext")
     resolver = InvestigationConfigurationResolver(
         lexicon_store=lexicons,
         policy_store=policies,
-        crawler_account_store=CrawlerAccountStore(resource_db),
+        crawler_account_store=crawler_accounts,
         ruleset_service=rulesets,
         principal_provider=principals,
     )
@@ -70,6 +107,7 @@ def m3_stack(tmp_path: Path) -> dict:
         "policies": policies,
         "principals": principals,
         "resources": resources,
+        "crawler_accounts": crawler_accounts,
         "store": creation_store,
         "service": service,
     }
@@ -123,6 +161,762 @@ def _create_draft(stack: dict, configuration: dict):
         ),
         principal=_principal(stack),
     )
+
+
+def _account_for_platform(stack: dict, platform: str) -> dict:
+    return next(
+        account
+        for account in stack["crawler_accounts"].list(platform=platform)
+        if account["status"] == "active" and account["has_auth_state"]
+    )
+
+
+def _douyin_configuration(stack: dict, term: str = "世界杯") -> dict:
+    return {
+        "platform": "dy",
+        "investigation": {
+            "mode": "search",
+            "recall_plan": {
+                "strategy": "temporary_terms",
+                "terms": [term],
+                "source_lexicon_ids": ["general-reference"],
+            },
+        },
+        "audit_policy": _selection(_policy(stack)),
+    }
+
+
+class _FakeCrawler:
+    def __init__(self, contents: list[dict]) -> None:
+        self.contents = [dict(item) for item in contents]
+        self.calls: list[dict] = []
+
+    def _run(self, mode: str, **kwargs) -> CrawlOutput:
+        self.calls.append({"mode": mode, **kwargs})
+        if kwargs.get("started_callback"):
+            kwargs["started_callback"]()
+        callback = kwargs.get("content_callback")
+        if callback:
+            for item in self.contents:
+                callback([dict(item)], [])
+            if self.contents:
+                callback([dict(self.contents[0])], [])
+        return CrawlOutput(
+            platform=kwargs["platform"],
+            contents=[dict(item) for item in self.contents],
+            comments=[],
+            output_dir=kwargs["save_root"],
+            command=["fake-mediacrawler", mode],
+        )
+
+    def run_search(self, **kwargs) -> CrawlOutput:
+        return self._run("search", **kwargs)
+
+    def run_creator(self, **kwargs) -> CrawlOutput:
+        return self._run("creator", **kwargs)
+
+
+
+def test_unmarked_pipeline_preserves_legacy_multiple_item_behavior(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(
+        audit_pipeline_module.settings, "auto_analyze_crawled_content", True
+    )
+    audit_db = tmp_path / "legacy-multiple.sqlite3"
+    jobs = JobStore(audit_db)
+    ingestion = IngestionStore(audit_db)
+    crawler = _FakeCrawler(
+        [
+            {"note_id": "legacy-1", "title": "first"},
+            {"note_id": "legacy-2", "title": "second"},
+        ]
+    )
+    job_id = "legacy-multiple"
+    configuration = {
+        "platform": "xhs",
+        "display_name": "Legacy multiple",
+        "crawl_mode": "search",
+        "keyword": "legacy",
+        "keyword_source": "keyword",
+        "lexicon_category": "soft",
+        "library_ids": ["soft"],
+        "capabilities": ["text"],
+        "scoring_template": "balanced",
+        "rule_snapshot": {},
+        "lexicon_keywords": [],
+        "creator_url": "",
+        "creator_id": "",
+        "start_page": 1,
+        "max_notes": 2,
+        "max_comments": 0,
+        "max_concurrency": 1,
+        "max_items_per_minute": 1,
+        "crawler_account_id": None,
+        "get_sub_comment": False,
+        "analyze_limit": 2,
+        "run_crawler": True,
+        "source_output_id": None,
+        "analysis_batch_size": 1,
+        "prompt_profile_snapshot": {},
+        "policy_id": "",
+    }
+    jobs.create(job_id=job_id, **configuration)
+    monkeypatch.setattr(audit_pipeline_module, "job_store", jobs)
+    pipeline = AuditPipeline.__new__(AuditPipeline)
+    pipeline.job_id = job_id
+    pipeline.crawler = crawler
+    pipeline.ingestion = ingestion
+    pipeline.audit_results = object()
+    pipeline.prompt_profile_snapshot = {}
+    pipeline.audit_config_revision_id = ""
+    pipeline.rule_snapshot = {}
+    pipeline._analyze_subject = lambda subject: {
+        "note_id": subject.note_id,
+        "title": subject.title,
+        "decision": "pass",
+    }
+    pipeline._persist_audit_result = lambda **kwargs: {
+        **kwargs["result"],
+        "content_key": kwargs["content_key"],
+    }
+
+    pipeline.run(SimpleNamespace(**configuration))
+
+    assert jobs.get(job_id)["status"] == "completed"
+    assert pipeline.authoritative_m3 is False
+    stats = ingestion.stats_for_task(job_id)
+    assert stats["ingested_count"] == 2
+    assert stats["completed_analysis_count"] == 2
+    assert crawler.calls[0]["max_notes"] == 2
+    assert "_confirmed_analyze_limit" not in configuration
+
+
+def test_existing_draft_payload_without_account_remains_readable(m3_stack: dict):
+    configuration = _temporary_configuration(m3_stack, ["美食"])
+    assert "crawler_account_id" not in configuration
+    parsed = InvestigationDraftConfiguration.model_validate(configuration)
+    assert "crawler_account_id" not in parsed.model_dump(mode="json")
+
+
+def test_v3_snapshot_accepts_analyze_limit_greater_than_one(m3_stack: dict):
+    draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["美食"]))
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=1,
+            confirmed=True,
+            idempotency_key="analyze-limit:v3-two",
+        ),
+        principal=_principal(m3_stack),
+    )
+    snapshot = json.loads(json.dumps(run.confirmed_configuration))
+    snapshot["execution"]["analyze_limit"] = 2
+    snapshot["config_hash"] = confirmed_configuration_hash(
+        {
+            key: snapshot[key]
+            for key in (
+                "mode",
+                "platform",
+                "resolved_search_terms",
+                "creator_url",
+                "recall_plan",
+                "audit_policy",
+                "ruleset_revision",
+                "execution",
+            )
+        }
+    )
+
+    parsed = ConfirmedConfigurationSnapshotV3.model_validate(snapshot)
+
+    assert parsed.schema_version == "investigation-run-config-v3"
+    assert parsed.execution.analyze_limit == 2
+    assert parsed.execution.max_notes == 1
+
+
+def test_m3_hides_auto_selected_account_and_freezes_it_into_job(
+    m3_stack: dict,
+):
+    account = _account_for_platform(m3_stack, "dy")
+    draft = _create_draft(
+        m3_stack,
+        _douyin_configuration(m3_stack),
+    )
+    assert "crawler_account_id" not in draft.configuration.model_dump(mode="json")
+
+    preview = m3_stack["service"].get_confirmation_preview(
+        draft.id, principal=_principal(m3_stack)
+    )
+    assert preview.can_confirm
+    preview_payload = preview.model_dump(mode="json")
+    assert "crawler_account" not in preview_payload
+    assert "crawler_accounts" not in preview_payload
+
+    frozen_name = account["display_name"]
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=draft.current_revision,
+            confirmed=True,
+            idempotency_key="account-freeze:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    execution = run.confirmed_configuration["execution"]
+    assert execution["crawler_account_id"] == account["id"]
+    assert execution["crawler_account_display_name"] == frozen_name
+    assert execution["crawler_account_confirmed_state"] == {
+        "status": "active",
+        "has_auth_state": True,
+        "auth_state_updated_at": account["auth_state_updated_at"],
+        "last_validated_at": account["last_validated_at"],
+    }
+    assert execution["max_notes"] == 1
+    assert execution["analyze_limit"] == 1
+
+    m3_stack["crawler_accounts"].update(
+        account["id"], display_name="renamed after confirmation"
+    )
+    resource_db = m3_stack["resources"].resource_db_path
+    adapter = AuditPipelineExecutionAdapter(
+        job_store=JobStore(resource_db),
+        ingestion_store=IngestionStore(resource_db),
+        revision_store=TaskAuditConfigRevisionStore(resource_db),
+        crawler_account_store=m3_stack["crawler_accounts"],
+        test_provider_validator=lambda _: None,
+    )
+    job_id = adapter.ensure_job(run)
+    job = JobStore(resource_db).get(job_id)
+    assert job["crawler_account_id"] == account["id"]
+    assert job["crawler_account_display_name"] == frozen_name
+    assert job["max_notes"] == 1
+    assert job["analyze_limit"] == 1
+
+
+def test_existing_job_freeze_identity_mismatch_fails_closed(m3_stack: dict):
+    account = _account_for_platform(m3_stack, "dy")
+    draft = _create_draft(m3_stack, _douyin_configuration(m3_stack))
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=draft.current_revision,
+            confirmed=True,
+            idempotency_key="freeze-mismatch:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    resource_db = m3_stack["resources"].resource_db_path
+    adapter = AuditPipelineExecutionAdapter(
+        job_store=JobStore(resource_db),
+        ingestion_store=IngestionStore(resource_db),
+        revision_store=TaskAuditConfigRevisionStore(resource_db),
+        crawler_account_store=m3_stack["crawler_accounts"],
+        test_provider_validator=lambda _: None,
+    )
+    job_id = adapter.ensure_job(run)
+    JobStore(resource_db).update(job_id, crawler_account_display_name="伪造显示名")
+
+    with pytest.raises(RuntimeError, match="crawler_account_display_name"):
+        adapter.ensure_job(run)
+    failed_job = JobStore(resource_db).get(job_id)
+    assert failed_job["status"] == "failed"
+    assert "crawler_account_display_name" in failed_job["error"]
+
+
+def test_account_invalidated_after_job_creation_invalidates_job_before_worker(
+    m3_stack: dict,
+):
+    account = _account_for_platform(m3_stack, "dy")
+    draft = _create_draft(m3_stack, _douyin_configuration(m3_stack))
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=draft.current_revision,
+            confirmed=True,
+            idempotency_key="account-invalid-after-job:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    resource_db = m3_stack["resources"].resource_db_path
+    adapter = AuditPipelineExecutionAdapter(
+        job_store=JobStore(resource_db),
+        ingestion_store=IngestionStore(resource_db),
+        revision_store=TaskAuditConfigRevisionStore(resource_db),
+        crawler_account_store=m3_stack["crawler_accounts"],
+        test_provider_validator=lambda _: None,
+    )
+    job_id = adapter.ensure_job(run)
+    m3_stack["crawler_accounts"].update(account["id"], status="disabled")
+
+    worker = InvestigationWorker(
+        m3_stack["store"],
+        execution_adapter=adapter,
+        report_adapter=object(),
+        session_adapter=object(),
+    )
+    failed = worker.run_once()
+    assert failed is not None
+    assert failed.error_code == "crawler_account_login_required"
+    assert failed.pipeline_started_at == ""
+    assert JobStore(resource_db).get(job_id)["status"] == "failed"
+
+
+def test_m3_confirmation_without_account_is_blocked_without_side_effects(
+    m3_stack: dict,
+):
+    account = _account_for_platform(m3_stack, "dy")
+    m3_stack["crawler_accounts"].delete(account["id"])
+    draft = _create_draft(
+        m3_stack,
+        _douyin_configuration(m3_stack),
+    )
+    assert "crawler_account_id" not in draft.configuration.model_dump(mode="json")
+    preview = m3_stack["service"].get_confirmation_preview(
+        draft.id, principal=_principal(m3_stack)
+    )
+    assert not preview.can_confirm
+    assert [item.code for item in preview.blockers] == [
+        "collection_service_unavailable"
+    ]
+    assert preview.blockers[0].message == "抖音采集服务当前不可用，请稍后重试。"
+    assert "crawler_account" not in preview.model_dump(mode="json")
+    with pytest.raises(ConfigurationValidationError) as caught:
+        m3_stack["service"].confirm_and_queue(
+            ConfirmAndQueueCommand(
+                draft_id=draft.id,
+                expected_revision=draft.current_revision,
+                confirmed=True,
+                idempotency_key="no-account:1",
+            ),
+            principal=_principal(m3_stack),
+        )
+    assert caught.value.code == "collection_service_unavailable"
+    assert _confirmation_side_effects(m3_stack) == (0, 0, 0)
+
+
+def test_m3_discards_legacy_user_account_input_and_selects_stably(m3_stack: dict):
+    existing = _account_for_platform(m3_stack, "dy")
+    second = m3_stack["crawler_accounts"].create(
+        platform="dy", display_name="second active fixture"
+    )
+    m3_stack["crawler_accounts"].save_auth_state(
+        second["id"], "synthetic-second-fixture-ciphertext"
+    )
+    configuration = _douyin_configuration(m3_stack)
+    configuration["crawler_account_id"] = "user-supplied-account-must-be-ignored"
+    draft = _create_draft(m3_stack, configuration)
+    assert "crawler_account_id" not in draft.configuration.model_dump(mode="json")
+    preview = m3_stack["service"].get_confirmation_preview(
+        draft.id, principal=_principal(m3_stack)
+    )
+    assert preview.can_confirm
+    assert "crawler_account" not in preview.model_dump(mode="json")
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=draft.current_revision,
+            confirmed=True,
+            idempotency_key="stable-auto-account:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    assert run.confirmed_configuration["execution"]["crawler_account_id"] == min(
+        existing["id"], second["id"]
+    )
+
+
+def test_m3_account_changed_after_draft_blocks_run_and_worker_never_creates_job(
+    m3_stack: dict,
+):
+    account = _account_for_platform(m3_stack, "dy")
+    draft = _create_draft(
+        m3_stack,
+        _douyin_configuration(m3_stack),
+    )
+    m3_stack["crawler_accounts"].update(account["id"], status="disabled")
+    with pytest.raises(ConfigurationValidationError) as caught:
+        m3_stack["service"].confirm_and_queue(
+            ConfirmAndQueueCommand(
+                draft_id=draft.id,
+                expected_revision=draft.current_revision,
+                confirmed=True,
+                idempotency_key="changed-before-confirm:1",
+            ),
+            principal=_principal(m3_stack),
+        )
+    assert caught.value.code == "collection_service_unavailable"
+    assert str(caught.value) == "抖音采集服务当前不可用，请稍后重试。"
+    assert _confirmation_side_effects(m3_stack) == (0, 0, 0)
+
+    m3_stack["crawler_accounts"].update(account["id"], status="active")
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=draft.current_revision,
+            confirmed=True,
+            idempotency_key="changed-before-worker:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    m3_stack["crawler_accounts"].update(account["id"], status="disabled")
+    resource_db = m3_stack["resources"].resource_db_path
+    worker = InvestigationWorker(
+        m3_stack["store"],
+        execution_adapter=AuditPipelineExecutionAdapter(
+            job_store=JobStore(resource_db),
+            ingestion_store=IngestionStore(resource_db),
+            revision_store=TaskAuditConfigRevisionStore(resource_db),
+            crawler_account_store=m3_stack["crawler_accounts"],
+            test_provider_validator=lambda _: None,
+        ),
+        report_adapter=object(),
+        session_adapter=object(),
+    )
+    failed = worker.run_once()
+    assert failed is not None
+    assert failed.id == run.id
+    assert failed.status.value == "FAILED"
+    assert failed.error_code == "crawler_account_login_required"
+    assert failed.pipeline_started_at == ""
+    assert _confirmation_side_effects(m3_stack)[2] == 0
+
+
+@pytest.mark.parametrize(
+    ("decision", "risk_level", "expected_evidence_count"),
+    [("review", "high", 1), ("pass", "none", 0)],
+)
+def test_douyin_jsonl_to_durable_audit_completed_without_report_or_session(
+    m3_stack: dict,
+    tmp_path: Path,
+    decision: str,
+    risk_level: str,
+    expected_evidence_count: int,
+):
+    fixture_root = tmp_path / f"douyin-fixture-{decision}"
+    fixture_jsonl = fixture_root / "douyin" / "jsonl"
+    fixture_jsonl.mkdir(parents=True)
+    candidates = [
+        {
+            "aweme_id": "7590000000000000001",
+            "aweme_url": "https://www.douyin.com/video/7590000000000000001",
+            "title": "世界杯稳赚交流群",
+            "desc": "点击主页加入交流群",
+            "nickname": "内容作者甲",
+            "sec_uid": "MS4wLjABAAAA-content-author-a",
+            "video_download_url": "https://fixture.invalid/video.mp4",
+        },
+        {
+            "aweme_id": "7590000000000000002",
+            "aweme_url": "https://www.douyin.com/video/7590000000000000002",
+            "title": "第二条候选内容",
+            "nickname": "内容作者乙",
+            "sec_uid": "MS4wLjABAAAA-content-author-b",
+        },
+    ]
+    (fixture_jsonl / "search_contents_2026-09-01.jsonl").write_text(
+        "\n".join(json.dumps(item, ensure_ascii=False) for item in candidates),
+        encoding="utf-8",
+    )
+
+    resource_db = m3_stack["resources"].resource_db_path
+    jobs = JobStore(resource_db)
+    ingestion = IngestionStore(resource_db)
+    audit_results = AuditResultStore(resource_db)
+    fake_calls = {"pipeline": 0, "asr": 0, "qwen": 0}
+
+    class DeterministicAsrTestDouble:
+        def transcribe(self, _audio_path: Path) -> dict:
+            fake_calls["asr"] += 1
+            return {
+                "text": "加入世界杯交流，宣称稳赚",
+                "segments": [
+                    {"start": 0.0, "end": 2.0, "text": "加入世界杯交流，宣称稳赚"}
+                ],
+            }
+
+    class DeterministicQwenTestDouble:
+        model = "test-only-qwen-audit-v1"
+
+        def audit(self, item: dict, transcript: dict) -> dict:
+            fake_calls["qwen"] += 1
+            assert transcript["text"] == "加入世界杯交流，宣称稳赚"
+            evidence = (
+                [
+                    {
+                        "evidence_id": "ev-asr-1",
+                        "source_type": "video_asr",
+                        "original_text": transcript["text"],
+                    }
+                ]
+                if expected_evidence_count
+                else []
+            )
+            return {
+                "note_id": item["aweme_id"],
+                "url": item["aweme_url"],
+                "title": item["title"],
+                "author": {
+                    "nickname": item["nickname"],
+                    "sec_uid": item["sec_uid"],
+                },
+                "decision": decision,
+                "risk_level": risk_level,
+                "summary": (
+                    "视频包含稳赚承诺和站外引流，建议复核。"
+                    if decision == "review"
+                    else "本次审核未发现明确风险。"
+                ),
+                "evidence_items": evidence,
+                "model_provenance": {
+                    "provider": "deterministic-test-double",
+                    "model": self.model,
+                    "prompt_sha256": "a" * 64,
+                    "prompt_version": "m3-audit-test-v1",
+                },
+                "prompt_version": "m3-audit-test-v1",
+            }
+
+    asr = DeterministicAsrTestDouble()
+    qwen = DeterministicQwenTestDouble()
+
+    class DeterministicPipelineTestDouble:
+        def __init__(self, *, job_id: str) -> None:
+            self.job_id = job_id
+
+        def run(self, request) -> None:
+            fake_calls["pipeline"] += 1
+            assert request.platform == "dy"
+            assert request.analyze_limit == 1
+            assert request._confirmed_analyze_limit == 1
+            assert request._authoritative_m3_contract is True
+            jobs.update(self.job_id, status="running")
+            output = MediaCrawlerAdapter(
+                tmp_path / "unused-mediacrawler"
+            ).load_latest_output(fixture_root, "dy")
+            assert [item["aweme_id"] for item in output.contents] == [
+                "7590000000000000001",
+                "7590000000000000002",
+            ]
+            writer = BatchWriter(
+                job_id=self.job_id,
+                platform="dy",
+                keyword="世界杯",
+                root=tmp_path / "pipeline-output" / self.job_id,
+                batch_size=1,
+            )
+            batch_paths = writer.add(output.contents[:1], output.comments)
+            assert len(batch_paths) == 1
+            queued = ingestion.ingest_batch(
+                batch_paths[0], tmp_path / "raw-items" / self.job_id
+            )
+            assert len(queued) == 1
+            selected = queued[0]
+            content_key = selected["content_key"]
+            ingestion.mark_content_status(
+                "dy", content_key, "analyzing", task_id=self.job_id
+            )
+            transcript = asr.transcribe(tmp_path / "fixture-video.wav")
+            result = qwen.audit(selected["item"], transcript)
+            result_path = tmp_path / "results" / f"{content_key}.json"
+            result_path.parent.mkdir(parents=True, exist_ok=True)
+            result_path.write_text(
+                json.dumps(result, ensure_ascii=False), encoding="utf-8"
+            )
+            persisted = audit_results.upsert_result(
+                job_id=self.job_id,
+                platform="dy",
+                content_key=content_key,
+                result=result,
+                result_path=str(result_path),
+                content_id=selected["content_id"],
+                model_text=qwen.model,
+                prompt_version="m3-audit-test-v1",
+            )
+            ingestion.mark_content_status(
+                "dy",
+                content_key,
+                "completed",
+                str(result_path),
+                task_id=self.job_id,
+                audit_result_id=int(persisted["audit_result_id"]),
+            )
+            jobs.update(self.job_id, status="completed", items=[persisted])
+
+    class ForbiddenReportOrSessionAdapter:
+        def __getattr__(self, name: str):
+            raise AssertionError(f"v3 audit completion must not call {name}")
+
+    draft = _create_draft(m3_stack, _douyin_configuration(m3_stack))
+    public_draft_payload = draft.model_dump(mode="json")
+    assert "crawler_account" not in json.dumps(public_draft_payload)
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=draft.current_revision,
+            confirmed=True,
+            idempotency_key=f"dy-audit-completed:{decision}",
+        ),
+        principal=_principal(m3_stack),
+    )
+    frozen_account_id = run.confirmed_configuration["execution"][
+        "crawler_account_id"
+    ]
+    assert "_authoritative_m3_contract" not in json.dumps(
+        run.confirmed_configuration
+    )
+    assert frozen_account_id == _account_for_platform(m3_stack, "dy")["id"]
+    adapter = AuditPipelineExecutionAdapter(
+        job_store=jobs,
+        ingestion_store=ingestion,
+        audit_result_store=audit_results,
+        revision_store=TaskAuditConfigRevisionStore(resource_db),
+        crawler_account_store=m3_stack["crawler_accounts"],
+        pipeline_factory=DeterministicPipelineTestDouble,
+        test_provider_validator=lambda _: None,
+    )
+    worker = InvestigationWorker(
+        m3_stack["store"],
+        execution_adapter=adapter,
+        report_adapter=ForbiddenReportOrSessionAdapter(),
+        session_adapter=ForbiddenReportOrSessionAdapter(),
+    )
+
+    completed = worker.run_once()
+
+    assert completed is not None
+    assert completed.status.value == "AUDIT_COMPLETED"
+    assert completed.job_id == adapter.job_id_for_run(run.id)
+    assert completed.report_version_id == ""
+    assert completed.report_session_id == ""
+    assert "_authoritative_m3_contract" not in json.dumps(
+        jobs.get(completed.job_id)
+    )
+    assert fake_calls == {"pipeline": 1, "asr": 1, "qwen": 1}
+    assert ingestion.stats_for_task(completed.job_id) == {
+        "ingested_count": 1,
+        "queued_analysis_count": 0,
+        "pending_analysis_count": 0,
+        "analyzing_count": 0,
+        "completed_analysis_count": 1,
+        "failed_analysis_count": 0,
+        "analysis_status_counts": {"completed": 1},
+        "batch_count": 1,
+        "batch_item_count": 1,
+        "batch_processed_count": 1,
+    }
+    memberships, refs = ingestion.validated_selection_for_task(completed.job_id)
+    assert [item["content_key"] for item in memberships] == [
+        "7590000000000000001"
+    ]
+    assert refs[0]["item"]["sec_uid"] == "MS4wLjABAAAA-content-author-a"
+    stored_page = audit_results.list_results(job_id=completed.job_id)
+    assert stored_page["total"] == 1
+    stored_result = stored_page["items"][0]
+    assert stored_result["decision"] == decision
+    assert stored_result["risk_level"] == risk_level
+    assert stored_result["model_provenance"] == {
+        "provider": "deterministic-test-double",
+        "model": "test-only-qwen-audit-v1",
+        "prompt_sha256": "a" * 64,
+        "prompt_version": "m3-audit-test-v1",
+    }
+    assert len(stored_result["evidence_items"]) == expected_evidence_count
+
+    m3_stack["service"].run_projector = InvestigationRunProjector(
+        job_store=jobs,
+        ingestion_store=ingestion,
+        audit_result_store=audit_results,
+    )
+    projection = public_run(
+        m3_stack["service"].get_run(
+            completed.id, principal=_principal(m3_stack)
+        )
+    ).model_dump(mode="json")
+    assert projection["status"] == "AUDIT_COMPLETED"
+    assert projection["crawl_status"] == "completed"
+    assert projection["analysis_status"] == "completed"
+    assert projection["report_status"] == "pending"
+    assert projection["report_version_id"] == ""
+    assert projection["audit_results"][0]["author_display_name"] == "内容作者甲"
+    assert projection["audit_results"][0]["summary"] == stored_result["summary"]
+    assert len(projection["audit_results"][0]["evidence"]) == expected_evidence_count
+    serialized_projection = json.dumps(projection, ensure_ascii=False)
+    assert "_authoritative_m3_contract" not in serialized_projection
+    assert frozen_account_id not in serialized_projection
+    assert "fixture account" not in serialized_projection
+    assert "crawler_account" not in serialized_projection
+
+    reopened = InvestigationCreationStore(m3_stack["store"].db_path)
+    durable = reopened.get_run(completed.id, principal=_principal(m3_stack).id)
+    assert durable.status.value == "AUDIT_COMPLETED"
+    assert InvestigationWorker(
+        reopened,
+        execution_adapter=adapter,
+        report_adapter=ForbiddenReportOrSessionAdapter(),
+        session_adapter=ForbiddenReportOrSessionAdapter(),
+    ).run_once() is None
+    assert fake_calls == {"pipeline": 1, "asr": 1, "qwen": 1}
+    assert audit_results.list_results(job_id=completed.job_id)["total"] == 1
+    with sqlite3.connect(m3_stack["store"].db_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM investigation_report_generation_bindings"
+        ).fetchone()[0] == 0
+
+
+def test_authoritative_m3_missing_provider_fails_before_job_creation(
+    m3_stack: dict,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(audit_pipeline_module.settings, "use_remote_llm", False)
+    monkeypatch.setattr(audit_pipeline_module.settings, "dashscope_api_key", "")
+    monkeypatch.setattr(
+        audit_pipeline_module.settings, "qwen_text_model", "qwen-test-model"
+    )
+    draft = _create_draft(m3_stack, _douyin_configuration(m3_stack))
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=draft.current_revision,
+            confirmed=True,
+            idempotency_key="missing-provider:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    resource_db = m3_stack["resources"].resource_db_path
+    jobs = JobStore(resource_db)
+    adapter = AuditPipelineExecutionAdapter(
+        job_store=jobs,
+        ingestion_store=IngestionStore(resource_db),
+        audit_result_store=AuditResultStore(resource_db),
+        revision_store=TaskAuditConfigRevisionStore(resource_db),
+        crawler_account_store=m3_stack["crawler_accounts"],
+    )
+    failed = InvestigationWorker(
+        m3_stack["store"],
+        execution_adapter=adapter,
+        report_adapter=object(),
+        session_adapter=object(),
+    ).run_once()
+
+    assert failed is not None
+    assert failed.status.value == "FAILED"
+    assert failed.error_code == "audit_provider_unavailable"
+    assert failed.job_id == ""
+    assert failed.pipeline_started_at == ""
+    assert jobs.get(adapter.job_id_for_run(run.id)) is None
+
+
+def test_non_authoritative_qwen_keeps_legacy_missing_config_mock_contract(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(audit_pipeline_module.settings, "use_remote_llm", False)
+    monkeypatch.setattr(audit_pipeline_module.settings, "dashscope_api_key", "")
+
+    result = audit_pipeline_module.QwenClient().audit_text("legacy fixture prompt")
+
+    assert result["decision"] == "review"
+    assert result["risk_level"] == "unknown"
 
 
 def _counts(store: InvestigationCreationStore) -> tuple[int, int]:
@@ -499,13 +1293,18 @@ def test_creator_mode_has_no_recall_and_reports_platform_mismatch(m3_stack: dict
         principal=_principal(m3_stack),
     )
     snapshot = run.confirmed_configuration
+    account = _account_for_platform(m3_stack, "dy")
     assert snapshot["mode"] == "creator"
     assert snapshot["creator_url"] == configuration["investigation"]["creator_url"]
     assert snapshot["resolved_search_terms"] == []
     assert snapshot["recall_plan"] is None
     assert snapshot["execution"]["crawl_mode"] == "creator"
     assert snapshot["execution"]["keyword"] == ""
+    assert snapshot["execution"]["crawler_account_id"] == account["id"]
+    assert snapshot["execution"]["crawler_account_display_name"] == account["display_name"]
+    assert snapshot["execution"]["crawler_account_confirmed_state"]["has_auth_state"] is True
     assert snapshot["execution"]["max_notes"] == 1
+    assert snapshot["execution"]["analyze_limit"] == 1
 
     mismatched = dict(configuration)
     mismatched["platform"] = "xhs"
@@ -566,6 +1365,20 @@ def test_modes_reject_cross_mode_fields(m3_stack: dict, investigation: dict):
                     "investigation": investigation,
                     "audit_policy": _selection(_policy(m3_stack)),
                 },
+            }
+        )
+
+
+def test_draft_cannot_set_internal_authoritative_m3_marker(m3_stack: dict):
+    configuration = _temporary_configuration(m3_stack, ["internal marker"])
+    configuration["_authoritative_m3_contract"] = True
+
+    with pytest.raises(ValidationError):
+        CreateDraftCommand.model_validate(
+            {
+                "title": "Reject internal marker",
+                "objective": "The client cannot select the authoritative contract.",
+                "configuration": configuration,
             }
         )
 
@@ -1037,10 +1850,16 @@ def test_request_principal_reaches_all_m3_resource_queries(tmp_path: Path):
         provider_calls.append("called")
         return Principal("resource-provider")
 
+    crawler_accounts = CrawlerAccountStore(resource_db)
+    account = crawler_accounts.create(
+        platform="xhs",
+        display_name="xhs principal fixture account",
+    )
+    crawler_accounts.save_auth_state(account["id"], "synthetic-fixture-ciphertext")
     resolver = InvestigationConfigurationResolver(
         lexicon_store=lexicons,
         policy_store=policies,
-        crawler_account_store=CrawlerAccountStore(resource_db),
+        crawler_account_store=crawler_accounts,
         ruleset_service=rulesets,
         principal_provider=resource_provider,
     )

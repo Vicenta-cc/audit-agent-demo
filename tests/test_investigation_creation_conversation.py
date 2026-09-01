@@ -105,10 +105,17 @@ def creation_stack(tmp_path: Path) -> dict:
     lexicons = LexiconStore(resource_db)
     policies = AuditPolicyStore(resource_db)
     rulesets = RuleSetService(RuleSetStore(resource_db))
+    crawler_accounts = CrawlerAccountStore(resource_db)
+    for platform in ("xhs", "dy", "ks"):
+        account = crawler_accounts.create(
+            platform=platform,
+            display_name=f"{platform} fixture account",
+        )
+        crawler_accounts.save_auth_state(account["id"], "synthetic-fixture-ciphertext")
     resolver = InvestigationConfigurationResolver(
         lexicon_store=lexicons,
         policy_store=policies,
-        crawler_account_store=CrawlerAccountStore(resource_db),
+        crawler_account_store=crawler_accounts,
         ruleset_service=rulesets,
         principal_provider=principals,
     )
@@ -362,6 +369,8 @@ def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
     assert creation_stack["report_executor"].calls == []
     serialized = json.dumps(terminal, ensure_ascii=False)
     for forbidden in (
+        "crawler_account",
+        "fixture account",
         "report_session_id",
         "DASHSCOPE_API_KEY",
         "system_message",
@@ -369,6 +378,9 @@ def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
         "sqlite3",
     ):
         assert forbidden not in serialized
+    serialized_transcript = json.dumps(transcript, ensure_ascii=False)
+    assert "crawler_account" not in serialized_transcript
+    assert "fixture account" not in serialized_transcript
 
 
 def test_fake_creator_homepage_turn_uses_creator_draft_without_recall_or_run(
@@ -419,6 +431,8 @@ def test_turn_and_sse_replay_do_not_create_a_second_draft(creation_stack: dict) 
     )
     assert response.status_code == 200
     assert '"stage":"completed"' in response.text
+    assert "crawler_account" not in response.text
+    assert "fixture account" not in response.text
 
 
 def test_fake_runtime_uses_mutation_receipt_when_same_turn_is_replayed(

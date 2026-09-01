@@ -1,7 +1,23 @@
+import atexit
+import os
+import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+_JOB_VALIDATION_TEST_ROOT = Path(
+    tempfile.mkdtemp(prefix="job-request-validation-tests-", dir="/tmp")
+)
+os.environ["XHS_AUDIT_DATA_DIR"] = str(_JOB_VALIDATION_TEST_ROOT / "data")
+os.environ["XHS_AUDIT_OUTPUTS_DIR"] = str(_JOB_VALIDATION_TEST_ROOT / "outputs")
+os.environ["HERMES_HOME"] = str(_JOB_VALIDATION_TEST_ROOT / "hermes")
+os.environ["PYTHONPYCACHEPREFIX"] = str(_JOB_VALIDATION_TEST_ROOT / "pycache")
+sys.pycache_prefix = os.environ["PYTHONPYCACHEPREFIX"]
+os.environ["TMPDIR"] = str(_JOB_VALIDATION_TEST_ROOT / "tmp")
+(_JOB_VALIDATION_TEST_ROOT / "tmp").mkdir(parents=True, exist_ok=True)
+atexit.register(shutil.rmtree, _JOB_VALIDATION_TEST_ROOT, True)
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -53,9 +69,35 @@ class JobRequestValidationTest(unittest.TestCase):
 
     def test_frequency_defaults_to_five_and_rejects_out_of_range(self):
         self.assertEqual(main.CrawlRequest().max_items_per_minute, 5)
+        self.assertEqual(main.CrawlRequest().analyze_limit, 10000)
         for value in (0, 6):
             with self.assertRaises(ValidationError):
                 main.CrawlRequest(max_items_per_minute=value)
+
+    def test_authoritative_m3_public_job_redacts_internal_crawler_account(self):
+        projected = main.redact_authoritative_m3_crawler_account(
+            {
+                "id": "m3-123456",
+                "crawler_account_id": "internal-account-id",
+                "crawler_account_display_name": "内部采集账号",
+                "logs": [
+                    {"time": "t1", "message": "执行账号：内部采集账号"},
+                    {"time": "t2", "message": "审核完成 1/1"},
+                ],
+            }
+        )
+        self.assertNotIn("crawler_account_id", projected)
+        self.assertNotIn("crawler_account_display_name", projected)
+        self.assertEqual(projected["logs"], [{"time": "t2", "message": "审核完成 1/1"}])
+
+    def test_legacy_public_job_keeps_existing_account_contract(self):
+        job = {
+            "id": "legacy-job",
+            "crawler_account_id": "legacy-account",
+            "crawler_account_display_name": "旧任务账号",
+            "logs": [],
+        }
+        self.assertIs(main.redact_authoritative_m3_crawler_account(job), job)
 
 
 if __name__ == "__main__":

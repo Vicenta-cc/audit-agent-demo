@@ -6,7 +6,7 @@ import type {
   PublicInvestigationDraft
 } from "./investigationCreation";
 
-export type TaskSessionStatus = "配置中" | "等待确认" | "研判中" | "报告已生成" | "已创建";
+export type TaskSessionStatus = "配置中" | "等待确认" | "研判中" | "审核完成" | "报告已生成" | "已创建";
 
 export type PlatformCode = "dy" | "xhs" | "ks" | "wb" | "multi";
 

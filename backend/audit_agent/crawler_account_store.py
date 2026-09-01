@@ -60,12 +60,23 @@ class CrawlerAccountStore:
         if "auth_state_updated_at" not in columns:
             conn.execute("ALTER TABLE crawler_accounts ADD COLUMN auth_state_updated_at TEXT")
 
-    def list(self) -> list[dict]:
-        with self._lock, self._connect() as conn:
+    def list(
+        self,
+        *,
+        platform: str | None = None,
+        connection: sqlite3.Connection | None = None,
+    ) -> list[dict]:
+        def read(conn: sqlite3.Connection) -> list[dict]:
+            parameters: tuple[str, ...] = ()
+            where = ""
+            if platform is not None:
+                where = "WHERE platform = ?"
+                parameters = (self._validate_platform(platform),)
             rows = conn.execute(
                 """
                 SELECT *
                 FROM crawler_accounts
+                {where}
                 ORDER BY
                     CASE status
                         WHEN 'active' THEN 0
@@ -73,18 +84,35 @@ class CrawlerAccountStore:
                         WHEN 'expired' THEN 2
                         ELSE 3
                     END,
-                    updated_at DESC
-                """
+                    updated_at DESC,
+                    id ASC
+                """.format(where=where),
+                parameters,
             ).fetchall()
             return [self._row_to_account(row) for row in rows]
 
-    def get(self, account_id: str) -> dict | None:
+        if connection is not None:
+            return read(connection)
         with self._lock, self._connect() as conn:
+            return read(conn)
+
+    def get(
+        self,
+        account_id: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict | None:
+        def read(conn: sqlite3.Connection) -> dict | None:
             row = conn.execute(
                 "SELECT * FROM crawler_accounts WHERE id = ?",
                 (account_id,),
             ).fetchone()
             return self._row_to_account(row) if row else None
+
+        if connection is not None:
+            return read(connection)
+        with self._lock, self._connect() as conn:
+            return read(conn)
 
     def create(
         self,

@@ -62,3 +62,11 @@ class PrincipalAccessDeniedError(InvestigationCreationError):
 
 class LeaseLostError(InvestigationCreationError):
     pass
+
+
+class CrawlerAccountAuthenticationRequiredError(InvestigationCreationError):
+    code = "crawler_account_login_required"
+
+
+class AuthoritativeAuditProviderUnavailableError(InvestigationCreationError):
+    code = "audit_provider_unavailable"

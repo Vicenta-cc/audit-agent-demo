@@ -66,5 +66,8 @@ export function formatConfirmationBlockerMessage(code: string, message: string) 
   if (code === "NO_PUBLISHED_RECALL_LEXICON") {
     return "当前没有可用的已发布召回词库，无法创建关键词调查。";
   }
+  if (code === "NO_CRAWLER_ACCOUNT" || code === "collection_service_unavailable") {
+    return "抖音采集服务当前不可用，请稍后重试。";
+  }
   return message;
 }

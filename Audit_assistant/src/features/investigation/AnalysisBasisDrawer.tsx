@@ -44,7 +44,9 @@ export function AnalysisBasisDrawer({
     setCompleteEvidence(null);
     setEvidenceError("");
     setIsEvidenceLoading(true);
-    const request = record.source === "m3-report"
+    const request = record.source === "m3-job"
+      ? Promise.resolve(record.keyEvidence)
+      : record.source === "m3-report"
       ? record.reportVersionId && record.postRef
         ? fetchReportPostDetail(record.reportVersionId, record.postRef).then((detail) => (
             detail.direct_evidence.map(mapReportEvidence).filter(Boolean) as DrawerEvidence[]
@@ -260,11 +262,16 @@ export function AnalysisBasisDrawer({
         <footer className="analysis-basis-footer">
           <button
             type="button"
-            disabled={record.source === "m3-report" && (!record.reportVersionId || !record.findingRef)}
+            disabled={
+              record.source === "m3-job"
+                ? record.keyEvidence.length === 0
+                : record.source === "m3-report" && (!record.reportVersionId || !record.findingRef)
+            }
             onClick={() => onViewCompleteEvidence(record)}
           >
             <FileSearch size={17} />
-            <span>{record.source === "m3-report" && (!record.reportVersionId || !record.findingRef)
+            <span>{(record.source === "m3-job" && record.keyEvidence.length === 0)
+              || (record.source === "m3-report" && (!record.reportVersionId || !record.findingRef))
               ? "研判依据暂不可用"
               : "查看完整证据"}</span>
             <ArrowRight size={16} />

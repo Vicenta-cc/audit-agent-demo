@@ -16,6 +16,7 @@ const platformNames = {
 } as const;
 
 const activeLoginStatuses = ["starting", "waiting_scan", "finalizing"];
+const loginSessionStorageKey = (accountId: string) => `crawler-account-login-session:${accountId}`;
 
 interface CrawlerAccountLoginDialogProps {
   account: CrawlerAccount | null;
@@ -31,7 +32,7 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
   const requestedAccountRef = useRef("");
   const successHandledRef = useRef("");
 
-  const beginLogin = useCallback(async () => {
+  const beginLogin = useCallback(async (resume = true) => {
     if (!account) return;
     requestedAccountRef.current = account.id;
     successHandledRef.current = "";
@@ -39,7 +40,36 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
     setStartError("");
     setSession(null);
     try {
-      setSession(await startCrawlerAccountLogin(account.id));
+      const storedSessionId = resume
+        ? window.sessionStorage.getItem(loginSessionStorageKey(account.id)) || ""
+        : "";
+      let next: CrawlerAccountLoginSession;
+      if (storedSessionId) {
+        let stored: CrawlerAccountLoginSession | null = null;
+        try {
+          stored = await fetchCrawlerAccountLoginSession(storedSessionId);
+        } catch {
+          // A missing server session is stale client state, so start afresh.
+          window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
+        }
+        if (stored && stored.accountId !== account.id) {
+          throw new Error("登录会话与当前账号不匹配，请重新登录");
+        }
+        if (stored && activeLoginStatuses.includes(stored.status)) {
+          next = stored;
+        } else {
+          // The server is authoritative: terminal sessions cannot be resumed.
+          window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
+          next = await startCrawlerAccountLogin(account.id);
+        }
+      } else {
+        next = await startCrawlerAccountLogin(account.id);
+      }
+      if (next.accountId !== account.id) {
+        throw new Error("登录会话与当前账号不匹配，请重新登录");
+      }
+      window.sessionStorage.setItem(loginSessionStorageKey(account.id), next.id);
+      setSession(next);
     } catch (error) {
       setStartError(readApiError(error));
     } finally {
@@ -55,7 +85,7 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
       return;
     }
     if (requestedAccountRef.current !== account.id) {
-      void beginLogin();
+      void beginLogin(true);
     }
   }, [account, beginLogin]);
 
@@ -98,6 +128,7 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
   useEffect(() => {
     if (session?.status !== "success" || successHandledRef.current === session.id) return;
     successHandledRef.current = session.id;
+    window.sessionStorage.removeItem(loginSessionStorageKey(session.accountId));
     const timer = window.setTimeout(onSuccess, 900);
     return () => window.clearTimeout(timer);
   }, [onSuccess, session?.id, session?.status]);
@@ -114,17 +145,20 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
 
   const close = () => {
     if (session && activeLoginStatuses.includes(session.status)) {
-      void cancelCrawlerAccountLoginSession(session.id).catch(() => undefined);
+      void cancelCrawlerAccountLoginSession(session.id).then(() => {
+        window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
+      }).catch(() => undefined);
     }
     onClose();
   };
 
   const retry = () => {
+    window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
     if (session && activeLoginStatuses.includes(session.status)) {
       void cancelCrawlerAccountLoginSession(session.id).catch(() => undefined);
     }
     requestedAccountRef.current = "";
-    void beginLogin();
+    void beginLogin(false);
   };
 
   return (
@@ -165,6 +199,14 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
               </div>
               <div className="crawler-login-countdown">本次登录会话剩余 {formatCountdown(secondsLeft)}</div>
             </>
+          ) : null}
+
+          {!isTerminalError && isWaiting && !session.qrImageDataUrl ? (
+            <div className="crawler-login-state">
+              <Loader2 className="spin" size={34} />
+              <strong>等待二维码</strong>
+              <span>正在等待登录服务返回二维码</span>
+            </div>
           ) : null}
 
           {!isTerminalError && isFinalizing ? (

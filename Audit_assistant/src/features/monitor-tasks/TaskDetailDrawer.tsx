@@ -42,12 +42,17 @@ export function TaskDetailDrawer({ task, mode, onClose, onControl }: TaskDetailD
 
         <div className="drawer-body">
           <section className="drawer-section">
-            <h3>来源与账号</h3>
+            <h3>{task.raw.id.startsWith("m3-") ? "来源" : "来源与账号"}</h3>
             <div className="drawer-kv-grid">
               <DrawerKv label="任务来源" value={task.sourceLabel} />
               <DrawerKv label="平台" value={task.platformLabel} />
               <DrawerKv label="任务对象" value={task.objectLabel} />
-              {task.raw.run_crawler ? <DrawerKv label="执行账号" value={task.raw.crawler_account_display_name || "共享登录方式"} /> : null}
+              {task.raw.run_crawler && !task.raw.id.startsWith("m3-") ? (
+                <DrawerKv
+                  label="执行账号"
+                  value={task.raw.crawler_account_display_name || "共享登录方式"}
+                />
+              ) : null}
               {task.raw.run_crawler ? <DrawerKv label="抓取频率" value={`${task.raw.max_items_per_minute || 5} 条/分钟`} /> : null}
               <DrawerKv label="引用方案" value={task.referencePlan} />
               <DrawerKv label="创建时间" value={formatDateTime(task.createdAt)} />

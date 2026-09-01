@@ -12,7 +12,7 @@ from backend.audit_agent.audit_policy_store import (
 )
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.creator_url import validate_creator_url
-from backend.audit_agent.ingestion import IngestionStore
+from backend.audit_agent.ingestion import AuditResultStore, IngestionStore
 from backend.audit_agent.job_store import JobStore
 from backend.audit_agent.lexicon_store import LexiconStore
 from backend.audit_agent.pipeline import AuditPipeline
@@ -35,7 +35,11 @@ from .contracts import (
     RunStatus,
     parse_confirmed_configuration_snapshot,
 )
-from .errors import ConfigurationValidationError
+from .errors import (
+    AuthoritativeAuditProviderUnavailableError,
+    ConfigurationValidationError,
+    CrawlerAccountAuthenticationRequiredError,
+)
 
 
 class InvestigationConfigurationResolver:
@@ -188,7 +192,10 @@ class InvestigationConfigurationResolver:
         crawler_account_id = collection.crawler_account_id or ""
         crawler_account_display_name = ""
         if crawler_account_id:
-            account = self.crawler_account_store.get(crawler_account_id)
+            account = self.crawler_account_store.get(
+                crawler_account_id,
+                connection=resource_connection,
+            )
             if account is None:
                 raise ConfigurationValidationError("crawler account not found")
             if str(account.get("platform")) != platform:
@@ -258,6 +265,7 @@ class InvestigationConfigurationResolver:
             "max_items_per_minute": collection.max_items_per_minute,
             "crawler_account_id": crawler_account_id or None,
             "crawler_account_display_name": crawler_account_display_name,
+            "crawler_account_confirmed_state": None,
             "get_sub_comment": collection.get_sub_comment,
             "analyze_limit": analysis.analyze_limit,
             "run_crawler": run_crawler,
@@ -298,16 +306,31 @@ class AuditPipelineExecutionAdapter:
         *,
         job_store: JobStore | None = None,
         ingestion_store: IngestionStore | None = None,
+        audit_result_store: AuditResultStore | None = None,
         revision_store: TaskAuditConfigRevisionStore | None = None,
         pipeline_factory: Callable[..., Any] = AuditPipeline,
+        crawler_account_store: CrawlerAccountStore | None = None,
+        test_provider_validator: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self.job_store = job_store or JobStore()
         self.ingestion_store = ingestion_store or IngestionStore()
+        self.audit_result_store = audit_result_store or AuditResultStore(
+            self.ingestion_store.db_path
+        )
         self.revision_store = revision_store or TaskAuditConfigRevisionStore()
         self.pipeline_factory = pipeline_factory
+        self.crawler_account_store = crawler_account_store or CrawlerAccountStore()
+        self._provider_validator = (
+            test_provider_validator
+            if test_provider_validator is not None
+            else AuditPipeline.authoritative_provider_validator
+        )
 
     def ensure_job(self, run: InvestigationRun) -> str:
-        configuration = self._execution_configuration(run)
+        snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
+        configuration = snapshot.execution.model_dump(mode="json")
+        if snapshot.schema_version == "investigation-run-config-v3":
+            self.validate_m3_configuration(configuration)
         job_id = self.job_id_for_run(run.id)
         existing = self.job_store.get(job_id)
         if existing is None:
@@ -353,7 +376,12 @@ class AuditPipelineExecutionAdapter:
             existing = self.job_store.get(job_id)
         if existing is None:
             raise RuntimeError("failed to create M3 Job")
-        self._validate_existing_job(existing, configuration)
+        try:
+            self._validate_existing_job(existing, configuration)
+        except RuntimeError as exc:
+            # A persisted Job with a different frozen identity is never executable.
+            self.job_store.update(job_id, status="failed", error=str(exc))
+            raise
         if not existing.get("current_audit_config_revision_id"):
             revision_payload = dict(configuration.get("audit_config_revision") or {})
             revision = self.revision_store.create_or_get(
@@ -366,6 +394,18 @@ class AuditPipelineExecutionAdapter:
                 current_audit_config_revision_id=revision["id"],
             )
         return job_id
+
+    def validate_execution_configuration(
+        self, configuration: dict[str, Any], *, schema_version: str
+    ) -> None:
+        """Re-check the authoritative account immediately before execution."""
+        if schema_version == "investigation-run-config-v3":
+            self.validate_m3_configuration(configuration)
+
+    def invalidate_job_for_account(self, job_id: str, message: str) -> None:
+        """Make a previously-created Job non-executable after account invalidation."""
+        if self.job_store.get(job_id) is not None:
+            self.job_store.update(job_id, status="failed", error=message)
 
     def run_pipeline(self, job_id: str, configuration: dict[str, Any]) -> None:
         request = SimpleNamespace(**configuration)
@@ -380,7 +420,11 @@ class AuditPipelineExecutionAdapter:
             "error": str(job.get("error") or ""),
             "control": dict(job.get("control") or {}),
             "task_stats": self.ingestion_store.stats_for_task(job_id),
+            "audit_results": _public_audit_results(self.audit_result_store, job_id),
         }
+
+    def validate_selected_content_payloads(self, job_id: str) -> None:
+        self.ingestion_store.validated_selection_for_task(job_id)
 
     @staticmethod
     def job_id_for_run(run_id: str) -> str:
@@ -397,9 +441,50 @@ class AuditPipelineExecutionAdapter:
     def _validate_existing_job(
         job: dict[str, Any], configuration: dict[str, Any]
     ) -> None:
-        for key in ("platform", "crawl_mode", "keyword", "creator_url"):
+        for key in (
+            "platform",
+            "crawler_account_id",
+            "crawler_account_display_name",
+            "crawl_mode",
+            "keyword",
+            "creator_url",
+            "max_notes",
+            "analyze_limit",
+        ):
             if str(job.get(key) or "") != str(configuration.get(key) or ""):
                 raise RuntimeError(f"stable Job {key} does not match confirmed Run")
+
+    def validate_m3_configuration(
+        self, configuration: dict[str, Any]
+    ) -> None:
+        if int(configuration.get("max_notes") or 0) != 1:
+            raise RuntimeError("M3 execution requires max_notes=1")
+        if int(configuration.get("max_concurrency") or 0) != 1:
+            raise RuntimeError("M3 execution requires max_concurrency=1")
+        account_id = str(configuration.get("crawler_account_id") or "").strip()
+        if not account_id:
+            raise CrawlerAccountAuthenticationRequiredError(
+                "抖音采集服务当前不可用，请稍后重试。"
+            )
+        account = self.crawler_account_store.get(account_id)
+        if account is None:
+            raise CrawlerAccountAuthenticationRequiredError(
+                "抖音采集服务当前不可用，请稍后重试。"
+            )
+        if account["platform"] != configuration.get("platform"):
+            raise CrawlerAccountAuthenticationRequiredError(
+                "抖音采集服务当前不可用，请稍后重试。"
+            )
+        if account["status"] != "active" or not account["has_auth_state"]:
+            raise CrawlerAccountAuthenticationRequiredError(
+                "抖音采集服务当前不可用，请稍后重试。"
+            )
+        try:
+            self._provider_validator(configuration)
+        except Exception as exc:
+            raise AuthoritativeAuditProviderUnavailableError(
+                "审核服务当前不可用"
+            ) from exc
 
 
 class InvestigationRunProjector:
@@ -408,14 +493,19 @@ class InvestigationRunProjector:
         *,
         job_store: JobStore | None = None,
         ingestion_store: IngestionStore | None = None,
+        audit_result_store: AuditResultStore | None = None,
         report_store: ReportStore | None = None,
     ) -> None:
         self.job_store = job_store or JobStore()
         self.ingestion_store = ingestion_store or IngestionStore()
+        self.audit_result_store = audit_result_store or AuditResultStore(
+            self.ingestion_store.db_path
+        )
         self.report_store = report_store or ReportStore()
 
     def project(self, run: InvestigationRun) -> dict[str, Any]:
         task_stats: dict[str, Any] = {}
+        audit_results: list[dict[str, Any]] = []
         crawl_status = "pending"
         analysis_status = "pending"
         if run.job_id:
@@ -425,12 +515,16 @@ class InvestigationRunProjector:
                 analysis_status = "unknown"
             else:
                 task_stats = self.ingestion_store.stats_for_task(run.job_id)
+                audit_results = _public_audit_results(
+                    self.audit_result_store, run.job_id
+                )
                 crawl_status, analysis_status = self._job_projection(job, task_stats)
         report_status = self._report_status(run)
         return {
             "crawl_status": crawl_status,
             "analysis_status": analysis_status,
             "task_stats": task_stats,
+            "audit_results": audit_results,
             "report_status": report_status,
         }
 
@@ -482,6 +576,96 @@ class InvestigationRunProjector:
         else:
             analysis_status = "idle"
         return crawl_status, analysis_status
+
+
+def _public_audit_results(
+    store: AuditResultStore, job_id: str
+) -> list[dict[str, Any]]:
+    page = store.list_results(job_id=job_id, limit=1_000, sort="id")
+    return [_public_audit_result(item) for item in page.get("items") or []]
+
+
+def _public_audit_result(item: dict[str, Any]) -> dict[str, Any]:
+    author = item.get("author") if isinstance(item.get("author"), dict) else {}
+    author_display_name = next(
+        (
+            str(author.get(key) or "").strip()
+            for key in (
+                "nickname",
+                "user_unique_id",
+                "short_user_id",
+                "user_id",
+                "sec_uid",
+            )
+            if str(author.get(key) or "").strip()
+        ),
+        "未知作者",
+    )
+    evidence = [
+        projected
+        for raw in item.get("evidence_items") or []
+        if isinstance(raw, dict)
+        for projected in [_public_audit_evidence(raw)]
+        if projected is not None
+    ]
+    return {
+        "audit_result_id": str(item.get("audit_result_id") or item.get("id") or ""),
+        "content_key": str(item.get("content_key") or ""),
+        "platform": str(item.get("platform") or ""),
+        "content_title": str(
+            item.get("content_title") or item.get("title") or "未命名内容"
+        ),
+        "author_display_name": author_display_name,
+        "decision": str(item.get("decision") or ""),
+        "risk_level": str(item.get("risk_level") or ""),
+        "summary": str(item.get("summary") or ""),
+        "analyzed_at": str(item.get("analyzed_at") or ""),
+        "evidence": evidence,
+    }
+
+
+def _public_audit_evidence(item: dict[str, Any]) -> dict[str, str] | None:
+    evidence_id = str(item.get("evidence_id") or item.get("id") or "").strip()
+    content = next(
+        (
+            str(item.get(key) or "").strip()
+            for key in (
+                "original_text",
+                "source_text_dolphin",
+                "ocr_text",
+                "text",
+                "content",
+                "visual_summary",
+            )
+            if str(item.get(key) or "").strip()
+        ),
+        "",
+    )
+    if not evidence_id or not content:
+        return None
+    return {
+        "evidence_id": evidence_id,
+        "evidence_type": str(
+            item.get("primary_modality")
+            or item.get("evidence_type")
+            or item.get("type")
+            or "text"
+        ),
+        "content": content,
+        "translation": str(
+            item.get("translated_text")
+            or item.get("translation_zh")
+            or item.get("text_zh")
+            or ""
+        ),
+        "explanation": str(
+            item.get("summary")
+            or item.get("hit_explanation")
+            or item.get("reason")
+            or item.get("risk_basis")
+            or ""
+        ),
+    }
 
 
 class R31ReportAdapter:

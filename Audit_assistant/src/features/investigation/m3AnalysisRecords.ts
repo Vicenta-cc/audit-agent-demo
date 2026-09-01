@@ -25,6 +25,41 @@ export interface M3AnalysisRecordsResult {
 export async function loadM3AnalysisRecords(
   run: InvestigationRunProjection
 ): Promise<M3AnalysisRecordsResult> {
+  if (run.status === "AUDIT_COMPLETED") {
+    const records = run.audit_results.map((item, index) => {
+      const risk = normalizeRisk(item.risk_level, item.decision);
+      const evidence = item.evidence.map((value) => ({
+        id: value.evidence_id,
+        type: normalizeEvidenceType(value.evidence_type) || "text",
+        content: value.content,
+        translation: value.translation || undefined,
+        explanation: value.explanation
+      }));
+      return {
+        catalogVersion: 1,
+        source: "m3-job" as const,
+        itemNumber: index + 1,
+        risk,
+        riskLabel: riskLabel(risk),
+        decisionLabel: decisionLabel(item.decision),
+        summary: item.summary || "审核结果未提供摘要",
+        conclusion: item.summary || "审核结果未提供摘要",
+        contentTitle: item.content_title || "未命名内容",
+        author: item.author_display_name || "未知作者",
+        platform: platformLabel(item.platform),
+        analyzedAt: formatAnalyzedAt(item.analyzed_at || run.completed_at || run.updated_at),
+        evidenceCounts: countEvidence(evidence),
+        keyEvidence: evidence,
+        taskId: run.job_id,
+        outputId: item.audit_result_id
+      };
+    }).reverse();
+    return {
+      records,
+      completedCount: records.length,
+      totalCount: readRunTotal(run)
+    };
+  }
   if (run.status !== "PUBLISHED" || !run.report_version_id) {
     return {
       records: [],
@@ -115,9 +150,7 @@ export function readRunAnalysisCounts(run: InvestigationRunProjection) {
 }
 
 function readRunTotal(run: InvestigationRunProjection) {
-  return readRunCount(run, "ingested_count")
-    || readRunCount(run, "batch_item_count")
-    || readRunCount(run, "total");
+  return readRunCount(run, "ingested_count");
 }
 
 function readRunCount(run: InvestigationRunProjection, key: string) {
@@ -142,6 +175,14 @@ function normalizeRisk(riskLevel: string, decision: string): AnalysisRisk {
 
 function riskLabel(risk: AnalysisRisk) {
   return ({ safe: "无风险", low: "低风险", medium: "中风险", high: "高风险" } as const)[risk];
+}
+
+function decisionLabel(decision: string) {
+  return ({ pass: "通过", review: "需复核", reject: "拒绝" } as Record<string, string>)[decision.toLowerCase()] || "待确认";
+}
+
+function platformLabel(platform: string) {
+  return ({ dy: "抖音", xhs: "小红书", ks: "快手" } as Record<string, string>)[platform.toLowerCase()] || platform || "未知平台";
 }
 
 function normalizeEvidenceType(value: string): AnalysisEvidenceType | null {

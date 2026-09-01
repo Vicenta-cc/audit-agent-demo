@@ -20,6 +20,23 @@
   margin-bottom: 18px;
 }
 
+.crawler-account-return {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.crawler-account-return:hover {
+  color: var(--text-primary);
+}
+
 .crawler-accounts-header h1 {
   margin: 0 0 8px;
   color: #0f172a;

@@ -34,19 +34,23 @@ class DemoAudioProcessor:
         self.compute_type = settings.whisper_compute_type
         self._load_error = ""
         self.last_extract_error = ""
+        self.last_extract_status = "not_started"
         self.remote = RemoteInferenceClient()
 
     def extract_audio(self, video_path: Path, output_dir: Path) -> Path | None:
         output_dir.mkdir(parents=True, exist_ok=True)
         audio_path = output_dir / "audio.wav"
         self.last_extract_error = ""
+        self.last_extract_status = "running"
 
         ffmpeg_path = self._resolve_ffmpeg()
         if not ffmpeg_path:
             self.last_extract_error = "ffmpeg not found; install ffmpeg or set FFMPEG_PATH"
+            self.last_extract_status = "failed"
             return None
         if not video_path.exists():
             self.last_extract_error = f"video file not found: {video_path}"
+            self.last_extract_status = "failed"
             return None
 
         try:
@@ -73,20 +77,41 @@ class DemoAudioProcessor:
             )
             if completed.returncode != 0:
                 details = (completed.stderr or completed.stdout or "").strip()
+                if self._ffmpeg_confirms_no_audio_track(details):
+                    self.last_extract_status = "no_audio_track"
+                    self.last_extract_error = ""
+                    return None
                 self.last_extract_error = self._compact_error(
                     f"ffmpeg exited with code {completed.returncode}: {details}"
                 )
+                self.last_extract_status = "failed"
                 return None
             if not audio_path.exists() or audio_path.stat().st_size == 0:
                 self.last_extract_error = "ffmpeg produced no audio; the video may not contain an audio track"
+                self.last_extract_status = "failed"
                 return None
+            self.last_extract_status = "success"
             return audio_path
         except FileNotFoundError:
             self.last_extract_error = f"ffmpeg command not found: {ffmpeg_path}"
+            self.last_extract_status = "failed"
             return None
         except Exception as exc:
             self.last_extract_error = self._compact_error(str(exc))
+            self.last_extract_status = "failed"
             return None
+
+    @staticmethod
+    def _ffmpeg_confirms_no_audio_track(details: str) -> bool:
+        normalized = str(details or "").lower()
+        return any(
+            marker in normalized
+            for marker in (
+                "does not contain any stream",
+                "matches no streams",
+                "stream map '0:a' matches no streams",
+            )
+        )
 
     def _resolve_ffmpeg(self) -> str:
         configured = settings.ffmpeg_path

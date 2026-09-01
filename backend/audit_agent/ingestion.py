@@ -23,9 +23,31 @@ def content_identity(item: dict, platform: str) -> str:
     }.get(platform, ("note_id", "url"))
     for field in fields:
         value = item.get(field)
-        if value:
-            return str(value)
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            if value > 0:
+                return str(value)
+            continue
+        if not isinstance(value, str):
+            continue
+        cleaned = value.strip()
+        if cleaned != value or cleaned.lower() in {"", "none", "null", "undefined"}:
+            continue
+        return cleaned
     return ""
+
+
+SELECTED_CONTENT_PAYLOAD_UNAVAILABLE = "selected_content_payload_unavailable"
+
+
+class SelectedContentPayloadUnavailableError(RuntimeError):
+    code = SELECTED_CONTENT_PAYLOAD_UNAVAILABLE
+
+    def __init__(self, task_content_id: int, reason: str):
+        self.task_content_id = task_content_id
+        self.reason = reason
+        super().__init__(f"{self.code}: task_content_id={task_content_id}: {reason}")
 
 
 def comment_content_identity(comment: dict, platform: str) -> str:
@@ -591,7 +613,13 @@ class BatchWriter:
         self.batch_size = max(1, batch_size or settings.batch_size)
         self.flush_seconds = max(1.0, flush_seconds or settings.batch_flush_seconds)
         self._lock = threading.Lock()
-        self._batch_no = 0
+        existing_numbers = []
+        for path in self.batch_dir.glob("batch_*.json"):
+            try:
+                existing_numbers.append(int(path.stem.removeprefix("batch_")))
+            except ValueError:
+                continue
+        self._batch_no = max(existing_numbers, default=0)
         self._items: list[dict] = []
         self._comments_by_id: dict[str, dict] = {}
         self._started_at = monotonic()
@@ -927,6 +955,137 @@ class IngestionStore:
                 "should_analyze": True,
             })
         return queued
+
+    def refs_for_task(self, task_id: str, limit: int = 0) -> list[dict]:
+        memberships = self.selection_membership_for_task(task_id, limit=limit)
+        refs: list[dict] = []
+        for membership in memberships:
+            raw_path = Path(str(membership["raw_item_path"] or ""))
+            if not raw_path.exists():
+                continue
+            payload = json.loads(raw_path.read_text(encoding="utf-8"))
+            refs.append(self._ref_from_payload(membership, payload, raw_path))
+        return refs
+
+    def selection_membership_for_task(self, task_id: str, limit: int = 0) -> list[dict]:
+        """Return the frozen SQL selection without consulting raw payload files."""
+        sql = """
+            SELECT
+                tc.id AS task_content_id,
+                tc.content_id,
+                COALESCE(c.platform, '') AS platform,
+                COALESCE(c.content_key, '') AS content_key,
+                tc.analyze_status,
+                COALESCE(NULLIF(tc.raw_item_path, ''), c.raw_item_path) AS raw_item_path,
+                tc.result_path,
+                tc.audit_result_id
+            FROM task_contents tc
+            LEFT JOIN contents c ON c.id = tc.content_id
+            WHERE tc.task_id = ?
+            ORDER BY tc.id ASC
+        """
+        params: list[object] = [task_id]
+        if limit > 0:
+            sql += " LIMIT ?"
+            params.append(limit)
+
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+
+        return [
+            {
+                "task_content_id": int(row["task_content_id"]),
+                "content_id": int(row["content_id"]),
+                "platform": str(row["platform"] or ""),
+                "content_key": str(row["content_key"] or ""),
+                "analyze_status": str(row["analyze_status"] or "queued"),
+                "raw_item_path": str(row["raw_item_path"] or ""),
+                "result_path": str(row["result_path"] or ""),
+                "audit_result_id": row["audit_result_id"],
+            }
+            for row in rows
+        ]
+
+    def validated_refs_for_task(self, task_id: str, limit: int = 0) -> list[dict]:
+        return self.validated_selection_for_task(task_id, limit=limit)[1]
+
+    def validated_selection_for_task(
+        self, task_id: str, limit: int = 0
+    ) -> tuple[list[dict], list[dict]]:
+        """Hydrate every selected SQL member or fail closed with a stable error."""
+        memberships = self.selection_membership_for_task(task_id, limit=limit)
+        refs: list[dict] = []
+        for membership in memberships:
+            task_content_id = int(membership["task_content_id"])
+            raw_item_path = str(membership["raw_item_path"] or "")
+            if not raw_item_path:
+                raise SelectedContentPayloadUnavailableError(
+                    task_content_id, "raw_item_path is empty"
+                )
+            raw_path = Path(raw_item_path)
+            try:
+                is_file = raw_path.is_file()
+            except OSError as exc:
+                raise SelectedContentPayloadUnavailableError(
+                    task_content_id,
+                    f"raw item cannot be inspected: {exc.__class__.__name__}",
+                ) from exc
+            if not is_file:
+                raise SelectedContentPayloadUnavailableError(
+                    task_content_id, "raw item is not a readable regular file"
+                )
+            try:
+                raw_text = raw_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as exc:
+                raise SelectedContentPayloadUnavailableError(
+                    task_content_id, f"raw item cannot be read: {exc.__class__.__name__}"
+                ) from exc
+            try:
+                payload = json.loads(raw_text)
+            except (json.JSONDecodeError, TypeError) as exc:
+                raise SelectedContentPayloadUnavailableError(
+                    task_content_id, "raw item is not valid JSON"
+                ) from exc
+            if not isinstance(payload, dict):
+                raise SelectedContentPayloadUnavailableError(
+                    task_content_id, "raw payload root is not an object"
+                )
+            item = payload.get("item")
+            if not isinstance(item, dict):
+                raise SelectedContentPayloadUnavailableError(
+                    task_content_id, "raw payload item is not an object"
+                )
+            platform = str(membership["platform"] or "")
+            content_key = str(membership["content_key"] or "")
+            if not platform or not content_key:
+                raise SelectedContentPayloadUnavailableError(
+                    task_content_id, "SQL content identity is incomplete"
+                )
+            if content_identity(item, platform) != content_key:
+                raise SelectedContentPayloadUnavailableError(
+                    task_content_id, "raw payload identity does not match SQL selection"
+                )
+            refs.append(self._ref_from_payload(membership, payload, raw_path))
+        return memberships, refs
+
+    @staticmethod
+    def _ref_from_payload(membership: dict, payload: dict, raw_path: Path) -> dict:
+        item = payload.get("item")
+        comments = payload.get("comments")
+        return {
+            "task_content_id": int(membership["task_content_id"]),
+            "content_id": int(membership["content_id"]),
+            "platform": str(membership["platform"]),
+            "content_key": str(membership["content_key"]),
+            "item": item if isinstance(item, dict) else {},
+            "comments": comments if isinstance(comments, list) else [],
+            "raw_item_path": str(raw_path),
+            "result_path": str(membership["result_path"] or ""),
+            "audit_result_id": membership["audit_result_id"],
+            "analyze_status": str(membership["analyze_status"] or "queued"),
+            "should_analyze": str(membership["analyze_status"] or "queued")
+            in {"queued", "failed"},
+        }
 
     def stats_for_task(self, task_id: str) -> dict:
         with self._lock, self._connect() as conn:

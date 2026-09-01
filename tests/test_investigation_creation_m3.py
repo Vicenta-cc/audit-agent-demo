@@ -37,6 +37,10 @@ _DEFAULT_DIRECTORY_STATE = {
 _MODULE_ISOLATION_ROOT = Path(tempfile.mkdtemp(prefix="m3-review-gate-tests-"))
 os.environ["XHS_AUDIT_DATA_DIR"] = str(_MODULE_ISOLATION_ROOT / "data")
 os.environ["XHS_AUDIT_OUTPUTS_DIR"] = str(_MODULE_ISOLATION_ROOT / "outputs")
+os.environ["PYTHONPYCACHEPREFIX"] = str(_MODULE_ISOLATION_ROOT / "pycache")
+os.environ["TMPDIR"] = str(_MODULE_ISOLATION_ROOT / "tmp")
+os.environ["HERMES_HOME"] = str(_MODULE_ISOLATION_ROOT / "hermes")
+(_MODULE_ISOLATION_ROOT / "tmp").mkdir(parents=True, exist_ok=True)
 atexit.register(shutil.rmtree, _MODULE_ISOLATION_ROOT, True)
 
 from fastapi import FastAPI
@@ -191,22 +195,36 @@ class FakeConfigurationResolver:
 
 
 class FakeExecutionAdapter:
-    def __init__(self, final_state: dict | None = None) -> None:
+    def __init__(
+        self,
+        final_state: dict | None = None,
+        *,
+        ingestion_store: IngestionStore | None = None,
+    ) -> None:
         self.final_state = final_state or self.completed_state()
+        self.ingestion_store = ingestion_store
         self.ensure_calls = 0
         self.pipeline_calls = 0
+        self.pipeline_configurations: list[dict] = []
         self.jobs: dict[str, dict] = {}
         self.crash_in_pipeline = False
 
     @staticmethod
-    def completed_state(*, pending: int = 0, analyzing: int = 0) -> dict:
+    def completed_state(
+        *,
+        ingested: int = 1,
+        pending: int = 0,
+        analyzing: int = 0,
+        completed: int = 1,
+    ) -> dict:
         return {
             "status": "completed",
             "error": "",
             "task_stats": {
+                "ingested_count": ingested,
                 "pending_analysis_count": pending,
                 "analyzing_count": analyzing,
-                "completed_analysis_count": 1,
+                "completed_analysis_count": completed,
             },
         }
 
@@ -225,6 +243,7 @@ class FakeExecutionAdapter:
 
     def run_pipeline(self, job_id: str, configuration: dict) -> None:
         self.pipeline_calls += 1
+        self.pipeline_configurations.append(dict(configuration))
         if self.crash_in_pipeline:
             self.jobs[job_id] = {
                 "status": "running",
@@ -237,6 +256,23 @@ class FakeExecutionAdapter:
     def get_job_state(self, job_id: str):
         state = self.jobs.get(job_id)
         return dict(state) if state is not None else None
+
+    def validate_selected_content_payloads(self, job_id: str) -> None:
+        if self.ingestion_store is not None:
+            self.ingestion_store.validated_refs_for_task(job_id)
+
+
+class LegacyAwareExecutionAdapter(FakeExecutionAdapter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.validation_calls = 0
+
+    def validate_execution_configuration(
+        self, configuration: dict, *, schema_version: str
+    ) -> None:
+        self.validation_calls += 1
+        if schema_version == "investigation-run-config-v3":
+            raise AssertionError("legacy v2 run reached the M3 account validator")
 
 
 class FakeReportAdapter:
@@ -304,6 +340,34 @@ class SimulatedWorkerCrash(BaseException):
     pass
 
 
+def ingest_completed_selection(
+    ingestion_store: IngestionStore,
+    root: Path,
+    *,
+    job_id: str,
+    note_id: str = "note-a",
+) -> dict:
+    batch_path = root / f"{job_id.replace(':', '_')}-batch.json"
+    batch_path.write_text(
+        json.dumps(
+            {
+                "task_id": job_id,
+                "platform": "xhs",
+                "category": "soft",
+                "keyword": "subject",
+                "items": [{"note_id": note_id, "title": "selected"}],
+                "comments": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    ingestion_store.ingest_batch(batch_path, root / "raw-items")
+    ingestion_store.mark_content_status(
+        "xhs", note_id, "completed", task_id=job_id
+    )
+    return ingestion_store.selection_membership_for_task(job_id)[0]
+
+
 class M3TestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -369,6 +433,34 @@ class M3TestCase(unittest.TestCase):
 
 
 class OwnershipAndConfigurationTest(M3TestCase):
+    def test_v2_run_does_not_trigger_m3_account_validation(self):
+        _, run = self.queue_run()
+        self.assertEqual(run.confirmed_configuration["schema_version"], "investigation-run-config-v2")
+        self.assertNotIn(
+            "crawler_account_confirmed_state",
+            run.confirmed_configuration["execution"],
+        )
+        execution = LegacyAwareExecutionAdapter()
+
+        completed = self.worker(execution).run_once()
+
+        self.assertIsNotNone(completed)
+        self.assertNotEqual(completed.error_code, "crawler_account_login_required")
+        self.assertEqual(execution.validation_calls, 0)
+        self.assertEqual(execution.pipeline_calls, 1)
+        self.assertEqual(
+            execution.pipeline_configurations[0]["_confirmed_analyze_limit"],
+            run.confirmed_configuration["execution"]["analyze_limit"],
+        )
+        self.assertNotIn(
+            "_authoritative_m3_contract",
+            execution.pipeline_configurations[0],
+        )
+        self.assertNotIn(
+            "_authoritative_m3_contract",
+            json.dumps(run.confirmed_configuration),
+        )
+
     def test_cross_principal_get_patch_confirm_and_run_get_are_rejected(self):
         draft = self.create_draft()
         with self.assertRaises(PrincipalAccessDeniedError):
@@ -970,8 +1062,41 @@ class WorkerRecoveryAndFencingTest(M3TestCase):
     def test_failed_or_undrained_job_never_generates_report(self):
         for state, expected_code in (
             ({"status": "failed", "error": "failed", "task_stats": {}}, "audit_job_failed"),
+            (
+                {
+                    "status": "failed",
+                    "error": "selected_content_payload_unavailable: missing raw item",
+                    "task_stats": {},
+                },
+                "selected_content_payload_unavailable",
+            ),
+            (
+                {
+                    "status": "failed",
+                    "error": (
+                        "crawler_account_login_required: "
+                        "抖音采集服务当前不可用，请稍后重试。"
+                    ),
+                    "task_stats": {},
+                },
+                "crawler_account_login_required",
+            ),
             (FakeExecutionAdapter.completed_state(pending=1), "analysis_not_drained"),
             (FakeExecutionAdapter.completed_state(analyzing=1), "analysis_not_drained"),
+            (
+                FakeExecutionAdapter.completed_state(ingested=0, completed=0),
+                "no_valid_content_selected",
+            ),
+            (
+                FakeExecutionAdapter.completed_state(ingested=2, completed=1),
+                "completed_analysis_count_mismatch",
+            ),
+            (
+                FakeExecutionAdapter.completed_state(
+                    ingested=10_001, completed=10_001
+                ),
+                "ingested_count_exceeds_analyze_limit",
+            ),
         ):
             with self.subTest(expected_code=expected_code):
                 with tempfile.TemporaryDirectory() as temp_dir:
@@ -1006,6 +1131,80 @@ class WorkerRecoveryAndFencingTest(M3TestCase):
                     self.assertEqual(result.status, RunStatus.FAILED)
                     self.assertEqual(result.error_code, expected_code)
                     self.assertEqual(report.generate_calls, 0)
+
+    def test_missing_completed_payload_fails_before_report_projection(self):
+        _, run = self.queue_run(key="missing-payload-before-report")
+        ingestion = IngestionStore(Path(self.temp_dir.name) / "m3.sqlite3")
+        job_id = FakeExecutionAdapter.job_id_for_run(run.id)
+        membership = ingest_completed_selection(
+            ingestion,
+            Path(self.temp_dir.name),
+            job_id=job_id,
+        )
+        Path(membership["raw_item_path"]).unlink()
+        execution = FakeExecutionAdapter(ingestion_store=ingestion)
+        report = FakeReportAdapter()
+        session = FakeSessionAdapter()
+
+        result = self.worker(execution, report, session).run_once()
+
+        self.assertEqual(result.status, RunStatus.FAILED)
+        self.assertEqual(
+            result.error_code, "selected_content_payload_unavailable"
+        )
+        self.assertEqual(report.generate_calls, 0)
+        self.assertEqual(report.published_by_task, {})
+        self.assertEqual(session.calls, 0)
+        self.assertEqual(
+            [
+                row["content_key"]
+                for row in ingestion.selection_membership_for_task(job_id)
+            ],
+            ["note-a"],
+        )
+
+    def test_report_generating_recovery_revalidates_selected_payload(self):
+        _, run = self.queue_run(key="missing-payload-report-recovery")
+        ingestion = IngestionStore(Path(self.temp_dir.name) / "m3.sqlite3")
+        execution = FakeExecutionAdapter(ingestion_store=ingestion)
+        claimed = self.store.claim_next("worker:lost", lease_timeout_seconds=10)
+        job_id = execution.ensure_job(claimed)
+        claimed = self.store.bind_job(claimed.id, claimed.claim_token, job_id)
+        claimed = self.store.mark_pipeline_started(claimed.id, claimed.claim_token)
+        claimed = self.store.mark_pipeline_returned(claimed.id, claimed.claim_token)
+        self.store.mark_report_generating(claimed.id, claimed.claim_token)
+        execution.jobs[job_id] = FakeExecutionAdapter.completed_state()
+        membership = ingest_completed_selection(
+            ingestion,
+            Path(self.temp_dir.name),
+            job_id=job_id,
+        )
+        Path(membership["raw_item_path"]).unlink()
+        report = FakeReportAdapter()
+        session = FakeSessionAdapter()
+        self.clock.advance(11)
+
+        result = self.worker(
+            execution,
+            report,
+            session,
+            worker_id="worker:recovery",
+        ).run_once()
+
+        self.assertEqual(result.status, RunStatus.FAILED)
+        self.assertEqual(
+            result.error_code, "selected_content_payload_unavailable"
+        )
+        self.assertEqual(report.generate_calls, 0)
+        self.assertEqual(report.published_by_task, {})
+        self.assertEqual(session.calls, 0)
+        self.assertEqual(
+            [
+                row["content_key"]
+                for row in ingestion.selection_membership_for_task(job_id)
+            ],
+            ["note-a"],
+        )
 
     def test_completed_and_drained_generates_one_report(self):
         self.queue_run()
@@ -1234,6 +1433,78 @@ class WorkerRecoveryAndFencingTest(M3TestCase):
 
 
 class PersistenceContractTest(unittest.TestCase):
+    def test_audit_completed_schema_upgrade_preserves_existing_run_links(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "creation.sqlite3"
+            store = InvestigationCreationStore(db_path)
+            service = InvestigationCreationService(
+                store, configuration_resolver=FakeConfigurationResolver()
+            )
+            draft = service.create_draft(
+                CreateDraftCommand(
+                    title="Migration fixture",
+                    objective="Preserve existing durable links.",
+                    configuration=configuration_payload(),
+                ),
+                principal=LOCAL,
+            )
+            run = service.confirm_and_queue(
+                ConfirmAndQueueCommand(
+                    draft_id=draft.id,
+                    expected_revision=1,
+                    confirmed=True,
+                    idempotency_key="migration-fixture:1",
+                ),
+                principal=LOCAL,
+            )
+            claimed = store.claim_next("migration-worker")
+            self.assertIsNotNone(claimed)
+            claimed = store.bind_job(claimed.id, claimed.claim_token, "job:migration")
+            claimed = store.mark_pipeline_started(claimed.id, claimed.claim_token)
+            claimed = store.mark_pipeline_returned(claimed.id, claimed.claim_token)
+            generating = store.mark_report_generating(
+                claimed.id, claimed.claim_token
+            )
+            self.assertEqual(generating.status, RunStatus.REPORT_GENERATING)
+            self.assertIsNotNone(store.get_report_binding(run.id))
+
+            with sqlite3.connect(db_path) as connection:
+                sql = connection.execute(
+                    "SELECT sql FROM sqlite_master "
+                    "WHERE type = 'table' AND name = 'investigation_runs'"
+                ).fetchone()[0]
+                self.assertIn("AUDIT_COMPLETED", sql)
+                connection.execute("PRAGMA writable_schema = ON")
+                connection.execute(
+                    "UPDATE sqlite_master SET sql = ? "
+                    "WHERE type = 'table' AND name = 'investigation_runs'",
+                    (str(sql).replace("'AUDIT_COMPLETED', ", ""),),
+                )
+                connection.execute("PRAGMA writable_schema = OFF")
+                schema_version = connection.execute(
+                    "PRAGMA schema_version"
+                ).fetchone()[0]
+                connection.execute(f"PRAGMA schema_version = {schema_version + 1}")
+
+            reopened = InvestigationCreationStore(db_path)
+            durable = reopened.get_run(run.id, principal=LOCAL.id)
+            self.assertEqual(durable.status, RunStatus.REPORT_GENERATING)
+            self.assertEqual(durable.job_id, "job:migration")
+            self.assertEqual(
+                reopened.get_report_binding(run.id).state,
+                "RESERVED",
+            )
+            replay = reopened.replay_confirmation_identity(
+                draft.id,
+                principal=LOCAL.id,
+                expected_revision=1,
+                confirmed=True,
+                idempotency_key="migration-fixture:1",
+            )
+            self.assertEqual(replay.id, run.id)
+            with sqlite3.connect(db_path) as connection:
+                self.assertEqual(connection.execute("PRAGMA foreign_key_check").fetchall(), [])
+
     def test_revision_create_or_get_is_idempotent(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "audit.sqlite3"

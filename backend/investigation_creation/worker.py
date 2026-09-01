@@ -11,6 +11,10 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from backend.audit_agent.ingestion import (
+    SELECTED_CONTENT_PAYLOAD_UNAVAILABLE,
+    SelectedContentPayloadUnavailableError,
+)
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 
 from .adapters import (
@@ -24,7 +28,11 @@ from .contracts import (
     RunStatus,
     parse_confirmed_configuration_snapshot,
 )
-from .errors import LeaseLostError
+from .errors import (
+    AuthoritativeAuditProviderUnavailableError,
+    CrawlerAccountAuthenticationRequiredError,
+    LeaseLostError,
+)
 from .ports import ExecutionAdapter, ReportAdapter, ReportSessionAdapter
 from .store import InvestigationCreationStore
 
@@ -82,6 +90,8 @@ class InvestigationWorker:
         configuration = self._validated_configuration_or_fail(run)
         if isinstance(configuration, InvestigationRun):
             return configuration
+        snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
+        schema_version = snapshot.schema_version
         try:
             with self._lease(run) as lease:
                 lease.assert_owned()
@@ -89,13 +99,40 @@ class InvestigationWorker:
                 self._notify("after_job_created", run, job_id)
                 lease.assert_owned()
                 run = self.store.bind_job(run.id, run.claim_token, job_id)
+                lease.assert_owned()
+                self._validate_account_before_execution(
+                    configuration, job_id, schema_version=schema_version
+                )
                 run = self.store.mark_pipeline_started(run.id, run.claim_token)
                 lease.assert_owned()
-                self.execution_adapter.run_pipeline(job_id, configuration)
+                pipeline_configuration = dict(configuration)
+                # This internal projection scopes the SQL selection contract to
+                # confirmed Investigation Runs without changing ordinary Jobs.
+                pipeline_configuration["_confirmed_analyze_limit"] = int(
+                    snapshot.execution.analyze_limit
+                )
+                if schema_version == "investigation-run-config-v3":
+                    pipeline_configuration["_authoritative_m3_contract"] = True
+                self.execution_adapter.run_pipeline(job_id, pipeline_configuration)
                 lease.assert_owned()
                 run = self.store.mark_pipeline_returned(run.id, run.claim_token)
         except LeaseLostError:
             raise
+        except CrawlerAccountAuthenticationRequiredError as exc:
+            self._invalidate_job_for_account(run, exc)
+            return self.store.mark_failed(
+                run.id,
+                run.claim_token,
+                error_code=exc.code,
+                error_message=str(exc),
+            )
+        except AuthoritativeAuditProviderUnavailableError as exc:
+            return self.store.mark_failed(
+                run.id,
+                run.claim_token,
+                error_code=exc.code,
+                error_message=str(exc),
+            )
         except Exception as exc:
             if not self.store.owns_claim(run.id, run.claim_token):
                 raise LeaseLostError("Run lease was lost during Pipeline execution") from exc
@@ -174,11 +211,23 @@ class InvestigationWorker:
             )
         status = str(state.get("status") or "")
         if status == "failed":
+            error_message = str(state.get("error") or "AuditPipeline Job failed.")
+            error_code = (
+                SELECTED_CONTENT_PAYLOAD_UNAVAILABLE
+                if error_message.startswith(f"{SELECTED_CONTENT_PAYLOAD_UNAVAILABLE}:")
+                else "crawler_account_login_required"
+                if error_message.startswith("crawler_account_login_required:")
+                else "audit_provider_unavailable"
+                if error_message.startswith("audit_provider_unavailable:")
+                else "audit_provider_failed"
+                if error_message.startswith("audit_provider_failed:")
+                else "audit_job_failed"
+            )
             return self.store.mark_failed(
                 run.id,
                 run.claim_token,
-                error_code="audit_job_failed",
-                error_message=str(state.get("error") or "AuditPipeline Job failed."),
+                error_code=error_code,
+                error_message=error_message,
             )
         if status in {
             "stopped",
@@ -200,18 +249,18 @@ class InvestigationWorker:
                 error_code="collection_result_unknown",
                 error_message=f"Job has non-final status: {status or 'unknown'}",
             )
-        stats = dict(state.get("task_stats") or {})
-        pending = int(stats.get("pending_analysis_count") or 0)
-        analyzing = int(stats.get("analyzing_count") or 0)
-        if pending or analyzing:
+        gate_failure = self._completion_gate_failure(run, state=state)
+        if gate_failure is not None:
+            error_code, error_message = gate_failure
             return self.store.mark_failed(
                 run.id,
                 run.claim_token,
-                error_code="analysis_not_drained",
-                error_message=(
-                    f"Job completed with pending={pending}, analyzing={analyzing}."
-                ),
+                error_code=error_code,
+                error_message=error_message,
             )
+        snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
+        if snapshot.schema_version == "investigation-run-config-v3":
+            return self.store.mark_audit_completed(run.id, run.claim_token)
         run = self.store.mark_report_generating(run.id, run.claim_token)
         return self._finish_report(run, allow_generation=True)
 
@@ -224,6 +273,15 @@ class InvestigationWorker:
                 run.claim_token,
                 error_code="report_job_missing",
                 error_message="REPORT_GENERATING Run has no Job binding.",
+            )
+        gate_failure = self._completion_gate_failure(run)
+        if gate_failure is not None:
+            error_code, error_message = gate_failure
+            return self.store.mark_failed(
+                run.id,
+                run.claim_token,
+                error_code=error_code,
+                error_message=error_message,
             )
         binding = self.store.get_report_binding(run.id)
         if binding is None:
@@ -368,9 +426,33 @@ class InvestigationWorker:
             snapshot = parse_confirmed_configuration_snapshot(
                 run.confirmed_configuration
             )
-            return ResolvedExecutionConfiguration.model_validate(
+            configuration = ResolvedExecutionConfiguration.model_validate(
                 snapshot.execution.model_dump(mode="json")
             ).model_dump(mode="json")
+            if snapshot.schema_version == "investigation-run-config-v3":
+                validator = getattr(
+                    self.execution_adapter,
+                    "validate_m3_configuration",
+                    None,
+                )
+                if callable(validator):
+                    validator(configuration)
+            return configuration
+        except CrawlerAccountAuthenticationRequiredError as exc:
+            self._invalidate_job_for_account(run, exc)
+            return self.store.mark_failed(
+                run.id,
+                run.claim_token,
+                error_code=exc.code,
+                error_message=str(exc),
+            )
+        except AuthoritativeAuditProviderUnavailableError as exc:
+            return self.store.mark_failed(
+                run.id,
+                run.claim_token,
+                error_code=exc.code,
+                error_message=str(exc),
+            )
         except ValidationError as exc:
             return self.store.mark_failed(
                 run.id,
@@ -378,6 +460,126 @@ class InvestigationWorker:
                 error_code="invalid_confirmed_configuration",
                 error_message=str(exc),
             )
+
+    def _validate_account_before_execution(
+        self,
+        configuration: dict[str, Any],
+        job_id: str,
+        *,
+        schema_version: str,
+    ) -> None:
+        validator = getattr(
+            self.execution_adapter,
+            "validate_execution_configuration",
+            None,
+        )
+        try:
+            if callable(validator) and schema_version == "investigation-run-config-v3":
+                validator(configuration, schema_version=schema_version)
+        except CrawlerAccountAuthenticationRequiredError:
+            invalidator = getattr(
+                self.execution_adapter,
+                "invalidate_job_for_account",
+                None,
+            )
+            if callable(invalidator):
+                invalidator(job_id, "crawler account login is required")
+            raise
+
+    def _completion_gate_failure(
+        self,
+        run: InvestigationRun,
+        *,
+        state: dict[str, Any] | None = None,
+    ) -> tuple[str, str] | None:
+        if not run.job_id:
+            return "job_result_missing", "Run has no Job binding."
+        snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
+        authoritative_m3 = snapshot.schema_version == "investigation-run-config-v3"
+        analyze_limit = int(snapshot.execution.analyze_limit)
+        state = state or self.execution_adapter.get_job_state(run.job_id)
+        if state is None:
+            return "job_result_missing", "Job state is unavailable before completion."
+        stats = dict(state.get("task_stats") or {})
+        ingested = int(stats.get("ingested_count") or 0)
+        pending = int(stats.get("pending_analysis_count") or 0)
+        analyzing = int(stats.get("analyzing_count") or 0)
+        completed = int(stats.get("completed_analysis_count") or 0)
+        if ingested < 1:
+            return "no_valid_content_selected", "No valid content was selected for analysis."
+        if analyze_limit < 1 or ingested > analyze_limit:
+            return (
+                "ingested_count_exceeds_analyze_limit",
+                f"Job selected {ingested} contents with analyze_limit={analyze_limit}.",
+            )
+        if pending or analyzing:
+            return (
+                "analysis_not_drained",
+                f"Job has pending={pending}, analyzing={analyzing} before audit completion.",
+            )
+        if completed != ingested:
+            return (
+                "completed_analysis_count_mismatch",
+                f"Job completed {completed} analyses for {ingested} selected contents.",
+            )
+        if authoritative_m3:
+            audit_results = state.get("audit_results")
+            if not isinstance(audit_results, list) or len(audit_results) != completed:
+                return (
+                    "completed_audit_result_missing",
+                    "Completed audit result count does not match selected content membership.",
+                )
+            content_keys = {
+                str(item.get("content_key") or "").strip()
+                for item in audit_results
+                if isinstance(item, dict)
+            }
+            if "" in content_keys or len(content_keys) != completed:
+                return (
+                    "completed_audit_result_missing",
+                    "Completed audit results do not have a unique selected content identity.",
+                )
+            for item in audit_results:
+                decision = str(item.get("decision") or "").lower()
+                risk_level = str(item.get("risk_level") or "").lower()
+                if decision not in {"pass", "review", "reject"} or risk_level not in {
+                    "none",
+                    "low",
+                    "medium",
+                    "high",
+                }:
+                    return (
+                        "completed_audit_result_invalid",
+                        "Completed audit result has an invalid decision or risk level.",
+                    )
+        try:
+            self.execution_adapter.validate_selected_content_payloads(run.job_id)
+        except SelectedContentPayloadUnavailableError as exc:
+            return SELECTED_CONTENT_PAYLOAD_UNAVAILABLE, str(exc)
+        except Exception as exc:
+            return (
+                SELECTED_CONTENT_PAYLOAD_UNAVAILABLE,
+                f"{SELECTED_CONTENT_PAYLOAD_UNAVAILABLE}: {exc}",
+            )
+        return None
+
+    def _invalidate_job_for_account(
+        self, run: InvestigationRun, error: CrawlerAccountAuthenticationRequiredError
+    ) -> None:
+        job_id = run.job_id
+        if not job_id:
+            resolver = getattr(self.execution_adapter, "job_id_for_run", None)
+            if callable(resolver):
+                job_id = resolver(run.id)
+        if not job_id:
+            return
+        invalidator = getattr(
+            self.execution_adapter,
+            "invalidate_job_for_account",
+            None,
+        )
+        if callable(invalidator):
+            invalidator(job_id, str(error))
 
     def _lease(self, run: InvestigationRun) -> "_LeaseHeartbeat":
         return _LeaseHeartbeat(

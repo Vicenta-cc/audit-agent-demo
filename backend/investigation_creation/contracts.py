@@ -31,6 +31,7 @@ class DraftStatus(str, Enum):
 class RunStatus(str, Enum):
     QUEUED = "QUEUED"
     RUNNING = "RUNNING"
+    AUDIT_COMPLETED = "AUDIT_COMPLETED"
     REPORT_GENERATING = "REPORT_GENERATING"
     PUBLISHED = "PUBLISHED"
     FAILED = "FAILED"
@@ -77,6 +78,12 @@ InvestigationBlockerCode = Literal[
     "NO_SEARCH_TERMS",
     "PLATFORM_MISMATCH",
     "INVALID_CREATOR_URL",
+    "NO_CRAWLER_ACCOUNT",
+    "collection_service_unavailable",
+    "CRAWLER_ACCOUNT_NOT_FOUND",
+    "CRAWLER_ACCOUNT_PLATFORM_MISMATCH",
+    "CRAWLER_ACCOUNT_DISABLED",
+    "CRAWLER_ACCOUNT_LOGIN_REQUIRED",
     "CONFIRMATION_REQUIRED",
     "IDEMPOTENCY_CONFLICT",
 ]
@@ -179,6 +186,17 @@ class InvestigationDraftConfiguration(StrictModel):
     platform: Platform
     investigation: InvestigationMode
     audit_policy: AuditPolicySelection | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def discard_legacy_crawler_account(cls, value: object) -> object:
+        if isinstance(value, dict) and "crawler_account_id" in value:
+            return {
+                key: item
+                for key, item in value.items()
+                if key != "crawler_account_id"
+            }
+        return value
 
 
 class CollectionConfiguration(StrictModel):
@@ -406,6 +424,13 @@ class RecallPlanPreview(StrictModel):
     source_lexicon_ids: list[StrictStr] = Field(default_factory=list)
 
 
+class CrawlerAccountConfirmedState(StrictModel):
+    status: Literal["active"]
+    has_auth_state: Literal[True]
+    auth_state_updated_at: StrictStr = ""
+    last_validated_at: StrictStr = ""
+
+
 class ConfirmationPreview(StrictModel):
     draft_id: StrictStr
     draft_revision: StrictInt = Field(ge=1)
@@ -460,6 +485,7 @@ class ResolvedExecutionConfiguration(StrictModel):
     max_items_per_minute: StrictInt = Field(ge=1, le=5)
     crawler_account_id: StrictStr | None = None
     crawler_account_display_name: StrictStr = ""
+    crawler_account_confirmed_state: CrawlerAccountConfirmedState | None = None
     get_sub_comment: StrictBool
     analyze_limit: StrictInt = Field(ge=0)
     run_crawler: StrictBool
@@ -749,6 +775,7 @@ class InvestigationRunProjection(StrictModel):
     crawl_status: str
     analysis_status: str
     task_stats: dict[str, Any]
+    audit_results: list[dict[str, Any]] = Field(default_factory=list)
     report_status: str
     report_version_id: str = ""
     report_session_id: str = ""

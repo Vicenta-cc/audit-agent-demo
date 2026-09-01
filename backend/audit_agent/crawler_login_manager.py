@@ -163,9 +163,33 @@ class CrawlerAccountLoginManager:
         return session.public()
 
     def get(self, session_id: str) -> dict | None:
+        self._expire_if_needed(session_id)
         with self._lock:
             session = self._sessions.get(session_id)
             return session.public() if session else None
+
+    def _expire_if_needed(self, session_id: str) -> None:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if not session or session.status not in ACTIVE_LOGIN_STATUSES:
+                return
+            try:
+                expired = _utc_now() >= datetime.fromisoformat(session.expires_at)
+            except ValueError:
+                expired = True
+            if not expired:
+                return
+            session.status = "expired"
+            session.error = "二维码登录已超时，请重新获取二维码"
+            session.qr_image_data_url = ""
+            session.qr_expires_at = ""
+            session.finalizing_started_at = ""
+            session.finalizing_duration_seconds = 0
+            session.updated_at = _iso(_utc_now())
+            process = session.process
+            account_id = session.account_id
+        self.store.mark_expired(account_id, session.error)
+        self._stop_process(process)
 
     def cancel(self, session_id: str) -> bool:
         with self._lock:

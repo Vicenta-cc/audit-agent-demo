@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Ban,
+  ArrowLeft,
   CheckCircle2,
   ChevronDown,
   Pencil,
@@ -12,6 +13,7 @@ import {
   Trash2,
   UsersRound
 } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../../components/common/Button";
 import { IconButton } from "../../components/common/IconButton";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog";
@@ -60,6 +62,10 @@ const statusMeta: Record<CrawlerAccountStatus, { label: string; className: strin
 };
 
 export function CrawlerAccountsPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedReturnTo = searchParams.get("return_to") || "";
+  const returnTo = requestedReturnTo.startsWith("/investigation") ? requestedReturnTo : "";
   const [accounts, setAccounts] = useState<CrawlerAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,6 +80,7 @@ export function CrawlerAccountsPage() {
   const [deleteTarget, setDeleteTarget] = useState<CrawlerAccount | null>(null);
   const [loginTarget, setLoginTarget] = useState<CrawlerAccount | null>(null);
   const [toast, setToast] = useState<{ message: string; tone?: "success" | "info" } | null>(null);
+  const loadGenerationRef = useRef(0);
   const [expandedPlatforms, setExpandedPlatforms] = useState<Record<string, boolean>>({
     xhs: true,
     dy: true,
@@ -81,16 +88,30 @@ export function CrawlerAccountsPage() {
   });
 
   const loadData = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    const generation = ++loadGenerationRef.current;
     if (mode === "initial") setLoading(true);
     else setRefreshing(true);
     setError("");
     try {
-      setAccounts(await fetchCrawlerAccounts());
+      const nextAccounts = await fetchCrawlerAccounts();
+      if (generation !== loadGenerationRef.current) return;
+      setAccounts(nextAccounts);
+      const pendingAccountId = window.sessionStorage.getItem("crawler-account-login-target") || "";
+      if (pendingAccountId) {
+        const pendingAccount = nextAccounts.find((account) => account.id === pendingAccountId);
+        if (pendingAccount) setLoginTarget(pendingAccount);
+        else window.sessionStorage.removeItem("crawler-account-login-target");
+      }
     } catch (loadError) {
+      if (generation !== loadGenerationRef.current) return;
+      // A failed authoritative read must never leave stale accounts actionable.
+      setAccounts([]);
       setError(readApiError(loadError));
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (generation === loadGenerationRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -139,6 +160,11 @@ export function CrawlerAccountsPage() {
     setDrawerOpen(true);
   };
 
+  const openLogin = (account: CrawlerAccount) => {
+    window.sessionStorage.setItem("crawler-account-login-target", account.id);
+    setLoginTarget(account);
+  };
+
   const handleSubmit = async (input: CrawlerAccountInput) => {
     setSubmitting(true);
     try {
@@ -152,7 +178,7 @@ export function CrawlerAccountsPage() {
       } else {
         const created = await createCrawlerAccount(input);
         setAccounts((current) => [created, ...current]);
-        setLoginTarget(created);
+        openLogin(created);
         setToast({ message: "账号已添加，请扫码登录" });
       }
       setDrawerOpen(false);
@@ -163,6 +189,7 @@ export function CrawlerAccountsPage() {
   };
 
   const handleLoginSuccess = useCallback(async () => {
+    window.sessionStorage.removeItem("crawler-account-login-target");
     setLoginTarget(null);
     await loadData("refresh");
     setToast({ message: "账号登录成功", tone: "success" });
@@ -201,6 +228,12 @@ export function CrawlerAccountsPage() {
     <main className="crawler-accounts-page">
       <header className="crawler-accounts-header">
         <div>
+          {returnTo ? (
+            <button type="button" className="crawler-account-return" onClick={() => navigate(returnTo)}>
+              <ArrowLeft size={16} aria-hidden="true" />
+              返回调查
+            </button>
+          ) : null}
           <h1>采集账号</h1>
           <p>平台登录账号与当前可用状态</p>
         </div>
@@ -333,7 +366,7 @@ export function CrawlerAccountsPage() {
                                 aria-label={`${account.status === "active" ? "重新登录" : "扫码登录"}${account.displayName}`}
                                 title={account.status === "active" ? "重新登录" : "扫码登录"}
                                 disabled={account.status === "disabled" || isActing}
-                                onClick={() => setLoginTarget(account)}
+                                onClick={() => openLogin(account)}
                               >
                                 <QrCode size={16} />
                               </IconButton>
@@ -400,7 +433,10 @@ export function CrawlerAccountsPage() {
 
       <CrawlerAccountLoginDialog
         account={loginTarget}
-        onClose={() => setLoginTarget(null)}
+        onClose={() => {
+          window.sessionStorage.removeItem("crawler-account-login-target");
+          setLoginTarget(null);
+        }}
         onSuccess={handleLoginSuccess}
       />
 

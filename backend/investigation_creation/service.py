@@ -249,9 +249,8 @@ class InvestigationCreationService:
         configuration_hash: str,
         confirmation_resolution: dict[str, Any] | None,
     ) -> InvestigationRun:
-        resolved = resolved_model.model_copy(update={"max_notes": 1}).model_dump(
-            mode="json"
-        )
+        execution_overrides = {"max_notes": 1}
+        resolved = resolved_model.model_copy(update=execution_overrides).model_dump(mode="json")
         if confirmation_resolution is not None:
             confirmation_resolution["execution"] = resolved
         fingerprint = self.store.confirmation_fingerprint(
@@ -289,6 +288,7 @@ class InvestigationCreationService:
             crawl_status=str(projected.get("crawl_status") or "unknown"),
             analysis_status=str(projected.get("analysis_status") or "unknown"),
             task_stats=dict(projected.get("task_stats") or {}),
+            audit_results=list(projected.get("audit_results") or []),
             report_status=str(projected.get("report_status") or "pending"),
             report_version_id=str(
                 projected.get("report_version_id") or run.report_version_id

@@ -1370,9 +1370,17 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           item.id === uiSessionId && item.creationBinding
             ? {
                 ...item,
-                status: run.status === "PUBLISHED" ? "报告已生成" : "研判中",
+                status: run.status === "PUBLISHED"
+                  ? "报告已生成"
+                  : run.status === "AUDIT_COMPLETED"
+                    ? "审核完成"
+                    : "研判中",
                 executionPhase: view.phase,
-                executionProgress: run.status === "PUBLISHED" ? 100 : item.executionProgress,
+                executionProgress: run.status === "PUBLISHED"
+                  ? 100
+                  : run.status === "AUDIT_COMPLETED"
+                    ? 75
+                    : item.executionProgress,
                 creationBinding: {
                   ...item.creationBinding,
                   run,
@@ -1390,6 +1398,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             workspaceSessionId,
             runId
           );
+          return;
+        }
+        if (run.status === "AUDIT_COMPLETED") {
+          runPollTimersRef.current.delete(uiSessionId);
           return;
         }
         if (run.status === "FAILED" || run.status === "INTERRUPTED") {
@@ -1513,7 +1525,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       if (
         !binding
         || !run
-        || ["PUBLISHED", "FAILED", "INTERRUPTED"].includes(run.status)
+        || ["AUDIT_COMPLETED", "PUBLISHED", "FAILED", "INTERRUPTED"].includes(run.status)
         || runPollTimersRef.current.has(session.id)
       ) return;
       pollCreationRun(

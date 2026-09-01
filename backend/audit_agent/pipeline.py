@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import queue
 import re
@@ -61,6 +62,14 @@ class FusionAuditContractError(RuntimeError):
     pass
 
 
+class AuditProviderCallError(RuntimeError):
+    pass
+
+
+class AuditProviderUnavailableError(RuntimeError):
+    pass
+
+
 def _severity_rank(severity) -> int:
     return {"high": 3, "medium": 2, "low": 1}.get(str(severity).lower(), 0)
 
@@ -80,6 +89,11 @@ class AuditPipeline:
         self.prompt_profile_snapshot: dict = {}
         self.audit_config_revision_id = ""
         self.rule_snapshot: dict = {}
+        self.authoritative_m3 = False
+
+    @staticmethod
+    def authoritative_provider_validator(configuration: dict) -> None:
+        QwenClient.validate_authoritative_configuration(configuration)
 
     def run(self, request) -> None:
         try:
@@ -103,13 +117,33 @@ class AuditPipeline:
             def wait_if_analysis_paused() -> bool:
                 return not analysis_stop_requested()
 
+            confirmed_limit_value = getattr(request, "_confirmed_analyze_limit", None)
+            self.authoritative_m3 = (
+                getattr(request, "_authoritative_m3_contract", None) is True
+            )
+            selection_limit = (
+                max(0, int(confirmed_limit_value))
+                if confirmed_limit_value is not None
+                else None
+            )
+            selected_memberships: list[dict] = []
+            selected_refs: list[dict] = []
+            selected_identities: set[str] = set()
             if request.run_crawler:
                 source_root = settings.outputs_dir / self.job_id
                 crawl_dir = source_root / "crawler"
                 job_store.log(self.job_id, f"等待 MediaCrawler 爬取锁：{request.platform}")
                 last_progress = {"done": -1}
-                results: list[dict] = []
-                analyzed_ids: set[str] = set()
+                results: list[dict] = (
+                    list(job_snapshot.get("items") or [])
+                    if selection_limit is not None
+                    else []
+                )
+                analyzed_ids: set[str] = {
+                    str(item.get("content_key") or item.get("note_id") or "")
+                    for item in results
+                    if item.get("content_key") or item.get("note_id")
+                }
                 analyze_limit = max(0, request.analyze_limit)
                 stream_queue: queue.Queue[dict | tuple[list[dict], list[dict]] | None] = queue.Queue()
                 analysis_errors: list[BaseException] = []
@@ -119,12 +153,14 @@ class AuditPipeline:
                     keyword=request.keyword if request.crawl_mode == "search" else (request.creator_url or request.creator_id),
                     category=request.lexicon_category if getattr(request, "keyword_source", "keyword") == "lexicon" else "",
                     root=source_root,
+                    batch_size=1 if selection_limit is not None else None,
                 )
                 raw_items_dir = source_root / "raw_items"
                 stop_flusher = threading.Event()
                 auto_analyze_crawled_content = settings.auto_analyze_crawled_content
                 if not auto_analyze_crawled_content:
                     analyze_limit = 0
+                    selection_limit = None
                     job_store.log(
                         self.job_id,
                         "当前为采集入库模式：内容会入库，审核分析暂不自动执行，可稍后点击继续分析",
@@ -132,11 +168,25 @@ class AuditPipeline:
                 analysis_media_scope = self._analysis_media_scope()
                 if analysis_media_scope == "image_text":
                     job_store.log(self.job_id, "当前分析范围：仅分析图文内容，视频内容只入库不审核")
-                stream_items_enabled = settings.stream_crawl_analysis
-                use_batch_ingestion = stream_items_enabled and settings.batch_ingestion_enabled
+                stream_items_enabled = (
+                    settings.stream_crawl_analysis or selection_limit is not None
+                )
+                use_batch_ingestion = selection_limit is not None or (
+                    stream_items_enabled and settings.batch_ingestion_enabled
+                )
                 stream_analysis = stream_items_enabled and auto_analyze_crawled_content
                 skip_final_supplement = use_batch_ingestion and auto_analyze_crawled_content
                 stream_callback_enabled = use_batch_ingestion or stream_analysis
+                if selection_limit is not None:
+                    (
+                        selected_memberships,
+                        selected_refs,
+                    ) = self.ingestion.validated_selection_for_task(self.job_id)
+                    selected_identities = {
+                        str(membership.get("content_key") or "")
+                        for membership in selected_memberships
+                        if membership.get("content_key")
+                    }
                 crawler_concurrency = max(
                     1,
                     min(
@@ -159,7 +209,40 @@ class AuditPipeline:
                     last_progress["done"] = done
                     job_store.log(self.job_id, f"已爬取 {done}/{total} 条")
 
-                def enqueue_stream_batch(contents: list[dict], comments: list[dict]) -> None:
+                def refresh_selected_contents() -> None:
+                    (
+                        refreshed_memberships,
+                        refreshed_refs,
+                    ) = self.ingestion.validated_selection_for_task(
+                        self.job_id
+                    )
+                    selected_memberships[:] = refreshed_memberships
+                    selected_refs[:] = refreshed_refs
+                    selected_identities.clear()
+                    selected_identities.update(
+                        str(membership.get("content_key") or "")
+                        for membership in refreshed_memberships
+                        if membership.get("content_key")
+                    )
+
+                def enqueue_stream_batch(
+                    contents: list[dict], comments: list[dict]
+                ) -> None:
+                    if selection_limit is not None:
+                        refresh_selected_contents()
+                        for content in contents:
+                            identity = content_identity(content, request.platform)
+                            if (
+                                not identity
+                                or identity in selected_identities
+                                or len(selected_memberships) >= selection_limit
+                            ):
+                                continue
+                            batch_paths = batch_writer.add([content], comments)
+                            for batch_path in batch_paths:
+                                ingest_completed_batch(batch_path)
+                            refresh_selected_contents()
+                        return
                     if not contents:
                         return
                     if use_batch_ingestion:
@@ -221,6 +304,7 @@ class AuditPipeline:
                                 task_id=self.job_id,
                             )
                             result = self._analyze_subject(subject)
+                            self._assert_authoritative_provider_healthy()
                             result_path = self._write_result_json(subject.note_id, result)
                             persisted = self._persist_audit_result(
                                 platform=request.platform,
@@ -296,6 +380,7 @@ class AuditPipeline:
                                 task_id=self.job_id,
                             )
                             result = self._analyze_subject(subject)
+                            self._assert_authoritative_provider_healthy()
                             result_path = self._write_result_json(subject.note_id, result)
                             persisted = self._persist_audit_result(
                                 platform=request.platform,
@@ -358,7 +443,7 @@ class AuditPipeline:
                         daemon=True,
                     )
                     stream_analyzer.start()
-                if use_batch_ingestion:
+                if use_batch_ingestion and selection_limit is None:
                     batch_flusher = threading.Thread(
                         target=flush_batches_periodically,
                         name=f"audit-batch-flusher-{self.job_id}",
@@ -373,17 +458,44 @@ class AuditPipeline:
                         if crawler_account_id:
                             account = crawler_account_store.get(crawler_account_id)
                             if not account:
+                                if self.authoritative_m3:
+                                    raise RuntimeError(
+                                        "crawler_account_login_required: "
+                                        "抖音采集服务当前不可用，请稍后重试。"
+                                    )
                                 raise RuntimeError("所选采集账号不存在")
                             if account["platform"] != request.platform:
+                                if self.authoritative_m3:
+                                    raise RuntimeError(
+                                        "crawler_account_login_required: "
+                                        "抖音采集服务当前不可用，请稍后重试。"
+                                    )
                                 raise RuntimeError("所选采集账号与任务平台不匹配")
                             if account["status"] != "active" or not account["has_auth_state"]:
+                                if self.authoritative_m3:
+                                    raise RuntimeError(
+                                        "crawler_account_login_required: "
+                                        "抖音采集服务当前不可用，请稍后重试。"
+                                    )
                                 raise RuntimeError("所选采集账号当前不可用，请重新登录")
                             ciphertext = crawler_account_store.get_auth_state_ciphertext(crawler_account_id)
-                            account_auth_state = auth_state_cipher.decrypt(ciphertext)
-                            job_store.log(
-                                self.job_id,
-                                f"执行账号：{account.get('display_name') or crawler_account_id}",
-                            )
+                            try:
+                                account_auth_state = auth_state_cipher.decrypt(ciphertext)
+                            except Exception as exc:
+                                if self.authoritative_m3:
+                                    crawler_account_store.mark_expired(
+                                        crawler_account_id, "auth state is unreadable"
+                                    )
+                                    raise RuntimeError(
+                                        "crawler_account_login_required: "
+                                        "抖音采集服务当前不可用，请稍后重试。"
+                                    ) from exc
+                                raise
+                            if not self.authoritative_m3:
+                                job_store.log(
+                                    self.job_id,
+                                    f"执行账号：{account.get('display_name') or crawler_account_id}",
+                                )
 
                         def mark_crawler_started() -> None:
                             if crawler_account_id:
@@ -436,6 +548,11 @@ class AuditPipeline:
                         except CrawlerAuthenticationError as exc:
                             if crawler_account_id:
                                 crawler_account_store.mark_expired(crawler_account_id, str(exc))
+                            if self.authoritative_m3:
+                                raise RuntimeError(
+                                    "crawler_account_login_required: "
+                                    "抖音采集服务当前不可用，请稍后重试。"
+                                ) from exc
                             raise
                 finally:
                     if batch_flusher:
@@ -476,10 +593,56 @@ class AuditPipeline:
                 self.job_id,
                 f"crawler output loaded: contents={len(output.contents)}, comments={len(output.comments)}",
             )
+            if selection_limit is not None:
+                if request.run_crawler:
+                    enqueue_stream_batch(output.contents, output.comments)
+                    (
+                        selected_memberships,
+                        selected_refs,
+                    ) = self.ingestion.validated_selection_for_task(
+                        self.job_id
+                    )
+                else:
+                    (
+                        selected_memberships,
+                        selected_refs,
+                    ) = self.ingestion.validated_selection_for_task(
+                        self.job_id
+                    )
+                    if not selected_memberships:
+                        output.contents = self._select_distinct_contents(
+                            output.contents,
+                            output.platform,
+                            selection_limit,
+                        )
+                if request.run_crawler and not selected_memberships:
+                    raise RuntimeError(
+                        "no_valid_content_selected: crawler returned no content "
+                        "with a valid content identity"
+                    )
+                if not request.run_crawler and not selected_memberships and not output.contents:
+                    raise RuntimeError(
+                        "no_valid_content_selected: source output contained no content "
+                        "with a valid content identity"
+                    )
+                if selected_memberships:
+                    output.contents = [dict(ref["item"]) for ref in selected_refs]
+                    output.comments = [
+                        dict(comment)
+                        for ref in selected_refs
+                        for comment in ref.get("comments", [])
+                    ]
+                skip_final_supplement = False
+                job_store.log(
+                    self.job_id,
+                    f"已从采集结果中选取 {len(output.contents)} 条内容进行研判",
+                )
             if request.run_crawler and not output.contents and not output.comments:
                 job_store.log(self.job_id, self._empty_crawl_hint(crawl_dir, request.platform))
             ingested_refs_by_key = {}
-            if not skip_final_supplement and output.contents:
+            if selection_limit is not None and request.run_crawler:
+                ingested_refs_by_key = self._refs_by_content_key(selected_refs)
+            elif not skip_final_supplement and output.contents:
                 ingested_refs_by_key = self._ingest_loaded_output(
                     platform=output.platform,
                     contents=output.contents,
@@ -487,6 +650,12 @@ class AuditPipeline:
                     keyword=request.keyword if request.crawl_mode == "search" else (request.creator_url or request.creator_id),
                     category=request.lexicon_category if getattr(request, "keyword_source", "keyword") == "lexicon" else "",
                 )
+                if selection_limit is not None:
+                    (
+                        selected_memberships,
+                        selected_refs,
+                    ) = self.ingestion.validated_selection_for_task(self.job_id)
+                    ingested_refs_by_key = self._refs_by_content_key(selected_refs)
                 for item in results:
                     analyzed_key = str(item.get("content_key") or item.get("note_id") or item.get("url") or "")
                     if analyzed_key:
@@ -546,6 +715,7 @@ class AuditPipeline:
                                 task_id=self.job_id,
                             )
                         result = self._analyze_subject(subject)
+                        self._assert_authoritative_provider_healthy()
                         result_path = self._write_result_json(subject.note_id, result)
                         persisted = self._persist_audit_result(
                             platform=output.platform,
@@ -610,11 +780,37 @@ class AuditPipeline:
                 job_store.update(self.job_id, status="crawl_paused", items=results)
                 job_store.log(self.job_id, "任务采集已暂停，已处理当前可分析内容")
             else:
+                self._assert_authoritative_provider_healthy()
                 job_store.update(self.job_id, status="completed", items=results)
                 job_store.log(self.job_id, "任务完成")
+        except AuditProviderUnavailableError as exc:
+            job_store.update(
+                self.job_id,
+                status="failed",
+                error="audit_provider_unavailable: 审核服务当前不可用",
+            )
+            job_store.log(
+                self.job_id,
+                f"任务失败：audit_provider_unavailable: {exc}",
+            )
+        except AuditProviderCallError as exc:
+            job_store.update(
+                self.job_id,
+                status="failed",
+                error="audit_provider_failed: 审核服务调用失败",
+            )
+            job_store.log(self.job_id, f"任务失败：audit_provider_failed: {exc}")
         except Exception as exc:
             job_store.update(self.job_id, status="failed", error=str(exc))
             job_store.log(self.job_id, f"任务失败：{exc}")
+
+    def _assert_authoritative_provider_healthy(self) -> None:
+        if not getattr(self, "authoritative_m3", False):
+            return
+        qwen = getattr(self, "qwen", None)
+        provider_failure = str(getattr(qwen, "provider_failure", "") or "")
+        if provider_failure:
+            raise AuditProviderCallError(provider_failure)
 
     def resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5) -> None:
         try:
@@ -785,6 +981,10 @@ class AuditPipeline:
             result=result,
             result_path=str(result_path),
             content_id=content_id,
+            model_text=str(
+                (result.get("model_provenance") or {}).get("model")
+                or settings.qwen_text_model
+            ),
             prompt_version=str(result.get("prompt_version") or ""),
             audit_config_revision_id=self.audit_config_revision_id,
         )
@@ -1065,6 +1265,38 @@ class AuditPipeline:
         job_store.log(self.job_id, f"已有输出入库完成：{len(contents)} 条，待分析 {ingested_count} 条")
         return refs_by_key
 
+    @staticmethod
+    def _select_distinct_contents(
+        contents: list[dict], platform: str, limit: int
+    ) -> list[dict]:
+        selected: list[dict] = []
+        identities: set[str] = set()
+        for content in contents:
+            identity = content_identity(content, platform)
+            if not identity or identity in identities:
+                continue
+            identities.add(identity)
+            selected.append(content)
+            if len(selected) >= limit:
+                break
+        return selected
+
+    def _refs_by_content_key(self, refs: list[dict]) -> dict[str, dict]:
+        refs_by_key: dict[str, dict] = {}
+        for ref in refs:
+            item = ref.get("item") or {}
+            platform = str(ref.get("platform") or "")
+            keys = {
+                str(ref.get("content_key") or ""),
+                self._content_id(item, platform),
+                self._content_url(item, platform),
+                content_identity(item, platform),
+            }
+            for key in keys:
+                if key:
+                    refs_by_key[key] = ref
+        return refs_by_key
+
     def _subject_content_key(self, subject: AuditSubject, refs_by_key: dict[str, dict]) -> str:
         ref = refs_by_key.get(subject.note_id) or refs_by_key.get(subject.url)
         if ref:
@@ -1290,6 +1522,7 @@ class AuditPipeline:
         return False
 
     def _analyze_subject(self, subject: AuditSubject) -> dict:
+        authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
         note_dir = settings.outputs_dir / self.job_id / "assets" / subject.note_id
         started_at = perf_counter()
         job_store.log(
@@ -1299,13 +1532,26 @@ class AuditPipeline:
         )
 
         self._translate_subject_texts(subject)
+        self._validate_authoritative_subject_configuration(subject)
 
         job_store.log(self.job_id, f"笔记 {subject.note_id}：开始图片分析")
         image_analyses = self._analyze_images(subject, note_dir / "images")
+        if authoritative_m3 and (
+            subject.local_image_paths or subject.image_urls
+        ) and not image_analyses:
+            raise AuditProviderCallError(
+                "visual audit produced no image result for selected content"
+            )
         job_store.log(self.job_id, f"笔记 {subject.note_id}：图片分析完成，共 {len(image_analyses)} 张")
 
         job_store.log(self.job_id, f"笔记 {subject.note_id}：开始视频分析")
         video_results = self._analyze_videos(subject, note_dir / "videos")
+        if authoritative_m3 and (
+            subject.local_video_paths or subject.video_urls
+        ) and not video_results:
+            raise AuditProviderCallError(
+                "visual audit produced no video result for selected content"
+            )
         job_store.log(self.job_id, f"笔记 {subject.note_id}：视频分析完成，共 {len(video_results)} 个")
 
         media_summary = self._media_summary_for_comment_audit(image_analyses, video_results)
@@ -1489,7 +1735,7 @@ class AuditPipeline:
         )
         has_risk = bool(risk_evidence) or bool(risk_frames) or bool(risk_images) or decision in ("review", "reject")
 
-        return {
+        result = {
             "note_id": subject.note_id,
             "url": subject.url,
             "title": subject.title,
@@ -1526,6 +1772,230 @@ class AuditPipeline:
             "comment_audit_stats": self._comment_audit_stats(audited_comments),
             "raw_audit": audit,
         }
+        if getattr(self, "authoritative_m3", False):
+            provenance = dict(audit.get("_provider_provenance") or {})
+            completed_modalities = ["text"]
+            vision_models: list[str] = []
+            if image_analyses:
+                completed_modalities.append("vision")
+                vision_models.append(str(settings.qwen_image_audit_model or ""))
+            if video_results:
+                if "vision" not in completed_modalities:
+                    completed_modalities.append("vision")
+                vision_models.append(str(settings.qwen_contact_sheet_model or ""))
+                if any(
+                    str((item.get("transcript") or {}).get("completion_status") or "")
+                    in {"completed", "no_speech"}
+                    for item in video_results
+                ):
+                    completed_modalities.append("asr")
+                elif any(
+                    str((item.get("transcript") or {}).get("completion_status") or "")
+                    == "no_audio_track"
+                    for item in video_results
+                ):
+                    completed_modalities.append("no_audio_track")
+            provenance["completed_modalities"] = completed_modalities
+            provenance["vision_models"] = sorted(
+                {model for model in vision_models if model}
+            )
+            result["model_provenance"] = provenance
+        return result
+
+    def _validate_authoritative_subject_configuration(
+        self, subject: AuditSubject
+    ) -> None:
+        if not getattr(self, "authoritative_m3", False):
+            return
+        required_models: dict[str, str] = {}
+        if subject.local_image_paths or subject.image_urls:
+            required_models["QWEN_IMAGE_AUDIT_MODEL"] = (
+                settings.qwen_image_audit_model
+            )
+        if subject.local_video_paths or subject.video_urls:
+            required_models["QWEN_CONTACT_SHEET_MODEL"] = (
+                settings.qwen_contact_sheet_model
+            )
+        if not required_models:
+            return
+        try:
+            QwenClient.validate_authoritative_vision_configuration(
+                required_models=required_models
+            )
+        except Exception as exc:
+            raise AuditProviderUnavailableError(str(exc)) from exc
+
+    @staticmethod
+    def _validate_authoritative_asr_configuration() -> None:
+        errors: list[str] = []
+        if settings.use_remote_asr:
+            if not settings.remote_asr_base_url:
+                errors.append("REMOTE_ASR_BASE_URL")
+        elif settings.asr_engine == "dolphin":
+            if not str(settings.dolphin_model or "").strip():
+                errors.append("DOLPHIN_MODEL")
+        elif settings.asr_engine == "whisper":
+            if not str(settings.whisper_model or "").strip():
+                errors.append("WHISPER_MODEL")
+        else:
+            errors.append("ASR_ENGINE")
+        if errors:
+            raise AuditProviderUnavailableError(
+                "authoritative ASR Provider configuration is incomplete: "
+                + ", ".join(sorted(set(errors)))
+            )
+
+    @staticmethod
+    def _validated_authoritative_transcript(value: object) -> dict:
+        if not isinstance(value, dict):
+            raise AuditProviderCallError("ASR Provider response is not an object")
+        if str(value.get("error") or "").strip():
+            raise AuditProviderCallError(
+                f"ASR Provider returned an error: {value.get('error')}"
+            )
+        text = value.get("text")
+        segments = value.get("segments")
+        if not isinstance(text, str) or not isinstance(segments, list):
+            raise AuditProviderCallError("ASR Provider response has invalid text/segments")
+        if any(not isinstance(segment, dict) for segment in segments):
+            raise AuditProviderCallError("ASR Provider response has invalid segments")
+        provider = str(value.get("asr_engine") or value.get("provider") or "").strip()
+        if not provider:
+            raise AuditProviderCallError("ASR Provider response has no provider identity")
+        transcript = dict(value)
+        transcript["completion_status"] = (
+            "completed" if text.strip() or segments else "no_speech"
+        )
+        return transcript
+
+    @staticmethod
+    def _validated_authoritative_visual_response(
+        value: object, *, response_contract: str
+    ) -> dict:
+        if not isinstance(value, dict) or not value:
+            raise AuditProviderCallError(
+                "visual Provider response is empty or not an object"
+            )
+        if str(value.get("error") or "").strip():
+            raise AuditProviderCallError(
+                f"visual Provider returned an error: {value.get('error')}"
+            )
+
+        def require_string(container: dict, field: str) -> None:
+            if field not in container or not isinstance(container[field], str):
+                raise AuditProviderCallError(
+                    f"visual Provider response has invalid {field}"
+                )
+
+        def require_string_list(container: dict, field: str) -> None:
+            values = container.get(field)
+            if not isinstance(values, list) or any(
+                not isinstance(item, str) for item in values
+            ):
+                raise AuditProviderCallError(
+                    f"visual Provider response has invalid {field}"
+                )
+
+        def validate_optional_common_fields(
+            container: dict, *, allow_none_risk_level: bool = False
+        ) -> None:
+            for field in ("rule_id", "id"):
+                if field in container and not isinstance(container[field], str):
+                    raise AuditProviderCallError(
+                        f"visual Provider response has invalid {field}"
+                    )
+            if "matched_exemption_ids" in container:
+                require_string_list(container, "matched_exemption_ids")
+            if "risk_level" in container:
+                allowed_risk_levels = {"low", "medium", "high"}
+                if allow_none_risk_level:
+                    allowed_risk_levels.add("none")
+                if container["risk_level"] not in allowed_risk_levels:
+                    raise AuditProviderCallError(
+                        "visual Provider response has invalid risk_level"
+                    )
+
+        def require_score(container: dict, field: str) -> None:
+            score = container.get(field)
+            if (
+                isinstance(score, bool)
+                or not isinstance(score, (int, float))
+                or not 0 <= score <= 100
+            ):
+                raise AuditProviderCallError(
+                    f"visual Provider response has invalid {field}"
+                )
+
+        if response_contract == "image":
+            require_string(value, "visual_summary")
+            for optional_string in ("ocr_text", "benign_context", "safe_context"):
+                if optional_string in value and not isinstance(
+                    value[optional_string], str
+                ):
+                    raise AuditProviderCallError(
+                        f"visual Provider response has invalid {optional_string}"
+                    )
+            risk_items = value.get("risk_items")
+            if not isinstance(risk_items, list):
+                raise AuditProviderCallError(
+                    "visual Provider response has invalid risk_items"
+                )
+            for item in risk_items:
+                if not isinstance(item, dict):
+                    raise AuditProviderCallError(
+                        "visual Provider response has a non-object risk item"
+                    )
+                for field in ("risk_type", "evidence", "reason", "severity"):
+                    require_string(item, field)
+                if item["severity"] not in {"low", "medium", "high"}:
+                    raise AuditProviderCallError(
+                        "visual Provider response has invalid severity"
+                    )
+                validate_optional_common_fields(item)
+            return dict(value)
+
+        if response_contract == "video_segment":
+            require_string(value, "segment_summary")
+            require_score(value, "segment_score")
+            for field in ("risk_library_id", "risk_library_label"):
+                require_string(value, field)
+            if "segment_level" in value and value["segment_level"] not in {
+                "none",
+                "low",
+                "medium",
+                "high",
+            }:
+                raise AuditProviderCallError(
+                    "visual Provider response has invalid segment_level"
+                )
+            for risk_field in ("visual_risks", "ocr_risks", "asr_risks"):
+                risk_items = value.get(risk_field)
+                if not isinstance(risk_items, list):
+                    raise AuditProviderCallError(
+                        f"visual Provider response has invalid {risk_field}"
+                    )
+                for item in risk_items:
+                    if not isinstance(item, dict):
+                        raise AuditProviderCallError(
+                            f"visual Provider response has a non-object {risk_field} item"
+                        )
+                    for field in ("risk_type", "reason"):
+                        require_string(item, field)
+                    require_score(item, "score")
+                    if risk_field in {"visual_risks", "ocr_risks"}:
+                        require_string_list(item, "frame_ids")
+                    if risk_field == "ocr_risks":
+                        require_string(item, "ocr_chunk_id")
+                    elif risk_field == "asr_risks":
+                        require_string(item, "asr_chunk_id")
+                    validate_optional_common_fields(
+                        item, allow_none_risk_level=True
+                    )
+            return dict(value)
+
+        raise AuditProviderCallError(
+            f"unknown authoritative visual response contract: {response_contract}"
+        )
 
     def _translate_subject_texts(self, subject: AuditSubject) -> None:
         translator = getattr(self, "translator", None)
@@ -2046,6 +2516,7 @@ class AuditPipeline:
         return "pass"
 
     def _run_fusion_audit(self, note_id: str, prompt: str, *, contract_validator=None) -> dict:
+        authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
         retries = max(0, settings.fusion_timeout_retries)
         attempts = retries + 1
         timeout = max(1, settings.fusion_request_timeout)
@@ -2072,6 +2543,10 @@ class AuditPipeline:
                         f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 失败，"
                         f"耗时={elapsed:.1f}s，error={exc}",
                     )
+                    if authoritative_m3:
+                        raise AuditProviderCallError(
+                            "text Provider request failed"
+                        ) from exc
                     raise
                 if attempt < attempts:
                     job_store.log(
@@ -2085,6 +2560,10 @@ class AuditPipeline:
                     f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 超时，"
                     f"耗时={elapsed:.1f}s，重试次数已用尽",
                 )
+                if authoritative_m3:
+                    raise AuditProviderCallError(
+                        "text Provider request timed out"
+                    ) from exc
                 raise FusionAuditTimeoutError(
                     f"连续 {attempts} 次调用超时，单次上限 {timeout}s"
                 ) from exc
@@ -2101,6 +2580,10 @@ class AuditPipeline:
                 )
                 if attempt < attempts:
                     continue
+                if authoritative_m3:
+                    raise AuditProviderCallError(
+                        "text Provider response violated the audit contract"
+                    ) from exc
                 raise
 
             elapsed = perf_counter() - started_at
@@ -2109,6 +2592,21 @@ class AuditPipeline:
                 if isinstance(audit, dict) and isinstance(audit.get("_llm_meta"), dict)
                 else {}
             )
+            provider = str(
+                llm_meta.get("provider")
+                or (
+                    "remote_openai_compatible"
+                    if settings.use_remote_llm
+                    else "dashscope_openai_compatible"
+                )
+            )
+            if authoritative_m3:
+                audit["_provider_provenance"] = {
+                    "provider": provider,
+                    "model": str(llm_meta.get("model") or settings.qwen_text_model),
+                    "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+                    "prompt_version": self.prompt_set.prompt_version,
+                }
             job_store.log(
                 self.job_id,
                 f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 完成，"
@@ -5105,6 +5603,7 @@ class AuditPipeline:
         return text[: max_chars - len(suffix)] + suffix
 
     def _analyze_images(self, subject: AuditSubject, image_dir: Path) -> list[dict]:
+        authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
         results = []
         job_root = settings.outputs_dir / self.job_id
         local_images = [Path(path) for path in subject.local_image_paths if Path(path).exists()]
@@ -5130,7 +5629,13 @@ class AuditPipeline:
                     self.prompt_set.image_prompt,
                     model=settings.qwen_image_audit_model,
                 )
-                analysis = dict(analysis or {})
+                analysis = (
+                    self._validated_authoritative_visual_response(
+                        analysis, response_contract="image"
+                    )
+                    if authoritative_m3
+                    else dict(analysis or {})
+                )
                 raw_risk_items = analysis.get("risk_items")
                 analysis["risk_items"] = self._filter_stage_risk_items(
                     raw_risk_items,
@@ -5154,6 +5659,12 @@ class AuditPipeline:
                     **ocr_fields,
                 })
             except Exception as exc:
+                if authoritative_m3:
+                    if isinstance(exc, AuditProviderCallError):
+                        raise
+                    raise AuditProviderCallError(
+                        f"visual Provider failed for local image: {exc}"
+                    ) from exc
                 job_store.log(self.job_id, f"笔记 {subject.note_id}：本地图片 {idx + 1} 分析失败：{exc}")
                 results.append({
                     "index": idx,
@@ -5202,7 +5713,13 @@ class AuditPipeline:
                     self.prompt_set.image_prompt,
                     model=settings.qwen_image_audit_model,
                 )
-                analysis = dict(analysis or {})
+                analysis = (
+                    self._validated_authoritative_visual_response(
+                        analysis, response_contract="image"
+                    )
+                    if authoritative_m3
+                    else dict(analysis or {})
+                )
                 raw_risk_items = analysis.get("risk_items")
                 analysis["risk_items"] = self._filter_stage_risk_items(
                     raw_risk_items,
@@ -5225,6 +5742,12 @@ class AuditPipeline:
                     **ocr_fields,
                 })
             except Exception as exc:
+                if authoritative_m3:
+                    if isinstance(exc, AuditProviderCallError):
+                        raise
+                    raise AuditProviderCallError(
+                        f"visual Provider failed for remote image: {exc}"
+                    ) from exc
                 job_store.log(self.job_id, f"笔记 {subject.note_id}：远程图片 {idx + 1} 分析失败：{exc}")
                 results.append({
                     "index": idx,
@@ -5368,6 +5891,7 @@ class AuditPipeline:
         title: str = "",
         desc: str = "",
     ) -> dict:
+        authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
         started_at = perf_counter()
         video_label = f"视频 {index + 1}"
         job_store.log(self.job_id, f"{video_label}：开始处理 {video_path}")
@@ -5394,7 +5918,11 @@ class AuditPipeline:
             audio_path = self.audio.extract_audio(video_path, video_dir / f"audio_{index:02d}")
             if audio_path:
                 job_store.log(self.job_id, f"{video_label}：音频抽取完成，开始 ASR 转写")
+                if authoritative_m3:
+                    self._validate_authoritative_asr_configuration()
                 transcript = self.audio.transcribe(audio_path)
+                if authoritative_m3:
+                    transcript = self._validated_authoritative_transcript(transcript)
                 transcript = self._translate_transcript_if_needed(
                     transcript,
                     video_label,
@@ -5411,10 +5939,40 @@ class AuditPipeline:
                     f"文本长度={len(transcript.get('text', ''))}",
                 )
             else:
-                detail = getattr(self.audio, "last_extract_error", "") or "audio extraction failed"
-                errors.append(f"audio extraction failed: {detail}")
-                job_store.log(self.job_id, f"{video_label}：音频抽取失败：{detail}，跳过转写")
+                extract_status = str(
+                    getattr(self.audio, "last_extract_status", "") or ""
+                )
+                if authoritative_m3 and extract_status == "no_audio_track":
+                    transcript = {
+                        "text": "",
+                        "segments": [],
+                        "completion_status": "no_audio_track",
+                    }
+                    job_store.log(
+                        self.job_id,
+                        f"{video_label}：媒体已确定无音轨，跳过 ASR",
+                    )
+                elif authoritative_m3:
+                    detail = (
+                        getattr(self.audio, "last_extract_error", "")
+                        or "audio extraction did not prove success"
+                    )
+                    raise AuditProviderCallError(
+                        f"audio extraction failed: {detail}"
+                    )
+                else:
+                    detail = getattr(self.audio, "last_extract_error", "") or "audio extraction failed"
+                    errors.append(f"audio extraction failed: {detail}")
+                    job_store.log(self.job_id, f"{video_label}：音频抽取失败：{detail}，跳过转写")
         except Exception as exc:
+            if authoritative_m3:
+                if isinstance(
+                    exc, (AuditProviderUnavailableError, AuditProviderCallError)
+                ):
+                    raise
+                raise AuditProviderCallError(
+                    f"audio extraction or ASR failed: {exc}"
+                ) from exc
             errors.append(f"audio/transcribe failed: {exc}")
             job_store.log(self.job_id, f"{video_label}：音频/转写失败：{exc}")
 
@@ -5548,6 +6106,10 @@ class AuditPipeline:
                     max_tokens=settings.fusion_max_tokens,
                     model=settings.qwen_contact_sheet_model,
                 )
+                if authoritative_m3:
+                    raw_analysis = self._validated_authoritative_visual_response(
+                        raw_analysis, response_contract="video_segment"
+                    )
                 analysis = self._normalize_segment_review(
                     raw_analysis,
                     sheet,
@@ -5624,6 +6186,12 @@ class AuditPipeline:
                 })
 
         except Exception as exc:
+            if authoritative_m3:
+                if isinstance(exc, AuditProviderCallError):
+                    raise
+                raise AuditProviderCallError(
+                    f"visual Provider or frame analysis failed: {exc}"
+                ) from exc
             errors.append(f"frame analysis failed: {exc}")
             job_store.log(self.job_id, f"{video_label}：视频画面分析失败：{exc}")
 

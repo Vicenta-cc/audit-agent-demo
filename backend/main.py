@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Literal, Optional
 from urllib.parse import urlparse
@@ -33,6 +34,7 @@ from .audit_agent.creator_url import (
     validate_creator_url as validate_creator_url_contract,
 )
 from .audit_agent.crawler_login_manager import crawler_account_login_manager
+from .audit_agent.runtime_boundary import runtime_data_directory_error
 from .audit_agent.crawler_adapter import SUPPORTED_PLATFORMS, MediaCrawlerAdapter
 from .audit_agent.evidence_groups import build_evidence_groups
 from .audit_agent.ingestion import AuditResultStore, IngestionStore
@@ -913,7 +915,24 @@ def enrich_job(job: dict) -> dict:
                 "prompt_version": (revision.get("prompt_profile_snapshot") or {}).get("prompt_version", ""),
                 "audit_config": revision.get("audit_config") or {},
             }
-    return enriched
+    return redact_authoritative_m3_crawler_account(enriched)
+
+
+def redact_authoritative_m3_crawler_account(job: dict) -> dict:
+    if not str(job.get("id") or "").startswith("m3-"):
+        return job
+    public_job = dict(job)
+    public_job.pop("crawler_account_id", None)
+    public_job.pop("crawler_account_display_name", None)
+    public_job["logs"] = [
+        dict(item)
+        for item in public_job.get("logs") or []
+        if not any(
+            marker in str(item.get("message") or "")
+            for marker in ("执行账号", "采集账号")
+        )
+    ]
+    return public_job
 
 
 def validate_crawler_account_for_job(account_id: str | None, platform: str) -> dict | None:
@@ -1029,6 +1048,11 @@ def config_js():
 
 @app.get("/api/config")
 def get_config():
+    runtime_boundary_error = runtime_data_directory_error(
+        data_dir=settings.data_dir,
+        account_db_path=crawler_account_store.db_path,
+        outputs_dir=settings.outputs_dir,
+    )
     return {
         "supported_platforms": sorted(SUPPORTED_PLATFORMS),
         "default_keyword": "泳装",
@@ -1086,6 +1110,9 @@ def get_config():
         "crawler_max_concurrency": settings.crawler_max_concurrency,
         "crawler_sleep_seconds": settings.crawler_sleep_seconds,
         "outputs_dir": str(settings.outputs_dir),
+        "runtime_data_dir": str(settings.data_dir),
+        "runtime_backend_port": os.getenv("XHS_AUDIT_BACKEND_PORT", ""),
+        "runtime_boundary_error": runtime_boundary_error,
         "risk_rule_defaults": {
             "capabilities": DEFAULT_CAPABILITIES,
             "thresholds": DEFAULT_THRESHOLDS,

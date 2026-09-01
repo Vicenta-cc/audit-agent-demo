@@ -106,7 +106,7 @@ class InvestigationCreationStore:
                     draft_revision INTEGER NOT NULL CHECK(draft_revision >= 1),
                     idempotency_key TEXT NOT NULL,
                     status TEXT NOT NULL CHECK(status IN (
-                        'QUEUED', 'RUNNING', 'REPORT_GENERATING',
+                        'QUEUED', 'RUNNING', 'AUDIT_COMPLETED', 'REPORT_GENERATING',
                         'PUBLISHED', 'FAILED', 'INTERRUPTED'
                     )),
                     confirmed_configuration_json TEXT NOT NULL,
@@ -183,7 +183,6 @@ class InvestigationCreationStore:
                 WHERE is_mutation = 1;
                 """
             )
-
         # Serialize additive upgrades so concurrent process initialization cannot
         # both observe and alter the same missing column.
         with self._connect() as connection:
@@ -277,6 +276,74 @@ class InvestigationCreationStore:
                     """,
                     (fingerprint, str(key["idempotency_key"])),
                 )
+        with self._connect() as connection:
+            self._ensure_audit_completed_status(connection)
+
+    @staticmethod
+    def _ensure_audit_completed_status(connection: sqlite3.Connection) -> None:
+        row = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'investigation_runs'"
+        ).fetchone()
+        if row is None or "AUDIT_COMPLETED" in str(row["sql"] or ""):
+            return
+        columns = (
+            "id, owner_principal, draft_id, draft_revision, idempotency_key, status, "
+            "confirmed_configuration_json, confirmed_by, confirmed_at, job_id, "
+            "pipeline_started_at, pipeline_returned_at, report_version_id, "
+            "report_session_id, error_code, error_message, claimed_by, claim_token, "
+            "claimed_at, heartbeat_at, recovery_required, created_at, updated_at, "
+            "started_at, completed_at"
+        )
+        connection.commit()
+        connection.execute("PRAGMA foreign_keys = OFF")
+        try:
+            connection.executescript(
+                f"""
+                BEGIN IMMEDIATE;
+                CREATE TABLE investigation_runs_audit_completed (
+                    id TEXT PRIMARY KEY,
+                    owner_principal TEXT NOT NULL,
+                    draft_id TEXT NOT NULL,
+                    draft_revision INTEGER NOT NULL CHECK(draft_revision >= 1),
+                    idempotency_key TEXT NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN (
+                        'QUEUED', 'RUNNING', 'AUDIT_COMPLETED', 'REPORT_GENERATING',
+                        'PUBLISHED', 'FAILED', 'INTERRUPTED'
+                    )),
+                    confirmed_configuration_json TEXT NOT NULL,
+                    confirmed_by TEXT NOT NULL,
+                    confirmed_at TEXT NOT NULL,
+                    job_id TEXT NOT NULL DEFAULT '',
+                    pipeline_started_at TEXT NOT NULL DEFAULT '',
+                    pipeline_returned_at TEXT NOT NULL DEFAULT '',
+                    report_version_id TEXT NOT NULL DEFAULT '',
+                    report_session_id TEXT NOT NULL DEFAULT '',
+                    error_code TEXT NOT NULL DEFAULT '',
+                    error_message TEXT NOT NULL DEFAULT '',
+                    claimed_by TEXT NOT NULL DEFAULT '',
+                    claim_token TEXT NOT NULL DEFAULT '',
+                    claimed_at TEXT NOT NULL DEFAULT '',
+                    heartbeat_at TEXT NOT NULL DEFAULT '',
+                    recovery_required INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    started_at TEXT NOT NULL DEFAULT '',
+                    completed_at TEXT NOT NULL DEFAULT '',
+                    UNIQUE(draft_id, draft_revision),
+                    FOREIGN KEY(draft_id, draft_revision)
+                        REFERENCES investigation_draft_revisions(draft_id, revision)
+                );
+                INSERT INTO investigation_runs_audit_completed ({columns})
+                SELECT {columns} FROM investigation_runs;
+                DROP TABLE investigation_runs;
+                ALTER TABLE investigation_runs_audit_completed RENAME TO investigation_runs;
+                CREATE INDEX idx_investigation_runs_status
+                ON investigation_runs(status, created_at, id);
+                COMMIT;
+                """
+            )
+        finally:
+            connection.execute("PRAGMA foreign_keys = ON")
 
     @staticmethod
     def _ensure_column(
@@ -591,6 +658,14 @@ class InvestigationCreationStore:
                 draft_configuration = InvestigationConfiguration.model_validate_json(
                     str(draft["configuration_json"])
                 )
+                # Keep the legacy v2 snapshot free of M3-only account fields.
+                legacy_execution = dict(resolved_configuration)
+                for key in (
+                    "crawler_account_id",
+                    "crawler_account_display_name",
+                    "crawler_account_confirmed_state",
+                ):
+                    legacy_execution.pop(key, None)
                 snapshot = {
                     "schema_version": "investigation-run-config-v2",
                     "draft_id": draft_id,
@@ -598,7 +673,7 @@ class InvestigationCreationStore:
                     "title": str(draft["title"]),
                     "objective": str(draft["objective"]),
                     "draft_configuration": draft_configuration.model_dump(mode="json"),
-                    "execution": resolved_configuration,
+                    "execution": legacy_execution,
                 }
             else:
                 resolution = ConfirmationResolution.model_validate(
@@ -1130,6 +1205,17 @@ class InvestigationCreationStore:
             if binding is None or str(binding["generation_key"]) != generation_key:
                 raise InvalidStateTransitionError("report generation binding conflict")
         return self.get_run_for_worker(run_id)
+
+    def mark_audit_completed(
+        self, run_id: str, claim_token: str
+    ) -> InvestigationRun:
+        return self._mark_terminal(
+            run_id,
+            claim_token,
+            RunStatus.AUDIT_COMPLETED,
+            error_code="",
+            error_message="",
+        )
 
     @staticmethod
     def generation_key_for_run(run_id: str) -> str:

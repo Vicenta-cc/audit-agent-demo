@@ -219,6 +219,7 @@ function run(status: InvestigationRunProjection["status"], overrides = {}): Inve
     crawl_status: "pending",
     analysis_status: "pending",
     task_stats: {},
+    audit_results: [],
     report_status: "pending",
     report_version_id: "",
     error_code: "",
@@ -526,6 +527,22 @@ test("restores the same confirmed Run and published report version in one worksp
   expect(JSON.stringify(published)).not.toContain("report_session_id");
 });
 
+test("restores an audit-completed Run without claiming a generated report", () => {
+  const auditCompleted = restoreInvestigationWorkspace(workspaceState({
+    run: run("AUDIT_COMPLETED", {
+      crawl_status: "completed",
+      analysis_status: "completed",
+      task_stats: { ingested_count: 1, completed_analysis_count: 1 },
+      report_status: "pending"
+    })
+  }));
+
+  expect(auditCompleted.status).toBe("审核完成");
+  expect(auditCompleted.executionProgress).toBe(75);
+  expect(auditCompleted.executionPhase).toBe("audit_completed");
+  expect(auditCompleted.creationBinding?.run?.report_version_id).toBe("");
+});
+
 test("restores report messages and a pending report Turn in the same workspace", () => {
   const published = restoreInvestigationWorkspace(workspaceState({
     run: run("PUBLISHED", {
@@ -773,6 +790,15 @@ test("maps only real Run projection states, including parallel crawl and analysi
   expect(mapInvestigationRunState(run("RUNNING", {
     crawl_status: "completed", analysis_status: "completed"
   }))).toMatchObject({ phase: "audit_completed", step: 3, activity: "queued" });
+  expect(mapInvestigationRunState(run("AUDIT_COMPLETED", {
+    crawl_status: "completed", analysis_status: "completed"
+  }))).toMatchObject({
+    phase: "audit_completed",
+    label: "审核完成",
+    step: 3,
+    activity: "completed",
+    terminal: null
+  });
   expect(mapInvestigationRunState(run("REPORT_GENERATING"))).toMatchObject({
     phase: "report_generating", step: 4, activity: "running"
   });
@@ -841,10 +867,61 @@ test("maps one real report post and its five-category Evidence without invented 
 
 test("analysis progress counts come only from Run task statistics", () => {
   expect(readRunAnalysisCounts(run("RUNNING", {
-    task_stats: { ingested_count: 1, completed_analysis_count: 0 }
-  }))).toEqual({ completedCount: 0, totalCount: 1 });
+    task_stats: {
+      ingested_count: 1,
+      completed_analysis_count: 1,
+      batch_item_count: 10,
+      total: 20
+    }
+  }))).toEqual({ completedCount: 1, totalCount: 1 });
   expect(readRunAnalysisCounts(run("RUNNING", { task_stats: {} })))
     .toEqual({ completedCount: 0, totalCount: 0 });
+});
+
+test("audit-completed records come directly from the current Job projection", async () => {
+  let fetchCalls = 0;
+  globalThis.fetch = async () => {
+    fetchCalls += 1;
+    throw new Error("AUDIT_COMPLETED must not fetch ReportVersion data");
+  };
+  const result = await loadM3AnalysisRecords(run("AUDIT_COMPLETED", {
+    crawl_status: "completed",
+    analysis_status: "completed",
+    task_stats: { ingested_count: 1, completed_analysis_count: 1 },
+    report_status: "pending",
+    audit_results: [{
+      audit_result_id: "audit-result-1",
+      content_key: "7590000000000000001",
+      platform: "dy",
+      content_title: "世界杯稳赚交流群",
+      author_display_name: "内容作者甲",
+      decision: "review",
+      risk_level: "high",
+      summary: "视频包含稳赚承诺和站外引流，建议复核。",
+      analyzed_at: "2026-09-01T08:00:00Z",
+      evidence: [{
+        evidence_id: "ev-asr-1",
+        evidence_type: "video_asr",
+        content: "加入世界杯交流，宣称稳赚",
+        translation: "",
+        explanation: "命中稳赚承诺"
+      }]
+    }]
+  }));
+
+  expect(fetchCalls).toBe(0);
+  expect(result).toMatchObject({ completedCount: 1, totalCount: 1 });
+  expect(result.records[0]).toMatchObject({
+    source: "m3-job",
+    taskId: "job-1",
+    outputId: "audit-result-1",
+    platform: "抖音",
+    author: "内容作者甲",
+    decisionLabel: "需复核",
+    riskLabel: "高风险",
+    summary: "视频包含稳赚承诺和站外引流，建议复核。",
+    evidenceCounts: { text: 0, ocr: 0, asr: 1, comment: 0, vision: 0 }
+  });
 });
 
 test("published M3 records fail closed when the ReportVersion has no structured report", async () => {

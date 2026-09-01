@@ -10,6 +10,7 @@ from typing import Any, Iterator
 import unicodedata
 
 from backend.audit_agent.audit_policy_store import AuditPolicyStore
+from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
 from backend.audit_agent.crawler_adapter import SUPPORTED_PLATFORMS
 from backend.audit_agent.lexicon_store import LexiconStore
@@ -20,6 +21,7 @@ from backend.rulesets.service import RuleSetService
 from .contracts import (
     AuditPolicySelection,
     AuditPolicySummary,
+    CrawlerAccountConfirmedState,
     ConfirmationPreview,
     ConfirmationResolution,
     ConfirmedRecallPlanSnapshot,
@@ -56,17 +58,23 @@ class InvestigationResourceService:
         policy_store: AuditPolicyStore,
         ruleset_service: RuleSetService,
         configuration_resolver: Any,
+        crawler_account_store: CrawlerAccountStore | None = None,
     ) -> None:
         self.lexicon_store = lexicon_store
         self.policy_store = policy_store
         self.ruleset_service = ruleset_service
         self.configuration_resolver = configuration_resolver
+        self.crawler_account_store = (
+            crawler_account_store
+            or configuration_resolver.crawler_account_store
+        )
         resource_paths = {
             Path(path).expanduser().resolve()
             for path in (
                 self.lexicon_store.db_path,
                 self.policy_store.db_path,
                 self.ruleset_service.store.db_path,
+                self.crawler_account_store.db_path,
             )
         }
         if len(resource_paths) != 1:
@@ -253,6 +261,19 @@ class InvestigationResourceService:
         policy_summary: AuditPolicySummary | None = None
         ruleset_summary: RuleSetRevisionSummary | None = None
         management_url = self._management_url(draft.id)
+        available_accounts = self._available_crawler_accounts(
+            configuration.platform.value,
+            connection=resource_connection,
+        )
+        if not available_accounts:
+            blockers.append(
+                self._blocker(
+                    "collection_service_unavailable",
+                    self._collection_unavailable_message(
+                        configuration.platform.value
+                    ),
+                )
+            )
 
         if configuration.audit_policy is None:
             blockers.append(
@@ -490,6 +511,16 @@ class InvestigationResourceService:
         configuration = InvestigationDraftConfiguration.model_validate(
             draft.configuration.model_dump(mode="json")
         )
+        available_accounts = self._available_crawler_accounts(
+            configuration.platform.value,
+            connection=resource_connection,
+        )
+        if not available_accounts:
+            raise ConfigurationValidationError(
+                self._collection_unavailable_message(configuration.platform.value),
+                code="collection_service_unavailable",
+            )
+        selected_account = available_accounts[0]
         mode = configuration.investigation.mode
         collection: dict[str, Any]
         if mode == "search":
@@ -498,6 +529,7 @@ class InvestigationResourceService:
                 "keyword_source": "keyword",
                 "keywords": list(preview.resolved_search_terms),
                 "max_notes": 1,
+                "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
             }
         else:
@@ -507,12 +539,16 @@ class InvestigationResourceService:
                 "keywords": [],
                 "creator_url": preview.creator_url,
                 "max_notes": 1,
+                "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
             }
         legacy = {
             "platform": configuration.platform.value,
             "collection": collection,
-            "analysis": {"policy_id": preview.audit_policy.id},
+            "analysis": {
+                "policy_id": preview.audit_policy.id,
+                "analyze_limit": 1,
+            },
         }
         resolved = dict(
             self.configuration_resolver.resolve(
@@ -521,7 +557,24 @@ class InvestigationResourceService:
                 resource_connection=resource_connection,
             )
         )
-        resolved["max_notes"] = 1
+        resolved.update(
+            {
+                "max_notes": 1,
+                "analyze_limit": 1,
+                "crawler_account_id": selected_account["id"],
+                "crawler_account_display_name": selected_account["display_name"],
+                "crawler_account_confirmed_state": CrawlerAccountConfirmedState(
+                    status="active",
+                    has_auth_state=True,
+                    auth_state_updated_at=str(
+                        selected_account.get("auth_state_updated_at") or ""
+                    ),
+                    last_validated_at=str(
+                        selected_account.get("last_validated_at") or ""
+                    ),
+                ).model_dump(mode="json"),
+            }
+        )
 
         recall_snapshot: ConfirmedRecallPlanSnapshot | None = None
         if mode == "search":
@@ -845,6 +898,28 @@ class InvestigationResourceService:
     @staticmethod
     def _management_url(draft_id: str) -> str:
         return f"{_RULES_MANAGEMENT_PATH}&draft_id={draft_id}"
+
+    def _available_crawler_accounts(
+        self,
+        platform: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> list[dict[str, Any]]:
+        available = [
+            account
+            for account in self.crawler_account_store.list(
+                platform=platform,
+                connection=connection,
+            )
+            if account["status"] == "active" and account["has_auth_state"]
+        ]
+        return sorted(available, key=lambda account: str(account["id"]))
+
+    @staticmethod
+    def _collection_unavailable_message(platform: str) -> str:
+        if platform == "dy":
+            return "抖音采集服务当前不可用，请稍后重试。"
+        return "采集服务当前不可用，请稍后重试。"
 
     @staticmethod
     def _blocker(

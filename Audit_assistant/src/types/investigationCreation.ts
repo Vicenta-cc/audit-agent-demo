@@ -5,6 +5,7 @@ export type InvestigationCreationPlatform = Exclude<InvestigationPlatform, "wb">
 export type InvestigationRunStatus =
   | "QUEUED"
   | "RUNNING"
+  | "AUDIT_COMPLETED"
   | "REPORT_GENERATING"
   | "PUBLISHED"
   | "FAILED"
@@ -154,6 +155,7 @@ export interface InvestigationRunProjection {
   crawl_status: string;
   analysis_status: string;
   task_stats: Record<string, unknown>;
+  audit_results: CompletedAuditResult[];
   report_status: string;
   report_version_id: string;
   error_code: string;
@@ -162,6 +164,27 @@ export interface InvestigationRunProjection {
   updated_at: string;
   started_at: string;
   completed_at: string;
+}
+
+export interface CompletedAuditEvidence {
+  evidence_id: string;
+  evidence_type: string;
+  content: string;
+  translation: string;
+  explanation: string;
+}
+
+export interface CompletedAuditResult {
+  audit_result_id: string;
+  content_key: string;
+  platform: string;
+  content_title: string;
+  author_display_name: string;
+  decision: string;
+  risk_level: string;
+  summary: string;
+  analyzed_at: string;
+  evidence: CompletedAuditEvidence[];
 }
 
 export interface InvestigationRunArtifact {

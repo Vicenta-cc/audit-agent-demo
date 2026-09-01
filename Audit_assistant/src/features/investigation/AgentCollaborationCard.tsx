@@ -34,12 +34,14 @@ interface AgentCollaborationCardProps {
 
 export function EvidenceRelayPipeline({
   isDone,
+  auditCompleted = false,
   isStopped = false,
   authoritative = false,
   activeStep = 1,
   isQueued = false
 }: {
   isDone: boolean;
+  auditCompleted?: boolean;
   isStopped?: boolean;
   authoritative?: boolean;
   activeStep?: 1 | 2 | 3 | 4;
@@ -51,7 +53,7 @@ export function EvidenceRelayPipeline({
     <div className="evidence-pipeline" aria-label="证据接力流水线">
       <svg
         viewBox="0 0 640 112"
-        className={`evidence-pipeline-svg ${isDone ? "is-done" : isStopped ? "is-stopped" : isQueued ? "is-queued" : "is-running"}`}
+        className={`evidence-pipeline-svg ${isDone ? "is-done" : auditCompleted ? "is-audit-completed" : isStopped ? "is-stopped" : isQueued ? "is-queued" : "is-running"}`}
         preserveAspectRatio="xMidYMid meet"
       >
         <text x="76" y="19" className="pipeline-node-label">数据采集</text>
@@ -62,7 +64,7 @@ export function EvidenceRelayPipeline({
         <line x1="100" y1="66" x2="212" y2="66" className="pipeline-track" />
         <line x1="260" y1="66" x2="380" y2="66" className="pipeline-track" />
         <line x1="428" y1="66" x2="540" y2="66" className="pipeline-track" />
-        {!isDone && !isStopped && !isQueued ? (
+        {!isDone && !auditCompleted && !isStopped && !isQueued ? (
           <g aria-hidden="true">
             {(!authoritative || activeStep >= 2) ? <line x1="100" y1="66" x2="212" y2="66" className="pipeline-track-flow pipeline-track-flow--1" /> : null}
             {(!authoritative || activeStep >= 3) ? <line x1="260" y1="66" x2="380" y2="66" className="pipeline-track-flow pipeline-track-flow--2" /> : null}
@@ -70,7 +72,7 @@ export function EvidenceRelayPipeline({
           </g>
         ) : null}
 
-        <g className={`pipeline-node pipeline-node--source ${isDone || activeStep > 1 ? "is-done" : ""} ${!isDone && !isStopped && !isQueued && activeStep === 1 ? "is-active" : ""}`}>
+        <g className={`pipeline-node pipeline-node--source ${isDone || auditCompleted || activeStep > 1 ? "is-done" : ""} ${!isDone && !auditCompleted && !isStopped && !isQueued && activeStep === 1 ? "is-active" : ""}`}>
           <circle cx="76" cy="66" r="22" className="pipeline-node-bg" />
           <g transform="translate(76, 66)">
             <circle cx="0" cy="0" r="14" className="pipeline-radar-ring" />
@@ -80,7 +82,7 @@ export function EvidenceRelayPipeline({
           </g>
         </g>
 
-        <g className={`pipeline-node pipeline-node--analysis ${isDone || activeStep > 2 ? "is-done" : ""} ${!isDone && !isStopped && !isQueued && activeStep === 2 ? "is-active" : ""}`}>
+        <g className={`pipeline-node pipeline-node--analysis ${isDone || auditCompleted || activeStep > 2 ? "is-done" : ""} ${!isDone && !auditCompleted && !isStopped && !isQueued && activeStep === 2 ? "is-active" : ""}`}>
           <circle cx="236" cy="66" r="22" className="pipeline-node-bg" />
           <g transform="translate(236, 66)" className="pipeline-analysis-glyph">
             <path d="M 0 -9 L 8 0 L 0 9 L -8 0 Z" />
@@ -88,7 +90,7 @@ export function EvidenceRelayPipeline({
           </g>
         </g>
 
-        <g className={`pipeline-node pipeline-node--risk ${isDone || activeStep > 3 ? "is-done" : ""} ${!isDone && !isStopped && !isQueued && (activeStep === 3 || (authoritative && activeStep === 2)) ? "is-active" : ""}`}>
+        <g className={`pipeline-node pipeline-node--risk ${isDone || auditCompleted || activeStep > 3 ? "is-done" : ""} ${!isDone && !auditCompleted && !isStopped && !isQueued && (activeStep === 3 || (authoritative && activeStep === 2)) ? "is-active" : ""}`}>
           <circle cx="404" cy="66" r="22" className="pipeline-node-bg" />
           <g transform="translate(404, 66)" className="pipeline-risk-glyph">
             <path d="M -9 1 A 9 9 0 0 1 9 1" />
@@ -187,7 +189,7 @@ export function AgentCollaborationCard({
     const runCounts = readRunAnalysisCounts(run);
     setAuthoritativeCounts(runCounts);
     setRecordsError("");
-    if (run.status !== "PUBLISHED" || !run.report_version_id) {
+    if (run.status !== "AUDIT_COMPLETED" && (run.status !== "PUBLISHED" || !run.report_version_id)) {
       setAnalysisRecords([]);
       setRecordsLoading(false);
       return;
@@ -314,6 +316,7 @@ export function AgentCollaborationCard({
 
   const legacyStep = getStepStatus();
   const runView = run ? mapInvestigationRunState(run) : null;
+  const auditCompleted = authoritative && run?.status === "AUDIT_COMPLETED";
   const done = authoritative ? runView?.activity === "completed" : legacyStep.done;
   const activeStep = authoritative ? runView?.step || 1 : legacyStep.step;
   const terminalError = runView?.activity === "stopped";
@@ -362,15 +365,22 @@ export function AgentCollaborationCard({
     <div className="agent-exec-clean-card" aria-label="调查流水线执行进度">
       <div className="agent-exec-clean-head">
         <span className="agent-exec-title">
-          {done
-            ? "调查流水线已完成"
+          {auditCompleted
+            ? "审核完成"
+            : done
+              ? "调查流水线已完成"
             : terminalError
               ? runView?.label
               : queued
                 ? runView?.label
                 : "调查流水线运行中"}
         </span>
-        {done ? (
+        {auditCompleted ? (
+          <span className="agent-exec-status-tag is-done">
+            <CheckCircle2 size={13} />
+            审核完成
+          </span>
+        ) : done ? (
           <span className="agent-exec-status-tag is-done">
             <CheckCircle2 size={13} />
             研判完成
@@ -394,7 +404,7 @@ export function AgentCollaborationCard({
         <div className={`investigation-run-projection is-${run.status.toLowerCase()}`}>
           <strong>{runView.label}</strong>
           <span>
-            采集 {run.crawl_status} · 分析 {run.analysis_status} · 报告 {run.report_status}
+            采集 {statusLabel(run.crawl_status)} · 分析 {statusLabel(run.analysis_status)} · 报告 {reportStatusLabel(run.report_status)}
           </span>
           {run.error_message ? <p role="alert">{run.error_message}</p> : null}
           {Object.keys(run.task_stats).length > 0 ? (
@@ -408,7 +418,8 @@ export function AgentCollaborationCard({
       ) : null}
 
       <EvidenceRelayPipeline
-        isDone={Boolean(done)}
+        isDone={Boolean(done && !auditCompleted)}
+        auditCompleted={Boolean(auditCompleted)}
         isStopped={terminalError}
         authoritative={authoritative}
         activeStep={activeStep}
@@ -465,7 +476,7 @@ export function AgentCollaborationCard({
                     <div className="analysis-feed-primary">
                       <strong>第 {record.itemNumber} 条分析完成</strong>
                       <span className={`analysis-risk-tag is-${record.risk}`}>
-                        {record.riskLabel}
+                        {record.decisionLabel ? `${record.decisionLabel} · ` : ""}{record.riskLabel}
                       </span>
                     </div>
                     <span className="analysis-feed-summary">{record.summary}</span>
@@ -474,9 +485,10 @@ export function AgentCollaborationCard({
                     type="button"
                     className="analysis-evidence-toggle"
                     onClick={() => setSelectedRecord(record)}
+                    disabled={authoritative && record.keyEvidence.length === 0}
                   >
                     <FileSearch size={14} />
-                    查看研判依据
+                    {authoritative && record.keyEvidence.length === 0 ? "研判依据暂不可用" : "查看研判依据"}
                   </button>
                 </div>
               </article>
@@ -493,4 +505,12 @@ export function AgentCollaborationCard({
       />
     </div>
   );
+}
+
+function statusLabel(status: string) {
+  return ({ completed: "完成", pending: "待处理", running: "进行中", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || status;
+}
+
+function reportStatusLabel(status: string) {
+  return ({ pending: "待生成", generating: "生成中", published: "已生成", failed: "失败", interrupted: "已中断" } as Record<string, string>)[status] || status;
 }

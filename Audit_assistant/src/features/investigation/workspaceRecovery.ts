@@ -224,6 +224,8 @@ export function restoreInvestigationWorkspace(
     title: artifact?.draft.title || "新调查需求",
     status: run?.status === "PUBLISHED"
       ? "报告已生成"
+      : run?.status === "AUDIT_COMPLETED"
+        ? "审核完成"
       : run
         ? "研判中"
         : artifact
@@ -233,7 +235,11 @@ export function restoreInvestigationWorkspace(
     draft,
     messages,
     executionPhase: runView?.phase || "idle",
-    executionProgress: run?.status === "PUBLISHED" ? 100 : 0,
+    executionProgress: run?.status === "PUBLISHED"
+      ? 100
+      : run?.status === "AUDIT_COMPLETED"
+        ? 75
+        : 0,
     creationBinding: {
       workspaceSessionId,
       draft: artifact?.draft,

@@ -63,6 +63,8 @@ class ExecutionAdapter(Protocol):
 
     def get_job_state(self, job_id: str) -> dict[str, Any] | None: ...
 
+    def validate_selected_content_payloads(self, job_id: str) -> None: ...
+
 
 class ReportAdapter(Protocol):
     def find_published(
@@ -86,6 +88,7 @@ class ReportSessionAdapter(Protocol):
 class EmptyRunProjector:
     def project(self, run: InvestigationRun) -> dict[str, Any]:
         report_status = {
+            "AUDIT_COMPLETED": "pending",
             "REPORT_GENERATING": "generating",
             "PUBLISHED": "published",
             "FAILED": "failed",
@@ -95,5 +98,6 @@ class EmptyRunProjector:
             "crawl_status": "pending" if not run.job_id else "unknown",
             "analysis_status": "pending" if not run.job_id else "unknown",
             "task_stats": {},
+            "audit_results": [],
             "report_status": report_status,
         }

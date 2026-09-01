@@ -2,14 +2,48 @@ import sys
 import tempfile
 import time
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from backend.audit_agent.auth_state_cipher import AuthStateCipher
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
-from backend.audit_agent.crawler_login_manager import CrawlerAccountLoginManager
+from backend.audit_agent.crawler_login_manager import CrawlerAccountLoginManager, LoginSession
 
 
 class CrawlerAccountLoginManagerTest(unittest.TestCase):
+    def test_expired_server_session_is_terminal_and_qr_is_cleared(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            store = CrawlerAccountStore(root / "audit.sqlite3")
+            manager = CrawlerAccountLoginManager(
+                store=store,
+                cipher=AuthStateCipher(key_file=root / "auth.key"),
+                python_path=Path(sys.executable),
+                helper_path=root / "unused-login.py",
+                timeout_seconds=60,
+            )
+            account = store.create(platform="xhs", display_name="测试账号")
+            now = datetime.now(timezone.utc)
+            manager._sessions["expired-session"] = LoginSession(
+                id="expired-session",
+                account_id=account["id"],
+                platform="xhs",
+                status="waiting_scan",
+                created_at=(now - timedelta(minutes=2)).isoformat(),
+                updated_at=(now - timedelta(minutes=2)).isoformat(),
+                expires_at=(now - timedelta(seconds=1)).isoformat(),
+                qr_image_data_url="data:image/png;base64,SYNTHETIC",
+            )
+
+            session = manager.get("expired-session")
+
+            self.assertIsNotNone(session)
+            self.assertEqual(session["status"], "expired")
+            self.assertEqual(session["qr_image_data_url"], "")
+            self.assertIn("超时", session["error"])
+            self.assertEqual(store.get(account["id"])["status"], "expired")
+            manager.shutdown()
+
     def test_login_process_can_import_project_modules(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -19,16 +19,58 @@ class ChatCompletionText(str):
         return instance
 
 
+class QwenProviderError(RuntimeError):
+    pass
+
+
 class QwenClient:
     def __init__(self):
         self.api_key = settings.dashscope_api_key
         self.base_url = settings.dashscope_base_url
         self.chat_url = f"{self.base_url}/chat/completions"
         self.remote = RemoteInferenceClient()
+        self.provider_failure = ""
 
     @property
     def enabled(self) -> bool:
         return bool(self.api_key)
+
+    @classmethod
+    def validate_authoritative_configuration(
+        cls, configuration: dict | None = None
+    ) -> None:
+        errors: list[str] = []
+        if settings.use_remote_llm:
+            if not settings.remote_inference_base_url:
+                errors.append("REMOTE_INFERENCE_BASE_URL")
+        elif not settings.dashscope_api_key:
+            errors.append("DASHSCOPE_API_KEY")
+        if not str(settings.qwen_text_model or "").strip():
+            errors.append("QWEN_TEXT_MODEL")
+        if errors:
+            raise RuntimeError(
+                "authoritative audit Provider configuration is incomplete: "
+                + ", ".join(sorted(set(errors)))
+            )
+
+    @classmethod
+    def validate_authoritative_vision_configuration(
+        cls, *, required_models: dict[str, str]
+    ) -> None:
+        errors: list[str] = []
+        if settings.use_remote_vlm:
+            if not settings.remote_inference_base_url:
+                errors.append("REMOTE_INFERENCE_BASE_URL for vision")
+        elif not settings.dashscope_api_key:
+            errors.append("DASHSCOPE_API_KEY for vision")
+        for setting_name, model in required_models.items():
+            if not str(model or "").strip():
+                errors.append(setting_name)
+        if errors:
+            raise RuntimeError(
+                "authoritative vision Provider configuration is incomplete: "
+                + ", ".join(sorted(set(errors)))
+            )
 
     def analyze_image(
         self,
@@ -59,18 +101,21 @@ class QwenClient:
                 image_bytes = requests.get(str(image_path), timeout=settings.request_timeout).content
                 mime_type = "image/jpeg"
                 remote_compress_image = compress_image
-            return self.remote.analyze_image(
-                image_bytes,
-                prompt,
-                filename=path.name or "image.jpg",
-                mime_type=mime_type,
-                compress_image=remote_compress_image,
-                image_max_side=image_max_side,
-                image_quality=image_quality,
-                max_tokens=max_tokens,
-                model=model,
-                enable_thinking=enable_thinking,
-            )
+            try:
+                return self.remote.analyze_image(
+                    image_bytes,
+                    prompt,
+                    filename=path.name or "image.jpg",
+                    mime_type=mime_type,
+                    compress_image=remote_compress_image,
+                    image_max_side=image_max_side,
+                    image_quality=image_quality,
+                    max_tokens=max_tokens,
+                    model=model,
+                    enable_thinking=enable_thinking,
+                )
+            except Exception as exc:
+                raise self._provider_error("vision Provider request failed", exc) from exc
 
         if not self.enabled:
             return self._mock_image_result(str(image_path))
@@ -112,13 +157,16 @@ class QwenClient:
         if settings.use_remote_llm:
             if not self.remote.enabled:
                 raise RuntimeError("USE_REMOTE_LLM=true but REMOTE_INFERENCE_BASE_URL is empty")
-            return self.remote.audit_text(
-                prompt,
-                max_tokens=max_tokens,
-                model=model,
-                enable_thinking=enable_thinking,
-                request_timeout=request_timeout,
-            )
+            try:
+                return self.remote.audit_text(
+                    prompt,
+                    max_tokens=max_tokens,
+                    model=model,
+                    enable_thinking=enable_thinking,
+                    request_timeout=request_timeout,
+                )
+            except Exception as exc:
+                raise self._provider_error("text Provider request failed", exc) from exc
 
         if not self.enabled:
             return self._mock_audit_result()
@@ -137,25 +185,32 @@ class QwenClient:
         return self._parse_chat_json(text)
 
     def _post_chat(self, payload: dict, *, request_timeout: int | float | None = None) -> str:
-        response = requests.post(
-            self.chat_url,
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=request_timeout or settings.request_timeout,
-        )
+        try:
+            response = requests.post(
+                self.chat_url,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=request_timeout or settings.request_timeout,
+            )
+        except Exception as exc:
+            raise self._provider_error("Provider request failed", exc) from exc
         try:
             response.raise_for_status()
         except requests.HTTPError as exc:
             body = self._format_error_body(response)
-            raise RuntimeError(
+            raise self._provider_error(
                 f"LLM request failed: HTTP {response.status_code} {response.reason}; "
-                f"model={payload.get('model')}; url={self.chat_url}; body={body}"
+                f"model={payload.get('model')}; body={body}",
+                exc,
             ) from exc
-        data = response.json()
-        choice = data["choices"][0]
+        try:
+            data = response.json()
+            choice = data["choices"][0]
+        except Exception as exc:
+            raise self._provider_error("Provider response is invalid", exc) from exc
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
         metadata = {
             "model": data.get("model") or payload.get("model"),
@@ -167,6 +222,10 @@ class QwenClient:
         }
         metadata = {key: value for key, value in metadata.items() if value is not None}
         return ChatCompletionText(choice["message"]["content"], metadata)
+
+    def _provider_error(self, message: str, exc: BaseException) -> QwenProviderError:
+        self.provider_failure = message
+        return QwenProviderError(message)
 
     def _parse_chat_json(self, text: str) -> dict:
         result = self._parse_json_object(text, fallback={"raw_response": str(text)})

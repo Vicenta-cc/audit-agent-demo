@@ -15,6 +15,7 @@ export interface AnalysisRecord {
   itemNumber: number;
   risk: AnalysisRisk;
   riskLabel: string;
+  decisionLabel?: string;
   summary: string;
   conclusion: string;
   contentTitle: string;
@@ -23,7 +24,7 @@ export interface AnalysisRecord {
   analyzedAt: string;
   evidenceCounts: Record<AnalysisEvidenceType, number>;
   keyEvidence: AnalysisKeyEvidence[];
-  source?: "mock" | "m3-report";
+  source?: "mock" | "m3-job" | "m3-report";
   taskId?: string;
   outputId?: string;
   reportVersionId?: string;
