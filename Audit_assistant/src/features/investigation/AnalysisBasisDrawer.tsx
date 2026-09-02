@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, FileSearch, X } from "lucide-react";
+import { ArrowRight, ExternalLink, FileSearch, Link2, X } from "lucide-react";
 import { fetchAuditResultDetail } from "../../services/jobs";
 import { fetchReportPostDetail } from "../../services/reports";
 import type { AuditEvidenceGroupItem } from "../../types/jobs";
 import type { AnalysisEvidenceType, AnalysisKeyEvidence, AnalysisRecord } from "./analysisRecords";
 import { analysisEvidenceTypes } from "./analysisRecords";
 import { mapReportEvidence } from "./m3AnalysisRecords";
+import {
+  buildAnalysisSourceProvenance,
+  type AnalysisSourceProvenance
+} from "./sourceProvenance";
 
 interface AnalysisBasisDrawerProps {
   record: AnalysisRecord | null;
@@ -34,6 +38,7 @@ export function AnalysisBasisDrawer({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [activeEvidenceType, setActiveEvidenceType] = useState<AnalysisEvidenceType>("text");
   const [completeEvidence, setCompleteEvidence] = useState<DrawerEvidence[] | null>(null);
+  const [sourceProvenance, setSourceProvenance] = useState<AnalysisSourceProvenance | null>(null);
   const [isEvidenceLoading, setIsEvidenceLoading] = useState(false);
   const [evidenceError, setEvidenceError] = useState("");
   const [loadRevision, setLoadRevision] = useState(0);
@@ -42,23 +47,36 @@ export function AnalysisBasisDrawer({
     if (!record) return;
     let isCurrent = true;
     setCompleteEvidence(null);
+    setSourceProvenance(null);
     setEvidenceError("");
     setIsEvidenceLoading(true);
     const request = record.source === "m3-job"
-      ? Promise.resolve(record.keyEvidence)
+      ? record.outputId
+        ? fetchAuditResultDetail(record.outputId).then((detail) => ({
+            evidence: mapEvidenceGroups(detail.evidence_groups || detail.audit_result.evidence_groups),
+            sourceProvenance: buildAnalysisSourceProvenance(detail.audit_result, record)
+          }))
+        : Promise.resolve({ evidence: record.keyEvidence, sourceProvenance: null })
       : record.source === "m3-report"
       ? record.reportVersionId && record.postRef
         ? fetchReportPostDetail(record.reportVersionId, record.postRef).then((detail) => (
-            detail.direct_evidence.map(mapReportEvidence).filter(Boolean) as DrawerEvidence[]
+            {
+              evidence: detail.direct_evidence.map(mapReportEvidence).filter(Boolean) as DrawerEvidence[],
+              sourceProvenance: null
+            }
           ))
         : Promise.reject(new Error("当前记录缺少真实 ReportVersion 或帖子引用"))
       : record.outputId
-        ? fetchAuditResultDetail(record.outputId).then((detail) => mapEvidenceGroups(detail.evidence_groups))
+        ? fetchAuditResultDetail(record.outputId).then((detail) => ({
+            evidence: mapEvidenceGroups(detail.evidence_groups || detail.audit_result.evidence_groups),
+            sourceProvenance: null
+          }))
         : Promise.reject(new Error("当前记录缺少真实任务输出引用"));
     void request
       .then((detail) => {
         if (!isCurrent) return;
-        setCompleteEvidence(detail);
+        setCompleteEvidence(detail.evidence);
+        setSourceProvenance(detail.sourceProvenance);
         setIsEvidenceLoading(false);
       })
       .catch((error) => {
@@ -169,6 +187,36 @@ export function AnalysisBasisDrawer({
             <span className={`analysis-basis-risk is-${record.risk}`}>{record.riskLabel}</span>
           </section>
 
+          {record.source === "m3-job" ? (
+            <section className="analysis-basis-section analysis-source-provenance">
+              <div className="analysis-source-heading">
+                <div>
+                  <Link2 size={15} />
+                  <span>采集来源</span>
+                </div>
+                <small>{isEvidenceLoading ? "正在核验" : sourceProvenance ? "来源已入库" : "来源待核验"}</small>
+              </div>
+              {sourceProvenance ? (
+                <>
+                  <strong className="analysis-source-title" title={sourceProvenance.title}>
+                    {sourceProvenance.title}
+                  </strong>
+                  <dl className="analysis-source-grid">
+                    <div><dt>原帖作者</dt><dd>{sourceProvenance.author}</dd></div>
+                    <div><dt>来源平台</dt><dd>{sourceProvenance.platform}</dd></div>
+                    <div><dt>平台内容 ID</dt><dd title={sourceProvenance.contentId}>{sourceProvenance.contentId}</dd></div>
+                    <div><dt>研判时间</dt><dd>{sourceProvenance.analyzedAt}</dd></div>
+                  </dl>
+                  <p className="analysis-source-note">该来源信息由本次采集结果直接入库，可用于回查原始内容。</p>
+                </>
+              ) : (
+                <p className="analysis-source-note">
+                  {isEvidenceLoading ? "正在从审核结果中核验原帖来源…" : "当前审核结果未返回可核验的原帖来源。"}
+                </p>
+              )}
+            </section>
+          ) : null}
+
           <section className="analysis-basis-section">
             <div className="analysis-basis-section-label">证据概览</div>
             <div className="analysis-evidence-tabs" aria-label="五类证据数量概览">
@@ -207,7 +255,7 @@ export function AnalysisBasisDrawer({
                 </div>
               ) : evidenceError ? (
                 <div className="analysis-evidence-error" role="alert">
-                  <strong>研判依据暂不可用</strong>
+                  <strong>审核详情暂时无法加载</strong>
                   <span>{evidenceError}</span>
                   <div>
                     <button type="button" onClick={() => setLoadRevision((current) => current + 1)}>重试</button>
@@ -246,7 +294,11 @@ export function AnalysisBasisDrawer({
                 );
               })}
               {!isEvidenceLoading && !evidenceError && visibleEvidence.length === 0 ? (
-                <div className="analysis-key-empty">该类型暂无风险证据</div>
+                <div className="analysis-key-empty">
+                  {record.source === "m3-job"
+                    ? "本条未命中风险证据；采集来源仍可用于核验原帖。"
+                    : "该类型暂无风险证据"}
+                </div>
               ) : null}
             </div>
           </section>
@@ -260,22 +312,33 @@ export function AnalysisBasisDrawer({
         </div>
 
         <footer className="analysis-basis-footer">
-          <button
-            type="button"
-            disabled={
-              record.source === "m3-job"
-                ? record.keyEvidence.length === 0
-                : record.source === "m3-report" && (!record.reportVersionId || !record.findingRef)
-            }
-            onClick={() => onViewCompleteEvidence(record)}
-          >
-            <FileSearch size={17} />
-            <span>{(record.source === "m3-job" && record.keyEvidence.length === 0)
-              || (record.source === "m3-report" && (!record.reportVersionId || !record.findingRef))
-              ? "研判依据暂不可用"
-              : "查看完整证据"}</span>
-            <ArrowRight size={16} />
-          </button>
+          {record.source === "m3-job" ? (
+            sourceProvenance?.sourceUrl ? (
+              <a href={sourceProvenance.sourceUrl} target="_blank" rel="noreferrer">
+                <ExternalLink size={17} />
+                <span>查看{sourceProvenance.sourceLabel}</span>
+                <ArrowRight size={16} />
+              </a>
+            ) : (
+              <button type="button" disabled>
+                <ExternalLink size={17} />
+                <span>{isEvidenceLoading ? "正在核验原帖来源" : "原帖链接暂不可用"}</span>
+                <ArrowRight size={16} />
+              </button>
+            )
+          ) : (
+            <button
+              type="button"
+              disabled={record.source === "m3-report" && (!record.reportVersionId || !record.findingRef)}
+              onClick={() => onViewCompleteEvidence(record)}
+            >
+              <FileSearch size={17} />
+              <span>{record.source === "m3-report" && (!record.reportVersionId || !record.findingRef)
+                ? "研判依据暂不可用"
+                : "查看完整证据"}</span>
+              <ArrowRight size={16} />
+            </button>
+          )}
         </footer>
       </aside>
     </div>,

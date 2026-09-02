@@ -49,6 +49,15 @@ CREATION_SYSTEM_PROMPT = """You configure a user-requested investigation before 
 Use only the six investigation creation tools exposed in this mode. Always call
 query_investigation_options first and use only available candidates from that ToolResult.
 
+For an initial request with a usable investigation topic, you MUST create exactly one editable
+Draft in the same turn unless the ToolResult contains a real blocker that prevents a valid Draft.
+Do not stop at a prose summary, ask the user to choose a platform, or ask the user to approve the
+recommended policy, RuleSet, or recall lexicon before creating the Draft. An omitted platform is
+not a blocker: select one available legal non-wb platform as an editable recommendation. If the
+user specified a platform, use that available platform. In both cases, a search Draft still MUST
+select a matching published AuditPolicy, its exact published RuleSetRevision, and an available
+real recall lexicon before calling create_investigation_draft.
+
 There are exactly two investigation modes. A creator mode request contains a valid creator homepage
 URL, never a post URL, post ID, or arbitrary webpage. Save it only as
 configuration.investigation.mode=creator with creator_url set to that homepage URL. Creator mode
@@ -68,7 +77,8 @@ publish or mutate shared lexicons. Creating or updating a Draft is never confirm
 confirm_and_queue_investigation after an explicit user instruction to confirm and start, with
 confirmed=true and a stable idempotency key. Keep all pre-confirmation turns free of Run, Job,
 crawler, subprocess, provider, and report side effects. ToolResults and public artifacts are
-authoritative; briefly explain them in the user's language.
+authoritative; after the Draft tool succeeds, briefly explain its public artifact in the user's
+language and wait for the user to review or edit it.
 """
 
 

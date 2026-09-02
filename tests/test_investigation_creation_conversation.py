@@ -33,6 +33,7 @@ from backend.investigation_creation.contracts import (
     RunStatus,
 )
 from backend.investigation_creation.conversation import (
+    CREATION_SYSTEM_PROMPT,
     FakeCreationHermesAgent,
     InvestigationCreationConversationService,
 )
@@ -1361,6 +1362,14 @@ def test_creation_mode_has_exactly_six_tools() -> None:
     }
     parameters = [schema["parameters"] for schema in HERMES_M3_TOOL_SCHEMAS]
     assert '"wb"' not in json.dumps(parameters, sort_keys=True)
+
+
+def test_creation_prompt_requires_an_editable_search_draft_before_clarification() -> None:
+    assert "MUST create exactly one editable" in CREATION_SYSTEM_PROMPT
+    assert "An omitted platform is\nnot a blocker" in CREATION_SYSTEM_PROMPT
+    assert "Do not stop at a prose summary" in CREATION_SYSTEM_PROMPT
+    assert "still MUST\nselect a matching published AuditPolicy" in CREATION_SYSTEM_PROMPT
+    assert "after the Draft tool succeeds" in CREATION_SYSTEM_PROMPT
 
 
 def test_published_report_handoff_reuses_internal_run_anchor_without_exposing_session(

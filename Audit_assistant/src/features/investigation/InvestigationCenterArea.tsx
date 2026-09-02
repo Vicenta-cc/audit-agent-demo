@@ -19,6 +19,7 @@ import type { InvestigationTurnStage } from "../../types/investigations";
 import { AgentCollaborationCard } from "./AgentCollaborationCard";
 import { TaskConfigCard } from "./TaskConfigCard";
 import { TaskSuggestionCard } from "./TaskSuggestionCard";
+import { buildSuggestionAssistantCopy } from "./suggestionPresentation";
 import { TaskConfirmationCard } from "./TaskConfirmationCard";
 import { InvestigationReportCard } from "./InvestigationReportCard";
 import { StreamingAssistantText } from "./StreamingAssistantText";
@@ -347,7 +348,12 @@ export function InvestigationCenterArea({
                   return (
                     <TaskSuggestionCard
                       key={msg.id}
-                      assistantContent={msg.content || ""}
+                      assistantContent={session.creationBinding
+                        ? buildSuggestionAssistantCopy(
+                            session.draft,
+                            session.creationBinding.confirmationPreview
+                          )
+                        : msg.content || ""}
                       shouldStream={!session.creationBinding && streamingMessageId === msg.id}
                       showSuggestionCard={Boolean(session.creationBinding) || streamingMessageId !== msg.id}
                       onStreamingComplete={() => handleStreamingComplete(msg.id)}
@@ -355,12 +361,17 @@ export function InvestigationCenterArea({
                       preview={session.creationBinding?.confirmationPreview}
                       platformOptions={session.creationBinding?.suggestion?.platform_options.map((platform) => ({
                         code: platform.id,
-                        label: platform.name
+                        label: platform.name,
+                        available: platform.available
                       }))}
                       isReadOnly={msg.proposalData.platformsConfirmed}
                       onUpdatePlatforms={onUpdateDraftPlatforms}
+                      onUpdateSearchTerms={session.creationBinding
+                        ? onUpdateCreationSearchTerms
+                        : async (terms) => onUpdateDraftKeywords(terms)}
                       onGenerateConfig={() => onGenerateTaskConfig(msg.id)}
                       onOpenAnalysisPlan={() => onOpenDrawer("ruleset")}
+                      error={session.creationBinding?.error}
                     />
                   );
                 }

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ExternalLink, PencilLine, Play, Save } from "lucide-react";
+import { AlertTriangle, ExternalLink, PencilLine, Play, Save, ShieldCheck } from "lucide-react";
 import type { TaskDraft } from "../../types/investigation";
 import type { ConfirmationPreview } from "../../types/investigationCreation";
 import {
   buildConfirmationCardView,
   formatConfirmationBlockerMessage,
+  formatCreationErrorMessage,
   parseInvestigationSearchTerms
 } from "./confirmationView";
 
@@ -12,7 +13,6 @@ interface TaskConfirmationCardProps {
   draft: TaskDraft;
   onModifyConfig: () => void;
   onStartExecution: () => void;
-  onSaveDraft?: () => void;
   preview?: ConfirmationPreview;
   onUpdateSearchTerms?: (terms: string[]) => Promise<void>;
   isConfirming?: boolean;
@@ -23,25 +23,19 @@ export function TaskConfirmationCard({
   draft,
   onModifyConfig,
   onStartExecution,
-  onSaveDraft,
   preview,
   onUpdateSearchTerms,
   isConfirming = false,
   error = ""
 }: TaskConfirmationCardProps) {
-  const [isSaved, setIsSaved] = useState(false);
   const [searchTerms, setSearchTerms] = useState("");
   const [isSavingTerms, setIsSavingTerms] = useState(false);
   const view = buildConfirmationCardView(draft, preview);
+  const parsedSearchTerms = parseInvestigationSearchTerms(searchTerms);
 
   useEffect(() => {
     setSearchTerms((preview?.resolved_search_terms || draft.keywords).join("、"));
   }, [draft.keywords, preview]);
-
-  const handleSaveDraft = () => {
-    onSaveDraft?.();
-    setIsSaved(true);
-  };
 
   const saveTerms = async () => {
     if (!onUpdateSearchTerms) return;
@@ -56,13 +50,15 @@ export function TaskConfirmationCard({
 
   return (
     <section className="task-final-confirm-card" aria-label="最终任务确认卡">
-      <h3>任务配置确认</h3>
+      <div className="task-final-heading">
+        <div>
+          <span className="task-final-eyebrow"><ShieldCheck size={14} aria-hidden="true" />配置确认</span>
+          <h3>{view.title}</h3>
+        </div>
+        <span className="task-final-ready-state">等待确认</span>
+      </div>
 
       <div className="task-final-fields">
-        <div className="task-final-field">
-          <span>任务名称</span>
-          <strong>{view.title}</strong>
-        </div>
         <div className="task-final-field">
           <span>采集平台</span>
           <strong>{view.platform}</strong>
@@ -83,7 +79,11 @@ export function TaskConfirmationCard({
                 onChange={(event) => setSearchTerms(event.target.value)}
                 rows={2}
               />
-              <button type="button" onClick={() => void saveTerms()} disabled={isSavingTerms}>
+              <button
+                type="button"
+                onClick={() => void saveTerms()}
+                disabled={isSavingTerms || parsedSearchTerms.length === 0}
+              >
                 <Save size={14} aria-hidden="true" />
                 {isSavingTerms ? "保存中" : "保存搜索词"}
               </button>
@@ -93,26 +93,26 @@ export function TaskConfirmationCard({
           )}
         </div>
         <div className="task-final-field">
-          <span>Audit Policy</span>
+          <span>研判方案</span>
           <strong>{view.auditPolicy}</strong>
         </div>
         {preview ? (
           <>
             <div className="task-final-field">
-              <span>RuleSet</span>
+              <span>研判规则</span>
               <strong>
                 {view.ruleSet}
               </strong>
             </div>
             <div className="task-final-field">
-              <span>召回策略</span>
+              <span>召回方式</span>
               <strong>
                 {view.recallStrategy}
               </strong>
             </div>
             <div className="task-final-field">
               <span>采集数量</span>
-              <strong>最多 {preview.max_notes} 条（Pilot 固定）</strong>
+              <strong>本次选择 {preview.max_notes} 条进入研判</strong>
             </div>
           </>
         ) : null}
@@ -133,17 +133,9 @@ export function TaskConfirmationCard({
           ) : null}
         </div>
       ) : null}
-      {error ? <p className="task-final-error" role="alert">{error}</p> : null}
+      {error ? <p className="task-final-error" role="alert">{formatCreationErrorMessage(error)}</p> : null}
 
       <div className="task-final-actions">
-        <button
-          type="button"
-          className="task-save-draft-action"
-          onClick={handleSaveDraft}
-          disabled={Boolean(preview)}
-        >
-          {preview || isSaved ? "草稿已保存" : "保存草稿"}
-        </button>
         <button type="button" className="mt-button mt-button-secondary" onClick={onModifyConfig}>
           <PencilLine size={14} aria-hidden="true" />
           修改配置

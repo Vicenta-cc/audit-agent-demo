@@ -4,6 +4,7 @@ import {
   buildConfirmationCardView,
   buildConfirmationIdempotencyKey,
   formatConfirmationBlockerMessage,
+  formatCreationErrorMessage,
   parseInvestigationSearchTerms
 } from "../src/features/investigation/confirmationView";
 import { mapInvestigationRunState } from "../src/features/investigation/investigationRunState";
@@ -15,12 +16,18 @@ import {
 } from "../src/features/investigation/m3AnalysisRecords";
 import { buildDraftSuggestionPlanView } from "../src/features/investigation/InvestigationContextDrawer";
 import {
+  buildSuggestionAssistantCopy,
   buildSuggestionBlockerLink,
   selectSingleSuggestionPlatform,
-} from "../src/features/investigation/TaskSuggestionCard";
+} from "../src/features/investigation/suggestionPresentation";
+import {
+  buildRunProgressItems,
+  formatRunFailureMessage
+} from "../src/features/investigation/runPresentation";
 import {
   buildNewInvestigationWorkspaceSession,
   buildWorkspaceRecoveryErrorSession,
+  presentCreationAssistantContent,
   restoreInvestigationWorkspace
 } from "../src/features/investigation/workspaceRecovery";
 import { ApiError } from "../src/services/apiClient";
@@ -248,7 +255,7 @@ test("renders real Draft and ConfirmationPreview fields", () => {
     platform: "小红书",
     objective: preview.objective,
     auditPolicy: "博彩引流审核策略",
-    ruleSet: "博彩风险规则 · v7",
+    ruleSet: "博彩风险规则",
     recallStrategy: "本次临时搜索词",
     maxNotes: 1,
     termsOrCreator: "世界杯博彩、看球下注",
@@ -593,7 +600,7 @@ test("workspace state API failures stay explicit and never produce a demo fallba
   );
   expect(failed.id).toBe("investigation-session:missing");
   expect(failed.creationBinding?.error).toBe("调查工作区不存在");
-  expect(failed.messages[0].content).toContain("恢复失败");
+  expect(failed.messages[0].content).toBe("当前调查暂时无法恢复，请返回调查列表后重试。");
 });
 
 test("blockers disable confirmation and expose the management URL", () => {
@@ -620,12 +627,29 @@ test("blockers disable confirmation and expose the management URL", () => {
   expect(formatConfirmationBlockerMessage(
     blocked.blockers[0].code,
     "A valid published AuditPolicy must be selected before confirmation."
-  )).toBe("当前没有已发布的审核策略，无法确认执行。");
+  )).toBe("当前还没有匹配的研判方案，配置后即可继续。");
 
   expect(buildSuggestionBlockerLink(blocked)).toEqual({
-    label: "编辑/新增研判方案",
+    label: "去配置研判方案",
     managementUrl: "/rule-assistant/rulesets?return_to=/investigation"
   });
+  expect(buildSuggestionAssistantCopy(draft, blocked)).toBe(
+    "已根据你的调查主题整理出初步建议。当前还有一项必要配置需要处理，完成后即可继续。"
+  );
+});
+
+test("creation diagnostics fail closed into user-facing copy", () => {
+  expect(presentCreationAssistantContent(
+    "| 项目 | 内容 |\n|---|---|\n| Draft ID | investigation-draft:secret |"
+  )).toBe("当前操作暂时无法完成，请稍后重试。");
+  expect(presentCreationAssistantContent(
+    "NO_PUBLISHED_AUDIT_POLICY /rule-assistant/rulesets?return_to=/investigation"
+  )).toBe("当前还没有匹配的研判方案，配置后即可继续。");
+  expect(formatCreationErrorMessage("RESOURCE_STALE revision conflict")).toBe(
+    "配置刚刚发生变化，已载入最新内容，请重新核对。"
+  );
+  expect(presentCreationAssistantContent("已为本次调查整理好召回词。"))
+    .toBe("已为本次调查整理好召回词。");
 });
 
 test("creator workspace recovery preserves the homepage URL and carries no search terms", () => {
@@ -878,6 +902,28 @@ test("analysis progress counts come only from Run task statistics", () => {
     .toEqual({ completedCount: 0, totalCount: 0 });
 });
 
+test("run progress exposes only curated business counts and sanitizes provider failures", () => {
+  const projection = run("FAILED", {
+    error_code: "audit_provider_failed",
+    error_message: "Provider returned invalid JSON at /internal/provider",
+    task_stats: {
+      ingested_count: 1,
+      pending_analysis_count: 0,
+      analyzing_count: 0,
+      completed_analysis_count: 0,
+      analysis_status_counts: { failed: 1 },
+      batch_item_count: 8
+    }
+  });
+  expect(buildRunProgressItems(projection)).toEqual([
+    { label: "进入研判", value: 1 },
+    { label: "待分析", value: 0 },
+    { label: "分析中", value: 0 },
+    { label: "已完成", value: 0 }
+  ]);
+  expect(formatRunFailureMessage(projection)).toBe("研判服务返回异常，本次调查已停止。");
+});
+
 test("audit-completed records come directly from the current Job projection", async () => {
   let fetchCalls = 0;
   globalThis.fetch = async () => {
@@ -954,6 +1000,7 @@ test("authoritative M3 progress is server-backed and reduced motion remains stat
   );
   expect(cardSource).toContain("loadM3AnalysisRecords(run)");
   expect(cardSource).toContain("if (authoritative) return;");
+  expect(cardSource).not.toContain("Object.entries(run.task_stats)");
   expect(recordsPageSource).toContain("getInvestigationWorkspaceState(investigationId)");
   expect(recordsPageSource).not.toContain("readStoredAnalysisRecords(investigationId)\n        || createCompletedAnalysisRecords()");
   expect(styles).toContain(".evidence-pipeline-svg.is-done *");

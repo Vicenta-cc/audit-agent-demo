@@ -14,6 +14,9 @@ import {
   type AnalysisRecord
 } from "./analysisRecords";
 import { loadM3AnalysisRecords, readRunAnalysisCounts } from "./m3AnalysisRecords";
+import { buildRunProgressItems, formatRunFailureMessage } from "./runPresentation";
+
+export { buildRunProgressItems, formatRunFailureMessage } from "./runPresentation";
 
 const ETHNIC_RELATIONS_TOTAL = 667;
 const ETHNIC_RELATIONS_DEMO_RECORDS = 10;
@@ -119,7 +122,7 @@ export function EvidenceRelayPipeline({
           </g>
         </g>
 
-        {!authoritative && !isDone && !isStopped ? (
+        {!isDone && !auditCompleted && !isStopped && !isQueued ? (
           <g className="pipeline-relay-layer" aria-hidden="true">
             {relayStartDelays.map((delay, index) => (
               <g key={index} className="pipeline-relay-item" style={{ animationDelay: `${delay}s` }}>
@@ -325,6 +328,7 @@ export function AgentCollaborationCard({
   const displayedAnalyzedCount = isEthnicRelationsDemo && (phase.startsWith("report") || done)
     ? ETHNIC_RELATIONS_TOTAL
     : analysisRecords.length;
+  const runStats = run ? buildRunProgressItems(run) : [];
 
   const handleOpenAllRecords = () => {
     if (authoritative && run) {
@@ -402,18 +406,23 @@ export function AgentCollaborationCard({
 
       {run && runView ? (
         <div className={`investigation-run-projection is-${run.status.toLowerCase()}`}>
-          <strong>{runView.label}</strong>
-          <span>
-            采集 {statusLabel(run.crawl_status)} · 分析 {statusLabel(run.analysis_status)} · 报告 {reportStatusLabel(run.report_status)}
-          </span>
-          {run.error_message ? <p role="alert">{run.error_message}</p> : null}
-          {Object.keys(run.task_stats).length > 0 ? (
-            <span className="investigation-run-task-stats">
-              {Object.entries(run.task_stats)
-                .map(([key, value]) => `${key} ${String(value)}`)
-                .join(" · ")}
+          <div className="investigation-run-summary">
+            <strong>{runView.label}</strong>
+            <span>
+              采集 {statusLabel(run.crawl_status)} · 分析 {statusLabel(run.analysis_status)} · 报告 {reportStatusLabel(run.report_status)}
             </span>
+          </div>
+          {runStats.length ? (
+            <dl className="investigation-run-metrics" aria-label="本次调查进度统计">
+              {runStats.map((item) => (
+                <div key={item.label}>
+                  <dt>{item.label}</dt>
+                  <dd>{item.value}</dd>
+                </div>
+              ))}
+            </dl>
           ) : null}
+          {run.error_message ? <p role="alert">{formatRunFailureMessage(run)}</p> : null}
         </div>
       ) : null}
 
@@ -459,7 +468,7 @@ export function AgentCollaborationCard({
           {recordsLoading ? (
             <div className="analysis-feed-empty" role="status"><Loader2 size={16} className="spin" />正在加载分析结果</div>
           ) : recordsError ? (
-            <div className="analysis-feed-empty is-error" role="alert">研判依据暂不可用：{recordsError}</div>
+            <div className="analysis-feed-empty is-error" role="alert">研判依据暂不可用，请稍后重试。</div>
           ) : visibleRecords.length === 0 ? (
             <div className="analysis-feed-empty" role="status">正在等待分析结果</div>
           ) : visibleRecords.map((record, index) => {
@@ -485,10 +494,12 @@ export function AgentCollaborationCard({
                     type="button"
                     className="analysis-evidence-toggle"
                     onClick={() => setSelectedRecord(record)}
-                    disabled={authoritative && record.keyEvidence.length === 0}
+                    disabled={authoritative && !record.outputId && record.keyEvidence.length === 0}
                   >
                     <FileSearch size={14} />
-                    {authoritative && record.keyEvidence.length === 0 ? "研判依据暂不可用" : "查看研判依据"}
+                    {authoritative && !record.outputId && record.keyEvidence.length === 0
+                      ? "审核详情暂不可用"
+                      : "查看研判依据"}
                   </button>
                 </div>
               </article>
@@ -508,9 +519,9 @@ export function AgentCollaborationCard({
 }
 
 function statusLabel(status: string) {
-  return ({ completed: "完成", pending: "待处理", running: "进行中", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || status;
+  return ({ completed: "完成", pending: "待处理", running: "进行中", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || "处理中";
 }
 
 function reportStatusLabel(status: string) {
-  return ({ pending: "待生成", generating: "生成中", published: "已生成", failed: "失败", interrupted: "已中断" } as Record<string, string>)[status] || status;
+  return ({ pending: "待生成", generating: "生成中", published: "已生成", failed: "失败", interrupted: "已中断" } as Record<string, string>)[status] || "待处理";
 }

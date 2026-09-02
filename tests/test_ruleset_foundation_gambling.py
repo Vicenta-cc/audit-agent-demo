@@ -462,6 +462,10 @@ class RuleSetCompilerTests(unittest.TestCase):
             set(image_contract),
             {"ocr_text", "visual_summary", "benign_context", "risk_items"},
         )
+        self.assertIn("visual_summary 必须始终存在", image)
+        self.assertIn("必须是 JSON 字符串", image)
+        self.assertIn("不得返回 null、数组或对象", image)
+        self.assertIn("即使未发现风险", image)
         self.assertEqual(
             set(image_contract["risk_items"][0]),
             {

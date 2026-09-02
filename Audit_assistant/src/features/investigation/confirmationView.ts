@@ -29,7 +29,7 @@ export function buildConfirmationCardView(
       ? preview.audit_policy?.name || "尚未选择审核策略"
       : draft.analysisPlanName || draft.matchedRuleSet,
     ruleSet: preview?.ruleset_revision
-      ? `${preview.ruleset_revision.name} · v${preview.ruleset_revision.version}`
+      ? preview.ruleset_revision.name
       : "尚未绑定",
     recallStrategy: preview?.mode === "creator"
       ? "主页模式不使用召回词"
@@ -61,13 +61,43 @@ export function parseInvestigationSearchTerms(value: string) {
 
 export function formatConfirmationBlockerMessage(code: string, message: string) {
   if (code === "NO_PUBLISHED_AUDIT_POLICY") {
-    return "当前没有已发布的审核策略，无法确认执行。";
+    return "当前还没有匹配的研判方案，配置后即可继续。";
   }
   if (code === "NO_PUBLISHED_RECALL_LEXICON") {
-    return "当前没有可用的已发布召回词库，无法创建关键词调查。";
+    return "当前没有适合本次主题的召回词库，请先配置或选择一个词库。";
+  }
+  if (code === "NO_SEARCH_TERMS") {
+    return "当前没有可用于本次调查的召回词，请补充调查主题或配置词库。";
   }
   if (code === "NO_CRAWLER_ACCOUNT" || code === "collection_service_unavailable") {
-    return "抖音采集服务当前不可用，请稍后重试。";
+    return "当前平台采集账号暂不可用，请稍后重试。";
   }
-  return message;
+  void message;
+  return "当前配置暂时无法继续，请调整相关设置后重试。";
+}
+
+export function formatCreationErrorMessage(message: string) {
+  const normalized = message.toUpperCase();
+  if (normalized.includes("NO_PUBLISHED_AUDIT_POLICY")) {
+    return formatConfirmationBlockerMessage("NO_PUBLISHED_AUDIT_POLICY", message);
+  }
+  if (normalized.includes("NO_PUBLISHED_RECALL_LEXICON")) {
+    return formatConfirmationBlockerMessage("NO_PUBLISHED_RECALL_LEXICON", message);
+  }
+  if (normalized.includes("NO_SEARCH_TERMS")) {
+    return formatConfirmationBlockerMessage("NO_SEARCH_TERMS", message);
+  }
+  if (
+    normalized.includes("NO_CRAWLER_ACCOUNT")
+    || normalized.includes("COLLECTION_SERVICE_UNAVAILABLE")
+  ) {
+    return formatConfirmationBlockerMessage("NO_CRAWLER_ACCOUNT", message);
+  }
+  if (normalized.includes("RESOURCE_STALE") || /REVISION|版本已变化|已被更新/i.test(message)) {
+    return "配置刚刚发生变化，已载入最新内容，请重新核对。";
+  }
+  if (/搜索词|召回词/.test(message)) return "召回词暂时无法保存，请稍后重试。";
+  if (/平台/.test(message)) return "平台设置暂时无法保存，请稍后重试。";
+  if (/确认/.test(message)) return "任务配置暂时无法确认，请稍后重试。";
+  return "当前操作暂时无法完成，请稍后重试。";
 }

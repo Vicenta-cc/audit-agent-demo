@@ -11,6 +11,16 @@ import type {
 } from "../../types/investigationCreation";
 import { buildConfirmationIdempotencyKey } from "./confirmationView";
 import { mapInvestigationRunState } from "./investigationRunState";
+import { formatCreationErrorMessage } from "./confirmationView";
+
+const technicalCreationContent = /(schema_version|draft[_\s-]?id|toolresult|\[object object\]|\/rule-assistant\/|https?:\/\/|\|\s*(?:项目|草稿|状态)\s*\||[A-Z]{3,}(?:_[A-Z0-9]+)+|```|\{\s*"|database|revision)/i;
+
+export function presentCreationAssistantContent(content: string) {
+  const trimmed = content.trim();
+  if (!trimmed) return "正在整理本次调查建议。";
+  if (!technicalCreationContent.test(trimmed)) return trimmed;
+  return formatCreationErrorMessage(trimmed);
+}
 
 function messageTime(createdAt: string) {
   const value = new Date(createdAt);
@@ -21,7 +31,8 @@ function messageTime(createdAt: string) {
 
 function publicMessage(
   message: InvestigationWorkspaceMessage,
-  confirmationVisible: boolean
+  confirmationVisible: boolean,
+  sanitizeAssistant = true
 ): ChatMessage {
   const artifact = message.artifact?.artifact_type === "investigation_draft"
     ? message.artifact
@@ -32,7 +43,7 @@ function publicMessage(
       id: message.message_id,
       sender: message.role,
       timestamp: messageTime(message.created_at),
-      content: message.content,
+      content: presentCreationAssistantContent(message.content),
       type: "task_proposal",
       proposalData: {
         taskName: suggestion.title,
@@ -51,7 +62,7 @@ function publicMessage(
       id: message.message_id,
       sender: message.role,
       timestamp: messageTime(message.created_at),
-      content: message.content,
+      content: presentCreationAssistantContent(message.content),
       type: "task_confirmation"
     };
   }
@@ -59,7 +70,9 @@ function publicMessage(
     id: message.message_id,
     sender: message.role,
     timestamp: messageTime(message.created_at),
-    content: message.content,
+    content: message.role === "assistant" && sanitizeAssistant
+      ? presentCreationAssistantContent(message.content)
+      : message.content,
     type: "text"
   };
 }
@@ -116,7 +129,7 @@ export function buildWorkspaceRecoveryErrorSession(
       id: `workspace-recovery-error:${workspaceSessionId}`,
       sender: "assistant",
       timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-      content: `调查工作区恢复失败：${message}`,
+      content: "当前调查暂时无法恢复，请返回调查列表后重试。",
       type: "text"
     }],
     executionPhase: "idle",
@@ -194,7 +207,7 @@ export function restoreInvestigationWorkspace(
     });
   }
   const reportMessages = state.report_messages || [];
-  messages.push(...reportMessages.map((message) => publicMessage(message, false)));
+  messages.push(...reportMessages.map((message) => publicMessage(message, false, false)));
 
   const draft: TaskDraft = artifact && preview
     ? {

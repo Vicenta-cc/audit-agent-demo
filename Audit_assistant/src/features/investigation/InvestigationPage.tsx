@@ -50,6 +50,7 @@ import { buildConfirmationIdempotencyKey } from "./confirmationView";
 import {
   buildNewInvestigationWorkspaceSession,
   buildWorkspaceRecoveryErrorSession,
+  presentCreationAssistantContent,
   restoreInvestigationWorkspace
 } from "./workspaceRecovery";
 
@@ -1800,7 +1801,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                     id: `msg-answer-${turnId}`,
                     sender: "assistant",
                     timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-                    content: answer,
+                    content: presentCreationAssistantContent(answer),
                     type: "text"
                   }
                 ],
@@ -1827,7 +1828,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   id: `msg-creation-error-${turnId}`,
                   sender: "assistant",
                   timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-                  content: `调查方案生成失败：${message}`,
+                  content: presentCreationAssistantContent(message),
                   type: "text"
                 }
               ],
@@ -1945,7 +1946,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                     id: `msg-creation-send-error-${clientMessageId}`,
                     sender: "assistant",
                     timestamp: nowTime,
-                    content: `调查方案请求失败：${message}`,
+                    content: presentCreationAssistantContent(message),
                     type: "text"
                   }
                 ],
