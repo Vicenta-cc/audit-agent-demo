@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
-from pydantic import TypeAdapter
-
 from backend.audit_agent.config import settings
 
 from .contracts import (
     ConfirmationResolution,
+    ConfirmationResolutionV3,
     ConfirmedConfigurationSnapshotV3,
+    ConfirmedConfigurationSnapshotV4,
     DraftConfiguration,
     DraftStatus,
     InvestigationConfiguration,
@@ -22,6 +22,7 @@ from .contracts import (
     InvestigationRun,
     ReportGenerationBinding,
     RunStatus,
+    parse_draft_configuration,
 )
 from .errors import (
     ConfirmationRequiredError,
@@ -34,9 +35,6 @@ from .errors import (
     RunNotFoundError,
 )
 from .principal import LOCAL_PRINCIPAL_ID
-
-
-_DRAFT_CONFIGURATION_ADAPTER = TypeAdapter(DraftConfiguration)
 
 
 def utc_now() -> datetime:
@@ -552,7 +550,9 @@ class InvestigationCreationStore:
             next_configuration = (
                 configuration.model_dump(mode="json")
                 if configuration is not None
-                else self._load_json(str(row["configuration_json"]))
+                else parse_draft_configuration(
+                    self._load_json(str(row["configuration_json"]))
+                ).model_dump(mode="json")
             )
             configuration_json = self._json(next_configuration)
             updated = connection.execute(
@@ -676,22 +676,40 @@ class InvestigationCreationStore:
                     "execution": legacy_execution,
                 }
             else:
-                resolution = ConfirmationResolution.model_validate(
-                    confirmation_resolution
-                )
-                snapshot = ConfirmedConfigurationSnapshotV3.model_validate(
-                    {
-                        "schema_version": "investigation-run-config-v3",
-                        "draft_id": draft_id,
-                        "draft_revision": expected_revision,
-                        "title": str(draft["title"]),
-                        "objective": str(draft["objective"]),
-                        **resolution.model_dump(mode="json"),
-                        "max_notes": 1,
-                        "confirmed_by": principal,
-                        "confirmed_at": now,
-                    }
-                ).model_dump(mode="json")
+                if "audit_policy" in confirmation_resolution:
+                    resolution_v3 = ConfirmationResolutionV3.model_validate(
+                        confirmation_resolution
+                    )
+                    snapshot = ConfirmedConfigurationSnapshotV3.model_validate(
+                        {
+                            "schema_version": "investigation-run-config-v3",
+                            "draft_id": draft_id,
+                            "draft_revision": expected_revision,
+                            "title": str(draft["title"]),
+                            "objective": str(draft["objective"]),
+                            **resolution_v3.model_dump(mode="json"),
+                            "max_notes": 1,
+                            "confirmed_by": principal,
+                            "confirmed_at": now,
+                        }
+                    ).model_dump(mode="json")
+                else:
+                    resolution = ConfirmationResolution.model_validate(
+                        confirmation_resolution
+                    )
+                    snapshot = ConfirmedConfigurationSnapshotV4.model_validate(
+                        {
+                            "schema_version": "investigation-run-config-v4",
+                            "draft_id": draft_id,
+                            "draft_revision": expected_revision,
+                            "title": str(draft["title"]),
+                            "objective": str(draft["objective"]),
+                            **resolution.model_dump(mode="json"),
+                            "max_notes": 1,
+                            "confirmed_by": principal,
+                            "confirmed_at": now,
+                        }
+                    ).model_dump(mode="json")
             connection.execute(
                 """
                 INSERT INTO investigation_runs (
@@ -1491,8 +1509,8 @@ class InvestigationCreationStore:
     @classmethod
     def _draft(cls, row: sqlite3.Row) -> InvestigationDraft:
         record = dict(row)
-        record["configuration"] = _DRAFT_CONFIGURATION_ADAPTER.validate_json(
-            record.pop("configuration_json")
+        record["configuration"] = parse_draft_configuration(
+            cls._load_json(record.pop("configuration_json"))
         )
         return InvestigationDraft.model_validate(record)
 

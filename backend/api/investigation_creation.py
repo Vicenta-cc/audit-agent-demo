@@ -15,7 +15,7 @@ from backend.investigation_creation.contracts import (
     ConfirmAndQueueCommand,
     ConfirmationPreview,
     CreateDraftCommand,
-    DraftConfiguration,
+    InvestigationDraftConfiguration,
     InvestigationOptions,
     Platform,
     QueryInvestigationOptions,
@@ -47,7 +47,7 @@ class RequestModel(BaseModel):
 class CreateDraftRequest(RequestModel):
     title: str = Field(min_length=1, max_length=300)
     objective: str = Field(min_length=1, max_length=4_000)
-    configuration: DraftConfiguration
+    configuration: InvestigationDraftConfiguration
 
     @field_validator("title", "objective", mode="before")
     @classmethod
@@ -59,7 +59,7 @@ class UpdateDraftRequest(RequestModel):
     expected_revision: int = Field(ge=1)
     title: str | None = Field(default=None, min_length=1, max_length=300)
     objective: str | None = Field(default=None, min_length=1, max_length=4_000)
-    configuration: DraftConfiguration | None = None
+    configuration: InvestigationDraftConfiguration | None = None
 
     @field_validator("title", "objective", mode="before")
     @classmethod
@@ -88,9 +88,10 @@ def create_investigation_creation_router(
         domain_hint: str = Query(default="", max_length=200),
         mode: Literal["search", "creator"] = Query(default="search"),
         platform: Platform | None = Query(default=None),
-        audit_policy_ids: list[str] = Query(default=[]),
+        ruleset_revision_ids: list[str] = Query(default=[]),
         lexicon_ids: list[str] = Query(default=[]),
         include_lexicon_terms_for_ids: list[str] = Query(default=[]),
+        include_ruleset_details_for_revision_ids: list[str] = Query(default=[]),
         page_size: int = Query(default=20, ge=1, le=50),
         lexicon_term_limit: int = Query(default=50, ge=1, le=100),
         cursor: str = Query(default="", max_length=40),
@@ -102,9 +103,12 @@ def create_investigation_creation_router(
                     domain_hint=domain_hint,
                     mode=mode,
                     platform=platform,
-                    audit_policy_ids=audit_policy_ids,
+                    ruleset_revision_ids=ruleset_revision_ids,
                     lexicon_ids=lexicon_ids,
                     include_lexicon_terms_for_ids=include_lexicon_terms_for_ids,
+                    include_ruleset_details_for_revision_ids=(
+                        include_ruleset_details_for_revision_ids
+                    ),
                     page_size=page_size,
                     lexicon_term_limit=lexicon_term_limit,
                     cursor=cursor,

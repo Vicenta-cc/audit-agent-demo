@@ -5,7 +5,6 @@ from typing import Annotated, Any, Literal
 from pydantic import Field
 
 from .contracts import (
-    AuditPolicySummary,
     ConfirmationPreview,
     DraftConfiguration,
     DraftStatus,
@@ -60,7 +59,6 @@ class InvestigationDraftSuggestion(StrictModel):
     platform_options: list[PlatformOption]
     selected_platform: Platform
     search_terms: list[str] = Field(default_factory=list)
-    audit_policy: AuditPolicySummary | None = None
     ruleset_revision: RuleSetRevisionSummary | None = None
     recall_lexicons: list[RecallLexiconSummary] = Field(default_factory=list)
 
@@ -174,7 +172,6 @@ def draft_artifact(
             ],
             selected_platform=preview.platform,
             search_terms=list(preview.resolved_search_terms),
-            audit_policy=preview.audit_policy,
             ruleset_revision=preview.ruleset_revision,
             recall_lexicons=[
                 lexicon

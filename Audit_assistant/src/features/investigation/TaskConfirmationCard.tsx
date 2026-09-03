@@ -92,10 +92,6 @@ export function TaskConfirmationCard({
             <strong>{view.termsOrCreator}</strong>
           )}
         </div>
-        <div className="task-final-field">
-          <span>研判方案</span>
-          <strong>{view.auditPolicy}</strong>
-        </div>
         {preview ? (
           <>
             <div className="task-final-field">
@@ -128,7 +124,7 @@ export function TaskConfirmationCard({
           ))}
           {view.rulesManagementUrl ? (
             <a href={view.rulesManagementUrl}>
-              编辑/新增研判方案 <ExternalLink size={13} aria-hidden="true" />
+              编辑/新增研判规则 <ExternalLink size={13} aria-hidden="true" />
             </a>
           ) : null}
         </div>

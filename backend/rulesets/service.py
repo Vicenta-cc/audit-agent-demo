@@ -109,6 +109,15 @@ class RuleSetService:
         del principal
         return self.store.list_published(ruleset_id=ruleset_id)
 
+    def list_current_published(
+        self,
+        *,
+        principal: Principal,
+        ruleset_id: str = "",
+    ) -> list[dict]:
+        del principal
+        return self.store.list_current_published(ruleset_id=ruleset_id)
+
     def get_published(
         self,
         revision_id: str,
@@ -119,11 +128,23 @@ class RuleSetService:
         del principal
         return self.store.get_published(revision_id, connection=connection)
 
+    def get_current_published(
+        self,
+        revision_id: str,
+        *,
+        principal: Principal,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict | None:
+        del principal
+        return self.store.get_current_published(
+            revision_id, connection=connection
+        )
+
     def compile_preview(
         self,
         revision_id: str,
         *,
-        audit_policy: dict,
+        audit_policy: dict | None = None,
         principal: Principal,
         system_template_version: str = SYSTEM_TEMPLATE_VERSION,
         compiler_version: str = COMPILER_VERSION,
@@ -155,7 +176,7 @@ class RuleSetService:
         self,
         revision_id: str,
         *,
-        audit_policy: dict,
+        audit_policy: dict | None = None,
         principal: Principal,
         connection: sqlite3.Connection | None = None,
         system_template_version: str = SYSTEM_TEMPLATE_VERSION,

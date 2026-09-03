@@ -20,22 +20,13 @@ export interface InvestigationBlocker {
   management_url: string;
 }
 
-export interface AuditPolicySummary {
-  id: string;
-  name: string;
-  description: string;
-  published_version: string;
-  ruleset_revision_id: string;
-  ruleset_version: number;
-  domain: string;
-}
-
 export interface RuleSetRevisionSummary {
   id: string;
   ruleset_id: string;
   name: string;
   domain: string;
   version: number;
+  content_hash: string;
   enabled_rule_count: number;
 }
 
@@ -63,13 +54,12 @@ export interface InvestigationDraftSuggestion {
   platform_options: InvestigationPlatformOption[];
   selected_platform: InvestigationCreationPlatform;
   search_terms: string[];
-  audit_policy: AuditPolicySummary | null;
   ruleset_revision: RuleSetRevisionSummary | null;
   recall_lexicons: RecallLexiconSummary[];
 }
 
 export interface InvestigationDraftConfiguration {
-  schema_version: "investigation-draft-config-v3";
+  schema_version: "investigation-draft-config-v4";
   platform: InvestigationPlatform;
   investigation:
     | {
@@ -88,11 +78,9 @@ export interface InvestigationDraftConfiguration {
             };
       }
     | { mode: "creator"; creator_url: string };
-  audit_policy: null | {
-    id: string;
-    expected_published_version: string;
-    expected_published_config_hash: string;
-    expected_ruleset_revision_id: string;
+  judgement: {
+    strategy: "existing_ruleset";
+    ruleset_revision_id: string;
     expected_ruleset_version: number;
     expected_ruleset_content_hash: string;
   };
@@ -129,7 +117,6 @@ export interface ConfirmationPreview {
     temporary_terms: string[];
     source_lexicon_ids: string[];
   };
-  audit_policy: AuditPolicySummary | null;
   ruleset_revision: RuleSetRevisionSummary | null;
   max_notes: 1;
   blockers: InvestigationBlocker[];

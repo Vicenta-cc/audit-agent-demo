@@ -137,7 +137,6 @@ investigation_configuration_resolver = InvestigationConfigurationResolver(
 )
 investigation_resource_service = InvestigationResourceService(
     lexicon_store=lexicon_store,
-    policy_store=audit_policy_store,
     ruleset_service=ruleset_service,
     configuration_resolver=investigation_configuration_resolver,
 )

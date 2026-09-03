@@ -9,6 +9,10 @@ mkdir -p "$LOG_DIR"
 
 SERVER="${SERVER:-root@47.117.134.103}"
 SSH_PORT="${SSH_PORT:-6099}"
+ASR_TUNNEL_TRANSPORT="${ASR_TUNNEL_TRANSPORT:-ssh}"
+CODER_BIN="${CODER_BIN:-$(command -v coder || true)}"
+CODER_WORKSPACE="${CODER_WORKSPACE:-}"
+CODER_GLOBAL_CONFIG="${CODER_GLOBAL_CONFIG:-}"
 LOCAL_ASR_TUNNEL_PORT="${LOCAL_ASR_TUNNEL_PORT:-19001}"
 LOCAL_MMS_ASR_TUNNEL_PORT="${LOCAL_MMS_ASR_TUNNEL_PORT:-19004}"
 REMOTE_ASR_PORT="${REMOTE_ASR_PORT:-9001}"
@@ -74,11 +78,14 @@ port_pids() {
 
 curl_health() {
   local base_url="$1"
-  local headers=()
   if [[ -n "$REMOTE_INFERENCE_KEY_EFFECTIVE" ]]; then
-    headers=(-H "X-Inference-Key: $REMOTE_INFERENCE_KEY_EFFECTIVE")
+    curl -fsS --max-time "$HEALTH_TIMEOUT" \
+      -H "X-Inference-Key: $REMOTE_INFERENCE_KEY_EFFECTIVE" \
+      "$base_url/api/inference/health" >/dev/null
+  else
+    curl -fsS --max-time "$HEALTH_TIMEOUT" \
+      "$base_url/api/inference/health" >/dev/null
   fi
-  curl -fsS --max-time "$HEALTH_TIMEOUT" "${headers[@]}" "$base_url/api/inference/health" >/dev/null
 }
 
 print_health() {
@@ -95,8 +102,12 @@ start_remote_services() {
   if ! bool_env "$START_REMOTE_ASR_SERVICES"; then
     return
   fi
-  if [[ ! -x "$ROOT/scripts/remote-stack.sh" ]]; then
-    echo "remote-stack.sh is missing or not executable; skip remote service start." >&2
+  if [[ "$ASR_TUNNEL_TRANSPORT" == "coder" ]]; then
+    echo "Coder mode expects the workspace to manage Dolphin; skip remote-stack.sh." >&2
+    return
+  fi
+  if [[ ! -f "$ROOT/scripts/remote-stack.sh" ]]; then
+    echo "remote-stack.sh is missing; skip remote service start." >&2
     return
   fi
 
@@ -111,7 +122,7 @@ start_remote_services() {
     ENABLE_MMS_ASR="$enable_mms" \
     ENABLE_HYMT=false \
     ENABLE_OCR=false \
-    "$ROOT/scripts/remote-stack.sh" start
+    bash "$ROOT/scripts/remote-stack.sh" start
 }
 
 start_tunnel() {
@@ -132,8 +143,20 @@ start_tunnel() {
     return
   fi
 
-  echo "Starting $label tunnel guard: 127.0.0.1:$local_port -> $SERVER:127.0.0.1:$remote_port"
-  screen -dmS "$session" "$SCRIPT_PATH" _tunnel_loop "$label" "$local_port" "$remote_port"
+  if [[ "$ASR_TUNNEL_TRANSPORT" == "coder" ]]; then
+    if [[ -z "$CODER_BIN" || ! -x "$CODER_BIN" ]]; then
+      echo "coder CLI is required for ASR_TUNNEL_TRANSPORT=coder" >&2
+      exit 1
+    fi
+    if [[ -z "$CODER_WORKSPACE" ]]; then
+      echo "CODER_WORKSPACE is required for ASR_TUNNEL_TRANSPORT=coder" >&2
+      exit 1
+    fi
+    echo "Starting $label tunnel guard: 127.0.0.1:$local_port -> Coder $CODER_WORKSPACE:127.0.0.1:$remote_port"
+  else
+    echo "Starting $label tunnel guard: 127.0.0.1:$local_port -> $SERVER:127.0.0.1:$remote_port"
+  fi
+  screen -dmS "$session" bash "$SCRIPT_PATH" _tunnel_loop "$label" "$local_port" "$remote_port"
 }
 
 stop_tunnel() {
@@ -190,17 +213,33 @@ tunnel_loop() {
 
   echo "[$(date '+%F %T')] $label guard started"
   while true; do
-    echo "[$(date '+%F %T')] opening tunnel 127.0.0.1:$local_port -> $SERVER:127.0.0.1:$remote_port"
-    ssh \
-      -p "$SSH_PORT" \
-      -o ConnectTimeout=15 \
-      -o ServerAliveInterval=30 \
-      -o ServerAliveCountMax=3 \
-      -o ExitOnForwardFailure=yes \
-      -N \
-      -L "$local_port:127.0.0.1:$remote_port" \
-      "$SERVER"
-    code="$?"
+    if [[ "$ASR_TUNNEL_TRANSPORT" == "coder" ]]; then
+      echo "[$(date '+%F %T')] opening Coder tunnel 127.0.0.1:$local_port -> $CODER_WORKSPACE:127.0.0.1:$remote_port"
+      coder_args=("$CODER_BIN")
+      if [[ -n "$CODER_GLOBAL_CONFIG" ]]; then
+        coder_args+=(--global-config "$CODER_GLOBAL_CONFIG")
+      fi
+      if "${coder_args[@]}" port-forward "$CODER_WORKSPACE" --tcp "$local_port:$remote_port"; then
+        code=0
+      else
+        code="$?"
+      fi
+    else
+      echo "[$(date '+%F %T')] opening SSH tunnel 127.0.0.1:$local_port -> $SERVER:127.0.0.1:$remote_port"
+      if ssh \
+        -p "$SSH_PORT" \
+        -o ConnectTimeout=15 \
+        -o ServerAliveInterval=30 \
+        -o ServerAliveCountMax=3 \
+        -o ExitOnForwardFailure=yes \
+        -N \
+        -L "$local_port:127.0.0.1:$remote_port" \
+        "$SERVER"; then
+        code=0
+      else
+        code="$?"
+      fi
+    fi
     echo "[$(date '+%F %T')] tunnel exited with code $code; reconnecting in ${RECONNECT_SECONDS}s"
     sleep "$RECONNECT_SECONDS"
   done
@@ -226,10 +265,11 @@ case "$ACTION" in
     stop_tunnel "$MMS_SESSION" "MMS ASR" "$LOCAL_MMS_ASR_TUNNEL_PORT"
     ;;
   restart)
-    "$SCRIPT_PATH" stop
-    "$SCRIPT_PATH" start
+    bash "$SCRIPT_PATH" stop
+    bash "$SCRIPT_PATH" start
     ;;
   status)
+    echo "ASR tunnel transport: $ASR_TUNNEL_TRANSPORT"
     status_one "$ASR_SESSION" "Dolphin ASR" "$LOCAL_ASR_TUNNEL_PORT" "$(asr_base_url)"
     if bool_env "$USE_REMOTE_MMS_ASR_EFFECTIVE"; then
       status_one "$MMS_SESSION" "MMS ASR" "$LOCAL_MMS_ASR_TUNNEL_PORT" "$(mms_base_url)"
@@ -247,6 +287,7 @@ case "$ACTION" in
   *)
     echo "Usage: $0 [start|stop|restart|status|check]" >&2
     echo "Optional: START_REMOTE_ASR_SERVICES=true $0 start" >&2
+    echo "Coder: ASR_TUNNEL_TRANSPORT=coder CODER_WORKSPACE=<workspace> REMOTE_ASR_PORT=19001 $0 start" >&2
     exit 2
     ;;
 esac

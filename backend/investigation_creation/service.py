@@ -12,6 +12,8 @@ from .contracts import (
     InvestigationDraft,
     InvestigationRun,
     InvestigationRunProjection,
+    LegacyInvestigationDraftConfigurationV3,
+    DraftStatus,
     Platform,
     QueryInvestigationOptions,
     ResolvedExecutionConfiguration,
@@ -21,6 +23,7 @@ from .contracts import (
 from .errors import (
     ConfigurationValidationError,
     ConfirmationRequiredError,
+    DraftAlreadyConfirmedError,
     DraftRevisionConflictError,
 )
 from .ports import (
@@ -62,9 +65,18 @@ class InvestigationCreationService:
                 raise ConfigurationValidationError(
                     "investigation resource service is not configured"
                 )
-            configuration = self.resource_service.snapshot_draft_configuration(
-                configuration, principal=principal
-            )
+            with self.resource_service.authoritative_draft_fence() as resource_connection:
+                resolution = self.resource_service.resolve_authoritative_draft(
+                    configuration,
+                    principal=principal,
+                    resource_connection=resource_connection,
+                )
+                return self.store.create_draft(
+                    principal=principal.id,
+                    title=command.title,
+                    objective=command.objective,
+                    configuration=resolution.normalized_configuration,
+                )
         return self.store.create_draft(
             principal=principal.id,
             title=command.title,
@@ -78,24 +90,46 @@ class InvestigationCreationService:
         command = UpdateDraftCommand.model_validate(
             command.model_dump(mode="json", warnings=False)
         )
-        if command.configuration is not None:
-            self._reject_legacy_creation_platform(command.configuration)
-        configuration = command.configuration
-        if isinstance(configuration, InvestigationDraftConfiguration):
+        draft = self.store.get_draft(command.draft_id, principal=principal.id)
+        if draft.status is not DraftStatus.DRAFT:
+            raise DraftAlreadyConfirmedError(command.draft_id)
+        if draft.current_revision != command.expected_revision:
+            raise DraftRevisionConflictError(
+                f"expected revision {command.expected_revision}, "
+                f"current revision is {draft.current_revision}"
+            )
+        effective_configuration = (
+            command.configuration
+            if command.configuration is not None
+            else draft.configuration
+        )
+        self._reject_legacy_creation_platform(effective_configuration)
+        if isinstance(effective_configuration, InvestigationDraftConfiguration):
             if self.resource_service is None:
                 raise ConfigurationValidationError(
                     "investigation resource service is not configured"
                 )
-            configuration = self.resource_service.snapshot_draft_configuration(
-                configuration, principal=principal
-            )
+            with self.resource_service.authoritative_draft_fence() as resource_connection:
+                resolution = self.resource_service.resolve_authoritative_draft(
+                    effective_configuration,
+                    principal=principal,
+                    resource_connection=resource_connection,
+                )
+                return self.store.update_draft(
+                    command.draft_id,
+                    principal=principal.id,
+                    expected_revision=command.expected_revision,
+                    title=command.title,
+                    objective=command.objective,
+                    configuration=resolution.normalized_configuration,
+                )
         return self.store.update_draft(
             command.draft_id,
             principal=principal.id,
             expected_revision=command.expected_revision,
             title=command.title,
             objective=command.objective,
-            configuration=configuration,
+            configuration=effective_configuration,
         )
 
     def get_draft(
@@ -111,8 +145,16 @@ class InvestigationCreationService:
     ) -> ConfirmationPreview:
         draft = self.get_draft(draft_id, principal=principal)
         if not isinstance(draft.configuration, InvestigationDraftConfiguration):
+            message = "confirmation preview is not available for a legacy Draft"
+            if isinstance(
+                draft.configuration, LegacyInvestigationDraftConfigurationV3
+            ):
+                message = (
+                    "legacy Draft has no deterministic RuleSet judgement selection; "
+                    "save a published RuleSetRevision before confirmation"
+                )
             raise ConfigurationValidationError(
-                "confirmation preview is not available for a legacy Draft",
+                message,
                 code="CONFIGURATION_INVALID",
             )
         if self.resource_service is None:
@@ -157,6 +199,7 @@ class InvestigationCreationService:
             raise ConfigurationValidationError(
                 "Weibo is retained only for historical Draft compatibility and cannot be selected for a new revision.",
                 code="PLATFORM_MISMATCH",
+                details={"mutation_applied": False},
             )
 
     def confirm_and_queue(
@@ -188,6 +231,14 @@ class InvestigationCreationService:
             draft.configuration.model_dump(mode="json")
         )
         confirmation_resolution = None
+        if isinstance(
+            draft_configuration, LegacyInvestigationDraftConfigurationV3
+        ):
+            raise ConfigurationValidationError(
+                "legacy Draft has no deterministic RuleSet judgement selection; "
+                "save a published RuleSetRevision before confirmation",
+                code="CONFIGURATION_INVALID",
+            )
         if isinstance(draft_configuration, InvestigationDraftConfiguration):
             if self.resource_service is None:
                 raise ConfigurationValidationError(

@@ -155,6 +155,35 @@ SERVER=<user>@<server-host> SSH_PORT=<ssh-port> ENABLE_REMOTE_INFERENCE=false EN
 ./scripts/stop-stack.sh
 ```
 
+### 方式 C：Dolphin 运行在 Coder workspace
+
+Coder workspace 内的 Dolphin 监听 `127.0.0.1:19001` 时，可以用 Coder CLI 转发：
+
+```bash
+coder login https://<coder-deployment>/
+coder port-forward <workspace> --tcp 19001:19001
+```
+
+需要自动重连时，使用 ASR guard：
+
+```bash
+ASR_TUNNEL_TRANSPORT=coder \
+CODER_WORKSPACE=<workspace> \
+REMOTE_ASR_PORT=19001 \
+bash scripts/asr-guard.sh start
+```
+
+本地后端仍配置为：
+
+```env
+USE_REMOTE_ASR=true
+REMOTE_ASR_BASE_URL=http://127.0.0.1:19001
+REMOTE_ASR_REQUEST_RETRIES=3
+REMOTE_ASR_RETRY_BACKOFF_SECONDS=2
+```
+
+ASR 调用只会重试连接失败、超时、HTTP 408/429 和 5xx。鉴权失败、非重试型 4xx 及结果合同错误仍会 fail closed。
+
 ## 5. 启动服务器 ASR 服务
 
 如果服务器已经按项目脚本配置好，直接从本地执行：

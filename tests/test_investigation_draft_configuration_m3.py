@@ -47,12 +47,16 @@ from backend.investigation_creation.contracts import (
     ConfirmedConfigurationSnapshotV3,
     CreateDraftCommand,
     InvestigationDraftConfiguration,
+    LegacyInvestigationDraftConfigurationV3,
     QueryInvestigationOptions,
     UpdateDraftCommand,
     confirmed_configuration_hash,
 )
 from backend.investigation_creation.errors import (
     ConfigurationValidationError,
+    DraftAlreadyConfirmedError,
+    DraftRevisionConflictError,
+    PrincipalAccessDeniedError,
     ResourceStaleError,
 )
 from backend.investigation_creation.principal import LocalPrincipalProvider, Principal
@@ -65,6 +69,8 @@ from backend.investigation_creation.worker import InvestigationWorker
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
 from backend.rulesets.service import RuleSetService
 from backend.rulesets.store import RuleSetStore
+from backend.rulesets.compiler import content_hash as ruleset_content_hash
+from backend.rulesets.contracts import RuleSetContent
 from hermes_m0.plugin import register as register_hermes_plugin
 from hermes_m0.schemas import M2_ACCOUNT_ACTIVITY_TOOLS
 
@@ -73,6 +79,11 @@ from hermes_m0.schemas import M2_ACCOUNT_ACTIVITY_TOOLS
 def m3_stack(tmp_path: Path) -> dict:
     resource_db = tmp_path / "resources.sqlite3"
     lexicons = LexiconStore(resource_db)
+    lexicons.upsert_category(
+        category_id="general-reference",
+        title="General reference",
+        terms=[],
+    )
     policies = AuditPolicyStore(resource_db)
     rulesets = RuleSetService(RuleSetStore(resource_db))
     principals = LocalPrincipalProvider()
@@ -92,7 +103,6 @@ def m3_stack(tmp_path: Path) -> dict:
     )
     resources = InvestigationResourceService(
         lexicon_store=lexicons,
-        policy_store=policies,
         ruleset_service=rulesets,
         configuration_resolver=resolver,
     )
@@ -117,23 +127,21 @@ def _principal(stack: dict):
     return stack["principals"]()
 
 
-def _policy(stack: dict):
+def _ruleset(stack: dict):
     options = stack["service"].query_investigation_options(
         QueryInvestigationOptions(domain_hint="gambling"),
         principal=_principal(stack),
     )
-    assert len(options.audit_policies) == 1
-    return options.audit_policies[0]
+    assert options.ruleset_revisions
+    return options.ruleset_revisions[0]
 
 
-def _selection(policy) -> dict:
+def _judgement(ruleset) -> dict:
     return {
-        "id": policy.id,
-        "expected_published_version": policy.published_version,
-        "expected_published_config_hash": policy.published_config_hash,
-        "expected_ruleset_revision_id": policy.ruleset_revision_id,
-        "expected_ruleset_version": policy.ruleset_version,
-        "expected_ruleset_content_hash": policy.ruleset_content_hash,
+        "strategy": "existing_ruleset",
+        "ruleset_revision_id": ruleset.id,
+        "expected_ruleset_version": ruleset.version,
+        "expected_ruleset_content_hash": ruleset.content_hash,
     }
 
 
@@ -148,7 +156,40 @@ def _temporary_configuration(stack: dict, terms: list[str]) -> dict:
                 "source_lexicon_ids": ["general-reference"],
             },
         },
-        "audit_policy": _selection(_policy(stack)),
+        "judgement": _judgement(_ruleset(stack)),
+    }
+
+
+def _legacy_v3_configuration(
+    stack: dict,
+    terms: list[str],
+    *,
+    include_policy: bool = True,
+) -> dict:
+    ruleset = _ruleset(stack)
+    return {
+        "schema_version": "investigation-draft-config-v3",
+        "platform": "xhs",
+        "investigation": {
+            "mode": "search",
+            "recall_plan": {
+                "strategy": "temporary_terms",
+                "terms": terms,
+                "source_lexicon_ids": [],
+            },
+        },
+        "audit_policy": (
+            {
+                "id": "policy_gambling",
+                "expected_published_version": "v2.0",
+                "expected_published_config_hash": "a" * 64,
+                "expected_ruleset_revision_id": ruleset.id,
+                "expected_ruleset_version": ruleset.version,
+                "expected_ruleset_content_hash": ruleset.content_hash,
+            }
+            if include_policy
+            else None
+        ),
     }
 
 
@@ -182,7 +223,7 @@ def _douyin_configuration(stack: dict, term: str = "世界杯") -> dict:
                 "source_lexicon_ids": ["general-reference"],
             },
         },
-        "audit_policy": _selection(_policy(stack)),
+        "judgement": _judgement(_ruleset(stack)),
     }
 
 
@@ -299,6 +340,123 @@ def test_existing_draft_payload_without_account_remains_readable(m3_stack: dict)
     assert "crawler_account_id" not in parsed.model_dump(mode="json")
 
 
+def test_old_unconfirmed_v3_draft_migrates_from_saved_ruleset_identity(
+    m3_stack: dict,
+):
+    legacy = LegacyInvestigationDraftConfigurationV3.model_validate(
+        _legacy_v3_configuration(m3_stack, ["legacy-term"])
+    )
+    draft = m3_stack["store"].create_draft(
+        principal=_principal(m3_stack).id,
+        title="Legacy v3 Draft",
+        objective="Migrate deterministically without reading AuditPolicy.",
+        configuration=legacy,
+    )
+    assert isinstance(draft.configuration, InvestigationDraftConfiguration)
+    assert draft.configuration.schema_version == "investigation-draft-config-v4"
+    assert draft.configuration.judgement.ruleset_revision_id == (
+        legacy.audit_policy.expected_ruleset_revision_id
+    )
+
+    with sqlite3.connect(m3_stack["store"].db_path) as connection:
+        raw_before = json.loads(
+            connection.execute(
+                "SELECT configuration_json FROM investigation_drafts WHERE id = ?",
+                (draft.id,),
+            ).fetchone()[0]
+        )
+    assert raw_before["schema_version"] == "investigation-draft-config-v3"
+
+    with patch.object(
+        m3_stack["policies"],
+        "get",
+        side_effect=AssertionError("authoritative migration read AuditPolicy"),
+    ):
+        preview = m3_stack["service"].get_confirmation_preview(
+            draft.id, principal=_principal(m3_stack)
+        )
+        assert preview.can_confirm
+        updated = m3_stack["service"].update_draft(
+            UpdateDraftCommand(
+                draft_id=draft.id,
+                expected_revision=1,
+                title="Migrated v4 Draft",
+            ),
+            principal=_principal(m3_stack),
+        )
+        run = m3_stack["service"].confirm_and_queue(
+            ConfirmAndQueueCommand(
+                draft_id=draft.id,
+                expected_revision=2,
+                confirmed=True,
+                idempotency_key="legacy-v3-migration:1",
+            ),
+            principal=_principal(m3_stack),
+        )
+
+    assert updated.configuration.schema_version == "investigation-draft-config-v4"
+    assert run.confirmed_configuration["schema_version"] == (
+        "investigation-run-config-v4"
+    )
+    with sqlite3.connect(m3_stack["store"].db_path) as connection:
+        revisions = connection.execute(
+            "SELECT revision, configuration_json "
+            "FROM investigation_draft_revisions WHERE draft_id = ? ORDER BY revision",
+            (draft.id,),
+        ).fetchall()
+    assert json.loads(revisions[0][1])["schema_version"] == (
+        "investigation-draft-config-v3"
+    )
+    assert json.loads(revisions[1][1])["schema_version"] == (
+        "investigation-draft-config-v4"
+    )
+
+
+def test_old_unconfirmed_v3_draft_without_selection_is_retained_and_blocked(
+    m3_stack: dict,
+):
+    legacy = LegacyInvestigationDraftConfigurationV3.model_validate(
+        _legacy_v3_configuration(
+            m3_stack,
+            ["legacy-incomplete"],
+            include_policy=False,
+        )
+    )
+    draft = m3_stack["store"].create_draft(
+        principal=_principal(m3_stack).id,
+        title="Incomplete legacy Draft",
+        objective="Require an explicit published RuleSetRevision.",
+        configuration=legacy,
+    )
+    assert isinstance(draft.configuration, LegacyInvestigationDraftConfigurationV3)
+
+    with pytest.raises(ConfigurationValidationError) as preview_error:
+        m3_stack["service"].get_confirmation_preview(
+            draft.id, principal=_principal(m3_stack)
+        )
+    assert preview_error.value.code == "CONFIGURATION_INVALID"
+    with pytest.raises(ConfigurationValidationError) as confirm_error:
+        m3_stack["service"].confirm_and_queue(
+            ConfirmAndQueueCommand(
+                draft_id=draft.id,
+                expected_revision=1,
+                confirmed=True,
+                idempotency_key="legacy-v3-incomplete:1",
+            ),
+            principal=_principal(m3_stack),
+        )
+    assert confirm_error.value.code == "CONFIGURATION_INVALID"
+    assert _confirmation_side_effects(m3_stack) == (0, 0, 0)
+    with sqlite3.connect(m3_stack["store"].db_path) as connection:
+        retained = json.loads(
+            connection.execute(
+                "SELECT configuration_json FROM investigation_drafts WHERE id = ?",
+                (draft.id,),
+            ).fetchone()[0]
+        )
+    assert retained == legacy.model_dump(mode="json")
+
+
 def test_v3_snapshot_accepts_analyze_limit_greater_than_one(m3_stack: dict):
     draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["美食"]))
     run = m3_stack["service"].confirm_and_queue(
@@ -311,6 +469,19 @@ def test_v3_snapshot_accepts_analyze_limit_greater_than_one(m3_stack: dict):
         principal=_principal(m3_stack),
     )
     snapshot = json.loads(json.dumps(run.confirmed_configuration))
+    snapshot["schema_version"] = "investigation-run-config-v3"
+    snapshot["audit_policy"] = {
+        "id": "policy_gambling",
+        "name": "赌博博彩研判方案",
+        "description": "legacy compatibility fixture",
+        "published_version": "v2.0",
+        "published_config_hash": "a" * 64,
+        "ruleset_revision_id": snapshot["ruleset_revision"]["id"],
+        "ruleset_version": snapshot["ruleset_revision"]["version"],
+        "ruleset_content_hash": snapshot["ruleset_revision"]["content_hash"],
+        "domain": snapshot["ruleset_revision"]["domain"],
+        "available": True,
+    }
     snapshot["execution"]["analyze_limit"] = 2
     snapshot["config_hash"] = confirmed_configuration_hash(
         {
@@ -333,6 +504,20 @@ def test_v3_snapshot_accepts_analyze_limit_greater_than_one(m3_stack: dict):
     assert parsed.schema_version == "investigation-run-config-v3"
     assert parsed.execution.analyze_limit == 2
     assert parsed.execution.max_notes == 1
+    adapter = AuditPipelineExecutionAdapter(
+        job_store=JobStore(m3_stack["resources"].resource_db_path),
+        ingestion_store=IngestionStore(m3_stack["resources"].resource_db_path),
+        revision_store=TaskAuditConfigRevisionStore(
+            m3_stack["resources"].resource_db_path
+        ),
+        crawler_account_store=m3_stack["crawler_accounts"],
+        test_provider_validator=lambda _: None,
+    )
+    legacy_run = run.model_copy(update={"confirmed_configuration": snapshot})
+    job_id = adapter.ensure_job(legacy_run)
+    assert JobStore(m3_stack["resources"].resource_db_path).get(job_id)[
+        "analyze_limit"
+    ] == 2
 
 
 def test_m3_hides_auto_selected_account_and_freezes_it_into_job(
@@ -930,6 +1115,16 @@ def _counts(store: InvestigationCreationStore) -> tuple[int, int]:
     return int(drafts), int(runs)
 
 
+def _draft_revision_count(store: InvestigationCreationStore, draft_id: str) -> int:
+    with sqlite3.connect(store.db_path) as connection:
+        return int(
+            connection.execute(
+                "SELECT COUNT(*) FROM investigation_draft_revisions WHERE draft_id = ?",
+                (draft_id,),
+            ).fetchone()[0]
+        )
+
+
 def _confirmation_side_effects(stack: dict) -> tuple[int, int, int]:
     with sqlite3.connect(stack["store"].db_path) as connection:
         runs = connection.execute(
@@ -963,8 +1158,404 @@ def _existing_lexicon_configuration(
                 "expected_runtime_content_hash": runtime_hash,
             },
         },
-        "audit_policy": _selection(_policy(stack)),
+        "judgement": _judgement(_ruleset(stack)),
     }
+
+
+def _replace_persisted_draft_configuration(
+    stack: dict, draft_id: str, configuration: dict
+) -> None:
+    payload = json.dumps(configuration, ensure_ascii=False, sort_keys=True)
+    with sqlite3.connect(stack["store"].db_path) as connection:
+        connection.execute(
+            "UPDATE investigation_drafts SET configuration_json = ? WHERE id = ?",
+            (payload, draft_id),
+        )
+        connection.execute(
+            "UPDATE investigation_draft_revisions SET configuration_json = ? "
+            "WHERE draft_id = ? AND revision = 1",
+            (payload, draft_id),
+        )
+
+
+def test_create_rejects_historical_ruleset_before_write(m3_stack: dict):
+    historical = m3_stack["resources"].ruleset_service.get_published(
+        "ruleset-revision:gambling:v1",
+        principal=_principal(m3_stack),
+    )
+    configuration = _temporary_configuration(m3_stack, ["term"])
+    configuration["judgement"] = {
+        "strategy": "existing_ruleset",
+        "ruleset_revision_id": historical["id"],
+        "expected_ruleset_version": historical["version"],
+        "expected_ruleset_content_hash": historical["content_hash"],
+    }
+
+    with pytest.raises(ResourceStaleError) as caught:
+        _create_draft(m3_stack, configuration)
+
+    assert caught.value.details["mutation_applied"] is False
+    assert _counts(m3_stack["store"]) == (0, 0)
+
+
+@pytest.mark.parametrize("drift_field", ["version", "content_hash"])
+def test_create_rejects_ruleset_identity_drift_before_write(
+    m3_stack: dict, drift_field: str
+):
+    configuration = _temporary_configuration(m3_stack, ["term"])
+    if drift_field == "version":
+        configuration["judgement"]["expected_ruleset_version"] += 1
+    else:
+        configuration["judgement"]["expected_ruleset_content_hash"] = "0" * 64
+
+    with pytest.raises(ResourceStaleError) as caught:
+        _create_draft(m3_stack, configuration)
+
+    assert caught.value.details["mutation_applied"] is False
+    assert _counts(m3_stack["store"]) == (0, 0)
+
+
+def test_create_rejects_ruleset_unsupported_by_current_compiler(m3_stack: dict):
+    configuration = _temporary_configuration(m3_stack, ["term"])
+    revision_id = configuration["judgement"]["ruleset_revision_id"]
+    with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
+        connection.execute("DROP TRIGGER immutable_rule_set_revisions_update")
+        row = connection.execute(
+            "SELECT snapshot_json FROM rule_set_revisions WHERE id = ?",
+            (revision_id,),
+        ).fetchone()
+        snapshot = json.loads(row[0])
+        snapshot["domain"] = "astronomy"
+        digest = ruleset_content_hash(RuleSetContent.model_validate(snapshot))
+        connection.execute(
+            "UPDATE rule_set_revisions SET snapshot_json = ?, content_hash = ? WHERE id = ?",
+            (json.dumps(snapshot, ensure_ascii=False), digest, revision_id),
+        )
+    configuration["judgement"]["expected_ruleset_content_hash"] = digest
+
+    with pytest.raises(ConfigurationValidationError) as caught:
+        _create_draft(m3_stack, configuration)
+
+    assert caught.value.code == "INVALID_RULESET_REFERENCE"
+    assert caught.value.details["mutation_applied"] is False
+    assert _counts(m3_stack["store"]) == (0, 0)
+
+
+def test_create_rejects_missing_existing_lexicon_before_write(m3_stack: dict):
+    configuration = _existing_lexicon_configuration(
+        m3_stack, "missing-lexicon", "0" * 64
+    )
+
+    with pytest.raises(ConfigurationValidationError) as caught:
+        _create_draft(m3_stack, configuration)
+
+    assert caught.value.code == "INVALID_RESOURCE_REFERENCE"
+    assert caught.value.details["resource_id"] == "missing-lexicon"
+    assert _counts(m3_stack["store"]) == (0, 0)
+
+
+def test_create_rejects_existing_lexicon_hash_drift_before_write(m3_stack: dict):
+    configuration = _existing_lexicon_configuration(
+        m3_stack, "gambling", "0" * 64
+    )
+
+    with pytest.raises(ResourceStaleError) as caught:
+        _create_draft(m3_stack, configuration)
+
+    assert caught.value.details["mutation_applied"] is False
+    assert _counts(m3_stack["store"]) == (0, 0)
+
+
+def test_create_overwrites_client_enabled_terms_with_authoritative_snapshot(
+    m3_stack: dict,
+):
+    m3_stack["lexicons"].upsert_category(
+        category_id="authoritative-terms",
+        title="Authoritative terms",
+        terms=["server-one", "server-two"],
+    )
+    configuration = _existing_lexicon_configuration(
+        m3_stack,
+        "authoritative-terms",
+        m3_stack["lexicons"].runtime_content_hash("authoritative-terms"),
+    )
+    configuration["investigation"]["recall_plan"]["enabled_main_terms"] = [
+        "client-forgery"
+    ]
+
+    draft = _create_draft(m3_stack, configuration)
+
+    assert draft.configuration.investigation.recall_plan.enabled_main_terms == [
+        "server-one",
+        "server-two",
+    ]
+
+
+def test_create_rejects_missing_source_lexicon_provenance(m3_stack: dict):
+    configuration = _temporary_configuration(m3_stack, ["term"])
+    configuration["investigation"]["recall_plan"]["source_lexicon_ids"] = [
+        "missing-source"
+    ]
+
+    with pytest.raises(ConfigurationValidationError) as caught:
+        _create_draft(m3_stack, configuration)
+
+    assert caught.value.code == "INVALID_SOURCE_LEXICON_REFERENCE"
+    assert caught.value.details["resource_id"] == "missing-source"
+    assert _counts(m3_stack["store"]) == (0, 0)
+
+
+def test_empty_authoritative_lexicon_terms_remain_editable_blocker(
+    m3_stack: dict,
+):
+    m3_stack["lexicons"].upsert_category(
+        category_id="empty-recall",
+        title="Empty recall",
+        terms=[],
+    )
+    configuration = _existing_lexicon_configuration(
+        m3_stack,
+        "empty-recall",
+        m3_stack["lexicons"].runtime_content_hash("empty-recall"),
+    )
+
+    draft = _create_draft(m3_stack, configuration)
+    preview = m3_stack["service"].get_confirmation_preview(
+        draft.id, principal=_principal(m3_stack)
+    )
+
+    assert draft.configuration.investigation.recall_plan.enabled_main_terms == []
+    assert [item.code for item in preview.blockers] == ["NO_SEARCH_TERMS"]
+
+
+def test_title_only_update_revalidates_unchanged_effective_configuration(
+    m3_stack: dict,
+):
+    draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["term"]))
+
+    updated = m3_stack["service"].update_draft(
+        UpdateDraftCommand(
+            draft_id=draft.id,
+            expected_revision=1,
+            title="Title-only revision",
+        ),
+        principal=_principal(m3_stack),
+    )
+
+    assert updated.current_revision == 2
+    assert updated.title == "Title-only revision"
+    assert _draft_revision_count(m3_stack["store"], draft.id) == 2
+
+
+def test_update_checks_owner_state_and_cas_before_resource_resolution(
+    m3_stack: dict,
+):
+    draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["term"]))
+    resolution = m3_stack["resources"].resolve_authoritative_draft
+
+    with patch.object(
+        m3_stack["resources"],
+        "resolve_authoritative_draft",
+        side_effect=AssertionError("resource resolution must not run"),
+    ):
+        with pytest.raises(PrincipalAccessDeniedError):
+            m3_stack["service"].update_draft(
+                UpdateDraftCommand(
+                    draft_id=draft.id,
+                    expected_revision=1,
+                    title="Wrong owner",
+                ),
+                principal=Principal("wrong-owner"),
+            )
+        with pytest.raises(DraftRevisionConflictError):
+            m3_stack["service"].update_draft(
+                UpdateDraftCommand(
+                    draft_id=draft.id,
+                    expected_revision=2,
+                    title="Wrong revision",
+                ),
+                principal=_principal(m3_stack),
+            )
+    assert _draft_revision_count(m3_stack["store"], draft.id) == 1
+
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=1,
+            confirmed=True,
+            idempotency_key="prewrite-order:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    assert run.draft_revision == 1
+    with patch.object(
+        m3_stack["resources"],
+        "resolve_authoritative_draft",
+        wraps=resolution,
+    ) as resource_resolution:
+        with pytest.raises(DraftAlreadyConfirmedError):
+            m3_stack["service"].update_draft(
+                UpdateDraftCommand(
+                    draft_id=draft.id,
+                    expected_revision=1,
+                    title="Already confirmed",
+                ),
+                principal=_principal(m3_stack),
+            )
+    resource_resolution.assert_not_called()
+    assert _draft_revision_count(m3_stack["store"], draft.id) == 1
+
+
+def test_title_only_update_rejects_noncurrent_ruleset_without_new_revision(
+    m3_stack: dict,
+):
+    draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["term"]))
+    with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
+        connection.execute(
+            "UPDATE rule_sets SET published_revision_id = ? WHERE id = ?",
+            ("ruleset-revision:gambling:v1", "ruleset.gambling"),
+        )
+
+    with pytest.raises(ResourceStaleError):
+        m3_stack["service"].update_draft(
+            UpdateDraftCommand(
+                draft_id=draft.id,
+                expected_revision=1,
+                title="Must not persist",
+            ),
+            principal=_principal(m3_stack),
+        )
+
+    persisted = m3_stack["store"].get_draft(
+        draft.id, principal=_principal(m3_stack).id
+    )
+    assert persisted.current_revision == 1
+    assert persisted.title == draft.title
+    assert _draft_revision_count(m3_stack["store"], draft.id) == 1
+
+
+def test_title_only_update_rejects_lexicon_drift_without_new_revision(
+    m3_stack: dict,
+):
+    m3_stack["lexicons"].upsert_category(
+        category_id="update-drift",
+        title="Update drift",
+        terms=["before"],
+    )
+    draft = _create_draft(
+        m3_stack,
+        _existing_lexicon_configuration(
+            m3_stack,
+            "update-drift",
+            m3_stack["lexicons"].runtime_content_hash("update-drift"),
+        ),
+    )
+    m3_stack["lexicons"].add_keyword(
+        category_id="update-drift", keyword="after"
+    )
+
+    with pytest.raises(ResourceStaleError):
+        m3_stack["service"].update_draft(
+            UpdateDraftCommand(
+                draft_id=draft.id,
+                expected_revision=1,
+                title="Must not persist",
+            ),
+            principal=_principal(m3_stack),
+        )
+
+    assert _draft_revision_count(m3_stack["store"], draft.id) == 1
+    assert m3_stack["store"].get_draft(
+        draft.id, principal=_principal(m3_stack).id
+    ).current_revision == 1
+
+
+def test_full_configuration_update_rejects_invalid_effective_provenance(
+    m3_stack: dict,
+):
+    draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["term"]))
+    configuration = draft.configuration.model_dump(mode="json")
+    configuration["investigation"]["recall_plan"]["source_lexicon_ids"] = [
+        "missing-source"
+    ]
+
+    with pytest.raises(ConfigurationValidationError) as caught:
+        m3_stack["service"].update_draft(
+            UpdateDraftCommand(
+                draft_id=draft.id,
+                expected_revision=1,
+                configuration=configuration,
+            ),
+            principal=_principal(m3_stack),
+        )
+
+    assert caught.value.code == "INVALID_SOURCE_LEXICON_REFERENCE"
+    assert _draft_revision_count(m3_stack["store"], draft.id) == 1
+
+
+def test_authoritative_update_fence_blocks_resource_writer_until_draft_commit(
+    m3_stack: dict, monkeypatch: pytest.MonkeyPatch
+):
+    m3_stack["lexicons"].upsert_category(
+        category_id="update-fence",
+        title="Update fence",
+        terms=["fenced"],
+    )
+    draft = _create_draft(
+        m3_stack,
+        _existing_lexicon_configuration(
+            m3_stack,
+            "update-fence",
+            m3_stack["lexicons"].runtime_content_hash("update-fence"),
+        ),
+    )
+    draft_store_entered = threading.Event()
+    writer_attempted = threading.Event()
+    writer_finished = threading.Event()
+    writer_errors: list[BaseException] = []
+    original_update = m3_stack["store"].update_draft
+
+    def observe_draft_commit(*args, **kwargs):
+        draft_store_entered.set()
+        assert writer_attempted.wait(2)
+        assert not writer_finished.wait(0.1)
+        result = original_update(*args, **kwargs)
+        assert not writer_finished.is_set()
+        return result
+
+    monkeypatch.setattr(m3_stack["store"], "update_draft", observe_draft_commit)
+
+    def write_resource() -> None:
+        try:
+            assert draft_store_entered.wait(2)
+            writer_attempted.set()
+            m3_stack["lexicons"].add_keyword(
+                category_id="update-fence", keyword="after-commit"
+            )
+        except BaseException as exc:
+            writer_errors.append(exc)
+        finally:
+            writer_finished.set()
+
+    writer = threading.Thread(target=write_resource)
+    writer.start()
+    updated = m3_stack["service"].update_draft(
+        UpdateDraftCommand(
+            draft_id=draft.id,
+            expected_revision=1,
+            title="Fenced revision",
+        ),
+        principal=_principal(m3_stack),
+    )
+    assert writer_finished.wait(2)
+    writer.join(timeout=2)
+
+    assert not writer_errors
+    assert updated.current_revision == 2
+    assert m3_stack["lexicons"].enabled_main_terms("update-fence") == [
+        "fenced",
+        "after-commit",
+    ]
 
 
 def test_options_are_safe_bounded_and_have_no_m3_side_effects(m3_stack: dict):
@@ -976,11 +1567,99 @@ def test_options_are_safe_bounded_and_have_no_m3_side_effects(m3_stack: dict):
     )
     assert _counts(m3_stack["store"]) == before == (0, 0)
     assert _confirmation_side_effects(m3_stack) == confirmation_before == (0, 0, 0)
-    assert [item.id for item in options.audit_policies] == ["policy_gambling"]
-    assert len(options.ruleset_revisions) == 1
+    assert [item.id for item in options.ruleset_revisions] == [
+        "ruleset-revision:gambling:v2",
+    ]
+    assert options.ruleset_revision_details == []
     serialized = json.dumps(options.model_dump(mode="json"), ensure_ascii=False)
     for forbidden in ("system_template", "source_mappings", "prompt_profile", "categories"):
         assert forbidden not in serialized
+
+
+def test_explicit_ruleset_revision_detail_is_complete_safe_and_read_only(
+    m3_stack: dict,
+):
+    before = _counts(m3_stack["store"])
+    confirmation_before = _confirmation_side_effects(m3_stack)
+
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(
+            include_ruleset_details_for_revision_ids=[
+                "ruleset-revision:gambling:v2"
+            ]
+        ),
+        principal=_principal(m3_stack),
+    )
+
+    assert _counts(m3_stack["store"]) == before == (0, 0)
+    assert _confirmation_side_effects(m3_stack) == confirmation_before == (0, 0, 0)
+    assert len(options.ruleset_revision_details) == 1
+    detail = options.ruleset_revision_details[0]
+    assert detail.id == "ruleset-revision:gambling:v2"
+    assert detail.ruleset_id == "ruleset.gambling"
+    assert detail.name == "赌博博彩风险规则集"
+    assert detail.domain == "gambling"
+    assert detail.version == 2
+    assert len(detail.content_hash) == 64
+    assert detail.audit_goal
+    assert detail.general_exemptions
+    assert detail.general_exemptions[0].condition
+    assert detail.categories
+
+    category = next(
+        item for item in detail.categories if item.category_id == "gambling.access_and_funds"
+    )
+    assert category.name == "入口与资金闭环"
+    assert category.description
+    rule = next(
+        item
+        for item in category.rules
+        if item.rule_id == "gambling.platform_entry_and_funding"
+    )
+    assert rule.name == "博彩平台或群入口与资金路径"
+    assert rule.hit_condition
+    assert rule.rule_exemptions
+    assert rule.rule_exemptions[0].condition
+    assert rule.adjudication_notes
+    assert rule.application_stages == [
+        "image_evidence",
+        "video_frame_evidence",
+        "comment_audit",
+        "fusion_audit",
+    ]
+
+    serialized = json.dumps(options.model_dump(mode="json"), ensure_ascii=False)
+    for internal in (
+        "source_mappings",
+        "source_file",
+        "system_template",
+        "prompt_profile",
+        "compiler",
+    ):
+        assert internal not in serialized
+
+
+def test_explicit_missing_ruleset_revision_detail_fails_closed_without_side_effects(
+    m3_stack: dict,
+):
+    before = _counts(m3_stack["store"])
+    confirmation_before = _confirmation_side_effects(m3_stack)
+
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(
+            include_ruleset_details_for_revision_ids=["ruleset-revision:missing"]
+        ),
+        principal=_principal(m3_stack),
+    )
+
+    assert options.ruleset_revision_details == []
+    blocker = next(
+        item for item in options.blockers if item.code == "INVALID_RULESET_REFERENCE"
+    )
+    assert blocker.resource_type == "ruleset_revision"
+    assert blocker.resource_id == "ruleset-revision:missing"
+    assert _counts(m3_stack["store"]) == before == (0, 0)
+    assert _confirmation_side_effects(m3_stack) == confirmation_before == (0, 0, 0)
 
 
 @pytest.mark.parametrize(
@@ -995,15 +1674,14 @@ def test_domain_hint_ranks_gambling_resources_without_filtering_valid_candidates
         principal=_principal(m3_stack),
     )
 
-    assert options.audit_policies[0].id == "policy_gambling"
     assert options.ruleset_revisions[0].id == "ruleset-revision:gambling:v2"
     assert options.recall_lexicons[0].id == "gambling"
-    assert "NO_PUBLISHED_AUDIT_POLICY" not in {
+    assert "NO_PUBLISHED_RULESET" not in {
         blocker.code for blocker in options.blockers
     }
 
 
-def test_unrelated_domain_hint_returns_no_policy_blocker_without_fallback(
+def test_unrelated_domain_hint_does_not_make_application_reject_ruleset(
     m3_stack: dict,
 ):
     before = _counts(m3_stack["store"])
@@ -1016,9 +1694,11 @@ def test_unrelated_domain_hint_returns_no_policy_blocker_without_fallback(
         principal=_principal(m3_stack),
     )
 
-    assert options.audit_policies == []
+    assert [item.id for item in options.ruleset_revisions] == [
+        "ruleset-revision:gambling:v2"
+    ]
     assert len(options.recall_lexicons) == 1
-    assert "NO_PUBLISHED_AUDIT_POLICY" in {
+    assert "NO_PUBLISHED_RULESET" not in {
         blocker.code for blocker in options.blockers
     }
     assert _counts(m3_stack["store"]) == before == (0, 0)
@@ -1026,16 +1706,16 @@ def test_unrelated_domain_hint_returns_no_policy_blocker_without_fallback(
 
 
 def test_domain_hint_order_and_cursor_are_deterministic(m3_stack: dict):
-    source = m3_stack["policies"].get("policy_gambling")
-    policy = m3_stack["policies"].create(
-        id="policy_alpha",
-        name="Alpha candidate",
-        description="A deterministic secondary candidate.",
-        config=source["published_config"],
+    draft = m3_stack["resources"].ruleset_service.fork_published(
+        "ruleset-revision:gambling:v2",
+        principal=_principal(m3_stack),
+        ruleset_id="ruleset.alpha",
     )
-    m3_stack["policies"].publish(
-        policy["id"],
-        expected_draft_hash=m3_stack["policies"].draft_hash(policy),
+    m3_stack["resources"].ruleset_service.publish(
+        draft["id"],
+        expected_revision=draft["draft_revision"],
+        idempotency_key="publish-alpha-ruleset",
+        principal=_principal(m3_stack),
     )
 
     query = QueryInvestigationOptions(domain_hint="alpha", page_size=20)
@@ -1045,9 +1725,12 @@ def test_domain_hint_order_and_cursor_are_deterministic(m3_stack: dict):
     second = m3_stack["service"].query_investigation_options(
         query, principal=_principal(m3_stack)
     )
-    first_ids = [item.id for item in first.audit_policies]
-    assert first_ids == ["policy_alpha"]
-    assert [item.id for item in second.audit_policies] == first_ids
+    first_ids = [item.id for item in first.ruleset_revisions]
+    assert first_ids == [
+        "ruleset-revision:ruleset.alpha:v1",
+        "ruleset-revision:gambling:v2",
+    ]
+    assert [item.id for item in second.ruleset_revisions] == first_ids
 
     first_page = m3_stack["service"].query_investigation_options(
         QueryInvestigationOptions(domain_hint="alpha", page_size=1),
@@ -1059,8 +1742,12 @@ def test_domain_hint_order_and_cursor_are_deterministic(m3_stack: dict):
         ),
         principal=_principal(m3_stack),
     )
-    assert [item.id for item in first_page.audit_policies] == ["policy_alpha"]
-    assert second_page.audit_policies == []
+    assert [item.id for item in first_page.ruleset_revisions] == [
+        "ruleset-revision:ruleset.alpha:v1"
+    ]
+    assert [item.id for item in second_page.ruleset_revisions] == [
+        "ruleset-revision:gambling:v2"
+    ]
 
 
 def test_creator_options_never_require_or_return_recall_lexicons(m3_stack: dict):
@@ -1068,7 +1755,7 @@ def test_creator_options_never_require_or_return_recall_lexicons(m3_stack: dict)
         QueryInvestigationOptions(mode="creator"),
         principal=_principal(m3_stack),
     )
-    assert options.audit_policies
+    assert options.ruleset_revisions
     assert options.recall_lexicons == []
     assert "NO_PUBLISHED_RECALL_LEXICON" not in {
         blocker.code for blocker in options.blockers
@@ -1090,48 +1777,87 @@ def test_search_options_block_when_no_real_recall_lexicon_exists(m3_stack: dict)
     }
 
 
-def test_explicit_policy_request_is_strict_and_not_filtered_by_hint(m3_stack: dict):
+def test_explicit_ruleset_request_is_strict_and_not_filtered_by_hint(m3_stack: dict):
     options = m3_stack["service"].query_investigation_options(
         QueryInvestigationOptions(
             domain_hint="completely unrelated astronomy",
-            audit_policy_ids=["policy_gambling"],
+            ruleset_revision_ids=["ruleset-revision:gambling:v2"],
         ),
         principal=_principal(m3_stack),
     )
-    assert [item.id for item in options.audit_policies] == ["policy_gambling"]
+    assert [item.id for item in options.ruleset_revisions] == [
+        "ruleset-revision:gambling:v2"
+    ]
     assert options.blockers == []
 
 
-def test_no_valid_published_policy_still_returns_blocker(m3_stack: dict):
+def test_historical_ruleset_revision_is_readable_but_not_discoverable_for_new_selection(
+    m3_stack: dict,
+):
+    historical_id = "ruleset-revision:gambling:v1"
+    historical = m3_stack["resources"].ruleset_service.get_published(
+        historical_id,
+        principal=_principal(m3_stack),
+    )
+    assert historical["id"] == historical_id
+
+    options = m3_stack["service"].query_investigation_options(
+        QueryInvestigationOptions(ruleset_revision_ids=[historical_id]),
+        principal=_principal(m3_stack),
+    )
+    assert options.ruleset_revisions == []
+    assert {
+        (blocker.code, blocker.resource_id) for blocker in options.blockers
+    } >= {("NO_PUBLISHED_RULESET", historical_id)}
+
+
+def test_application_does_not_validate_objective_ruleset_semantic_relevance(
+    m3_stack: dict,
+):
+    draft = m3_stack["service"].create_draft(
+        CreateDraftCommand(
+            title="Astronomy observation",
+            objective="Study galaxy morphology in public posts.",
+            configuration=_temporary_configuration(m3_stack, ["galaxy"]),
+        ),
+        principal=_principal(m3_stack),
+    )
+
+    preview = m3_stack["service"].get_confirmation_preview(
+        draft.id,
+        principal=_principal(m3_stack),
+    )
+    assert preview.can_confirm
+    assert preview.ruleset_revision.id == "ruleset-revision:gambling:v2"
+
+
+def test_no_valid_published_ruleset_still_returns_blocker(m3_stack: dict):
     with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
         connection.execute(
-            "UPDATE audit_policies SET status = 'draft' WHERE id = ?",
-            ("policy_gambling",),
+            "UPDATE rule_sets SET published_revision_id = NULL WHERE id = ?",
+            ("ruleset.gambling",),
         )
 
     options = m3_stack["service"].query_investigation_options(
         QueryInvestigationOptions(domain_hint="世界杯 博彩 引流"),
         principal=_principal(m3_stack),
     )
-    assert options.audit_policies == []
-    assert "NO_PUBLISHED_AUDIT_POLICY" in {
+    assert options.ruleset_revisions == []
+    assert "NO_PUBLISHED_RULESET" in {
         blocker.code for blocker in options.blockers
     }
 
 
-@pytest.mark.parametrize("policy_state", ["missing", "draft", "invalid_hash"])
-def test_explicit_invalid_policy_request_remains_fail_closed(
-    m3_stack: dict, policy_state: str
+@pytest.mark.parametrize("ruleset_state", ["missing", "unpublished", "invalid_hash"])
+def test_explicit_invalid_ruleset_request_remains_fail_closed(
+    m3_stack: dict, ruleset_state: str
 ):
-    requested_id = "policy_gambling"
+    requested_id = "ruleset-revision:gambling:v2"
     with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
-        if policy_state == "missing":
-            requested_id = "policy_missing"
-        elif policy_state == "draft":
-            connection.execute(
-                "UPDATE audit_policies SET status = 'draft' WHERE id = ?",
-                (requested_id,),
-            )
+        if ruleset_state == "missing":
+            requested_id = "ruleset-revision:missing"
+        elif ruleset_state == "unpublished":
+            requested_id = "ruleset.gambling"
         else:
             connection.execute("DROP TRIGGER immutable_rule_set_revisions_update")
             connection.execute(
@@ -1142,14 +1868,14 @@ def test_explicit_invalid_policy_request_remains_fail_closed(
     options = m3_stack["service"].query_investigation_options(
         QueryInvestigationOptions(
             domain_hint="世界杯 博彩 引流",
-            audit_policy_ids=[requested_id],
+            ruleset_revision_ids=[requested_id],
         ),
         principal=_principal(m3_stack),
     )
-    assert options.audit_policies == []
+    assert options.ruleset_revisions == []
     codes = {blocker.code for blocker in options.blockers}
-    assert "NO_PUBLISHED_AUDIT_POLICY" in codes
-    if policy_state == "invalid_hash":
+    assert "NO_PUBLISHED_RULESET" in codes
+    if ruleset_state == "invalid_hash":
         assert "INVALID_RULESET_REFERENCE" in codes
 
 
@@ -1272,7 +1998,7 @@ def test_creator_mode_has_no_recall_and_reports_platform_mismatch(m3_stack: dict
             "mode": "creator",
             "creator_url": "https://www.douyin.com/user/MS4wLjABAAAA-valid",
         },
-        "audit_policy": _selection(_policy(m3_stack)),
+        "judgement": _judgement(_ruleset(m3_stack)),
     }
     draft = _create_draft(m3_stack, configuration)
     preview = m3_stack["service"].get_confirmation_preview(
@@ -1308,11 +2034,10 @@ def test_creator_mode_has_no_recall_and_reports_platform_mismatch(m3_stack: dict
 
     mismatched = dict(configuration)
     mismatched["platform"] = "xhs"
-    bad_draft = _create_draft(m3_stack, mismatched)
-    bad_preview = m3_stack["service"].get_confirmation_preview(
-        bad_draft.id, principal=_principal(m3_stack)
-    )
-    assert [item.code for item in bad_preview.blockers] == ["PLATFORM_MISMATCH"]
+    with pytest.raises(ConfigurationValidationError) as mismatch_error:
+        _create_draft(m3_stack, mismatched)
+    assert mismatch_error.value.code == "PLATFORM_MISMATCH"
+    assert mismatch_error.value.details["mutation_applied"] is False
 
     post_url_configuration = {
         **configuration,
@@ -1321,13 +2046,10 @@ def test_creator_mode_has_no_recall_and_reports_platform_mismatch(m3_stack: dict
             "creator_url": "https://www.douyin.com/video/1234567890",
         },
     }
-    post_url_draft = _create_draft(m3_stack, post_url_configuration)
-    post_url_preview = m3_stack["service"].get_confirmation_preview(
-        post_url_draft.id, principal=_principal(m3_stack)
-    )
-    assert [item.code for item in post_url_preview.blockers] == [
-        "INVALID_CREATOR_URL"
-    ]
+    with pytest.raises(ConfigurationValidationError) as creator_error:
+        _create_draft(m3_stack, post_url_configuration)
+    assert creator_error.value.code == "INVALID_CREATOR_URL"
+    assert creator_error.value.details["mutation_applied"] is False
     assert _counts(m3_stack["store"])[1] == 1
 
 
@@ -1363,7 +2085,7 @@ def test_modes_reject_cross_mode_fields(m3_stack: dict, investigation: dict):
                 "configuration": {
                     "platform": "dy",
                     "investigation": investigation,
-                    "audit_policy": _selection(_policy(m3_stack)),
+                    "judgement": _judgement(_ruleset(m3_stack)),
                 },
             }
         )
@@ -1459,20 +2181,35 @@ def test_existing_lexicon_snapshot_and_explicit_term_edit_are_revisioned(
     assert second_plan["terms"] == ["user-edited-main"]
 
 
-def test_missing_policy_keeps_draft_and_returns_management_url(m3_stack: dict):
+def test_missing_ruleset_is_rejected_before_draft_insert(m3_stack: dict):
     configuration = _temporary_configuration(m3_stack, ["term"])
-    configuration["audit_policy"] = None
-    draft = _create_draft(m3_stack, configuration)
-    preview = m3_stack["service"].get_confirmation_preview(
-        draft.id, principal=_principal(m3_stack)
-    )
-    assert not preview.can_confirm
-    blocker = preview.blockers[0]
-    assert blocker.code == "NO_PUBLISHED_AUDIT_POLICY"
-    assert blocker.management_url == (
-        f"/rule-assistant/rulesets?return_to=/investigation&draft_id={draft.id}"
-    )
-    assert _counts(m3_stack["store"]) == (1, 0)
+    configuration["judgement"] = {
+        "strategy": "existing_ruleset",
+        "ruleset_revision_id": "ruleset-revision:missing",
+        "expected_ruleset_version": 1,
+        "expected_ruleset_content_hash": "0" * 64,
+    }
+    with pytest.raises(ConfigurationValidationError) as caught:
+        _create_draft(m3_stack, configuration)
+    assert caught.value.code == "INVALID_RESOURCE_REFERENCE"
+    assert caught.value.details["mutation_applied"] is False
+    assert _counts(m3_stack["store"]) == (0, 0)
+    assert _confirmation_side_effects(m3_stack) == (0, 0, 0)
+
+
+def test_unpublished_ruleset_is_rejected_before_draft_insert(m3_stack: dict):
+    configuration = _temporary_configuration(m3_stack, ["term"])
+    configuration["judgement"] = {
+        "strategy": "existing_ruleset",
+        "ruleset_revision_id": "ruleset.gambling",
+        "expected_ruleset_version": 2,
+        "expected_ruleset_content_hash": _ruleset(m3_stack).content_hash,
+    }
+    with pytest.raises(ConfigurationValidationError) as caught:
+        _create_draft(m3_stack, configuration)
+    assert caught.value.code == "INVALID_RESOURCE_REFERENCE"
+    assert _counts(m3_stack["store"]) == (0, 0)
+    assert _confirmation_side_effects(m3_stack) == (0, 0, 0)
 
 
 def test_preview_is_dynamic_and_never_persisted(m3_stack: dict):
@@ -1494,6 +2231,355 @@ def test_preview_is_dynamic_and_never_persisted(m3_stack: dict):
             ).fetchall()
         }
     assert "confirmation_preview" not in columns
+
+
+def test_create_preview_and_confirm_share_authoritative_resolution_without_semantics(
+    m3_stack: dict,
+):
+    original = m3_stack["resources"].resolve_authoritative_draft
+    resource_connections = []
+
+    def observe_resolution(*args, **kwargs):
+        resource_connections.append(kwargs.get("resource_connection"))
+        return original(*args, **kwargs)
+
+    with patch.object(
+        m3_stack["resources"],
+        "resolve_authoritative_draft",
+        side_effect=observe_resolution,
+    ):
+        draft = m3_stack["service"].create_draft(
+            CreateDraftCommand(
+                title="Astronomy objective with gambling judgement",
+                objective="Compare telescope recommendations for amateur astronomy.",
+                configuration=_temporary_configuration(m3_stack, ["telescope"]),
+            ),
+            principal=_principal(m3_stack),
+        )
+        preview = m3_stack["service"].get_confirmation_preview(
+            draft.id, principal=_principal(m3_stack)
+        )
+        run = m3_stack["service"].confirm_and_queue(
+            ConfirmAndQueueCommand(
+                draft_id=draft.id,
+                expected_revision=1,
+                confirmed=True,
+                idempotency_key="shared-valid:1",
+            ),
+            principal=_principal(m3_stack),
+        )
+
+    assert preview.can_confirm
+    assert preview.blockers == []
+    assert run.confirmed_configuration["schema_version"] == (
+        "investigation-run-config-v4"
+    )
+    assert len(resource_connections) == 3
+    assert resource_connections[0] is not None
+    assert resource_connections[1] is None
+    assert resource_connections[2] is not None
+
+
+@pytest.mark.parametrize(
+    ("condition", "expected_code", "expected_error"),
+    [
+        ("ruleset_hash_drift", "RESOURCE_STALE", ResourceStaleError),
+        ("ruleset_replaced", "RESOURCE_STALE", ResourceStaleError),
+        ("ruleset_missing", "INVALID_RESOURCE_REFERENCE", ConfigurationValidationError),
+        ("lexicon_hash_drift", "RESOURCE_STALE", ResourceStaleError),
+        ("lexicon_missing", "INVALID_RESOURCE_REFERENCE", ConfigurationValidationError),
+        (
+            "source_lexicon_missing",
+            "INVALID_SOURCE_LEXICON_REFERENCE",
+            ConfigurationValidationError,
+        ),
+    ],
+)
+def test_resource_truth_classification_is_shared_by_preview_and_confirm(
+    m3_stack: dict,
+    condition: str,
+    expected_code: str,
+    expected_error: type[Exception],
+):
+    if condition.startswith("lexicon_"):
+        m3_stack["lexicons"].upsert_category(
+            category_id="convergence-lexicon",
+            title="Convergence lexicon",
+            terms=["before"],
+        )
+        configuration = _existing_lexicon_configuration(
+            m3_stack,
+            "convergence-lexicon",
+            m3_stack["lexicons"].runtime_content_hash("convergence-lexicon"),
+        )
+    else:
+        configuration = _temporary_configuration(m3_stack, ["term"])
+    draft = _create_draft(m3_stack, configuration)
+
+    resource_db = m3_stack["resources"].resource_db_path
+    if condition == "ruleset_hash_drift":
+        revision_id = draft.configuration.judgement.ruleset_revision_id
+        with sqlite3.connect(resource_db) as connection:
+            connection.execute("DROP TRIGGER immutable_rule_set_revisions_update")
+            connection.execute(
+                "UPDATE rule_set_revisions SET content_hash = ? WHERE id = ?",
+                ("0" * 64, revision_id),
+            )
+    elif condition == "ruleset_replaced":
+        with sqlite3.connect(resource_db) as connection:
+            connection.execute(
+                "UPDATE rule_sets SET published_revision_id = ? WHERE id = ?",
+                ("ruleset-revision:gambling:v1", "ruleset.gambling"),
+            )
+    elif condition == "ruleset_missing":
+        revision_id = draft.configuration.judgement.ruleset_revision_id
+        with sqlite3.connect(resource_db) as connection:
+            connection.execute("DROP TRIGGER immutable_rule_set_revisions_delete")
+            connection.execute(
+                "DELETE FROM rule_set_revisions WHERE id = ?", (revision_id,)
+            )
+    elif condition == "lexicon_hash_drift":
+        m3_stack["lexicons"].add_keyword(
+            category_id="convergence-lexicon", keyword="after"
+        )
+    elif condition == "lexicon_missing":
+        m3_stack["lexicons"].delete_category("convergence-lexicon")
+    else:
+        m3_stack["lexicons"].delete_category("general-reference")
+
+    original = m3_stack["resources"].resolve_authoritative_draft
+    with patch.object(
+        m3_stack["resources"],
+        "resolve_authoritative_draft",
+        wraps=original,
+    ) as shared_resolution:
+        preview = m3_stack["service"].get_confirmation_preview(
+            draft.id, principal=_principal(m3_stack)
+        )
+        with pytest.raises(expected_error) as caught:
+            m3_stack["service"].confirm_and_queue(
+                ConfirmAndQueueCommand(
+                    draft_id=draft.id,
+                    expected_revision=1,
+                    confirmed=True,
+                    idempotency_key=f"shared-invalid:{condition}",
+                ),
+                principal=_principal(m3_stack),
+            )
+
+    assert not preview.can_confirm
+    assert preview.blockers[0].code == expected_code
+    assert caught.value.code == expected_code
+    assert shared_resolution.call_count == 2
+    assert _confirmation_side_effects(m3_stack) == (0, 0, 0)
+    persisted = m3_stack["store"].get_draft(
+        draft.id, principal=_principal(m3_stack).id
+    )
+    assert persisted.status.value == "DRAFT"
+    assert persisted.current_revision == 1
+
+
+def test_creator_mismatch_uses_shared_truth_for_preview_and_confirm(
+    m3_stack: dict,
+):
+    draft = _create_draft(
+        m3_stack,
+        {
+            "platform": "dy",
+            "investigation": {
+                "mode": "creator",
+                "creator_url": "https://www.douyin.com/user/MS4wLjABAAAA-valid",
+            },
+            "judgement": _judgement(_ruleset(m3_stack)),
+        },
+    )
+    corrupted = draft.configuration.model_dump(mode="json")
+    corrupted["platform"] = "xhs"
+    _replace_persisted_draft_configuration(m3_stack, draft.id, corrupted)
+
+    original = m3_stack["resources"].resolve_authoritative_draft
+    with patch.object(
+        m3_stack["resources"],
+        "resolve_authoritative_draft",
+        wraps=original,
+    ) as shared_resolution:
+        preview = m3_stack["service"].get_confirmation_preview(
+            draft.id, principal=_principal(m3_stack)
+        )
+        with pytest.raises(ConfigurationValidationError) as caught:
+            m3_stack["service"].confirm_and_queue(
+                ConfirmAndQueueCommand(
+                    draft_id=draft.id,
+                    expected_revision=1,
+                    confirmed=True,
+                    idempotency_key="shared-creator-mismatch:1",
+                ),
+                principal=_principal(m3_stack),
+            )
+
+    assert [item.code for item in preview.blockers] == ["PLATFORM_MISMATCH"]
+    assert caught.value.code == "PLATFORM_MISMATCH"
+    assert shared_resolution.call_count == 2
+    assert _confirmation_side_effects(m3_stack) == (0, 0, 0)
+
+
+def test_crawler_readiness_remains_outside_authoritative_draft_truth(
+    m3_stack: dict,
+):
+    configuration = _temporary_configuration(m3_stack, ["term"])
+    account = _account_for_platform(m3_stack, "xhs")
+    m3_stack["crawler_accounts"].delete(account["id"])
+
+    draft = _create_draft(m3_stack, configuration)
+    updated = m3_stack["service"].update_draft(
+        UpdateDraftCommand(
+            draft_id=draft.id,
+            expected_revision=1,
+            title="Still valid without current crawler infrastructure",
+        ),
+        principal=_principal(m3_stack),
+    )
+    preview = m3_stack["service"].get_confirmation_preview(
+        draft.id, principal=_principal(m3_stack)
+    )
+    with pytest.raises(ConfigurationValidationError) as caught:
+        m3_stack["service"].confirm_and_queue(
+            ConfirmAndQueueCommand(
+                draft_id=draft.id,
+                expected_revision=updated.current_revision,
+                confirmed=True,
+                idempotency_key="runtime-only-blocker:1",
+            ),
+            principal=_principal(m3_stack),
+        )
+
+    assert updated.current_revision == 2
+    assert [item.code for item in preview.blockers] == [
+        "collection_service_unavailable"
+    ]
+    assert caught.value.code == "collection_service_unavailable"
+    assert _confirmation_side_effects(m3_stack) == (0, 0, 0)
+
+
+def test_preview_and_confirm_use_normalized_lexicon_without_mutating_draft(
+    m3_stack: dict,
+):
+    m3_stack["lexicons"].upsert_category(
+        category_id="normalized-freeze",
+        title="Normalized freeze",
+        terms=["server-one", "server-two"],
+    )
+    draft = _create_draft(
+        m3_stack,
+        _existing_lexicon_configuration(
+            m3_stack,
+            "normalized-freeze",
+            m3_stack["lexicons"].runtime_content_hash("normalized-freeze"),
+        ),
+    )
+    forged = draft.configuration.model_dump(mode="json")
+    forged["investigation"]["recall_plan"]["enabled_main_terms"] = [
+        "client-forgery"
+    ]
+    _replace_persisted_draft_configuration(m3_stack, draft.id, forged)
+
+    preview = m3_stack["service"].get_confirmation_preview(
+        draft.id, principal=_principal(m3_stack)
+    )
+    after_preview = m3_stack["store"].get_draft(
+        draft.id, principal=_principal(m3_stack).id
+    )
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=1,
+            confirmed=True,
+            idempotency_key="normalized-freeze:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    after_confirm = m3_stack["store"].get_draft(
+        draft.id, principal=_principal(m3_stack).id
+    )
+
+    assert preview.can_confirm
+    assert preview.resolved_search_terms == ["server-one", "server-two"]
+    assert preview.recall_plan.enabled_main_terms == ["server-one", "server-two"]
+    assert after_preview.configuration.investigation.recall_plan.enabled_main_terms == [
+        "client-forgery"
+    ]
+    assert run.confirmed_configuration["resolved_search_terms"] == [
+        "server-one",
+        "server-two",
+    ]
+    assert run.confirmed_configuration["recall_plan"]["enabled_main_terms"] == [
+        "server-one",
+        "server-two",
+    ]
+    assert after_confirm.configuration.investigation.recall_plan.enabled_main_terms == [
+        "client-forgery"
+    ]
+    assert after_confirm.current_revision == 1
+    assert _draft_revision_count(m3_stack["store"], draft.id) == 1
+
+
+def test_confirm_orders_shared_truth_before_runtime_readiness_and_freeze(
+    m3_stack: dict,
+):
+    draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["term"]))
+    events: list[str] = []
+    original_resolution = m3_stack["resources"].resolve_authoritative_draft
+    original_accounts = m3_stack["resources"]._available_crawler_accounts
+    original_freeze = m3_stack["resources"].configuration_resolver.resolve_ruleset_execution
+
+    def observe_resolution(*args, **kwargs):
+        events.append("shared_resolution")
+        return original_resolution(*args, **kwargs)
+
+    def observe_accounts(*args, **kwargs):
+        events.append("crawler_runtime_readiness")
+        return original_accounts(*args, **kwargs)
+
+    def observe_freeze(*args, **kwargs):
+        events.append("ruleset_freeze")
+        return original_freeze(*args, **kwargs)
+
+    with (
+        patch.object(
+            m3_stack["resources"],
+            "resolve_authoritative_draft",
+            side_effect=observe_resolution,
+        ),
+        patch.object(
+            m3_stack["resources"],
+            "_available_crawler_accounts",
+            side_effect=observe_accounts,
+        ),
+        patch.object(
+            m3_stack["resources"].configuration_resolver,
+            "resolve_ruleset_execution",
+            side_effect=observe_freeze,
+        ),
+    ):
+        run = m3_stack["service"].confirm_and_queue(
+            ConfirmAndQueueCommand(
+                draft_id=draft.id,
+                expected_revision=1,
+                confirmed=True,
+                idempotency_key="confirm-order:1",
+            ),
+            principal=_principal(m3_stack),
+        )
+
+    assert events == [
+        "shared_resolution",
+        "crawler_runtime_readiness",
+        "ruleset_freeze",
+    ]
+    assert run.confirmed_configuration["schema_version"] == (
+        "investigation-run-config-v4"
+    )
+    assert "audit_policy" not in run.confirmed_configuration
 
 
 def test_existing_lexicon_snapshot_is_clean_frozen_and_server_limited(m3_stack: dict):
@@ -1526,7 +2612,7 @@ def test_existing_lexicon_snapshot_is_clean_frozen_and_server_limited(m3_stack: 
                 "expected_runtime_content_hash": runtime_hash,
             },
         },
-        "audit_policy": _selection(_policy(m3_stack)),
+        "judgement": _judgement(_ruleset(m3_stack)),
     }
     draft = _create_draft(m3_stack, configuration)
     run = m3_stack["service"].confirm_and_queue(
@@ -1539,14 +2625,16 @@ def test_existing_lexicon_snapshot_is_clean_frozen_and_server_limited(m3_stack: 
         principal=_principal(m3_stack),
     )
     snapshot = run.confirmed_configuration
-    assert snapshot["schema_version"] == "investigation-run-config-v3"
+    assert snapshot["schema_version"] == "investigation-run-config-v4"
     assert snapshot["resolved_search_terms"] == ["first", "second"]
     assert snapshot["recall_plan"]["enabled_main_terms"] == ["first", "second"]
     assert snapshot["recall_plan"]["runtime_content_hash"] == runtime_hash
     assert snapshot["max_notes"] == 1
     assert snapshot["execution"]["max_notes"] == 1
-    assert snapshot["audit_policy"]["published_config_hash"]
     assert snapshot["ruleset_revision"]["content_hash"]
+    assert "audit_policy" not in snapshot
+    assert snapshot["execution"]["policy_id"] == ""
+    assert snapshot["execution"]["audit_config_revision"]["source_policy_id"] == ""
     assert snapshot["confirmed_by"] == _principal(m3_stack).id
     assert snapshot["confirmed_at"]
     assert snapshot["config_hash"]
@@ -1584,7 +2672,7 @@ def test_pre_confirmation_resource_change_is_stale(m3_stack: dict):
                     "expected_runtime_content_hash": runtime_hash,
                 },
             },
-            "audit_policy": _selection(_policy(m3_stack)),
+            "judgement": _judgement(_ruleset(m3_stack)),
         },
     )
     m3_stack["lexicons"].add_keyword(
@@ -1655,15 +2743,19 @@ def test_resource_writer_committed_first_is_stale_without_side_effects(
         draft.id, principal=_principal(m3_stack).id
     )
     assert stored_draft.status.value == "DRAFT"
-    updated = m3_stack["service"].update_draft(
-        UpdateDraftCommand(
-            draft_id=draft.id,
-            expected_revision=1,
-            title="Still editable after stale resources",
-        ),
-        principal=_principal(m3_stack),
+    with pytest.raises(ResourceStaleError):
+        m3_stack["service"].update_draft(
+            UpdateDraftCommand(
+                draft_id=draft.id,
+                expected_revision=1,
+                title="Still editable after stale resources",
+            ),
+            principal=_principal(m3_stack),
+        )
+    stored_after = m3_stack["store"].get_draft(
+        draft.id, principal=_principal(m3_stack).id
     )
-    assert updated.current_revision == 2
+    assert stored_after.current_revision == 1
 
 
 def test_confirmation_fence_blocks_resource_writer_until_run_commit(
@@ -1733,18 +2825,16 @@ def test_confirmation_fence_blocks_resource_writer_until_run_commit(
     ]
 
 
-def test_locked_policy_hash_drift_is_stale_without_confirmation_writes(m3_stack: dict):
+def test_locked_ruleset_version_drift_is_stale_without_confirmation_writes(
+    m3_stack: dict,
+):
     draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["term"]))
+    revision_id = draft.configuration.judgement.ruleset_revision_id
     with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
-        row = connection.execute(
-            "SELECT published_config_json FROM audit_policies WHERE id = ?",
-            (draft.configuration.audit_policy.id,),
-        ).fetchone()
-        changed = json.loads(row[0])
-        changed["fencing_probe"] = "changed"
+        connection.execute("DROP TRIGGER immutable_rule_set_revisions_update")
         connection.execute(
-            "UPDATE audit_policies SET published_config_json = ? WHERE id = ?",
-            (json.dumps(changed), draft.configuration.audit_policy.id),
+            "UPDATE rule_set_revisions SET version = version + 1 WHERE id = ?",
+            (revision_id,),
         )
 
     with pytest.raises(ResourceStaleError):
@@ -1753,7 +2843,7 @@ def test_locked_policy_hash_drift_is_stale_without_confirmation_writes(m3_stack:
                 draft_id=draft.id,
                 expected_revision=1,
                 confirmed=True,
-                idempotency_key="policy-hash-stale:1",
+                idempotency_key="ruleset-version-stale:1",
             ),
             principal=_principal(m3_stack),
         )
@@ -1764,7 +2854,7 @@ def test_locked_ruleset_hash_validation_is_stale_without_confirmation_writes(
     m3_stack: dict,
 ):
     draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["term"]))
-    revision_id = draft.configuration.audit_policy.expected_ruleset_revision_id
+    revision_id = draft.configuration.judgement.ruleset_revision_id
     with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
         connection.execute("DROP TRIGGER immutable_rule_set_revisions_update")
         connection.execute(
@@ -1794,7 +2884,9 @@ def test_confirmation_is_idempotent_and_tool_queries_do_not_start_work(m3_stack:
         {"domain_hint": "gambling"},
         principal=principal,
     )
-    assert options["audit_policies"][0]["id"] == "policy_gambling"
+    assert options["ruleset_revisions"][0]["id"] == (
+        "ruleset-revision:gambling:v2"
+    )
     assert _counts(m3_stack["store"]) == before
     assert "actor_id" not in json.dumps(tools.definitions())
 
@@ -1832,8 +2924,31 @@ def test_request_principal_reaches_all_m3_resource_queries(tmp_path: Path):
                 revision_id, principal=principal, connection=connection
             )
 
+        def list_published(self, *, principal, connection=None):
+            self.principal_ids.append(principal.id)
+            return delegate.list_published(principal=principal)
+
+        def list_current_published(self, *, principal, connection=None):
+            self.principal_ids.append(principal.id)
+            return delegate.list_current_published(principal=principal)
+
+        def get_current_published(
+            self, revision_id: str, *, principal, connection=None
+        ):
+            self.principal_ids.append(principal.id)
+            return delegate.get_current_published(
+                revision_id,
+                principal=principal,
+                connection=connection,
+            )
+
         def compile_for_execution(
-            self, revision_id: str, *, audit_policy, principal, connection=None
+            self,
+            revision_id: str,
+            *,
+            audit_policy=None,
+            principal,
+            connection=None,
         ):
             self.principal_ids.append(principal.id)
             return delegate.compile_for_execution(
@@ -1865,7 +2980,6 @@ def test_request_principal_reaches_all_m3_resource_queries(tmp_path: Path):
     )
     resources = InvestigationResourceService(
         lexicon_store=lexicons,
-        policy_store=policies,
         ruleset_service=rulesets,
         configuration_resolver=resolver,
     )
@@ -1889,7 +3003,7 @@ def test_request_principal_reaches_all_m3_resource_queries(tmp_path: Path):
                 "terms": ["term"],
             },
         },
-        "audit_policy": _selection(options.audit_policies[0]),
+        "judgement": _judgement(options.ruleset_revisions[0]),
     }
     draft = service.create_draft(
         CreateDraftCommand(
@@ -2010,9 +3124,13 @@ def test_other_m3_strict_string_lists_do_not_preconvert_values():
 
 def test_http_resource_stale_error_is_structured(m3_stack: dict):
     draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["term"]))
-    policy = m3_stack["policies"].get("policy_gambling")
-    assert policy is not None
-    m3_stack["policies"].update("policy_gambling", name="Changed Draft name")
+    revision_id = draft.configuration.judgement.ruleset_revision_id
+    with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
+        connection.execute("DROP TRIGGER immutable_rule_set_revisions_update")
+        connection.execute(
+            "UPDATE rule_set_revisions SET version = version + 1 WHERE id = ?",
+            (revision_id,),
+        )
 
     app = FastAPI()
     app.include_router(

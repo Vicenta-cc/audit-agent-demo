@@ -28,10 +28,6 @@ export function buildDraftSuggestionPlanView(
   suggestion: InvestigationDraftSuggestion
 ) {
   return {
-    policyName: suggestion.audit_policy?.name || "尚未选择审核策略",
-    policyDescription: suggestion.audit_policy?.description || "等待有效审核策略后方可确认。",
-    policyVersion: suggestion.audit_policy?.published_version || "",
-    policyDomain: suggestion.audit_policy?.domain || "",
     ruleSetName: suggestion.ruleset_revision?.name || "尚未绑定规则集",
     ruleSetVersion: suggestion.ruleset_revision?.version || null,
     ruleSetDomain: suggestion.ruleset_revision?.domain || "",
@@ -70,7 +66,7 @@ export function InvestigationContextDrawer({
       case "evidence": return "原始与多媒体证据链";
       case "key_users": return "重点作者候选列表";
       case "agent_logs": return "4 名 Agent 协同执行日志";
-      case "ruleset": return "研判方案配置";
+      case "ruleset": return "研判规则配置";
       default: return "上下文详情";
     }
   };
@@ -101,7 +97,7 @@ export function InvestigationContextDrawer({
             </div>
 
             <div>
-              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>推荐研判方案</div>
+              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>推荐研判规则</div>
               <div style={{ color: "#0f172a", fontSize: "13px", fontWeight: "700" }}>
                 {draft.analysisPlanName || draft.matchedRuleSet}
               </div>
@@ -280,28 +276,16 @@ export function InvestigationContextDrawer({
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ padding: "12px 0 14px", borderBottom: "1px solid #e2e8f0" }}>
               <div style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>
-                {draftSuggestionPlan.policyName}
+                {draftSuggestionPlan.ruleSetName}
               </div>
               <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
-                系统推荐 · 引用 {draftSuggestionPlan.ruleSetName}
+                系统推荐
                 {draftSuggestionPlan.ruleSetVersion ? ` v${draftSuggestionPlan.ruleSetVersion}` : ""}
               </div>
               <div style={{ fontSize: "12px", color: "#64748b", lineHeight: "1.55", marginTop: "8px" }}>
-                {draftSuggestionPlan.policyDescription}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>Published AuditPolicy</div>
-              <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "8px 10px", borderRadius: "6px", fontSize: "12px" }}>
-                <div style={{ fontWeight: "700", color: "#0f172a" }}>
-                  {draftSuggestionPlan.policyName}
-                </div>
-                {draftSuggestionPlan.policyVersion ? (
-                  <div style={{ color: "#475569" }}>
-                    已发布版本 {draftSuggestionPlan.policyVersion} · {draftSuggestionPlan.policyDomain}
-                  </div>
-                ) : null}
+                {draftSuggestionPlan.ruleSetVersion
+                  ? `${draftSuggestionPlan.ruleSetDomain} · 启用规则 ${draftSuggestionPlan.enabledRuleCount} 条`
+                  : "等待选择已发布的研判规则。"}
               </div>
             </div>
 

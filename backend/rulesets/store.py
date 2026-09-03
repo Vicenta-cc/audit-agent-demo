@@ -412,6 +412,27 @@ class RuleSetStore:
                 ).fetchall()
             return [self._row_to_revision(row) for row in rows]
 
+    def list_current_published(self, *, ruleset_id: str = "") -> list[dict]:
+        with self._lock, self._connect() as connection:
+            parameters: tuple[str, ...] = ()
+            predicate = ""
+            if ruleset_id:
+                predicate = "AND aggregates.id = ?"
+                parameters = (ruleset_id,)
+            rows = connection.execute(
+                f"""
+                SELECT revisions.*
+                FROM rule_sets AS aggregates
+                JOIN rule_set_revisions AS revisions
+                  ON revisions.id = aggregates.published_revision_id
+                WHERE aggregates.status = 'published'
+                  {predicate}
+                ORDER BY revisions.published_at DESC, revisions.id
+                """,
+                parameters,
+            ).fetchall()
+            return [self._row_to_revision(row) for row in rows]
+
     def get_published(
         self,
         revision_id: str,
@@ -422,6 +443,39 @@ class RuleSetStore:
             return self._get_published_with_connection(connection, revision_id)
         with self._lock, self._connect() as store_connection:
             return self._get_published_with_connection(store_connection, revision_id)
+
+    def get_current_published(
+        self,
+        revision_id: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> dict | None:
+        if connection is not None:
+            return self._get_current_published_with_connection(connection, revision_id)
+        with self._lock, self._connect() as store_connection:
+            return self._get_current_published_with_connection(
+                store_connection, revision_id
+            )
+
+    def _get_current_published_with_connection(
+        self,
+        connection: sqlite3.Connection,
+        revision_id: str,
+    ) -> dict | None:
+        row = connection.execute(
+            """
+            SELECT revisions.*
+            FROM rule_set_revisions AS revisions
+            JOIN rule_sets AS aggregates
+              ON aggregates.id = revisions.ruleset_id
+            WHERE revisions.id = ?
+              AND revisions.status = 'published'
+              AND aggregates.status = 'published'
+              AND aggregates.published_revision_id = revisions.id
+            """,
+            (revision_id,),
+        ).fetchone()
+        return self._row_to_revision(row) if row is not None else None
 
     def _get_published_with_connection(
         self,

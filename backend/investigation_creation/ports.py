@@ -5,11 +5,13 @@ import sqlite3
 from typing import Any, Callable, Protocol
 
 from .contracts import (
+    AuthoritativeDraftResolution,
     ConfirmationPreview,
     ConfirmationResolution,
     InvestigationDraft,
     InvestigationOptions,
     InvestigationConfiguration,
+    InvestigationDraftConfiguration,
     InvestigationRun,
     QueryInvestigationOptions,
 )
@@ -21,13 +23,17 @@ class ConfigurationResolver(Protocol):
 
 
 class ResourceService(Protocol):
-    def snapshot_draft_configuration(
+    def authoritative_draft_fence(
         self,
-        configuration: Any,
+    ) -> AbstractContextManager[sqlite3.Connection]: ...
+
+    def resolve_authoritative_draft(
+        self,
+        configuration: InvestigationDraftConfiguration,
         *,
-        principal: Any,
-    ) -> Any:
-        ...
+        principal: Principal,
+        resource_connection: sqlite3.Connection | None,
+    ) -> AuthoritativeDraftResolution: ...
 
     def query_options(
         self, query: QueryInvestigationOptions, *, principal: Principal

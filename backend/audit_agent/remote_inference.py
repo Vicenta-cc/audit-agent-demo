@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import mimetypes
+import time
 
 import requests
 
@@ -17,6 +18,8 @@ class RemoteInferenceClient:
         self.ocr_base_url = settings.remote_ocr_base_url
         self.api_key = settings.remote_inference_api_key
         self.timeout = settings.request_timeout
+        self.asr_request_retries = settings.remote_asr_request_retries
+        self.asr_retry_backoff_seconds = settings.remote_asr_retry_backoff_seconds
 
     @property
     def enabled(self) -> bool:
@@ -39,24 +42,55 @@ class RemoteInferenceClient:
         return bool(self.ocr_base_url)
 
     def transcribe(self, audio_path: Path) -> dict:
-        with audio_path.open("rb") as f:
-            response = requests.post(
-                f"{self.asr_base_url}/api/inference/transcribe",
-                headers=self._headers(),
-                files={"audio": (audio_path.name, f, "audio/wav")},
-                timeout=self.timeout,
-            )
-        return self._json_response(response, "remote ASR failed")
+        return self._post_audio_with_retry(
+            f"{self.asr_base_url}/api/inference/transcribe",
+            audio_path,
+            "remote ASR failed",
+        )
 
     def mms_transcribe(self, audio_path: Path) -> dict:
-        with audio_path.open("rb") as f:
-            response = requests.post(
-                f"{self.mms_asr_base_url}/api/inference/mms-transcribe",
-                headers=self._headers(),
-                files={"audio": (audio_path.name, f, "audio/wav")},
-                timeout=self.timeout,
-            )
-        return self._json_response(response, "remote MMS ASR failed")
+        return self._post_audio_with_retry(
+            f"{self.mms_asr_base_url}/api/inference/mms-transcribe",
+            audio_path,
+            "remote MMS ASR failed",
+        )
+
+    def _post_audio_with_retry(
+        self,
+        url: str,
+        audio_path: Path,
+        error_message: str,
+    ) -> dict:
+        attempts = self.asr_request_retries + 1
+        for attempt in range(attempts):
+            try:
+                with audio_path.open("rb") as audio_file:
+                    response = requests.post(
+                        url,
+                        headers=self._headers(),
+                        files={"audio": (audio_path.name, audio_file, "audio/wav")},
+                        timeout=self.timeout,
+                    )
+            except (requests.ConnectionError, requests.Timeout):
+                if attempt + 1 >= attempts:
+                    raise
+                self._wait_before_asr_retry(attempt)
+                continue
+
+            if not self._retryable_asr_status(response.status_code) or attempt + 1 >= attempts:
+                return self._json_response(response, error_message)
+            self._wait_before_asr_retry(attempt)
+
+        raise RuntimeError(f"{error_message}: retry loop exhausted")
+
+    def _wait_before_asr_retry(self, attempt: int) -> None:
+        delay = self.asr_retry_backoff_seconds * (2**attempt)
+        if delay > 0:
+            time.sleep(delay)
+
+    @staticmethod
+    def _retryable_asr_status(status_code: int) -> bool:
+        return status_code in {408, 429} or status_code >= 500
 
     def translate(
         self,

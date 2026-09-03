@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import atexit
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -64,6 +65,7 @@ from backend.investigation_creation.adapters import (
     R31ReportAdapter,
 )
 from backend.investigation_creation.contracts import (
+    AuthoritativeDraftResolution,
     ConfirmAndQueueCommand,
     CreateDraftCommand,
     InvestigationConfiguration,
@@ -132,6 +134,27 @@ def creator_configuration_payload(
     }
 
 
+def authoritative_configuration_payload(*, keyword: str = "subject") -> dict:
+    return {
+        "schema_version": "investigation-draft-config-v4",
+        "platform": "xhs",
+        "investigation": {
+            "mode": "search",
+            "recall_plan": {
+                "strategy": "temporary_terms",
+                "terms": [keyword],
+                "source_lexicon_ids": [],
+            },
+        },
+        "judgement": {
+            "strategy": "existing_ruleset",
+            "ruleset_revision_id": "ruleset-revision:test:v1",
+            "expected_ruleset_version": 1,
+            "expected_ruleset_content_hash": "0" * 64,
+        },
+    }
+
+
 class MutableClock:
     def __init__(self) -> None:
         self.value = datetime(2026, 8, 27, tzinfo=timezone.utc)
@@ -192,6 +215,22 @@ class FakeConfigurationResolver:
             "policy_id": analysis.policy_id,
             "audit_config_revision": revision,
         }
+
+
+class PassThroughDraftResourceService:
+    @contextmanager
+    def authoritative_draft_fence(self):
+        yield None
+
+    @staticmethod
+    def resolve_authoritative_draft(
+        configuration, *, principal, resource_connection
+    ):
+        del principal
+        del resource_connection
+        return AuthoritativeDraftResolution.model_construct(
+            normalized_configuration=configuration
+        )
 
 
 class FakeExecutionAdapter:
@@ -378,7 +417,9 @@ class M3TestCase(unittest.TestCase):
         )
         self.resolver = FakeConfigurationResolver()
         self.service = InvestigationCreationService(
-            self.store, configuration_resolver=self.resolver
+            self.store,
+            configuration_resolver=self.resolver,
+            resource_service=PassThroughDraftResourceService(),
         )
 
     def create_draft(self, *, principal: Principal = LOCAL, keyword: str = "subject"):
@@ -623,7 +664,7 @@ class OwnershipAndConfigurationTest(M3TestCase):
                     json={
                         "title": "Rejected actor",
                         "objective": "Actor is server-owned.",
-                        "configuration": configuration_payload(),
+                        "configuration": authoritative_configuration_payload(),
                         "created_by": "client-controlled",
                     },
                 )
@@ -633,34 +674,32 @@ class OwnershipAndConfigurationTest(M3TestCase):
                     json={
                         "title": "HTTP draft",
                         "objective": "Queue only.",
-                        "configuration": configuration_payload(keyword="http"),
+                        "configuration": authoritative_configuration_payload(
+                            keyword="http"
+                        ),
                     },
                 )
                 self.assertEqual(created.status_code, 201)
-                draft_id = created.json()["id"]
-                confirmed = client.post(
-                    f"/api/investigation-drafts/{draft_id}/confirm-and-queue",
-                    headers={"Idempotency-Key": "http:confirm"},
-                    json={"expected_revision": 1, "confirmed": True},
+                persisted = self.service.get_draft(
+                    created.json()["id"],
+                    principal=LOCAL,
                 )
-        self.assertEqual(confirmed.status_code, 202)
-        self.assertEqual(confirmed.json()["status"], "QUEUED")
+                self.assertEqual(persisted.owner_principal, LOCAL.id)
         pipeline_run.assert_not_called()
 
     def test_invalid_configuration_is_rejected_by_api_and_service(self):
         invalid_payloads = (
             {
-                **configuration_payload(),
-                "collection": {
-                    **configuration_payload()["collection"],
-                    "run_crawler": "false",
-                },
+                **authoritative_configuration_payload(),
+                "run_crawler": "false",
             },
-            {**configuration_payload(), "unexpected": "field"},
+            {**authoritative_configuration_payload(), "unexpected": "field"},
             {
                 "platforms": ["xhs", "dy"],
-                "collection": configuration_payload()["collection"],
-                "analysis": configuration_payload()["analysis"],
+                "investigation": authoritative_configuration_payload()[
+                    "investigation"
+                ],
+                "judgement": authoritative_configuration_payload()["judgement"],
             },
         )
         app = FastAPI()
@@ -671,7 +710,9 @@ class OwnershipAndConfigurationTest(M3TestCase):
                 json={
                     "title": "Valid before PATCH",
                     "objective": "The update must remain strict.",
-                    "configuration": configuration_payload(keyword="patch"),
+                    "configuration": authoritative_configuration_payload(
+                        keyword="patch"
+                    ),
                 },
             )
             self.assertEqual(valid.status_code, 201)
@@ -743,49 +784,12 @@ class OwnershipAndConfigurationTest(M3TestCase):
             )
         self.assertEqual(response.status_code, 422)
 
-    def test_invalid_creator_urls_are_rejected_by_api_service_and_worker(self):
+    def test_invalid_creator_urls_are_rejected_by_legacy_service_and_worker(self):
         invalid_urls = (
             "ordinary creator text",
             "https://www.xiaohongshu.com/explore/123?xsec_token=t&xsec_source=s",
             "https://www.douyin.com/user/MS4wLjABAAAA_other",
         )
-        app = FastAPI()
-        app.include_router(create_investigation_creation_router(self.service))
-        with TestClient(app) as client:
-            valid = client.post(
-                "/api/investigation-drafts",
-                json={
-                    "title": "Valid creator",
-                    "objective": "Exercise creator PATCH validation.",
-                    "configuration": creator_configuration_payload(),
-                },
-            )
-            self.assertEqual(valid.status_code, 201)
-            for invalid_url in invalid_urls:
-                with self.subTest(layer="api", creator_url=invalid_url):
-                    response = client.post(
-                        "/api/investigation-drafts",
-                        json={
-                            "title": "Invalid creator",
-                            "objective": "Reject the wrong creator identity.",
-                            "configuration": creator_configuration_payload(
-                                creator_url=invalid_url
-                            ),
-                        },
-                    )
-                    self.assertEqual(response.status_code, 422)
-                with self.subTest(layer="api-patch", creator_url=invalid_url):
-                    response = client.patch(
-                        f"/api/investigation-drafts/{valid.json()['id']}",
-                        json={
-                            "expected_revision": 1,
-                            "configuration": creator_configuration_payload(
-                                creator_url=invalid_url
-                            ),
-                        },
-                    )
-                    self.assertEqual(response.status_code, 422)
-
         with self.assertRaises(ValidationError):
             self.service.create_draft(
                 CreateDraftCommand.model_construct(

@@ -62,7 +62,7 @@ export function TaskSuggestionCard({
   const keywordsText = draft.keywords.join("、");
   const blockerLink = buildSuggestionBlockerLink(preview);
   const hasAnalysisPlan = preview
-    ? Boolean(preview.audit_policy && preview.ruleset_revision)
+    ? Boolean(preview.ruleset_revision)
     : Boolean(draft.analysisPlanName || draft.matchedRuleSet);
   const [isEditingKeywords, setIsEditingKeywords] = useState(false);
   const [keywordDraft, setKeywordDraft] = useState(keywordsText);
@@ -200,14 +200,14 @@ export function TaskSuggestionCard({
           </section>
 
           <section className="task-suggestion-section task-suggestion-plan-section">
-            <div className="task-suggestion-label">推荐研判方案</div>
+            <div className="task-suggestion-label">推荐研判规则</div>
             <div className="task-suggestion-field-body task-suggestion-plan-body">
               <div className="task-plan-row">
                 <div className="task-suggestion-plan-heading">
                   <div className={`task-suggestion-value${hasAnalysisPlan ? "" : " is-missing"}`}>
                     {hasAnalysisPlan
                       ? draft.analysisPlanName || draft.matchedRuleSet
-                      : "研判方案待配置"}
+                      : "研判规则待配置"}
                   </div>
                   {hasAnalysisPlan ? <span className="task-suggestion-recommend-tag">系统推荐</span> : null}
                 </div>
@@ -220,7 +220,7 @@ export function TaskSuggestionCard({
                 </button>
               </div>
               <p className="task-suggestion-help">
-                {hasAnalysisPlan ? draft.ruleSetDescription : "配置匹配的研判方案后，系统将自动校验规则与调查范围。"}
+                {hasAnalysisPlan ? draft.ruleSetDescription : "选择匹配的已发布研判规则后，系统将校验规则版本。"}
                 {draft.recommendedRecallLexicons?.length
                   ? ` · 推荐召回词库：${draft.recommendedRecallLexicons.join("、")}`
                   : ""}

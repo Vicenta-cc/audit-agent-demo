@@ -111,7 +111,10 @@ class InvestigationWorker:
                 pipeline_configuration["_confirmed_analyze_limit"] = int(
                     snapshot.execution.analyze_limit
                 )
-                if schema_version == "investigation-run-config-v3":
+                if schema_version in {
+                    "investigation-run-config-v3",
+                    "investigation-run-config-v4",
+                }:
                     pipeline_configuration["_authoritative_m3_contract"] = True
                 self.execution_adapter.run_pipeline(job_id, pipeline_configuration)
                 lease.assert_owned()
@@ -259,7 +262,10 @@ class InvestigationWorker:
                 error_message=error_message,
             )
         snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
-        if snapshot.schema_version == "investigation-run-config-v3":
+        if snapshot.schema_version in {
+            "investigation-run-config-v3",
+            "investigation-run-config-v4",
+        }:
             return self.store.mark_audit_completed(run.id, run.claim_token)
         run = self.store.mark_report_generating(run.id, run.claim_token)
         return self._finish_report(run, allow_generation=True)
@@ -429,7 +435,10 @@ class InvestigationWorker:
             configuration = ResolvedExecutionConfiguration.model_validate(
                 snapshot.execution.model_dump(mode="json")
             ).model_dump(mode="json")
-            if snapshot.schema_version == "investigation-run-config-v3":
+            if snapshot.schema_version in {
+                "investigation-run-config-v3",
+                "investigation-run-config-v4",
+            }:
                 validator = getattr(
                     self.execution_adapter,
                     "validate_m3_configuration",
@@ -474,7 +483,10 @@ class InvestigationWorker:
             None,
         )
         try:
-            if callable(validator) and schema_version == "investigation-run-config-v3":
+            if callable(validator) and schema_version in {
+                "investigation-run-config-v3",
+                "investigation-run-config-v4",
+            }:
                 validator(configuration, schema_version=schema_version)
         except CrawlerAccountAuthenticationRequiredError:
             invalidator = getattr(
@@ -495,7 +507,10 @@ class InvestigationWorker:
         if not run.job_id:
             return "job_result_missing", "Run has no Job binding."
         snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
-        authoritative_m3 = snapshot.schema_version == "investigation-run-config-v3"
+        authoritative_m3 = snapshot.schema_version in {
+            "investigation-run-config-v3",
+            "investigation-run-config-v4",
+        }
         analyze_limit = int(snapshot.execution.analyze_limit)
         state = state or self.execution_adapter.get_job_state(run.job_id)
         if state is None:

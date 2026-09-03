@@ -1079,7 +1079,6 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   ? {
                       ...item.creationBinding.suggestion,
                       search_terms: preview.resolved_search_terms,
-                      audit_policy: preview.audit_policy,
                       ruleset_revision: preview.ruleset_revision
                     }
                   : undefined,
@@ -1115,7 +1114,6 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                           ? item.creationBinding.suggestion.selected_platform
                           : preview.platform,
                         search_terms: preview.resolved_search_terms,
-                        audit_policy: preview.audit_policy,
                         ruleset_revision: preview.ruleset_revision
                       }
                     : undefined,
@@ -1174,7 +1172,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   platforms: [candidate.id],
                   keywords: preview.resolved_search_terms,
                   matchedRuleSet: preview.ruleset_revision?.name || "尚未绑定规则集",
-                  analysisPlanName: preview.audit_policy?.name || "尚未选择审核策略"
+                  analysisPlanName: preview.ruleset_revision?.name || "尚未选择研判规则"
                 },
                 creationBinding: {
                   ...item.creationBinding,
@@ -1185,7 +1183,6 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                         ...item.creationBinding.suggestion,
                         selected_platform: candidate.id,
                         search_terms: preview.resolved_search_terms,
-                        audit_policy: preview.audit_policy,
                         ruleset_revision: preview.ruleset_revision
                       }
                     : undefined,
@@ -2164,7 +2161,16 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         activeSubView={activeSubView}
         onSelectSubView={(subView) => {
           if (subView === "knowledge-center") {
-            navigate("/rule-assistant");
+            navigate("/rule-assistant", {
+              state: {
+                returnLocation: {
+                  pathname: `/investigation/${encodeURIComponent(activeSessionId)}`,
+                  activeSessionId,
+                  activeSubView: null,
+                  scrollTop: subViewScrollRef.current?.scrollTop || 0
+                }
+              }
+            });
             return;
           }
           setActiveSubView(subView);

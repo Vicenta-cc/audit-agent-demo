@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-import hashlib
-import json
 from pathlib import Path
 import re
 import sqlite3
 from typing import Any, Iterator
 import unicodedata
 
-from backend.audit_agent.audit_policy_store import AuditPolicyStore
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
 from backend.audit_agent.crawler_adapter import SUPPORTED_PLATFORMS
@@ -19,8 +16,7 @@ from backend.rulesets.contracts import RuleSetContent
 from backend.rulesets.service import RuleSetService
 
 from .contracts import (
-    AuditPolicySelection,
-    AuditPolicySummary,
+    AuthoritativeDraftResolution,
     CrawlerAccountConfirmedState,
     ConfirmationPreview,
     ConfirmationResolution,
@@ -36,7 +32,11 @@ from .contracts import (
     RecallLexiconSummary,
     RecallPlanPreview,
     ResolvedExecutionConfiguration,
+    RuleSetCategoryDetail,
+    RuleSetExemptionDetail,
+    RuleSetRevisionDetail,
     RuleSetRevisionSummary,
+    RuleSetRuleDetail,
     confirmed_configuration_hash,
 )
 from .errors import ConfigurationValidationError, ResourceStaleError
@@ -55,13 +55,11 @@ class InvestigationResourceService:
         self,
         *,
         lexicon_store: LexiconStore,
-        policy_store: AuditPolicyStore,
         ruleset_service: RuleSetService,
         configuration_resolver: Any,
         crawler_account_store: CrawlerAccountStore | None = None,
     ) -> None:
         self.lexicon_store = lexicon_store
-        self.policy_store = policy_store
         self.ruleset_service = ruleset_service
         self.configuration_resolver = configuration_resolver
         self.crawler_account_store = (
@@ -72,7 +70,6 @@ class InvestigationResourceService:
             Path(path).expanduser().resolve()
             for path in (
                 self.lexicon_store.db_path,
-                self.policy_store.db_path,
                 self.ruleset_service.store.db_path,
                 self.crawler_account_store.db_path,
             )
@@ -102,6 +99,11 @@ class InvestigationResourceService:
         finally:
             connection.close()
 
+    @contextmanager
+    def authoritative_draft_fence(self) -> Iterator[sqlite3.Connection]:
+        with self.confirmation_fence() as connection:
+            yield connection
+
     def query_options(
         self,
         query: QueryInvestigationOptions,
@@ -112,48 +114,76 @@ class InvestigationResourceService:
             query.model_dump(mode="json")
         )
         offset = self._cursor_offset(query.cursor)
-        valid_policies: list[
-            tuple[int, AuditPolicySummary, RuleSetRevisionSummary]
-        ] = []
+        valid_rulesets: list[tuple[int, RuleSetRevisionSummary]] = []
         blockers: list[InvestigationBlocker] = []
-        requested_policy_ids = set(query.audit_policy_ids)
+        requested_revision_ids = set(query.ruleset_revision_ids)
 
-        for policy in self.policy_store.list(include_drafts=True):
-            policy_id = str(policy.get("id") or "")
-            if requested_policy_ids and policy_id not in requested_policy_ids:
+        for revision in self.ruleset_service.list_current_published(
+            principal=principal
+        ):
+            revision_id = str(revision.get("id") or "")
+            if requested_revision_ids and revision_id not in requested_revision_ids:
                 continue
-            summary, ruleset, error = self._policy_resource(policy, principal=principal)
-            if error is not None:
-                if requested_policy_ids:
-                    blockers.append(error)
+            try:
+                summary, content = self._ruleset_revision_resource(revision)
+            except Exception:
+                if requested_revision_ids:
+                    blockers.append(
+                        self._blocker(
+                            "INVALID_RULESET_REFERENCE",
+                            "The requested published RuleSetRevision is unavailable or invalid.",
+                            resource_type="ruleset_revision",
+                            resource_id=revision_id,
+                        )
+                    )
                 continue
-            if summary is None or ruleset is None:
-                continue
-            match_score = self._domain_hint_score(
-                query.domain_hint, policy, summary, ruleset
+            match_score = self._text_match_score(
+                query.domain_hint,
+                summary.id,
+                summary.ruleset_id,
+                *self._ruleset_search_values(content),
             )
-            if query.domain_hint and not requested_policy_ids and match_score <= 0:
-                continue
-            valid_policies.append((match_score, summary, ruleset))
+            valid_rulesets.append((match_score, summary))
 
-        found_policy_ids = {summary.id for _, summary, _ in valid_policies}
-        for policy_id in query.audit_policy_ids:
-            if policy_id not in found_policy_ids and not any(
-                item.resource_id == policy_id for item in blockers
+        found_revision_ids = {summary.id for _, summary in valid_rulesets}
+        for revision_id in query.ruleset_revision_ids:
+            if revision_id not in found_revision_ids and not any(
+                item.resource_id == revision_id for item in blockers
             ):
                 blockers.append(
                     self._blocker(
-                        "NO_PUBLISHED_AUDIT_POLICY",
-                        "The requested AuditPolicy is not available as a valid published resource.",
-                        resource_type="audit_policy",
-                        resource_id=policy_id,
+                        "NO_PUBLISHED_RULESET",
+                        "The requested RuleSetRevision is not available as a published resource.",
+                        resource_type="ruleset_revision",
+                        resource_id=revision_id,
                     )
                 )
 
-        valid_policies.sort(key=lambda item: (-item[0], item[1].name, item[1].id))
-        policy_page = valid_policies[offset : offset + query.page_size]
-        policy_summaries = [item[1] for item in policy_page]
-        rulesets_by_id = {item[2].id: item[2] for item in policy_page}
+        valid_rulesets.sort(
+            key=lambda item: (
+                -item[0],
+                item[1].name,
+                item[1].ruleset_id,
+                -item[1].version,
+                item[1].id,
+            )
+        )
+        ruleset_page = valid_rulesets[offset : offset + query.page_size]
+        ruleset_details: list[RuleSetRevisionDetail] = []
+        for revision_id in query.include_ruleset_details_for_revision_ids:
+            try:
+                ruleset_details.append(
+                    self._ruleset_revision_detail(revision_id, principal=principal)
+                )
+            except Exception:
+                blockers.append(
+                    self._blocker(
+                        "INVALID_RULESET_REFERENCE",
+                        "The requested published RuleSetRevision is unavailable or invalid.",
+                        resource_type="ruleset_revision",
+                        resource_id=revision_id,
+                    )
+                )
 
         requested_lexicon_ids = set(query.lexicon_ids)
         include_terms = set(query.include_lexicon_terms_for_ids)
@@ -208,11 +238,12 @@ class InvestigationResourceService:
             item for _, item in lexicons[offset : offset + query.page_size]
         ]
 
-        if not valid_policies:
+        if not valid_rulesets:
             blockers.append(
                 self._blocker(
-                    "NO_PUBLISHED_AUDIT_POLICY",
-                    "No matching published AuditPolicy is available for the requested scope.",
+                    "NO_PUBLISHED_RULESET",
+                    "No matching published RuleSetRevision is available for the requested scope.",
+                    resource_type="ruleset_revision",
                     management_url=_RULES_MANAGEMENT_PATH,
                 )
             )
@@ -225,7 +256,7 @@ class InvestigationResourceService:
                 )
             )
         has_more = (
-            offset + query.page_size < len(valid_policies)
+            offset + query.page_size < len(valid_rulesets)
             or offset + query.page_size < len(lexicons)
         )
         platforms = [
@@ -239,8 +270,8 @@ class InvestigationResourceService:
         ]
         return InvestigationOptions(
             platforms=platforms,
-            audit_policies=policy_summaries,
-            ruleset_revisions=list(rulesets_by_id.values()),
+            ruleset_revisions=[item for _, item in ruleset_page],
+            ruleset_revision_details=ruleset_details,
             recall_lexicons=lexicon_page,
             blockers=self._dedupe_blockers(blockers),
             next_cursor=str(offset + query.page_size) if has_more else "",
@@ -256,13 +287,27 @@ class InvestigationResourceService:
         configuration = InvestigationDraftConfiguration.model_validate(
             draft.configuration.model_dump(mode="json")
         )
-        mode = configuration.investigation.mode
+        resolution: AuthoritativeDraftResolution | None = None
         blockers: list[InvestigationBlocker] = []
-        policy_summary: AuditPolicySummary | None = None
-        ruleset_summary: RuleSetRevisionSummary | None = None
-        management_url = self._management_url(draft.id)
+        try:
+            resolution = self.resolve_authoritative_draft(
+                configuration,
+                principal=principal,
+                resource_connection=resource_connection,
+            )
+        except (ConfigurationValidationError, ResourceStaleError) as exc:
+            blockers.append(self._authoritative_error_blocker(exc, draft_id=draft.id))
+
+        effective_configuration = (
+            resolution.normalized_configuration
+            if resolution is not None
+            else configuration
+        )
+        mode = effective_configuration.investigation.mode
+        if resolution is not None:
+            blockers.extend(resolution.editable_blockers)
         available_accounts = self._available_crawler_accounts(
-            configuration.platform.value,
+            effective_configuration.platform.value,
             connection=resource_connection,
         )
         if not available_accounts:
@@ -270,126 +315,35 @@ class InvestigationResourceService:
                 self._blocker(
                     "collection_service_unavailable",
                     self._collection_unavailable_message(
-                        configuration.platform.value
+                        effective_configuration.platform.value
                     ),
                 )
             )
-
-        if configuration.audit_policy is None:
-            blockers.append(
-                self._blocker(
-                    "NO_PUBLISHED_AUDIT_POLICY",
-                    "A valid published AuditPolicy must be selected before confirmation.",
-                    management_url=management_url,
-                )
-            )
-        else:
-            policy = self.policy_store.get(
-                configuration.audit_policy.id,
-                connection=resource_connection,
-            )
-            if policy is None:
-                blockers.append(
-                    self._blocker(
-                        "RESOURCE_STALE",
-                        "The selected AuditPolicy is no longer available.",
-                        resource_type="audit_policy",
-                        resource_id=configuration.audit_policy.id,
-                        management_url=management_url,
-                    )
-                )
-            else:
-                policy_summary, ruleset_summary, error = self._policy_resource(
-                    policy,
-                    principal=principal,
-                    management_url=management_url,
-                    resource_connection=resource_connection,
-                )
-                if error is not None:
-                    blockers.append(
-                        self._blocker(
-                            "RESOURCE_STALE",
-                            "The selected AuditPolicy or RuleSetRevision changed and is no longer confirmable.",
-                            resource_type=error.resource_type,
-                            resource_id=error.resource_id,
-                            latest_safe_summary={
-                                "available": False,
-                                "reason_code": error.code,
-                            },
-                            management_url=management_url,
-                        )
-                    )
-                elif policy_summary is not None and ruleset_summary is not None:
-                    blockers.extend(
-                        self._selection_drift_blockers(
-                            configuration.audit_policy,
-                            policy_summary,
-                            ruleset_summary,
-                            management_url=management_url,
-                        )
-                    )
 
         resolved_terms: list[str] = []
         creator_url = ""
         recall_preview = RecallPlanPreview(strategy="none")
         if mode == "search":
-            plan = configuration.investigation.recall_plan
+            plan = effective_configuration.investigation.recall_plan
             if plan.strategy == "existing_lexicon":
-                try:
-                    summary = self._lexicon_summary(
-                        plan.lexicon_id,
-                        include_terms=True,
-                        resource_connection=resource_connection,
-                    )
-                except KeyError:
-                    blockers.append(
-                        self._blocker(
-                            "RESOURCE_STALE",
-                            "The selected recall lexicon is no longer available.",
-                            resource_type="recall_lexicon",
-                            resource_id=plan.lexicon_id,
-                        )
-                    )
-                    summary = RecallLexiconSummary(
-                        id=plan.lexicon_id,
-                        enabled_main_term_count=0,
-                        available=False,
-                    )
+                summary = resolution.recall_lexicon if resolution is not None else None
                 resolved_terms = list(plan.enabled_main_terms)
                 recall_preview = RecallPlanPreview(
                     strategy="existing_lexicon",
-                    lexicon_id=summary.id,
-                    lexicon_title=summary.title,
-                    runtime_content_hash=summary.runtime_content_hash,
-                    enabled_main_term_count=summary.enabled_main_term_count,
+                    lexicon_id=plan.lexicon_id,
+                    lexicon_title=summary.title if summary is not None else "",
+                    runtime_content_hash=(
+                        summary.runtime_content_hash
+                        if summary is not None
+                        else plan.expected_runtime_content_hash
+                    ),
+                    enabled_main_term_count=(
+                        summary.enabled_main_term_count
+                        if summary is not None
+                        else len(plan.enabled_main_terms)
+                    ),
                     enabled_main_terms=list(plan.enabled_main_terms),
                 )
-                if (
-                    summary.available
-                    and plan.expected_runtime_content_hash
-                    != summary.runtime_content_hash
-                ):
-                    blockers.append(
-                        self._blocker(
-                            "RESOURCE_STALE",
-                            "The selected recall lexicon changed after the Draft was saved.",
-                            resource_type="recall_lexicon",
-                            resource_id=plan.lexicon_id,
-                            latest_safe_summary=summary.model_dump(mode="json"),
-                        )
-                    )
-                if summary.available and list(plan.enabled_main_terms) != list(
-                    summary.enabled_main_terms
-                ):
-                    blockers.append(
-                        self._blocker(
-                            "RESOURCE_STALE",
-                            "The saved enabled main-term snapshot no longer matches the selected recall lexicon.",
-                            resource_type="recall_lexicon",
-                            resource_id=plan.lexicon_id,
-                            latest_safe_summary=summary.model_dump(mode="json"),
-                        )
-                    )
             else:
                 resolved_terms = list(plan.terms)
                 recall_preview = RecallPlanPreview(
@@ -397,20 +351,8 @@ class InvestigationResourceService:
                     temporary_terms=list(plan.terms),
                     source_lexicon_ids=list(plan.source_lexicon_ids),
                 )
-            if not resolved_terms:
-                blockers.append(
-                    self._blocker(
-                        "NO_SEARCH_TERMS",
-                        "At least one confirmed search term is required.",
-                    )
-                )
         else:
-            creator_url = configuration.investigation.creator_url
-            creator_error = self._creator_blocker(
-                configuration.platform.value, creator_url
-            )
-            if creator_error is not None:
-                blockers.append(creator_error)
+            creator_url = effective_configuration.investigation.creator_url
 
         blockers = self._dedupe_blockers(blockers)
         return ConfirmationPreview(
@@ -419,14 +361,225 @@ class InvestigationResourceService:
             title=draft.title,
             objective=draft.objective,
             mode=mode,
-            platform=configuration.platform,
+            platform=effective_configuration.platform,
             resolved_search_terms=resolved_terms,
             creator_url=creator_url,
             recall_plan=recall_preview,
-            audit_policy=policy_summary,
-            ruleset_revision=ruleset_summary,
+            ruleset_revision=(
+                resolution.ruleset_revision if resolution is not None else None
+            ),
             blockers=blockers,
             can_confirm=not blockers,
+        )
+
+    def resolve_authoritative_draft(
+        self,
+        configuration: InvestigationDraftConfiguration,
+        *,
+        principal: Principal,
+        resource_connection: sqlite3.Connection | None,
+    ) -> AuthoritativeDraftResolution:
+        """Validate and snapshot resource identity without judging relevance."""
+
+        configuration = InvestigationDraftConfiguration.model_validate(
+            configuration.model_dump(mode="json")
+        )
+        platform = configuration.platform.value
+        if platform not in SUPPORTED_PLATFORMS:
+            raise ConfigurationValidationError(
+                "The selected platform is not supported for new Draft revisions.",
+                code="PLATFORM_MISMATCH",
+                details={"mutation_applied": False, "platform": platform},
+            )
+
+        selection = configuration.judgement
+        try:
+            revision = self.ruleset_service.get_published(
+                selection.ruleset_revision_id,
+                principal=principal,
+                connection=resource_connection,
+            )
+        except Exception as exc:
+            raise ConfigurationValidationError(
+                "The selected RuleSetRevision does not exist.",
+                code="INVALID_RESOURCE_REFERENCE",
+                details={
+                    "mutation_applied": False,
+                    "resource_type": "ruleset_revision",
+                    "resource_id": selection.ruleset_revision_id,
+                },
+            ) from exc
+
+        raw_version = int(revision.get("version") or 0)
+        raw_hash = str(revision.get("content_hash") or "").strip().lower()
+        if (
+            selection.expected_ruleset_version != raw_version
+            or selection.expected_ruleset_content_hash != raw_hash
+        ):
+            raise ResourceStaleError(
+                "The selected RuleSetRevision identity changed before the Draft revision was saved.",
+                details={
+                    "mutation_applied": False,
+                    "resource_type": "ruleset_revision",
+                    "resource_id": selection.ruleset_revision_id,
+                    "resource": {
+                        "id": str(revision.get("id") or ""),
+                        "ruleset_id": str(revision.get("ruleset_id") or ""),
+                        "version": raw_version,
+                        "content_hash": raw_hash,
+                    },
+                },
+            )
+
+        try:
+            ruleset_summary, _ = self._ruleset_revision_resource(revision)
+        except Exception as exc:
+            raise ConfigurationValidationError(
+                "The selected RuleSetRevision is not a valid authoritative resource.",
+                code="INVALID_RULESET_REFERENCE",
+                details={
+                    "mutation_applied": False,
+                    "resource_type": "ruleset_revision",
+                    "resource_id": selection.ruleset_revision_id,
+                },
+            ) from exc
+
+        current_revision = self.ruleset_service.get_current_published(
+            selection.ruleset_revision_id,
+            principal=principal,
+            connection=resource_connection,
+        )
+        if current_revision is None:
+            raise ResourceStaleError(
+                "The selected RuleSetRevision is not the RuleSet's current published revision.",
+                details={
+                    "mutation_applied": False,
+                    "resource_type": "ruleset_revision",
+                    "resource_id": selection.ruleset_revision_id,
+                    "resource": ruleset_summary.model_dump(mode="json"),
+                },
+            )
+        try:
+            self.ruleset_service.compile_for_execution(
+                selection.ruleset_revision_id,
+                principal=principal,
+                connection=resource_connection,
+            )
+        except Exception as exc:
+            raise ConfigurationValidationError(
+                "The selected RuleSetRevision is not supported by the current compiler/runtime.",
+                code="INVALID_RULESET_REFERENCE",
+                details={
+                    "mutation_applied": False,
+                    "resource_type": "ruleset_revision",
+                    "resource_id": selection.ruleset_revision_id,
+                },
+            ) from exc
+
+        normalized = configuration
+        recall_summary: RecallLexiconSummary | None = None
+        source_summaries: list[RecallLexiconSummary] = []
+        editable_blockers: list[InvestigationBlocker] = []
+        if configuration.investigation.mode == "creator":
+            creator_blocker = self._creator_blocker(
+                platform, configuration.investigation.creator_url
+            )
+            if creator_blocker is not None:
+                raise ConfigurationValidationError(
+                    creator_blocker.message,
+                    code=creator_blocker.code,
+                    details={
+                        "mutation_applied": False,
+                        "platform": platform,
+                    },
+                )
+        else:
+            plan = configuration.investigation.recall_plan
+            if plan.strategy == "existing_lexicon":
+                try:
+                    recall_summary = self._lexicon_summary(
+                        plan.lexicon_id,
+                        include_terms=True,
+                        resource_connection=resource_connection,
+                    )
+                except KeyError as exc:
+                    raise ConfigurationValidationError(
+                        "The selected recall lexicon does not exist.",
+                        code="INVALID_RESOURCE_REFERENCE",
+                        details={
+                            "mutation_applied": False,
+                            "resource_type": "recall_lexicon",
+                            "resource_id": plan.lexicon_id,
+                        },
+                    ) from exc
+                if (
+                    plan.expected_runtime_content_hash
+                    != recall_summary.runtime_content_hash
+                ):
+                    raise ResourceStaleError(
+                        "The selected recall lexicon changed before the Draft revision was saved.",
+                        details={
+                            "mutation_applied": False,
+                            "resource_type": "recall_lexicon",
+                            "resource_id": plan.lexicon_id,
+                            "resource": recall_summary.model_dump(mode="json"),
+                        },
+                    )
+                frozen_plan = plan.model_copy(
+                    update={
+                        "enabled_main_terms": list(
+                            recall_summary.enabled_main_terms
+                        )
+                    }
+                )
+                normalized = configuration.model_copy(
+                    update={
+                        "investigation": configuration.investigation.model_copy(
+                            update={"recall_plan": frozen_plan}
+                        )
+                    }
+                )
+                if not recall_summary.enabled_main_terms:
+                    editable_blockers.append(
+                        self._blocker(
+                            "NO_SEARCH_TERMS",
+                            "At least one confirmed search term is required.",
+                        )
+                    )
+            else:
+                for source_lexicon_id in plan.source_lexicon_ids:
+                    try:
+                        source_summaries.append(
+                            self._lexicon_summary(
+                                source_lexicon_id,
+                                include_terms=False,
+                                resource_connection=resource_connection,
+                            )
+                        )
+                    except KeyError as exc:
+                        raise ConfigurationValidationError(
+                            "A source recall lexicon does not exist.",
+                            code="INVALID_SOURCE_LEXICON_REFERENCE",
+                            details={
+                                "mutation_applied": False,
+                                "resource_type": "recall_lexicon",
+                                "resource_id": source_lexicon_id,
+                            },
+                        ) from exc
+                if not plan.terms:
+                    editable_blockers.append(
+                        self._blocker(
+                            "NO_SEARCH_TERMS",
+                            "At least one confirmed search term is required.",
+                        )
+                    )
+
+        return AuthoritativeDraftResolution(
+            normalized_configuration=normalized,
+            ruleset_revision=ruleset_summary,
+            recall_lexicon=recall_summary,
+            source_lexicons=source_summaries,
+            editable_blockers=editable_blockers,
         )
 
     def snapshot_draft_configuration(
@@ -435,41 +588,14 @@ class InvestigationResourceService:
         *,
         principal: Principal,
     ) -> InvestigationDraftConfiguration:
-        """Freeze real search resource content into each persisted Draft revision."""
+        """Compatibility wrapper over the authoritative Draft resolution boundary."""
 
-        configuration = InvestigationDraftConfiguration.model_validate(
-            configuration.model_dump(mode="json")
-        )
-        if configuration.investigation.mode != "search":
-            return configuration
-        plan = configuration.investigation.recall_plan
-        if plan.strategy != "existing_lexicon":
-            return configuration
-        try:
-            summary = self._lexicon_summary(plan.lexicon_id, include_terms=True)
-        except KeyError as exc:
-            raise ConfigurationValidationError(
-                "The selected recall lexicon is not available.",
-                code="NO_PUBLISHED_RECALL_LEXICON",
-                details={"resource_id": plan.lexicon_id},
-            ) from exc
-        if plan.expected_runtime_content_hash != summary.runtime_content_hash:
-            raise ResourceStaleError(
-                "The selected recall lexicon changed before the Draft revision was saved.",
-                details={
-                    "resource": summary.model_dump(mode="json"),
-                },
-            )
-        frozen_plan = plan.model_copy(
-            update={"enabled_main_terms": list(summary.enabled_main_terms)}
-        )
-        return configuration.model_copy(
-            update={
-                "investigation": configuration.investigation.model_copy(
-                    update={"recall_plan": frozen_plan}
-                )
-            }
-        )
+        with self.authoritative_draft_fence() as resource_connection:
+            return self.resolve_authoritative_draft(
+                configuration,
+                principal=principal,
+                resource_connection=resource_connection,
+            ).normalized_configuration
 
     def resolve_confirmation(
         self,
@@ -478,39 +604,37 @@ class InvestigationResourceService:
         principal: Principal,
         resource_connection: sqlite3.Connection | None = None,
     ) -> ConfirmationResolution:
-        preview = self.confirmation_preview(
-            draft,
-            principal=principal,
-            resource_connection=resource_connection,
+        configuration = InvestigationDraftConfiguration.model_validate(
+            draft.configuration.model_dump(mode="json")
         )
-        if preview.blockers:
-            stale = [item for item in preview.blockers if item.code == "RESOURCE_STALE"]
-            if stale:
-                raise ResourceStaleError(
-                    "one or more selected resources changed after the Draft was saved",
-                    details={
-                        "resources": [item.model_dump(mode="json") for item in stale]
-                    },
-                )
-            blocker = preview.blockers[0]
+        try:
+            resolution = self.resolve_authoritative_draft(
+                configuration,
+                principal=principal,
+                resource_connection=resource_connection,
+            )
+        except ResourceStaleError as exc:
+            blocker = self._authoritative_error_blocker(exc, draft_id=draft.id)
+            raise ResourceStaleError(
+                str(exc),
+                details={
+                    **exc.details,
+                    "resources": [blocker.model_dump(mode="json")],
+                },
+            ) from exc
+        if resolution.editable_blockers:
+            blocker = resolution.editable_blockers[0]
             raise ConfigurationValidationError(
                 blocker.message,
                 code=blocker.code,
                 details={
                     "blockers": [
-                        item.model_dump(mode="json") for item in preview.blockers
+                        item.model_dump(mode="json")
+                        for item in resolution.editable_blockers
                     ]
                 },
             )
-        if preview.audit_policy is None or preview.ruleset_revision is None:
-            raise ConfigurationValidationError(
-                "published AuditPolicy resolution is incomplete",
-                code="NO_PUBLISHED_AUDIT_POLICY",
-            )
-
-        configuration = InvestigationDraftConfiguration.model_validate(
-            draft.configuration.model_dump(mode="json")
-        )
+        configuration = resolution.normalized_configuration
         available_accounts = self._available_crawler_accounts(
             configuration.platform.value,
             connection=resource_connection,
@@ -527,7 +651,12 @@ class InvestigationResourceService:
             collection = {
                 "crawl_mode": "search",
                 "keyword_source": "keyword",
-                "keywords": list(preview.resolved_search_terms),
+                "keywords": list(
+                    configuration.investigation.recall_plan.enabled_main_terms
+                    if configuration.investigation.recall_plan.strategy
+                    == "existing_lexicon"
+                    else configuration.investigation.recall_plan.terms
+                ),
                 "max_notes": 1,
                 "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
@@ -537,22 +666,37 @@ class InvestigationResourceService:
                 "crawl_mode": "creator",
                 "keyword_source": "keyword",
                 "keywords": [],
-                "creator_url": preview.creator_url,
+                "creator_url": configuration.investigation.creator_url,
                 "max_notes": 1,
                 "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
             }
-        legacy = {
+        execution_input = {
             "platform": configuration.platform.value,
             "collection": collection,
             "analysis": {
-                "policy_id": preview.audit_policy.id,
                 "analyze_limit": 1,
             },
         }
+        recall_library_ids = []
+        if mode == "search":
+            plan = configuration.investigation.recall_plan
+            if plan.strategy == "existing_lexicon":
+                recall_library_ids = [plan.lexicon_id]
+        resolve_direct = getattr(
+            self.configuration_resolver,
+            "resolve_ruleset_execution",
+            None,
+        )
+        if not callable(resolve_direct):
+            raise ConfigurationValidationError(
+                "RuleSet-direct execution resolver is not configured"
+            )
         resolved = dict(
-            self.configuration_resolver.resolve(
-                InvestigationConfiguration.model_validate(legacy),
+            resolve_direct(
+                InvestigationConfiguration.model_validate(execution_input),
+                ruleset_revision_id=resolution.ruleset_revision.id,
+                recall_library_ids=recall_library_ids,
                 principal=principal,
                 resource_connection=resource_connection,
             )
@@ -582,12 +726,12 @@ class InvestigationResourceService:
             if plan.strategy == "existing_lexicon":
                 resolved["keyword_source"] = "lexicon"
                 resolved["lexicon_category"] = plan.lexicon_id
-                resolved["lexicon_keywords"] = list(preview.resolved_search_terms)
+                resolved["lexicon_keywords"] = list(plan.enabled_main_terms)
                 recall_snapshot = ConfirmedRecallPlanSnapshot(
                     strategy="existing_lexicon",
                     lexicon_id=plan.lexicon_id,
-                    runtime_content_hash=preview.recall_plan.runtime_content_hash,
-                    enabled_main_terms=list(preview.resolved_search_terms),
+                    runtime_content_hash=resolution.recall_lexicon.runtime_content_hash,
+                    enabled_main_terms=list(plan.enabled_main_terms),
                 )
             else:
                 resolved["keyword_source"] = "keyword"
@@ -595,22 +739,34 @@ class InvestigationResourceService:
                 resolved["lexicon_keywords"] = []
                 recall_snapshot = ConfirmedRecallPlanSnapshot(
                     strategy="temporary_terms",
-                    temporary_terms=list(preview.resolved_search_terms),
+                    temporary_terms=list(plan.terms),
                     source_lexicon_ids=list(plan.source_lexicon_ids),
                 )
         execution = ResolvedExecutionConfiguration.model_validate(resolved)
+        resolved_search_terms = (
+            list(configuration.investigation.recall_plan.enabled_main_terms)
+            if mode == "search"
+            and configuration.investigation.recall_plan.strategy == "existing_lexicon"
+            else (
+                list(configuration.investigation.recall_plan.terms)
+                if mode == "search"
+                else []
+            )
+        )
+        creator_url = (
+            configuration.investigation.creator_url if mode == "creator" else ""
+        )
         hash_payload = {
             "mode": mode,
             "platform": configuration.platform.value,
-            "resolved_search_terms": list(preview.resolved_search_terms),
-            "creator_url": preview.creator_url,
+            "resolved_search_terms": resolved_search_terms,
+            "creator_url": creator_url,
             "recall_plan": (
                 recall_snapshot.model_dump(mode="json")
                 if recall_snapshot is not None
                 else None
             ),
-            "audit_policy": preview.audit_policy.model_dump(mode="json"),
-            "ruleset_revision": preview.ruleset_revision.model_dump(mode="json"),
+            "ruleset_revision": resolution.ruleset_revision.model_dump(mode="json"),
             "execution": execution.model_dump(mode="json"),
         }
         return ConfirmationResolution(
@@ -618,89 +774,33 @@ class InvestigationResourceService:
             config_hash=confirmed_configuration_hash(hash_payload),
         )
 
-    def _policy_resource(
-        self,
-        policy: dict[str, Any],
-        *,
-        principal: Any,
-        management_url: str = _RULES_MANAGEMENT_PATH,
-        resource_connection: sqlite3.Connection | None = None,
-    ) -> tuple[
-        AuditPolicySummary | None,
-        RuleSetRevisionSummary | None,
-        InvestigationBlocker | None,
-    ]:
-        policy_id = str(policy.get("id") or "")
+    @staticmethod
+    def _ruleset_revision_resource(
+        revision: dict[str, Any],
+    ) -> tuple[RuleSetRevisionSummary, RuleSetContent]:
+        revision_id = str(revision.get("id") or "").strip()
+        content = RuleSetContent.model_validate(
+            {
+                key: revision.get(key)
+                for key in (
+                    "schema_version",
+                    "name",
+                    "domain",
+                    "audit_goal",
+                    "general_exemptions",
+                    "categories",
+                )
+            }
+        )
+        computed_hash = ruleset_content_hash(content)
+        stored_hash = str(revision.get("content_hash") or "").strip().lower()
         if (
-            str(policy.get("status") or "").lower() != "published"
-            or not str(policy.get("published_version") or "").strip()
-            or not isinstance(policy.get("published_config"), dict)
-            or not policy.get("published_config")
+            not revision_id
+            or str(revision.get("status") or "") != "published"
+            or len(stored_hash) != 64
+            or stored_hash != computed_hash
         ):
-            return (
-                None,
-                None,
-                self._blocker(
-                    "NO_PUBLISHED_AUDIT_POLICY",
-                    "AuditPolicy is not available as a published configuration.",
-                    resource_type="audit_policy",
-                    resource_id=policy_id,
-                    management_url=management_url,
-                ),
-            )
-        config = dict(policy["published_config"])
-        revision_id = str(config.get("ruleset_revision_id") or "").strip()
-        if not revision_id:
-            return (
-                None,
-                None,
-                self._blocker(
-                    "INVALID_RULESET_REFERENCE",
-                    "Published AuditPolicy does not reference a published RuleSetRevision.",
-                    resource_type="audit_policy",
-                    resource_id=policy_id,
-                    management_url=management_url,
-                ),
-            )
-        try:
-            revision = self.ruleset_service.get_published(
-                revision_id,
-                principal=principal,
-                connection=resource_connection,
-            )
-            content = RuleSetContent.model_validate(
-                {
-                    key: revision.get(key)
-                    for key in (
-                        "schema_version",
-                        "name",
-                        "domain",
-                        "audit_goal",
-                        "general_exemptions",
-                        "categories",
-                    )
-                }
-            )
-            computed_hash = ruleset_content_hash(content)
-            stored_hash = str(revision.get("content_hash") or "").strip().lower()
-            if (
-                str(revision.get("status") or "") != "published"
-                or len(stored_hash) != 64
-                or stored_hash != computed_hash
-            ):
-                raise ValueError("published RuleSetRevision hash is invalid")
-        except Exception:
-            return (
-                None,
-                None,
-                self._blocker(
-                    "INVALID_RULESET_REFERENCE",
-                    "Published AuditPolicy references an unavailable or invalid RuleSetRevision.",
-                    resource_type="ruleset_revision",
-                    resource_id=revision_id,
-                    management_url=management_url,
-                ),
-            )
+            raise ValueError("published RuleSetRevision hash is invalid")
         enabled_rules = sum(
             1
             for category in content.categories
@@ -716,61 +816,66 @@ class InvestigationResourceService:
             content_hash=stored_hash,
             enabled_rule_count=enabled_rules,
         )
-        policy_hash = self._hash_json(config)
-        summary = AuditPolicySummary(
-            id=policy_id,
-            name=str(policy.get("name") or policy_id),
-            description=str(policy.get("description") or ""),
-            published_version=str(policy.get("published_version") or ""),
-            published_config_hash=policy_hash,
-            ruleset_revision_id=revision_id,
-            ruleset_version=ruleset.version,
-            ruleset_content_hash=ruleset.content_hash,
-            domain=ruleset.domain,
-        )
-        return summary, ruleset, None
+        return ruleset, content
 
-    def _selection_drift_blockers(
+    def _ruleset_revision_detail(
         self,
-        selection: AuditPolicySelection,
-        policy: AuditPolicySummary,
-        ruleset: RuleSetRevisionSummary,
+        revision_id: str,
         *,
-        management_url: str,
-    ) -> list[InvestigationBlocker]:
-        blockers: list[InvestigationBlocker] = []
-        if (
-            selection.expected_published_version != policy.published_version
-            or selection.expected_published_config_hash
-            != policy.published_config_hash
-            or selection.expected_ruleset_revision_id != policy.ruleset_revision_id
-        ):
-            blockers.append(
-                self._blocker(
-                    "RESOURCE_STALE",
-                    "The selected AuditPolicy changed after the Draft was saved.",
-                    resource_type="audit_policy",
-                    resource_id=selection.id,
-                    latest_safe_summary=policy.model_dump(mode="json"),
-                    management_url=management_url,
+        principal: Principal,
+    ) -> RuleSetRevisionDetail:
+        revision = self.ruleset_service.get_published(
+            revision_id,
+            principal=principal,
+        )
+        summary, content = self._ruleset_revision_resource(revision)
+        return RuleSetRevisionDetail(
+            id=summary.id,
+            ruleset_id=summary.ruleset_id,
+            name=summary.name,
+            domain=summary.domain,
+            version=summary.version,
+            content_hash=summary.content_hash,
+            audit_goal=content.audit_goal,
+            general_exemptions=[
+                RuleSetExemptionDetail(
+                    exemption_id=item.exemption_id,
+                    name=item.name,
+                    condition=item.condition,
                 )
-            )
-        if (
-            selection.expected_ruleset_revision_id != ruleset.id
-            or selection.expected_ruleset_version != ruleset.version
-            or selection.expected_ruleset_content_hash != ruleset.content_hash
-        ):
-            blockers.append(
-                self._blocker(
-                    "RESOURCE_STALE",
-                    "The selected RuleSetRevision changed after the Draft was saved.",
-                    resource_type="ruleset_revision",
-                    resource_id=selection.expected_ruleset_revision_id,
-                    latest_safe_summary=ruleset.model_dump(mode="json"),
-                    management_url=management_url,
+                for item in content.general_exemptions
+            ],
+            categories=[
+                RuleSetCategoryDetail(
+                    category_id=category.category_id,
+                    name=category.name,
+                    description=category.description,
+                    order=category.order,
+                    rules=[
+                        RuleSetRuleDetail(
+                            rule_id=rule.rule_id,
+                            name=rule.name,
+                            hit_condition=rule.hit_condition,
+                            suggested_risk_level=rule.suggested_risk_level,
+                            rule_exemptions=[
+                                RuleSetExemptionDetail(
+                                    exemption_id=item.exemption_id,
+                                    name=item.name,
+                                    condition=item.condition,
+                                )
+                                for item in rule.rule_exemptions
+                            ],
+                            application_stages=list(rule.application_stages),
+                            adjudication_notes=rule.adjudication_notes,
+                            enabled=rule.enabled,
+                            order=rule.order,
+                        )
+                        for rule in category.rules
+                    ],
                 )
-            )
-        return blockers
+                for category in content.categories
+            ],
+        )
 
     def _lexicon_summary(
         self,
@@ -805,21 +910,25 @@ class InvestigationResourceService:
         )
 
     @staticmethod
-    def _domain_hint_score(
-        hint: str,
-        policy: dict[str, Any],
-        summary: AuditPolicySummary,
-        ruleset: RuleSetRevisionSummary,
-    ) -> int:
-        return InvestigationResourceService._text_match_score(
-            hint,
-            summary.id,
-            summary.name,
-            summary.description,
-            summary.domain,
-            ruleset.name,
-            policy.get("published_config", {}).get("library_ids"),
+    def _ruleset_search_values(content: RuleSetContent) -> tuple[object, ...]:
+        values: list[object] = [content.name, content.domain, content.audit_goal]
+        values.extend(
+            value
+            for exemption in content.general_exemptions
+            for value in (exemption.name, exemption.condition)
         )
+        for category in content.categories:
+            values.extend((category.name, category.description))
+            for rule in category.rules:
+                values.extend(
+                    (
+                        rule.name,
+                        rule.hit_condition,
+                        rule.suggested_risk_level,
+                        rule.adjudication_notes,
+                    )
+                )
+        return tuple(values)
 
     @staticmethod
     def _matches_text(hint: str, *values: object) -> bool:
@@ -899,6 +1008,28 @@ class InvestigationResourceService:
     def _management_url(draft_id: str) -> str:
         return f"{_RULES_MANAGEMENT_PATH}&draft_id={draft_id}"
 
+    @classmethod
+    def _authoritative_error_blocker(
+        cls,
+        error: ConfigurationValidationError | ResourceStaleError,
+        *,
+        draft_id: str,
+    ) -> InvestigationBlocker:
+        resource_type = str(error.details.get("resource_type") or "")
+        resource_id = str(error.details.get("resource_id") or "")
+        return cls._blocker(
+            error.code,
+            str(error),
+            resource_type=resource_type,
+            resource_id=resource_id,
+            latest_safe_summary=dict(error.details.get("resource") or {}),
+            management_url=(
+                cls._management_url(draft_id)
+                if resource_type == "ruleset_revision"
+                else ""
+            ),
+        )
+
     def _available_crawler_accounts(
         self,
         platform: str,
@@ -964,14 +1095,3 @@ class InvestigationResourceService:
         if value < 0:
             raise ValueError("cursor must be an opaque value returned by this query")
         return value
-
-    @staticmethod
-    def _hash_json(value: dict[str, Any]) -> str:
-        return hashlib.sha256(
-            json.dumps(
-                value,
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()

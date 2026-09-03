@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from typing import Any, Callable
 from unittest.mock import patch
 
 import pytest
@@ -47,7 +48,9 @@ from backend.investigation_creation.service import InvestigationCreationService
 from backend.investigation_creation.store import InvestigationCreationStore
 from backend.investigation_creation.tools import (
     HERMES_M3_TOOL_SCHEMAS,
+    M3_TOOL_DESCRIPTIONS,
     M3_TOOL_INPUTS,
+    HermesToolExecutionIdentity,
     InvestigationCreationToolService,
     configure_hermes_investigation_creation_tools,
     dispatch_hermes_investigation_creation_tool,
@@ -98,6 +101,100 @@ class RecordingReportExecutor(InvestigationTurnExecutor):
         )
 
 
+ScriptArguments = dict[str, Any] | Callable[[list[dict[str, Any]]], dict[str, Any]]
+
+
+class ScriptedCreationHermesAgent:
+    """Hermes-shaped test agent that runs declared actions through real M3 tools."""
+
+    def __init__(
+        self,
+        *,
+        session_id: str,
+        tool_service: InvestigationCreationToolService,
+        principal_resolver: Callable[[str], Principal],
+        actions: list[tuple[str, ScriptArguments]],
+        final_response: str,
+    ) -> None:
+        self.session_id = session_id
+        self.tool_service = tool_service
+        self.principal_resolver = principal_resolver
+        self.actions = actions
+        self.final_response = final_response
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.results: list[dict[str, Any]] = []
+
+    def run_conversation(
+        self,
+        message: str,
+        *,
+        conversation_history: list[dict[str, Any]] | None = None,
+        task_id: str,
+        **_: Any,
+    ) -> dict[str, Any]:
+        principal = self.principal_resolver(self.session_id)
+        messages = [
+            *(conversation_history or []),
+            {"role": "user", "content": message},
+        ]
+        for index, (name, argument_source) in enumerate(self.actions, start=1):
+            arguments = (
+                argument_source(self.results)
+                if callable(argument_source)
+                else dict(argument_source)
+            )
+            call_id = f"{task_id}:scripted:{index}"
+            envelope = self.tool_service.execute_with_identity(
+                name,
+                arguments,
+                principal=principal,
+                identity=HermesToolExecutionIdentity.require(
+                    session_id=self.session_id,
+                    turn_id=task_id,
+                    tool_call_id=call_id,
+                ),
+            )
+            assert envelope["status"] == "ok"
+            self.calls.append((name, arguments))
+            self.results.append(envelope["data"])
+            messages.extend(
+                [
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": name,
+                                    "arguments": arguments,
+                                },
+                            }
+                        ],
+                    },
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": name,
+                        "content": json.dumps(
+                            envelope, ensure_ascii=False, sort_keys=True
+                        ),
+                    },
+                ]
+            )
+        messages.append({"role": "assistant", "content": self.final_response})
+        return {
+            "completed": True,
+            "failed": False,
+            "interrupted": False,
+            "final_response": self.final_response,
+            "messages": messages,
+            "turn_exit_reason": "completed",
+            "api_calls": 0,
+        }
+
+
 @pytest.fixture
 def creation_stack(tmp_path: Path) -> dict:
     resource_db = tmp_path / "resources.sqlite3"
@@ -122,7 +219,6 @@ def creation_stack(tmp_path: Path) -> dict:
     )
     resources = InvestigationResourceService(
         lexicon_store=lexicons,
-        policy_store=policies,
         ruleset_service=rulesets,
         configuration_resolver=resolver,
     )
@@ -214,6 +310,16 @@ def _run_count(store: InvestigationCreationStore) -> int:
         )
 
 
+def _mutation_receipt_count(store: InvestigationCreationStore) -> int:
+    with sqlite3.connect(store.db_path) as connection:
+        return int(
+            connection.execute(
+                "SELECT COUNT(*) FROM investigation_creation_tool_receipts "
+                "WHERE is_mutation = 1"
+            ).fetchone()[0]
+        )
+
+
 def _job_count(resource_db: Path) -> int:
     with sqlite3.connect(resource_db) as connection:
         return int(connection.execute("SELECT COUNT(*) FROM jobs").fetchone()[0])
@@ -224,6 +330,122 @@ def _report_version_count(resource_db: Path) -> int:
         return int(
             connection.execute("SELECT COUNT(*) FROM report_versions").fetchone()[0]
         )
+
+
+def _run_scripted_creation_turn(
+    stack: dict,
+    *,
+    content: str,
+    actions: list[tuple[str, ScriptArguments]],
+    final_response: str = "已根据当前系统资源回答。",
+    session_id: str = "",
+    client_message_id: str = "scripted-message",
+) -> dict[str, Any]:
+    conversation = stack["conversation"]
+    principal = Principal("principal-a")
+    if session_id:
+        session = conversation.get_session(session_id, principal=principal)
+    else:
+        session = conversation.create_session(
+            principal=principal,
+            workspace_key=f"scripted:{client_message_id}",
+        )
+    agent = ScriptedCreationHermesAgent(
+        session_id=session.id,
+        tool_service=stack["tool_service"],
+        principal_resolver=conversation.principal_for_session,
+        actions=actions,
+        final_response=final_response,
+    )
+    conversation._agents[session.id] = agent
+    turn, idempotent_replay = conversation.accept_message(
+        session.id,
+        client_message_id=client_message_id,
+        content=content,
+        principal=principal,
+    )
+    assert idempotent_replay is False
+    result = conversation.execute_turn(turn.id)
+    return {
+        "session_id": session.id,
+        "turn": conversation.store.get_turn(turn.id),
+        "result": result,
+        "agent": agent,
+    }
+
+
+def _requested_lexicon_terms(results: list[dict[str, Any]]) -> dict[str, Any]:
+    lexicon = next(
+        item for item in results[0]["recall_lexicons"] if item["available"]
+    )
+    return {
+        "domain_hint": "博彩",
+        "mode": "search",
+        "lexicon_ids": [lexicon["id"]],
+        "include_lexicon_terms_for_ids": [lexicon["id"]],
+        "page_size": 20,
+        "lexicon_term_limit": 100,
+    }
+
+
+def _requested_ruleset_details(results: list[dict[str, Any]]) -> dict[str, Any]:
+    revision = results[0]["ruleset_revisions"][0]
+    return {
+        "domain_hint": "赌博博彩",
+        "mode": "search",
+        "include_ruleset_details_for_revision_ids": [revision["id"]],
+        "page_size": 20,
+    }
+
+
+def _search_draft_from_options(results: list[dict[str, Any]]) -> dict[str, Any]:
+    options = results[-1]
+    platform = next(
+        (item for item in options["platforms"] if item["id"] == "xhs"),
+        options["platforms"][0],
+    )
+    ruleset = options["ruleset_revisions"][0]
+    lexicon = next(
+        item
+        for item in options["recall_lexicons"]
+        if item["available"] and item["terms_included"]
+    )
+    return {
+        "title": "世界杯博彩风险调查",
+        "objective": "调查世界杯博彩风险",
+        "configuration": {
+            "schema_version": "investigation-draft-config-v4",
+            "platform": platform["id"],
+            "investigation": {
+                "mode": "search",
+                "recall_plan": {
+                    "strategy": "existing_lexicon",
+                    "lexicon_id": lexicon["id"],
+                    "expected_runtime_content_hash": lexicon[
+                        "runtime_content_hash"
+                    ],
+                    "enabled_main_terms": lexicon["enabled_main_terms"],
+                },
+            },
+            "judgement": {
+                "strategy": "existing_ruleset",
+                "ruleset_revision_id": ruleset["id"],
+                "expected_ruleset_version": ruleset["version"],
+                "expected_ruleset_content_hash": ruleset["content_hash"],
+            },
+        },
+    }
+
+
+def _explicit_create_actions() -> list[tuple[str, ScriptArguments]]:
+    return [
+        (
+            "query_investigation_options",
+            {"domain_hint": "博彩", "mode": "search", "page_size": 20},
+        ),
+        ("query_investigation_options", _requested_lexicon_terms),
+        ("create_investigation_draft", _search_draft_from_options),
+    ]
 
 
 def _create_completed_turn(
@@ -344,7 +566,6 @@ def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
     ]
     assert suggestion["selected_platform"] in {"dy", "xhs", "ks"}
     assert suggestion["search_terms"]
-    assert suggestion["audit_policy"]["published_version"]
     assert suggestion["ruleset_revision"]["version"] >= 1
     assert suggestion["recall_lexicons"]
     transcript = creation_stack["conversation"].store.latest_completed_hermes_transcript(
@@ -527,7 +748,7 @@ def test_mutation_receipt_replays_success_and_unknown_result_fails_safe(
     options = service.query_investigation_options(
         QueryInvestigationOptions(), principal=principal
     )
-    policy = options.audit_policies[0]
+    ruleset = options.ruleset_revisions[0]
     arguments = {
         "title": "receipt test",
         "objective": "prove mutation replay safety",
@@ -541,13 +762,11 @@ def test_mutation_receipt_replays_success_and_unknown_result_fails_safe(
                     "source_lexicon_ids": [],
                 },
             },
-            "audit_policy": {
-                "id": policy.id,
-                "expected_published_version": policy.published_version,
-                "expected_published_config_hash": policy.published_config_hash,
-                "expected_ruleset_revision_id": policy.ruleset_revision_id,
-                "expected_ruleset_version": policy.ruleset_version,
-                "expected_ruleset_content_hash": policy.ruleset_content_hash,
+            "judgement": {
+                "strategy": "existing_ruleset",
+                "ruleset_revision_id": ruleset.id,
+                "expected_ruleset_version": ruleset.version,
+                "expected_ruleset_content_hash": ruleset.content_hash,
             },
         },
     }
@@ -591,6 +810,195 @@ def test_mutation_receipt_replays_success_and_unknown_result_fails_safe(
     assert _draft_count(store) == 1
 
 
+def test_invalid_create_does_not_reserve_receipt_and_corrected_same_turn_succeeds(
+    creation_stack: dict,
+) -> None:
+    tool_service = creation_stack["tool_service"]
+    store = creation_stack["creation_store"]
+    principal = Principal("principal-a")
+    session_id = "session:invalid-then-valid"
+    turn_id = "turn:invalid-then-valid"
+    invalid_arguments = {
+        "title": "世界杯博彩风险调查",
+        "objective": "调查世界杯博彩风险",
+        "configuration": {
+            "platform": "xhs",
+            "crawl_mode": "search",
+        },
+    }
+
+    with patch.object(creation_stack["app_service"], "create_draft") as create_draft:
+        invalid = tool_service.execute_with_identity(
+            "create_investigation_draft",
+            invalid_arguments,
+            principal=principal,
+            identity=HermesToolExecutionIdentity.require(
+                session_id=session_id,
+                turn_id=turn_id,
+                tool_call_id="call:invalid-create",
+            ),
+        )
+    create_draft.assert_not_called()
+
+    assert invalid["status"] == "error"
+    assert invalid["error"]["code"] == "INVALID_TOOL_ARGUMENTS"
+    details = invalid["error"]["details"]
+    assert details["receipt_created"] is False
+    assert details["mutation_applied"] is False
+    assert details["retryable"] is True
+    assert details["draft_created"] is False
+    assert details["validation_errors"]
+    assert set(details["validation_errors"][0]) == {"loc", "type", "message"}
+    assert details["recovery"] == (
+        "Draft was not created. Correct the arguments using the Tool schema and retry "
+        "create_investigation_draft."
+    )
+    assert _draft_count(store) == 0
+    assert _mutation_receipt_count(store) == 0
+
+    options = tool_service.execute(
+        "query_investigation_options",
+        {
+            "domain_hint": "博彩",
+            "mode": "search",
+            "include_lexicon_terms_for_ids": ["gambling"],
+        },
+        principal=principal,
+    )
+    valid_arguments = _search_draft_from_options([options])
+    valid_identity = HermesToolExecutionIdentity.require(
+        session_id=session_id,
+        turn_id=turn_id,
+        tool_call_id="call:valid-create",
+    )
+    created = tool_service.execute_with_identity(
+        "create_investigation_draft",
+        valid_arguments,
+        principal=principal,
+        identity=valid_identity,
+    )
+
+    assert created["status"] == "ok"
+    assert _draft_count(store) == 1
+    assert _mutation_receipt_count(store) == 1
+
+    replayed = tool_service.execute_with_identity(
+        "create_investigation_draft",
+        valid_arguments,
+        principal=principal,
+        identity=valid_identity,
+    )
+    assert replayed == created
+    assert _draft_count(store) == 1
+    assert _mutation_receipt_count(store) == 1
+
+    conflicting_arguments = json.loads(json.dumps(valid_arguments))
+    conflicting_arguments["title"] = "同一 Turn 的冲突创建"
+    conflict = tool_service.execute_with_identity(
+        "create_investigation_draft",
+        conflicting_arguments,
+        principal=principal,
+        identity=HermesToolExecutionIdentity.require(
+            session_id=session_id,
+            turn_id=turn_id,
+            tool_call_id="call:conflicting-create",
+        ),
+    )
+    assert conflict["status"] == "error"
+    assert conflict["error"]["code"] == "IDEMPOTENCY_CONFLICT"
+    assert _draft_count(store) == 1
+    assert _mutation_receipt_count(store) == 1
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments", "application_method"),
+    [
+        (
+            "update_investigation_draft",
+            {"draft_id": "investigation-draft:missing", "expected_revision": 1},
+            "update_draft",
+        ),
+        (
+            "confirm_and_queue_investigation",
+            {
+                "draft_id": "investigation-draft:missing",
+                "expected_revision": 1,
+                "idempotency_key": "invalid-confirm",
+            },
+            "confirm_and_queue",
+        ),
+    ],
+)
+def test_invalid_shared_mutation_inputs_do_not_reserve_receipts(
+    creation_stack: dict,
+    tool_name: str,
+    arguments: dict[str, Any],
+    application_method: str,
+) -> None:
+    store = creation_stack["creation_store"]
+
+    with patch.object(
+        creation_stack["app_service"], application_method
+    ) as application_call:
+        result = creation_stack["tool_service"].execute_with_identity(
+            tool_name,
+            arguments,
+            principal=Principal("principal-a"),
+            identity=HermesToolExecutionIdentity.require(
+                session_id="session:invalid-shared-mutation",
+                turn_id=f"turn:{tool_name}",
+                tool_call_id=f"call:{tool_name}",
+            ),
+        )
+    application_call.assert_not_called()
+
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "INVALID_TOOL_ARGUMENTS"
+    assert result["error"]["details"]["receipt_created"] is False
+    assert result["error"]["details"]["mutation_applied"] is False
+    assert result["error"]["details"]["retryable"] is True
+    assert "draft_created" not in result["error"]["details"]
+    assert _mutation_receipt_count(store) == 0
+
+
+def test_schema_valid_resource_failure_remains_inside_receipt_fence(
+    creation_stack: dict,
+) -> None:
+    tool_service = creation_stack["tool_service"]
+    store = creation_stack["creation_store"]
+    principal = Principal("principal-a")
+    options = tool_service.execute(
+        "query_investigation_options",
+        {
+            "domain_hint": "博彩",
+            "mode": "search",
+            "include_lexicon_terms_for_ids": ["gambling"],
+        },
+        principal=principal,
+    )
+    arguments = _search_draft_from_options([options])
+    arguments["configuration"]["investigation"]["recall_plan"][
+        "expected_runtime_content_hash"
+    ] = "0" * 64
+
+    result = tool_service.execute_with_identity(
+        "create_investigation_draft",
+        arguments,
+        principal=principal,
+        identity=HermesToolExecutionIdentity.require(
+            session_id="session:resource-failure",
+            turn_id="turn:resource-failure",
+            tool_call_id="call:resource-failure",
+        ),
+    )
+
+    assert result["status"] == "error"
+    assert result["error"]["code"] == "RESOURCE_STALE"
+    assert result["error"]["details"]["mutation_applied"] is False
+    assert _draft_count(store) == 0
+    assert _mutation_receipt_count(store) == 1
+
+
 def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
     creation_stack: dict, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -604,7 +1012,7 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
     options = service.query_investigation_options(
         QueryInvestigationOptions(), principal=principal
     )
-    policy = options.audit_policies[0]
+    ruleset = options.ruleset_revisions[0]
     create_arguments = {
         "title": "Hermes middleware identity",
         "objective": "prove real registry dispatch executes each mutation once",
@@ -618,13 +1026,11 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
                     "source_lexicon_ids": [],
                 },
             },
-            "audit_policy": {
-                "id": policy.id,
-                "expected_published_version": policy.published_version,
-                "expected_published_config_hash": policy.published_config_hash,
-                "expected_ruleset_revision_id": policy.ruleset_revision_id,
-                "expected_ruleset_version": policy.ruleset_version,
-                "expected_ruleset_content_hash": policy.ruleset_content_hash,
+            "judgement": {
+                "strategy": "existing_ruleset",
+                "ruleset_revision_id": ruleset.id,
+                "expected_ruleset_version": ruleset.version,
+                "expected_ruleset_content_hash": ruleset.content_hash,
             },
         },
     }
@@ -1315,7 +1721,7 @@ def test_single_creation_turn_create_and_confirm_restores_workspace_run_and_repo
         f"/api/investigation-workspaces/{workspace_id}/turns",
         json={
             "client_message_id": "single-turn-confirm-message",
-            "content": "请生成调查方案，确认并开始调查",
+                "content": "请生成世界杯博彩调查方案，确认并开始调查",
         },
     )
     assert accepted.status_code == 202
@@ -1362,14 +1768,467 @@ def test_creation_mode_has_exactly_six_tools() -> None:
     }
     parameters = [schema["parameters"] for schema in HERMES_M3_TOOL_SCHEMAS]
     assert '"wb"' not in json.dumps(parameters, sort_keys=True)
+    query_schema = next(
+        schema
+        for schema in HERMES_M3_TOOL_SCHEMAS
+        if schema["name"] == "query_investigation_options"
+    )
+    assert (
+        "include_ruleset_details_for_revision_ids"
+        in query_schema["parameters"]["properties"]
+    )
+    assert "ruleset_revision_ids" in query_schema["parameters"]["properties"]
+    serialized_query = json.dumps(query_schema["parameters"], sort_keys=True)
+    assert "audit_policy" not in serialized_query
+    for tool_name in (
+        "create_investigation_draft",
+        "update_investigation_draft",
+    ):
+        mutation_schema = next(
+            schema for schema in HERMES_M3_TOOL_SCHEMAS
+            if schema["name"] == tool_name
+        )
+        serialized = json.dumps(mutation_schema["parameters"], sort_keys=True)
+        assert "judgement" in serialized
+        for forbidden in (
+            "audit_policy",
+            "capabilities",
+            "scoring_template",
+            "thresholds",
+            "rule_importance",
+            "scoring_rules",
+            "outputs",
+            "crawler_account_id",
+        ):
+            assert forbidden not in serialized
 
 
-def test_creation_prompt_requires_an_editable_search_draft_before_clarification() -> None:
-    assert "MUST create exactly one editable" in CREATION_SYSTEM_PROMPT
-    assert "An omitted platform is\nnot a blocker" in CREATION_SYSTEM_PROMPT
-    assert "Do not stop at a prose summary" in CREATION_SYSTEM_PROMPT
-    assert "still MUST\nselect a matching published AuditPolicy" in CREATION_SYSTEM_PROMPT
-    assert "after the Draft tool succeeds" in CREATION_SYSTEM_PROMPT
+def test_creation_prompt_leaves_resource_query_timing_to_the_agent() -> None:
+    normalized_prompt = " ".join(CREATION_SYSTEM_PROMPT.split())
+    assert "Conversation is primary" in CREATION_SYSTEM_PROMPT
+    assert "according to the user's current intent" in CREATION_SYSTEM_PROMPT
+    assert "For a read-only request" in CREATION_SYSTEM_PROMPT
+    assert "without calling\ncreate_investigation_draft" in CREATION_SYSTEM_PROMPT
+    assert '"I want to investigate X" is sufficient' in normalized_prompt
+    assert "When resource discovery is needed" in normalized_prompt
+    assert "Complete resource identities already present" in normalized_prompt
+    assert "authoritatively validate them during creation" in normalized_prompt
+    assert "Only call\nconfirm_and_queue_investigation after an explicit" in CREATION_SYSTEM_PROMPT
+    for workflow_first_instruction in (
+        "Always call\nquery_investigation_options first",
+        "first call query_investigation_options in the same turn",
+        "Query that lexicon with\ninclude_lexicon_terms_for_ids before creating",
+        "MUST create exactly one editable",
+        "Do not stop at a prose summary",
+    ):
+        assert workflow_first_instruction not in CREATION_SYSTEM_PROMPT
+
+
+def test_creation_prompt_defaults_only_editable_fields_from_real_resources() -> None:
+    assert (
+        "editable recommended configuration, not a final confirmed execution"
+        in CREATION_SYSTEM_PROMPT
+    )
+    assert "do\nnot require explicit confirmation of every editable or defaultable field" in (
+        CREATION_SYSTEM_PROMPT
+    )
+    assert "preserve any available platform the user explicitly selected" in (
+        CREATION_SYSTEM_PROMPT
+    )
+    assert "choose one reasonable available platform from the available resource context" in (
+        CREATION_SYSTEM_PROMPT
+    )
+    assert "available in the conversation context" in CREATION_SYSTEM_PROMPT
+    assert "authoritative term snapshot is the recall\nconfiguration" in (
+        CREATION_SYSTEM_PROMPT
+    )
+    assert "do not ask the user to enter separate search keywords" in (
+        CREATION_SYSTEM_PROMPT
+    )
+
+
+def test_creation_prompt_keeps_hard_missing_resource_boundaries() -> None:
+    assert "Never fabricate missing domain resources" in CREATION_SYSTEM_PROMPT
+    assert "no real recall configuration can be formed" in CREATION_SYSTEM_PROMPT
+    assert "the user's requested\nplatform is unavailable" in CREATION_SYSTEM_PROMPT
+    assert "do not create a\nmisleading Draft" in CREATION_SYSTEM_PROMPT
+    assert "cannot default a missing creator homepage URL" in CREATION_SYSTEM_PROMPT
+    assert "Only call\nconfirm_and_queue_investigation after an explicit" in (
+        CREATION_SYSTEM_PROMPT
+    )
+
+
+def test_creation_tool_descriptions_are_capability_oriented() -> None:
+    query_description = M3_TOOL_DESCRIPTIONS["query_investigation_options"]
+    create_description = M3_TOOL_DESCRIPTIONS["create_investigation_draft"]
+    assert "discover, explain, compare, recommend, or configure" in query_description
+    assert "categories, rules, hit conditions, exemptions" in query_description
+    assert "application stages" in query_description
+    assert "when the user wants" in create_description
+    descriptions = " ".join(M3_TOOL_DESCRIPTIONS.values())
+    for workflow_instruction in (
+        "must call this before",
+        "must subsequently create",
+        "first step",
+    ):
+        assert workflow_instruction not in descriptions.lower()
+
+
+@pytest.mark.parametrize(
+    ("content", "query_arguments"),
+    [
+        ("现在有哪些召回词库？", {"mode": "search"}),
+        (
+            "有哪些博彩相关词库？",
+            {"domain_hint": "博彩", "mode": "search"},
+        ),
+        ("现在有哪些研判方案？", {"mode": "search"}),
+        (
+            "赌博博彩研判方案使用了什么规则？",
+            {"domain_hint": "赌博博彩", "mode": "search"},
+        ),
+        (
+            "我想调查世界杯博彩风险。",
+            {"domain_hint": "世界杯博彩风险", "mode": "search"},
+        ),
+    ],
+)
+def test_query_only_resource_turn_stops_without_creating_draft(
+    creation_stack: dict,
+    content: str,
+    query_arguments: dict[str, Any],
+) -> None:
+    before = _draft_count(creation_stack["creation_store"])
+
+    turn = _run_scripted_creation_turn(
+        creation_stack,
+        content=content,
+        actions=[("query_investigation_options", query_arguments)],
+        client_message_id=f"query-only:{content}",
+    )
+
+    assert [name for name, _ in turn["agent"].calls] == [
+        "query_investigation_options"
+    ]
+    assert turn["result"].tool_names == ("query_investigation_options",)
+    assert turn["turn"].public_artifact == {}
+    assert _draft_count(creation_stack["creation_store"]) == before == 0
+    state = creation_stack["conversation"].get_workspace_state(
+        turn["session_id"], principal=Principal("principal-a")
+    )
+    assert state.draft_artifact == {}
+
+
+def test_query_only_lexicon_terms_returns_terms_without_draft_artifact(
+    creation_stack: dict,
+) -> None:
+    initial = creation_stack["tool_service"].execute(
+        "query_investigation_options",
+        {"domain_hint": "博彩", "mode": "search"},
+        principal=Principal("principal-a"),
+    )
+    lexicon = next(item for item in initial["recall_lexicons"] if item["available"])
+    arguments = {
+        "domain_hint": "博彩",
+        "mode": "search",
+        "lexicon_ids": [lexicon["id"]],
+        "include_lexicon_terms_for_ids": [lexicon["id"]],
+    }
+
+    turn = _run_scripted_creation_turn(
+        creation_stack,
+        content="这个词库里面有哪些词？",
+        actions=[("query_investigation_options", arguments)],
+        client_message_id="query-lexicon-terms",
+    )
+
+    returned = turn["agent"].results[0]["recall_lexicons"][0]
+    assert returned["id"] == lexicon["id"]
+    assert returned["terms_included"] is True
+    assert returned["enabled_main_terms"]
+    assert turn["turn"].public_artifact == {}
+    assert _draft_count(creation_stack["creation_store"]) == 0
+
+
+def test_query_only_ruleset_detail_returns_rule_fields_without_draft_artifact(
+    creation_stack: dict,
+) -> None:
+    turn = _run_scripted_creation_turn(
+        creation_stack,
+        content="这个研判方案的风险分类、规则、命中和豁免条件是什么？",
+        actions=[
+            (
+                "query_investigation_options",
+                {"domain_hint": "赌博博彩", "mode": "search"},
+            ),
+            ("query_investigation_options", _requested_ruleset_details),
+        ],
+        client_message_id="query-ruleset-detail",
+    )
+
+    detail_result = turn["agent"].results[1]
+    assert len(detail_result["ruleset_revision_details"]) == 1
+    detail = detail_result["ruleset_revision_details"][0]
+    assert detail["categories"]
+    category = next(
+        item
+        for item in detail["categories"]
+        if item["category_id"] == "gambling.access_and_funds"
+    )
+    rule = next(
+        item
+        for item in category["rules"]
+        if item["rule_id"] == "gambling.platform_entry_and_funding"
+    )
+    assert detail["general_exemptions"][0]["condition"]
+    assert rule["hit_condition"]
+    assert rule["rule_exemptions"][0]["condition"]
+    assert rule["adjudication_notes"]
+    assert rule["application_stages"] == [
+        "image_evidence",
+        "video_frame_evidence",
+        "comment_audit",
+        "fusion_audit",
+    ]
+    assert "source_mappings" not in json.dumps(detail_result, ensure_ascii=False)
+    assert [name for name, _ in turn["agent"].calls] == [
+        "query_investigation_options",
+        "query_investigation_options",
+    ]
+    assert turn["result"].tool_names == (
+        "query_investigation_options",
+        "query_investigation_options",
+    )
+    assert turn["turn"].public_artifact == {}
+    assert _draft_count(creation_stack["creation_store"]) == 0
+    assert _run_count(creation_stack["creation_store"]) == 0
+    assert _job_count(creation_stack["resource_db"]) == 0
+
+
+def test_explicit_create_still_uses_query_then_create_and_returns_draft(
+    creation_stack: dict,
+) -> None:
+    turn = _run_scripted_creation_turn(
+        creation_stack,
+        content="就按刚才这个配置创建调查。",
+        actions=_explicit_create_actions(),
+        final_response="已创建可编辑调查草案，尚未开始调查。",
+        client_message_id="explicit-create",
+    )
+
+    assert [name for name, _ in turn["agent"].calls] == [
+        "query_investigation_options",
+        "query_investigation_options",
+        "create_investigation_draft",
+    ]
+    assert turn["turn"].public_artifact["artifact_type"] == "investigation_draft"
+    assert turn["turn"].public_artifact["draft_revision"] == 1
+    assert _draft_count(creation_stack["creation_store"]) == 1
+    assert _run_count(creation_stack["creation_store"]) == 0
+
+
+def test_existing_draft_get_update_and_confirm_do_not_create_second_draft(
+    creation_stack: dict,
+) -> None:
+    created = _run_scripted_creation_turn(
+        creation_stack,
+        content="用当前配置创建调查。",
+        actions=_explicit_create_actions(),
+        client_message_id="lifecycle-create",
+    )
+    session_id = created["session_id"]
+    draft = created["turn"].public_artifact["draft"]
+
+    viewed = _run_scripted_creation_turn(
+        creation_stack,
+        session_id=session_id,
+        content="把刚才的 Draft 给我看看。",
+        actions=[("get_investigation_draft", {"draft_id": draft["id"]})],
+        client_message_id="lifecycle-get",
+    )
+    assert [name for name, _ in viewed["agent"].calls] == [
+        "get_investigation_draft"
+    ]
+    assert viewed["turn"].public_artifact["draft_id"] == draft["id"]
+    assert _draft_count(creation_stack["creation_store"]) == 1
+
+    updated_configuration = json.loads(json.dumps(draft["configuration"]))
+    updated_configuration["platform"] = "ks"
+    updated = _run_scripted_creation_turn(
+        creation_stack,
+        session_id=session_id,
+        content="把快手加进去。",
+        actions=[
+            (
+                "update_investigation_draft",
+                {
+                    "draft_id": draft["id"],
+                    "expected_revision": 1,
+                    "configuration": updated_configuration,
+                },
+            )
+        ],
+        client_message_id="lifecycle-update",
+    )
+    assert [name for name, _ in updated["agent"].calls] == [
+        "update_investigation_draft"
+    ]
+    assert updated["turn"].public_artifact["draft_revision"] == 2
+    assert updated["turn"].public_artifact["draft"]["configuration"]["platform"] == "ks"
+    assert _draft_count(creation_stack["creation_store"]) == 1
+
+    confirmed = _run_scripted_creation_turn(
+        creation_stack,
+        session_id=session_id,
+        content="确认开始。",
+        actions=[
+            (
+                "confirm_and_queue_investigation",
+                {
+                    "draft_id": draft["id"],
+                    "expected_revision": 2,
+                    "confirmed": True,
+                    "idempotency_key": "conversation-first-confirm",
+                },
+            )
+        ],
+        client_message_id="lifecycle-confirm",
+    )
+    assert [name for name, _ in confirmed["agent"].calls] == [
+        "confirm_and_queue_investigation"
+    ]
+    assert confirmed["turn"].public_artifact["artifact_type"] == "investigation_run"
+    assert _draft_count(creation_stack["creation_store"]) == 1
+    assert _run_count(creation_stack["creation_store"]) == 1
+
+
+def test_same_turn_direct_create_with_known_resources_reaches_application(
+    creation_stack: dict,
+) -> None:
+    options = creation_stack["app_service"].query_investigation_options(
+        QueryInvestigationOptions(
+            domain_hint="博彩",
+            mode="search",
+            include_lexicon_terms_for_ids=["gambling"],
+        ),
+        principal=Principal("principal-a"),
+    ).model_dump(mode="json")
+    create_arguments = _search_draft_from_options([options])
+
+    direct = _run_scripted_creation_turn(
+        creation_stack,
+        content="按这些已知资源创建调查。",
+        actions=[("create_investigation_draft", create_arguments)],
+        client_message_id="direct-create-known-resources",
+    )
+
+    assert [name for name, _ in direct["agent"].calls] == [
+        "create_investigation_draft"
+    ]
+    assert direct["result"].tool_names == ("create_investigation_draft",)
+    assert direct["turn"].status == "completed"
+    assert direct["turn"].public_artifact["artifact_type"] == "investigation_draft"
+    assert _draft_count(creation_stack["creation_store"]) == 1
+    assert _run_count(creation_stack["creation_store"]) == 0
+
+
+@pytest.mark.parametrize(
+    ("field_path", "invalid_value", "expected_code"),
+    [
+        (
+            ("judgement", "ruleset_revision_id"),
+            "ruleset-revision:missing:v1",
+            "INVALID_RESOURCE_REFERENCE",
+        ),
+        (
+            ("judgement", "expected_ruleset_content_hash"),
+            "0" * 64,
+            "RESOURCE_STALE",
+        ),
+        (
+            ("investigation", "recall_plan", "lexicon_id"),
+            "missing-lexicon",
+            "INVALID_RESOURCE_REFERENCE",
+        ),
+    ],
+)
+def test_direct_create_without_turn_query_keeps_authoritative_resource_rejection(
+    creation_stack: dict,
+    field_path: tuple[str, ...],
+    invalid_value: str,
+    expected_code: str,
+) -> None:
+    options = creation_stack["app_service"].query_investigation_options(
+        QueryInvestigationOptions(
+            domain_hint="博彩",
+            mode="search",
+            include_lexicon_terms_for_ids=["gambling"],
+        ),
+        principal=Principal("principal-a"),
+    ).model_dump(mode="json")
+    arguments = _search_draft_from_options([options])
+    target = arguments["configuration"]
+    for key in field_path[:-1]:
+        target = target[key]
+    target[field_path[-1]] = invalid_value
+
+    result = creation_stack["tool_service"].execute_with_identity(
+        "create_investigation_draft",
+        arguments,
+        principal=Principal("principal-a"),
+        identity=HermesToolExecutionIdentity.require(
+            session_id="session:phase-2c-invalid-direct-create",
+            turn_id="turn:phase-2c-invalid-direct-create",
+            tool_call_id=f"call:{field_path[-1]}",
+        ),
+    )
+
+    assert result["status"] == "error"
+    assert result["error"]["code"] == expected_code
+    assert result["error"]["details"]["mutation_applied"] is False
+    assert _draft_count(creation_stack["creation_store"]) == 0
+    assert _mutation_receipt_count(creation_stack["creation_store"]) == 1
+
+
+def test_cross_turn_known_resources_can_be_reused_without_same_turn_query(
+    creation_stack: dict,
+) -> None:
+    queried = _run_scripted_creation_turn(
+        creation_stack,
+        content="有哪些博彩相关规则和召回词库？",
+        actions=[
+            (
+                "query_investigation_options",
+                {
+                    "domain_hint": "博彩",
+                    "mode": "search",
+                    "include_lexicon_terms_for_ids": ["gambling"],
+                },
+            )
+        ],
+        client_message_id="cross-turn-resource-query",
+    )
+    assert queried["result"].tool_names == ("query_investigation_options",)
+    assert queried["turn"].public_artifact == {}
+    assert _draft_count(creation_stack["creation_store"]) == 0
+
+    create_arguments = _search_draft_from_options(queried["agent"].results)
+    created = _run_scripted_creation_turn(
+        creation_stack,
+        session_id=queried["session_id"],
+        content="就按刚才的资源，调查抖音上的世界杯博彩风险。",
+        actions=[("create_investigation_draft", create_arguments)],
+        client_message_id="cross-turn-direct-create",
+    )
+
+    assert [name for name, _ in created["agent"].calls] == [
+        "create_investigation_draft"
+    ]
+    assert created["result"].tool_names == ("create_investigation_draft",)
+    assert created["turn"].status == "completed"
+    assert created["turn"].public_artifact["artifact_type"] == "investigation_draft"
+    assert _draft_count(creation_stack["creation_store"]) == 1
+    assert _run_count(creation_stack["creation_store"]) == 0
 
 
 def test_published_report_handoff_reuses_internal_run_anchor_without_exposing_session(

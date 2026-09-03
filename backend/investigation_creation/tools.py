@@ -5,7 +5,13 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Any
 
-from pydantic import Field, StrictBool, field_validator, model_validator
+from pydantic import (
+    Field,
+    StrictBool,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from .contracts import (
     ConfirmAndQueueCommand,
@@ -128,23 +134,24 @@ M3_MUTATION_TOOL_NAMES = frozenset(
 
 M3_TOOL_DESCRIPTIONS = {
     "query_investigation_options": (
-        "Query bounded real platform, published AuditPolicy/RuleSet, and recall lexicon "
-        "options for search or creator mode. Creator mode never requires recall lexicons. "
-        "For search, request enabled main terms only for explicit candidate lexicon IDs. "
-        "Every investigation-creation request must call this before creating a Draft. "
-        "This query never creates a Draft, Run, or Job."
+        "Query currently available real platforms, published RuleSetRevisions, independent "
+        "recall lexicons, and blockers. Use it to discover, explain, "
+        "compare, recommend, or configure resources. For search, request enabled main terms "
+        "only for explicit candidate lexicon IDs. Request RuleSet categories, rules, hit "
+        "conditions, exemptions, adjudication notes, and application stages only for exact "
+        "published revision IDs. This query never creates a Draft, Run, or Job."
     ),
     "create_investigation_draft": (
-        "Create an editable Investigation Draft from available query_investigation_options "
-        "candidates. If the user omitted a platform, select one legal non-wb candidate as "
-        "an editable recommendation; also select a published policy/ruleset. Search Drafts "
-        "must freeze a real existing_lexicon ID, hash, and enabled_main_terms snapshot; creator "
-        "Drafts must contain only a validated creator homepage URL and no recall plan. Do not require "
-        "the user to reselect recommended resources. This never confirms or starts a Run."
+        "Create an editable Investigation Draft when the user wants the currently defined "
+        "configuration captured as an investigation. Use current real resource candidates. "
+        "Select a published RuleSetRevision directly as judgement. "
+        "Search Drafts must freeze a real existing_lexicon ID, hash, and enabled_main_terms "
+        "snapshot; creator Drafts must contain only a validated creator homepage URL and no "
+        "recall plan. This never confirms or starts a Run."
     ),
     "update_investigation_draft": (
         "Update an editable Investigation Draft at its expected revision. User changes "
-        "to platform, policy, lexicon, or terms are allowed before confirmation; edited "
+        "to platform, RuleSet judgement, lexicon, or terms are allowed before confirmation; edited "
         "lexicon terms must be represented as temporary_terms. This command never confirms "
         "or starts an investigation."
     ),
@@ -273,6 +280,50 @@ class InvestigationCreationToolService:
             turn_id=identity.turn_id,
             tool_call_id=identity.tool_call_id,
         )
+        raw_arguments = dict(arguments or {})
+        if tool_name in M3_MUTATION_TOOL_NAMES:
+            try:
+                M3_TOOL_INPUTS[tool_name].model_validate(raw_arguments)
+            except ValidationError as exc:
+                details: dict[str, Any] = {
+                    "receipt_created": False,
+                    "mutation_applied": False,
+                    "retryable": True,
+                    "validation_errors": [
+                        {
+                            "loc": list(error["loc"]),
+                            "type": error["type"],
+                            "message": error["msg"],
+                        }
+                        for error in exc.errors(
+                            include_url=False,
+                            include_context=False,
+                            include_input=False,
+                        )
+                    ],
+                    "recovery": (
+                        "Correct the arguments using the Tool schema and retry "
+                        f"{tool_name}."
+                    ),
+                }
+                if tool_name == "create_investigation_draft":
+                    details.update(
+                        {
+                            "draft_created": False,
+                            "recovery": (
+                                "Draft was not created. Correct the arguments using the "
+                                "Tool schema and retry create_investigation_draft."
+                            ),
+                        }
+                    )
+                return {
+                    "status": "error",
+                    "error": {
+                        "code": "INVALID_TOOL_ARGUMENTS",
+                        "message": "Tool arguments do not match the required schema.",
+                        "details": details,
+                    },
+                }
         receipt: dict[str, Any] | None = None
         try:
             if tool_name in M3_MUTATION_TOOL_NAMES:
@@ -282,7 +333,7 @@ class InvestigationCreationToolService:
                     tool_call_id=identity.tool_call_id,
                     principal=principal.id,
                     tool_name=tool_name,
-                    arguments=dict(arguments or {}),
+                    arguments=raw_arguments,
                     is_mutation=True,
                 )
                 if receipt["replay"]:
@@ -300,7 +351,7 @@ class InvestigationCreationToolService:
                     }
             payload = self.execute(
                 tool_name,
-                dict(arguments or {}),
+                raw_arguments,
                 principal=principal,
             )
             result = {"status": "ok", "data": payload}

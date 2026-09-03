@@ -279,6 +279,127 @@ class InvestigationConfigurationResolver:
             mode="json"
         )
 
+    def resolve_ruleset_execution(
+        self,
+        configuration: InvestigationConfiguration,
+        *,
+        ruleset_revision_id: str,
+        recall_library_ids: list[str],
+        principal: Any,
+        resource_connection: sqlite3.Connection | None = None,
+    ) -> dict[str, Any]:
+        """Freeze authoritative M3 execution directly from a RuleSetRevision."""
+
+        validated = InvestigationConfiguration.model_validate(
+            configuration.model_dump(mode="json")
+        )
+        if self.ruleset_service is None:
+            raise ConfigurationValidationError(
+                "RuleSet execution requires the RuleSet application service"
+            )
+        try:
+            compiled = self.ruleset_service.compile_for_execution(
+                ruleset_revision_id,
+                principal=principal,
+                connection=resource_connection,
+            )
+        except Exception as exc:
+            raise ConfigurationValidationError(str(exc)) from exc
+
+        platform = validated.platform.value
+        collection = validated.collection
+        crawl_mode = collection.crawl_mode.value
+        keywords = list(collection.keywords)
+        if crawl_mode == "search" and not keywords:
+            raise ConfigurationValidationError("at least one search keyword is required")
+        creator_url = collection.creator_url
+        if crawl_mode == "creator":
+            creator_url = validate_creator_url(platform, creator_url)
+
+        crawler_account_id = collection.crawler_account_id or ""
+        crawler_account_display_name = ""
+        if crawler_account_id:
+            account = self.crawler_account_store.get(
+                crawler_account_id,
+                connection=resource_connection,
+            )
+            if account is None:
+                raise ConfigurationValidationError("crawler account not found")
+            if str(account.get("platform")) != platform:
+                raise ConfigurationValidationError(
+                    "crawler account does not match the selected platform"
+                )
+            if account.get("status") != "active" or not account.get("has_auth_state"):
+                raise ConfigurationValidationError("crawler account is not ready")
+            crawler_account_display_name = str(account.get("display_name") or "")
+
+        rule_snapshot = dict(compiled["rule_snapshot"])
+        prompt_profile_snapshot = dict(compiled["prompt_profile_snapshot"])
+        system_runtime = dict(compiled.get("audit_policy_snapshot") or {})
+        capabilities = list(system_runtime.get("capabilities") or [])
+        scoring_template = str(system_runtime.get("scoring_template") or "balanced")
+        audit_config = {
+            "schema_version": 2,
+            "source_policy_id": "",
+            "source_policy_name": "",
+            "source_policy_version": "",
+            "library_ids": list(recall_library_ids),
+            "capabilities": capabilities,
+            "scoring_template": scoring_template,
+            "thresholds": rule_snapshot.get("thresholds") or DEFAULT_THRESHOLDS,
+            "scoring_rules": rule_snapshot.get("scoring_rules") or [],
+            "prompt_version": str(prompt_profile_snapshot.get("prompt_version") or ""),
+            "ruleset_ref": rule_snapshot["ruleset_ref"],
+            "system_template_version": prompt_profile_snapshot[
+                "system_template_version"
+            ],
+            "compiler_version": prompt_profile_snapshot["compiler_version"],
+        }
+        revision_payload = {
+            "source_policy_id": "",
+            "source_policy_name": "",
+            "source_policy_version": "",
+            "audit_config": audit_config,
+            "knowledge_package_snapshots": [],
+            "rule_snapshot": rule_snapshot,
+            "prompt_profile_snapshot": prompt_profile_snapshot,
+            "config_hash": str(compiled["config_hash"]),
+        }
+        resolved = {
+            "platform": platform,
+            "display_name": collection.display_name,
+            "crawl_mode": crawl_mode,
+            "keyword": ",".join(keywords),
+            "keyword_source": "keyword",
+            "lexicon_category": recall_library_ids[0] if recall_library_ids else "",
+            "library_ids": list(recall_library_ids),
+            "capabilities": capabilities,
+            "scoring_template": scoring_template,
+            "rule_snapshot": rule_snapshot,
+            "lexicon_keywords": [],
+            "creator_url": creator_url,
+            "creator_id": creator_url,
+            "start_page": collection.start_page,
+            "max_notes": collection.max_notes,
+            "max_comments": collection.max_comments,
+            "max_concurrency": collection.max_concurrency,
+            "max_items_per_minute": collection.max_items_per_minute,
+            "crawler_account_id": crawler_account_id or None,
+            "crawler_account_display_name": crawler_account_display_name,
+            "crawler_account_confirmed_state": None,
+            "get_sub_comment": collection.get_sub_comment,
+            "analyze_limit": validated.analysis.analyze_limit,
+            "run_crawler": collection.run_crawler,
+            "source_output_id": collection.source_output_id,
+            "analysis_batch_size": validated.analysis.analysis_batch_size,
+            "prompt_profile_snapshot": prompt_profile_snapshot,
+            "policy_id": "",
+            "audit_config_revision": revision_payload,
+        }
+        return ResolvedExecutionConfiguration.model_validate(resolved).model_dump(
+            mode="json"
+        )
+
     def _enabled_keywords(self, library_ids: list[str]) -> list[str]:
         seen: set[str] = set()
         output: list[str] = []
@@ -329,7 +450,10 @@ class AuditPipelineExecutionAdapter:
     def ensure_job(self, run: InvestigationRun) -> str:
         snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
         configuration = snapshot.execution.model_dump(mode="json")
-        if snapshot.schema_version == "investigation-run-config-v3":
+        if snapshot.schema_version in {
+            "investigation-run-config-v3",
+            "investigation-run-config-v4",
+        }:
             self.validate_m3_configuration(configuration)
         job_id = self.job_id_for_run(run.id)
         existing = self.job_store.get(job_id)
@@ -399,7 +523,10 @@ class AuditPipelineExecutionAdapter:
         self, configuration: dict[str, Any], *, schema_version: str
     ) -> None:
         """Re-check the authoritative account immediately before execution."""
-        if schema_version == "investigation-run-config-v3":
+        if schema_version in {
+            "investigation-run-config-v3",
+            "investigation-run-config-v4",
+        }:
             self.validate_m3_configuration(configuration)
 
     def invalidate_job_for_account(self, job_id: str, message: str) -> None:

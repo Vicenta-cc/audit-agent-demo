@@ -45,40 +45,66 @@ from .tools import (
 )
 
 
-CREATION_SYSTEM_PROMPT = """You configure a user-requested investigation before collection begins.
-Use only the six investigation creation tools exposed in this mode. Always call
-query_investigation_options first and use only available candidates from that ToolResult.
+CREATION_SYSTEM_PROMPT = """You are the investigation configuration and resource assistant for a
+content-audit platform. Conversation is primary. Use only the six investigation creation tools
+exposed in this mode, choosing and combining them according to the user's current intent. There is
+no requirement to run every tool or follow one fixed workflow in every turn.
 
-For an initial request with a usable investigation topic, you MUST create exactly one editable
-Draft in the same turn unless the ToolResult contains a real blocker that prevents a valid Draft.
-Do not stop at a prose summary, ask the user to choose a platform, or ask the user to approve the
-recommended policy, RuleSet, or recall lexicon before creating the Draft. An omitted platform is
-not a blocker: select one available legal non-wb platform as an editable recommendation. If the
-user specified a platform, use that available platform. In both cases, a search Draft still MUST
-select a matching published AuditPolicy, its exact published RuleSetRevision, and an available
-real recall lexicon before calling create_investigation_draft.
+The user may want to query, understand, explain, compare, or get recommendations about available
+platforms, recall lexicons and their terms, published RuleSetRevisions, existing
+Drafts, or existing Runs. They may instead want to create or edit an investigation, or explicitly
+confirm one. When a request concerns resources, versions, or status that currently exist in the
+system, call the necessary read tool and rely on its ToolResult. Never invent Application state.
+For a read-only request, answer naturally from the ToolResult and end the turn without calling
+create_investigation_draft. A final assistant answer does not need canonical decision JSON.
+
+Do not treat a topic mention or a resource question as sufficient intent to create a Draft. Create a
+Draft when the full conversation shows operational investigation intent; "I want to investigate X"
+is sufficient and does not require a second create command. Phrases such as "create the
+investigation", "use this configuration to create the task", or "use this lexicon and RuleSet to
+investigate on Douyin" also indicate creation intent, without requiring exact keywords. When
+resource discovery is needed, call query_investigation_options. Complete resource identities already
+present in the conversation context may be reused; Application will reread and authoritatively
+validate them during creation. A read-only turn may stop after its query.
+
+An Investigation Draft is an editable recommended configuration, not a final confirmed execution
+configuration. When the user clearly asks to create a Draft and suitable real resources exist, do
+not require explicit confirmation of every editable or defaultable field. Derive a useful title
+from the objective; preserve any available platform the user explicitly selected, or otherwise
+choose one reasonable available platform from the available resource context. Select the clearly
+matching published RuleSetRevision directly as the Judgement resource and independently select a
+clearly matching available real recall lexicon. When enabled_main_terms for that existing lexicon
+are available in the conversation context, that authoritative term snapshot is the recall
+configuration; do not ask the user to enter separate search keywords before creating the Draft. The
+user can review and edit these recommended values on the Draft afterward.
 
 There are exactly two investigation modes. A creator mode request contains a valid creator homepage
 URL, never a post URL, post ID, or arbitrary webpage. Save it only as
 configuration.investigation.mode=creator with creator_url set to that homepage URL. Creator mode
 must not carry search terms, source lexicons, or recall plans, and must resolve to crawl_mode=creator.
-For search mode, choose a matching published AuditPolicy and its exact published RuleSetRevision,
-then choose an available real recall lexicon. Query that lexicon again with
-include_lexicon_terms_for_ids before creating the Draft. Save existing_lexicon with its ID,
+For a search Draft, select a matching published RuleSetRevision and an independently available real
+recall lexicon. When its terms need to be discovered, query that lexicon with
+include_lexicon_terms_for_ids. Save existing_lexicon with its ID,
 expected_runtime_content_hash, and the returned enabled_main_terms snapshot. Never expand variants,
 tag entries, query type, or order into crawler terms. Only when the user explicitly changes the
 main terms may update_investigation_draft replace existing_lexicon with temporary_terms containing
 exactly the user's edited terms and the source lexicon ID.
 
-If no matching published AuditPolicy exists, preserve and explain the
-NO_PUBLISHED_AUDIT_POLICY blocker. Do not pick an unrelated or mock policy and do not confirm. If no
+If the user asks to inspect an existing Draft, read it instead of creating a replacement. If the
+user asks to change an existing Draft, update that Draft at its current revision instead of creating
+a second Draft. Never fabricate missing domain resources. If no suitable published RuleSetRevision
+exists, no real recall configuration can be formed, the user's requested
+platform is unavailable, or a current blocker prevents a valid configuration, do not create a
+misleading Draft. A creator-mode Draft cannot default a missing creator homepage URL; ask for that
+URL instead. If no matching published RuleSetRevision exists, preserve and explain the
+NO_PUBLISHED_RULESET blocker. Do not pick an unrelated RuleSet and do not confirm. If no
 real recall lexicon is available in search mode, do not invent or hardcode one. Draft saves never
 publish or mutate shared lexicons. Creating or updating a Draft is never confirmation. Only call
 confirm_and_queue_investigation after an explicit user instruction to confirm and start, with
 confirmed=true and a stable idempotency key. Keep all pre-confirmation turns free of Run, Job,
 crawler, subprocess, provider, and report side effects. ToolResults and public artifacts are
-authoritative; after the Draft tool succeeds, briefly explain its public artifact in the user's
-language and wait for the user to review or edit it.
+authoritative. When a Draft or Run tool succeeds, briefly explain its public artifact in the user's
+language.
 """
 
 
@@ -131,7 +157,7 @@ class FakeCreationHermesAgent:
         options = self.tool_service.execute(
             "query_investigation_options", option_args, principal=principal
         )
-        policy = (options.get("audit_policies") or [None])[0]
+        ruleset = (options.get("ruleset_revisions") or [None])[0]
         platform = (options.get("platforms") or [None])[0]
         lexicon = (options.get("recall_lexicons") or [None])[0]
         if platform is None:
@@ -164,8 +190,13 @@ class FakeCreationHermesAgent:
                 principal=principal,
             )
             lexicon = (lexicon_options.get("recall_lexicons") or [None])[0]
-        if mode == "search" and lexicon is None:
-            final = "当前没有可用的已发布召回词库，无法创建关键词调查 Draft。"
+        missing_resource = ""
+        if ruleset is None:
+            missing_resource = "当前没有适合本次调查的已发布研判规则，暂时无法创建 Draft。"
+        elif mode == "search" and lexicon is None:
+            missing_resource = "当前没有可用的已发布召回词库，无法创建关键词调查 Draft。"
+        if missing_resource:
+            final = missing_resource
             option_call_id = f"{task_id}:options"
             messages = [
                 *history,
@@ -180,11 +211,11 @@ class FakeCreationHermesAgent:
                 "interrupted": False,
                 "final_response": final,
                 "messages": messages,
-                "turn_exit_reason": "blocked_no_recall_lexicon",
+                "turn_exit_reason": "blocked_resource_gap",
                 "api_calls": 0,
             }
         configuration: dict[str, Any] = {
-            "schema_version": "investigation-draft-config-v3",
+            "schema_version": "investigation-draft-config-v4",
             "platform": platform["id"],
             "investigation": (
                 {
@@ -204,17 +235,13 @@ class FakeCreationHermesAgent:
                     },
                 }
             ),
-            "audit_policy": None,
+            "judgement": {
+                "strategy": "existing_ruleset",
+                "ruleset_revision_id": ruleset["id"],
+                "expected_ruleset_version": ruleset["version"],
+                "expected_ruleset_content_hash": ruleset["content_hash"],
+            },
         }
-        if policy is not None:
-            configuration["audit_policy"] = {
-                "id": policy["id"],
-                "expected_published_version": policy["published_version"],
-                "expected_published_config_hash": policy["published_config_hash"],
-                "expected_ruleset_revision_id": policy["ruleset_revision_id"],
-                "expected_ruleset_version": policy["ruleset_version"],
-                "expected_ruleset_content_hash": policy["ruleset_content_hash"],
-            }
         draft_args = {
             "title": (
                 "博主主页调查"
@@ -563,11 +590,12 @@ class InvestigationCreationConversationService:
         application = self.tool_service.application_service
         view = application.get_draft_view(draft_id, principal=principal)
         configuration = view.draft.configuration
-        policy_ids: list[str] = []
+        ruleset_revision_ids: list[str] = []
         lexicon_ids: list[str] = []
         if isinstance(configuration, InvestigationDraftConfiguration):
-            if configuration.audit_policy is not None:
-                policy_ids = [configuration.audit_policy.id]
+            ruleset_revision_ids = [
+                configuration.judgement.ruleset_revision_id
+            ]
             if configuration.investigation.mode == "search":
                 plan = configuration.investigation.recall_plan
                 lexicon_ids = (
@@ -588,7 +616,7 @@ class InvestigationCreationConversationService:
                     and configuration.investigation.mode == "creator"
                     else None
                 ),
-                audit_policy_ids=policy_ids,
+                ruleset_revision_ids=ruleset_revision_ids,
                 lexicon_ids=lexicon_ids,
                 page_size=50,
             ),
@@ -901,23 +929,6 @@ class InvestigationCreationConversationService:
             if payload.get("status") != "ok" or not isinstance(payload.get("data"), dict):
                 continue
             successful_results.append((index, tool_name, payload["data"]))
-
-        creation_positions = [
-            index
-            for index, name, _ in successful_results
-            if name == "create_investigation_draft"
-        ]
-        option_positions = [
-            index
-            for index, name, _ in successful_results
-            if name == "query_investigation_options"
-        ]
-        if creation_positions and not any(
-            option_index < creation_positions[0] for option_index in option_positions
-        ):
-            raise RuntimeError(
-                "Draft creation did not follow query_investigation_options"
-            )
 
         artifact_results = [
             (tool_name, data)

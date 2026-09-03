@@ -50,7 +50,9 @@ function publicMessage(
         taskType: "平台话题采集",
         subject: suggestion.objective,
         matchedRuleSet: suggestion.ruleset_revision?.name || "尚未绑定规则集",
-        ruleSetDescription: suggestion.audit_policy?.description || "等待有效审核策略后方可确认。",
+        ruleSetDescription: suggestion.ruleset_revision
+          ? `已选择发布版本 v${suggestion.ruleset_revision.version}，包含 ${suggestion.ruleset_revision.enabled_rule_count} 条启用规则。`
+          : "等待选择已发布的研判规则。",
         platformsSelected: [suggestion.selected_platform],
         platformsConfirmed: confirmationVisible,
         interactionMode: "platform-selection"
@@ -89,12 +91,12 @@ function taskDraftFromArtifact(artifact: InvestigationDraftArtifact): TaskDraft 
     matchedRuleSet: suggestion?.ruleset_revision?.name
       || preview.ruleset_revision?.name
       || "尚未绑定规则集",
-    analysisPlanName: suggestion?.audit_policy?.name
-      || preview.audit_policy?.name
-      || "尚未选择审核策略",
-    ruleSetDescription: suggestion?.audit_policy?.description
-      || preview.audit_policy?.description
-      || "等待有效审核策略后方可确认。",
+    analysisPlanName: suggestion?.ruleset_revision?.name
+      || preview.ruleset_revision?.name
+      || "尚未选择研判规则",
+    ruleSetDescription: preview.ruleset_revision
+      ? `已选择发布版本 v${preview.ruleset_revision.version}，包含 ${preview.ruleset_revision.enabled_rule_count} 条启用规则。`
+      : "等待选择已发布的研判规则。",
     recommendedRecallLexicons: suggestion?.recall_lexicons.map((lexicon) => lexicon.title) || [],
     status: artifact.presentation_stage === "confirmation" ? "等待确认" : "配置中",
     confirmed: false

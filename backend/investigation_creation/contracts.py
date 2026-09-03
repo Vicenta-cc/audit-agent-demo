@@ -17,6 +17,7 @@ from pydantic import (
 )
 
 from backend.audit_agent.creator_url import validate_creator_url
+from backend.rulesets.contracts import ApplicationStage, RiskLevel
 
 
 class StrictModel(BaseModel):
@@ -72,7 +73,10 @@ class AnalysisCapability(str, Enum):
 
 InvestigationBlockerCode = Literal[
     "NO_PUBLISHED_AUDIT_POLICY",
+    "NO_PUBLISHED_RULESET",
     "NO_PUBLISHED_RECALL_LEXICON",
+    "INVALID_RESOURCE_REFERENCE",
+    "INVALID_SOURCE_LEXICON_REFERENCE",
     "INVALID_RULESET_REFERENCE",
     "RESOURCE_STALE",
     "NO_SEARCH_TERMS",
@@ -179,7 +183,7 @@ class AuditPolicySelection(StrictModel):
         return value.strip() if isinstance(value, str) else value
 
 
-class InvestigationDraftConfiguration(StrictModel):
+class LegacyInvestigationDraftConfigurationV3(StrictModel):
     schema_version: Literal["investigation-draft-config-v3"] = (
         "investigation-draft-config-v3"
     )
@@ -198,6 +202,41 @@ class InvestigationDraftConfiguration(StrictModel):
             }
         return value
 
+
+class ExistingRuleSetJudgement(StrictModel):
+    strategy: Literal["existing_ruleset"] = "existing_ruleset"
+    ruleset_revision_id: StrictStr = Field(min_length=1, max_length=240)
+    expected_ruleset_version: StrictInt = Field(ge=1)
+    expected_ruleset_content_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator(
+        "ruleset_revision_id",
+        "expected_ruleset_content_hash",
+        mode="before",
+    )
+    @classmethod
+    def strip_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
+class InvestigationDraftConfiguration(StrictModel):
+    schema_version: Literal["investigation-draft-config-v4"] = (
+        "investigation-draft-config-v4"
+    )
+    platform: Platform
+    investigation: InvestigationMode
+    judgement: ExistingRuleSetJudgement
+
+    @model_validator(mode="before")
+    @classmethod
+    def discard_legacy_crawler_account(cls, value: object) -> object:
+        if isinstance(value, dict) and "crawler_account_id" in value:
+            return {
+                key: item
+                for key, item in value.items()
+                if key != "crawler_account_id"
+            }
+        return value
 
 class CollectionConfiguration(StrictModel):
     crawl_mode: CrawlMode = CrawlMode.SEARCH
@@ -307,7 +346,40 @@ class InvestigationConfiguration(StrictModel):
         return self
 
 
-DraftConfiguration = InvestigationDraftConfiguration | InvestigationConfiguration
+DraftConfiguration = (
+    InvestigationDraftConfiguration
+    | LegacyInvestigationDraftConfigurationV3
+    | InvestigationConfiguration
+)
+
+
+def parse_draft_configuration(value: object) -> DraftConfiguration:
+    if isinstance(
+        value,
+        (
+            InvestigationDraftConfiguration,
+            LegacyInvestigationDraftConfigurationV3,
+            InvestigationConfiguration,
+        ),
+    ):
+        return value
+    if isinstance(value, dict) and value.get("schema_version") == "investigation-draft-config-v3":
+        legacy = LegacyInvestigationDraftConfigurationV3.model_validate(value)
+        if legacy.audit_policy is None:
+            return legacy
+        selection = legacy.audit_policy
+        return InvestigationDraftConfiguration(
+            platform=legacy.platform,
+            investigation=legacy.investigation,
+            judgement=ExistingRuleSetJudgement(
+                ruleset_revision_id=selection.expected_ruleset_revision_id,
+                expected_ruleset_version=selection.expected_ruleset_version,
+                expected_ruleset_content_hash=selection.expected_ruleset_content_hash,
+            ),
+        )
+    if isinstance(value, dict) and value.get("schema_version") == "investigation-draft-config-v4":
+        return InvestigationDraftConfiguration.model_validate(value)
+    return InvestigationConfiguration.model_validate(value)
 
 
 class InvestigationBlocker(StrictModel):
@@ -336,6 +408,44 @@ class RuleSetRevisionSummary(StrictModel):
     available: StrictBool = True
 
 
+class RuleSetExemptionDetail(StrictModel):
+    exemption_id: StrictStr
+    name: StrictStr
+    condition: StrictStr
+
+
+class RuleSetRuleDetail(StrictModel):
+    rule_id: StrictStr
+    name: StrictStr
+    hit_condition: StrictStr
+    suggested_risk_level: RiskLevel
+    rule_exemptions: list[RuleSetExemptionDetail] = Field(default_factory=list)
+    application_stages: list[ApplicationStage]
+    adjudication_notes: StrictStr
+    enabled: StrictBool
+    order: StrictInt = Field(ge=0)
+
+
+class RuleSetCategoryDetail(StrictModel):
+    category_id: StrictStr
+    name: StrictStr
+    description: StrictStr = ""
+    order: StrictInt = Field(ge=0)
+    rules: list[RuleSetRuleDetail]
+
+
+class RuleSetRevisionDetail(StrictModel):
+    id: StrictStr
+    ruleset_id: StrictStr
+    name: StrictStr
+    domain: StrictStr
+    version: StrictInt = Field(ge=1)
+    content_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+    audit_goal: StrictStr
+    general_exemptions: list[RuleSetExemptionDetail] = Field(default_factory=list)
+    categories: list[RuleSetCategoryDetail]
+
+
 class AuditPolicySummary(StrictModel):
     id: StrictStr
     name: StrictStr
@@ -362,13 +472,26 @@ class RecallLexiconSummary(StrictModel):
     available: StrictBool = True
 
 
+class AuthoritativeDraftResolution(StrictModel):
+    """Server-resolved resource truth for one effective Draft configuration."""
+
+    normalized_configuration: InvestigationDraftConfiguration
+    ruleset_revision: RuleSetRevisionSummary
+    recall_lexicon: RecallLexiconSummary | None = None
+    source_lexicons: list[RecallLexiconSummary] = Field(default_factory=list)
+    editable_blockers: list[InvestigationBlocker] = Field(default_factory=list)
+
+
 class QueryInvestigationOptions(StrictModel):
     domain_hint: StrictStr = Field(default="", max_length=200)
     mode: Literal["search", "creator"] = "search"
     platform: Platform | None = None
-    audit_policy_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
+    ruleset_revision_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
     lexicon_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
     include_lexicon_terms_for_ids: list[StrictStr] = Field(
+        default_factory=list, max_length=10
+    )
+    include_ruleset_details_for_revision_ids: list[StrictStr] = Field(
         default_factory=list, max_length=10
     )
     page_size: StrictInt = Field(default=20, ge=1, le=50)
@@ -376,9 +499,10 @@ class QueryInvestigationOptions(StrictModel):
     cursor: StrictStr = Field(default="", max_length=40)
 
     @field_validator(
-        "audit_policy_ids",
+        "ruleset_revision_ids",
         "lexicon_ids",
         "include_lexicon_terms_for_ids",
+        "include_ruleset_details_for_revision_ids",
         mode="before",
     )
     @classmethod
@@ -405,8 +529,10 @@ class QueryInvestigationOptions(StrictModel):
 
 class InvestigationOptions(StrictModel):
     platforms: list[PlatformOption]
-    audit_policies: list[AuditPolicySummary]
     ruleset_revisions: list[RuleSetRevisionSummary]
+    ruleset_revision_details: list[RuleSetRevisionDetail] = Field(
+        default_factory=list
+    )
     recall_lexicons: list[RecallLexiconSummary]
     blockers: list[InvestigationBlocker] = Field(default_factory=list)
     next_cursor: StrictStr = ""
@@ -441,7 +567,6 @@ class ConfirmationPreview(StrictModel):
     resolved_search_terms: list[StrictStr] = Field(default_factory=list)
     creator_url: StrictStr = ""
     recall_plan: RecallPlanPreview
-    audit_policy: AuditPolicySummary | None = None
     ruleset_revision: RuleSetRevisionSummary | None = None
     max_notes: Literal[1] = 1
     blockers: list[InvestigationBlocker] = Field(default_factory=list)
@@ -531,13 +656,51 @@ class ConfirmedRecallPlanSnapshot(StrictModel):
         return self
 
 
-class ConfirmationResolution(StrictModel):
+class ConfirmationResolutionV3(StrictModel):
     mode: Literal["search", "creator"]
     platform: Platform
     resolved_search_terms: list[StrictStr] = Field(default_factory=list)
     creator_url: StrictStr = ""
     recall_plan: ConfirmedRecallPlanSnapshot | None = None
     audit_policy: AuditPolicySummary
+    ruleset_revision: RuleSetRevisionSummary
+    execution: ResolvedExecutionConfiguration
+    config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_resolution(self) -> "ConfirmationResolutionV3":
+        if self.mode == "search":
+            if not self.resolved_search_terms or self.creator_url or self.recall_plan is None:
+                raise ValueError("search resolution requires terms and a recall plan")
+        elif self.resolved_search_terms or self.recall_plan is not None or not self.creator_url:
+            raise ValueError("creator resolution requires only a creator URL")
+        expected = confirmed_configuration_hash(
+            {
+                "mode": self.mode,
+                "platform": self.platform.value,
+                "resolved_search_terms": self.resolved_search_terms,
+                "creator_url": self.creator_url,
+                "recall_plan": (
+                    self.recall_plan.model_dump(mode="json")
+                    if self.recall_plan is not None
+                    else None
+                ),
+                "audit_policy": self.audit_policy.model_dump(mode="json"),
+                "ruleset_revision": self.ruleset_revision.model_dump(mode="json"),
+                "execution": self.execution.model_dump(mode="json"),
+            }
+        )
+        if self.config_hash != expected:
+            raise ValueError("confirmation resolution config_hash does not match")
+        return self
+
+
+class ConfirmationResolution(StrictModel):
+    mode: Literal["search", "creator"]
+    platform: Platform
+    resolved_search_terms: list[StrictStr] = Field(default_factory=list)
+    creator_url: StrictStr = ""
+    recall_plan: ConfirmedRecallPlanSnapshot | None = None
     ruleset_revision: RuleSetRevisionSummary
     execution: ResolvedExecutionConfiguration
     config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
@@ -560,7 +723,6 @@ class ConfirmationResolution(StrictModel):
                     if self.recall_plan is not None
                     else None
                 ),
-                "audit_policy": self.audit_policy.model_dump(mode="json"),
                 "ruleset_revision": self.ruleset_revision.model_dump(mode="json"),
                 "execution": self.execution.model_dump(mode="json"),
             }
@@ -616,7 +778,7 @@ class ConfirmedConfigurationSnapshotV3(StrictModel):
 
     @model_validator(mode="after")
     def validate_snapshot(self) -> "ConfirmedConfigurationSnapshotV3":
-        ConfirmationResolution.model_validate(
+        ConfirmationResolutionV3.model_validate(
             {
                 key: value
                 for key, value in self.model_dump(mode="json").items()
@@ -628,6 +790,59 @@ class ConfirmedConfigurationSnapshotV3(StrictModel):
                     "creator_url",
                     "recall_plan",
                     "audit_policy",
+                    "ruleset_revision",
+                    "execution",
+                    "config_hash",
+                }
+            }
+        )
+        if not all(
+            value.strip()
+            for value in (
+                self.draft_id,
+                self.title,
+                self.objective,
+                self.confirmed_by,
+                self.confirmed_at,
+            )
+        ):
+            raise ValueError("confirmed snapshot identity fields must not be blank")
+        if self.execution.max_notes != 1:
+            raise ValueError("confirmed execution max_notes must be 1")
+        return self
+
+
+class ConfirmedConfigurationSnapshotV4(StrictModel):
+    schema_version: Literal["investigation-run-config-v4"]
+    draft_id: StrictStr
+    draft_revision: StrictInt = Field(ge=1)
+    title: StrictStr
+    objective: StrictStr
+    mode: Literal["search", "creator"]
+    platform: Platform
+    resolved_search_terms: list[StrictStr] = Field(default_factory=list)
+    creator_url: StrictStr = ""
+    recall_plan: ConfirmedRecallPlanSnapshot | None = None
+    ruleset_revision: RuleSetRevisionSummary
+    max_notes: Literal[1]
+    execution: ResolvedExecutionConfiguration
+    config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+    confirmed_by: StrictStr
+    confirmed_at: StrictStr
+
+    @model_validator(mode="after")
+    def validate_snapshot(self) -> "ConfirmedConfigurationSnapshotV4":
+        ConfirmationResolution.model_validate(
+            {
+                key: value
+                for key, value in self.model_dump(mode="json").items()
+                if key
+                in {
+                    "mode",
+                    "platform",
+                    "resolved_search_terms",
+                    "creator_url",
+                    "recall_plan",
                     "ruleset_revision",
                     "execution",
                     "config_hash",
@@ -663,7 +878,13 @@ def confirmed_configuration_hash(value: dict[str, Any]) -> str:
 
 def parse_confirmed_configuration_snapshot(
     value: dict[str, Any],
-) -> ConfirmedConfigurationSnapshot | ConfirmedConfigurationSnapshotV3:
+) -> (
+    ConfirmedConfigurationSnapshot
+    | ConfirmedConfigurationSnapshotV3
+    | ConfirmedConfigurationSnapshotV4
+):
+    if value.get("schema_version") == "investigation-run-config-v4":
+        return ConfirmedConfigurationSnapshotV4.model_validate(value)
     if value.get("schema_version") == "investigation-run-config-v3":
         return ConfirmedConfigurationSnapshotV3.model_validate(value)
     return ConfirmedConfigurationSnapshot.model_validate(value)

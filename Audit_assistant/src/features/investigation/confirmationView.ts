@@ -14,7 +14,7 @@ export function buildConfirmationCardView(
   preview?: ConfirmationPreview
 ) {
   const rulesManagementUrl = preview?.blockers.find(
-    (blocker) => blocker.code === "NO_PUBLISHED_AUDIT_POLICY"
+    (blocker) => blocker.code === "NO_PUBLISHED_RULESET"
   )?.management_url;
   return {
     title: preview?.title || draft.taskName,
@@ -25,9 +25,6 @@ export function buildConfirmationCardView(
     termsOrCreator: preview?.mode === "creator"
       ? preview.creator_url
       : (preview?.resolved_search_terms || draft.keywords).join("、"),
-    auditPolicy: preview
-      ? preview.audit_policy?.name || "尚未选择审核策略"
-      : draft.analysisPlanName || draft.matchedRuleSet,
     ruleSet: preview?.ruleset_revision
       ? preview.ruleset_revision.name
       : "尚未绑定",
@@ -60,8 +57,8 @@ export function parseInvestigationSearchTerms(value: string) {
 }
 
 export function formatConfirmationBlockerMessage(code: string, message: string) {
-  if (code === "NO_PUBLISHED_AUDIT_POLICY") {
-    return "当前还没有匹配的研判方案，配置后即可继续。";
+  if (code === "NO_PUBLISHED_RULESET") {
+    return "当前还没有匹配的已发布研判规则，配置后即可继续。";
   }
   if (code === "NO_PUBLISHED_RECALL_LEXICON") {
     return "当前没有适合本次主题的召回词库，请先配置或选择一个词库。";
@@ -78,8 +75,8 @@ export function formatConfirmationBlockerMessage(code: string, message: string) 
 
 export function formatCreationErrorMessage(message: string) {
   const normalized = message.toUpperCase();
-  if (normalized.includes("NO_PUBLISHED_AUDIT_POLICY")) {
-    return formatConfirmationBlockerMessage("NO_PUBLISHED_AUDIT_POLICY", message);
+  if (normalized.includes("NO_PUBLISHED_RULESET")) {
+    return formatConfirmationBlockerMessage("NO_PUBLISHED_RULESET", message);
   }
   if (normalized.includes("NO_PUBLISHED_RECALL_LEXICON")) {
     return formatConfirmationBlockerMessage("NO_PUBLISHED_RECALL_LEXICON", message);

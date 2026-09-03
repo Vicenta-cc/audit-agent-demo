@@ -68,6 +68,14 @@ class Settings:
     fusion_request_timeout = int(os.getenv("FUSION_REQUEST_TIMEOUT", "90"))
     fusion_timeout_retries = int(os.getenv("FUSION_TIMEOUT_RETRIES", "1"))
     request_timeout = int(os.getenv("REQUEST_TIMEOUT", "180"))
+    remote_asr_request_retries = max(
+        0,
+        int(os.getenv("REMOTE_ASR_REQUEST_RETRIES", "3")),
+    )
+    remote_asr_retry_backoff_seconds = max(
+        0.0,
+        float(os.getenv("REMOTE_ASR_RETRY_BACKOFF_SECONDS", "2")),
+    )
     remote_inference_base_url = os.getenv("REMOTE_INFERENCE_BASE_URL", "").rstrip("/")
     remote_asr_base_url = os.getenv("REMOTE_ASR_BASE_URL", remote_inference_base_url).rstrip("/")
     remote_mms_asr_base_url = os.getenv("REMOTE_MMS_ASR_BASE_URL", "").rstrip("/")
