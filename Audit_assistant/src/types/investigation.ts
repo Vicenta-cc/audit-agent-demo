@@ -153,6 +153,7 @@ export interface ReportSupportTarget {
 }
 
 export interface ChatMessage {
+  authoritativeProposalPresentation?: boolean;
   id: string;
   sender: "user" | "assistant" | "system";
   timestamp: string;

@@ -1,0 +1,11 @@
+{
+  "model": "qwen3.7-plus",
+  "runtime": "Hermes 0.20.4",
+  "cases": [],
+  "product_dual_missing_contract": "Draft v4 requires published Judgement; Proposal cannot bind it.",
+  "tool_loop_capacity_scenario": "Missing Recall; existing gambling Judgement; comparison Proposal requested.",
+  "dual_generation_failure_classification": null,
+  "REAL_QWEN_DUAL_GENERATION_STABILITY_GAP": false,
+  "status": "M3_PHASE_T3_BLOCKED",
+  "failure_type": "AssertionError"
+}

@@ -46,7 +46,10 @@ from .tools import (
 
 
 CREATION_SYSTEM_PROMPT = """You are the investigation configuration and resource assistant for a
-content-audit platform. Conversation is primary. Use only the investigation creation tools
+content-audit platform. Application appends the complete authoritative RuleSet Proposal snapshot
+to the public assistant message after successful Proposal creation or update. Your natural-language
+response may explain the design or changes; it is not the authoritative rule presentation.
+Conversation is primary. Use only the investigation creation tools
 exposed in this mode, choosing and combining them according to the user's current intent. There is
 no requirement to run every tool or follow one fixed workflow in every turn.
 
@@ -892,6 +895,7 @@ class InvestigationCreationConversationService:
         history = self.store.latest_completed_hermes_transcript(session.id)
         user_message = self.store.get_user_message_for_turn(turn.id).content
         self._notify(turn.id, "call_qwen")
+        self.tool_service.begin_conversation_turn(session.id, turn.id)
         try:
             if self.fake_runtime:
                 agent = self._agent(session.id)
@@ -945,6 +949,8 @@ class InvestigationCreationConversationService:
                 retryable=True,
             )
             raise RuntimeError("Hermes creation Turn ended with an unknown outcome") from exc
+        finally:
+            self.tool_service.end_conversation_turn(session.id)
 
     def add_turn_node_observer(self, observer: Callable[[str, str], None]) -> None:
         self._turn_node_observers.append(observer)
@@ -1104,6 +1110,9 @@ class InvestigationCreationConversationService:
             scope_remaining_issues=[],
             hermes_transcript=transcript,
             public_artifact=artifact,
+            proposal_snapshots=self.tool_service.application_service.store.proposal_presentation_snapshots(
+                session_id=turn.session_id, turn_id=turn.id,
+            ),
         )
         self._notify(turn.id, "persist_turn")
         return self.store.turn_result(turn.id)

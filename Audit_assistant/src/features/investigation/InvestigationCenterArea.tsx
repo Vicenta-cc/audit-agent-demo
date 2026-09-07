@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Send,
   Sparkles,
@@ -343,12 +343,26 @@ export function InvestigationCenterArea({
               }
 
               // Assistant message cases
+              const withProposalPresentation = (card: ReactNode) => msg.authoritativeProposalPresentation ? (
+                <Fragment key={msg.id}>
+                  <div className="inv-msg-asst-card">
+                    <div className="inv-asst-head"><Bot size={16} /><span>研判助手</span></div>
+                    <div className="inv-assistant-text" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                      {msg.content}
+                    </div>
+                  </div>
+                  {card}
+                </Fragment>
+              ) : card;
               if (msg.type === "task_proposal") {
                 if (msg.proposalData?.interactionMode === "platform-selection") {
                   return (
                     <TaskSuggestionCard
                       key={msg.id}
-                      assistantContent={session.creationBinding
+                      literalAssistantContent={msg.authoritativeProposalPresentation}
+                      assistantContent={msg.authoritativeProposalPresentation
+                        ? msg.content || ""
+                        : session.creationBinding
                         ? buildSuggestionAssistantCopy(
                             session.draft,
                             session.creationBinding.confirmationPreview
@@ -376,7 +390,7 @@ export function InvestigationCenterArea({
                   );
                 }
 
-                return (
+                return withProposalPresentation(
                   <TaskConfigCard
                     key={msg.id}
                     draft={session.draft}
@@ -391,7 +405,7 @@ export function InvestigationCenterArea({
 
               if (msg.type === "task_confirmation") {
                 if (session.draft.confirmed) {
-                  return (
+                  return withProposalPresentation(
                     <TaskConfigCard
                       key={msg.id}
                       draft={session.draft}
@@ -404,7 +418,7 @@ export function InvestigationCenterArea({
                   );
                 }
 
-                return (
+                return withProposalPresentation(
                   <TaskConfirmationCard
                     key={msg.id}
                     draft={session.draft}
@@ -688,7 +702,11 @@ export function InvestigationCenterArea({
                     <Bot size={16} />
                     <span>研判助手</span>
                   </div>
-                  {isHistoricalAnswer ? (
+                  {msg.authoritativeProposalPresentation ? (
+                    <div className="inv-assistant-text" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                      {msg.content}
+                    </div>
+                  ) : isHistoricalAnswer ? (
                     <AssistantMarkdown content={msg.content || ""} />
                   ) : (
                     <StreamingAssistantText

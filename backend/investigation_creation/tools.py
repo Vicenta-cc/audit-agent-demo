@@ -262,6 +262,18 @@ class InvestigationCreationToolService:
 
     def __init__(self, application_service: Any) -> None:
         self.application_service = application_service
+        self._conversation_turns: dict[str, str] = {}
+        self._conversation_lock = RLock()
+
+    def begin_conversation_turn(self, session_id: str, turn_id: str) -> None:
+        with self._conversation_lock:
+            if session_id in self._conversation_turns:
+                raise RuntimeError("Session already has an executing conversation turn")
+            self._conversation_turns[session_id] = turn_id
+
+    def end_conversation_turn(self, session_id: str) -> None:
+        with self._conversation_lock:
+            self._conversation_turns.pop(session_id, None)
 
     @property
     def allowed_tool_names(self) -> frozenset[str]:
@@ -400,6 +412,11 @@ class InvestigationCreationToolService:
         receipt: dict[str, Any] | None = None
         try:
             if tool_name in M3_MUTATION_TOOL_NAMES:
+                with self._conversation_lock:
+                    application_turn_id = (
+                        self._conversation_turns.get(identity.session_id, "")
+                        if tool_name in {"create_ruleset_proposal", "update_ruleset_proposal"} else ""
+                    )
                 receipt = self.application_service.store.begin_tool_execution(
                     session_id=identity.session_id,
                     turn_id=identity.turn_id,
@@ -408,6 +425,7 @@ class InvestigationCreationToolService:
                     tool_name=tool_name,
                     arguments=raw_arguments,
                     is_mutation=True,
+                    application_turn_id=application_turn_id,
                 )
                 if receipt["replay"]:
                     if receipt["response"] is not None:

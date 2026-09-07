@@ -180,9 +180,11 @@ export interface InvestigationRunArtifact {
   run: InvestigationRunProjection;
 }
 
-export type InvestigationConversationArtifact =
+export type InvestigationConversationArtifact = (
   | InvestigationDraftArtifact
-  | InvestigationRunArtifact;
+  | InvestigationRunArtifact
+  | { artifact_type: "ruleset_proposal_presentation" }
+) & { proposal_presentations?: { assistant_message_id: string; text: string }[] };
 
 export interface InvestigationWorkspaceSession {
   workspace_session_id: string;

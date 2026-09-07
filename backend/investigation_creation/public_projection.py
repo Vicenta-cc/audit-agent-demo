@@ -15,6 +15,7 @@ from .contracts import (
     RuleSetRevisionSummary,
     RunStatus,
     StrictModel,
+    TemporaryRuleSetProposal,
 )
 
 
@@ -63,6 +64,26 @@ class InvestigationDraftSuggestion(StrictModel):
     recall_lexicons: list[RecallLexiconSummary] = Field(default_factory=list)
 
 
+class ProposalPresentation(StrictModel):
+    session_id: str
+    source_user_turn_id: str
+    source_user_message_id: str
+    assistant_message_id: str
+    presented_at: str
+    proposal_id: str
+    proposal_version: int = Field(ge=1)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    snapshot: TemporaryRuleSetProposal
+    presentation_format: Literal["ruleset-proposal-text-v1"]
+    text: str
+    boundary: Literal["durable_public_assistant_message"]
+
+
+class RuleSetProposalPresentationArtifact(StrictModel):
+    artifact_type: Literal["ruleset_proposal_presentation"] = "ruleset_proposal_presentation"
+    proposal_presentations: list[ProposalPresentation] = Field(min_length=1)
+
+
 class InvestigationDraftArtifact(StrictModel):
     artifact_type: Literal["investigation_draft"] = "investigation_draft"
     presentation_stage: Literal["suggestion", "confirmation"] = "suggestion"
@@ -71,16 +92,18 @@ class InvestigationDraftArtifact(StrictModel):
     draft: PublicInvestigationDraft
     confirmation_preview: ConfirmationPreview
     suggestion: InvestigationDraftSuggestion | None = None
+    proposal_presentations: list[ProposalPresentation] = Field(default_factory=list)
 
 
 class InvestigationRunArtifact(StrictModel):
     artifact_type: Literal["investigation_run"] = "investigation_run"
     run_id: str
     run: PublicInvestigationRunProjection
+    proposal_presentations: list[ProposalPresentation] = Field(default_factory=list)
 
 
 InvestigationConversationArtifact = Annotated[
-    InvestigationDraftArtifact | InvestigationRunArtifact,
+    InvestigationDraftArtifact | InvestigationRunArtifact | RuleSetProposalPresentationArtifact,
     Field(discriminator="artifact_type"),
 ]
 

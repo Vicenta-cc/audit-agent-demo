@@ -22,6 +22,7 @@ def main():
     parser.add_argument("--dual-attempts", type=int, choices=(1, 2), default=2)
     parser.add_argument("--authoring-quality", action="store_true",
                         help="Run isolated recruitment and gambling Proposal authoring cases only")
+    parser.add_argument("--presentation-only", action="store_true", help="Run T4A create/update presentation acceptance")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo))
@@ -163,6 +164,13 @@ def main():
                 "job_count": len(snapshot(stack["resource_db"], "jobs")),
                 "report_count": len(snapshot(stack["resource_db"], "report_versions")),
             }
+            if args.presentation_only:
+                public = stack["client"].get(f"/api/investigation-workspaces/{session.id}/state")
+                message = next((m for m in public.json().get("messages", []) if m["message_id"] == saved.assistant_message_id), {})
+                presentations = saved.public_artifact.get("proposal_presentations", [])
+                record["public_status"] = public.status_code
+                record["presentations"] = presentations
+                record["public_message"] = message
             transcript = conversation.store.latest_completed_hermes_transcript(session.id) or []
             current_user_index = max(
                 (i for i, item in enumerate(transcript) if item.get("role") == "user"), default=0,
@@ -178,6 +186,15 @@ def main():
             evidence["cases"].append(record)
             save()
             print(json.dumps({key: record[key] for key in ("case", "status", "tools", "llm_call_count", "failure_point")}), flush=True)
+            if args.presentation_only:
+                assert public.status_code == 200 and presentations
+                for presentation in presentations:
+                    assert presentation["snapshot"] in after_proposals
+                    assert presentation["assistant_message_id"] == message["message_id"]
+                    assert presentation["source_user_turn_id"] == saved.id
+                    assert presentation["session_id"] == session.id
+                    assert presentation["text"] in message["content"] == result.answer
+                assert message["artifact"]["proposal_presentations"] == presentations
             assert record["no_formal_resource_mutation"]
             assert record["run_count"] == record["job_count"] == record["report_count"] == 0
             assert "confirm_and_queue_investigation" not in record["tools"]
@@ -234,7 +251,8 @@ def main():
                 return
 
             session, created = turn(
-                "proposal-generation", "帮我调查招聘诈骗，如果没有合适的研判规则，生成一套临时规则给我看看。",
+                "proposal-generation", ("帮我生成一套招聘诈骗研判规则给我看看。" if args.presentation_only else
+                "帮我调查招聘诈骗，如果没有合适的研判规则，生成一套临时规则给我看看。"),
             )
             assert created["status"] == "completed" and created["drafts_unchanged"]
             assert len(created["proposals_after"]) == 1
@@ -242,13 +260,19 @@ def main():
             assert first["version"] == 1
             assert "create_ruleset_proposal" in created["tools"]
             _, edited = turn(
-                "proposal-edit", "提前收费这条太宽了，改成只有明确要求求职者先付款时才命中。", session,
+                "proposal-edit", ("第二条严格一点。" if args.presentation_only else
+                "提前收费这条太宽了，改成只有明确要求求职者先付款时才命中。"), session,
             )
             assert edited["status"] == "completed" and edited["drafts_unchanged"]
             second = edited["proposals_after"][0]
             assert second["proposal_id"] == first["proposal_id"] and second["version"] == 2
             assert second["content_hash"] != first["content_hash"]
             assert "update_ruleset_proposal" in edited["tools"]
+            if args.presentation_only:
+                assert created["presentations"][0]["proposal_version"] == 1
+                assert edited["presentations"][0]["proposal_version"] == 2
+                evidence["status"] = "M3_PHASE_T4A_PASS"
+                return
             old_rules = {r["rule_id"]: r for c in first["content"]["categories"] for r in c["rules"]}
             new_rules = {r["rule_id"]: r for c in second["content"]["categories"] for r in c["rules"]}
             edited["rule_ids_preserved"] = list(old_rules) == list(new_rules)
@@ -310,7 +334,7 @@ def main():
                     raise AssertionError("Dual generation system contract failure")
             evidence["status"] = "M3_PHASE_T3_PASS"
         except Exception as exc:
-            evidence["status"] = "M3_PHASE_T3_BLOCKED"
+            evidence["status"] = "M3_PHASE_T4A_BLOCKED" if args.presentation_only else "M3_PHASE_T3_BLOCKED"
             evidence["failure_type"] = type(exc).__name__
             raise
         finally:

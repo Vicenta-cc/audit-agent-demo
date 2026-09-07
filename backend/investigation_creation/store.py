@@ -193,6 +193,11 @@ class InvestigationCreationStore:
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_creation_turn_mutation_tool
                 ON investigation_creation_tool_receipts(session_id, turn_id, tool_name)
                 WHERE is_mutation = 1;
+
+                CREATE TABLE IF NOT EXISTS ruleset_proposal_conversation_bindings (
+                    receipt_id TEXT PRIMARY KEY REFERENCES investigation_creation_tool_receipts(receipt_id),
+                    application_turn_id TEXT NOT NULL
+                );
                 """
             )
         # Serialize additive upgrades so concurrent process initialization cannot
@@ -392,6 +397,7 @@ class InvestigationCreationStore:
         tool_name: str,
         arguments: dict[str, Any],
         is_mutation: bool,
+        application_turn_id: str = "",
     ) -> dict[str, Any]:
         identity = {
             "session_id": str(session_id or "").strip(),
@@ -436,6 +442,8 @@ class InvestigationCreationStore:
                         "tool execution identity was reused with different input"
                     )
                 response_json = str(row["response_json"] or "")
+                if application_turn_id:
+                    self._bind_proposal_conversation(connection, str(row["receipt_id"]), application_turn_id)
                 return {
                     "receipt_id": str(row["receipt_id"]),
                     "status": str(row["status"]),
@@ -461,6 +469,8 @@ class InvestigationCreationStore:
                     now,
                 ),
             )
+            if application_turn_id:
+                self._bind_proposal_conversation(connection, receipt_id, application_turn_id)
         return {
             "receipt_id": receipt_id,
             "status": "STARTED",
@@ -493,6 +503,44 @@ class InvestigationCreationStore:
             raise IdempotencyConflictError(
                 "tool execution receipt is no longer writable"
             )
+
+    @staticmethod
+    def _bind_proposal_conversation(connection: sqlite3.Connection, receipt_id: str, turn_id: str) -> None:
+        connection.execute(
+            "INSERT OR IGNORE INTO ruleset_proposal_conversation_bindings VALUES (?, ?)",
+            (receipt_id, turn_id),
+        )
+        bound = connection.execute(
+            "SELECT application_turn_id FROM ruleset_proposal_conversation_bindings WHERE receipt_id = ?",
+            (receipt_id,),
+        ).fetchone()
+        if bound["application_turn_id"] != turn_id:
+            raise IdempotencyConflictError("Proposal receipt belongs to a different conversation turn")
+
+    def proposal_presentation_snapshots(self, *, session_id: str, turn_id: str) -> list[dict[str, Any]]:
+        # Only durable successful Application receipts may select snapshots for display.
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT r.response_json FROM investigation_creation_tool_receipts r
+                   JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id = r.receipt_id
+                   WHERE r.session_id = ? AND b.application_turn_id = ? AND r.status = 'SUCCEEDED'
+                     AND r.tool_name IN ('create_ruleset_proposal', 'update_ruleset_proposal')
+                   ORDER BY r.rowid""", (session_id, turn_id),
+            ).fetchall()
+            latest = {}
+            for row in rows:
+                recorded = TemporaryRuleSetProposal.model_validate(json.loads(row["response_json"])["data"])
+                latest[recorded.proposal_id] = recorded
+            snapshots = []
+            for recorded in latest.values():
+                current = self._owned_proposal(connection, recorded.proposal_id, session_id)
+                # Do not silently replace a tool's version with a later unseen version.
+                if current.version != recorded.version or current.content_hash != recorded.content_hash:
+                    raise ProposalVersionConflictError("Proposal changed before presentation")
+                snapshot = current.model_dump(mode="json")
+                if snapshot not in snapshots:
+                    snapshots.append(snapshot)
+            return snapshots
 
     def create_ruleset_proposal(
         self, *, session_id: str, content: RuleSetContent, content_hash: str

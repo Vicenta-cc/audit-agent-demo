@@ -34,6 +34,9 @@ function publicMessage(
   confirmationVisible: boolean,
   sanitizeAssistant = true
 ): ChatMessage {
+  const presentation = message.role === "assistant" && message.artifact?.proposal_presentations?.length
+    ? { content: message.content, authoritativeProposalPresentation: true }
+    : {};
   const artifact = message.artifact?.artifact_type === "investigation_draft"
     ? message.artifact
     : null;
@@ -44,6 +47,7 @@ function publicMessage(
       sender: message.role,
       timestamp: messageTime(message.created_at),
       content: presentCreationAssistantContent(message.content),
+      ...presentation,
       type: "task_proposal",
       proposalData: {
         taskName: suggestion.title,
@@ -65,6 +69,7 @@ function publicMessage(
       sender: message.role,
       timestamp: messageTime(message.created_at),
       content: presentCreationAssistantContent(message.content),
+      ...presentation,
       type: "task_confirmation"
     };
   }
@@ -75,6 +80,7 @@ function publicMessage(
     content: message.role === "assistant" && sanitizeAssistant
       ? presentCreationAssistantContent(message.content)
       : message.content,
+    ...presentation,
     type: "text"
   };
 }
@@ -187,7 +193,7 @@ export function restoreInvestigationWorkspace(
     ? { ...artifact, presentation_stage: "suggestion" as const }
     : null;
   const messages = state.messages.map((message, index) => publicMessage(
-    index === artifactMessageIndex
+    index === artifactMessageIndex && !message.artifact?.proposal_presentations?.length
       ? { ...message, artifact: recoveredSuggestionArtifact }
       : message,
     confirmationVisible

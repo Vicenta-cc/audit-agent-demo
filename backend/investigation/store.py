@@ -1072,6 +1072,7 @@ class InvestigationStore:
         scope_remaining_issues: list[dict[str, Any]],
         hermes_transcript: list[dict[str, Any]] | None = None,
         public_artifact: dict[str, Any] | None = None,
+        proposal_snapshots: list[dict[str, Any]] | None = None,
     ) -> tuple[InvestigationTurn, InvestigationMessage, tuple[SourceLedgerEntry, ...]]:
         now = utc_now()
         transcript_json = (
@@ -1173,6 +1174,26 @@ class InvestigationStore:
                 )
             sequence += 1
             assistant_id = self._stable_message_id(turn_id, "answer")
+            if proposal_snapshots:
+                from backend.investigation_creation.presentation import message_presentations
+
+                scope = connection.execute(
+                    "SELECT scope_type FROM investigation_sessions WHERE id = ?", (session_id,),
+                ).fetchone()
+                if scope["scope_type"] != "creation":
+                    raise ValueError("Proposal presentation requires a creation Session")
+                presentations = message_presentations(
+                    proposal_snapshots, session_id=session_id, turn_id=turn_id,
+                    user_message_id=str(turn_row["user_message_id"]),
+                    assistant_message_id=assistant_id, presented_at=now,
+                )
+                answer = "\n\n".join([answer, *(item["text"] for item in presentations)]).strip()
+                public_artifact = dict(public_artifact or {"artifact_type": "ruleset_proposal_presentation"})
+                public_artifact["proposal_presentations"] = presentations
+                from pydantic import TypeAdapter
+                from backend.investigation_creation.public_projection import InvestigationConversationArtifact
+
+                TypeAdapter(InvestigationConversationArtifact).validate_python(public_artifact)
             assistant_metadata = {
                 "grounding_validation": grounding_validation,
                 "resolved_references": resolved_references,
@@ -1210,6 +1231,13 @@ class InvestigationStore:
                     now,
                 ),
             )
+            if proposal_snapshots:
+                stored_answer = connection.execute(
+                    "SELECT session_id, turn_id, role, content FROM investigation_messages WHERE id = ?",
+                    (assistant_id,),
+                ).fetchone()
+                if tuple(stored_answer) != (session_id, turn_id, "assistant", answer):
+                    raise ValueError("Proposal presentation does not match the public assistant message")
             normalized_referents = []
             for item in ordered_referents:
                 value = dict(item)

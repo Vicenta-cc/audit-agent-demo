@@ -287,7 +287,7 @@ def test_multiturn_creation_edit_regeneration_with_no_formal_or_draft_effects(cr
     assert third["agent"].results[-1]["version"] == 1
     assert third["agent"].results[-1]["proposal_id"] != p1["proposal_id"]
     assert app.get_ruleset_proposal(p1["proposal_id"], session_id=first["session_id"]).version == 2
-    assert all(turn["turn"].status == "completed" and turn["turn"].public_artifact == {} for turn in (first, second, third))
+    assert all(turn["turn"].status == "completed" and turn["turn"].public_artifact["proposal_presentations"] for turn in (first, second, third))
     assert rows(app.store, "investigation_drafts") == rows(app.store, "investigation_runs") == []
     assert creation_stack["tool_service"].execute("query_investigation_options", {}, principal=Principal("principal-a")) == options
     with sqlite3.connect(creation_stack["resource_db"]) as connection:

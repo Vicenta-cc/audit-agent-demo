@@ -27,6 +27,7 @@ const defaultPlatformOptions: Array<{ code: PlatformCode; label: string; availab
 
 interface TaskSuggestionCardProps {
   assistantContent: string;
+  literalAssistantContent?: boolean;
   shouldStream: boolean;
   showSuggestionCard: boolean;
   onStreamingComplete: () => void;
@@ -43,6 +44,7 @@ interface TaskSuggestionCardProps {
 
 export function TaskSuggestionCard({
   assistantContent,
+  literalAssistantContent = false,
   shouldStream,
   showSuggestionCard,
   onStreamingComplete,
@@ -113,12 +115,16 @@ export function TaskSuggestionCard({
           <Bot size={16} />
           <span>研判助手</span>
         </div>
-        <StreamingAssistantText
+        {literalAssistantContent ? (
+          <div className="task-suggestion-copy" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+            {assistantContent}
+          </div>
+        ) : <StreamingAssistantText
           text={assistantContent}
           shouldStream={shouldStream}
           className="task-suggestion-copy"
           onComplete={onStreamingComplete}
-        />
+        />}
       </div>
 
       {showSuggestionCard ? <section className={`task-suggestion-card${isReadOnly ? " is-read-only" : ""}`} aria-label="任务建议卡片">

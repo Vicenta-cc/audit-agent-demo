@@ -156,6 +156,48 @@ const suggestion = {
   }]
 };
 
+test("authoritative Proposal survives conversation recovery without prose sanitization", () => {
+  const text = "助手说明：只有一条。\n\n临时研判规则 · 完整规则快照\n规则数：3\nhttps://example.test <tag> ``` draft_id";
+  const state = workspaceState({
+    draft_artifact: null,
+    messages: [{
+      message_id: "actual-assistant", turn_id: "actual-turn", role: "assistant",
+      content: text, sequence: 2, created_at: "2026-09-07T00:00:00Z",
+      artifact: { artifact_type: "ruleset_proposal_presentation",
+        proposal_presentations: [{ assistant_message_id: "actual-assistant", text }] }
+    }]
+  });
+  const restored = restoreInvestigationWorkspace(state);
+  expect(restored.messages[0].id).toBe("actual-assistant");
+  expect(restored.messages[0].content).toBe(text);
+  expect(restored.messages[0].authoritativeProposalPresentation).toBe(true);
+  expect(restored.messages[0].type).toBe("text");
+});
+
+for (const stage of ["suggestion", "confirmation"] as const) {
+  test(`mixed Proposal preserves ${stage} message identity and Draft behavior`, () => {
+    const state = workspaceState();
+    const artifact = { ...state.draft_artifact!, presentation_stage: stage };
+    state.draft_artifact = artifact;
+    state.messages = [{ ...state.messages[1], artifact }];
+    const before = restoreInvestigationWorkspace(state);
+    const text = "完整规则快照 <tag> https://example.test ``` draft_id";
+    state.messages[0] = {
+      ...state.messages[0], content: text,
+      artifact: { ...artifact, proposal_presentations: [{ assistant_message_id: state.messages[0].message_id, text }] }
+    };
+    const after = restoreInvestigationWorkspace(state);
+    expect(after.messages).toHaveLength(1);
+    expect(after.messages[0].id).toBe(before.messages[0].id);
+    expect(after.messages[0].type).toBe(stage === "suggestion" ? "task_proposal" : "task_confirmation");
+    expect(after.messages[0].proposalData).toEqual(before.messages[0].proposalData);
+    expect(after.messages[0].content).toBe(text);
+    expect(after.messages[0].authoritativeProposalPresentation).toBe(true);
+    expect(after.creationBinding).toEqual(before.creationBinding);
+    expect(restoreInvestigationWorkspace(JSON.parse(JSON.stringify(state)))).toEqual(after);
+  });
+}
+
 function workspaceState(
   overrides: Partial<InvestigationWorkspaceState> = {}
 ): InvestigationWorkspaceState {
