@@ -1,0 +1,24 @@
+{
+  "name": "Recruitment Fraud",
+  "domain": "recruitment_fraud",
+  "audit_goal": "Assess recruitment advance fees and fabricated job offers from the supplied evidence.",
+  "general_exemptions": [
+    {"exemption_id": "recruitment.education", "name": "Education", "condition": "Educational reporting without soliciting applicants or payments."}
+  ],
+  "categories": [
+    {
+      "category_id": "recruitment.advance_fee", "name": "Advance fees", "order": 10,
+      "rules": [
+        {"rule_id": "recruitment.fee_request", "name": "Payment demand", "hit_condition": "Require an applicant to transfer a deposit before receiving a job offer.", "suggested_risk_level": "high", "application_stages": ["image_evidence", "video_frame_evidence", "comment_audit", "fusion_audit"], "order": 1, "adjudication_notes": "Metadata only: fee review.", "rule_exemptions": [{"exemption_id": "recruitment.refund", "name": "Refund record", "condition": "The record only documents returning a previously collected fee."}]},
+        {"rule_id": "recruitment.unclear_fee", "name": "Unclear fee", "hit_condition": "An ambiguous service fee is mentioned without a payment request.", "suggested_risk_level": "low", "application_stages": ["comment_audit"], "order": 2, "adjudication_notes": "Metadata only: ambiguity."}
+      ]
+    },
+    {
+      "category_id": "recruitment.fake_offer", "name": "Fabricated offers", "order": 20,
+      "rules": [
+        {"rule_id": "recruitment.offer_promise", "name": "Offer promise", "hit_condition": "Promise guaranteed employment while presenting a demonstrably fabricated employer offer.", "suggested_risk_level": "medium", "application_stages": ["image_evidence", "video_frame_evidence", "fusion_audit"], "order": 1, "adjudication_notes": "Metadata only: offer review.", "rule_exemptions": [{"exemption_id": "recruitment.sample", "name": "Sample offer", "condition": "The offer is explicitly marked as a fictional training sample."}]},
+        {"rule_id": "recruitment.disabled", "name": "Disabled rule", "hit_condition": "DISABLED_EXECUTION_SENTINEL", "suggested_risk_level": "high", "application_stages": ["image_evidence", "video_frame_evidence", "comment_audit", "fusion_audit"], "enabled": false, "order": 2, "adjudication_notes": "Metadata only: disabled."}
+      ]
+    }
+  ]
+}

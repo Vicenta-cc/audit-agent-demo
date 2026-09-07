@@ -28,7 +28,6 @@ class RuleSetService:
         principal: Principal,
         ruleset_id: str = "",
     ) -> dict:
-        self._validate_pilot_scope(content)
         self._validate_operator_content(content)
         return self.store.create_draft(
             content=content,
@@ -50,7 +49,6 @@ class RuleSetService:
         content: RuleSetContent,
         principal: Principal,
     ) -> dict:
-        self._validate_pilot_scope(content)
         self._validate_operator_content(content)
         return self.store.update_draft(
             ruleset_id,
@@ -206,13 +204,6 @@ class RuleSetService:
             actor_id=principal.id,
             ruleset_id=ruleset_id,
         )
-
-    @staticmethod
-    def _validate_pilot_scope(content: RuleSetContent) -> None:
-        if content.domain != "gambling":
-            raise RuleSetValidationError(
-                "RuleSet Foundation pilot only accepts domain='gambling'"
-            )
 
     @staticmethod
     def _validate_operator_content(content: RuleSetContent) -> None:

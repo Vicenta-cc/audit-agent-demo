@@ -9,8 +9,8 @@ from typing import Any
 from .contracts import RuleSetContent
 from .errors import RuleSetValidationError
 
-SYSTEM_TEMPLATE_VERSION = "audit-system-template-v2"
-COMPILER_VERSION = "ruleset-compiler-v2"
+SYSTEM_TEMPLATE_VERSION = "audit-system-template-v3"
+COMPILER_VERSION = "ruleset-compiler-v3"
 
 _STAGES = (
     "image_evidence",
@@ -54,8 +54,6 @@ def _validate_compile_content(
     if compiler_version != COMPILER_VERSION:
         raise RuleSetValidationError(f"unsupported compiler_version: {compiler_version}")
     content = RuleSetContent.model_validate(content)
-    if content.domain != "gambling":
-        raise RuleSetValidationError("RuleSet Foundation pilot only supports the gambling domain")
     return content
 
 
@@ -130,7 +128,7 @@ def compile_ruleset_content(
     system_template_version: str = SYSTEM_TEMPLATE_VERSION,
     compiler_version: str = COMPILER_VERSION,
 ) -> _ContentCompileResult:
-    """Compile content with the existing gambling pilot templates, without revision identity."""
+    """Compile content-driven business semantics without revision identity."""
     content = _validate_compile_content(content, system_template_version, compiler_version)
     rules = _enabled_rules(content)
     stage_routes = {
@@ -146,6 +144,10 @@ def compile_ruleset_content(
                 "audit_goal": content.audit_goal,
             },
             "general_exemptions": general_exemptions,
+            "categories": [
+                {"category_id": category.category_id, "name": category.name}
+                for category in sorted(content.categories, key=lambda item: (item.order, item.category_id))
+            ],
             "rules": [_prompt_rule(rule) for rule in rules if stage in rule["application_stages"]],
         }
         for stage in _STAGES
@@ -165,6 +167,7 @@ def compile_ruleset_content(
         "libraries": [
             {
                 "id": content.domain,
+                "ruleset_content_driven": True,
                 "title": content.name,
                 "audit_goal": content.audit_goal,
                 "output_labels": [category.name for category in content.categories],
@@ -179,7 +182,7 @@ def compile_ruleset_content(
         "fusion_audit": len(prompt_profile_snapshot["fusion_prompt_template"]),
     }
     prompt_digest = hashlib.sha256(canonical_json(prompt_profile_snapshot).encode("utf-8")).hexdigest()[:16]
-    prompt_profile_snapshot["prompt_version"] = f"gambling-v1-{prompt_digest}"
+    prompt_profile_snapshot["prompt_version"] = f"ruleset-v1-{prompt_digest}"
 
     return _ContentCompileResult(
         prompt_profile_snapshot=prompt_profile_snapshot,
@@ -278,11 +281,11 @@ def _decision_rule(rule: dict) -> dict:
 
 def _image_prompt(payload: dict) -> str:
     return (
-        "提取图片赌博风险证据，分析 OCR、二维码、界面及视觉；不作整帖最终处罚。\n\n"
+        "依据本次 RuleSet 提取图片风险证据，分析 OCR、二维码、界面及视觉；不作整帖最终处罚。\n\n"
         + _compiled_business_rules(
             payload,
             reference_instruction=(
-                "risk_type 只能是赌博交易、投注平台导流、上分提现、代理推广、盘口赔率、资金结算或其子类。"
+                "risk_type 仅使用上述 category_id。"
                 "“参考”只用于研判，必须依据当前证据独立输出实际 severity，不得照抄。"
             ),
         )
@@ -302,12 +305,12 @@ def _image_prompt(payload: dict) -> str:
 
 def _frame_prompt(payload: dict) -> str:
     return (
-        "提取视频分段赌博风险证据。4x4 contact sheet 按真实时间排序；空白格非视频内容。结合标题、正文、"
+        "依据本次 RuleSet 提取视频分段风险证据。4x4 contact sheet 按真实时间排序；空白格非视频内容。结合标题、正文、"
         "逐帧 OCR 原文/译文及本段 ASR 审核；不复述 OCR/ASR 全文。\n\n"
         + _compiled_business_rules(
             payload,
             reference_instruction=(
-                "risk_type 只能是赌博交易、投注平台导流、上分提现、代理推广、盘口赔率、资金结算或其子类。"
+                "risk_type 仅使用上述 category_id。"
                 "“参考”仅供研判；实际 risk_level 由当前证据独立判断，不得代填；score 按 "
                 "none=0、low=40、medium=60、high=80 输出。"
             ),
@@ -331,12 +334,12 @@ def _frame_prompt(payload: dict) -> str:
 
 def _comment_prompt_template(payload: dict) -> str:
     return (
-        "你是评论区逐条赌博风险审核器。结合帖子标题、正文和媒体摘要，独立判断每条评论；不得聚合多条评论，"
+        "依据本次 RuleSet 逐条审核评论风险。结合帖子标题、正文和媒体摘要，独立判断每条评论；不得聚合多条评论，"
         "一条评论可独立触发召回。评论证据只归属于该评论，不得直接归责主帖作者。\n\n"
         + _compiled_business_rules(
             payload,
             reference_instruction=(
-                "t 只能是赌博交易、投注平台导流、上分提现、代理推广、盘口赔率、资金结算或其子类。"
+                "t 仅使用上述 category_id。"
                 "“参考”只用于研判；实际 risk_level 仅依据当前评论证据，不得代填；s 按 "
                 "none=0、low=40、medium=60、high=80 输出。"
             ),
@@ -360,16 +363,16 @@ def _comment_prompt_template(payload: dict) -> str:
 
 def _fusion_prompt_template(payload: dict) -> str:
     return (
-        "融合全帖赌博风险。仅校准 evidence_catalog 现有证据的跨分段、跨模态含义；不重审媒体，不创造、"
+        "依据本次 RuleSet 融合全帖风险。仅校准 evidence_catalog 现有证据的跨分段、跨模态含义；不重审媒体，不创造、"
         "复制或改写证据。\n\n"
         + _compiled_business_rules(
             payload,
             reference_instruction=(
-                "categories 仅使用赌博交易、投注平台导流、上分提现、代理推广、盘口赔率、资金结算或其子类。"
+                "categories 仅使用上述 category_id。"
                 "“参考”仅供研判；实际 evidence_risk_level 和建议等级按已有证据独立判断，不得代填。"
             ),
         )
-        + "\n\n优先识别引用、反讽、批判、否定、新闻、科普、举报、反赌、被骗曝光、风险提示。评论独立；"
+        + "\n\n结合上下文判断规则和豁免是否实际满足。评论独立；"
         "其证据主导时仅建议 review，summary 注明来自评论区，不直接归责主帖作者。title_zh/desc_zh "
         "优先用于理解外文。content_title 须为8-18字中文主题短标题，不写内容ID、审核结论或风险等级。\n\n"
         "只输出合法 JSON：\n"
@@ -398,7 +401,14 @@ def _compiled_business_rules(
     *,
     reference_instruction: str,
 ) -> str:
-    lines = ["筛选后的业务规则："]
+    context = payload["ruleset"]
+    lines = [
+        f"domain：{context['domain']}",
+        f"audit_goal：{context['audit_goal']}",
+        "允许的风险类别（category_id｜name）：",
+        *[f"{category['category_id']}｜{category['name']}" for category in payload["categories"]],
+        "筛选后的业务规则：",
+    ]
     seen_rule_ids: set[str] = set()
     rule_exemptions: list[str] = []
     seen_exemption_ids: set[str] = set()

@@ -4778,7 +4778,10 @@ class AuditPipeline:
             )
             if not risk_library_id:
                 risk_library_label = ""
-            risk_type = self._truncate_text(row.get("t") or row.get("risk_type", ""), 50)
+            try:
+                risk_type = self._normalize_risk_type(row.get("t") or row.get("risk_type", ""), 50)
+            except FusionAuditContractError:
+                continue
             risk_basis = self._truncate_text(row.get("rb") or row.get("risk_basis", ""), 30)
             if self._is_ruleset_v2() and v2_risk_level != "none" and (
                 not risk_library_id or not risk_type or not risk_basis or not quote
@@ -5004,7 +5007,7 @@ class AuditPipeline:
                 "severity": item.get("severity", ""),
                 "risk_library_id": self._truncate_text(item.get("risk_library_id", ""), 40),
                 "risk_library_label": self._truncate_text(item.get("risk_library_label", ""), 40),
-                "risk_type": self._truncate_text(item.get("risk_type", ""), 80),
+                "risk_type": self._normalize_risk_type(item.get("risk_type", ""), 80),
                 "evidence": self._truncate_text(item.get("evidence", ""), 140),
                 "reason": self._truncate_text(item.get("reason", ""), 160),
             }
@@ -5054,6 +5057,19 @@ class AuditPipeline:
         if omitted:
             trimmed.append({"omitted_frames": omitted, "reason": "融合输入长度限制，仅保留前部关键帧摘要"})
         return json.dumps(trimmed, ensure_ascii=False, separators=(",", ":"))
+
+    def _normalize_risk_type(self, value, legacy_max_chars: int) -> str:
+        profile = getattr(self, "prompt_profile_snapshot", {}) or {}
+        content_driven = self._is_ruleset_v2() and any(
+            isinstance(library, dict) and library.get("ruleset_content_driven") is True
+            for library in profile.get("libraries") or []
+        )
+        if not content_driven:
+            return self._truncate_text(value, legacy_max_chars)
+        # Category identities must never pass through display normalization.
+        if not isinstance(value, str) or len(value) > 100:
+            raise FusionAuditContractError("risk_type must be a category identity of at most 100 characters")
+        return value
 
     @staticmethod
     def _truncate_text(value, max_chars: int) -> str:
@@ -6666,7 +6682,7 @@ class AuditPipeline:
                 "risk_level": risk_level,
                 "risk_library_id": risk_library_id,
                 "risk_library_label": risk_library_label,
-                "risk_type": self._truncate_text(item.get("risk_type", ""), 60),
+                "risk_type": self._normalize_risk_type(item.get("risk_type", ""), 60),
                 "reason": self._truncate_text(item.get("reason", ""), 100),
             }
             if rule_id:
@@ -6706,7 +6722,7 @@ class AuditPipeline:
                 "risk_level": risk_level,
                 "risk_library_id": risk_library_id,
                 "risk_library_label": risk_library_label,
-                "risk_type": self._truncate_text(item.get("risk_type", ""), 60),
+                "risk_type": self._normalize_risk_type(item.get("risk_type", ""), 60),
                 "reason": self._truncate_text(item.get("reason", ""), 100),
             }
             if rule_id:
@@ -6736,7 +6752,7 @@ class AuditPipeline:
                 "risk_level": risk_level,
                 "risk_library_id": risk_library_id,
                 "risk_library_label": risk_library_label,
-                "risk_type": self._truncate_text(item.get("risk_type", ""), 60),
+                "risk_type": self._normalize_risk_type(item.get("risk_type", ""), 60),
                 "reason": self._truncate_text(item.get("reason", ""), 100),
             }
             if rule_id:

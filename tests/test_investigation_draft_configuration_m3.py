@@ -1215,7 +1215,7 @@ def test_create_rejects_ruleset_identity_drift_before_write(
     assert _counts(m3_stack["store"]) == (0, 0)
 
 
-def test_create_rejects_ruleset_unsupported_by_current_compiler(m3_stack: dict):
+def test_create_accepts_schema_valid_domain_without_semantic_validation(m3_stack: dict):
     configuration = _temporary_configuration(m3_stack, ["term"])
     revision_id = configuration["judgement"]["ruleset_revision_id"]
     with sqlite3.connect(m3_stack["resources"].resource_db_path) as connection:
@@ -1233,12 +1233,35 @@ def test_create_rejects_ruleset_unsupported_by_current_compiler(m3_stack: dict):
         )
     configuration["judgement"]["expected_ruleset_content_hash"] = digest
 
-    with pytest.raises(ConfigurationValidationError) as caught:
-        _create_draft(m3_stack, configuration)
+    _create_draft(m3_stack, configuration)
+    assert _counts(m3_stack["store"]) == (1, 0)
 
-    assert caught.value.code == "INVALID_RULESET_REFERENCE"
-    assert caught.value.details["mutation_applied"] is False
-    assert _counts(m3_stack["store"]) == (0, 0)
+
+def test_t2_draft_content_freshness_survives_compiler_upgrade(m3_stack: dict):
+    historical = json.loads(
+        (Path(__file__).parent / "fixtures" / "ruleset_compiler_t2_baseline.json").read_text(encoding="utf-8")
+    )["cases"][0]["output"]
+    rulesets = m3_stack["resources"].ruleset_service
+    with patch.object(rulesets, "compile_for_execution", return_value=historical):
+        configuration = _temporary_configuration(m3_stack, ["term"])
+        draft = _create_draft(m3_stack, configuration)
+    assert set(configuration["judgement"]) == {
+        "strategy", "ruleset_revision_id", "expected_ruleset_version", "expected_ruleset_content_hash",
+    }
+    preview = m3_stack["service"].get_confirmation_preview(draft.id, principal=_principal(m3_stack))
+    assert preview.can_confirm
+    current = rulesets.compile_for_execution(configuration["judgement"]["ruleset_revision_id"], principal=_principal(m3_stack))
+    assert current["config_hash"] != historical["config_hash"]
+    assert current["rule_snapshot"]["ruleset_ref"]["content_hash"] == configuration["judgement"]["expected_ruleset_content_hash"]
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(draft_id=draft.id, expected_revision=1, confirmed=True, idempotency_key="t2-5-upgrade"),
+        principal=_principal(m3_stack),
+    )
+    frozen = run.confirmed_configuration["execution"]["audit_config_revision"]
+    assert frozen["config_hash"] == current["config_hash"]
+    assert frozen["prompt_profile_snapshot"] == current["prompt_profile_snapshot"]
+    fresh = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["new-term"]))
+    assert m3_stack["service"].get_confirmation_preview(fresh.id, principal=_principal(m3_stack)).can_confirm
 
 
 def test_create_rejects_missing_existing_lexicon_before_write(m3_stack: dict):

@@ -2586,10 +2586,10 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
         self.assertEqual(
             v2_fixed,
             {
-                "image_evidence": 1600,
-                "video_frame_evidence": 2011,
-                "comment_audit": 1916,
-                "fusion_audit": 2076,
+                "image_evidence": 1840,
+                "video_frame_evidence": 2251,
+                "comment_audit": 2152,
+                "fusion_audit": 2297,
             },
         )
         # Exact goldens supersede the one-time v1-to-v2 migration ratio; later
@@ -2704,10 +2704,10 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                     "fusion_audit": {"fixed": 2250, "dynamic": 1062, "total": 3312},
                 },
                 "v2": {
-                    "image_evidence": {"fixed": 1600, "dynamic": 0, "total": 1600},
-                    "video_frame_evidence": {"fixed": 2011, "dynamic": 532, "total": 2543},
-                    "comment_audit": {"fixed": 1916, "dynamic": 420, "total": 2336},
-                    "fusion_audit": {"fixed": 2076, "dynamic": 1115, "total": 3191},
+                    "image_evidence": {"fixed": 1840, "dynamic": 0, "total": 1840},
+                    "video_frame_evidence": {"fixed": 2251, "dynamic": 532, "total": 2783},
+                    "comment_audit": {"fixed": 2152, "dynamic": 420, "total": 2572},
+                    "fusion_audit": {"fixed": 2297, "dynamic": 1115, "total": 3412},
                 },
             },
         )

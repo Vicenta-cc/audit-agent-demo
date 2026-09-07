@@ -244,7 +244,8 @@ def compact_library_policy(library: dict, *, modalities: list[str] | None = None
     }
     if "keyword" in modality_set:
         selected_guidance["keyword"] = "关键词和黑话只能作为线索，必须结合上下文、交易/攻击/导流/行动意图和豁免语境。"
-    if "comment" in modality_set:
+    # Formal compiled libraries derive business guidance exclusively from content.
+    if "comment" in modality_set and library.get("ruleset_content_driven") is not True:
         extra = _extra_comment_guidance(library)
         if extra:
             selected_guidance["comment_extra"] = extra
