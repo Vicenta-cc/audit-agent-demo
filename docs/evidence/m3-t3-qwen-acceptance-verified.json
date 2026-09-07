@@ -1,0 +1,3236 @@
+{
+  "model": "qwen3.7-plus",
+  "runtime": "Hermes 0.20.4",
+  "cases": [
+    {
+      "case": "proposal-generation",
+      "input": "帮我调查招聘诈骗，如果没有合适的研判规则，生成一套临时规则给我看看。",
+      "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+      "turn_id": "investigation-turn:8921db9ec7754a1eac0311f67e0cf8f9",
+      "status": "completed",
+      "failure_point": null,
+      "answer": "当前没有找到针对\"招聘诈骗\"的已发布研判规则集，只有\"赌博博彩风险规则集\"可用。\n\n根据你的要求，我已经生成了一套临时规则集提案，包含以下5个类别共9条规则：\n\n**1. 虚假收费招聘**\n- 招聘要求预缴费用（报名费、培训费、体检费等）\n- 招聘诱导贷款培训（培训贷骗局）\n\n**2. 刷单兼职诈骗**\n- 刷单刷信誉兼职（点赞赚钱、做任务返佣等）\n- 兼职要求缴纳押金或垫资\n\n**3. 高薪诱骗**\n- 异常高薪低门槛招聘（日薪数千但无需经验）\n- 境外高薪招聘诱导（东南亚、缅甸等高风险区域）\n\n**4. 个人信息套取**\n- 招聘索要身份证件（身份证、户口本照片）\n- 招聘索要银行卡及验证码\n\n**5. 传销及非法组织招募**\n- 招聘发展下线拉人头（团队裂变、层级返利）\n\n**豁免条件**：已认证企业官方账号（持有平台蓝V认证且招聘内容与其经营范围一致）\n\n这套临时规则集已保存为提案（proposal_id: ruleset-proposal:a5b6896526a44ca4b4530323e341a16a），仅供你参考和评估。需要注意的是，这是临时候选规则，不是正式的已发布规则集，因此不能直接用于创建调查草稿。\n\n如果你需要继续创建招聘诈骗的调查任务，目前存在两个资源缺口：\n1. 没有已发布的招聘诈骗研判规则集\n2. 没有专门针对招聘诈骗的召回词库（虽然有\"涉诈话术词库\"，但可能不够精准）\n\n你可以选择：\n- 继续使用现有的\"涉诈话术词库\"作为召回资源，等待合适的研判规则发布\n- 或者我可以为本次调查生成临时搜索词，配合现有的\"涉诈话术词库\"使用\n\n你希望如何继续？",
+      "llm_call_count": 6,
+      "tools": [
+        "query_investigation_options",
+        "create_ruleset_proposal"
+      ],
+      "tool_events": [
+        {
+          "tool": "query_investigation_options",
+          "arguments": {
+            "domain_hint": "招聘诈骗",
+            "mode": "search"
+          },
+          "status": "ok"
+        },
+        {
+          "tool": "create_ruleset_proposal",
+          "arguments": {
+            "content": {
+              "schema_version": 0,
+              "name": "招聘诈骗风险规则集",
+              "domain": "recruitment_fraud",
+              "audit_goal": "识别社交平台中以招聘、兼职、招工为名义实施的诈骗行为，包括虚假收费、刷单诈骗、高薪诱骗、个人信息套取及传销招募等典型场景，保护求职者免受财产损失和信息泄露风险。",
+              "categories": [
+                {
+                  "category_id": "fee_collection",
+                  "name": "虚假收费招聘",
+                  "description": "以招聘为名向求职者收取各类费用（报名费、培训费、体检费、服装费、押金等）",
+                  "order": 0,
+                  "rules": [
+                    {
+                      "rule_id": "fee_collection.upfront_fee",
+                      "name": "招聘要求预缴费用",
+                      "hit_condition": "内容以招聘、招工、入职为语境，且出现要求求职者缴纳报名费、培训费、体检费、服装费、工牌费、押金、保证金、建档费等任何形式的前置费用，或暗示需先付款再上岗",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "正规用人单位不得在入职前向劳动者收取任何费用（《劳动合同法》第九条）。凡招聘内容中明确要求缴费或变相缴费，高度可疑。需结合是否有正规企业资质信息综合判断。",
+                      "order": 0,
+                      "enabled": true
+                    },
+                    {
+                      "rule_id": "fee_collection.loan_induction",
+                      "name": "招聘诱导贷款培训",
+                      "hit_condition": "内容以招聘或就业为语境，同时出现培训贷、助学贷、先培训后上岗、分期付学费、贷款培训等表述，暗示求职者需通过贷款支付培训费用",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "典型的培训贷骗局，以高薪就业为诱饵诱导求职者背负贷款。实际往往培训质量低劣或根本无法安排承诺的工作岗位。",
+                      "order": 1,
+                      "enabled": true
+                    }
+                  ]
+                },
+                {
+                  "category_id": "brush_scam",
+                  "name": "刷单兼职诈骗",
+                  "description": "以刷单、刷信誉、点赞赚钱等名义实施的兼职诈骗",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "rule_id": "brush_scam.order_brushing",
+                      "name": "刷单刷信誉兼职",
+                      "hit_condition": "内容包含刷单、刷信誉、刷好评、做任务返佣、点赞赚钱、关注返现、代拍代抢等表述，并承诺高额回报或日结工资",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "刷单本身即为违法行为，以刷单为名的兼职几乎均为诈骗。典型模式为小额返利建立信任后骗取大额本金。",
+                      "order": 0,
+                      "enabled": true
+                    },
+                    {
+                      "rule_id": "brush_scam.deposit_task",
+                      "name": "兼职要求缴纳押金或垫资",
+                      "hit_condition": "内容以兼职、副业、在家赚钱为语境，要求先缴纳入会费、押金、垫资、充值激活等费用才能开始接单或做任务",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "任何要求先付款才能开始工作的兼职均为高风险。正规兼职不会要求劳动者预先支付费用或垫付资金。",
+                      "order": 1,
+                      "enabled": true
+                    }
+                  ]
+                },
+                {
+                  "category_id": "salary_lure",
+                  "name": "高薪诱骗",
+                  "description": "以不切实际的高薪、低门槛条件吸引求职者，实际为诈骗引流",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "rule_id": "salary_lure.unrealistic_pay",
+                      "name": "异常高薪低门槛招聘",
+                      "hit_condition": "内容以招聘为语境，承诺日薪数百至数千元或月入过万等明显超出市场水平的薪资，同时对学历、经验、技能几乎无要求，或强调零基础、无需经验、轻松上手",
+                      "suggested_risk_level": "medium",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "薪资与岗位要求严重不匹配是招聘诈骗的典型特征。需结合具体行业、岗位判断是否合理。单独此条为中等风险，若同时涉及收费或信息收集则升级为高风险。",
+                      "order": 0,
+                      "enabled": true
+                    },
+                    {
+                      "rule_id": "salary_lure.overseas_lure",
+                      "name": "境外高薪招聘诱导",
+                      "hit_condition": "内容以境外工作、出国打工、海外高薪为语境，承诺高额薪资且门槛极低，目的地涉及东南亚、缅甸、柬埔寨、菲律宾、迪拜等已知高风险区域",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "境外高薪低门槛招聘极大概率为电信诈骗园区或非法用工招募。近年来东南亚地区此类案件频发，需高度警惕。",
+                      "order": 1,
+                      "enabled": true
+                    }
+                  ]
+                },
+                {
+                  "category_id": "info_harvest",
+                  "name": "个人信息套取",
+                  "description": "以招聘为名套取求职者身份证、银行卡、手机号等敏感个人信息",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "rule_id": "info_harvest.id_document",
+                      "name": "招聘索要身份证件",
+                      "hit_condition": "内容以招聘或面试为语境，要求在面试前或入职前提交身份证正反面照片、手持身份证照片、户口本照片等证件影像",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "正规企业在入职环节才会核验身份信息，且应通过安全渠道提交。在社交平台公开或私聊中索要证件照片极可能用于身份冒用或注册非法账户。",
+                      "order": 0,
+                      "enabled": true
+                    },
+                    {
+                      "rule_id": "info_harvest.bank_info",
+                      "name": "招聘索要银行卡及验证码",
+                      "hit_condition": "内容以招聘、入职、发薪为语境，索要银行卡号、银行卡密码、网银验证码、手机验证码，或要求提供银行卡用于走账、代收代付",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "索要银行卡信息和验证码是典型的金融诈骗手段，可能涉及盗刷、洗钱或帮助信息网络犯罪活动。要求提供银行卡走账则涉嫌帮信罪。",
+                      "order": 1,
+                      "enabled": true
+                    }
+                  ]
+                },
+                {
+                  "category_id": "pyramid_recruit",
+                  "name": "传销及非法组织招募",
+                  "description": "以招聘为名实施传销拉人头或加入非法组织",
+                  "order": 4,
+                  "rules": [
+                    {
+                      "rule_id": "pyramid_recruit.downline",
+                      "name": "招聘发展下线拉人头",
+                      "hit_condition": "内容以招聘、创业、合伙为语境，强调发展下线、拉人入伙、团队裂变、人头提成、层级返利，或将收入来源与招募人数而非实际产品或服务挂钩",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "以发展人员数量计酬或要求缴纳费用获得加入资格并形成层级关系的，符合传销特征（《禁止传销条例》）。此类招聘往往包装为创业机会或新零售模式。",
+                      "order": 0,
+                      "enabled": true
+                    }
+                  ]
+                }
+              ],
+              "general_exemptions": [
+                {
+                  "exemption_id": "verified_enterprise",
+                  "name": "已认证企业官方账号",
+                  "condition": "发布者持有平台认证的企业蓝V或官方认证标识，且招聘内容与其认证经营范围一致",
+                  "source_mappings": []
+                }
+              ]
+            }
+          },
+          "status": "ok",
+          "execution_identity": {
+            "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+            "turn_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0:investigation-turn:8921db9ec7754a1eac0311f67e0cf8f9:8f18de83",
+            "tool_call_id": "call_127c5a18485b43d1ae0e919f"
+          }
+        }
+      ],
+      "mutation_receipts": [
+        {
+          "receipt_id": "creation-tool-receipt:0da3fbfd8dbe497fb0ea391dceee4b86",
+          "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+          "turn_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0:investigation-turn:8921db9ec7754a1eac0311f67e0cf8f9:8f18de83",
+          "tool_call_id": "call_127c5a18485b43d1ae0e919f",
+          "tool_name": "create_ruleset_proposal",
+          "arguments_fingerprint": "0bf3a857f8ce9ca4f3d3f605656860183f9fb7321164f642c292d06dffa7a8ba",
+          "status": "SUCCEEDED"
+        }
+      ],
+      "proposals_before": [],
+      "proposals_after": [
+        {
+          "proposal_id": "ruleset-proposal:a5b6896526a44ca4b4530323e341a16a",
+          "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+          "version": 1,
+          "content_hash": "13faa1f9db28a29253594bd707bd486dbb44894c71e21c03cca8138c1aef4e2c",
+          "content": {
+            "schema_version": 0,
+            "name": "招聘诈骗风险规则集",
+            "domain": "recruitment_fraud",
+            "audit_goal": "识别社交平台中以招聘、兼职、招工为名义实施的诈骗行为，包括虚假收费、刷单诈骗、高薪诱骗、个人信息套取及传销招募等典型场景，保护求职者免受财产损失和信息泄露风险。",
+            "general_exemptions": [
+              {
+                "exemption_id": "verified_enterprise",
+                "name": "已认证企业官方账号",
+                "condition": "发布者持有平台认证的企业蓝V或官方认证标识，且招聘内容与其认证经营范围一致",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "fee_collection",
+                "name": "虚假收费招聘",
+                "description": "以招聘为名向求职者收取各类费用（报名费、培训费、体检费、服装费、押金等）",
+                "order": 0,
+                "rules": [
+                  {
+                    "rule_id": "fee_collection.upfront_fee",
+                    "name": "招聘要求预缴费用",
+                    "hit_condition": "内容以招聘、招工、入职为语境，且出现要求求职者缴纳报名费、培训费、体检费、服装费、工牌费、押金、保证金、建档费等任何形式的前置费用，或暗示需先付款再上岗",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规用人单位不得在入职前向劳动者收取任何费用（《劳动合同法》第九条）。凡招聘内容中明确要求缴费或变相缴费，高度可疑。需结合是否有正规企业资质信息综合判断。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "fee_collection.loan_induction",
+                    "name": "招聘诱导贷款培训",
+                    "hit_condition": "内容以招聘或就业为语境，同时出现培训贷、助学贷、先培训后上岗、分期付学费、贷款培训等表述，暗示求职者需通过贷款支付培训费用",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "典型的培训贷骗局，以高薪就业为诱饵诱导求职者背负贷款。实际往往培训质量低劣或根本无法安排承诺的工作岗位。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "brush_scam",
+                "name": "刷单兼职诈骗",
+                "description": "以刷单、刷信誉、点赞赚钱等名义实施的兼职诈骗",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "brush_scam.order_brushing",
+                    "name": "刷单刷信誉兼职",
+                    "hit_condition": "内容包含刷单、刷信誉、刷好评、做任务返佣、点赞赚钱、关注返现、代拍代抢等表述，并承诺高额回报或日结工资",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "刷单本身即为违法行为，以刷单为名的兼职几乎均为诈骗。典型模式为小额返利建立信任后骗取大额本金。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "brush_scam.deposit_task",
+                    "name": "兼职要求缴纳押金或垫资",
+                    "hit_condition": "内容以兼职、副业、在家赚钱为语境，要求先缴纳入会费、押金、垫资、充值激活等费用才能开始接单或做任务",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "任何要求先付款才能开始工作的兼职均为高风险。正规兼职不会要求劳动者预先支付费用或垫付资金。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "salary_lure",
+                "name": "高薪诱骗",
+                "description": "以不切实际的高薪、低门槛条件吸引求职者，实际为诈骗引流",
+                "order": 2,
+                "rules": [
+                  {
+                    "rule_id": "salary_lure.unrealistic_pay",
+                    "name": "异常高薪低门槛招聘",
+                    "hit_condition": "内容以招聘为语境，承诺日薪数百至数千元或月入过万等明显超出市场水平的薪资，同时对学历、经验、技能几乎无要求，或强调零基础、无需经验、轻松上手",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "薪资与岗位要求严重不匹配是招聘诈骗的典型特征。需结合具体行业、岗位判断是否合理。单独此条为中等风险，若同时涉及收费或信息收集则升级为高风险。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "salary_lure.overseas_lure",
+                    "name": "境外高薪招聘诱导",
+                    "hit_condition": "内容以境外工作、出国打工、海外高薪为语境，承诺高额薪资且门槛极低，目的地涉及东南亚、缅甸、柬埔寨、菲律宾、迪拜等已知高风险区域",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "境外高薪低门槛招聘极大概率为电信诈骗园区或非法用工招募。近年来东南亚地区此类案件频发，需高度警惕。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "info_harvest",
+                "name": "个人信息套取",
+                "description": "以招聘为名套取求职者身份证、银行卡、手机号等敏感个人信息",
+                "order": 3,
+                "rules": [
+                  {
+                    "rule_id": "info_harvest.id_document",
+                    "name": "招聘索要身份证件",
+                    "hit_condition": "内容以招聘或面试为语境，要求在面试前或入职前提交身份证正反面照片、手持身份证照片、户口本照片等证件影像",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规企业在入职环节才会核验身份信息，且应通过安全渠道提交。在社交平台公开或私聊中索要证件照片极可能用于身份冒用或注册非法账户。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "info_harvest.bank_info",
+                    "name": "招聘索要银行卡及验证码",
+                    "hit_condition": "内容以招聘、入职、发薪为语境，索要银行卡号、银行卡密码、网银验证码、手机验证码，或要求提供银行卡用于走账、代收代付",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "索要银行卡信息和验证码是典型的金融诈骗手段，可能涉及盗刷、洗钱或帮助信息网络犯罪活动。要求提供银行卡走账则涉嫌帮信罪。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "pyramid_recruit",
+                "name": "传销及非法组织招募",
+                "description": "以招聘为名实施传销拉人头或加入非法组织",
+                "order": 4,
+                "rules": [
+                  {
+                    "rule_id": "pyramid_recruit.downline",
+                    "name": "招聘发展下线拉人头",
+                    "hit_condition": "内容以招聘、创业、合伙为语境，强调发展下线、拉人入伙、团队裂变、人头提成、层级返利，或将收入来源与招募人数而非实际产品或服务挂钩",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "以发展人员数量计酬或要求缴纳费用获得加入资格并形成层级关系的，符合传销特征（《禁止传销条例》）。此类招聘往往包装为创业机会或新零售模式。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "created_at": "2026-09-07T08:28:34.263625Z",
+          "updated_at": "2026-09-07T08:28:34.263625Z"
+        }
+      ],
+      "drafts_unchanged": true,
+      "draft_side_effects": [],
+      "no_formal_resource_mutation": true,
+      "run_count": 0,
+      "job_count": 0,
+      "report_count": 0,
+      "hermes_tool_sequence": [
+        "tool_search",
+        "tool_describe",
+        "query_investigation_options",
+        "tool_describe",
+        "create_ruleset_proposal"
+      ],
+      "model_output_shape": [
+        {
+          "role": "user",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 0
+        }
+      ]
+    },
+    {
+      "case": "proposal-edit",
+      "input": "提前收费这条太宽了，改成只有明确要求求职者先付款时才命中。",
+      "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+      "turn_id": "investigation-turn:b7caefc0b6d746ac899b18282c628618",
+      "status": "completed",
+      "failure_point": null,
+      "answer": "已修改完成。\"招聘要求预缴费用\"规则的命中条件已收紧：\n\n**修改前：**\n> 内容以招聘、招工、入职为语境，且出现要求求职者缴纳报名费、培训费、体检费、服装费、工牌费、押金、保证金、建档费等任何形式的前置费用，**或暗示需先付款再上岗**\n\n**修改后：**\n> 内容以招聘、招工、入职为语境，且**明确要求**求职者先支付报名费、培训费、体检费、服装费、工牌费、押金、保证金、建档费等**具体费用后才可上岗或入职**\n\n主要变化：\n- 去掉了\"暗示\"这种模糊判断\n- 强调必须\"明确要求\"先支付\"具体费用\"\n- 增加了\"后才可上岗或入职\"的因果关系，确保只有在付款与上岗直接挂钩时才命中\n\n规则提案已更新至版本 2（proposal_id: ruleset-proposal:a5b6896526a44ca4b4530323e341a16a）。\n\n如果你还需要调整其他规则，或者准备创建调查任务，请告诉我。",
+      "llm_call_count": 3,
+      "tools": [
+        "get_ruleset_proposal",
+        "update_ruleset_proposal"
+      ],
+      "tool_events": [
+        {
+          "tool": "get_ruleset_proposal",
+          "arguments": {
+            "proposal_id": "ruleset-proposal:a5b6896526a44ca4b4530323e341a16a"
+          },
+          "status": "ok"
+        },
+        {
+          "tool": "update_ruleset_proposal",
+          "arguments": {
+            "content": {
+              "audit_goal": "识别社交平台中以招聘、兼职、招工为名义实施的诈骗行为，包括虚假收费、刷单诈骗、高薪诱骗、个人信息套取及传销招募等典型场景，保护求职者免受财产损失和信息泄露风险。",
+              "categories": [
+                {
+                  "category_id": "fee_collection",
+                  "description": "以招聘为名向求职者收取各类费用（报名费、培训费、体检费、服装费、押金等）",
+                  "name": "虚假收费招聘",
+                  "order": 0,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正规用人单位不得在入职前向劳动者收取任何费用（《劳动合同法》第九条）。只有当招聘内容中明确要求求职者先支付具体费用后才可上岗或入职时，才视为高风险。需结合是否有正规企业资质信息综合判断。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘、招工、入职为语境，且明确要求求职者先支付报名费、培训费、体检费、服装费、工牌费、押金、保证金、建档费等具体费用后才可上岗或入职",
+                      "name": "招聘要求预缴费用",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "fee_collection.upfront_fee",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "典型的培训贷骗局，以高薪就业为诱饵诱导求职者背负贷款。实际往往培训质量低劣或根本无法安排承诺的工作岗位。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘或就业为语境，同时出现培训贷、助学贷、先培训后上岗、分期付学费、贷款培训等表述，暗示求职者需通过贷款支付培训费用",
+                      "name": "招聘诱导贷款培训",
+                      "order": 1,
+                      "rule_exemptions": [],
+                      "rule_id": "fee_collection.loan_induction",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "brush_scam",
+                  "description": "以刷单、刷信誉、点赞赚钱等名义实施的兼职诈骗",
+                  "name": "刷单兼职诈骗",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "adjudication_notes": "刷单本身即为违法行为，以刷单为名的兼职几乎均为诈骗。典型模式为小额返利建立信任后骗取大额本金。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容包含刷单、刷信誉、刷好评、做任务返佣、点赞赚钱、关注返现、代拍代抢等表述，并承诺高额回报或日结工资",
+                      "name": "刷单刷信誉兼职",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "brush_scam.order_brushing",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "任何要求先付款才能开始工作的兼职均为高风险。正规兼职不会要求劳动者预先支付费用或垫付资金。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以兼职、副业、在家赚钱为语境，要求先缴纳入会费、押金、垫资、充值激活等费用才能开始接单或做任务",
+                      "name": "兼职要求缴纳押金或垫资",
+                      "order": 1,
+                      "rule_exemptions": [],
+                      "rule_id": "brush_scam.deposit_task",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "salary_lure",
+                  "description": "以不切实际的高薪、低门槛条件吸引求职者，实际为诈骗引流",
+                  "name": "高薪诱骗",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "adjudication_notes": "薪资与岗位要求严重不匹配是招聘诈骗的典型特征。需结合具体行业、岗位判断是否合理。单独此条为中等风险，若同时涉及收费或信息收集则升级为高风险。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘为语境，承诺日薪数百至数千元或月入过万等明显超出市场水平的薪资，同时对学历、经验、技能几乎无要求，或强调零基础、无需经验、轻松上手",
+                      "name": "异常高薪低门槛招聘",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "salary_lure.unrealistic_pay",
+                      "source_mappings": [],
+                      "suggested_risk_level": "medium"
+                    },
+                    {
+                      "adjudication_notes": "境外高薪低门槛招聘极大概率为电信诈骗园区或非法用工招募。近年来东南亚地区此类案件频发，需高度警惕。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以境外工作、出国打工、海外高薪为语境，承诺高额薪资且门槛极低，目的地涉及东南亚、缅甸、柬埔寨、菲律宾、迪拜等已知高风险区域",
+                      "name": "境外高薪招聘诱导",
+                      "order": 1,
+                      "rule_exemptions": [],
+                      "rule_id": "salary_lure.overseas_lure",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "info_harvest",
+                  "description": "以招聘为名套取求职者身份证、银行卡、手机号等敏感个人信息",
+                  "name": "个人信息套取",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正规企业在入职环节才会核验身份信息，且应通过安全渠道提交。在社交平台公开或私聊中索要证件照片极可能用于身份冒用或注册非法账户。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘或面试为语境，要求在面试前或入职前提交身份证正反面照片、手持身份证照片、户口本照片等证件影像",
+                      "name": "招聘索要身份证件",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "info_harvest.id_document",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "索要银行卡信息和验证码是典型的金融诈骗手段，可能涉及盗刷、洗钱或帮助信息网络犯罪活动。要求提供银行卡走账则涉嫌帮信罪。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘、入职、发薪为语境，索要银行卡号、银行卡密码、网银验证码、手机验证码，或要求提供银行卡用于走账、代收代付",
+                      "name": "招聘索要银行卡及验证码",
+                      "order": 1,
+                      "rule_exemptions": [],
+                      "rule_id": "info_harvest.bank_info",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "pyramid_recruit",
+                  "description": "以招聘为名实施传销拉人头或加入非法组织",
+                  "name": "传销及非法组织招募",
+                  "order": 4,
+                  "rules": [
+                    {
+                      "adjudication_notes": "以发展人员数量计酬或要求缴纳费用获得加入资格并形成层级关系的，符合传销特征（《禁止传销条例》）。此类招聘往往包装为创业机会或新零售模式。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘、创业、合伙为语境，强调发展下线、拉人入伙、团队裂变、人头提成、层级返利，或将收入来源与招募人数而非实际产品或服务挂钩",
+                      "name": "招聘发展下线拉人头",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "pyramid_recruit.downline",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                }
+              ],
+              "domain": "recruitment_fraud",
+              "general_exemptions": [
+                {
+                  "condition": "发布者持有平台认证的企业蓝V或官方认证标识，且招聘内容与其认证经营范围一致",
+                  "exemption_id": "verified_enterprise",
+                  "name": "已认证企业官方账号",
+                  "source_mappings": []
+                }
+              ],
+              "name": "招聘诈骗风险规则集",
+              "schema_version": 0
+            },
+            "expected_version": 1,
+            "proposal_id": "ruleset-proposal:a5b6896526a44ca4b4530323e341a16a"
+          },
+          "status": "ok",
+          "execution_identity": {
+            "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+            "turn_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0:investigation-turn:b7caefc0b6d746ac899b18282c628618:1af0ba98",
+            "tool_call_id": "call_0dc70d981ee04a0e91606ef1"
+          }
+        }
+      ],
+      "mutation_receipts": [
+        {
+          "receipt_id": "creation-tool-receipt:d8b5e18988f245628f735a4d2dd400e2",
+          "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+          "turn_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0:investigation-turn:b7caefc0b6d746ac899b18282c628618:1af0ba98",
+          "tool_call_id": "call_0dc70d981ee04a0e91606ef1",
+          "tool_name": "update_ruleset_proposal",
+          "arguments_fingerprint": "c9df3c84ad08973158bcdf9a9150881f30dbcbdda660927aab3600a663c3cc21",
+          "status": "SUCCEEDED"
+        }
+      ],
+      "proposals_before": [
+        {
+          "proposal_id": "ruleset-proposal:a5b6896526a44ca4b4530323e341a16a",
+          "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+          "version": 1,
+          "content_hash": "13faa1f9db28a29253594bd707bd486dbb44894c71e21c03cca8138c1aef4e2c",
+          "content": {
+            "schema_version": 0,
+            "name": "招聘诈骗风险规则集",
+            "domain": "recruitment_fraud",
+            "audit_goal": "识别社交平台中以招聘、兼职、招工为名义实施的诈骗行为，包括虚假收费、刷单诈骗、高薪诱骗、个人信息套取及传销招募等典型场景，保护求职者免受财产损失和信息泄露风险。",
+            "general_exemptions": [
+              {
+                "exemption_id": "verified_enterprise",
+                "name": "已认证企业官方账号",
+                "condition": "发布者持有平台认证的企业蓝V或官方认证标识，且招聘内容与其认证经营范围一致",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "fee_collection",
+                "name": "虚假收费招聘",
+                "description": "以招聘为名向求职者收取各类费用（报名费、培训费、体检费、服装费、押金等）",
+                "order": 0,
+                "rules": [
+                  {
+                    "rule_id": "fee_collection.upfront_fee",
+                    "name": "招聘要求预缴费用",
+                    "hit_condition": "内容以招聘、招工、入职为语境，且出现要求求职者缴纳报名费、培训费、体检费、服装费、工牌费、押金、保证金、建档费等任何形式的前置费用，或暗示需先付款再上岗",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规用人单位不得在入职前向劳动者收取任何费用（《劳动合同法》第九条）。凡招聘内容中明确要求缴费或变相缴费，高度可疑。需结合是否有正规企业资质信息综合判断。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "fee_collection.loan_induction",
+                    "name": "招聘诱导贷款培训",
+                    "hit_condition": "内容以招聘或就业为语境，同时出现培训贷、助学贷、先培训后上岗、分期付学费、贷款培训等表述，暗示求职者需通过贷款支付培训费用",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "典型的培训贷骗局，以高薪就业为诱饵诱导求职者背负贷款。实际往往培训质量低劣或根本无法安排承诺的工作岗位。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "brush_scam",
+                "name": "刷单兼职诈骗",
+                "description": "以刷单、刷信誉、点赞赚钱等名义实施的兼职诈骗",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "brush_scam.order_brushing",
+                    "name": "刷单刷信誉兼职",
+                    "hit_condition": "内容包含刷单、刷信誉、刷好评、做任务返佣、点赞赚钱、关注返现、代拍代抢等表述，并承诺高额回报或日结工资",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "刷单本身即为违法行为，以刷单为名的兼职几乎均为诈骗。典型模式为小额返利建立信任后骗取大额本金。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "brush_scam.deposit_task",
+                    "name": "兼职要求缴纳押金或垫资",
+                    "hit_condition": "内容以兼职、副业、在家赚钱为语境，要求先缴纳入会费、押金、垫资、充值激活等费用才能开始接单或做任务",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "任何要求先付款才能开始工作的兼职均为高风险。正规兼职不会要求劳动者预先支付费用或垫付资金。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "salary_lure",
+                "name": "高薪诱骗",
+                "description": "以不切实际的高薪、低门槛条件吸引求职者，实际为诈骗引流",
+                "order": 2,
+                "rules": [
+                  {
+                    "rule_id": "salary_lure.unrealistic_pay",
+                    "name": "异常高薪低门槛招聘",
+                    "hit_condition": "内容以招聘为语境，承诺日薪数百至数千元或月入过万等明显超出市场水平的薪资，同时对学历、经验、技能几乎无要求，或强调零基础、无需经验、轻松上手",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "薪资与岗位要求严重不匹配是招聘诈骗的典型特征。需结合具体行业、岗位判断是否合理。单独此条为中等风险，若同时涉及收费或信息收集则升级为高风险。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "salary_lure.overseas_lure",
+                    "name": "境外高薪招聘诱导",
+                    "hit_condition": "内容以境外工作、出国打工、海外高薪为语境，承诺高额薪资且门槛极低，目的地涉及东南亚、缅甸、柬埔寨、菲律宾、迪拜等已知高风险区域",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "境外高薪低门槛招聘极大概率为电信诈骗园区或非法用工招募。近年来东南亚地区此类案件频发，需高度警惕。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "info_harvest",
+                "name": "个人信息套取",
+                "description": "以招聘为名套取求职者身份证、银行卡、手机号等敏感个人信息",
+                "order": 3,
+                "rules": [
+                  {
+                    "rule_id": "info_harvest.id_document",
+                    "name": "招聘索要身份证件",
+                    "hit_condition": "内容以招聘或面试为语境，要求在面试前或入职前提交身份证正反面照片、手持身份证照片、户口本照片等证件影像",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规企业在入职环节才会核验身份信息，且应通过安全渠道提交。在社交平台公开或私聊中索要证件照片极可能用于身份冒用或注册非法账户。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "info_harvest.bank_info",
+                    "name": "招聘索要银行卡及验证码",
+                    "hit_condition": "内容以招聘、入职、发薪为语境，索要银行卡号、银行卡密码、网银验证码、手机验证码，或要求提供银行卡用于走账、代收代付",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "索要银行卡信息和验证码是典型的金融诈骗手段，可能涉及盗刷、洗钱或帮助信息网络犯罪活动。要求提供银行卡走账则涉嫌帮信罪。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "pyramid_recruit",
+                "name": "传销及非法组织招募",
+                "description": "以招聘为名实施传销拉人头或加入非法组织",
+                "order": 4,
+                "rules": [
+                  {
+                    "rule_id": "pyramid_recruit.downline",
+                    "name": "招聘发展下线拉人头",
+                    "hit_condition": "内容以招聘、创业、合伙为语境，强调发展下线、拉人入伙、团队裂变、人头提成、层级返利，或将收入来源与招募人数而非实际产品或服务挂钩",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "以发展人员数量计酬或要求缴纳费用获得加入资格并形成层级关系的，符合传销特征（《禁止传销条例》）。此类招聘往往包装为创业机会或新零售模式。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "created_at": "2026-09-07T08:28:34.263625Z",
+          "updated_at": "2026-09-07T08:28:34.263625Z"
+        }
+      ],
+      "proposals_after": [
+        {
+          "proposal_id": "ruleset-proposal:a5b6896526a44ca4b4530323e341a16a",
+          "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+          "version": 2,
+          "content_hash": "0cb85f53cf9649c83687c716ee4f8332e296a0a62d8f529c217c232ad3e5dabf",
+          "content": {
+            "schema_version": 0,
+            "name": "招聘诈骗风险规则集",
+            "domain": "recruitment_fraud",
+            "audit_goal": "识别社交平台中以招聘、兼职、招工为名义实施的诈骗行为，包括虚假收费、刷单诈骗、高薪诱骗、个人信息套取及传销招募等典型场景，保护求职者免受财产损失和信息泄露风险。",
+            "general_exemptions": [
+              {
+                "exemption_id": "verified_enterprise",
+                "name": "已认证企业官方账号",
+                "condition": "发布者持有平台认证的企业蓝V或官方认证标识，且招聘内容与其认证经营范围一致",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "fee_collection",
+                "name": "虚假收费招聘",
+                "description": "以招聘为名向求职者收取各类费用（报名费、培训费、体检费、服装费、押金等）",
+                "order": 0,
+                "rules": [
+                  {
+                    "rule_id": "fee_collection.upfront_fee",
+                    "name": "招聘要求预缴费用",
+                    "hit_condition": "内容以招聘、招工、入职为语境，且明确要求求职者先支付报名费、培训费、体检费、服装费、工牌费、押金、保证金、建档费等具体费用后才可上岗或入职",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规用人单位不得在入职前向劳动者收取任何费用（《劳动合同法》第九条）。只有当招聘内容中明确要求求职者先支付具体费用后才可上岗或入职时，才视为高风险。需结合是否有正规企业资质信息综合判断。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "fee_collection.loan_induction",
+                    "name": "招聘诱导贷款培训",
+                    "hit_condition": "内容以招聘或就业为语境，同时出现培训贷、助学贷、先培训后上岗、分期付学费、贷款培训等表述，暗示求职者需通过贷款支付培训费用",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "典型的培训贷骗局，以高薪就业为诱饵诱导求职者背负贷款。实际往往培训质量低劣或根本无法安排承诺的工作岗位。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "brush_scam",
+                "name": "刷单兼职诈骗",
+                "description": "以刷单、刷信誉、点赞赚钱等名义实施的兼职诈骗",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "brush_scam.order_brushing",
+                    "name": "刷单刷信誉兼职",
+                    "hit_condition": "内容包含刷单、刷信誉、刷好评、做任务返佣、点赞赚钱、关注返现、代拍代抢等表述，并承诺高额回报或日结工资",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "刷单本身即为违法行为，以刷单为名的兼职几乎均为诈骗。典型模式为小额返利建立信任后骗取大额本金。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "brush_scam.deposit_task",
+                    "name": "兼职要求缴纳押金或垫资",
+                    "hit_condition": "内容以兼职、副业、在家赚钱为语境，要求先缴纳入会费、押金、垫资、充值激活等费用才能开始接单或做任务",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "任何要求先付款才能开始工作的兼职均为高风险。正规兼职不会要求劳动者预先支付费用或垫付资金。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "salary_lure",
+                "name": "高薪诱骗",
+                "description": "以不切实际的高薪、低门槛条件吸引求职者，实际为诈骗引流",
+                "order": 2,
+                "rules": [
+                  {
+                    "rule_id": "salary_lure.unrealistic_pay",
+                    "name": "异常高薪低门槛招聘",
+                    "hit_condition": "内容以招聘为语境，承诺日薪数百至数千元或月入过万等明显超出市场水平的薪资，同时对学历、经验、技能几乎无要求，或强调零基础、无需经验、轻松上手",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "薪资与岗位要求严重不匹配是招聘诈骗的典型特征。需结合具体行业、岗位判断是否合理。单独此条为中等风险，若同时涉及收费或信息收集则升级为高风险。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "salary_lure.overseas_lure",
+                    "name": "境外高薪招聘诱导",
+                    "hit_condition": "内容以境外工作、出国打工、海外高薪为语境，承诺高额薪资且门槛极低，目的地涉及东南亚、缅甸、柬埔寨、菲律宾、迪拜等已知高风险区域",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "境外高薪低门槛招聘极大概率为电信诈骗园区或非法用工招募。近年来东南亚地区此类案件频发，需高度警惕。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "info_harvest",
+                "name": "个人信息套取",
+                "description": "以招聘为名套取求职者身份证、银行卡、手机号等敏感个人信息",
+                "order": 3,
+                "rules": [
+                  {
+                    "rule_id": "info_harvest.id_document",
+                    "name": "招聘索要身份证件",
+                    "hit_condition": "内容以招聘或面试为语境，要求在面试前或入职前提交身份证正反面照片、手持身份证照片、户口本照片等证件影像",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规企业在入职环节才会核验身份信息，且应通过安全渠道提交。在社交平台公开或私聊中索要证件照片极可能用于身份冒用或注册非法账户。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "info_harvest.bank_info",
+                    "name": "招聘索要银行卡及验证码",
+                    "hit_condition": "内容以招聘、入职、发薪为语境，索要银行卡号、银行卡密码、网银验证码、手机验证码，或要求提供银行卡用于走账、代收代付",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "索要银行卡信息和验证码是典型的金融诈骗手段，可能涉及盗刷、洗钱或帮助信息网络犯罪活动。要求提供银行卡走账则涉嫌帮信罪。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "pyramid_recruit",
+                "name": "传销及非法组织招募",
+                "description": "以招聘为名实施传销拉人头或加入非法组织",
+                "order": 4,
+                "rules": [
+                  {
+                    "rule_id": "pyramid_recruit.downline",
+                    "name": "招聘发展下线拉人头",
+                    "hit_condition": "内容以招聘、创业、合伙为语境，强调发展下线、拉人入伙、团队裂变、人头提成、层级返利，或将收入来源与招募人数而非实际产品或服务挂钩",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "以发展人员数量计酬或要求缴纳费用获得加入资格并形成层级关系的，符合传销特征（《禁止传销条例》）。此类招聘往往包装为创业机会或新零售模式。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "created_at": "2026-09-07T08:28:34.263625Z",
+          "updated_at": "2026-09-07T08:29:27.073368Z"
+        }
+      ],
+      "drafts_unchanged": true,
+      "draft_side_effects": [],
+      "no_formal_resource_mutation": true,
+      "run_count": 0,
+      "job_count": 0,
+      "report_count": 0,
+      "hermes_tool_sequence": [
+        "get_ruleset_proposal",
+        "update_ruleset_proposal"
+      ],
+      "model_output_shape": [
+        {
+          "role": "user",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 0
+        }
+      ],
+      "rule_ids_preserved": true,
+      "changed_rule_ids": [
+        "fee_collection.upfront_fee"
+      ],
+      "category_ids_preserved": true
+    },
+    {
+      "case": "proposal-regeneration",
+      "input": "再生成另一套让我比较。",
+      "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+      "turn_id": "investigation-turn:d4878f59ff204831a6073022219f3024",
+      "status": "completed",
+      "failure_point": null,
+      "answer": "已生成第二套规则集（行为模式版），现在你有两套可以比较：\n\n## 第一套：场景分类版\n**proposal_id:** ruleset-proposal:a5b6896526a44ca4b4530323e341a16a\n\n**分类逻辑：** 按具体诈骗场景划分\n- 虚假收费招聘（2条）\n- 刷单兼职诈骗（2条）\n- 高薪诱骗（2条）\n- 个人信息套取（2条）\n- 传销及非法组织招募（1条）\n\n**总计：** 9条规则，1个豁免条件\n\n---\n\n## 第二套：行为模式版\n**proposal_id:** ruleset-proposal:d18420b8df0a496390bc78e8f6b5e51c\n\n**分类逻辑：** 按欺诈行为本质划分\n- 虚假承诺类（3条）：薪资不匹配、虚假就业保证、境外高风险招聘\n- 资金转移诱导类（3条）：入职前收费、培训贷、兼职垫资\n- 信息剥削类（2条）：提前索要证件、索要金融账户\n- 组织欺诈类（2条）：传销式招募、黑中介虚假派遣\n\n**总计：** 10条规则，2个豁免条件\n\n---\n\n## 主要差异\n\n1. **分类视角不同**\n   - 第一套：从\"诈骗手段\"出发（收费、刷单、高薪诱骗等）\n   - 第二套：从\"欺诈行为本质\"出发（虚假承诺、资金转移、信息剥削等）\n\n2. **覆盖范围**\n   - 第二套新增了\"虚假就业保证\"和\"黑中介虚假派遣\"两个场景\n   - 第二套的\"虚假承诺类\"将薪资不匹配和就业保证分开处理\n\n3. **豁免条件**\n   - 第一套：仅豁免已认证企业官方账号\n   - 第二套：额外豁免持证人力资源服务机构\n\n4. **规则粒度**\n   - 第一套的\"虚假收费招聘\"已按你的要求收紧为\"明确要求先付款\"\n   - 第二套的\"入职前强制收费\"也采用了相同的严格标准\n\n两套规则集都已保存为临时提案，你可以选择其中一套用于后续调查，或者告诉我需要如何调整。",
+      "llm_call_count": 2,
+      "tools": [
+        "create_ruleset_proposal"
+      ],
+      "tool_events": [
+        {
+          "tool": "create_ruleset_proposal",
+          "arguments": {
+            "content": {
+              "audit_goal": "通过识别招聘诈骗的典型行为模式，发现社交平台中以求职、招工为名义的欺诈内容，重点关注虚假承诺、信息不对称滥用、资金转移诱导等核心欺诈特征。",
+              "categories": [
+                {
+                  "category_id": "false_promise",
+                  "description": "通过虚假承诺吸引求职者，实际无法兑现",
+                  "name": "虚假承诺类",
+                  "order": 0,
+                  "rules": [
+                    {
+                      "adjudication_notes": "薪资承诺明显超出市场合理范围且无对应技能要求，属于典型的诱饵话术。需结合行业、地区判断是否合理。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘为语境，承诺的薪资水平明显高于同岗位市场均价，且对求职者的学历、经验、技能无实质性要求，或使用'轻松月入过万''零基础日赚千元'等绝对化表述",
+                      "name": "薪资承诺与岗位要求严重不匹配",
+                      "order": 0,
+                      "rule_id": "false_promise.salary_mismatch",
+                      "suggested_risk_level": "medium"
+                    },
+                    {
+                      "adjudication_notes": "承诺包就业、保证入职但实际无法兑现，往往伴随收费或培训贷。正规企业不会做出绝对化的就业保证。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘、培训为语境，使用'包就业''保证入职''100%安排工作''不就业全额退款'等绝对化承诺，且未提供可验证的企业资质或过往成功案例",
+                      "name": "虚假就业保证",
+                      "order": 1,
+                      "rule_id": "false_promise.employment_guarantee",
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "境外高薪招聘往往与电信诈骗园区、非法用工相关，尤其是东南亚地区。低门槛+高薪资+境外地点是典型危险信号。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以境外工作、出国打工为语境，目的地涉及缅甸、柬埔寨、菲律宾、老挝、阿联酋等已知高风险区域，承诺高薪但门槛极低，且未提供正规劳务派遣资质",
+                      "name": "境外高风险区域招聘",
+                      "order": 2,
+                      "rule_id": "false_promise.overseas_high_risk",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "fund_transfer_induction",
+                  "description": "诱导求职者向诈骗方转移资金",
+                  "name": "资金转移诱导类",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "adjudication_notes": "任何要求求职者在入职前支付费用的行为均违反《劳动合同法》。只有当明确要求先付款才能上岗时才命中此规则。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘、入职为语境，明确要求求职者先支付报名费、培训费、体检费、服装费、押金等具体费用后才可上岗或入职",
+                      "name": "入职前强制收费",
+                      "order": 0,
+                      "rule_id": "fund_transfer_induction.pre_employment_fee",
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "以培训为名诱导求职者贷款，实际培训质量低劣或无法安排承诺的工作。培训贷是近年来高发的招聘诈骗形式。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘、培训为语境，要求求职者通过贷款、分期付款等方式支付培训费用，或暗示'先学习后付款''入职后从工资扣除学费'",
+                      "name": "诱导贷款培训",
+                      "order": 1,
+                      "rule_id": "fund_transfer_induction.training_loan",
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "刷单、做任务等兼职本身违法，以之为名要求先垫资或缴费的几乎均为诈骗。小额返利建立信任后骗取大额本金是典型模式。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以兼职、副业为语境，涉及刷单、刷信誉、点赞赚钱、做任务返佣等，并要求先缴纳入会费、押金、垫资或充值激活",
+                      "name": "兼职垫资或缴费",
+                      "order": 2,
+                      "rule_id": "fund_transfer_induction.part_deposit",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "info_exploitation",
+                  "description": "套取求职者敏感信息用于非法目的",
+                  "name": "信息剥削类",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正规企业在正式入职环节才核验身份，且应通过安全渠道。在社交平台索要证件照片极可能用于身份冒用。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘、面试为语境，在正式入职前要求提交身份证正反面照片、手持身份证照片、户口本照片等证件影像",
+                      "name": "提前索要证件影像",
+                      "order": 0,
+                      "rule_id": "info_exploitation.id_document_early",
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "索要银行卡信息、验证码或要求提供银行卡走账，可能涉及盗刷、洗钱或帮信罪。正规企业不会通过社交平台索要此类信息。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘、入职、发薪为语境，索要银行卡号、密码、网银验证码、手机验证码，或要求提供银行卡用于走账、代收代付",
+                      "name": "索要金融账户信息",
+                      "order": 1,
+                      "rule_id": "info_exploitation.financial_account",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "organizational_fraud",
+                  "description": "以招聘为名发展下线或招募进入非法组织",
+                  "name": "组织欺诈类",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "adjudication_notes": "以发展人员数量计酬或要求缴费获得加入资格并形成层级关系，符合传销特征。此类招聘往往包装为创业、新零售等模式。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以招聘、创业、合伙为语境，强调发展下线、拉人入伙、团队裂变、人头提成、层级返利，或将收入与招募人数而非实际产品或服务挂钩",
+                      "name": "传销式招募",
+                      "order": 0,
+                      "rule_id": "organizational_fraud.pyramid_scheme",
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "黑中介无证经营，虚构岗位或夸大待遇，收取中介费后无法提供承诺的服务。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容以职业中介、劳务派遣为语境，收取中介费、介绍费，但未提供人力资源服务许可证等合法资质，或承诺的岗位明显虚假",
+                      "name": "黑中介虚假派遣",
+                      "order": 1,
+                      "rule_id": "organizational_fraud.unlicensed_agency",
+                      "suggested_risk_level": "medium"
+                    }
+                  ]
+                }
+              ],
+              "domain": "recruitment_fraud",
+              "general_exemptions": [
+                {
+                  "condition": "发布者持有平台认证的企业蓝V或官方认证标识，且招聘内容与其认证经营范围一致",
+                  "exemption_id": "verified_enterprise",
+                  "name": "已认证企业官方账号",
+                  "source_mappings": []
+                },
+                {
+                  "condition": "内容明确标注为正规人力资源服务机构发布，且提供可验证的人力资源服务许可证编号",
+                  "exemption_id": "licensed_hr_service",
+                  "name": "持证人力资源服务机构",
+                  "source_mappings": []
+                }
+              ],
+              "name": "招聘诈骗风险规则集（行为模式版）",
+              "schema_version": 0
+            }
+          },
+          "status": "ok",
+          "execution_identity": {
+            "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+            "turn_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0:investigation-turn:d4878f59ff204831a6073022219f3024:85a42700",
+            "tool_call_id": "call_fc670f635f5f457faa3e5ef8"
+          }
+        }
+      ],
+      "mutation_receipts": [
+        {
+          "receipt_id": "creation-tool-receipt:2288d343870b49b0a93e93eaf8266785",
+          "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+          "turn_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0:investigation-turn:d4878f59ff204831a6073022219f3024:85a42700",
+          "tool_call_id": "call_fc670f635f5f457faa3e5ef8",
+          "tool_name": "create_ruleset_proposal",
+          "arguments_fingerprint": "c0ee2839c66d0a75064003b9524503c31dee5916be33ccab85bfea43048568f9",
+          "status": "SUCCEEDED"
+        }
+      ],
+      "proposals_before": [
+        {
+          "proposal_id": "ruleset-proposal:a5b6896526a44ca4b4530323e341a16a",
+          "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+          "version": 2,
+          "content_hash": "0cb85f53cf9649c83687c716ee4f8332e296a0a62d8f529c217c232ad3e5dabf",
+          "content": {
+            "schema_version": 0,
+            "name": "招聘诈骗风险规则集",
+            "domain": "recruitment_fraud",
+            "audit_goal": "识别社交平台中以招聘、兼职、招工为名义实施的诈骗行为，包括虚假收费、刷单诈骗、高薪诱骗、个人信息套取及传销招募等典型场景，保护求职者免受财产损失和信息泄露风险。",
+            "general_exemptions": [
+              {
+                "exemption_id": "verified_enterprise",
+                "name": "已认证企业官方账号",
+                "condition": "发布者持有平台认证的企业蓝V或官方认证标识，且招聘内容与其认证经营范围一致",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "fee_collection",
+                "name": "虚假收费招聘",
+                "description": "以招聘为名向求职者收取各类费用（报名费、培训费、体检费、服装费、押金等）",
+                "order": 0,
+                "rules": [
+                  {
+                    "rule_id": "fee_collection.upfront_fee",
+                    "name": "招聘要求预缴费用",
+                    "hit_condition": "内容以招聘、招工、入职为语境，且明确要求求职者先支付报名费、培训费、体检费、服装费、工牌费、押金、保证金、建档费等具体费用后才可上岗或入职",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规用人单位不得在入职前向劳动者收取任何费用（《劳动合同法》第九条）。只有当招聘内容中明确要求求职者先支付具体费用后才可上岗或入职时，才视为高风险。需结合是否有正规企业资质信息综合判断。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "fee_collection.loan_induction",
+                    "name": "招聘诱导贷款培训",
+                    "hit_condition": "内容以招聘或就业为语境，同时出现培训贷、助学贷、先培训后上岗、分期付学费、贷款培训等表述，暗示求职者需通过贷款支付培训费用",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "典型的培训贷骗局，以高薪就业为诱饵诱导求职者背负贷款。实际往往培训质量低劣或根本无法安排承诺的工作岗位。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "brush_scam",
+                "name": "刷单兼职诈骗",
+                "description": "以刷单、刷信誉、点赞赚钱等名义实施的兼职诈骗",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "brush_scam.order_brushing",
+                    "name": "刷单刷信誉兼职",
+                    "hit_condition": "内容包含刷单、刷信誉、刷好评、做任务返佣、点赞赚钱、关注返现、代拍代抢等表述，并承诺高额回报或日结工资",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "刷单本身即为违法行为，以刷单为名的兼职几乎均为诈骗。典型模式为小额返利建立信任后骗取大额本金。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "brush_scam.deposit_task",
+                    "name": "兼职要求缴纳押金或垫资",
+                    "hit_condition": "内容以兼职、副业、在家赚钱为语境，要求先缴纳入会费、押金、垫资、充值激活等费用才能开始接单或做任务",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "任何要求先付款才能开始工作的兼职均为高风险。正规兼职不会要求劳动者预先支付费用或垫付资金。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "salary_lure",
+                "name": "高薪诱骗",
+                "description": "以不切实际的高薪、低门槛条件吸引求职者，实际为诈骗引流",
+                "order": 2,
+                "rules": [
+                  {
+                    "rule_id": "salary_lure.unrealistic_pay",
+                    "name": "异常高薪低门槛招聘",
+                    "hit_condition": "内容以招聘为语境，承诺日薪数百至数千元或月入过万等明显超出市场水平的薪资，同时对学历、经验、技能几乎无要求，或强调零基础、无需经验、轻松上手",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "薪资与岗位要求严重不匹配是招聘诈骗的典型特征。需结合具体行业、岗位判断是否合理。单独此条为中等风险，若同时涉及收费或信息收集则升级为高风险。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "salary_lure.overseas_lure",
+                    "name": "境外高薪招聘诱导",
+                    "hit_condition": "内容以境外工作、出国打工、海外高薪为语境，承诺高额薪资且门槛极低，目的地涉及东南亚、缅甸、柬埔寨、菲律宾、迪拜等已知高风险区域",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "境外高薪低门槛招聘极大概率为电信诈骗园区或非法用工招募。近年来东南亚地区此类案件频发，需高度警惕。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "info_harvest",
+                "name": "个人信息套取",
+                "description": "以招聘为名套取求职者身份证、银行卡、手机号等敏感个人信息",
+                "order": 3,
+                "rules": [
+                  {
+                    "rule_id": "info_harvest.id_document",
+                    "name": "招聘索要身份证件",
+                    "hit_condition": "内容以招聘或面试为语境，要求在面试前或入职前提交身份证正反面照片、手持身份证照片、户口本照片等证件影像",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规企业在入职环节才会核验身份信息，且应通过安全渠道提交。在社交平台公开或私聊中索要证件照片极可能用于身份冒用或注册非法账户。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "info_harvest.bank_info",
+                    "name": "招聘索要银行卡及验证码",
+                    "hit_condition": "内容以招聘、入职、发薪为语境，索要银行卡号、银行卡密码、网银验证码、手机验证码，或要求提供银行卡用于走账、代收代付",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "索要银行卡信息和验证码是典型的金融诈骗手段，可能涉及盗刷、洗钱或帮助信息网络犯罪活动。要求提供银行卡走账则涉嫌帮信罪。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "pyramid_recruit",
+                "name": "传销及非法组织招募",
+                "description": "以招聘为名实施传销拉人头或加入非法组织",
+                "order": 4,
+                "rules": [
+                  {
+                    "rule_id": "pyramid_recruit.downline",
+                    "name": "招聘发展下线拉人头",
+                    "hit_condition": "内容以招聘、创业、合伙为语境，强调发展下线、拉人入伙、团队裂变、人头提成、层级返利，或将收入来源与招募人数而非实际产品或服务挂钩",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "以发展人员数量计酬或要求缴纳费用获得加入资格并形成层级关系的，符合传销特征（《禁止传销条例》）。此类招聘往往包装为创业机会或新零售模式。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "created_at": "2026-09-07T08:28:34.263625Z",
+          "updated_at": "2026-09-07T08:29:27.073368Z"
+        }
+      ],
+      "proposals_after": [
+        {
+          "proposal_id": "ruleset-proposal:a5b6896526a44ca4b4530323e341a16a",
+          "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+          "version": 2,
+          "content_hash": "0cb85f53cf9649c83687c716ee4f8332e296a0a62d8f529c217c232ad3e5dabf",
+          "content": {
+            "schema_version": 0,
+            "name": "招聘诈骗风险规则集",
+            "domain": "recruitment_fraud",
+            "audit_goal": "识别社交平台中以招聘、兼职、招工为名义实施的诈骗行为，包括虚假收费、刷单诈骗、高薪诱骗、个人信息套取及传销招募等典型场景，保护求职者免受财产损失和信息泄露风险。",
+            "general_exemptions": [
+              {
+                "exemption_id": "verified_enterprise",
+                "name": "已认证企业官方账号",
+                "condition": "发布者持有平台认证的企业蓝V或官方认证标识，且招聘内容与其认证经营范围一致",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "fee_collection",
+                "name": "虚假收费招聘",
+                "description": "以招聘为名向求职者收取各类费用（报名费、培训费、体检费、服装费、押金等）",
+                "order": 0,
+                "rules": [
+                  {
+                    "rule_id": "fee_collection.upfront_fee",
+                    "name": "招聘要求预缴费用",
+                    "hit_condition": "内容以招聘、招工、入职为语境，且明确要求求职者先支付报名费、培训费、体检费、服装费、工牌费、押金、保证金、建档费等具体费用后才可上岗或入职",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规用人单位不得在入职前向劳动者收取任何费用（《劳动合同法》第九条）。只有当招聘内容中明确要求求职者先支付具体费用后才可上岗或入职时，才视为高风险。需结合是否有正规企业资质信息综合判断。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "fee_collection.loan_induction",
+                    "name": "招聘诱导贷款培训",
+                    "hit_condition": "内容以招聘或就业为语境，同时出现培训贷、助学贷、先培训后上岗、分期付学费、贷款培训等表述，暗示求职者需通过贷款支付培训费用",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "典型的培训贷骗局，以高薪就业为诱饵诱导求职者背负贷款。实际往往培训质量低劣或根本无法安排承诺的工作岗位。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "brush_scam",
+                "name": "刷单兼职诈骗",
+                "description": "以刷单、刷信誉、点赞赚钱等名义实施的兼职诈骗",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "brush_scam.order_brushing",
+                    "name": "刷单刷信誉兼职",
+                    "hit_condition": "内容包含刷单、刷信誉、刷好评、做任务返佣、点赞赚钱、关注返现、代拍代抢等表述，并承诺高额回报或日结工资",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "刷单本身即为违法行为，以刷单为名的兼职几乎均为诈骗。典型模式为小额返利建立信任后骗取大额本金。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "brush_scam.deposit_task",
+                    "name": "兼职要求缴纳押金或垫资",
+                    "hit_condition": "内容以兼职、副业、在家赚钱为语境，要求先缴纳入会费、押金、垫资、充值激活等费用才能开始接单或做任务",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "任何要求先付款才能开始工作的兼职均为高风险。正规兼职不会要求劳动者预先支付费用或垫付资金。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "salary_lure",
+                "name": "高薪诱骗",
+                "description": "以不切实际的高薪、低门槛条件吸引求职者，实际为诈骗引流",
+                "order": 2,
+                "rules": [
+                  {
+                    "rule_id": "salary_lure.unrealistic_pay",
+                    "name": "异常高薪低门槛招聘",
+                    "hit_condition": "内容以招聘为语境，承诺日薪数百至数千元或月入过万等明显超出市场水平的薪资，同时对学历、经验、技能几乎无要求，或强调零基础、无需经验、轻松上手",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "薪资与岗位要求严重不匹配是招聘诈骗的典型特征。需结合具体行业、岗位判断是否合理。单独此条为中等风险，若同时涉及收费或信息收集则升级为高风险。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "salary_lure.overseas_lure",
+                    "name": "境外高薪招聘诱导",
+                    "hit_condition": "内容以境外工作、出国打工、海外高薪为语境，承诺高额薪资且门槛极低，目的地涉及东南亚、缅甸、柬埔寨、菲律宾、迪拜等已知高风险区域",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "境外高薪低门槛招聘极大概率为电信诈骗园区或非法用工招募。近年来东南亚地区此类案件频发，需高度警惕。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "info_harvest",
+                "name": "个人信息套取",
+                "description": "以招聘为名套取求职者身份证、银行卡、手机号等敏感个人信息",
+                "order": 3,
+                "rules": [
+                  {
+                    "rule_id": "info_harvest.id_document",
+                    "name": "招聘索要身份证件",
+                    "hit_condition": "内容以招聘或面试为语境，要求在面试前或入职前提交身份证正反面照片、手持身份证照片、户口本照片等证件影像",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规企业在入职环节才会核验身份信息，且应通过安全渠道提交。在社交平台公开或私聊中索要证件照片极可能用于身份冒用或注册非法账户。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "info_harvest.bank_info",
+                    "name": "招聘索要银行卡及验证码",
+                    "hit_condition": "内容以招聘、入职、发薪为语境，索要银行卡号、银行卡密码、网银验证码、手机验证码，或要求提供银行卡用于走账、代收代付",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "索要银行卡信息和验证码是典型的金融诈骗手段，可能涉及盗刷、洗钱或帮助信息网络犯罪活动。要求提供银行卡走账则涉嫌帮信罪。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "pyramid_recruit",
+                "name": "传销及非法组织招募",
+                "description": "以招聘为名实施传销拉人头或加入非法组织",
+                "order": 4,
+                "rules": [
+                  {
+                    "rule_id": "pyramid_recruit.downline",
+                    "name": "招聘发展下线拉人头",
+                    "hit_condition": "内容以招聘、创业、合伙为语境，强调发展下线、拉人入伙、团队裂变、人头提成、层级返利，或将收入来源与招募人数而非实际产品或服务挂钩",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "以发展人员数量计酬或要求缴纳费用获得加入资格并形成层级关系的，符合传销特征（《禁止传销条例》）。此类招聘往往包装为创业机会或新零售模式。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "created_at": "2026-09-07T08:28:34.263625Z",
+          "updated_at": "2026-09-07T08:29:27.073368Z"
+        },
+        {
+          "proposal_id": "ruleset-proposal:d18420b8df0a496390bc78e8f6b5e51c",
+          "session_id": "investigation-session:20e7d81ccb0a4732b285cdc80c2e13d0",
+          "version": 1,
+          "content_hash": "d1b49fd2d82eb726baaea565c1d26d6dafd14adca77b501973306f641aa33a0f",
+          "content": {
+            "schema_version": 0,
+            "name": "招聘诈骗风险规则集（行为模式版）",
+            "domain": "recruitment_fraud",
+            "audit_goal": "通过识别招聘诈骗的典型行为模式，发现社交平台中以求职、招工为名义的欺诈内容，重点关注虚假承诺、信息不对称滥用、资金转移诱导等核心欺诈特征。",
+            "general_exemptions": [
+              {
+                "exemption_id": "verified_enterprise",
+                "name": "已认证企业官方账号",
+                "condition": "发布者持有平台认证的企业蓝V或官方认证标识，且招聘内容与其认证经营范围一致",
+                "source_mappings": []
+              },
+              {
+                "exemption_id": "licensed_hr_service",
+                "name": "持证人力资源服务机构",
+                "condition": "内容明确标注为正规人力资源服务机构发布，且提供可验证的人力资源服务许可证编号",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "false_promise",
+                "name": "虚假承诺类",
+                "description": "通过虚假承诺吸引求职者，实际无法兑现",
+                "order": 0,
+                "rules": [
+                  {
+                    "rule_id": "false_promise.salary_mismatch",
+                    "name": "薪资承诺与岗位要求严重不匹配",
+                    "hit_condition": "内容以招聘为语境，承诺的薪资水平明显高于同岗位市场均价，且对求职者的学历、经验、技能无实质性要求，或使用'轻松月入过万''零基础日赚千元'等绝对化表述",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "薪资承诺明显超出市场合理范围且无对应技能要求，属于典型的诱饵话术。需结合行业、地区判断是否合理。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "false_promise.employment_guarantee",
+                    "name": "虚假就业保证",
+                    "hit_condition": "内容以招聘、培训为语境，使用'包就业''保证入职''100%安排工作''不就业全额退款'等绝对化承诺，且未提供可验证的企业资质或过往成功案例",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "承诺包就业、保证入职但实际无法兑现，往往伴随收费或培训贷。正规企业不会做出绝对化的就业保证。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "false_promise.overseas_high_risk",
+                    "name": "境外高风险区域招聘",
+                    "hit_condition": "内容以境外工作、出国打工为语境，目的地涉及缅甸、柬埔寨、菲律宾、老挝、阿联酋等已知高风险区域，承诺高薪但门槛极低，且未提供正规劳务派遣资质",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "境外高薪招聘往往与电信诈骗园区、非法用工相关，尤其是东南亚地区。低门槛+高薪资+境外地点是典型危险信号。",
+                    "enabled": true,
+                    "order": 2,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "fund_transfer_induction",
+                "name": "资金转移诱导类",
+                "description": "诱导求职者向诈骗方转移资金",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "fund_transfer_induction.pre_employment_fee",
+                    "name": "入职前强制收费",
+                    "hit_condition": "内容以招聘、入职为语境，明确要求求职者先支付报名费、培训费、体检费、服装费、押金等具体费用后才可上岗或入职",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "任何要求求职者在入职前支付费用的行为均违反《劳动合同法》。只有当明确要求先付款才能上岗时才命中此规则。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "fund_transfer_induction.training_loan",
+                    "name": "诱导贷款培训",
+                    "hit_condition": "内容以招聘、培训为语境，要求求职者通过贷款、分期付款等方式支付培训费用，或暗示'先学习后付款''入职后从工资扣除学费'",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "以培训为名诱导求职者贷款，实际培训质量低劣或无法安排承诺的工作。培训贷是近年来高发的招聘诈骗形式。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "fund_transfer_induction.part_deposit",
+                    "name": "兼职垫资或缴费",
+                    "hit_condition": "内容以兼职、副业为语境，涉及刷单、刷信誉、点赞赚钱、做任务返佣等，并要求先缴纳入会费、押金、垫资或充值激活",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "刷单、做任务等兼职本身违法，以之为名要求先垫资或缴费的几乎均为诈骗。小额返利建立信任后骗取大额本金是典型模式。",
+                    "enabled": true,
+                    "order": 2,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "info_exploitation",
+                "name": "信息剥削类",
+                "description": "套取求职者敏感信息用于非法目的",
+                "order": 2,
+                "rules": [
+                  {
+                    "rule_id": "info_exploitation.id_document_early",
+                    "name": "提前索要证件影像",
+                    "hit_condition": "内容以招聘、面试为语境，在正式入职前要求提交身份证正反面照片、手持身份证照片、户口本照片等证件影像",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规企业在正式入职环节才核验身份，且应通过安全渠道。在社交平台索要证件照片极可能用于身份冒用。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "info_exploitation.financial_account",
+                    "name": "索要金融账户信息",
+                    "hit_condition": "内容以招聘、入职、发薪为语境，索要银行卡号、密码、网银验证码、手机验证码，或要求提供银行卡用于走账、代收代付",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "索要银行卡信息、验证码或要求提供银行卡走账，可能涉及盗刷、洗钱或帮信罪。正规企业不会通过社交平台索要此类信息。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "organizational_fraud",
+                "name": "组织欺诈类",
+                "description": "以招聘为名发展下线或招募进入非法组织",
+                "order": 3,
+                "rules": [
+                  {
+                    "rule_id": "organizational_fraud.pyramid_scheme",
+                    "name": "传销式招募",
+                    "hit_condition": "内容以招聘、创业、合伙为语境，强调发展下线、拉人入伙、团队裂变、人头提成、层级返利，或将收入与招募人数而非实际产品或服务挂钩",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "以发展人员数量计酬或要求缴费获得加入资格并形成层级关系，符合传销特征。此类招聘往往包装为创业、新零售等模式。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "organizational_fraud.unlicensed_agency",
+                    "name": "黑中介虚假派遣",
+                    "hit_condition": "内容以职业中介、劳务派遣为语境，收取中介费、介绍费，但未提供人力资源服务许可证等合法资质，或承诺的岗位明显虚假",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "黑中介无证经营，虚构岗位或夸大待遇，收取中介费后无法提供承诺的服务。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "created_at": "2026-09-07T08:30:10.252352Z",
+          "updated_at": "2026-09-07T08:30:10.252352Z"
+        }
+      ],
+      "drafts_unchanged": true,
+      "draft_side_effects": [],
+      "no_formal_resource_mutation": true,
+      "run_count": 0,
+      "job_count": 0,
+      "report_count": 0,
+      "hermes_tool_sequence": [
+        "create_ruleset_proposal"
+      ],
+      "model_output_shape": [
+        {
+          "role": "user",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 0
+        }
+      ]
+    },
+    {
+      "case": "temporary-terms-alone",
+      "input": "我想调查小红书上的赌博博彩推广风险，如果没有合适词库就帮我生成这次搜索词。",
+      "session_id": "investigation-session:0e03a9ba77234962be0f418bffd520d3",
+      "turn_id": "investigation-turn:8c58ec3b726e440ab289b93a1b13c4ef",
+      "status": "completed",
+      "failure_point": null,
+      "answer": "已为你创建调查草稿：**小红书赌博博彩推广风险调查**\n\n**配置概览：**\n- **平台**：小红书\n- **调查模式**：搜索模式\n- **判定规则**：赌博博彩风险规则集 v2（7条规则）\n- **召回策略**：临时搜索词（本次调查专用，不保存为正式词库）\n\n**生成的搜索词（15个核心概念）：**\n博彩平台推荐、网赌平台、注册送彩金、博彩代理招揽、境外赌博、上分下分、带单老师、赌球推荐、六合彩、百家乐、真人娱乐城、充值返利、棋牌游戏赌博、时时彩、外围投注\n\n**草稿状态**：DRAFT（未确认）\n- 草稿ID：`investigation-draft:de1c7f2341d0448cbbba930fc0b0b7af`\n- 当前版本：1\n\n你可以随时查看或编辑这个草稿。如果配置无误，告诉我\"确认并启动调查\"，我会将其提交执行。",
+      "llm_call_count": 6,
+      "tools": [
+        "query_investigation_options",
+        "create_investigation_draft"
+      ],
+      "tool_events": [
+        {
+          "tool": "query_investigation_options",
+          "arguments": {
+            "domain_hint": "赌博博彩推广",
+            "mode": "search",
+            "platform": "xhs"
+          },
+          "status": "ok"
+        },
+        {
+          "tool": "create_investigation_draft",
+          "arguments": {
+            "title": "小红书赌博博彩推广风险调查",
+            "objective": "调查小红书平台上存在的赌博、博彩类推广内容，识别相关违规风险账号和笔记",
+            "configuration": {
+              "schema_version": "investigation-draft-config-v4",
+              "platform": "xhs",
+              "investigation": {
+                "mode": "search",
+                "recall_plan": {
+                  "strategy": "temporary_terms",
+                  "terms": [
+                    "博彩平台推荐",
+                    "网赌平台",
+                    "注册送彩金",
+                    "博彩代理招揽",
+                    "境外赌博",
+                    "上分下分",
+                    "带单老师",
+                    "赌球推荐",
+                    "六合彩",
+                    "百家乐",
+                    "真人娱乐城",
+                    "充值返利",
+                    "棋牌游戏赌博",
+                    "时时彩",
+                    "外围投注"
+                  ],
+                  "source_lexicon_ids": []
+                }
+              },
+              "judgement": {
+                "strategy": "existing_ruleset",
+                "ruleset_revision_id": "ruleset-revision:gambling:v2",
+                "expected_ruleset_version": 2,
+                "expected_ruleset_content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc"
+              }
+            }
+          },
+          "status": "ok",
+          "execution_identity": {
+            "session_id": "investigation-session:0e03a9ba77234962be0f418bffd520d3",
+            "turn_id": "investigation-session:0e03a9ba77234962be0f418bffd520d3:investigation-turn:8c58ec3b726e440ab289b93a1b13c4ef:7b74ac72",
+            "tool_call_id": "call_b1472901aadf4954807793bc"
+          }
+        }
+      ],
+      "mutation_receipts": [
+        {
+          "receipt_id": "creation-tool-receipt:7253837bc46a4655851521177835bdd8",
+          "session_id": "investigation-session:0e03a9ba77234962be0f418bffd520d3",
+          "turn_id": "investigation-session:0e03a9ba77234962be0f418bffd520d3:investigation-turn:8c58ec3b726e440ab289b93a1b13c4ef:7b74ac72",
+          "tool_call_id": "call_b1472901aadf4954807793bc",
+          "tool_name": "create_investigation_draft",
+          "arguments_fingerprint": "45e8332db5df562781794187c3bca859b228ed43676a00dd7f0383a0800662cf",
+          "status": "SUCCEEDED"
+        }
+      ],
+      "proposals_before": [],
+      "proposals_after": [],
+      "drafts_unchanged": false,
+      "draft_side_effects": [
+        {
+          "draft_id": "investigation-draft:de1c7f2341d0448cbbba930fc0b0b7af",
+          "revision": 1,
+          "configuration": {
+            "investigation": {
+              "mode": "search",
+              "recall_plan": {
+                "source_lexicon_ids": [],
+                "strategy": "temporary_terms",
+                "terms": [
+                  "博彩平台推荐",
+                  "网赌平台",
+                  "注册送彩金",
+                  "博彩代理招揽",
+                  "境外赌博",
+                  "上分下分",
+                  "带单老师",
+                  "赌球推荐",
+                  "六合彩",
+                  "百家乐",
+                  "真人娱乐城",
+                  "充值返利",
+                  "棋牌游戏赌博",
+                  "时时彩",
+                  "外围投注"
+                ]
+              }
+            },
+            "judgement": {
+              "expected_ruleset_content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc",
+              "expected_ruleset_version": 2,
+              "ruleset_revision_id": "ruleset-revision:gambling:v2",
+              "strategy": "existing_ruleset"
+            },
+            "platform": "xhs",
+            "schema_version": "investigation-draft-config-v4"
+          }
+        }
+      ],
+      "no_formal_resource_mutation": true,
+      "run_count": 0,
+      "job_count": 0,
+      "report_count": 0,
+      "hermes_tool_sequence": [
+        "tool_search",
+        "tool_describe",
+        "query_investigation_options",
+        "tool_describe",
+        "create_investigation_draft"
+      ],
+      "model_output_shape": [
+        {
+          "role": "user",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 0
+        }
+      ]
+    },
+    {
+      "case": "dual-generation-1",
+      "input": "帮我调查小红书上的赌博博彩推广风险，用现有已发布的赌博博彩研判规则创建调查草案；没有合适词库就生成本次搜索词，同时另外生成一套临时研判规则 Proposal 给我比较。先不要启动调查。",
+      "session_id": "investigation-session:ee5958c4fe924416aa3b0192c35ee887",
+      "turn_id": "investigation-turn:294da246d93b45ce81669f76cc67bb94",
+      "status": "completed",
+      "failure_point": null,
+      "answer": "已完成两项任务：\n\n## 调查草案已创建\n\n**草案ID**: `investigation-draft:503484b9c2114df09e0c46f4d2ba35e1`\n\n**配置详情**：\n- **平台**: 小红书 (xhs)\n- **研判规则**: 使用已发布的「赌博博彩风险规则集 v2」（7条规则）\n- **召回策略**: 临时搜索词（因无合适词库）\n- **搜索词**: 博彩平台开户、网赌代理带单、赌博群入口、代投包赢、充值上分提现、博彩返水、境外博彩App、体育投注推广\n\n## 临时规则集 Proposal 已生成\n\n**Proposal ID**: `ruleset-proposal:ef725c6dcad94b3cb2ebedc009be6561`\n\n**新增内容**（相比已发布的 v2）：\n\n1. **加密货币与虚拟资产赌博**（2条新规则）\n   - 加密货币投注与结算：识别 USDT、虚拟币与赌博平台结合\n   - 区块链概念伪装赌博导流：识别空投、挖矿等概念伪装\n\n2. **直播与短视频赌博推广**（2条新规则）\n   - 直播互动赌博玩法：转盘、猜大小等互动玩法\n   - 主播展示赌博操作：展示 App 界面、口述投注指令\n\n3. **隐晦话术与变体规避**（2条新规则）\n   - 谐音暗语赌博推广：识别谐音、缩写、emoji 暗语\n   - 虚拟礼物变现赌博：打赏与返现、提现形成闭环\n\n4. **新增全局豁免**：加密货币投资讨论、平台合规抽奖活动\n\n## 当前状态\n\n- ✅ 调查草案已创建（可编辑）\n- ✅ 临时规则集 Proposal 已生成（仅供比较，不影响草案）\n- ⏸️ **调查尚未启动**\n\n如需启动调查，请明确告知\"确认并启动调查\"。如需修改草案配置（如调整搜索词、更换规则集），也可以先编辑再确认。",
+      "llm_call_count": 7,
+      "tools": [
+        "query_investigation_options",
+        "query_investigation_options",
+        "create_investigation_draft",
+        "create_ruleset_proposal"
+      ],
+      "tool_events": [
+        {
+          "tool": "query_investigation_options",
+          "arguments": {
+            "domain_hint": "赌博博彩",
+            "mode": "search",
+            "platform": "xhs",
+            "page_size": 20,
+            "lexicon_term_limit": 50
+          },
+          "status": "ok"
+        },
+        {
+          "tool": "query_investigation_options",
+          "arguments": {
+            "include_ruleset_details_for_revision_ids": [
+              "ruleset-revision:gambling:v2"
+            ]
+          },
+          "status": "ok"
+        },
+        {
+          "tool": "create_investigation_draft",
+          "arguments": {
+            "configuration": {
+              "investigation": {
+                "mode": "search",
+                "recall_plan": {
+                  "source_lexicon_ids": [],
+                  "strategy": "temporary_terms",
+                  "terms": [
+                    "博彩平台开户",
+                    "网赌代理带单",
+                    "赌博群入口",
+                    "代投包赢",
+                    "充值上分提现",
+                    "博彩返水",
+                    "境外博彩App",
+                    "体育投注推广"
+                  ]
+                }
+              },
+              "judgement": {
+                "expected_ruleset_content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc",
+                "expected_ruleset_version": 2,
+                "ruleset_revision_id": "ruleset-revision:gambling:v2",
+                "strategy": "existing_ruleset"
+              },
+              "platform": "xhs",
+              "schema_version": "investigation-draft-config-v4"
+            },
+            "objective": "调查小红书平台上赌博博彩推广内容的风险情况，识别博彩平台入口、代理带单、资金操作、站外导流等违规推广行为。",
+            "title": "小红书赌博博彩推广风险调查"
+          },
+          "status": "ok",
+          "execution_identity": {
+            "session_id": "investigation-session:ee5958c4fe924416aa3b0192c35ee887",
+            "turn_id": "investigation-session:ee5958c4fe924416aa3b0192c35ee887:investigation-turn:294da246d93b45ce81669f76cc67bb94:67fb84b8",
+            "tool_call_id": "call_d6fe3da1188f4cadabc49a42"
+          }
+        },
+        {
+          "tool": "create_ruleset_proposal",
+          "arguments": {
+            "content": {
+              "audit_goal": "识别社交媒体平台上赌博博彩推广的新型变体，包括加密货币赌博、直播带赌、隐晦话术导流、虚拟礼物变现赌博等场景，以及跨模态证据形成的赌博交易闭环。",
+              "categories": [
+                {
+                  "category_id": "gambling.access_and_funds",
+                  "description": "识别平台、群入口、二维码以及下注、充值、提现和结算链路。",
+                  "name": "入口与资金闭环",
+                  "order": 10,
+                  "rules": [
+                    {
+                      "adjudication_notes": "入口与资金或投注证据必须指向同一赌博活动；单独二维码或平台截图不直接构成高风险。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "投注平台、App、开户链接、二维码、群入口、代理或联系方式，与下注、充值、上分、提现、赔率、返水或结算路径同时出现。",
+                      "name": "博彩平台或群入口与资金路径",
+                      "order": 10,
+                      "rule_exemptions": [
+                        {
+                          "condition": "投注平台、二维码或界面只用于反赌新闻、普法、被骗曝光或举报，且没有参与指令。",
+                          "exemption_id": "gambling.rule.platform.warning_context",
+                          "name": "警示取证语境"
+                        }
+                      ],
+                      "rule_id": "gambling.platform_entry_and_funding",
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "盘口、赔率等词只有在真实投注或资金路径中才可达到高风险；普通赛事分析不得按赌博操作处理。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "投注、盘口、赔率、下注、上分、提现、结算、刷流水、赌资或资金盘等明确参与或资金操作。",
+                      "name": "盘口下注与充值提现操作",
+                      "order": 20,
+                      "rule_exemptions": [
+                        {
+                          "condition": "只讨论比赛结果、赛事数据或概率，且没有下注或资金执行意图。",
+                          "exemption_id": "gambling.rule.operations.discussion",
+                          "name": "赛事或概率讨论"
+                        }
+                      ],
+                      "rule_id": "gambling.betting_and_settlement",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "gambling.promotion_and_diversion",
+                  "description": "识别代理、带单、包赢稳赚和私域联系方式。",
+                  "name": "推广承诺与站外导流",
+                  "order": 20,
+                  "rules": [
+                    {
+                      "adjudication_notes": "诈骗语境中的投资带单需按实际主风险归类；本规则只处理明确指向赌博参与或投注平台的推广。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "代投、包赢、稳赚、回血、返水、带飞、房卡、车队、会员发展或返佣等引导参与。",
+                      "name": "代理带单与包赢稳赚承诺",
+                      "order": 10,
+                      "rule_exemptions": [],
+                      "rule_id": "gambling.agent_guaranteed_win_promotion",
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "联系方式或私信动作不能脱离赌博语境单独命中本规则；若同时形成资金路径，优先按高风险闭环规则处理。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "赌博黑话与私信、加群、看主页、联系方式、开户链接或交易暗示结合。",
+                      "name": "赌博语境下私信群聊主页导流",
+                      "order": 20,
+                      "rule_exemptions": [],
+                      "rule_id": "gambling.off_platform_diversion",
+                      "suggested_risk_level": "medium"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "gambling.crypto_and_virtual_assets",
+                  "description": "识别利用加密货币、虚拟资产、USDT、代币等新型支付手段进行赌博的推广行为。",
+                  "name": "加密货币与虚拟资产赌博",
+                  "order": 25,
+                  "rules": [
+                    {
+                      "adjudication_notes": "单纯讨论加密货币投资或交易不构成赌博；必须有投注、赔率、上下分等赌博操作要素。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "USDT、加密货币、代币、虚拟币与下注、赔率、上分、提现、返水、盘口或投注平台结合出现，形成赌博参与链路。",
+                      "name": "加密货币投注与结算",
+                      "order": 10,
+                      "rule_exemptions": [
+                        {
+                          "condition": "只讨论加密货币行情、投资策略或技术分析，没有投注或赌博平台要素。",
+                          "exemption_id": "gambling.rule.crypto.investment_discussion",
+                          "name": "加密货币投资讨论"
+                        }
+                      ],
+                      "rule_id": "gambling.crypto_betting_and_settlement",
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "空投、挖矿等词在正常区块链语境中常见；必须与赌博平台入口或资金操作结合才构成命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "空投、挖矿、DeFi、链游等概念与赌博平台注册、充值、返佣或代理发展结合。",
+                      "name": "区块链概念伪装赌博导流",
+                      "order": 20,
+                      "rule_exemptions": [
+                        {
+                          "condition": "只讨论区块链技术应用或合法GameFi项目，没有赌博投注要素。",
+                          "exemption_id": "gambling.rule.crypto.blockchain_tech",
+                          "name": "区块链技术讨论"
+                        }
+                      ],
+                      "rule_id": "gambling.crypto_disguised_diversion",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "gambling.live_stream_gambling",
+                  "description": "识别直播、短视频中以互动形式组织的赌博推广行为。",
+                  "name": "直播与短视频赌博推广",
+                  "order": 28,
+                  "rules": [
+                    {
+                      "adjudication_notes": "直播中的互动游戏或抽奖需区分合法营销与赌博；关键看是否有投注资金、赔率和上下分机制。",
+                      "application_stages": [
+                        "video_frame_evidence",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "直播或短视频中展示转盘、猜大小、押注、竞猜等互动玩法，并与充值、打赏变现、返现或私域导流结合。",
+                      "name": "直播互动赌博玩法",
+                      "order": 10,
+                      "rule_exemptions": [
+                        {
+                          "condition": "平台官方合规抽奖活动，无投注资金要求，奖品由平台提供。",
+                          "exemption_id": "gambling.rule.livestream.platform_lottery",
+                          "name": "平台合规抽奖"
+                        }
+                      ],
+                      "rule_id": "gambling.livestream_interactive_gambling",
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "主播本人展示赌博界面或口述投注指令为直接证据；仅弹幕讨论不构成主播责任。",
+                      "application_stages": [
+                        "video_frame_evidence",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "主播展示赌博App界面、口述投注指令、引导粉丝跟单或展示投注收益截图。",
+                      "name": "主播展示赌博操作",
+                      "order": 20,
+                      "rule_exemptions": [
+                        {
+                          "condition": "主播在反赌或新闻报道语境中展示赌博界面作为证据。",
+                          "exemption_id": "gambling.rule.livestream.warning_context",
+                          "name": "反赌警示展示"
+                        }
+                      ],
+                      "rule_id": "gambling.livestream_host_gambling_demo",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "gambling.covert_language",
+                  "description": "识别使用谐音、缩写、暗语等隐晦话术规避审核的赌博推广。",
+                  "name": "隐晦话术与变体规避",
+                  "order": 32,
+                  "rules": [
+                    {
+                      "adjudication_notes": "单个谐音或缩写不足以判定；必须结合上下文中的资金、平台或组织参与证据。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "谐音字、拼音缩写、emoji暗语、拆字等变体形式与投注、充值、返水、代理或平台入口语义结合。",
+                      "name": "谐音暗语赌博推广",
+                      "order": 10,
+                      "rule_exemptions": [
+                        {
+                          "condition": "谐音或缩写用于正常游戏、娱乐或日常交流语境。",
+                          "exemption_id": "gambling.rule.covert.normal_slang",
+                          "name": "正常俚语使用"
+                        }
+                      ],
+                      "rule_id": "gambling.covert_language_promotion",
+                      "suggested_risk_level": "medium"
+                    },
+                    {
+                      "adjudication_notes": "虚拟礼物、打赏变现本身不违规；必须与赌博投注或返现承诺形成闭环。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "虚拟礼物、打赏、刷礼物与返现、提现、下注或赌博平台注册形成变现闭环。",
+                      "name": "虚拟礼物变现赌博",
+                      "order": 20,
+                      "rule_exemptions": [
+                        {
+                          "condition": "正常粉丝打赏互动，没有返现或赌博投注承诺。",
+                          "exemption_id": "gambling.rule.covert.normal_gift",
+                          "name": "正常粉丝互动"
+                        }
+                      ],
+                      "rule_id": "gambling.virtual_gift_monetization",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "gambling.comments",
+                  "description": "识别评论本身组织或邀请赌博参与，并保持评论证据独立归责。",
+                  "name": "评论自身组织参与",
+                  "order": 35,
+                  "rules": [
+                    {
+                      "adjudication_notes": "单条评论独立判断自身风险，不直接归责主帖作者；评论证据主导时的最终建议由融合阶段处理。",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "评论本身组织或邀请他人下注、加群、私聊、充值、上分或提现。",
+                      "name": "评论本身组织参与",
+                      "order": 10,
+                      "rule_exemptions": [],
+                      "rule_id": "gambling.comment_organized_participation",
+                      "suggested_risk_level": "medium"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "gambling.adjudication",
+                  "description": "约束弱关键词、多模态闭环和可追踪输出。",
+                  "name": "证据强度与融合",
+                  "order": 40,
+                  "rules": [
+                    {
+                      "adjudication_notes": "单个关键词不得直接构成高风险，也不得把不同语境中的弱词机械拼接成闭环。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "只有赌博黑话、棋牌、体育、筹码、抽卡等元素，缺少投注、资金、平台、代理、导流或组织参与证据。",
+                      "name": "弱关键词需结合上下文",
+                      "order": 10,
+                      "rule_exemptions": [
+                        {
+                          "condition": "只属于普通赛事、游戏娱乐、概率科普、新闻反赌、普法或被骗曝光语境。",
+                          "exemption_id": "gambling.rule.weak_keyword.benign",
+                          "name": "明确正常语境"
+                        }
+                      ],
+                      "rule_id": "gambling.weak_keyword_context",
+                      "suggested_risk_level": "low"
+                    },
+                    {
+                      "adjudication_notes": "不同模态证据必须引用当前输入 evidence_id，且语义指向一致；候选帧和 OCR 线索需在整体上下文中重新校准。",
+                      "application_stages": [
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "已有跨模态证据共同形成投注平台、资金、代理、导流或组织参与链路；不得把不同类别的弱证据机械相加。",
+                      "name": "多模态赌博参与闭环",
+                      "order": 20,
+                      "rule_exemptions": [
+                        {
+                          "condition": "跨模态内容整体是反赌、普法、新闻取证或被骗曝光，且没有参与号召。",
+                          "exemption_id": "gambling.rule.multimodal.warning",
+                          "name": "警示内容跨模态豁免"
+                        }
+                      ],
+                      "rule_id": "gambling.multimodal_closed_loop",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                }
+              ],
+              "domain": "gambling",
+              "general_exemptions": [
+                {
+                  "condition": "无金钱交易、平台、群入口、结算或代理推广的棋牌、桌游、游戏、赛事和概率讨论。",
+                  "exemption_id": "gambling.exemption.sports_and_games",
+                  "name": "普通赛事、游戏与概率讨论"
+                },
+                {
+                  "condition": "新闻反赌、科普、被骗曝光和风险提示。",
+                  "exemption_id": "gambling.exemption.news_and_education",
+                  "name": "反赌新闻、普法与被骗曝光"
+                },
+                {
+                  "condition": "警示语境中的二维码且没有可执行平台或资金路径。",
+                  "exemption_id": "gambling.exemption.warning_qr",
+                  "name": "警示材料中的二维码"
+                },
+                {
+                  "condition": "合法合规的加密货币投资讨论、区块链技术科普，没有投注或赌博要素。",
+                  "exemption_id": "gambling.exemption.crypto_investment",
+                  "name": "加密货币投资与区块链技术讨论"
+                },
+                {
+                  "condition": "平台官方合规的抽奖、互动活动，无投注资金要求。",
+                  "exemption_id": "gambling.exemption.platform_compliant_lottery",
+                  "name": "平台合规抽奖与互动活动"
+                }
+              ],
+              "name": "赌博博彩推广研判规则候选 v3-draft",
+              "schema_version": 0
+            }
+          },
+          "status": "ok",
+          "execution_identity": {
+            "session_id": "investigation-session:ee5958c4fe924416aa3b0192c35ee887",
+            "turn_id": "investigation-session:ee5958c4fe924416aa3b0192c35ee887:investigation-turn:294da246d93b45ce81669f76cc67bb94:67fb84b8",
+            "tool_call_id": "call_842b3ecad1bc42b3b19066d7"
+          }
+        }
+      ],
+      "mutation_receipts": [
+        {
+          "receipt_id": "creation-tool-receipt:547a278b751e4a9e9c44adb14ce98630",
+          "session_id": "investigation-session:ee5958c4fe924416aa3b0192c35ee887",
+          "turn_id": "investigation-session:ee5958c4fe924416aa3b0192c35ee887:investigation-turn:294da246d93b45ce81669f76cc67bb94:67fb84b8",
+          "tool_call_id": "call_d6fe3da1188f4cadabc49a42",
+          "tool_name": "create_investigation_draft",
+          "arguments_fingerprint": "a12037957deba8ddd78adf7054da58530f5ce742feed8d58dc87b84be94dc6f9",
+          "status": "SUCCEEDED"
+        },
+        {
+          "receipt_id": "creation-tool-receipt:d9f2f131777046bda3e196ebdf5de312",
+          "session_id": "investigation-session:ee5958c4fe924416aa3b0192c35ee887",
+          "turn_id": "investigation-session:ee5958c4fe924416aa3b0192c35ee887:investigation-turn:294da246d93b45ce81669f76cc67bb94:67fb84b8",
+          "tool_call_id": "call_842b3ecad1bc42b3b19066d7",
+          "tool_name": "create_ruleset_proposal",
+          "arguments_fingerprint": "b1a98cbb0903100ae900d456755e354d9ad1dd2e2fe1ec6dda4abc85fcd2f440",
+          "status": "SUCCEEDED"
+        }
+      ],
+      "proposals_before": [],
+      "proposals_after": [
+        {
+          "proposal_id": "ruleset-proposal:ef725c6dcad94b3cb2ebedc009be6561",
+          "session_id": "investigation-session:ee5958c4fe924416aa3b0192c35ee887",
+          "version": 1,
+          "content_hash": "e306c1b2eb0c874468ca4c8993479806b17ebb8ae6e8375a7d6242e1bd75d2f1",
+          "content": {
+            "schema_version": 0,
+            "name": "赌博博彩推广研判规则候选 v3-draft",
+            "domain": "gambling",
+            "audit_goal": "识别社交媒体平台上赌博博彩推广的新型变体，包括加密货币赌博、直播带赌、隐晦话术导流、虚拟礼物变现赌博等场景，以及跨模态证据形成的赌博交易闭环。",
+            "general_exemptions": [
+              {
+                "exemption_id": "gambling.exemption.sports_and_games",
+                "name": "普通赛事、游戏与概率讨论",
+                "condition": "无金钱交易、平台、群入口、结算或代理推广的棋牌、桌游、游戏、赛事和概率讨论。",
+                "source_mappings": []
+              },
+              {
+                "exemption_id": "gambling.exemption.news_and_education",
+                "name": "反赌新闻、普法与被骗曝光",
+                "condition": "新闻反赌、科普、被骗曝光和风险提示。",
+                "source_mappings": []
+              },
+              {
+                "exemption_id": "gambling.exemption.warning_qr",
+                "name": "警示材料中的二维码",
+                "condition": "警示语境中的二维码且没有可执行平台或资金路径。",
+                "source_mappings": []
+              },
+              {
+                "exemption_id": "gambling.exemption.crypto_investment",
+                "name": "加密货币投资与区块链技术讨论",
+                "condition": "合法合规的加密货币投资讨论、区块链技术科普，没有投注或赌博要素。",
+                "source_mappings": []
+              },
+              {
+                "exemption_id": "gambling.exemption.platform_compliant_lottery",
+                "name": "平台合规抽奖与互动活动",
+                "condition": "平台官方合规的抽奖、互动活动，无投注资金要求。",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "gambling.access_and_funds",
+                "name": "入口与资金闭环",
+                "description": "识别平台、群入口、二维码以及下注、充值、提现和结算链路。",
+                "order": 10,
+                "rules": [
+                  {
+                    "rule_id": "gambling.platform_entry_and_funding",
+                    "name": "博彩平台或群入口与资金路径",
+                    "hit_condition": "投注平台、App、开户链接、二维码、群入口、代理或联系方式，与下注、充值、上分、提现、赔率、返水或结算路径同时出现。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "gambling.rule.platform.warning_context",
+                        "name": "警示取证语境",
+                        "condition": "投注平台、二维码或界面只用于反赌新闻、普法、被骗曝光或举报，且没有参与指令。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "入口与资金或投注证据必须指向同一赌博活动；单独二维码或平台截图不直接构成高风险。",
+                    "enabled": true,
+                    "order": 10,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "gambling.betting_and_settlement",
+                    "name": "盘口下注与充值提现操作",
+                    "hit_condition": "投注、盘口、赔率、下注、上分、提现、结算、刷流水、赌资或资金盘等明确参与或资金操作。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "gambling.rule.operations.discussion",
+                        "name": "赛事或概率讨论",
+                        "condition": "只讨论比赛结果、赛事数据或概率，且没有下注或资金执行意图。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "盘口、赔率等词只有在真实投注或资金路径中才可达到高风险；普通赛事分析不得按赌博操作处理。",
+                    "enabled": true,
+                    "order": 20,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "gambling.promotion_and_diversion",
+                "name": "推广承诺与站外导流",
+                "description": "识别代理、带单、包赢稳赚和私域联系方式。",
+                "order": 20,
+                "rules": [
+                  {
+                    "rule_id": "gambling.agent_guaranteed_win_promotion",
+                    "name": "代理带单与包赢稳赚承诺",
+                    "hit_condition": "代投、包赢、稳赚、回血、返水、带飞、房卡、车队、会员发展或返佣等引导参与。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "诈骗语境中的投资带单需按实际主风险归类；本规则只处理明确指向赌博参与或投注平台的推广。",
+                    "enabled": true,
+                    "order": 10,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "gambling.off_platform_diversion",
+                    "name": "赌博语境下私信群聊主页导流",
+                    "hit_condition": "赌博黑话与私信、加群、看主页、联系方式、开户链接或交易暗示结合。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "联系方式或私信动作不能脱离赌博语境单独命中本规则；若同时形成资金路径，优先按高风险闭环规则处理。",
+                    "enabled": true,
+                    "order": 20,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "gambling.crypto_and_virtual_assets",
+                "name": "加密货币与虚拟资产赌博",
+                "description": "识别利用加密货币、虚拟资产、USDT、代币等新型支付手段进行赌博的推广行为。",
+                "order": 25,
+                "rules": [
+                  {
+                    "rule_id": "gambling.crypto_betting_and_settlement",
+                    "name": "加密货币投注与结算",
+                    "hit_condition": "USDT、加密货币、代币、虚拟币与下注、赔率、上分、提现、返水、盘口或投注平台结合出现，形成赌博参与链路。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "gambling.rule.crypto.investment_discussion",
+                        "name": "加密货币投资讨论",
+                        "condition": "只讨论加密货币行情、投资策略或技术分析，没有投注或赌博平台要素。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "单纯讨论加密货币投资或交易不构成赌博；必须有投注、赔率、上下分等赌博操作要素。",
+                    "enabled": true,
+                    "order": 10,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "gambling.crypto_disguised_diversion",
+                    "name": "区块链概念伪装赌博导流",
+                    "hit_condition": "空投、挖矿、DeFi、链游等概念与赌博平台注册、充值、返佣或代理发展结合。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "gambling.rule.crypto.blockchain_tech",
+                        "name": "区块链技术讨论",
+                        "condition": "只讨论区块链技术应用或合法GameFi项目，没有赌博投注要素。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "空投、挖矿等词在正常区块链语境中常见；必须与赌博平台入口或资金操作结合才构成命中。",
+                    "enabled": true,
+                    "order": 20,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "gambling.live_stream_gambling",
+                "name": "直播与短视频赌博推广",
+                "description": "识别直播、短视频中以互动形式组织的赌博推广行为。",
+                "order": 28,
+                "rules": [
+                  {
+                    "rule_id": "gambling.livestream_interactive_gambling",
+                    "name": "直播互动赌博玩法",
+                    "hit_condition": "直播或短视频中展示转盘、猜大小、押注、竞猜等互动玩法，并与充值、打赏变现、返现或私域导流结合。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "gambling.rule.livestream.platform_lottery",
+                        "name": "平台合规抽奖",
+                        "condition": "平台官方合规抽奖活动，无投注资金要求，奖品由平台提供。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "video_frame_evidence",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "直播中的互动游戏或抽奖需区分合法营销与赌博；关键看是否有投注资金、赔率和上下分机制。",
+                    "enabled": true,
+                    "order": 10,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "gambling.livestream_host_gambling_demo",
+                    "name": "主播展示赌博操作",
+                    "hit_condition": "主播展示赌博App界面、口述投注指令、引导粉丝跟单或展示投注收益截图。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "gambling.rule.livestream.warning_context",
+                        "name": "反赌警示展示",
+                        "condition": "主播在反赌或新闻报道语境中展示赌博界面作为证据。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "video_frame_evidence",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "主播本人展示赌博界面或口述投注指令为直接证据；仅弹幕讨论不构成主播责任。",
+                    "enabled": true,
+                    "order": 20,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "gambling.covert_language",
+                "name": "隐晦话术与变体规避",
+                "description": "识别使用谐音、缩写、暗语等隐晦话术规避审核的赌博推广。",
+                "order": 32,
+                "rules": [
+                  {
+                    "rule_id": "gambling.covert_language_promotion",
+                    "name": "谐音暗语赌博推广",
+                    "hit_condition": "谐音字、拼音缩写、emoji暗语、拆字等变体形式与投注、充值、返水、代理或平台入口语义结合。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "gambling.rule.covert.normal_slang",
+                        "name": "正常俚语使用",
+                        "condition": "谐音或缩写用于正常游戏、娱乐或日常交流语境。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "单个谐音或缩写不足以判定；必须结合上下文中的资金、平台或组织参与证据。",
+                    "enabled": true,
+                    "order": 10,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "gambling.virtual_gift_monetization",
+                    "name": "虚拟礼物变现赌博",
+                    "hit_condition": "虚拟礼物、打赏、刷礼物与返现、提现、下注或赌博平台注册形成变现闭环。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "gambling.rule.covert.normal_gift",
+                        "name": "正常粉丝互动",
+                        "condition": "正常粉丝打赏互动，没有返现或赌博投注承诺。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "虚拟礼物、打赏变现本身不违规；必须与赌博投注或返现承诺形成闭环。",
+                    "enabled": true,
+                    "order": 20,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "gambling.comments",
+                "name": "评论自身组织参与",
+                "description": "识别评论本身组织或邀请赌博参与，并保持评论证据独立归责。",
+                "order": 35,
+                "rules": [
+                  {
+                    "rule_id": "gambling.comment_organized_participation",
+                    "name": "评论本身组织参与",
+                    "hit_condition": "评论本身组织或邀请他人下注、加群、私聊、充值、上分或提现。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "单条评论独立判断自身风险，不直接归责主帖作者；评论证据主导时的最终建议由融合阶段处理。",
+                    "enabled": true,
+                    "order": 10,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "gambling.adjudication",
+                "name": "证据强度与融合",
+                "description": "约束弱关键词、多模态闭环和可追踪输出。",
+                "order": 40,
+                "rules": [
+                  {
+                    "rule_id": "gambling.weak_keyword_context",
+                    "name": "弱关键词需结合上下文",
+                    "hit_condition": "只有赌博黑话、棋牌、体育、筹码、抽卡等元素，缺少投注、资金、平台、代理、导流或组织参与证据。",
+                    "suggested_risk_level": "low",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "gambling.rule.weak_keyword.benign",
+                        "name": "明确正常语境",
+                        "condition": "只属于普通赛事、游戏娱乐、概率科普、新闻反赌、普法或被骗曝光语境。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "单个关键词不得直接构成高风险，也不得把不同语境中的弱词机械拼接成闭环。",
+                    "enabled": true,
+                    "order": 10,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "gambling.multimodal_closed_loop",
+                    "name": "多模态赌博参与闭环",
+                    "hit_condition": "已有跨模态证据共同形成投注平台、资金、代理、导流或组织参与链路；不得把不同类别的弱证据机械相加。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [
+                      {
+                        "exemption_id": "gambling.rule.multimodal.warning",
+                        "name": "警示内容跨模态豁免",
+                        "condition": "跨模态内容整体是反赌、普法、新闻取证或被骗曝光，且没有参与号召。",
+                        "source_mappings": []
+                      }
+                    ],
+                    "application_stages": [
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "不同模态证据必须引用当前输入 evidence_id，且语义指向一致；候选帧和 OCR 线索需在整体上下文中重新校准。",
+                    "enabled": true,
+                    "order": 20,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "created_at": "2026-09-07T08:33:08.389483Z",
+          "updated_at": "2026-09-07T08:33:08.389483Z"
+        }
+      ],
+      "drafts_unchanged": false,
+      "draft_side_effects": [
+        {
+          "draft_id": "investigation-draft:503484b9c2114df09e0c46f4d2ba35e1",
+          "revision": 1,
+          "configuration": {
+            "investigation": {
+              "mode": "search",
+              "recall_plan": {
+                "source_lexicon_ids": [],
+                "strategy": "temporary_terms",
+                "terms": [
+                  "博彩平台开户",
+                  "网赌代理带单",
+                  "赌博群入口",
+                  "代投包赢",
+                  "充值上分提现",
+                  "博彩返水",
+                  "境外博彩App",
+                  "体育投注推广"
+                ]
+              }
+            },
+            "judgement": {
+              "expected_ruleset_content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc",
+              "expected_ruleset_version": 2,
+              "ruleset_revision_id": "ruleset-revision:gambling:v2",
+              "strategy": "existing_ruleset"
+            },
+            "platform": "xhs",
+            "schema_version": "investigation-draft-config-v4"
+          }
+        }
+      ],
+      "no_formal_resource_mutation": true,
+      "run_count": 0,
+      "job_count": 0,
+      "report_count": 0,
+      "hermes_tool_sequence": [
+        "tool_search",
+        "tool_describe",
+        "query_investigation_options",
+        "tool_describe",
+        "query_investigation_options",
+        "create_investigation_draft",
+        "tool_call",
+        "create_ruleset_proposal"
+      ],
+      "model_output_shape": [
+        {
+          "role": "user",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 2
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 2
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 0
+        }
+      ],
+      "dual_generation_passed": true
+    }
+  ],
+  "product_dual_missing_contract": "Draft v4 requires published Judgement; Proposal cannot bind it.",
+  "tool_loop_capacity_scenario": "Missing Recall; existing gambling Judgement; comparison Proposal requested.",
+  "dual_generation_failure_classification": null,
+  "REAL_QWEN_DUAL_GENERATION_STABILITY_GAP": false,
+  "status": "M3_PHASE_T3_PASS"
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from datetime import datetime
 import hashlib
 import json
 from typing import Annotated, Any, Literal
@@ -17,11 +18,21 @@ from pydantic import (
 )
 
 from backend.audit_agent.creator_url import validate_creator_url
-from backend.rulesets.contracts import ApplicationStage, RiskLevel
+from backend.rulesets.contracts import ApplicationStage, RiskLevel, RuleSetContent
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class TemporaryRuleSetProposal(StrictModel):
+    proposal_id: str = Field(min_length=1)
+    session_id: str = Field(min_length=1)
+    version: StrictInt = Field(ge=1)
+    content_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    content: RuleSetContent
+    created_at: datetime
+    updated_at: datetime
 
 
 class DraftStatus(str, Enum):

@@ -1,0 +1,844 @@
+{
+  "model": "qwen3.7-plus",
+  "runtime": "Hermes 0.20.4",
+  "cases": [
+    {
+      "case": "authoring-quality-recruitment",
+      "input": "请生成一套招聘诈骗临时研判规则给我看看，关注先收费才能入职、培训贷、索要验证码或银行卡敏感信息，以及以招聘为名要求转账的骗局。不要启动调查。",
+      "session_id": "investigation-session:87674071efbb4088a3b33766968d375a",
+      "turn_id": "investigation-turn:4a9a10ec44c54d5581891df27b624c48",
+      "status": "completed",
+      "failure_point": null,
+      "answer": "已为你生成一套招聘诈骗临时研判规则（proposal_id: ruleset-proposal:3ce2f8c0d44f499b9c8250b961f0c68d），包含 4 个类别、4 条规则，全部标记为高风险。\n\n**规则结构说明：**\n\n**1. 入职前收费**\n- 命中条件：要求求职者在入职前缴纳任何费用，包括押金、保证金、服装费、工牌费、指定体检费、档案费、培训费、资料费等\n- 研判要点：即使费用名称看似合理（如体检费），只要指定机构或金额异常，仍应标记为风险\n\n**2. 培训贷**\n- 命中条件：以培训为名要求求职者贷款、分期付款或缴纳高额培训费用，或声称培训后从工资中扣除培训费\n- 研判要点：常见话术包括\"先培训后上岗\"\"带薪培训但需先交费\"\"培训费从工资扣\"\n\n**3. 索要敏感信息**\n- 命中条件：要求求职者提供验证码、银行卡密码、CVV安全码、网银U盾、支付密码等敏感金融信息\n- 研判要点：正规招聘流程不应索要验证码或银行卡密码，此类要求几乎总是风险信号\n\n**4. 以招聘为名要求转账**\n- 命中条件：以招聘、入职、激活账号、缴纳保证金、解冻账户、验证身份等名义要求求职者向指定账户转账或汇款\n- 研判要点：转账要求是招聘诈骗的核心特征，无论以何种名义均应标记\n\n**应用阶段选择：**\n所有规则都覆盖 image_evidence、video_frame_evidence、comment_audit、fusion_audit 四个阶段，因为这些风险行为可以独立出现在招聘海报图片、视频字幕/口播、评论内容中，且需要最终综合研判。\n\n**豁免说明：**\n未设置任何豁免条件。企业实名认证、蓝V认证、官方账号等身份标识不能否定明确的收费或转账行为，因此不作为豁免依据。\n\n这套规则仅作为临时候选方案供你查看，不绑定任何调查，也不会保存为正式规则。如需调整或用于实际调查，请告知。",
+      "llm_call_count": 3,
+      "tools": [
+        "create_ruleset_proposal"
+      ],
+      "tool_events": [
+        {
+          "tool": "create_ruleset_proposal",
+          "arguments": {
+            "content": {
+              "schema_version": 0,
+              "name": "招聘诈骗临时研判规则",
+              "domain": "recruitment_fraud",
+              "audit_goal": "识别以招聘为名的诈骗行为，包括入职前收费、培训贷、索要敏感信息及要求转账等典型骗局",
+              "general_exemptions": [],
+              "categories": [
+                {
+                  "category_id": "pre_employment_fee",
+                  "name": "入职前收费",
+                  "description": "要求求职者在入职前缴纳各类费用",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "rule_id": "pre_employment_fee",
+                      "name": "入职前收费",
+                      "hit_condition": "内容中明确要求求职者在入职前缴纳任何费用，包括但不限于押金、保证金、服装费、工牌费、指定体检费、档案费、培训费、资料费等",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "即使费用名称看似合理（如体检费），只要指定机构或金额异常，仍应标记为风险",
+                      "order": 1,
+                      "enabled": true,
+                      "rule_exemptions": []
+                    }
+                  ]
+                },
+                {
+                  "category_id": "training_loan",
+                  "name": "培训贷",
+                  "description": "以培训为名诱导求职者贷款或分期支付费用",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "rule_id": "training_loan",
+                      "name": "培训贷",
+                      "hit_condition": "内容中以培训为名要求求职者贷款、分期付款或缴纳高额培训费用，或声称培训后从工资中扣除培训费",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "培训贷常以'先培训后上岗''带薪培训但需先交费''培训费从工资扣'等形式出现",
+                      "order": 1,
+                      "enabled": true,
+                      "rule_exemptions": []
+                    }
+                  ]
+                },
+                {
+                  "category_id": "sensitive_info_request",
+                  "name": "索要敏感信息",
+                  "description": "要求求职者提供验证码、银行卡密码等敏感金融信息",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "rule_id": "sensitive_info_request",
+                      "name": "索要敏感信息",
+                      "hit_condition": "内容中要求求职者提供验证码、银行卡密码、CVV安全码、网银U盾、支付密码等敏感金融信息",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "正规招聘流程不应索要验证码或银行卡密码，此类要求几乎总是风险信号",
+                      "order": 1,
+                      "enabled": true,
+                      "rule_exemptions": []
+                    }
+                  ]
+                },
+                {
+                  "category_id": "transfer_scam",
+                  "name": "以招聘为名要求转账",
+                  "description": "以招聘、入职等名义要求求职者转账或汇款",
+                  "order": 4,
+                  "rules": [
+                    {
+                      "rule_id": "transfer_scam",
+                      "name": "以招聘为名要求转账",
+                      "hit_condition": "内容中以招聘、入职、激活账号、缴纳保证金、解冻账户、验证身份等名义要求求职者向指定账户转账或汇款",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "转账要求是招聘诈骗的核心特征，无论以何种名义（保证金、激活费、解冻费等）均应标记",
+                      "order": 1,
+                      "enabled": true,
+                      "rule_exemptions": []
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "status": "ok",
+          "execution_identity": {
+            "session_id": "investigation-session:87674071efbb4088a3b33766968d375a",
+            "turn_id": "investigation-session:87674071efbb4088a3b33766968d375a:investigation-turn:4a9a10ec44c54d5581891df27b624c48:724002e9",
+            "tool_call_id": "call_7d5c364dc5404d788ce8ed94"
+          }
+        }
+      ],
+      "mutation_receipts": [
+        {
+          "receipt_id": "creation-tool-receipt:22985a11d227473abbfe8af0ed42dd42",
+          "session_id": "investigation-session:87674071efbb4088a3b33766968d375a",
+          "turn_id": "investigation-session:87674071efbb4088a3b33766968d375a:investigation-turn:4a9a10ec44c54d5581891df27b624c48:724002e9",
+          "tool_call_id": "call_7d5c364dc5404d788ce8ed94",
+          "tool_name": "create_ruleset_proposal",
+          "arguments_fingerprint": "2ec4e4f842238a2286ded933f20aa00ae1e9fdc421c2b24007cc78e6fcb7b6c5",
+          "status": "SUCCEEDED"
+        }
+      ],
+      "proposals_before": [],
+      "proposals_after": [
+        {
+          "proposal_id": "ruleset-proposal:3ce2f8c0d44f499b9c8250b961f0c68d",
+          "session_id": "investigation-session:87674071efbb4088a3b33766968d375a",
+          "version": 1,
+          "content_hash": "7643384b3ceeeef6ba0c2336b1512a6a519f5ef15eaa810dcbc1d3532c71ebba",
+          "content": {
+            "schema_version": 0,
+            "name": "招聘诈骗临时研判规则",
+            "domain": "recruitment_fraud",
+            "audit_goal": "识别以招聘为名的诈骗行为，包括入职前收费、培训贷、索要敏感信息及要求转账等典型骗局",
+            "general_exemptions": [],
+            "categories": [
+              {
+                "category_id": "pre_employment_fee",
+                "name": "入职前收费",
+                "description": "要求求职者在入职前缴纳各类费用",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "pre_employment_fee",
+                    "name": "入职前收费",
+                    "hit_condition": "内容中明确要求求职者在入职前缴纳任何费用，包括但不限于押金、保证金、服装费、工牌费、指定体检费、档案费、培训费、资料费等",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "即使费用名称看似合理（如体检费），只要指定机构或金额异常，仍应标记为风险",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "training_loan",
+                "name": "培训贷",
+                "description": "以培训为名诱导求职者贷款或分期支付费用",
+                "order": 2,
+                "rules": [
+                  {
+                    "rule_id": "training_loan",
+                    "name": "培训贷",
+                    "hit_condition": "内容中以培训为名要求求职者贷款、分期付款或缴纳高额培训费用，或声称培训后从工资中扣除培训费",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "培训贷常以'先培训后上岗''带薪培训但需先交费''培训费从工资扣'等形式出现",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "sensitive_info_request",
+                "name": "索要敏感信息",
+                "description": "要求求职者提供验证码、银行卡密码等敏感金融信息",
+                "order": 3,
+                "rules": [
+                  {
+                    "rule_id": "sensitive_info_request",
+                    "name": "索要敏感信息",
+                    "hit_condition": "内容中要求求职者提供验证码、银行卡密码、CVV安全码、网银U盾、支付密码等敏感金融信息",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正规招聘流程不应索要验证码或银行卡密码，此类要求几乎总是风险信号",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "transfer_scam",
+                "name": "以招聘为名要求转账",
+                "description": "以招聘、入职等名义要求求职者转账或汇款",
+                "order": 4,
+                "rules": [
+                  {
+                    "rule_id": "transfer_scam",
+                    "name": "以招聘为名要求转账",
+                    "hit_condition": "内容中以招聘、入职、激活账号、缴纳保证金、解冻账户、验证身份等名义要求求职者向指定账户转账或汇款",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "转账要求是招聘诈骗的核心特征，无论以何种名义（保证金、激活费、解冻费等）均应标记",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "created_at": "2026-09-07T09:03:50.760279Z",
+          "updated_at": "2026-09-07T09:03:50.760279Z"
+        }
+      ],
+      "drafts_unchanged": true,
+      "draft_side_effects": [],
+      "no_formal_resource_mutation": true,
+      "run_count": 0,
+      "job_count": 0,
+      "report_count": 0,
+      "hermes_tool_sequence": [
+        "tool_describe",
+        "create_ruleset_proposal"
+      ],
+      "model_output_shape": [
+        {
+          "role": "user",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 0
+        }
+      ],
+      "authoring_summary": {
+        "rule_count": 4,
+        "stage_counts": {
+          "image_evidence": 4,
+          "video_frame_evidence": 4,
+          "comment_audit": 4,
+          "fusion_audit": 4
+        },
+        "stage_combinations": {
+          "comment_audit+fusion_audit+image_evidence+video_frame_evidence": 4
+        },
+        "general_exemptions": []
+      }
+    },
+    {
+      "case": "authoring-quality-gambling",
+      "input": "请另外生成一套网络赌博推广的临时研判规则给我看看，覆盖平台入口、投注资金、代理推广、评论组织参与和跨证据的参与闭环。不要启动调查。",
+      "session_id": "investigation-session:155fc796f00e49e5b42b2d8c6f97e5ef",
+      "turn_id": "investigation-turn:bfc508d6f36c4f11af5fac65ed065377",
+      "status": "completed",
+      "failure_point": null,
+      "answer": "已为您生成一套网络赌博推广的临时研判规则提案，覆盖您要求的五个维度。以下是规则结构说明：\n\n## 规则集概览\n\n**领域**：online_gambling_promotion（网络赌博推广）  \n**规则数量**：9条规则，分为5个类别\n\n---\n\n## 1. 平台入口（2条规则）\n\n**规则1：赌博平台网址/域名引导**\n- 识别内容中出现的赌博平台网址、域名、短链，或\"点击进入\"\"注册链接\"等引导语，配合博彩、下注、赔率等关键词\n- 应用阶段：`image_evidence` + `video_frame_evidence` + `comment_audit` + `fusion_audit`\n\n**规则2：赌博平台二维码/入群入口**\n- 识别图片、视频或评论中展示的二维码、群号、社交账号，引导扫码或加入赌博群聊\n- 应用阶段：同上\n\n**设计说明**：平台入口是赌博推广的第一步，可在任何模态中独立出现，因此覆盖全部四个阶段。\n\n---\n\n## 2. 投注资金（2条规则）\n\n**规则3：充值提现引导**\n- 识别引导充值、下注、提现的表述，或展示充值到账截图、提现记录、余额变化等\n- 应用阶段：全部四个阶段\n\n**规则4：资金流转通道指引**\n- 识别提供银行卡号、USDT/虚拟货币钱包地址、第三方支付账号等用于赌博资金流转的内容\n- 应用阶段：全部四个阶段\n\n**设计说明**：资金操作是赌博行为的核心证据，可在图片（截图）、视频（演示）、评论（直接引导）中独立出现。\n\n---\n\n## 3. 代理推广（2条规则）\n\n**规则5：代理/推广员招募**\n- 识别招募代理、推广员、合伙人的内容，承诺返佣、分成、流水提成等收益\n- 应用阶段：全部四个阶段\n\n**规则6：邀请码/推荐码分发**\n- 识别分发邀请码、推荐码、专属注册链接，建立上下级代理关系的行为\n- 应用阶段：全部四个阶段\n\n**设计说明**：代理推广可在任何模态中出现，且需要最终判定，因此覆盖全部阶段。\n\n---\n\n## 4. 评论组织参与（2条规则）\n\n**规则7：评论区组织参与赌博**\n- 识别评论区中\"跟我一起\"\"组队下注\"\"带你们赢\"等组织性表述，或组织群聊进行赌博活动\n- 应用阶段：`comment_audit` + `fusion_audit`\n\n**规则8：评论区协同推广**\n- 识别评论区中多条协同推广的评论，包含统一话术、相互呼应、集中引导等协同特征\n- 应用阶段：`comment_audit` + `fusion_audit`\n\n**设计说明**：这两条规则专门针对评论区行为，因此只在 `comment_audit` 和 `fusion_audit` 阶段应用。协同特征需要跨评论综合判断，`fusion_audit` 是必需的。\n\n---\n\n## 5. 跨证据参与闭环（1条规则）\n\n**规则9：跨模态赌博参与闭环**\n- 综合图片、视频、评论多种模态证据，形成\"入口引导→资金操作→代理/参与\"的完整闭环\n- 应用阶段：仅 `fusion_audit`\n\n**设计说明**：这是最终的综合性规则，依赖前序模态提取的证据进行闭环判定，因此只在 `fusion_audit` 阶段应用。单一模态证据不足以命中此规则。\n\n---\n\n## 通用豁免\n\n**国家合法彩票官方渠道**\n- 条件：内容明确为中国福利彩票或中国体育彩票官方渠道发布的合法彩票宣传、开奖信息或公益内容，且不涉及境外博彩、私彩、地下彩票或非法彩票平台\n\n**设计说明**：只设置了一个通用豁免，因为身份认证（如企业认证、蓝V认证）不能豁免赌博推广行为。即使是合法机构，如果明确推广赌博平台，也不应豁免。\n\n---\n\n## 重要说明\n\n这套规则是**临时候选**，仅在当前会话中有效，不会自动用于任何调查，也不会发布为正式规则集。如果您需要基于这套规则创建调查草稿，需要先确认是否有已发布的规则集可用于正式调查。\n\n如果您想修改某些规则的命中条件、应用阶段或豁免条件，可以告诉我具体",
+      "llm_call_count": 3,
+      "tools": [
+        "create_ruleset_proposal"
+      ],
+      "tool_events": [
+        {
+          "tool": "create_ruleset_proposal",
+          "arguments": {
+            "content": {
+              "schema_version": 0,
+              "name": "网络赌博推广研判规则（临时候选）",
+              "domain": "online_gambling_promotion",
+              "audit_goal": "识别并判定内容中涉及网络赌博平台入口引导、投注资金操作、代理推广招募、评论组织参与等行为，并支持跨模态证据闭环判定",
+              "general_exemptions": [
+                {
+                  "exemption_id": "legal_lottery_official",
+                  "name": "国家合法彩票官方渠道",
+                  "condition": "内容明确为中国福利彩票或中国体育彩票官方渠道发布的合法彩票宣传、开奖信息或公益内容，且不涉及境外博彩、私彩、地下彩票或非法彩票平台",
+                  "source_mappings": []
+                }
+              ],
+              "categories": [
+                {
+                  "category_id": "gambling_platform_entry",
+                  "name": "平台入口",
+                  "description": "识别引导用户进入赌博平台的入口信息",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "rule_id": "entry_url_domain",
+                      "name": "赌博平台网址/域名引导",
+                      "hit_condition": "内容中出现疑似赌博平台的网址、域名、短链，或包含引导访问赌博平台的表述（如\"点击进入\"\"注册链接\"\"官网地址\"等），且伴随赌博相关关键词（博彩、下注、赔率、盘口、开奖、六合彩、百家乐、龙虎斗等）",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "需结合上下文判断网址是否指向赌博平台；国家合法彩票官方网站不在此规则范围内",
+                      "order": 10,
+                      "enabled": true,
+                      "source_mappings": [],
+                      "rule_exemptions": []
+                    },
+                    {
+                      "rule_id": "entry_qrcode_group",
+                      "name": "赌博平台二维码/入群入口",
+                      "hit_condition": "图片、视频画面或评论中展示二维码、群号、社交账号等，并引导用户扫码或添加以获取赌博平台入口、加入赌博群聊或参与赌博活动",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "二维码本身需结合引导语或上下文判断用途；仅展示二维码无赌博引导的不单独命中",
+                      "order": 20,
+                      "enabled": true,
+                      "source_mappings": [],
+                      "rule_exemptions": []
+                    }
+                  ]
+                },
+                {
+                  "category_id": "betting_funds",
+                  "name": "投注资金",
+                  "description": "识别引导充值、下注、提现等资金操作行为",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "rule_id": "deposit_withdrawal_guide",
+                      "name": "充值提现引导",
+                      "hit_condition": "内容中引导用户进行充值、下注、提现等资金操作，或展示充值到账截图、提现记录、余额变化、投注流水等，暗示或明示参与赌博投注",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "需区分合法电商交易与赌博资金操作；关键看是否涉及赔率、盘口、开奖等赌博要素",
+                      "order": 30,
+                      "enabled": true,
+                      "source_mappings": [],
+                      "rule_exemptions": []
+                    },
+                    {
+                      "rule_id": "fund_flow_channel",
+                      "name": "资金流转通道指引",
+                      "hit_condition": "内容中提供银行卡号、USDT/虚拟货币钱包地址、第三方支付账号等资金流转通道，用于向赌博平台充值或从赌博平台提现，或教授规避资金监管的方法",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "单独出现银行卡号不一定命中，需结合赌博平台上下文判断用途",
+                      "order": 40,
+                      "enabled": true,
+                      "source_mappings": [],
+                      "rule_exemptions": []
+                    }
+                  ]
+                },
+                {
+                  "category_id": "agent_promotion",
+                  "name": "代理推广",
+                  "description": "识别赌博平台代理招募、返佣分成、邀请码分发等推广行为",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "rule_id": "agent_recruitment",
+                      "name": "代理/推广员招募",
+                      "hit_condition": "内容中招募赌博平台代理、推广员、合伙人，承诺返佣、分成、流水提成、拉新奖励等收益，或展示代理收益截图、佣金到账记录",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "需判断招募对象是否指向赌博平台；合法电商推广不在此范围",
+                      "order": 50,
+                      "enabled": true,
+                      "source_mappings": [],
+                      "rule_exemptions": []
+                    },
+                    {
+                      "rule_id": "referral_code_distribution",
+                      "name": "邀请码/推荐码分发",
+                      "hit_condition": "内容中分发赌博平台的邀请码、推荐码、专属注册链接，引导他人注册并建立上下级代理关系，或展示邀请奖励机制",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "需判断邀请码是否指向赌博平台；合法产品的邀请码不在此范围",
+                      "order": 60,
+                      "enabled": true,
+                      "source_mappings": [],
+                      "rule_exemptions": []
+                    }
+                  ]
+                },
+                {
+                  "category_id": "comment_organization",
+                  "name": "评论组织参与",
+                  "description": "识别评论区组织参与赌博或协同推广行为",
+                  "order": 4,
+                  "rules": [
+                    {
+                      "rule_id": "comment_recruitment",
+                      "name": "评论区组织参与赌博",
+                      "hit_condition": "评论区中出现组织他人参与赌博的表述，如\"跟我一起\"\"组队下注\"\"带你们赢\"\"稳赚不赔\"等，或组织群聊/频道进行赌博活动，或评论中直接发布赌博平台链接引导参与",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "需区分正常交流与组织赌博行为；关键看是否有组织性、引导性和赌博要素",
+                      "order": 70,
+                      "enabled": true,
+                      "source_mappings": [],
+                      "rule_exemptions": []
+                    },
+                    {
+                      "rule_id": "comment_coordinated_promotion",
+                      "name": "评论区协同推广",
+                      "hit_condition": "评论区中出现多条协同推广赌博平台的评论，包含统一话术模板、相互呼应、集中引导注册或充值、互相顶帖等行为特征",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "需识别协同特征：相似话术、集中发布时间、相互@或引用、统一引导方向",
+                      "order": 80,
+                      "enabled": true,
+                      "source_mappings": [],
+                      "rule_exemptions": []
+                    }
+                  ]
+                },
+                {
+                  "category_id": "cross_evidence_loop",
+                  "name": "跨证据参与闭环",
+                  "description": "跨模态证据综合判定赌博推广闭环",
+                  "order": 5,
+                  "rules": [
+                    {
+                      "rule_id": "cross_modal_gambling_chain",
+                      "name": "跨模态赌博参与闭环",
+                      "hit_condition": "跨图片、视频、评论多种证据模态，形成\"入口引导→资金操作→代理/参与\"的完整赌博推广闭环，或多种证据相互印证同一赌博推广行为（如图片展示平台界面、视频演示充值流程、评论提供客服联系方式）",
+                      "suggested_risk_level": "high",
+                      "application_stages": [
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "本规则仅用于最终综合判定，依赖前序模态提取的证据；需多种证据形成逻辑闭环，单一证据不足以命中",
+                      "order": 90,
+                      "enabled": true,
+                      "source_mappings": [],
+                      "rule_exemptions": []
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "status": "ok",
+          "execution_identity": {
+            "session_id": "investigation-session:155fc796f00e49e5b42b2d8c6f97e5ef",
+            "turn_id": "investigation-session:155fc796f00e49e5b42b2d8c6f97e5ef:investigation-turn:bfc508d6f36c4f11af5fac65ed065377:7a7f814c",
+            "tool_call_id": "call_447713abb3f44c1991c6fac3"
+          }
+        }
+      ],
+      "mutation_receipts": [
+        {
+          "receipt_id": "creation-tool-receipt:236e25e11f9f4aada7ee865109ec70d8",
+          "session_id": "investigation-session:155fc796f00e49e5b42b2d8c6f97e5ef",
+          "turn_id": "investigation-session:155fc796f00e49e5b42b2d8c6f97e5ef:investigation-turn:bfc508d6f36c4f11af5fac65ed065377:7a7f814c",
+          "tool_call_id": "call_447713abb3f44c1991c6fac3",
+          "tool_name": "create_ruleset_proposal",
+          "arguments_fingerprint": "81b0274e69fdd9e51c8fd40585f380db19169f98511ddd122eca63ea7cf57fb0",
+          "status": "SUCCEEDED"
+        }
+      ],
+      "proposals_before": [],
+      "proposals_after": [
+        {
+          "proposal_id": "ruleset-proposal:b44d743160a748ebba3b273d3e5e377a",
+          "session_id": "investigation-session:155fc796f00e49e5b42b2d8c6f97e5ef",
+          "version": 1,
+          "content_hash": "ef627643e38399dc3453bcd2fa552dea7c63ec5a8c84fb001cbbfcfdb78136b0",
+          "content": {
+            "schema_version": 0,
+            "name": "网络赌博推广研判规则（临时候选）",
+            "domain": "online_gambling_promotion",
+            "audit_goal": "识别并判定内容中涉及网络赌博平台入口引导、投注资金操作、代理推广招募、评论组织参与等行为，并支持跨模态证据闭环判定",
+            "general_exemptions": [
+              {
+                "exemption_id": "legal_lottery_official",
+                "name": "国家合法彩票官方渠道",
+                "condition": "内容明确为中国福利彩票或中国体育彩票官方渠道发布的合法彩票宣传、开奖信息或公益内容，且不涉及境外博彩、私彩、地下彩票或非法彩票平台",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "gambling_platform_entry",
+                "name": "平台入口",
+                "description": "识别引导用户进入赌博平台的入口信息",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "entry_url_domain",
+                    "name": "赌博平台网址/域名引导",
+                    "hit_condition": "内容中出现疑似赌博平台的网址、域名、短链，或包含引导访问赌博平台的表述（如\"点击进入\"\"注册链接\"\"官网地址\"等），且伴随赌博相关关键词（博彩、下注、赔率、盘口、开奖、六合彩、百家乐、龙虎斗等）",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "需结合上下文判断网址是否指向赌博平台；国家合法彩票官方网站不在此规则范围内",
+                    "enabled": true,
+                    "order": 10,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "entry_qrcode_group",
+                    "name": "赌博平台二维码/入群入口",
+                    "hit_condition": "图片、视频画面或评论中展示二维码、群号、社交账号等，并引导用户扫码或添加以获取赌博平台入口、加入赌博群聊或参与赌博活动",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "二维码本身需结合引导语或上下文判断用途；仅展示二维码无赌博引导的不单独命中",
+                    "enabled": true,
+                    "order": 20,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "betting_funds",
+                "name": "投注资金",
+                "description": "识别引导充值、下注、提现等资金操作行为",
+                "order": 2,
+                "rules": [
+                  {
+                    "rule_id": "deposit_withdrawal_guide",
+                    "name": "充值提现引导",
+                    "hit_condition": "内容中引导用户进行充值、下注、提现等资金操作，或展示充值到账截图、提现记录、余额变化、投注流水等，暗示或明示参与赌博投注",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "需区分合法电商交易与赌博资金操作；关键看是否涉及赔率、盘口、开奖等赌博要素",
+                    "enabled": true,
+                    "order": 30,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "fund_flow_channel",
+                    "name": "资金流转通道指引",
+                    "hit_condition": "内容中提供银行卡号、USDT/虚拟货币钱包地址、第三方支付账号等资金流转通道，用于向赌博平台充值或从赌博平台提现，或教授规避资金监管的方法",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "单独出现银行卡号不一定命中，需结合赌博平台上下文判断用途",
+                    "enabled": true,
+                    "order": 40,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "agent_promotion",
+                "name": "代理推广",
+                "description": "识别赌博平台代理招募、返佣分成、邀请码分发等推广行为",
+                "order": 3,
+                "rules": [
+                  {
+                    "rule_id": "agent_recruitment",
+                    "name": "代理/推广员招募",
+                    "hit_condition": "内容中招募赌博平台代理、推广员、合伙人，承诺返佣、分成、流水提成、拉新奖励等收益，或展示代理收益截图、佣金到账记录",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "需判断招募对象是否指向赌博平台；合法电商推广不在此范围",
+                    "enabled": true,
+                    "order": 50,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "referral_code_distribution",
+                    "name": "邀请码/推荐码分发",
+                    "hit_condition": "内容中分发赌博平台的邀请码、推荐码、专属注册链接，引导他人注册并建立上下级代理关系，或展示邀请奖励机制",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "需判断邀请码是否指向赌博平台；合法产品的邀请码不在此范围",
+                    "enabled": true,
+                    "order": 60,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "comment_organization",
+                "name": "评论组织参与",
+                "description": "识别评论区组织参与赌博或协同推广行为",
+                "order": 4,
+                "rules": [
+                  {
+                    "rule_id": "comment_recruitment",
+                    "name": "评论区组织参与赌博",
+                    "hit_condition": "评论区中出现组织他人参与赌博的表述，如\"跟我一起\"\"组队下注\"\"带你们赢\"\"稳赚不赔\"等，或组织群聊/频道进行赌博活动，或评论中直接发布赌博平台链接引导参与",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "需区分正常交流与组织赌博行为；关键看是否有组织性、引导性和赌博要素",
+                    "enabled": true,
+                    "order": 70,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "comment_coordinated_promotion",
+                    "name": "评论区协同推广",
+                    "hit_condition": "评论区中出现多条协同推广赌博平台的评论，包含统一话术模板、相互呼应、集中引导注册或充值、互相顶帖等行为特征",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "需识别协同特征：相似话术、集中发布时间、相互@或引用、统一引导方向",
+                    "enabled": true,
+                    "order": 80,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "cross_evidence_loop",
+                "name": "跨证据参与闭环",
+                "description": "跨模态证据综合判定赌博推广闭环",
+                "order": 5,
+                "rules": [
+                  {
+                    "rule_id": "cross_modal_gambling_chain",
+                    "name": "跨模态赌博参与闭环",
+                    "hit_condition": "跨图片、视频、评论多种证据模态，形成\"入口引导→资金操作→代理/参与\"的完整赌博推广闭环，或多种证据相互印证同一赌博推广行为（如图片展示平台界面、视频演示充值流程、评论提供客服联系方式）",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "本规则仅用于最终综合判定，依赖前序模态提取的证据；需多种证据形成逻辑闭环，单一证据不足以命中",
+                    "enabled": true,
+                    "order": 90,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "created_at": "2026-09-07T09:05:21.109536Z",
+          "updated_at": "2026-09-07T09:05:21.109536Z"
+        }
+      ],
+      "drafts_unchanged": true,
+      "draft_side_effects": [],
+      "no_formal_resource_mutation": true,
+      "run_count": 0,
+      "job_count": 0,
+      "report_count": 0,
+      "hermes_tool_sequence": [
+        "tool_describe",
+        "create_ruleset_proposal"
+      ],
+      "model_output_shape": [
+        {
+          "role": "user",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": false,
+          "tool_call_count": 1
+        },
+        {
+          "role": "tool",
+          "has_content": true,
+          "tool_call_count": 0
+        },
+        {
+          "role": "assistant",
+          "has_content": true,
+          "tool_call_count": 0
+        }
+      ],
+      "authoring_summary": {
+        "rule_count": 9,
+        "stage_counts": {
+          "image_evidence": 6,
+          "video_frame_evidence": 6,
+          "comment_audit": 8,
+          "fusion_audit": 9
+        },
+        "stage_combinations": {
+          "comment_audit+fusion_audit+image_evidence+video_frame_evidence": 6,
+          "comment_audit+fusion_audit": 2,
+          "fusion_audit": 1
+        },
+        "general_exemptions": [
+          {
+            "exemption_id": "legal_lottery_official",
+            "name": "国家合法彩票官方渠道",
+            "condition": "内容明确为中国福利彩票或中国体育彩票官方渠道发布的合法彩票宣传、开奖信息或公益内容，且不涉及境外博彩、私彩、地下彩票或非法彩票平台",
+            "source_mappings": []
+          }
+        ]
+      }
+    }
+  ],
+  "product_dual_missing_contract": "Draft v4 requires published Judgement; Proposal cannot bind it.",
+  "tool_loop_capacity_scenario": "Missing Recall; existing gambling Judgement; comparison Proposal requested.",
+  "dual_generation_failure_classification": null,
+  "REAL_QWEN_DUAL_GENERATION_STABILITY_GAP": false,
+  "status": "T3_AUTHORING_QUALITY_GENERATION_COMPLETE"
+}

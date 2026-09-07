@@ -9,6 +9,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from backend.audit_agent.config import settings
+from backend.rulesets.contracts import RuleSetContent
 
 from .contracts import (
     ConfirmationResolution,
@@ -22,6 +23,7 @@ from .contracts import (
     InvestigationRun,
     ReportGenerationBinding,
     RunStatus,
+    TemporaryRuleSetProposal,
     parse_draft_configuration,
 )
 from .errors import (
@@ -32,6 +34,8 @@ from .errors import (
     IdempotencyConflictError,
     InvalidStateTransitionError,
     PrincipalAccessDeniedError,
+    ProposalNotFoundError,
+    ProposalVersionConflictError,
     RunNotFoundError,
 )
 from .principal import LOCAL_PRINCIPAL_ID
@@ -81,6 +85,16 @@ class InvestigationCreationStore:
                     confirmed_revision INTEGER,
                     confirmed_by TEXT NOT NULL DEFAULT '',
                     confirmed_at TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS ruleset_proposals (
+                    proposal_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    version INTEGER NOT NULL CHECK(version >= 1),
+                    content_hash TEXT NOT NULL,
+                    content_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -479,6 +493,67 @@ class InvestigationCreationStore:
             raise IdempotencyConflictError(
                 "tool execution receipt is no longer writable"
             )
+
+    def create_ruleset_proposal(
+        self, *, session_id: str, content: RuleSetContent, content_hash: str
+    ) -> TemporaryRuleSetProposal:
+        proposal_id = f"ruleset-proposal:{uuid4().hex}"
+        now = self._now_text()
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO ruleset_proposals VALUES (?, ?, 1, ?, ?, ?, ?)",
+                (proposal_id, session_id, content_hash,
+                 self._json(content.model_dump(mode="json")), now, now),
+            )
+            return self._owned_proposal(connection, proposal_id, session_id)
+
+    def get_ruleset_proposal(
+        self, proposal_id: str, *, session_id: str
+    ) -> TemporaryRuleSetProposal:
+        with self._connect() as connection:
+            return self._owned_proposal(connection, proposal_id, session_id)
+
+    def update_ruleset_proposal(
+        self, proposal_id: str, *, session_id: str, expected_version: int,
+        content: RuleSetContent, content_hash: str,
+    ) -> TemporaryRuleSetProposal:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            current = self._owned_proposal(connection, proposal_id, session_id)
+            self.check_proposal_version(current, expected_version)
+            if current.content_hash == content_hash:
+                return current
+            connection.execute(
+                """UPDATE ruleset_proposals
+                   SET version = version + 1, content_hash = ?, content_json = ?, updated_at = ?
+                   WHERE proposal_id = ? AND session_id = ? AND version = ?""",
+                (content_hash, self._json(content.model_dump(mode="json")), self._now_text(),
+                 proposal_id, session_id, expected_version),
+            )
+            return self._owned_proposal(connection, proposal_id, session_id)
+
+    @staticmethod
+    def check_proposal_version(current: TemporaryRuleSetProposal, expected_version: int) -> None:
+        if current.version != expected_version:
+            raise ProposalVersionConflictError(
+                "Proposal version is stale; read the current Proposal before editing.",
+                details={"proposal_id": current.proposal_id,
+                         "expected_version": expected_version, "current_version": current.version},
+            )
+
+    @staticmethod
+    def _owned_proposal(
+        connection: sqlite3.Connection, proposal_id: str, session_id: str
+    ) -> TemporaryRuleSetProposal:
+        row = connection.execute(
+            "SELECT * FROM ruleset_proposals WHERE proposal_id = ? AND session_id = ?",
+            (proposal_id, session_id),
+        ).fetchone()
+        if row is None:
+            raise ProposalNotFoundError("Proposal was not found in the current Session")
+        payload = dict(row)
+        payload["content"] = json.loads(payload.pop("content_json"))
+        return TemporaryRuleSetProposal.model_validate(payload)
 
     def create_draft(
         self,

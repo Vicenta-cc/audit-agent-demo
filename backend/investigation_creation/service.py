@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from backend.rulesets.compiler import compile_ruleset_content, content_hash
+from backend.rulesets.contracts import RuleSetContent
+
 from .contracts import (
     ConfirmationPreview,
     ConfirmAndQueueCommand,
@@ -18,6 +21,7 @@ from .contracts import (
     QueryInvestigationOptions,
     ResolvedExecutionConfiguration,
     UpdateDraftCommand,
+    TemporaryRuleSetProposal,
     confirmed_configuration_hash,
 )
 from .errors import (
@@ -51,6 +55,44 @@ class InvestigationCreationService:
         self.configuration_resolver = configuration_resolver
         self.resource_service = resource_service
         self.run_projector = run_projector or EmptyRunProjector()
+
+    def create_ruleset_proposal(
+        self, content: RuleSetContent | dict, *, session_id: str
+    ) -> TemporaryRuleSetProposal:
+        session_id = self._required_identifier(session_id, "session_id")
+        content = self._validated_proposal_content(content)
+        digest = content_hash(content)
+        compile_ruleset_content(content)
+        return self.store.create_ruleset_proposal(
+            session_id=session_id, content=content, content_hash=digest
+        )
+
+    def get_ruleset_proposal(
+        self, proposal_id: str, *, session_id: str
+    ) -> TemporaryRuleSetProposal:
+        return self.store.get_ruleset_proposal(
+            self._required_identifier(proposal_id, "proposal_id"),
+            session_id=self._required_identifier(session_id, "session_id"),
+        )
+
+    def update_ruleset_proposal(
+        self, proposal_id: str, *, session_id: str, expected_version: int,
+        content: RuleSetContent | dict,
+    ) -> TemporaryRuleSetProposal:
+        current = self.get_ruleset_proposal(proposal_id, session_id=session_id)
+        self.store.check_proposal_version(current, expected_version)
+        content = self._validated_proposal_content(content)
+        compile_ruleset_content(content)
+        return self.store.update_ruleset_proposal(
+            current.proposal_id, session_id=current.session_id, expected_version=expected_version,
+            content=content, content_hash=content_hash(content),
+        )
+
+    @staticmethod
+    def _validated_proposal_content(content: RuleSetContent | dict) -> RuleSetContent:
+        if isinstance(content, RuleSetContent):
+            content = content.model_dump(mode="json")
+        return RuleSetContent.model_validate(content)
 
     def create_draft(
         self, command: CreateDraftCommand, *, principal: Principal

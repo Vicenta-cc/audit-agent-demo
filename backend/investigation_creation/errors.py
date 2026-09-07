@@ -24,6 +24,14 @@ class DraftNotFoundError(InvestigationCreationError):
     pass
 
 
+class ProposalNotFoundError(InvestigationCreationError):
+    code = "RULESET_PROPOSAL_NOT_FOUND"
+
+
+class ProposalVersionConflictError(InvestigationCreationError):
+    code = "RULESET_PROPOSAL_STALE"
+
+
 class RunNotFoundError(InvestigationCreationError):
     pass
 

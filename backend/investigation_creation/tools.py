@@ -8,10 +8,12 @@ from typing import Any
 from pydantic import (
     Field,
     StrictBool,
+    StrictInt,
     ValidationError,
     field_validator,
     model_validator,
 )
+from backend.rulesets.contracts import RuleSetContent
 
 from .contracts import (
     ConfirmAndQueueCommand,
@@ -114,6 +116,19 @@ class GetInvestigationRunInput(StrictModel):
         return value.strip() if isinstance(value, str) else value
 
 
+class CreateRuleSetProposalInput(StrictModel):
+    content: RuleSetContent
+
+
+class GetRuleSetProposalInput(StrictModel):
+    proposal_id: str = Field(min_length=1, max_length=160)
+
+
+class UpdateRuleSetProposalInput(GetRuleSetProposalInput):
+    expected_version: StrictInt = Field(ge=1)
+    content: RuleSetContent
+
+
 M3_TOOL_INPUTS: dict[str, type[StrictModel]] = {
     "query_investigation_options": QueryInvestigationOptions,
     "create_investigation_draft": CreateInvestigationDraftInput,
@@ -121,10 +136,15 @@ M3_TOOL_INPUTS: dict[str, type[StrictModel]] = {
     "get_investigation_draft": GetInvestigationDraftInput,
     "confirm_and_queue_investigation": ConfirmAndQueueInvestigationInput,
     "get_investigation_run": GetInvestigationRunInput,
+    "create_ruleset_proposal": CreateRuleSetProposalInput,
+    "update_ruleset_proposal": UpdateRuleSetProposalInput,
+    "get_ruleset_proposal": GetRuleSetProposalInput,
 }
 
 M3_MUTATION_TOOL_NAMES = frozenset(
     {
+        "create_ruleset_proposal",
+        "update_ruleset_proposal",
         "create_investigation_draft",
         "update_investigation_draft",
         "confirm_and_queue_investigation",
@@ -133,6 +153,36 @@ M3_MUTATION_TOOL_NAMES = frozenset(
 
 
 M3_TOOL_DESCRIPTIONS = {
+    "create_ruleset_proposal": (
+        "Author a temporary candidate RuleSet directly as canonical RuleSetContent JSON when "
+        "the user asks to generate rules or another candidate. Application validates, compiles "
+        "and persists it in this Session. Generation is not approval or use: it never binds "
+        "Draft Judgement, publishes or saves a formal RuleSet. No prior options query is required. "
+        "Temporary terms and a Proposal may both be generated in the same turn. "
+        "Choose each rule's stages by where its risk can independently appear: image_evidence "
+        "for image text/visual rules, video_frame_evidence for video/OCR/ASR rules, comment_audit "
+        "for comments themselves, fusion_audit for judgment using existing evidence. Rules supporting "
+        "a final finding must explicitly include fusion_audit; the compiler does not add it. Do not default "
+        "every rule to comment + fusion or to all four stages. Both exemption types remove risk; "
+        "use only conditions that negate it, never identity/certification/reputation alone."
+    ),
+    "update_ruleset_proposal": (
+        "Update a current Session Proposal using proposal_id, expected_version and the complete "
+        "new canonical RuleSetContent. Application maintains content_hash. Same content is a no-op. "
+        "On stale version, read current content before editing; never assume an automatic merge. "
+        "Preserve category_id, rule_id and ordering for unchanged semantics. This never approves, "
+        "uses or publishes the Proposal. Choose revised rules' application_stages by the evidence "
+        "modalities that can independently show their risk: image_evidence, video_frame_evidence "
+        "(including OCR/ASR), comment_audit (comments themselves), fusion_audit (existing evidence). "
+        "Rules supporting final findings must explicitly include fusion_audit; it is not added automatically. "
+        "Do not mechanically assign comment + fusion or all four stages. general_exemptions and "
+        "rule_exemptions remove risk, not just confidence; only use conditions that negate risk, "
+        "never identity/certification/reputation alone."
+    ),
+    "get_ruleset_proposal": (
+        "Read the full current temporary RuleSet Proposal in this Session, including its version "
+        "and canonical content, before inspection or editing. This is read-only."
+    ),
     "query_investigation_options": (
         "Query currently available real platforms, published RuleSetRevisions, independent "
         "recall lexicons, and blockers. Use it to discover, explain, "
@@ -235,12 +285,26 @@ class InvestigationCreationToolService:
         arguments: dict[str, Any],
         *,
         principal: Principal,
+        session_id: str = "",
     ) -> dict[str, Any]:
         schema = M3_TOOL_INPUTS.get(tool_name)
         if schema is None:
             raise ValueError("Hermes M3 tool name is not allowed")
         parsed = schema.model_validate(arguments)
-        if tool_name == "query_investigation_options":
+        if tool_name == "create_ruleset_proposal":
+            result = self.application_service.create_ruleset_proposal(
+                parsed.content, session_id=session_id
+            )
+        elif tool_name == "update_ruleset_proposal":
+            result = self.application_service.update_ruleset_proposal(
+                parsed.proposal_id, session_id=session_id,
+                expected_version=parsed.expected_version, content=parsed.content,
+            )
+        elif tool_name == "get_ruleset_proposal":
+            result = self.application_service.get_ruleset_proposal(
+                parsed.proposal_id, session_id=session_id
+            )
+        elif tool_name == "query_investigation_options":
             result = self.application_service.query_investigation_options(
                 parsed, principal=principal
             )
@@ -362,6 +426,7 @@ class InvestigationCreationToolService:
                 tool_name,
                 raw_arguments,
                 principal=principal,
+                session_id=identity.session_id,
             )
             result = {"status": "ok", "data": payload}
         except Exception as exc:
@@ -470,6 +535,7 @@ def dispatch_hermes_investigation_creation_tool_with_identity(
                     tool_name,
                     dict(arguments or {}),
                     principal=principal,
+                    session_id=session_id,
                 ),
             }
         else:
