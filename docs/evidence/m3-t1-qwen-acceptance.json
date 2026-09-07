@@ -1,0 +1,127 @@
+{
+  "model": "qwen3.7-plus",
+  "runtime": "Hermes 0.20.4",
+  "cases": [
+    {
+      "case": "existing",
+      "input": "我想调查小红书上的赌博博彩推广风险。",
+      "status": "completed",
+      "answer": "已为您创建调查草稿，配置如下：\n\n**调查标题**：小红书赌博博彩推广风险调查\n\n**资源配置**：\n- 目标平台：小红书\n- 判定规则集：赌博博彩风险规则集 v2（包含7条规则）\n- 召回词库：赌博黑话词库\n- 搜索词：上分、盘口\n\n**草稿状态**：DRAFT（未确认）\n**草稿ID**：investigation-draft:420edcc399cf43e680e39e6a6b478a26\n\n当前配置已保存为草稿，您可以在确认后启动实际调查。如需调整配置（如修改搜索词、更换词库等），可以告诉我进行修改。确认无误后，我可以帮您确认并启动调查任务。",
+      "tools": [
+        "create_investigation_draft"
+      ],
+      "hermes_tools": [
+        "tool_search",
+        "tool_describe",
+        "tool_call",
+        "tool_call",
+        "tool_describe",
+        "tool_call"
+      ],
+      "artifact_type": "investigation_draft",
+      "no_formal_lexicon_mutation": true,
+      "run_count": 0,
+      "draft_id": "investigation-draft:420edcc399cf43e680e39e6a6b478a26",
+      "revision": 1,
+      "recall_plan": {
+        "enabled_main_terms": [
+          "上分",
+          "盘口"
+        ],
+        "expected_runtime_content_hash": "3ef8792b1f996159dae5d16675fa03655e051b4e7c3b448af2aa124424967f5a",
+        "lexicon_id": "gambling",
+        "strategy": "existing_lexicon"
+      }
+    },
+    {
+      "case": "missing-no-authorization",
+      "input": "我想调查小红书上的赌博博彩推广风险。",
+      "status": "completed",
+      "answer": "根据查询结果，目前的情况如下：\n\n**✅ 平台**：小红书（xhs）可用。\n\n**✅ 判定规则集**：已找到已发布的「赌博博彩风险规则集」（版本 v2），包含 7 条启用规则，可直接用于本次调查的判定环节。\n\n**❌ 召回词库**：当前系统中没有可用的已发布召回词库（recall lexicon）用于搜索模式。这意味着缺少搜索关键词资源来驱动爬虫召回相关内容。\n\n---\n\n当前没有找到足够合适的现成召回词资源。可以为本次调查生成临时搜索词；这些词仅用于本次调查，不会保存为正式词库。**是否需要生成？**",
+      "tools": [],
+      "hermes_tools": [
+        "tool_search",
+        "tool_call",
+        "tool_describe",
+        "tool_call"
+      ],
+      "artifact_type": null,
+      "no_formal_lexicon_mutation": true,
+      "run_count": 0
+    },
+    {
+      "case": "missing-preauthorized",
+      "input": "我想调查小红书上的赌博博彩推广风险，如果没有合适词库就帮我生成这次搜索词。",
+      "status": "completed",
+      "answer": "草稿已成功创建。以下是本次调查的配置摘要：\n\n---\n\n**草稿 ID：** `investigation-draft:bbd0bcd05fa145dd8d639b9868dac7c8`\n\n| 配置项 | 内容 |\n|--------|------|\n| **标题** | 小红书赌博博彩推广风险调查 |\n| **目标** | 调查小红书平台上涉及赌博、博彩推广引流的内容风险，识别违规推广账号与内容 |\n| **平台** | 小红书（xhs） |\n| **模式** | 搜索模式 |\n| **判定规则集** | 赌博博彩风险规则集 v2（7 条规则） |\n| **召回策略** | 临时搜索词（本次调查专用，不保存为正式词库） |\n\n**生成的 12 条临时搜索词：**\n网赌平台推荐、博彩网站注册、赌博代理招商、境外博彩引流、赌博充值通道、娱乐城注册送、赌球平台、网络彩票平台、线上百家乐、赌博导师带赚、体育博彩投注、棋牌游戏提现\n\n---\n\n当前草稿状态为 **DRAFT**，没有阻塞项，可以确认执行。您可以：\n- 要求修改标题、搜索词或目标\n- 确认并启动调查（我会调用确认接口开始执行）\n\n请问需要调整配置，还是直接确认启动？",
+      "tools": [
+        "create_investigation_draft"
+      ],
+      "hermes_tools": [
+        "tool_search",
+        "tool_describe",
+        "tool_call",
+        "tool_describe",
+        "tool_call"
+      ],
+      "artifact_type": "investigation_draft",
+      "no_formal_lexicon_mutation": true,
+      "run_count": 0,
+      "draft_id": "investigation-draft:bbd0bcd05fa145dd8d639b9868dac7c8",
+      "revision": 1,
+      "recall_plan": {
+        "source_lexicon_ids": [],
+        "strategy": "temporary_terms",
+        "terms": [
+          "网赌平台推荐",
+          "博彩网站注册",
+          "赌博代理招商",
+          "境外博彩引流",
+          "赌博充值通道",
+          "娱乐城注册送",
+          "赌球平台",
+          "网络彩票平台",
+          "线上百家乐",
+          "赌博导师带赚",
+          "体育博彩投注",
+          "棋牌游戏提现"
+        ]
+      }
+    },
+    {
+      "case": "edit",
+      "input": "把其中的“网赌平台推荐”删掉。",
+      "status": "completed",
+      "answer": "已更新草稿，删除了\"网赌平台推荐\"。当前剩余 **11 条临时搜索词**：\n\n1. 博彩网站注册\n2. 赌博代理招商\n3. 境外博彩引流\n4. 赌博充值通道\n5. 娱乐城注册送\n6. 赌球平台\n7. 网络彩票平台\n8. 线上百家乐\n9. 赌博导师带赚\n10. 体育博彩投注\n11. 棋牌游戏提现\n\n草稿已更新至修订版本 2，无阻塞项。需要继续调整还是确认启动调查？",
+      "tools": [
+        "update_investigation_draft"
+      ],
+      "hermes_tools": [
+        "tool_call"
+      ],
+      "artifact_type": "investigation_draft",
+      "no_formal_lexicon_mutation": true,
+      "run_count": 0,
+      "draft_id": "investigation-draft:bbd0bcd05fa145dd8d639b9868dac7c8",
+      "revision": 2,
+      "recall_plan": {
+        "source_lexicon_ids": [],
+        "strategy": "temporary_terms",
+        "terms": [
+          "博彩网站注册",
+          "赌博代理招商",
+          "境外博彩引流",
+          "赌博充值通道",
+          "娱乐城注册送",
+          "赌球平台",
+          "网络彩票平台",
+          "线上百家乐",
+          "赌博导师带赚",
+          "体育博彩投注",
+          "棋牌游戏提现"
+        ]
+      }
+    }
+  ],
+  "status": "PASS"
+}

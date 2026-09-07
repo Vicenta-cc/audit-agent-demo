@@ -2288,11 +2288,6 @@ def test_create_preview_and_confirm_share_authoritative_resolution_without_seman
         ("ruleset_missing", "INVALID_RESOURCE_REFERENCE", ConfigurationValidationError),
         ("lexicon_hash_drift", "RESOURCE_STALE", ResourceStaleError),
         ("lexicon_missing", "INVALID_RESOURCE_REFERENCE", ConfigurationValidationError),
-        (
-            "source_lexicon_missing",
-            "INVALID_SOURCE_LEXICON_REFERENCE",
-            ConfigurationValidationError,
-        ),
     ],
 )
 def test_resource_truth_classification_is_shared_by_preview_and_confirm(
@@ -2344,8 +2339,6 @@ def test_resource_truth_classification_is_shared_by_preview_and_confirm(
         )
     elif condition == "lexicon_missing":
         m3_stack["lexicons"].delete_category("convergence-lexicon")
-    else:
-        m3_stack["lexicons"].delete_category("general-reference")
 
     original = m3_stack["resources"].resolve_authoritative_draft
     with patch.object(
@@ -3148,3 +3141,95 @@ def test_http_resource_stale_error_is_structured(m3_stack: dict):
     assert detail["code"] == "RESOURCE_STALE"
     assert detail["details"]["resources"]
     assert _counts(m3_stack["store"])[1] == 0
+
+
+@pytest.mark.parametrize("source_change", ["delete", "drift"])
+@pytest.mark.parametrize("edit", ["none", "title", "objective", "collection", "terms"])
+def test_t1_provenance_is_not_a_runtime_dependency(m3_stack, source_change, edit):
+    draft = _create_draft(
+        m3_stack,
+        _temporary_configuration(m3_stack, [" 外围盘口 ", "", "外围盘口", "滚球下注"]),
+    )
+    if source_change == "delete":
+        with sqlite3.connect(m3_stack["lexicons"].db_path) as connection:
+            connection.execute("DELETE FROM lexicon_categories WHERE id = ?", ("general-reference",))
+    else:
+        m3_stack["lexicons"].upsert_category(
+            category_id="general-reference", title="Changed source",
+            entries=[{"main_term": "unrelated-source-main", "variants": ["source-variant"],
+                      "query_type": "keyword", "enabled": True}],
+        )
+    expected = ["外围盘口", "滚球下注"]
+    if edit != "none":
+        changes = {}
+        if edit in {"title", "objective"}:
+            changes[edit] = "Updated investigation"
+        else:
+            configuration = draft.configuration.model_dump(mode="json")
+            if edit == "terms":
+                configuration["investigation"]["recall_plan"]["terms"] = [" 外围盘口 ", "", "外围盘口"]
+                expected = ["外围盘口"]
+            else:
+                configuration["platform"] = "dy"
+            changes["configuration"] = configuration
+        draft = m3_stack["service"].update_draft(
+            UpdateDraftCommand(draft_id=draft.id, expected_revision=1, **changes),
+            principal=_principal(m3_stack),
+        )
+        assert draft.current_revision == 2
+
+    # Preview and freeze must not even look up provenance content.
+    with patch.object(m3_stack["lexicons"], "get_category", side_effect=AssertionError("provenance lookup")):
+        preview = m3_stack["service"].get_confirmation_preview(draft.id, principal=_principal(m3_stack))
+        assert preview.can_confirm
+        assert preview.resolved_search_terms == expected
+        assert _counts(m3_stack["store"]) == (1, 0)
+        run = m3_stack["service"].confirm_and_queue(
+            ConfirmAndQueueCommand(draft_id=draft.id, expected_revision=draft.current_revision,
+                                   confirmed=True, idempotency_key="t1-confirm"),
+            principal=_principal(m3_stack),
+        )
+    snapshot = run.confirmed_configuration
+    assert snapshot["resolved_search_terms"] == expected
+    assert snapshot["execution"]["keyword"] == ",".join(expected)
+    assert snapshot["recall_plan"]["temporary_terms"] == expected
+    assert snapshot["recall_plan"]["source_lexicon_ids"] == ["general-reference"]
+    persisted = m3_stack["store"].get_draft(draft.id, principal=_principal(m3_stack).id)
+    assert persisted.current_revision == draft.current_revision
+
+
+def test_t1_changed_provenance_validates_all_new_refs_after_source_deletion(m3_stack):
+    draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["外围盘口"]))
+    with sqlite3.connect(m3_stack["lexicons"].db_path) as connection:
+        connection.execute("DELETE FROM lexicon_categories WHERE id = ?", ("general-reference",))
+    configuration = draft.configuration.model_dump(mode="json")
+    configuration["investigation"]["recall_plan"]["source_lexicon_ids"] = ["general-reference", "gambling"]
+    with pytest.raises(ConfigurationValidationError) as caught:
+        m3_stack["service"].update_draft(
+            UpdateDraftCommand(draft_id=draft.id, expected_revision=1, configuration=configuration),
+            principal=_principal(m3_stack),
+        )
+    assert caught.value.code == "INVALID_SOURCE_LEXICON_REFERENCE"
+    assert _draft_revision_count(m3_stack["store"], draft.id) == 1
+    configuration["investigation"]["recall_plan"]["source_lexicon_ids"] = ["gambling"]
+    updated = m3_stack["service"].update_draft(
+        UpdateDraftCommand(draft_id=draft.id, expected_revision=1, configuration=configuration),
+        principal=_principal(m3_stack),
+    )
+    assert updated.current_revision == 2
+
+
+def test_t1_typed_terms_keep_existing_count_and_strict_schema():
+    from backend.investigation_creation.contracts import TemporaryTermsRecallPlan
+    plan = TemporaryTermsRecallPlan(strategy="temporary_terms", terms=[" 外围盘口 ", "", "外围盘口", "滚球下注"])
+    assert plan.terms == ["外围盘口", "滚球下注"]
+    assert set(plan.model_dump()) == {"strategy", "terms", "source_lexicon_ids"}
+    for payload in (
+        {"terms": ["外围,盘口"]},
+        {"terms": [123]},
+        {"terms": [str(index) for index in range(101)]},
+        {"terms": ["外围盘口"], "variants": ["other"]},
+        {"terms": ["外围盘口"], "query_type": "keyword"},
+    ):
+        with pytest.raises(ValidationError):
+            TemporaryTermsRecallPlan(strategy="temporary_terms", **payload)

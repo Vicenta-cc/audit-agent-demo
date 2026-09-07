@@ -23,6 +23,13 @@ class ConfigurationResolver(Protocol):
 
 
 class ResourceService(Protocol):
+    def validate_temporary_provenance(
+        self,
+        source_lexicon_ids: list[str],
+        *,
+        resource_connection: sqlite3.Connection | None,
+    ) -> None: ...
+
     def authoritative_draft_fence(
         self,
     ) -> AbstractContextManager[sqlite3.Connection]: ...

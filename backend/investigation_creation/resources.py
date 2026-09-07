@@ -372,6 +372,29 @@ class InvestigationResourceService:
             can_confirm=not blockers,
         )
 
+    def validate_temporary_provenance(
+        self,
+        source_lexicon_ids: list[str],
+        *,
+        resource_connection: sqlite3.Connection | None,
+    ) -> None:
+        """Check new provenance at the mutation boundary, under the resource fence."""
+        for source_lexicon_id in source_lexicon_ids:
+            try:
+                self.lexicon_store.get_category(
+                    source_lexicon_id, connection=resource_connection
+                )
+            except KeyError as exc:
+                raise ConfigurationValidationError(
+                    "A source recall lexicon does not exist.",
+                    code="INVALID_SOURCE_LEXICON_REFERENCE",
+                    details={
+                        "mutation_applied": False,
+                        "resource_type": "recall_lexicon",
+                        "resource_id": source_lexicon_id,
+                    },
+                ) from exc
+
     def resolve_authoritative_draft(
         self,
         configuration: InvestigationDraftConfiguration,
@@ -478,7 +501,6 @@ class InvestigationResourceService:
 
         normalized = configuration
         recall_summary: RecallLexiconSummary | None = None
-        source_summaries: list[RecallLexiconSummary] = []
         editable_blockers: list[InvestigationBlocker] = []
         if configuration.investigation.mode == "creator":
             creator_blocker = self._creator_blocker(
@@ -547,25 +569,6 @@ class InvestigationResourceService:
                         )
                     )
             else:
-                for source_lexicon_id in plan.source_lexicon_ids:
-                    try:
-                        source_summaries.append(
-                            self._lexicon_summary(
-                                source_lexicon_id,
-                                include_terms=False,
-                                resource_connection=resource_connection,
-                            )
-                        )
-                    except KeyError as exc:
-                        raise ConfigurationValidationError(
-                            "A source recall lexicon does not exist.",
-                            code="INVALID_SOURCE_LEXICON_REFERENCE",
-                            details={
-                                "mutation_applied": False,
-                                "resource_type": "recall_lexicon",
-                                "resource_id": source_lexicon_id,
-                            },
-                        ) from exc
                 if not plan.terms:
                     editable_blockers.append(
                         self._blocker(
@@ -578,7 +581,6 @@ class InvestigationResourceService:
             normalized_configuration=normalized,
             ruleset_revision=ruleset_summary,
             recall_lexicon=recall_summary,
-            source_lexicons=source_summaries,
             editable_blockers=editable_blockers,
         )
 

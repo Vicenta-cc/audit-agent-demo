@@ -66,6 +66,11 @@ class InvestigationCreationService:
                     "investigation resource service is not configured"
                 )
             with self.resource_service.authoritative_draft_fence() as resource_connection:
+                sources = self._temporary_provenance(configuration)
+                if sources:
+                    self.resource_service.validate_temporary_provenance(
+                        sources, resource_connection=resource_connection
+                    )
                 resolution = self.resource_service.resolve_authoritative_draft(
                     configuration,
                     principal=principal,
@@ -110,6 +115,11 @@ class InvestigationCreationService:
                     "investigation resource service is not configured"
                 )
             with self.resource_service.authoritative_draft_fence() as resource_connection:
+                sources = self._temporary_provenance(effective_configuration)
+                if sources and sources != self._temporary_provenance(draft.configuration):
+                    self.resource_service.validate_temporary_provenance(
+                        sources, resource_connection=resource_connection
+                    )
                 resolution = self.resource_service.resolve_authoritative_draft(
                     effective_configuration,
                     principal=principal,
@@ -131,6 +141,16 @@ class InvestigationCreationService:
             objective=command.objective,
             configuration=effective_configuration,
         )
+
+    @staticmethod
+    def _temporary_provenance(configuration: object) -> list[str]:
+        if (
+            isinstance(configuration, InvestigationDraftConfiguration)
+            and configuration.investigation.mode == "search"
+            and configuration.investigation.recall_plan.strategy == "temporary_terms"
+        ):
+            return list(configuration.investigation.recall_plan.source_lexicon_ids)
+        return []
 
     def get_draft(
         self, draft_id: str, *, principal: Principal

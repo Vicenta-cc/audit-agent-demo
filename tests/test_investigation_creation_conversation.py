@@ -2512,3 +2512,100 @@ def test_fake_report_qa_is_valid_hermes_transcript_and_never_calls_provider() ->
         for message in result["messages"]
         if message.get("role") == "tool"
     )
+
+
+def _t1_temporary_arguments(stack):
+    options = stack["app_service"].query_investigation_options(
+        QueryInvestigationOptions(include_lexicon_terms_for_ids=["gambling"]),
+        principal=Principal("principal-a"),
+    ).model_dump(mode="json")
+    arguments = _search_draft_from_options([options])
+    arguments["configuration"]["investigation"]["recall_plan"] = {
+        "strategy": "temporary_terms", "terms": ["外围盘口", "滚球下注", "代理开户"],
+        "source_lexicon_ids": [],
+    }
+    return arguments
+
+
+@pytest.mark.parametrize("operation", ["create", "update"])
+def test_t1_comma_is_rejected_before_receipt_and_application(creation_stack, operation):
+    from backend.investigation_creation.contracts import CreateDraftCommand
+
+    arguments = _t1_temporary_arguments(creation_stack)
+    if operation == "update":
+        draft = creation_stack["app_service"].create_draft(
+            CreateDraftCommand(**arguments), principal=Principal("principal-a"),
+        )
+        arguments = {"draft_id": draft.id, "expected_revision": 1, "configuration": arguments["configuration"]}
+    arguments["configuration"]["investigation"]["recall_plan"]["terms"] = ["外围,盘口"]
+    with patch.object(creation_stack["app_service"], f"{operation}_draft") as mutation:
+        result = creation_stack["tool_service"].execute_with_identity(
+            f"{operation}_investigation_draft", arguments, principal=Principal("principal-a"),
+            identity=HermesToolExecutionIdentity.require(
+                session_id="t1-comma", turn_id=operation, tool_call_id="invalid",
+            ),
+        )
+    mutation.assert_not_called()
+    assert result["error"]["code"] == "INVALID_TOOL_ARGUMENTS"
+    assert result["error"]["details"]["mutation_applied"] is False
+    assert result["error"]["details"]["receipt_created"] is False
+    assert _mutation_receipt_count(creation_stack["creation_store"]) == 0
+    assert _draft_count(creation_stack["creation_store"]) == (operation == "update")
+    if operation == "update":
+        assert creation_stack["creation_store"].get_draft(draft.id, principal="principal-a").current_revision == 1
+
+
+@pytest.mark.parametrize("preauthorized", [False, True])
+def test_t1_missing_recall_conversation_contract(creation_stack, preauthorized):
+    arguments = _t1_temporary_arguments(creation_stack)
+    with sqlite3.connect(creation_stack["resource_db"]) as connection:
+        connection.execute("DELETE FROM lexicon_keywords")
+        connection.execute("DELETE FROM lexicon_categories")
+    actions = [("query_investigation_options", {"domain_hint": "博彩", "mode": "search"})]
+    if preauthorized:
+        actions.append(("create_investigation_draft", arguments))
+    turn = _run_scripted_creation_turn(
+        creation_stack,
+        content="我想调查博彩风险。" + ("没有合适召回词就帮我生成。" if preauthorized else ""),
+        actions=actions,
+        final_response=("已创建本次临时召回词 Draft，尚未启动。" if preauthorized
+                        else "当前没有找到合适的现成召回词资源，可以为本次调查生成临时搜索词。"),
+        client_message_id=f"t1-authorized-{preauthorized}",
+    )
+    assert turn["agent"].results[0]["recall_lexicons"] == []
+    assert turn["turn"].status == "completed"
+    assert _draft_count(creation_stack["creation_store"]) == int(preauthorized)
+    assert _run_count(creation_stack["creation_store"]) == 0
+    if preauthorized:
+        plan = turn["agent"].results[-1]["draft"]["configuration"]["investigation"]["recall_plan"]
+        assert plan == arguments["configuration"]["investigation"]["recall_plan"]
+    else:
+        assert turn["turn"].public_artifact == {}
+        assert turn["result"].tool_names == ("query_investigation_options",)
+
+
+def test_t1_generation_guidance_preserves_conversation_authority():
+    prompt = " ".join(CREATION_SYSTEM_PROMPT.split())
+    assert "Without that authorization" in prompt
+    assert "no Draft and no generated terms" in prompt
+    assert "do not list even illustrative example terms or candidate terms" in prompt
+    assert "Choose one canonical wording per core concept" in prompt
+    assert "create the Draft in the same turn" in prompt
+    assert "asking for generation permission again" in prompt
+    assert "real recall lexicon when it is sufficiently suitable" in prompt
+    assert "Never generate a temporary RuleSet" in prompt
+    assert "Preview and Confirm never generate or expand terms" in prompt
+    assert "provenance references only" in prompt
+
+
+def test_t1_draft_card_does_not_recommend_provenance_as_runtime_lexicon(creation_stack):
+    arguments = _t1_temporary_arguments(creation_stack)
+    arguments["configuration"]["investigation"]["recall_plan"]["source_lexicon_ids"] = ["gambling"]
+    turn = _run_scripted_creation_turn(
+        creation_stack, content="没有合适召回词就帮我生成这次搜索词并创建调查。",
+        actions=[("create_investigation_draft", arguments)], client_message_id="t1-provenance-card",
+    )
+    artifact = turn["turn"].public_artifact
+    assert artifact["suggestion"]["recall_lexicons"] == []
+    assert artifact["suggestion"]["search_terms"] == arguments["configuration"]["investigation"]["recall_plan"]["terms"]
+    assert artifact["confirmation_preview"]["recall_plan"]["source_lexicon_ids"] == ["gambling"]

@@ -145,14 +145,23 @@ M3_TOOL_DESCRIPTIONS = {
         "Create an editable Investigation Draft when the user wants the currently defined "
         "configuration captured as an investigation. Use current real resource candidates. "
         "Select a published RuleSetRevision directly as judgement. "
-        "Search Drafts must freeze a real existing_lexicon ID, hash, and enabled_main_terms "
-        "snapshot; creator Drafts must contain only a validated creator homepage URL and no "
+        "Search Drafts prefer a suitable real existing_lexicon ID, hash, and enabled_main_terms "
+        "snapshot. If none is sufficiently suitable and the conversation authorizes generating "
+        "missing Recall, supply focused canonical strings directly in temporary_terms.terms; "
+        "otherwise explain the gap and propose generation without creating a Draft or listing "
+        "any candidate/example search terms in the reply. Never generate "
+        "variants or query_type. source_lexicon_ids are write-time checked provenance, not runtime "
+        "dependencies. Temporary terms are not saved as a formal Lexicon. "
+        "Creator Drafts must contain only a validated creator homepage URL and no "
         "recall plan. This never confirms or starts a Run."
     ),
     "update_investigation_draft": (
         "Update an editable Investigation Draft at its expected revision. User changes "
         "to platform, RuleSet judgement, lexicon, or terms are allowed before confirmation; edited "
-        "lexicon terms must be represented as temporary_terms. This command never confirms "
+        "lexicon terms must be represented as temporary_terms. Authorized generation of missing "
+        "Recall supplies canonical terms directly, without variants, query_type, or formal save. "
+        "Changed source_lexicon_ids must reference real Lexicons; unchanged provenance needs no "
+        "resource refresh. Each temporary term must be comma-free. This command never confirms "
         "or starts an investigation."
     ),
     "get_investigation_draft": (

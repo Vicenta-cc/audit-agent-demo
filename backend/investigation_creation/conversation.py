@@ -82,13 +82,41 @@ There are exactly two investigation modes. A creator mode request contains a val
 URL, never a post URL, post ID, or arbitrary webpage. Save it only as
 configuration.investigation.mode=creator with creator_url set to that homepage URL. Creator mode
 must not carry search terms, source lexicons, or recall plans, and must resolve to crawl_mode=creator.
-For a search Draft, select a matching published RuleSetRevision and an independently available real
-recall lexicon. When its terms need to be discovered, query that lexicon with
+For a search Draft, select a matching published RuleSetRevision and prefer an independently available
+real recall lexicon when it is sufficiently suitable. When its terms need to be discovered, query that lexicon with
 include_lexicon_terms_for_ids. Save existing_lexicon with its ID,
 expected_runtime_content_hash, and the returned enabled_main_terms snapshot. Never expand variants,
-tag entries, query type, or order into crawler terms. Only when the user explicitly changes the
-main terms may update_investigation_draft replace existing_lexicon with temporary_terms containing
+tag entries, query type, or order into crawler terms. When the user explicitly changes the
+main terms, use update_investigation_draft to replace existing_lexicon with temporary_terms containing
 exactly the user's edited terms and the source lexicon ID.
+
+If no sufficiently suitable existing Lexicon is available, inspect the full conversation for
+authorization to generate missing Recall. Without that authorization, explain the Recall resource
+gap, propose generating temporary search terms for this investigation, and end this turn with no
+Draft and no generated terms. Investigation intent alone is not generation authorization.
+Before authorization, do not list even illustrative example terms or candidate terms in your reply;
+propose the generation action only, then wait for the user's answer.
+For this branch, use a brief reply such as: "当前没有找到足够合适的现成召回词资源。可以为本次调查
+生成临时搜索词；这些词仅用于本次调查，不会保存为正式词库。是否需要生成？" Do not append a term
+list, examples, a proposed configuration, or a Draft to that reply.
+If the user already authorized generation (for example, "没有合适词库就帮我生成这次搜索词" or
+"没有的话你自己补"), and investigation intent and a valid published Judgement RuleSet are present,
+generate focused temporary canonical search terms and create the Draft in the same turn, without
+asking for generation permission again. Put them directly in create_investigation_draft or
+update_investigation_draft configuration.investigation.recall_plan with strategy=temporary_terms,
+terms as a list of strings, and source_lexicon_ids as the real Lexicon IDs actually referenced, or [].
+Generate only core concepts worth searching: concrete, relevant platform search strings, without
+explanations or obvious duplicates. Keep the list focused; never mechanically pad it. Do not generate
+variants, synonym/slang/spelling expansions, platform-specific expansions, tags, query_type, or formal
+Lexicon entries. Never put an English comma inside one term or combine separate queries in one term.
+Choose one canonical wording per core concept. Do not enumerate alternate names for the same concept
+or pad a list with broad umbrella topic words and their synonymous restatements. Prefer specific
+intent-bearing concepts describing the activity, transaction, or offer being investigated; choose
+concepts for the actual goal, not a fixed generic topic list.
+source_lexicon_ids are provenance references only; they do not contribute search terms or variants.
+Generated terms belong only to this investigation and are not a saved formal Lexicon. Never call
+Lexicon POST/PATCH or promote/save a formal resource. Never generate a temporary RuleSet; if Judgement
+is missing, explain that resource gap. Preview and Confirm never generate or expand terms.
 
 If the user asks to inspect an existing Draft, read it instead of creating a replacement. If the
 user asks to change an existing Draft, update that Draft at its current revision instead of creating
@@ -601,7 +629,7 @@ class InvestigationCreationConversationService:
                 lexicon_ids = (
                     [plan.lexicon_id]
                     if plan.strategy == "existing_lexicon"
-                    else list(plan.source_lexicon_ids)
+                    else []
                 )
         options = application.query_investigation_options(
             QueryInvestigationOptions(

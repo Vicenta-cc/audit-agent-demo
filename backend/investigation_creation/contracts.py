@@ -117,6 +117,14 @@ class TemporaryTermsRecallPlan(StrictModel):
     terms: list[StrictStr] = Field(default_factory=list, max_length=100)
     source_lexicon_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
 
+    @field_validator("terms")
+    @classmethod
+    def reject_transport_separator(cls, values: list[str]) -> list[str]:
+        # MediaCrawler splits the frozen keyword string on ASCII commas.
+        if any("," in value for value in values):
+            raise ValueError("temporary search terms must not contain an English comma")
+        return values
+
     @field_validator("terms", "source_lexicon_ids", mode="before")
     @classmethod
     def normalize_terms(cls, values: object) -> object:
