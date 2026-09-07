@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from .contracts import RuleSetContent
@@ -35,6 +36,29 @@ def content_hash(content: RuleSetContent | dict) -> str:
     return hashlib.sha256(canonical_json(model.model_dump(mode="json")).encode("utf-8")).hexdigest()
 
 
+@dataclass
+class _ContentCompileResult:
+    prompt_profile_snapshot: dict
+    general_exemptions: list[dict]
+    decision_rules: list[dict]
+    stage_routes: dict[str, list[str]]
+
+
+def _validate_compile_content(
+    content: RuleSetContent | dict,
+    system_template_version: str,
+    compiler_version: str,
+) -> RuleSetContent:
+    if system_template_version != SYSTEM_TEMPLATE_VERSION:
+        raise RuleSetValidationError(f"unsupported system_template_version: {system_template_version}")
+    if compiler_version != COMPILER_VERSION:
+        raise RuleSetValidationError(f"unsupported compiler_version: {compiler_version}")
+    content = RuleSetContent.model_validate(content)
+    if content.domain != "gambling":
+        raise RuleSetValidationError("RuleSet Foundation pilot only supports the gambling domain")
+    return content
+
+
 def compile_ruleset_revision(
     revision: dict,
     *,
@@ -44,14 +68,10 @@ def compile_ruleset_revision(
 ) -> dict:
     if str(revision.get("status") or "") != "published":
         raise RuleSetValidationError("only a published RuleSetRevision can be compiled")
-    if system_template_version != SYSTEM_TEMPLATE_VERSION:
-        raise RuleSetValidationError(f"unsupported system_template_version: {system_template_version}")
-    if compiler_version != COMPILER_VERSION:
-        raise RuleSetValidationError(f"unsupported compiler_version: {compiler_version}")
-
-    content = RuleSetContent.model_validate(_revision_content(revision))
-    if content.domain != "gambling":
-        raise RuleSetValidationError("RuleSet Foundation pilot only supports the gambling domain")
+    # Validate before formal consistency checks to preserve their error precedence.
+    content = _validate_compile_content(
+        _revision_content(revision), system_template_version, compiler_version
+    )
     computed_content_hash = content_hash(content)
     stored_content_hash = str(revision.get("content_hash") or "").strip().lower()
     if not _SHA256_PATTERN.fullmatch(stored_content_hash):
@@ -65,6 +85,53 @@ def compile_ruleset_revision(
         raise RuleSetValidationError(
             "AuditPolicy RuleSetRevision reference does not match the compiled revision"
         )
+    compiled = compile_ruleset_content(
+        content,
+        system_template_version=system_template_version,
+        compiler_version=compiler_version,
+    )
+    ruleset_ref = {
+        "ruleset_id": str(revision.get("ruleset_id") or ""),
+        "revision_id": revision_id,
+        "version": int(revision.get("version") or 0),
+        "content_hash": computed_content_hash,
+    }
+    rule_snapshot = {
+        "schema_version": 2,
+        "ruleset_ref": ruleset_ref,
+        "general_exemptions": compiled.general_exemptions,
+        "decision_rules": compiled.decision_rules,
+        "scoring_rules": [],
+        "thresholds": policy["thresholds"],
+        "stage_routes": compiled.stage_routes,
+    }
+    hash_payload = {
+        "schema_version": 2,
+        "audit_policy": policy,
+        "ruleset_revision": ruleset_ref,
+        "rule_snapshot": rule_snapshot,
+        "prompt_profile_snapshot": compiled.prompt_profile_snapshot,
+        "system_template_version": system_template_version,
+        "compiler_version": compiler_version,
+    }
+    config_hash = hashlib.sha256(canonical_json(hash_payload).encode("utf-8")).hexdigest()
+    return {
+        "schema_version": 2,
+        "audit_policy_snapshot": policy,
+        "prompt_profile_snapshot": compiled.prompt_profile_snapshot,
+        "rule_snapshot": rule_snapshot,
+        "config_hash": config_hash,
+    }
+
+
+def compile_ruleset_content(
+    content: RuleSetContent | dict,
+    *,
+    system_template_version: str = SYSTEM_TEMPLATE_VERSION,
+    compiler_version: str = COMPILER_VERSION,
+) -> _ContentCompileResult:
+    """Compile content with the existing gambling pilot templates, without revision identity."""
+    content = _validate_compile_content(content, system_template_version, compiler_version)
     rules = _enabled_rules(content)
     stage_routes = {
         stage: [rule["rule_id"] for rule in rules if stage in rule["application_stages"]]
@@ -74,7 +141,6 @@ def compile_ruleset_revision(
     stage_payloads = {
         stage: {
             "ruleset": {
-                "id": str(revision.get("ruleset_id") or revision.get("id") or ""),
                 "name": content.name,
                 "domain": content.domain,
                 "audit_goal": content.audit_goal,
@@ -115,40 +181,12 @@ def compile_ruleset_revision(
     prompt_digest = hashlib.sha256(canonical_json(prompt_profile_snapshot).encode("utf-8")).hexdigest()[:16]
     prompt_profile_snapshot["prompt_version"] = f"gambling-v1-{prompt_digest}"
 
-    ruleset_ref = {
-        "ruleset_id": str(revision.get("ruleset_id") or ""),
-        "revision_id": revision_id,
-        "version": int(revision.get("version") or 0),
-        "content_hash": computed_content_hash,
-    }
-    decision_rules = [_decision_rule(rule) for rule in rules]
-    scoring_rules: list[dict] = []
-    rule_snapshot = {
-        "schema_version": 2,
-        "ruleset_ref": ruleset_ref,
-        "general_exemptions": general_exemptions,
-        "decision_rules": decision_rules,
-        "scoring_rules": scoring_rules,
-        "thresholds": policy["thresholds"],
-        "stage_routes": stage_routes,
-    }
-    hash_payload = {
-        "schema_version": 2,
-        "audit_policy": policy,
-        "ruleset_revision": ruleset_ref,
-        "rule_snapshot": rule_snapshot,
-        "prompt_profile_snapshot": prompt_profile_snapshot,
-        "system_template_version": system_template_version,
-        "compiler_version": compiler_version,
-    }
-    config_hash = hashlib.sha256(canonical_json(hash_payload).encode("utf-8")).hexdigest()
-    return {
-        "schema_version": 2,
-        "audit_policy_snapshot": policy,
-        "prompt_profile_snapshot": prompt_profile_snapshot,
-        "rule_snapshot": rule_snapshot,
-        "config_hash": config_hash,
-    }
+    return _ContentCompileResult(
+        prompt_profile_snapshot=prompt_profile_snapshot,
+        general_exemptions=general_exemptions,
+        decision_rules=[_decision_rule(rule) for rule in rules],
+        stage_routes=stage_routes,
+    )
 
 
 def _revision_content(revision: dict) -> dict:
