@@ -1,0 +1,34 @@
+{
+  "note": "A wrongly ordered focused invocation touched default application stores before module-local test isolation. Post-run observation and precisely attributed cleanup are recorded below. This is not a byte-identical pre-test database restoration claim. Final test isolation now starts in tests/conftest.py before application imports.",
+  "observation": {
+    "audit_index.sqlite3:jobs": 4,
+    "audit_index.sqlite3:task_audit_config_revisions": 2,
+    "audit_index.sqlite3:business_counts": {
+      "jobs": 28,
+      "audit_results": 0,
+      "report_versions": 0
+    },
+    "investigation_creation.sqlite3:business_counts": {
+      "investigation_drafts": 0,
+      "investigation_runs": 0,
+      "ruleset_proposals": 0,
+      "ruleset_proposal_approvals": 0
+    }
+  },
+  "cleanup": {
+    "removed_new_test_jobs": [
+      "4bd3b2f8bd65",
+      "8e6ba435d89f"
+    ],
+    "removed_their_audit_revisions": 2,
+    "restored_previous_test_jobs_to_recorded_queued_state": [
+      "840aea514b67",
+      "7d3fd916b918"
+    ],
+    "prior_time_evidence": "Both prior rows had only their creation/config-revision log at 2026-09-07T19:47:53 before the startup recovery log. Their execution fields match the newly created legacy API test rows exactly.",
+    "private_sqlite_backup_created": true,
+    "remaining_job_count": 26,
+    "byte_identical_pre_test_database_claim": false
+  },
+  "final_default_data_and_outputs_fingerprint_unchanged": true
+}

@@ -1,0 +1,31 @@
+ M Audit_assistant/tests/mixedProposalPresentation.spec.ts
+ M backend/api/investigation_creation.py
+ M backend/audit_agent/pipeline.py
+ M backend/investigation_creation/adapters.py
+ M backend/investigation_creation/contracts.py
+ M backend/investigation_creation/conversation.py
+ M backend/investigation_creation/resources.py
+ M backend/investigation_creation/service.py
+ M backend/investigation_creation/store.py
+ M backend/investigation_creation/worker.py
+ M tests/test_ruleset_proposal_approval.py
+?? backend/investigation_creation/frozen.py
+?? docs/M3_PHASE_T5_IMPLEMENTATION_REPORT.md
+?? docs/evidence/m3-t5-compiler_m1_m2.txt
+?? docs/evidence/m3-t5-default-store-observation.json
+?? docs/evidence/m3-t5-deterministic.txt
+?? docs/evidence/m3-t5-focused.txt
+?? docs/evidence/m3-t5-formal-golden.json
+?? docs/evidence/m3-t5-full_pytest.txt
+?? docs/evidence/m3-t5-git-status.txt
+?? docs/evidence/m3-t5-real-audit-result-provenance.json
+?? docs/evidence/m3-t5-real-execution-dy.json
+?? docs/evidence/m3-t5-real-execution-final.json
+?? docs/evidence/m3-t5-real-execution-retry.json
+?? docs/evidence/m3-t5-real-execution-verified.json
+?? docs/evidence/m3-t5-real-execution.json
+?? docs/evidence/m3-t5-typescript.txt
+?? docs/evidence/m3-t5-validation.json
+?? tests/conftest.py
+?? tests/m3_t5_execution_acceptance.py
+?? tests/test_temporary_ruleset_execution.py

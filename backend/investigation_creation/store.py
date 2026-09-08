@@ -538,6 +538,51 @@ class InvestigationCreationStore:
         if bound["application_turn_id"] != turn_id:
             raise IdempotencyConflictError("Proposal receipt belongs to a different conversation turn")
 
+    def successful_adoption_results(self, *, session_id: str, turn_id: str,
+                                    principal: str) -> list[dict[str, Any]]:
+        """Read adoption outcomes from Application receipts, never runtime text."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT r.* FROM investigation_creation_tool_receipts r
+                   JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id=r.receipt_id
+                   WHERE r.session_id=? AND b.application_turn_id=? AND r.principal=?
+                     AND r.tool_name='use_ruleset_proposal' AND r.is_mutation=1
+                     AND r.status='SUCCEEDED' ORDER BY r.rowid""",
+                (session_id, turn_id, principal),
+            ).fetchall()
+            results = []
+            for row in rows:
+                if not row["turn_id"] or not row["tool_call_id"] or not row["arguments_fingerprint"]:
+                    raise RuntimeError("Adoption receipt execution identity is incomplete")
+                envelope = json.loads(row["response_json"])
+                if not isinstance(envelope, dict) or envelope.get("status") != "ok":
+                    raise RuntimeError("Successful adoption receipt has an invalid response")
+                data = envelope["data"]
+                recorded = data["draft"]
+                owned = self._owned_draft_row(connection, recorded["id"], principal)
+                revision = connection.execute(
+                    "SELECT * FROM investigation_draft_revisions WHERE draft_id=? AND revision=?",
+                    (owned["id"], recorded["current_revision"]),
+                ).fetchone()
+                if (revision is None or revision["title"] != recorded["title"]
+                        or revision["objective"] != recorded["objective"]
+                        or json.loads(revision["configuration_json"]) != recorded["configuration"]):
+                    raise RuntimeError("Adoption receipt does not match the durable Draft revision")
+                judgement = recorded["configuration"]["judgement"]
+                # An existing binding may be returned by a no-op. Its audit need
+                # not belong to this call or to the current title/Recall revision.
+                binding = connection.execute(
+                    """SELECT 1 FROM ruleset_proposal_approvals WHERE session_id=? AND draft_id=?
+                       AND proposal_id=? AND proposal_version=? AND content_hash=?
+                       AND draft_revision<=? LIMIT 1""",
+                    (session_id, owned["id"], judgement["proposal_id"], judgement["proposal_version"],
+                     judgement["content_hash"], recorded["current_revision"]),
+                ).fetchone()
+                if judgement.get("strategy") != "temporary_ruleset" or binding is None:
+                    raise RuntimeError("Adoption receipt has no matching durable binding")
+                results.append(data)
+        return results
+
     def proposal_presentation_snapshots(self, *, session_id: str, turn_id: str) -> list[dict[str, Any]]:
         # Only durable successful Application receipts may select snapshots for display.
         with self._connect() as connection:
@@ -886,8 +931,6 @@ class InvestigationCreationStore:
                 return self._run(replay)
 
             draft = self._owned_draft_row(connection, draft_id, principal)
-            if isinstance(getattr(self._draft(draft).configuration, "judgement", None), TemporaryRuleSetJudgement):
-                reject("TEMPORARY_RULESET_EXECUTION_UNAVAILABLE", "Temporary RuleSet execution is not connected until T5.")
             current_revision = int(draft["current_revision"])
             if current_revision != expected_revision:
                 raise DraftRevisionConflictError(
@@ -969,6 +1012,45 @@ class InvestigationCreationStore:
                             "confirmed_at": now,
                         }
                     ).model_dump(mode="json")
+            # Prove the resolution was derived from the transaction's exact Draft revision.
+            persisted = self._draft(draft)
+            if isinstance(persisted.configuration, InvestigationDraftConfiguration):
+                from .frozen import same_payload, validate_temporary_execution
+                revision_row = connection.execute(
+                    "SELECT configuration_json FROM investigation_draft_revisions WHERE draft_id=? AND revision=?",
+                    (draft_id, expected_revision),
+                ).fetchone()
+                if revision_row is None or not same_payload(
+                    json.loads(revision_row["configuration_json"]), persisted.configuration.model_dump(mode="json")
+                ):
+                    reject("CONFIGURATION_INVALID", "Persisted Draft revision content mismatch.")
+                judgement = persisted.configuration.judgement
+                if isinstance(judgement, TemporaryRuleSetJudgement):
+                    configuration = persisted.configuration
+                    mode = configuration.investigation.mode
+                    terms = []
+                    creator_url = ""
+                    if mode == "search":
+                        plan = configuration.investigation.recall_plan
+                        terms = list(plan.enabled_main_terms if plan.strategy == "existing_lexicon" else plan.terms)
+                    else:
+                        creator_url = configuration.investigation.creator_url
+                    expected_fields = {"mode": mode, "platform": configuration.platform.value,
+                                       "resolved_search_terms": terms, "creator_url": creator_url}
+                    if any(not same_payload(snapshot.get(k), v) for k, v in expected_fields.items()):
+                        reject("CONFIGURATION_INVALID", "Frozen configuration differs from expected Draft revision.")
+                    execution = snapshot["execution"]
+                    if (execution["platform"] != configuration.platform.value or execution["crawl_mode"] != mode
+                            or execution["keyword"] != ",".join(terms) or execution["creator_url"] != creator_url):
+                        reject("CONFIGURATION_INVALID", "Execution parameters differ from expected Draft revision.")
+                    if not same_payload(snapshot.get("temporary_ruleset"), judgement.model_dump(mode="json")):
+                        reject("CONFIGURATION_INVALID", "Frozen source differs from expected Draft revision.")
+                    try:
+                        validate_temporary_execution(judgement, snapshot["execution"])
+                    except (ValueError, KeyError, TypeError) as exc:
+                        reject("CONFIGURATION_INVALID", str(exc))
+                elif snapshot.get("temporary_ruleset") is not None:
+                    reject("CONFIGURATION_INVALID", "Temporary source does not match formal Draft.")
             connection.execute(
                 """
                 INSERT INTO investigation_runs (
@@ -1277,6 +1359,11 @@ class InvestigationCreationStore:
                 (report_version_id, task_id, task_id),
             ).fetchall()
         return frozenset(str(row["owner_principal"]) for row in rows)
+
+    def get_run_for_job(self, job_id: str) -> InvestigationRun | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT * FROM investigation_runs WHERE job_id=?", (job_id,)).fetchone()
+        return self._run(row) if row is not None else None
 
     def get_run_for_worker(self, run_id: str) -> InvestigationRun:
         with self._connect() as connection:

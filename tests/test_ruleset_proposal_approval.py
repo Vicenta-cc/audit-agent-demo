@@ -60,14 +60,10 @@ def test_binding_snapshot_preview_confirm_audit_and_replay(creation_stack, conte
     assert judgement["strategy"] == "temporary_ruleset"
     assert judgement["content"] == evidence(first)["snapshot"]["content"]
     assert judgement["content_hash"] == evidence(first)["content_hash"]
-    assert not data["confirmation_preview"]["can_confirm"]
+    assert data["confirmation_preview"]["can_confirm"]
     assert data["confirmation_preview"]["temporary_ruleset"] == judgement
     app = stack["app_service"]
-    with patch.object(app.configuration_resolver, "resolve", side_effect=AssertionError("execution")):
-        with pytest.raises(Exception) as exc:
-            app.confirm_and_queue(ConfirmAndQueueCommand(draft_id=draft["id"], expected_revision=1,
-                                  confirmed=True, idempotency_key="blocked"), principal=PRINCIPAL)
-        assert exc.value.code == "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE"
+    # Adoption and readiness do not themselves confirm or create a Run (T5).
     assert not rows(stack["creation_store"], "investigation_runs")
     with sqlite3.connect(stack["resource_db"]) as db:
         assert db.execute("SELECT count(*) FROM jobs").fetchone()[0] == 0

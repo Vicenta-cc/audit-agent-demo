@@ -28,6 +28,7 @@ from backend.investigation.store import InvestigationStore
 from .contracts import (
     ConfirmationPreview,
     InvestigationDraftConfiguration,
+    InvestigationDraftView,
     InvestigationOptions,
     PlatformOption,
     InvestigationRunProjection,
@@ -152,7 +153,9 @@ require clarification. A stale presentation requires a new full presentation and
 Do not retry use with a newly displayed snapshot in the same user turn. On Draft revision conflict,
 read the latest Draft and assess changes; do not blindly replace expected_revision and force a retry.
 For re-presentation, get the current Proposal and update it with unchanged content/expected_version.
-Temporary Drafts can be saved and previewed, but Confirm/execution is blocked until T5.
+Temporary Drafts use the same Preview/Confirm flow as formal Drafts, subject to fresh Application
+readiness validation. Adoption alone never starts execution. Execution requires a separate explicit
+confirmation and uses the bound Draft snapshot, never the live Proposal.
 You may generate temporary terms and a Proposal in the same turn. When a valid published Judgement
 is available, save the terms in Draft Recall and independently create a requested comparison Proposal.
 When both formal resources are missing, generate the requested Proposal and wait for later approval
@@ -690,9 +693,10 @@ class InvestigationCreationConversationService:
         *,
         principal: Principal,
         presentation_stage: Literal["suggestion", "confirmation"],
+        verified_view: InvestigationDraftView | None = None,
     ) -> dict[str, Any]:
         application = self.tool_service.application_service
-        view = application.get_draft_view(draft_id, principal=principal)
+        view = verified_view if verified_view is not None else application.get_draft_view(draft_id, principal=principal)
         configuration = view.draft.configuration
         if (isinstance(configuration, InvestigationDraftConfiguration)
                 and configuration.judgement.strategy == "temporary_ruleset"):
@@ -755,7 +759,10 @@ class InvestigationCreationConversationService:
         artifact_run_id = ""
         presentation_stage: Literal["suggestion", "confirmation"] = "suggestion"
         for turn in reversed(turns):
-            artifact = turn.public_artifact or {}
+            adoption = (self._verified_artifact(
+                [], principal=principal, adoption_turn=turn, allow_superseded_draft=True,
+            ) if turn.status == "completed" else {})
+            artifact = adoption or turn.public_artifact or {}
             if artifact.get("artifact_type") == "investigation_draft":
                 draft_id = str(artifact.get("draft_id") or "")
                 if draft_id:
@@ -998,7 +1005,7 @@ class InvestigationCreationConversationService:
                 result, history=history, user_message=user_message
             )
             artifact = self._verified_artifact(
-                transcript[len(history or []):], principal=principal
+                transcript[len(history or []):], principal=principal, adoption_turn=turn
             )
             return self._persist_result(turn, result, transcript, artifact)
         except Exception as exc:
@@ -1028,6 +1035,12 @@ class InvestigationCreationConversationService:
     def _binding_failure_notice(self, turn: InvestigationTurn, trace_messages: list[dict] | None = None) -> str:
         from .approval import BINDING_FAILURES
 
+        if self.tool_service.application_service.store.successful_adoption_results(
+            session_id=turn.session_id, turn_id=turn.id,
+            principal=self.principal_for_session(turn.session_id).id,
+        ):
+            return ""
+
         # Receipt provenance, not model prose, determines this minimal public fallback.
         with self.tool_service.application_service.store._connect() as connection:
             failures = connection.execute(
@@ -1050,13 +1063,15 @@ class InvestigationCreationConversationService:
             try:
                 payload = json.loads(item.get("content") or "{}")
             except (ValueError, TypeError):
+                # Hermes can append diagnostic prose to a rejected tool result.
+                # It is not an authoritative envelope; keep a basic failure notice.
+                last_use_status = "error"
+                errors.append({"code": "CONFIGURATION_INVALID"})
                 continue
             if isinstance(payload, dict):
                 last_use_status = payload.get("status", "")
                 if last_use_status == "error":
                     errors.append(payload.get("error") or {})
-        if last_use_status == "ok":
-            return ""
         notices = []
         for error in errors:
             reason, recovery = BINDING_FAILURES.get(error.get("code"),
@@ -1099,7 +1114,15 @@ class InvestigationCreationConversationService:
         *,
         principal: Principal,
         allow_superseded_draft: bool = False,
+        adoption_turn: InvestigationTurn | None = None,
     ) -> dict[str, Any]:
+        adoption_results = []
+        if adoption_turn is not None:
+            self._authorize(self.store.get_session(adoption_turn.session_id), principal)
+            adoption_results = self.tool_service.application_service.store.successful_adoption_results(
+                session_id=adoption_turn.session_id, turn_id=adoption_turn.id, principal=principal.id,
+            )
+        adoption_position = len(messages)
         calls: dict[str, str] = {}
         successful_results: list[tuple[int, str, dict[str, Any]]] = []
         for index, message in enumerate(messages):
@@ -1118,10 +1141,25 @@ class InvestigationCreationConversationService:
             )
             if tool_name not in self.tool_service.allowed_tool_names:
                 continue
-            payload = json.loads(str(message.get("content") or "{}"))
-            if payload.get("status") != "ok" or not isinstance(payload.get("data"), dict):
+            if (tool_name == "use_ruleset_proposal"
+                    or calls.get(str(message.get("tool_call_id") or "")) == "use_ruleset_proposal"):
+                # Transcript locates a candidate in the turn, but never supplies
+                # its success status, Draft identity, or content (even valid JSON).
+                adoption_position = index
+                continue
+            try:
+                payload = json.loads(str(message.get("content") or "{}"))
+            except (ValueError, TypeError):
+                # Runtime diagnostics (including JSON followed by guardrail text)
+                # are not resource results. Never extract a success from a prefix.
+                continue
+            if not isinstance(payload, dict) or payload.get("status") != "ok" or not isinstance(payload.get("data"), dict):
                 continue
             successful_results.append((index, tool_name, payload["data"]))
+
+        if adoption_results:
+            successful_results.append((adoption_position, "use_ruleset_proposal", adoption_results[-1]))
+            successful_results.sort(key=lambda item: item[0])
 
         artifact_results = [
             (tool_name, data)
@@ -1165,10 +1203,17 @@ class InvestigationCreationConversationService:
                 )
             ):
                 raise RuntimeError("Draft ToolResult no longer matches Application state")
+            if (tool_name == "use_ruleset_proposal"
+                    and verified.draft.current_revision == tool_draft.current_revision
+                    and (verified.draft.configuration != tool_draft.configuration
+                         or verified.draft.title != tool_draft.title
+                         or verified.draft.objective != tool_draft.objective)):
+                raise RuntimeError("Adoption Draft content no longer matches its receipt")
             return self._draft_artifact_for(
                 tool_draft.id,
                 principal=principal,
                 presentation_stage="suggestion",
+                **({"verified_view": verified} if tool_name == "use_ruleset_proposal" else {}),
             )
         projection = InvestigationRunProjection.model_validate(data)
         verified = self.tool_service.application_service.get_run(

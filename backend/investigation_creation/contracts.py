@@ -15,6 +15,7 @@ from pydantic import (
     StrictStr,
     field_validator,
     model_validator,
+    model_serializer,
 )
 
 from backend.audit_agent.creator_url import validate_creator_url
@@ -744,13 +745,35 @@ class ConfirmationResolutionV3(StrictModel):
         return self
 
 
-class ConfirmationResolution(StrictModel):
+class FrozenRuleSetSource(StrictModel):
+    ruleset_revision: RuleSetRevisionSummary | None = None
+    temporary_ruleset: TemporaryRuleSetJudgement | None = None
+
+    @model_validator(mode="after")
+    def validate_source(self) -> "FrozenRuleSetSource":
+        if (self.ruleset_revision is None) == (self.temporary_ruleset is None):
+            raise ValueError("frozen execution requires exactly one RuleSet source")
+        return self
+
+    def source_payload(self) -> dict[str, Any]:
+        if self.temporary_ruleset is not None:
+            return {"temporary_ruleset": self.temporary_ruleset.model_dump(mode="json")}
+        return {"ruleset_revision": self.ruleset_revision.model_dump(mode="json")}
+
+    @model_serializer(mode="wrap")
+    def serialize_source(self, handler):
+        # Preserve the exact historical formal shape and hash input.
+        data = handler(self)
+        data.pop("temporary_ruleset" if self.temporary_ruleset is None else "ruleset_revision", None)
+        return data
+
+
+class ConfirmationResolution(FrozenRuleSetSource):
     mode: Literal["search", "creator"]
     platform: Platform
     resolved_search_terms: list[StrictStr] = Field(default_factory=list)
     creator_url: StrictStr = ""
     recall_plan: ConfirmedRecallPlanSnapshot | None = None
-    ruleset_revision: RuleSetRevisionSummary
     execution: ResolvedExecutionConfiguration
     config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
 
@@ -772,12 +795,21 @@ class ConfirmationResolution(StrictModel):
                     if self.recall_plan is not None
                     else None
                 ),
-                "ruleset_revision": self.ruleset_revision.model_dump(mode="json"),
+                **self.source_payload(),
                 "execution": self.execution.model_dump(mode="json"),
             }
         )
         if self.config_hash != expected:
             raise ValueError("confirmation resolution config_hash does not match")
+        if self.temporary_ruleset is not None:
+            from .frozen import same_payload, validate_execution_payload
+            execution = self.execution.model_dump(mode="json")
+            validate_execution_payload(execution)
+            provenance = self.temporary_ruleset.model_dump(mode="json", exclude={"content"})
+            if not same_payload(execution["rule_snapshot"].get("temporary_ruleset"), provenance):
+                raise ValueError("temporary frozen provenance differs from execution")
+            if "ruleset_ref" in execution["rule_snapshot"]:
+                raise ValueError("temporary execution cannot carry a formal revision")
         return self
 
 
@@ -861,7 +893,7 @@ class ConfirmedConfigurationSnapshotV3(StrictModel):
         return self
 
 
-class ConfirmedConfigurationSnapshotV4(StrictModel):
+class ConfirmedConfigurationSnapshotV4(FrozenRuleSetSource):
     schema_version: Literal["investigation-run-config-v4"]
     draft_id: StrictStr
     draft_revision: StrictInt = Field(ge=1)
@@ -872,7 +904,6 @@ class ConfirmedConfigurationSnapshotV4(StrictModel):
     resolved_search_terms: list[StrictStr] = Field(default_factory=list)
     creator_url: StrictStr = ""
     recall_plan: ConfirmedRecallPlanSnapshot | None = None
-    ruleset_revision: RuleSetRevisionSummary
     max_notes: Literal[1]
     execution: ResolvedExecutionConfiguration
     config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
@@ -893,6 +924,7 @@ class ConfirmedConfigurationSnapshotV4(StrictModel):
                     "creator_url",
                     "recall_plan",
                     "ruleset_revision",
+                    "temporary_ruleset",
                     "execution",
                     "config_hash",
                 }

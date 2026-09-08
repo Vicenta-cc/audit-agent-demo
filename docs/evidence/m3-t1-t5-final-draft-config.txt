@@ -1,0 +1,9 @@
+........................................................................ [ 72%]
+............................                                             [100%]
+=============================== warnings summary ===============================
+../xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+100 passed, 1 warning in 4.86s

@@ -290,11 +290,6 @@ class InvestigationResourceService:
         resolution: AuthoritativeDraftResolution | None = None
         blockers: list[InvestigationBlocker] = []
         temporary = configuration.judgement.strategy == "temporary_ruleset"
-        if temporary:
-            blockers.append(self._blocker(
-                "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
-                "本次使用临时规则；临时规则执行尚未在 T5 接通。",
-            ))
         try:
             resolution = self.resolve_authoritative_draft(
                 configuration,
@@ -508,6 +503,16 @@ class InvestigationResourceService:
                     },
                 ) from exc
 
+        if selection.strategy == "temporary_ruleset":
+            try:
+                from .frozen import compile_temporary
+                compile_temporary(selection)
+            except Exception as exc:
+                raise ConfigurationValidationError(
+                    "临时规则无法通过编译校验，请检查规则内容。",
+                    code="INVALID_RULESET_REFERENCE",
+                ) from exc
+
         normalized = configuration
         recall_summary: RecallLexiconSummary | None = None
         editable_blockers: list[InvestigationBlocker] = []
@@ -618,11 +623,6 @@ class InvestigationResourceService:
         configuration = InvestigationDraftConfiguration.model_validate(
             draft.configuration.model_dump(mode="json")
         )
-        if configuration.judgement.strategy == "temporary_ruleset":
-            raise ConfigurationValidationError(
-                "Temporary RuleSet execution is not connected until T5.",
-                code="TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
-            )
         try:
             resolution = self.resolve_authoritative_draft(
                 configuration,
@@ -711,7 +711,9 @@ class InvestigationResourceService:
         resolved = dict(
             resolve_direct(
                 InvestigationConfiguration.model_validate(execution_input),
-                ruleset_revision_id=resolution.ruleset_revision.id,
+                **({"temporary_ruleset": configuration.judgement}
+                   if configuration.judgement.strategy == "temporary_ruleset"
+                   else {"ruleset_revision_id": resolution.ruleset_revision.id}),
                 recall_library_ids=recall_library_ids,
                 principal=principal,
                 resource_connection=resource_connection,
@@ -782,7 +784,9 @@ class InvestigationResourceService:
                 if recall_snapshot is not None
                 else None
             ),
-            "ruleset_revision": resolution.ruleset_revision.model_dump(mode="json"),
+            **({"temporary_ruleset": configuration.judgement.model_dump(mode="json")}
+               if configuration.judgement.strategy == "temporary_ruleset"
+               else {"ruleset_revision": resolution.ruleset_revision.model_dump(mode="json")}),
             "execution": execution.model_dump(mode="json"),
         }
         return ConfirmationResolution(

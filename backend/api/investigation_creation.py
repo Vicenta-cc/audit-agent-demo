@@ -248,7 +248,9 @@ def _raise_public_error(exc: Exception) -> None:
     if isinstance(exc, PrincipalAccessDeniedError):
         raise HTTPException(status_code=404, detail="resource was not found") from exc
     if isinstance(exc, ValidationError):
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        # Validator contexts can contain ValueError objects, which JSONResponse
+        # cannot serialize. The location/type/message remain sufficient to report it.
+        raise HTTPException(status_code=422, detail=exc.errors(include_context=False)) from exc
     if isinstance(exc, (ConfirmationRequiredError, ConfigurationValidationError, ValueError)):
         raise HTTPException(status_code=400, detail=detail) from exc
     raise exc

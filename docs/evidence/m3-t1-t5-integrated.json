@@ -1,0 +1,323 @@
+{
+  "status": "M3_T1_T5_INTEGRATED_BLOCKED",
+  "old_baseline": "ad47e537013c38fe031ec1bab9bd7486767e49cb",
+  "review": {
+    "p0": 0,
+    "remaining_p1": 0,
+    "p1_fixed_this_review": 1
+  },
+  "commit_gate": false,
+  "commit": false,
+  "push": false,
+  "blocker": "Integrated B did not produce usable collected content: DY returned empty lists for every existing Recall term; XHS account authentication failed. No successful B execution is claimed.",
+  "integrated_cases": [
+    {
+      "case": "A",
+      "pass": true,
+      "evidence": "m3-t1-t5-integrated-temporary-final.json",
+      "sha256": "c91c9ff52dd6227c2847fc98a8e70fea0d50999b48dc6343bdd7bfec39c1fc10",
+      "run_id": "investigation-run:da70c3320b424da082c7f5b4c410bc57",
+      "job_id": "m3-77f537385f77c5b32be2",
+      "audit_revision_id": "audit-config-revision:5f96516cbd45712d00b6db67a015e97f",
+      "state": "AUDIT_COMPLETED",
+      "audit_results": 1,
+      "frozen_rule_prompt_revision_consumption_exact": true,
+      "run_config_hash": "d6f1f3609af92c39ffdc2942cf2d2b3bf6440b6136bc6e17fb747a274ab683d4",
+      "compiled_config_hash": "4dfde8a3ba4b9eaf4156fd37b138a01d9c119b05bbd6cb9a95fcbbb8349f9536",
+      "recall": {
+        "enabled_main_terms": [],
+        "lexicon_id": "",
+        "runtime_content_hash": "",
+        "source_lexicon_ids": [],
+        "strategy": "temporary_terms",
+        "temporary_terms": [
+          "入职前收费"
+        ]
+      },
+      "proposal": {
+        "proposal_id": "ruleset-proposal:27b2c792d2e44cf6bd24a1ebbb5429ec",
+        "proposal_version": 2,
+        "content_hash": "334738c1704aa3dde572f5b826ed5ecd40829128c404341834239d7b12627e68",
+        "presentation_id": "ruleset-presentation:0997832c26441c2a49d265ab808d9a642601af91608165c3c69c884729b9abbc"
+      },
+      "presentation_turn_id": "investigation-turn:aa2243fd9e81484c926177fcb9fd1560",
+      "adoption_turn_id": "investigation-turn:7b7dfe1c2fc248468a1231bcdc34f5fd",
+      "draft_id": "investigation-draft:58cb708c19fb48ffb1553fa8ad1c9d9a",
+      "draft_revision": 1,
+      "live_proposal_reads_forbidden": true,
+      "tools": [
+        {
+          "turn": "A-generate",
+          "calls": [
+            {
+              "name": "query_investigation_options",
+              "status": "ok",
+              "error_code": null
+            },
+            {
+              "name": "query_investigation_options",
+              "status": "ok",
+              "error_code": null
+            },
+            {
+              "name": "query_investigation_options",
+              "status": "ok",
+              "error_code": null
+            },
+            {
+              "name": "create_ruleset_proposal",
+              "status": "ok",
+              "error_code": null
+            },
+            {
+              "name": "create_investigation_draft",
+              "status": "error",
+              "error_code": "INVALID_TOOL_ARGUMENTS"
+            },
+            {
+              "name": "create_investigation_draft",
+              "status": "error",
+              "error_code": "PROPOSAL_APPROVAL_REQUIRED"
+            }
+          ]
+        },
+        {
+          "turn": "A-refine-recall",
+          "calls": []
+        },
+        {
+          "turn": "A-edit",
+          "calls": [
+            {
+              "name": "get_ruleset_proposal",
+              "status": "ok",
+              "error_code": null
+            },
+            {
+              "name": "update_ruleset_proposal",
+              "status": "ok",
+              "error_code": null
+            }
+          ]
+        },
+        {
+          "turn": "A-adopt",
+          "calls": [
+            {
+              "name": "create_investigation_draft",
+              "status": "error",
+              "error_code": "PROPOSAL_APPROVAL_REQUIRED"
+            },
+            {
+              "name": "use_ruleset_proposal",
+              "status": "ok",
+              "error_code": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "case": "B",
+      "pass": false,
+      "evidence": "m3-t1-t5-integrated-formal-final.json",
+      "sha256": "de799a1ee390fa447bb05a06a4ee8622cb43e2e4308799003efe7f7d1cb09008",
+      "run_id": "investigation-run:da838f33c59646a7aa9b1fc14d1c2bcb",
+      "job_id": "m3-dcb5a5006b294229437b",
+      "audit_revision_id": "audit-config-revision:46ad2d2b9d121d13571509949c479f6b",
+      "state": "FAILED",
+      "audit_results": 0,
+      "frozen_rule_prompt_revision_consumption_exact": true,
+      "run_config_hash": "8b3428c95fdb01378cd2740f8f2d7c485820e326455d7de2861b41d6a70a84a0",
+      "compiled_config_hash": "670c8a5c18474636d8d9426fd9a3eb3b9440a4c974c6098f9735739af2b8baa0",
+      "recall": {
+        "enabled_main_terms": [
+          "盘口",
+          "回血",
+          "上分",
+          "bc料",
+          "bc车队",
+          "跑分车队"
+        ],
+        "lexicon_id": "gambling",
+        "runtime_content_hash": "e80aea85954eafbab1441d97da33242ea0c7b4231cce4191d8d56789de9de436",
+        "source_lexicon_ids": [],
+        "strategy": "existing_lexicon",
+        "temporary_terms": []
+      },
+      "formal": {
+        "available": true,
+        "content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc",
+        "domain": "gambling",
+        "enabled_rule_count": 7,
+        "id": "ruleset-revision:gambling:v2",
+        "name": "赌博博彩风险规则集",
+        "ruleset_id": "ruleset.gambling",
+        "version": 2
+      },
+      "baseline_formal_reader_hash_shape_pass": true,
+      "error": "no_valid_content_selected: crawler returned no content with a valid content identity",
+      "crawler_diagnostics": [
+        {
+          "file": "mediacrawler_stdout.log",
+          "bytes": 0,
+          "categories": [],
+          "search_events": []
+        },
+        {
+          "file": "mediacrawler_stderr.log",
+          "bytes": 3818,
+          "categories": [
+            "search",
+            "is empty"
+          ],
+          "search_events": [
+            "[DouYinCrawler.search] Begin search douyin keywords",
+            "[DouYinCrawler.search] Current keyword: 盘口",
+            "[DouYinCrawler.search] Skip 0",
+            "[DouYinCrawler.search] search douyin keyword: 盘口, page: 1",
+            "[DouYinCrawler.search] search douyin keyword: 盘口, page: 1 is empty,[]`",
+            "[DouYinCrawler.search] keyword:盘口, aweme_list:[]",
+            "[DouYinCrawler.search] Current keyword: 回血",
+            "[DouYinCrawler.search] Skip 0",
+            "[DouYinCrawler.search] search douyin keyword: 回血, page: 1",
+            "[DouYinCrawler.search] search douyin keyword: 回血, page: 1 is empty,[]`",
+            "[DouYinCrawler.search] keyword:回血, aweme_list:[]",
+            "[DouYinCrawler.search] Current keyword: 上分",
+            "[DouYinCrawler.search] Skip 0",
+            "[DouYinCrawler.search] search douyin keyword: 上分, page: 1",
+            "[DouYinCrawler.search] search douyin keyword: 上分, page: 1 is empty,[]`",
+            "[DouYinCrawler.search] keyword:上分, aweme_list:[]",
+            "[DouYinCrawler.search] Current keyword: bc料",
+            "[DouYinCrawler.search] Skip 0",
+            "[DouYinCrawler.search] search douyin keyword: bc料, page: 1",
+            "[DouYinCrawler.search] search douyin keyword: bc料, page: 1 is empty,[]`",
+            "[DouYinCrawler.search] keyword:bc料, aweme_list:[]",
+            "[DouYinCrawler.search] Current keyword: bc车队",
+            "[DouYinCrawler.search] Skip 0",
+            "[DouYinCrawler.search] search douyin keyword: bc车队, page: 1",
+            "[DouYinCrawler.search] search douyin keyword: bc车队, page: 1 is empty,[]`",
+            "[DouYinCrawler.search] keyword:bc车队, aweme_list:[]",
+            "[DouYinCrawler.search] Current keyword: 跑分车队",
+            "[DouYinCrawler.search] Skip 0",
+            "[DouYinCrawler.search] search douyin keyword: 跑分车队, page: 1",
+            "[DouYinCrawler.search] search douyin keyword: 跑分车队, page: 1 is empty,[]`",
+            "[DouYinCrawler.search] keyword:跑分车队, aweme_list:[]"
+          ]
+        }
+      ],
+      "existing_recall_source": {
+        "method": "Read-only copy of existing saved entries into isolated resource DB, before Draft creation; no new terms generated.",
+        "lexicon_id": "gambling",
+        "enabled_main_terms": [
+          "盘口",
+          "回血",
+          "上分",
+          "bc料",
+          "bc车队",
+          "跑分车队"
+        ],
+        "runtime_content_hash": "e80aea85954eafbab1441d97da33242ea0c7b4231cce4191d8d56789de9de436"
+      }
+    }
+  ],
+  "history": [
+    "m3-t1-t5-integrated-transcript-failure.json",
+    "m3-t1-t5-integrated-recall-review.json",
+    "m3-t1-t5-integrated-formal-dy-empty.json",
+    "m3-t1-t5-integrated-formal-xhs-login.json"
+  ],
+  "tests": {
+    "t5_passed": 49,
+    "focused_passed": 397,
+    "focused_invocations": [
+      297,
+      100
+    ],
+    "focused_subtests": 22,
+    "full_pytest": {
+      "passed": 927,
+      "skipped": 24,
+      "failed": 0,
+      "subtests": 66
+    },
+    "compiler_m1_m2": {
+      "passed": 188,
+      "skipped": 7,
+      "subtests": 19,
+      "prior_final_evidence_reused": true
+    },
+    "typescript": "PASS",
+    "frontend_changed_file_passed": 12,
+    "full_frontend": {
+      "passed": 71,
+      "skipped": 2,
+      "baseline_failures": 5,
+      "complete_assertions_equal_baseline": true
+    }
+  },
+  "logs": {
+    "deterministic": {
+      "file": "m3-t1-t5-final-deterministic.txt",
+      "sha256": "92acb03ce5115e916e8c7c9ae43dfa9799ef4ee7ab4d8298a6f5b271ac421a10",
+      "original_sha256": "92acb03ce5115e916e8c7c9ae43dfa9799ef4ee7ab4d8298a6f5b271ac421a10",
+      "normalization": "Remove ANSI rendering codes and trailing whitespace only."
+    },
+    "focused": {
+      "file": "m3-t1-t5-final-focused.txt",
+      "sha256": "43503f2df26218946b0819e6eee5f19a9e35b44de6ad7aed6928e6cc80009275",
+      "original_sha256": "8f496d717cb797cdfa5491e20abeb72d8c2cbd8ddf7b51bbc055d9110879ff56",
+      "normalization": "Remove ANSI rendering codes and trailing whitespace only."
+    },
+    "draft-config": {
+      "file": "m3-t1-t5-final-draft-config.txt",
+      "sha256": "5719b6a9383d55085ad622bc5fcf3a529bbda7a0a8046b835300523e94ea148f",
+      "original_sha256": "5719b6a9383d55085ad622bc5fcf3a529bbda7a0a8046b835300523e94ea148f",
+      "normalization": "Remove ANSI rendering codes and trailing whitespace only."
+    },
+    "full-pytest": {
+      "file": "m3-t1-t5-final-full-pytest.txt",
+      "sha256": "efd2780739b609101ea53db7837b0c178f7a4277635b0dcc232e93b3af84d9ea",
+      "original_sha256": "3ebce8e7aaca134a7a5158ce8a352ba36fc79f80e3a58585d8126e4918b2f8eb",
+      "normalization": "Remove ANSI rendering codes and trailing whitespace only."
+    },
+    "typescript": {
+      "file": "m3-t1-t5-final-typescript.txt",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "original_sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "normalization": "Remove ANSI rendering codes and trailing whitespace only."
+    },
+    "frontend": {
+      "file": "m3-t1-t5-final-frontend.txt",
+      "sha256": "9e249933814887135149f244259366998d68ada83266dd9f3ac779fdac6735ac",
+      "original_sha256": "9e249933814887135149f244259366998d68ada83266dd9f3ac779fdac6735ac",
+      "normalization": "Remove ANSI rendering codes and trailing whitespace only."
+    }
+  },
+  "default_storage_fingerprints_unchanged": true,
+  "default_file_count": 22,
+  "no_formal_mutation": true,
+  "no_automatic_report": true,
+  "no_deep_link": true,
+  "post_commit_sanity": "Not applicable: commit gate blocked",
+  "recall_quality_limit": "Final A required a genuine user correction to one canonical term. Initial generation is not claimed to meet canonical/quantity guidance in one turn.",
+  "final_safety_checks": {
+    "diff_check": "PASS",
+    "all_added_file_whitespace": "PASS",
+    "secret_value_and_schema_scan": "PASS",
+    "default_storage_unchanged": true,
+    "staged_files": 0,
+    "head": "ad47e537013c38fe031ec1bab9bd7486767e49cb",
+    "proposed_scope_file_count": 45,
+    "remaining_acceptance_temp_dirs": 0
+  },
+  "superseding_product_decision": {
+    "date": "2026-09-08",
+    "commit_authorized": true,
+    "B_pass": false,
+    "B_commit_blocker": false,
+    "reason": "Known external Douyin verify_check collection residual; fresh B did not reach AUDIT_COMPLETED. Existing evidence does not support Recall/formal/T5 wiring regression. Original results above remain historical and unchanged.",
+    "latest_tests": "m3-adoption-hardening-validation.json",
+    "report": "../M3_T1_T5_FINAL_REVIEW.md"
+  }
+}

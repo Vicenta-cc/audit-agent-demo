@@ -1,0 +1,361 @@
+{
+  "stage": "M3_PHASE_T5",
+  "status": "M3_PHASE_T5_PASS",
+  "baseline": "ad47e537013c38fe031ec1bab9bd7486767e49cb",
+  "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/bin/python",
+  "tests": {
+    "t5_deterministic": {
+      "passed": 41,
+      "seconds": 4.88,
+      "standalone": true
+    },
+    "focused": {
+      "passed": 389,
+      "failed": 0,
+      "subtests": 22,
+      "seconds": 31.84
+    },
+    "compiler_m1_m2": {
+      "passed": 188,
+      "skipped": 7,
+      "subtests": 19
+    },
+    "full_pytest": {
+      "passed": 919,
+      "skipped": 24,
+      "failed": 0,
+      "subtests": 66,
+      "warnings": 5,
+      "seconds": 88.86
+    },
+    "typescript": "PASS",
+    "frontend": {
+      "passed": 71,
+      "skipped": 2,
+      "failed": 5,
+      "failure_names_and_complete_assertions_equal_baseline": true,
+      "relevant_passed": 47
+    },
+    "baseline_formal_v4_roundtrip": {
+      "pass": true,
+      "evidence": "m3-t5-formal-golden.json"
+    },
+    "default_storage_unchanged_after_isolation_fix": true
+  },
+  "test_invocation_note": "A focused invocation initially loaded default application stores before module-local isolation. The existing legacy API test created two test Jobs and startup recovery changed two prior test Job statuses. Exact cleanup and limitations are recorded in m3-t5-default-store-observation.json. tests/conftest.py now establishes isolation before any test imports. Standalone T5, the formerly failing focused order, and full pytest pass; default data/output file fingerprints are unchanged across all final runs.",
+  "review": {
+    "p0": 0,
+    "p1": 0,
+    "real_acceptance_gate": "PASS"
+  },
+  "scope": {
+    "compiler_semantics_changed": false,
+    "media_crawler_changed": false,
+    "formal_save_added": false,
+    "automatic_report_added": false,
+    "streaming_added": false,
+    "commit": false,
+    "push": false
+  },
+  "limitations": [
+    "Run and Job use separate database commits; no distributed atomicity or crash exactly-once claim.",
+    "24 backend skips, 2 frontend skips and 5 baseline frontend failures remain.",
+    "Initial wrongly ordered test invocation touched default stores; attributed cleanup and remaining proof limits are documented. Final tests leave default storage fingerprints unchanged."
+  ],
+  "logs": {
+    "focused": {
+      "file": "m3-t5-focused.txt",
+      "original_sha256": "ae606698fb132476ca90d0d186810059a9341c809ea05bf6049bebb29f2f188d",
+      "sha256": "445af56ccd56ee431ee08c9583368f67860b40ebf5a32f16ccb8258a496a3abc",
+      "normalization": "Trailing whitespace removed from pytest warning text only."
+    },
+    "compiler_m1_m2": {
+      "file": "m3-t5-compiler_m1_m2.txt",
+      "sha256": "a33ecf372e98d1793fc9a32efa6885da542b702815986328b0e1507c5143a7d6",
+      "original_sha256": "9da028bef6f9a733a5f1ae4c754f6ffc0e27cbcc5e98f0915e599ad4be85d66a",
+      "normalization": "Trailing whitespace removed from pytest warning text only."
+    },
+    "full_pytest": {
+      "file": "m3-t5-full_pytest.txt",
+      "original_sha256": "2ae89859e9f38af2f3bc41d462f2e19e895b1ce808f4ca0acdc9bbc95ad56e37",
+      "sha256": "0ed4bc788f526d77fdf4ca095e96c0edd59809b1304a33395a3bad7eeb33aa6e",
+      "normalization": "Trailing whitespace removed from pytest warning text only."
+    },
+    "typescript": {
+      "file": "m3-t5-typescript.txt",
+      "sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "original_sha256": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92",
+      "normalization": "Trailing whitespace removed from pytest warning text only."
+    },
+    "t5_deterministic": {
+      "file": "m3-t5-deterministic.txt",
+      "original_sha256": "9005b039f5e0402403211ad2a267226f2ce48e0f92aa20a3883f7364ba89dda6",
+      "sha256": "9005b039f5e0402403211ad2a267226f2ce48e0f92aa20a3883f7364ba89dda6",
+      "normalization": "Trailing whitespace removed from pytest warning text only."
+    }
+  },
+  "frontend_evidence": {
+    "current": {
+      "stats": {
+        "startTime": "2026-09-08T04:18:11.426Z",
+        "duration": 16951.481,
+        "expected": 71,
+        "skipped": 2,
+        "unexpected": 5,
+        "flaky": 0
+      },
+      "failures": [
+        {
+          "title": "renders real Draft and ConfirmationPreview fields",
+          "file": "investigationCreation.spec.tsx",
+          "assertions": [
+            "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoMatchObject\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 0\u001b[39m\n\n\u001b[33m@@ -1,7 +1,6 @@\u001b[39m\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"auditPolicy\": \"博彩引流审核策略\",\u001b[39m\n\u001b[2m    \"canConfirm\": true,\u001b[22m\n\u001b[2m    \"maxNotes\": 1,\u001b[22m\n\u001b[2m    \"objective\": \"识别世界杯期间的小红书博彩引流\",\u001b[22m\n\u001b[2m    \"platform\": \"小红书\",\u001b[22m\n\u001b[2m    \"recallStrategy\": \"本次临时搜索词\",\u001b[22m"
+          ]
+        },
+        {
+          "title": "real analysis-plan drawer projects public resources without mock rule details",
+          "file": "investigationCreation.spec.tsx",
+          "assertions": [
+            "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoMatchObject\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 0\u001b[39m\n\n\u001b[33m@@ -1,7 +1,6 @@\u001b[39m\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"policyName\": \"博彩引流审核策略\",\u001b[39m\n\u001b[2m    \"recallLexicons\": Array [\u001b[22m\n\u001b[2m      Object {\u001b[22m\n\u001b[2m        \"title\": \"博彩引流词库\",\u001b[22m\n\u001b[2m      },\u001b[22m\n\u001b[2m    ],\u001b[22m"
+          ]
+        },
+        {
+          "title": "blockers disable confirmation and expose the management URL",
+          "file": "investigationCreation.spec.tsx",
+          "assertions": [
+            "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"尚未选择审核策略\"\u001b[39m\nReceived: \u001b[31mundefined\u001b[39m"
+          ]
+        },
+        {
+          "title": "creation diagnostics fail closed into user-facing copy",
+          "file": "investigationCreation.spec.tsx",
+          "assertions": [
+            "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"当前\u001b[7m还没有匹配的研判方案，配置后即可继续\u001b[27m。\"\u001b[39m\nReceived: \u001b[31m\"当前\u001b[7m操作暂时无法完成，请稍后重试\u001b[27m。\"\u001b[39m"
+          ]
+        },
+        {
+          "title": "creation presentation hides internal diagnostics and keeps real management navigation",
+          "file": "investigationPresentation.spec.ts",
+          "assertions": [
+            "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 1\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"label\": \"去配置研判方案\",\u001b[39m\n\u001b[31m+   \"label\": \"前往配置\",\u001b[39m\n\u001b[2m    \"managementUrl\": \"/rule-assistant/rulesets?return_to=/investigation\",\u001b[22m\n\u001b[2m  }\u001b[22m"
+          ]
+        }
+      ]
+    },
+    "baseline": {
+      "stats": {
+        "startTime": "2026-09-07T11:56:34.966Z",
+        "duration": 8488.978000000001,
+        "expected": 38,
+        "skipped": 0,
+        "unexpected": 5,
+        "flaky": 0
+      },
+      "failures": [
+        {
+          "title": "renders real Draft and ConfirmationPreview fields",
+          "file": "investigationCreation.spec.tsx",
+          "assertions": [
+            "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoMatchObject\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 0\u001b[39m\n\n\u001b[33m@@ -1,7 +1,6 @@\u001b[39m\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"auditPolicy\": \"博彩引流审核策略\",\u001b[39m\n\u001b[2m    \"canConfirm\": true,\u001b[22m\n\u001b[2m    \"maxNotes\": 1,\u001b[22m\n\u001b[2m    \"objective\": \"识别世界杯期间的小红书博彩引流\",\u001b[22m\n\u001b[2m    \"platform\": \"小红书\",\u001b[22m\n\u001b[2m    \"recallStrategy\": \"本次临时搜索词\",\u001b[22m"
+          ]
+        },
+        {
+          "title": "real analysis-plan drawer projects public resources without mock rule details",
+          "file": "investigationCreation.spec.tsx",
+          "assertions": [
+            "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoMatchObject\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 0\u001b[39m\n\n\u001b[33m@@ -1,7 +1,6 @@\u001b[39m\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"policyName\": \"博彩引流审核策略\",\u001b[39m\n\u001b[2m    \"recallLexicons\": Array [\u001b[22m\n\u001b[2m      Object {\u001b[22m\n\u001b[2m        \"title\": \"博彩引流词库\",\u001b[22m\n\u001b[2m      },\u001b[22m\n\u001b[2m    ],\u001b[22m"
+          ]
+        },
+        {
+          "title": "blockers disable confirmation and expose the management URL",
+          "file": "investigationCreation.spec.tsx",
+          "assertions": [
+            "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"尚未选择审核策略\"\u001b[39m\nReceived: \u001b[31mundefined\u001b[39m"
+          ]
+        },
+        {
+          "title": "creation diagnostics fail closed into user-facing copy",
+          "file": "investigationCreation.spec.tsx",
+          "assertions": [
+            "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"当前\u001b[7m还没有匹配的研判方案，配置后即可继续\u001b[27m。\"\u001b[39m\nReceived: \u001b[31m\"当前\u001b[7m操作暂时无法完成，请稍后重试\u001b[27m。\"\u001b[39m"
+          ]
+        },
+        {
+          "title": "creation presentation hides internal diagnostics and keeps real management navigation",
+          "file": "investigationPresentation.spec.ts",
+          "assertions": [
+            "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 1\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"label\": \"去配置研判方案\",\u001b[39m\n\u001b[31m+   \"label\": \"前往配置\",\u001b[39m\n\u001b[2m    \"managementUrl\": \"/rule-assistant/rulesets?return_to=/investigation\",\u001b[22m\n\u001b[2m  }\u001b[22m"
+          ]
+        }
+      ]
+    }
+  },
+  "real_execution": {
+    "platform": "dy",
+    "accepted_cases": [
+      {
+        "case": "A",
+        "pass": true,
+        "evidence": "m3-t5-real-execution-dy.json",
+        "status": "AUDIT_COMPLETED",
+        "run_id": "investigation-run:51f86f5517a14db2ae86dfc226d6ce87",
+        "job_id": "m3-168d540562800314fab2",
+        "source": {
+          "strategy": "temporary_ruleset",
+          "proposal_id": "ruleset-proposal:eac6c00f080746ff8ffb2918ad6f220c",
+          "proposal_version": 2,
+          "content_hash": "92c82b98667a2a1052ffb60fe23e6592114e0e8cbce880c5aafb7a3a8f4c878d",
+          "inline_source_exact": true
+        },
+        "rule_prompt_revision_exact": true,
+        "result_provenance_exact": true,
+        "audit_results": 1,
+        "run_config_hash": "aa35a0b6941812a04fa19924afc3ce4ffd3fca312244b796c36ee90db6998c70",
+        "compiled_config_hash": "2626f485be73dfe315982ac700b132eb9d4fb617d3b9d9327cbcebd2e92fc51d"
+      },
+      {
+        "case": "B",
+        "pass": true,
+        "evidence": "m3-t5-real-execution-dy.json",
+        "status": "AUDIT_COMPLETED",
+        "run_id": "investigation-run:ab380162635843f39c1cb915b93934d9",
+        "job_id": "m3-867cc6a5310e51d1b1f9",
+        "source": {
+          "strategy": "temporary_ruleset",
+          "proposal_id": "ruleset-proposal:7fdbab77fb31494fb5a7746b5b68bad3",
+          "proposal_version": 2,
+          "content_hash": "92c82b98667a2a1052ffb60fe23e6592114e0e8cbce880c5aafb7a3a8f4c878d",
+          "inline_source_exact": true
+        },
+        "rule_prompt_revision_exact": true,
+        "result_provenance_exact": true,
+        "audit_results": 1,
+        "run_config_hash": "a4231c8f1b680fbd20a4f26bd269500b118b2ab8157835e14be1041380aa8fe0",
+        "compiled_config_hash": "507dd8cf5fb08e47a1952e0a26412d8e6d01ed33fb906aece0a63c50afd4fc43"
+      },
+      {
+        "case": "C",
+        "pass": true,
+        "evidence": "m3-t5-real-execution-retry.json",
+        "status": "AUDIT_COMPLETED",
+        "run_id": "investigation-run:70c360aac1554dd5b035fbe1c258e565",
+        "job_id": "m3-b74c86ed71067055c7ee",
+        "source": {
+          "strategy": "temporary_ruleset",
+          "proposal_id": "ruleset-proposal:38f82c588fff482f82a91a123e3b473a",
+          "proposal_version": 2,
+          "content_hash": "92c82b98667a2a1052ffb60fe23e6592114e0e8cbce880c5aafb7a3a8f4c878d",
+          "inline_source_exact": true
+        },
+        "rule_prompt_revision_exact": true,
+        "result_provenance_exact": true,
+        "audit_results": 1,
+        "run_config_hash": "d3b690743c1ff7a0229a241bb467ae2277d14ea9cb2807739002eba7bf0982c9",
+        "compiled_config_hash": "01e0191faa9ed2312cd14e2fc4c0d20d25b18926f7c94aba026d2ce35a0ce78d"
+      },
+      {
+        "case": "D",
+        "pass": true,
+        "evidence": "m3-t5-real-execution-retry.json",
+        "status": "AUDIT_COMPLETED",
+        "run_id": "investigation-run:7eae822ba58d46359911b46c2979fb70",
+        "job_id": "m3-00a7a5f0e282cb99b7c6",
+        "source": {
+          "strategy": "temporary_ruleset",
+          "proposal_id": "ruleset-proposal:0c02e0c51a40488c8ed31bf5e4463d10",
+          "proposal_version": 2,
+          "content_hash": "92c82b98667a2a1052ffb60fe23e6592114e0e8cbce880c5aafb7a3a8f4c878d",
+          "inline_source_exact": true
+        },
+        "rule_prompt_revision_exact": true,
+        "result_provenance_exact": true,
+        "audit_results": 1,
+        "run_config_hash": "fd5540a2c3ac31177ef2eca9aab2de8a684c072aae24abcbbfa1c14617103f61",
+        "compiled_config_hash": "91b91bcd7875a5f06da6bb47da7868e584bee0a5fd066a72cf0e1ef2f9c7294b"
+      },
+      {
+        "case": "E",
+        "pass": true,
+        "evidence": "m3-t5-real-execution-retry.json",
+        "status_code": 409,
+        "new_runs": 0,
+        "new_jobs": 0
+      },
+      {
+        "case": "F",
+        "pass": true,
+        "evidence": "m3-t5-real-execution-final.json",
+        "status_code": 422,
+        "new_runs": 0,
+        "new_jobs": 0
+      },
+      {
+        "case": "G",
+        "pass": true,
+        "evidence": "m3-t5-real-execution-final.json",
+        "status_code": 400,
+        "new_runs": 0,
+        "new_jobs": 0
+      },
+      {
+        "case": "H",
+        "pass": true,
+        "evidence": "m3-t5-real-execution-final.json",
+        "status": "AUDIT_COMPLETED",
+        "run_id": "investigation-run:5995b08450df49afa53c75c02620e5a1",
+        "job_id": "m3-13d026d9f01a7e8c4069",
+        "source": {
+          "strategy": "existing_ruleset",
+          "ruleset_revision_id": "ruleset-revision:gambling:v2",
+          "expected_ruleset_version": 2,
+          "expected_ruleset_content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc",
+          "formal_shape_preserved": true
+        },
+        "rule_prompt_revision_exact": true,
+        "result_provenance_exact": true,
+        "audit_results": 1,
+        "run_config_hash": "8716cb87bfd8d8682b33dce4de383230d75b3173e9307e7b208eb285d0f91a48",
+        "compiled_config_hash": "670c8a5c18474636d8d9426fd9a3eb3b9440a4c974c6098f9735739af2b8baa0"
+      }
+    ],
+    "selected_successful_runs": 5,
+    "selected_successful_jobs": 5,
+    "selected_audit_results": 5,
+    "final_batch_no_formal_mutation": true,
+    "final_batch_no_report_created": true,
+    "case_c_d_batch_no_formal_mutation": true,
+    "case_c_d_batch_no_report_created": true,
+    "case_a_b_result_provenance_evidence": "m3-t5-real-audit-result-provenance.json",
+    "history": [
+      {
+        "file": "m3-t5-real-execution.json",
+        "result": "Initial Qwen adoption reasked; no execution acceptance."
+      },
+      {
+        "file": "m3-t5-real-execution-verified.json",
+        "result": "XHS authoring and freeze succeeded; Run failed with crawler_account_login_required."
+      },
+      {
+        "file": "m3-t5-real-execution-dy.json",
+        "result": "A/B pass individually; C audit_provider_failed. Whole attempt false; final database table comparison was not reached."
+      },
+      {
+        "file": "m3-t5-real-execution-retry.json",
+        "result": "C/D/E pass individually; F exposed JSON serialization failure, now fixed. Whole attempt false; formal/report table comparison was captured."
+      },
+      {
+        "file": "m3-t5-real-execution-final.json",
+        "result": "F/G/H pass on final error handling; whole selected batch true."
+      }
+    ]
+  },
+  "git": {
+    "head": "ad47e537013c38fe031ec1bab9bd7486767e49cb",
+    "staged_files": 0,
+    "working_tree": "T5 changes intentionally uncommitted",
+    "status_evidence": "m3-t5-git-status.txt",
+    "diff_check": "PASS",
+    "new_file_whitespace": "PASS",
+    "evidence_secret_scan": "PASS"
+  }
+}

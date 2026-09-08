@@ -1,0 +1,26 @@
+[WebServer] (node:61259) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+[WebServer] (node:61263) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 12 tests using 1 worker
+
+(node:61270) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/12] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding suggestion remains editable and cannot execute at 1280px
+[2/12] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding confirmation remains editable and cannot execute at 1280px
+[3/12] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding suggestion remains editable and cannot execute at 390px
+[4/12] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding confirmation remains editable and cannot execute at 390px
+[5/12] tests/mixedProposalPresentation.spec.ts:91:5 › Draft-only suggestion: first render, refresh and actions
+[6/12] tests/mixedProposalPresentation.spec.ts:91:5 › mixed suggestion: first render, refresh and actions
+[7/12] tests/mixedProposalPresentation.spec.ts:91:5 › Draft-only confirmation: first render, refresh and actions
+[8/12] tests/mixedProposalPresentation.spec.ts:91:5 › mixed confirmation: first render, refresh and actions
+[9/12] tests/mixedProposalPresentation.spec.ts:129:3 › binding failure fallback remains visible after recovery at 1280px
+[10/12] tests/mixedProposalPresentation.spec.ts:129:3 › binding failure fallback remains visible after recovery at 390px
+[11/12] tests/mixedProposalPresentation.spec.ts:143:3 › T5 ready temporary Confirm survives refresh at 390px
+[12/12] tests/mixedProposalPresentation.spec.ts:143:3 › T5 ready temporary Confirm survives refresh at 1440px
+  12 passed (10.6s)

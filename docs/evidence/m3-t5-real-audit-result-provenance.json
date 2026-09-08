@@ -1,0 +1,31 @@
+{
+  "source": "Read-only observation of isolated real dy acceptance database while runner is active. No provider/account material exported.",
+  "results": [
+    {
+      "audit_result_id": 1,
+      "job_id": "m3-168d540562800314fab2",
+      "platform": "dy",
+      "content_key": "7644522722265042214",
+      "prompt_version": "ruleset-v1-aff16afdb51f33c4",
+      "audit_config_revision_id": "audit-config-revision:31a0800515edff5b9a3136e9f2c20fcb",
+      "job_revision_id": "audit-config-revision:31a0800515edff5b9a3136e9f2c20fcb",
+      "revision_job_id": "m3-168d540562800314fab2",
+      "config_hash": "2626f485be73dfe315982ac700b132eb9d4fb617d3b9d9327cbcebd2e92fc51d",
+      "result_revision_matches_job": true,
+      "result_prompt_version_matches_snapshot": true
+    },
+    {
+      "audit_result_id": 2,
+      "job_id": "m3-867cc6a5310e51d1b1f9",
+      "platform": "dy",
+      "content_key": "7644522722265042214",
+      "prompt_version": "ruleset-v1-aff16afdb51f33c4",
+      "audit_config_revision_id": "audit-config-revision:135fcbeb0d88802ec218098300727491",
+      "job_revision_id": "audit-config-revision:135fcbeb0d88802ec218098300727491",
+      "revision_job_id": "m3-867cc6a5310e51d1b1f9",
+      "config_hash": "507dd8cf5fb08e47a1952e0a26412d8e6d01ed33fb906aece0a63c50afd4fc43",
+      "result_revision_matches_job": true,
+      "result_prompt_version_matches_snapshot": true
+    }
+  ]
+}

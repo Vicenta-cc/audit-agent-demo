@@ -283,26 +283,29 @@ class InvestigationConfigurationResolver:
         self,
         configuration: InvestigationConfiguration,
         *,
-        ruleset_revision_id: str,
+        ruleset_revision_id: str | None = None,
+        temporary_ruleset: Any = None,
         recall_library_ids: list[str],
         principal: Any,
         resource_connection: sqlite3.Connection | None = None,
     ) -> dict[str, Any]:
-        """Freeze authoritative M3 execution directly from a RuleSetRevision."""
+        """Package M3 execution from a validated formal revision or inline source."""
 
         validated = InvestigationConfiguration.model_validate(
             configuration.model_dump(mode="json")
         )
-        if self.ruleset_service is None:
-            raise ConfigurationValidationError(
-                "RuleSet execution requires the RuleSet application service"
-            )
         try:
-            compiled = self.ruleset_service.compile_for_execution(
-                ruleset_revision_id,
-                principal=principal,
-                connection=resource_connection,
-            )
+            if temporary_ruleset is not None:
+                if ruleset_revision_id is not None:
+                    raise ValueError("exactly one RuleSet source is required")
+                from .frozen import compile_temporary
+                compiled = compile_temporary(temporary_ruleset)
+            else:
+                if self.ruleset_service is None:
+                    raise ValueError("RuleSet execution requires the RuleSet service")
+                compiled = self.ruleset_service.compile_for_execution(
+                    ruleset_revision_id, principal=principal, connection=resource_connection,
+                )
         except Exception as exc:
             raise ConfigurationValidationError(str(exc)) from exc
 
@@ -349,7 +352,9 @@ class InvestigationConfigurationResolver:
             "thresholds": rule_snapshot.get("thresholds") or DEFAULT_THRESHOLDS,
             "scoring_rules": rule_snapshot.get("scoring_rules") or [],
             "prompt_version": str(prompt_profile_snapshot.get("prompt_version") or ""),
-            "ruleset_ref": rule_snapshot["ruleset_ref"],
+            **({"temporary_ruleset": rule_snapshot["temporary_ruleset"]}
+               if "temporary_ruleset" in rule_snapshot
+               else {"ruleset_ref": rule_snapshot["ruleset_ref"]}),
             "system_template_version": prompt_profile_snapshot[
                 "system_template_version"
             ],
@@ -455,6 +460,8 @@ class AuditPipelineExecutionAdapter:
             "investigation-run-config-v4",
         }:
             self.validate_m3_configuration(configuration)
+            from .frozen import validate_execution_payload
+            validate_execution_payload(configuration)
         job_id = self.job_id_for_run(run.id)
         existing = self.job_store.get(job_id)
         if existing is None:
@@ -502,6 +509,8 @@ class AuditPipelineExecutionAdapter:
             raise RuntimeError("failed to create M3 Job")
         try:
             self._validate_existing_job(existing, configuration)
+            if snapshot.schema_version in {"investigation-run-config-v3", "investigation-run-config-v4"}:
+                self._validate_job_payload(existing, configuration)
         except RuntimeError as exc:
             # A persisted Job with a different frozen identity is never executable.
             self.job_store.update(job_id, status="failed", error=str(exc))
@@ -513,11 +522,46 @@ class AuditPipelineExecutionAdapter:
                 created_by="m3-worker",
                 **revision_payload,
             )
-            self.job_store.update(
-                job_id,
-                current_audit_config_revision_id=revision["id"],
-            )
+            if snapshot.schema_version in {"investigation-run-config-v3", "investigation-run-config-v4"}:
+                from .frozen import verified_job_configuration
+                verified_job_configuration(configuration, existing, revision)
+                # Never overwrite a revision another writer attached meanwhile.
+                with self.job_store._lock, self.job_store._connect() as connection:
+                    connection.execute(
+                        "UPDATE jobs SET current_audit_config_revision_id=? WHERE id=? "
+                        "AND COALESCE(current_audit_config_revision_id, '')=''",
+                        (revision["id"], job_id),
+                    )
+            else:
+                self.job_store.update(job_id, current_audit_config_revision_id=revision["id"])
+        if snapshot.schema_version in {"investigation-run-config-v3", "investigation-run-config-v4"}:
+            self.verify_run_job(run)
         return job_id
+
+    @staticmethod
+    def _validate_job_payload(job, configuration):
+        from .frozen import same_payload, validate_execution_payload
+        validate_execution_payload(configuration)
+        for field, value in configuration.items():
+            if field in {"audit_config_revision", "policy_id", "crawler_account_confirmed_state"}:
+                continue
+            if not same_payload(job.get(field), value):
+                raise RuntimeError("M3 Job " + field + " differs from frozen Run")
+
+    def verify_run_job(self, run: InvestigationRun) -> dict[str, Any]:
+        from .frozen import verified_job_configuration
+        snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
+        configuration = snapshot.execution.model_dump(mode="json")
+        if snapshot.schema_version not in {"investigation-run-config-v3", "investigation-run-config-v4"}:
+            return configuration
+        job_id = self.job_id_for_run(run.id)
+        if run.job_id and run.job_id != job_id:
+            raise ValueError("M3 Run Job binding conflict")
+        job = self.job_store.get(job_id)
+        if job is None:
+            raise ValueError("M3 frozen Job is missing")
+        revision = self.revision_store.get(str(job.get("current_audit_config_revision_id") or ""))
+        return verified_job_configuration(configuration, job, revision)
 
     def validate_execution_configuration(
         self, configuration: dict[str, Any], *, schema_version: str
@@ -536,7 +580,19 @@ class AuditPipelineExecutionAdapter:
 
     def run_pipeline(self, job_id: str, configuration: dict[str, Any]) -> None:
         request = SimpleNamespace(**configuration)
-        self.pipeline_factory(job_id=job_id).run(request)
+        pipeline = self.pipeline_factory(job_id=job_id)
+        if configuration.get("_authoritative_m3_contract") is True:
+            store = getattr(self, "creation_store", None)
+            if store is None:
+                from .store import InvestigationCreationStore
+                store = InvestigationCreationStore()
+            run = store.get_run_for_job(job_id)
+            if run is None:
+                raise ValueError("M3 Job has no authoritative Run")
+            # The pipeline invokes this at consumption, and receives a detached copy
+            # of the exact Job/revision records validated against the frozen Run.
+            pipeline._m3_snapshot_validator = lambda: self.verify_run_job(run)
+        pipeline.run(request)
 
     def get_job_state(self, job_id: str) -> dict[str, Any] | None:
         job = self.job_store.get(job_id)

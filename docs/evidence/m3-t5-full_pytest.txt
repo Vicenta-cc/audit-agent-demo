@@ -1,0 +1,49 @@
+........................................................................ [  7%]
+........................................................................ [ 15%]
+............................ssss.................................. [ 22%]
+...................................................................... [ 29%]
+.......................................................................................................................... [ 42%]
+........................................................................ [ 50%]
+....................sss.ss.ss..............................s [ 56%]
+ssssssssssss....................................................... [ 63%]
+........................................................................ [ 71%]
+..................................................................... [ 78%]
+........................................................ [ 84%]
+........................................................................ [ 92%]
+........................................................................ [ 99%]
+.                                                                        [100%]
+=============================== warnings summary ===============================
+../xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+backend/main.py:988
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-m3-authoritative-wiring/backend/main.py:988: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    @app.on_event("startup")
+
+../xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/fastapi/applications.py:4495
+../xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/fastapi/applications.py:4495
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/fastapi/applications.py:4495: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    return self.router.on_event(event_type)
+
+backend/main.py:1004
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-m3-authoritative-wiring/backend/main.py:1004: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+919 passed, 24 skipped, 5 warnings, 66 subtests passed in 88.86s (0:01:28)

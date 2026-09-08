@@ -57,6 +57,8 @@ class InvestigationWorker:
     ) -> None:
         self.store = store
         self.execution_adapter = execution_adapter
+        if isinstance(execution_adapter, AuditPipelineExecutionAdapter):
+            execution_adapter.creation_store = store
         self.report_adapter = report_adapter
         self.session_adapter = session_adapter
         self.worker_id = worker_id or f"{socket.gethostname()}:{uuid4().hex[:8]}"
@@ -204,6 +206,9 @@ class InvestigationWorker:
         *,
         job_state: dict[str, Any] | None = None,
     ) -> InvestigationRun:
+        failure = self._verify_job_or_fail(run)
+        if failure is not None:
+            return failure
         state = job_state or self.execution_adapter.get_job_state(job_id)
         if state is None:
             return self.store.mark_interrupted(
@@ -424,6 +429,17 @@ class InvestigationWorker:
                     f"{completion_error}"
                 ),
             )
+
+    def _verify_job_or_fail(self, run):
+        validator = getattr(self.execution_adapter, "verify_run_job", None)
+        if not callable(validator):
+            return None
+        try:
+            validator(run)
+        except (ValueError, RuntimeError, KeyError, TypeError) as exc:
+            return self.store.mark_failed(run.id, run.claim_token,
+                error_code="frozen_execution_mismatch", error_message=str(exc))
+        return None
 
     def _validated_configuration_or_fail(
         self, run: InvestigationRun

@@ -310,11 +310,6 @@ class InvestigationCreationService:
         if not command.confirmed:
             raise ConfirmationRequiredError("explicit confirmation is required")
         draft = self.store.get_draft(command.draft_id, principal=principal.id)
-        if isinstance(getattr(draft.configuration, "judgement", None), TemporaryRuleSetJudgement):
-            raise ConfigurationValidationError(
-                "Temporary RuleSet execution is not connected until T5.",
-                code="TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
-            )
         if draft.current_revision != command.expected_revision:
             raise DraftRevisionConflictError(
                 f"expected revision {command.expected_revision}, "

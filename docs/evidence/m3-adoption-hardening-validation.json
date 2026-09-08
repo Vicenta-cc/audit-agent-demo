@@ -1,0 +1,20 @@
+{
+  "added_receipt_tests": 21,
+  "logs": {
+    "focused": {
+      "summary": "180 passed, 1 warning in 25.75s",
+      "original_log_sha256": "dc21b4cf4b98abc1ac0b48b9f8125e854106ba6224dc949bcbf8ca4dda8fe236"
+    },
+    "full": {
+      "summary": "948 passed, 24 skipped, 5 warnings, 66 subtests passed in 91.78s (0:01:31)",
+      "original_log_sha256": "d19e8d31eb805d3203b653f810daaa4173e7bfaf7d079a717df8f761fe917cbf"
+    }
+  },
+  "full_failed": 0,
+  "python": "xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/bin/python",
+  "targeted_command": "python -m pytest tests/test_adoption_artifact_receipts.py tests/test_investigation_creation_conversation.py tests/test_ruleset_proposal_approval.py tests/test_temporary_ruleset_execution.py -q",
+  "full_command": "python -m pytest -q",
+  "raw_logs_excluded": true,
+  "p0": 0,
+  "p1": 0
+}

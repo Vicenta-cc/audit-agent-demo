@@ -1,0 +1,38 @@
+..................................................................... [ 35%]
+........................................................ [ 64%]
+............................................................sss.ss.ss.   [100%]
+=============================== warnings summary ===============================
+../xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+tests/test_ruleset_foundation_gambling.py::AuditPolicyVersioningTests::test_delete_lexicon_rejects_draft_reference_without_partial_writes
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-m3-authoritative-wiring/backend/main.py:988: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    @app.on_event("startup")
+
+tests/test_ruleset_foundation_gambling.py::AuditPolicyVersioningTests::test_delete_lexicon_rejects_draft_reference_without_partial_writes
+tests/test_ruleset_foundation_gambling.py::AuditPolicyVersioningTests::test_delete_lexicon_rejects_draft_reference_without_partial_writes
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/fastapi/applications.py:4495: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    return self.router.on_event(event_type)
+
+tests/test_ruleset_foundation_gambling.py::AuditPolicyVersioningTests::test_delete_lexicon_rejects_draft_reference_without_partial_writes
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-m3-authoritative-wiring/backend/main.py:1004: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+188 passed, 7 skipped, 5 warnings, 19 subtests passed in 5.31s

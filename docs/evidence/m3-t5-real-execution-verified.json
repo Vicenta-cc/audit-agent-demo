@@ -1,0 +1,3047 @@
+{
+  "stage": "M3_PHASE_T5",
+  "pass": false,
+  "cases": [
+    {
+      "case": "A",
+      "draft": {
+        "id": "investigation-draft:5fbb098046e5454cb5386527f8f7b248",
+        "status": "DRAFT",
+        "current_revision": 1,
+        "title": "小红书招聘诈骗调查",
+        "objective": "在小红书平台搜索招聘诈骗相关内容，识别以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘等典型模式。",
+        "configuration": {
+          "schema_version": "investigation-draft-config-v4",
+          "platform": "xhs",
+          "investigation": {
+            "mode": "search",
+            "recall_plan": {
+              "strategy": "temporary_terms",
+              "terms": [
+                "招聘收费"
+              ],
+              "source_lexicon_ids": []
+            }
+          },
+          "judgement": {
+            "strategy": "temporary_ruleset",
+            "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+            "proposal_version": 2,
+            "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+            "content": {
+              "schema_version": 0,
+              "name": "招聘诈骗风险规则集",
+              "domain": "recruitment_fraud",
+              "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+              "general_exemptions": [],
+              "categories": [
+                {
+                  "category_id": "recruitment_fee",
+                  "name": "入职前收费",
+                  "description": "以各种名义在入职前向求职者收取费用",
+                  "order": 0,
+                  "rules": [
+                    {
+                      "rule_id": "pre_employment_fee",
+                      "name": "入职前要求缴纳费用",
+                      "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                      "enabled": true,
+                      "order": 0,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "training_loan",
+                      "name": "培训贷",
+                      "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                      "enabled": true,
+                      "order": 1,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "job_arrangement_training_fee",
+                      "name": "以安排工作为由收取培训费或培训贷",
+                      "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                      "enabled": true,
+                      "order": 2,
+                      "source_mappings": []
+                    }
+                  ]
+                },
+                {
+                  "category_id": "pyramid_recruitment",
+                  "name": "传销式招聘",
+                  "description": "以招聘为名进行传销或拉人头式诈骗",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "rule_id": "pyramid_scheme_recruitment",
+                      "name": "拉人头式传销招聘",
+                      "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                      "enabled": true,
+                      "order": 0,
+                      "source_mappings": []
+                    }
+                  ]
+                },
+                {
+                  "category_id": "fake_high_salary",
+                  "name": "虚假高薪诱饵",
+                  "description": "以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "rule_id": "fake_high_salary_no_barrier",
+                      "name": "无门槛虚假高薪",
+                      "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                      "suggested_risk_level": "medium",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                      "enabled": true,
+                      "order": 0,
+                      "source_mappings": []
+                    }
+                  ]
+                },
+                {
+                  "category_id": "sensitive_info_collection",
+                  "name": "骗取敏感个人信息",
+                  "description": "以招聘为名收集求职者敏感个人信息",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "rule_id": "sensitive_info_collection",
+                      "name": "入职前索要敏感个人信息",
+                      "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                      "enabled": true,
+                      "order": 0,
+                      "source_mappings": []
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "created_by": "principal-a",
+        "updated_by": "principal-a",
+        "created_at": "2026-09-08T04:24:35.380942+00:00",
+        "updated_at": "2026-09-08T04:24:35.380942+00:00",
+        "confirmed_revision": null,
+        "confirmed_by": "",
+        "confirmed_at": ""
+      },
+      "preview": {
+        "draft_id": "investigation-draft:5fbb098046e5454cb5386527f8f7b248",
+        "draft_revision": 1,
+        "title": "小红书招聘诈骗调查",
+        "objective": "在小红书平台搜索招聘诈骗相关内容，识别以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘等典型模式。",
+        "mode": "search",
+        "platform": "xhs",
+        "resolved_search_terms": [
+          "招聘收费"
+        ],
+        "creator_url": "",
+        "recall_plan": {
+          "strategy": "temporary_terms",
+          "lexicon_id": "",
+          "lexicon_title": "",
+          "runtime_content_hash": "",
+          "enabled_main_term_count": 0,
+          "enabled_main_terms": [],
+          "temporary_terms": [
+            "招聘收费"
+          ],
+          "source_lexicon_ids": []
+        },
+        "ruleset_revision": null,
+        "temporary_ruleset": {
+          "strategy": "temporary_ruleset",
+          "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+          "proposal_version": 2,
+          "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+          "content": {
+            "schema_version": 0,
+            "name": "招聘诈骗风险规则集",
+            "domain": "recruitment_fraud",
+            "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+            "general_exemptions": [],
+            "categories": [
+              {
+                "category_id": "recruitment_fee",
+                "name": "入职前收费",
+                "description": "以各种名义在入职前向求职者收取费用",
+                "order": 0,
+                "rules": [
+                  {
+                    "rule_id": "pre_employment_fee",
+                    "name": "入职前要求缴纳费用",
+                    "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "training_loan",
+                    "name": "培训贷",
+                    "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "job_arrangement_training_fee",
+                    "name": "以安排工作为由收取培训费或培训贷",
+                    "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                    "enabled": true,
+                    "order": 2,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "pyramid_recruitment",
+                "name": "传销式招聘",
+                "description": "以招聘为名进行传销或拉人头式诈骗",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "pyramid_scheme_recruitment",
+                    "name": "拉人头式传销招聘",
+                    "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "fake_high_salary",
+                "name": "虚假高薪诱饵",
+                "description": "以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息",
+                "order": 2,
+                "rules": [
+                  {
+                    "rule_id": "fake_high_salary_no_barrier",
+                    "name": "无门槛虚假高薪",
+                    "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  }
+                ]
+              },
+              {
+                "category_id": "sensitive_info_collection",
+                "name": "骗取敏感个人信息",
+                "description": "以招聘为名收集求职者敏感个人信息",
+                "order": 3,
+                "rules": [
+                  {
+                    "rule_id": "sensitive_info_collection",
+                    "name": "入职前索要敏感个人信息",
+                    "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                    "enabled": true,
+                    "order": 0,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "max_notes": 1,
+        "blockers": [],
+        "can_confirm": true
+      },
+      "pass": false,
+      "run": {
+        "id": "investigation-run:48871d8a694941ee84026f00f697ea58",
+        "draft_id": "investigation-draft:5fbb098046e5454cb5386527f8f7b248",
+        "draft_revision": 1,
+        "idempotency_key": "A",
+        "status": "QUEUED",
+        "confirmed_configuration": {
+          "config_hash": "9ac1f9a931ff5ae562ddd946e1ede6a5740d4c12709399ebdaf992ef425ae294",
+          "confirmed_at": "2026-09-08T04:24:42.541988+00:00",
+          "confirmed_by": "principal-a",
+          "creator_url": "",
+          "draft_id": "investigation-draft:5fbb098046e5454cb5386527f8f7b248",
+          "draft_revision": 1,
+          "execution": {
+            "analysis_batch_size": 5,
+            "analyze_limit": 1,
+            "audit_config_revision": {
+              "audit_config": {
+                "capabilities": [
+                  "text",
+                  "ocr",
+                  "asr",
+                  "vision",
+                  "comment"
+                ],
+                "compiler_version": "ruleset-compiler-v3",
+                "library_ids": [],
+                "prompt_version": "ruleset-v1-fd842de259a8fb71",
+                "schema_version": 2,
+                "scoring_rules": [],
+                "scoring_template": "balanced",
+                "source_policy_id": "",
+                "source_policy_name": "",
+                "source_policy_version": "",
+                "system_template_version": "audit-system-template-v3",
+                "temporary_ruleset": {
+                  "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+                  "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+                  "proposal_version": 2,
+                  "strategy": "temporary_ruleset"
+                },
+                "thresholds": {
+                  "high": 80,
+                  "medium": 60,
+                  "review": 40
+                }
+              },
+              "config_hash": "a7d3352a0ddd6eb9161d91eb3f6372a44b6f0a6cd3ae1e4cdb16d7826ca2c965",
+              "knowledge_package_snapshots": [],
+              "prompt_profile_snapshot": {
+                "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+                "category_id": "recruitment_fraud",
+                "comment_prompt_template": "依据本次 RuleSet 逐条审核评论风险。结合帖子标题、正文和媒体摘要，独立判断每条评论；不得聚合多条评论，一条评论可独立触发召回。评论证据只归属于该评论，不得直接归责主帖作者。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nt 仅使用上述 category_id。“参考”只用于研判；实际 risk_level 仅依据当前评论证据，不得代填；s 按 none=0、low=40、medium=60、high=80 输出。\n\n只依据当前评论原文或可靠译文判断，不补写原文没有的交易、因果或参与意图。疑问、转述、批判、否定、举报和正常讨论不自动违规，也不自动豁免；语义或翻译不确定时最多 low。q 必须逐字摘自 source_text 且保持最短，t/rb 必须受 q 和可靠译文支持。每条 source_text 保持现有最多300字，已有 translation_zh 保持现有最多300字；不得改写评论正文。每个 comment_id 必须且只能输出一次。\n\n只输出合法 JSON 稀疏合同：\n{\"comments\":[{\"id\":\"原comment_id\",\"s\":0,\"risk_level\":\"none\",\"zh\":\"仅需要翻译时\"},{\"id\":\"原comment_id\",\"s\":80,\"lib\":\"主风险库id\",\"sec\":[\"次风险库id，可选\"],\"t\":\"短类别\",\"rb\":\"违规依据\",\"eb\":\"真实豁免依据，可选\",\"q\":\"source_text中的最短原句\",\"risk_level\":\"low|medium|high\",\"rule_id\":\"stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"],\"zh\":\"仅需要翻译时\"}]}\n必须保留 V1 稀疏语义：s=0 时只输出 id、s、risk_level，需翻译时加 zh；s>0 必须输出 id/s/lib/t/rb/q/risk_level/rule_id，sec、eb、matched_exemption_ids 仅在实际存在时输出。s 为0-100；rb 最多18字，eb 最多14字。需要翻译时 zh 必须准确、自然、完整；无需翻译时省略。不要输出空字符串、空数组或占位依据。",
+                "compiler_version": "ruleset-compiler-v3",
+                "fixed_prompt_chars": {
+                  "comment_audit": 1972,
+                  "fusion_audit": 1962,
+                  "image_evidence": 1741,
+                  "video_frame_evidence": 2152
+                },
+                "frame_prompt": "依据本次 RuleSet 提取视频分段风险证据。4x4 contact sheet 按真实时间排序；空白格非视频内容。结合标题、正文、逐帧 OCR 原文/译文及本段 ASR 审核；不复述 OCR/ASR 全文。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”仅供研判；实际 risk_level 由当前证据独立判断，不得代填；score 按 none=0、low=40、medium=60、high=80 输出。\n\nframe_id、ocr_chunk_id、asr_chunk_id 仅可取自输入。无明确风险时对应数组为空。每个非零风险项必须给出 stable rule_id、与 score 一致的 low|medium|high risk_level 和短原因；matched_exemption_ids 仅在真正命中豁免时输出。segment_score 和各项 score 均为0-100，reason 最多35字，segment_summary 客观且最多45字。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"segment_summary\":\"string\",\"segment_score\":0,\"risk_library_id\":\"string\",\"risk_library_label\":\"string\",\"visual_risks\":[{\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"ocr_risks\":[{\"ocr_chunk_id\":\"string\",\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"asr_risks\":[{\"asr_chunk_id\":\"string\",\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}]}",
+                "fusion_prompt_template": "依据本次 RuleSet 融合全帖风险。仅校准 evidence_catalog 现有证据的跨分段、跨模态含义；不重审媒体，不创造、复制或改写证据。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\ncategories 仅使用上述 category_id。“参考”仅供研判；实际 evidence_risk_level 和建议等级按已有证据独立判断，不得代填。\n\n结合上下文判断规则和豁免是否实际满足。评论独立；其证据主导时仅建议 review，summary 注明来自评论区，不直接归责主帖作者。title_zh/desc_zh 优先用于理解外文。content_title 须为8-18字中文主题短标题，不写内容ID、审核结论或风险等级。\n\n只输出合法 JSON：\n{\"schema_version\":\"audit_fusion_v4\",\"content_title\":\"\",\"summary\":\"\",\"decision_suggestion\":\"pass|review|reject\",\"risk_level_suggestion\":\"none|low|medium|high\",\"primary_risk\":\"\",\"categories\":[],\"evidence_items\":[{\"evidence_id\":\"目录ID\",\"evidence_risk_level\":\"low|medium|high\",\"reason\":\"短原因\"}],\"rule_matches\":[{\"rule_id\":\"stable rule_id\",\"evidence_ids\":[\"目录ID\"],\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}\n\nevidence_items 和 rule_matches 仅选 evidence_catalog 现有 ID。安全或豁免只写 summary，不得输出 none 证据；pass/none 时两个数组必须为空。summary 最多80字，reason 最多45字。不得输出 primary_modality、supporting_modalities、source、source_label、text、features 或 confidence。",
+                "image_prompt": "依据本次 RuleSet 提取图片风险证据，分析 OCR、二维码、界面及视觉；不作整帖最终处罚。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”只用于研判，必须依据当前证据独立输出实际 severity，不得照抄。\n\n逐字提取所有可见文字；看不清写 unreadable，无文字写空字符串。客观描述人物、物品、文字、二维码、联系方式和场景，不擅自定性。只有明确证据才输出 risk_items；证据不足输出空数组。每项必须引用图片文字或可见元素并说明原因，不得仅凭关键词、单个物品或无上下文画面判 high。severity 是该项实际证据风险等级。matched_exemption_ids 仅在真正命中豁免时输出。硬约束：visual_summary 必须始终存在且必须是 JSON 字符串，不得省略，也不得返回 null、数组或对象。即使未发现风险，也必须用 visual_summary 客观概括图片主要内容，并将 risk_items 返回空数组。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"ocr_text\":\"string\",\"visual_summary\":\"string\",\"benign_context\":\"string\",\"risk_items\":[{\"risk_type\":\"string\",\"evidence\":\"string\",\"reason\":\"string\",\"severity\":\"low|medium|high\",\"rule_id\":\"上述 stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}",
+                "libraries": [
+                  {
+                    "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+                    "id": "recruitment_fraud",
+                    "output_labels": [
+                      "入职前收费",
+                      "传销式招聘",
+                      "虚假高薪诱饵",
+                      "骗取敏感个人信息"
+                    ],
+                    "ruleset_content_driven": true,
+                    "title": "招聘诈骗风险规则集"
+                  }
+                ],
+                "prompt_version": "ruleset-v1-fd842de259a8fb71",
+                "schema_version": 2,
+                "stage_rule_ids": {
+                  "comment_audit": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "fusion_audit": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "image_evidence": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "video_frame_evidence": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ]
+                },
+                "system_template_version": "audit-system-template-v3"
+              },
+              "rule_snapshot": {
+                "decision_rules": [
+                  {
+                    "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "recruitment_fee",
+                    "category_name": "入职前收费",
+                    "enabled": true,
+                    "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                    "name": "入职前要求缴纳费用",
+                    "order": 0,
+                    "rule_exemptions": [],
+                    "rule_id": "pre_employment_fee",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "recruitment_fee",
+                    "category_name": "入职前收费",
+                    "enabled": true,
+                    "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                    "name": "培训贷",
+                    "order": 1,
+                    "rule_exemptions": [],
+                    "rule_id": "training_loan",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "recruitment_fee",
+                    "category_name": "入职前收费",
+                    "enabled": true,
+                    "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                    "name": "以安排工作为由收取培训费或培训贷",
+                    "order": 2,
+                    "rule_exemptions": [],
+                    "rule_id": "job_arrangement_training_fee",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "pyramid_recruitment",
+                    "category_name": "传销式招聘",
+                    "enabled": true,
+                    "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                    "name": "拉人头式传销招聘",
+                    "order": 0,
+                    "rule_exemptions": [],
+                    "rule_id": "pyramid_scheme_recruitment",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "fake_high_salary",
+                    "category_name": "虚假高薪诱饵",
+                    "enabled": true,
+                    "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                    "name": "无门槛虚假高薪",
+                    "order": 0,
+                    "rule_exemptions": [],
+                    "rule_id": "fake_high_salary_no_barrier",
+                    "source_mappings": [],
+                    "suggested_risk_level": "medium"
+                  },
+                  {
+                    "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "sensitive_info_collection",
+                    "category_name": "骗取敏感个人信息",
+                    "enabled": true,
+                    "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                    "name": "入职前索要敏感个人信息",
+                    "order": 0,
+                    "rule_exemptions": [],
+                    "rule_id": "sensitive_info_collection",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  }
+                ],
+                "general_exemptions": [],
+                "schema_version": 2,
+                "scoring_rules": [],
+                "stage_routes": {
+                  "comment_audit": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "fusion_audit": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "image_evidence": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "video_frame_evidence": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ]
+                },
+                "temporary_ruleset": {
+                  "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+                  "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+                  "proposal_version": 2,
+                  "strategy": "temporary_ruleset"
+                },
+                "thresholds": {
+                  "high": 80,
+                  "medium": 60,
+                  "review": 40
+                }
+              },
+              "source_policy_id": "",
+              "source_policy_name": "",
+              "source_policy_version": ""
+            },
+            "capabilities": [
+              "text",
+              "ocr",
+              "asr",
+              "vision",
+              "comment"
+            ],
+            "crawl_mode": "search",
+            "crawler_account_confirmed_state": {
+              "auth_state_updated_at": "2026-07-21T11:17:04",
+              "has_auth_state": true,
+              "last_validated_at": "2026-07-21T11:17:04",
+              "status": "active"
+            },
+            "crawler_account_display_name": "zc小红书账号",
+            "crawler_account_id": "0cffb0585459",
+            "creator_id": "",
+            "creator_url": "",
+            "display_name": "",
+            "get_sub_comment": false,
+            "keyword": "招聘收费",
+            "keyword_source": "keyword",
+            "lexicon_category": "",
+            "lexicon_keywords": [],
+            "library_ids": [],
+            "max_comments": 1000,
+            "max_concurrency": 1,
+            "max_items_per_minute": 5,
+            "max_notes": 1,
+            "platform": "xhs",
+            "policy_id": "",
+            "prompt_profile_snapshot": {
+              "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+              "category_id": "recruitment_fraud",
+              "comment_prompt_template": "依据本次 RuleSet 逐条审核评论风险。结合帖子标题、正文和媒体摘要，独立判断每条评论；不得聚合多条评论，一条评论可独立触发召回。评论证据只归属于该评论，不得直接归责主帖作者。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nt 仅使用上述 category_id。“参考”只用于研判；实际 risk_level 仅依据当前评论证据，不得代填；s 按 none=0、low=40、medium=60、high=80 输出。\n\n只依据当前评论原文或可靠译文判断，不补写原文没有的交易、因果或参与意图。疑问、转述、批判、否定、举报和正常讨论不自动违规，也不自动豁免；语义或翻译不确定时最多 low。q 必须逐字摘自 source_text 且保持最短，t/rb 必须受 q 和可靠译文支持。每条 source_text 保持现有最多300字，已有 translation_zh 保持现有最多300字；不得改写评论正文。每个 comment_id 必须且只能输出一次。\n\n只输出合法 JSON 稀疏合同：\n{\"comments\":[{\"id\":\"原comment_id\",\"s\":0,\"risk_level\":\"none\",\"zh\":\"仅需要翻译时\"},{\"id\":\"原comment_id\",\"s\":80,\"lib\":\"主风险库id\",\"sec\":[\"次风险库id，可选\"],\"t\":\"短类别\",\"rb\":\"违规依据\",\"eb\":\"真实豁免依据，可选\",\"q\":\"source_text中的最短原句\",\"risk_level\":\"low|medium|high\",\"rule_id\":\"stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"],\"zh\":\"仅需要翻译时\"}]}\n必须保留 V1 稀疏语义：s=0 时只输出 id、s、risk_level，需翻译时加 zh；s>0 必须输出 id/s/lib/t/rb/q/risk_level/rule_id，sec、eb、matched_exemption_ids 仅在实际存在时输出。s 为0-100；rb 最多18字，eb 最多14字。需要翻译时 zh 必须准确、自然、完整；无需翻译时省略。不要输出空字符串、空数组或占位依据。",
+              "compiler_version": "ruleset-compiler-v3",
+              "fixed_prompt_chars": {
+                "comment_audit": 1972,
+                "fusion_audit": 1962,
+                "image_evidence": 1741,
+                "video_frame_evidence": 2152
+              },
+              "frame_prompt": "依据本次 RuleSet 提取视频分段风险证据。4x4 contact sheet 按真实时间排序；空白格非视频内容。结合标题、正文、逐帧 OCR 原文/译文及本段 ASR 审核；不复述 OCR/ASR 全文。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”仅供研判；实际 risk_level 由当前证据独立判断，不得代填；score 按 none=0、low=40、medium=60、high=80 输出。\n\nframe_id、ocr_chunk_id、asr_chunk_id 仅可取自输入。无明确风险时对应数组为空。每个非零风险项必须给出 stable rule_id、与 score 一致的 low|medium|high risk_level 和短原因；matched_exemption_ids 仅在真正命中豁免时输出。segment_score 和各项 score 均为0-100，reason 最多35字，segment_summary 客观且最多45字。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"segment_summary\":\"string\",\"segment_score\":0,\"risk_library_id\":\"string\",\"risk_library_label\":\"string\",\"visual_risks\":[{\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"ocr_risks\":[{\"ocr_chunk_id\":\"string\",\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"asr_risks\":[{\"asr_chunk_id\":\"string\",\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}]}",
+              "fusion_prompt_template": "依据本次 RuleSet 融合全帖风险。仅校准 evidence_catalog 现有证据的跨分段、跨模态含义；不重审媒体，不创造、复制或改写证据。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\ncategories 仅使用上述 category_id。“参考”仅供研判；实际 evidence_risk_level 和建议等级按已有证据独立判断，不得代填。\n\n结合上下文判断规则和豁免是否实际满足。评论独立；其证据主导时仅建议 review，summary 注明来自评论区，不直接归责主帖作者。title_zh/desc_zh 优先用于理解外文。content_title 须为8-18字中文主题短标题，不写内容ID、审核结论或风险等级。\n\n只输出合法 JSON：\n{\"schema_version\":\"audit_fusion_v4\",\"content_title\":\"\",\"summary\":\"\",\"decision_suggestion\":\"pass|review|reject\",\"risk_level_suggestion\":\"none|low|medium|high\",\"primary_risk\":\"\",\"categories\":[],\"evidence_items\":[{\"evidence_id\":\"目录ID\",\"evidence_risk_level\":\"low|medium|high\",\"reason\":\"短原因\"}],\"rule_matches\":[{\"rule_id\":\"stable rule_id\",\"evidence_ids\":[\"目录ID\"],\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}\n\nevidence_items 和 rule_matches 仅选 evidence_catalog 现有 ID。安全或豁免只写 summary，不得输出 none 证据；pass/none 时两个数组必须为空。summary 最多80字，reason 最多45字。不得输出 primary_modality、supporting_modalities、source、source_label、text、features 或 confidence。",
+              "image_prompt": "依据本次 RuleSet 提取图片风险证据，分析 OCR、二维码、界面及视觉；不作整帖最终处罚。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”只用于研判，必须依据当前证据独立输出实际 severity，不得照抄。\n\n逐字提取所有可见文字；看不清写 unreadable，无文字写空字符串。客观描述人物、物品、文字、二维码、联系方式和场景，不擅自定性。只有明确证据才输出 risk_items；证据不足输出空数组。每项必须引用图片文字或可见元素并说明原因，不得仅凭关键词、单个物品或无上下文画面判 high。severity 是该项实际证据风险等级。matched_exemption_ids 仅在真正命中豁免时输出。硬约束：visual_summary 必须始终存在且必须是 JSON 字符串，不得省略，也不得返回 null、数组或对象。即使未发现风险，也必须用 visual_summary 客观概括图片主要内容，并将 risk_items 返回空数组。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"ocr_text\":\"string\",\"visual_summary\":\"string\",\"benign_context\":\"string\",\"risk_items\":[{\"risk_type\":\"string\",\"evidence\":\"string\",\"reason\":\"string\",\"severity\":\"low|medium|high\",\"rule_id\":\"上述 stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}",
+              "libraries": [
+                {
+                  "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+                  "id": "recruitment_fraud",
+                  "output_labels": [
+                    "入职前收费",
+                    "传销式招聘",
+                    "虚假高薪诱饵",
+                    "骗取敏感个人信息"
+                  ],
+                  "ruleset_content_driven": true,
+                  "title": "招聘诈骗风险规则集"
+                }
+              ],
+              "prompt_version": "ruleset-v1-fd842de259a8fb71",
+              "schema_version": 2,
+              "stage_rule_ids": {
+                "comment_audit": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "fusion_audit": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "image_evidence": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "video_frame_evidence": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ]
+              },
+              "system_template_version": "audit-system-template-v3"
+            },
+            "rule_snapshot": {
+              "decision_rules": [
+                {
+                  "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "recruitment_fee",
+                  "category_name": "入职前收费",
+                  "enabled": true,
+                  "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                  "name": "入职前要求缴纳费用",
+                  "order": 0,
+                  "rule_exemptions": [],
+                  "rule_id": "pre_employment_fee",
+                  "source_mappings": [],
+                  "suggested_risk_level": "high"
+                },
+                {
+                  "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "recruitment_fee",
+                  "category_name": "入职前收费",
+                  "enabled": true,
+                  "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                  "name": "培训贷",
+                  "order": 1,
+                  "rule_exemptions": [],
+                  "rule_id": "training_loan",
+                  "source_mappings": [],
+                  "suggested_risk_level": "high"
+                },
+                {
+                  "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "recruitment_fee",
+                  "category_name": "入职前收费",
+                  "enabled": true,
+                  "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                  "name": "以安排工作为由收取培训费或培训贷",
+                  "order": 2,
+                  "rule_exemptions": [],
+                  "rule_id": "job_arrangement_training_fee",
+                  "source_mappings": [],
+                  "suggested_risk_level": "high"
+                },
+                {
+                  "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "pyramid_recruitment",
+                  "category_name": "传销式招聘",
+                  "enabled": true,
+                  "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                  "name": "拉人头式传销招聘",
+                  "order": 0,
+                  "rule_exemptions": [],
+                  "rule_id": "pyramid_scheme_recruitment",
+                  "source_mappings": [],
+                  "suggested_risk_level": "high"
+                },
+                {
+                  "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "fake_high_salary",
+                  "category_name": "虚假高薪诱饵",
+                  "enabled": true,
+                  "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                  "name": "无门槛虚假高薪",
+                  "order": 0,
+                  "rule_exemptions": [],
+                  "rule_id": "fake_high_salary_no_barrier",
+                  "source_mappings": [],
+                  "suggested_risk_level": "medium"
+                },
+                {
+                  "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "sensitive_info_collection",
+                  "category_name": "骗取敏感个人信息",
+                  "enabled": true,
+                  "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                  "name": "入职前索要敏感个人信息",
+                  "order": 0,
+                  "rule_exemptions": [],
+                  "rule_id": "sensitive_info_collection",
+                  "source_mappings": [],
+                  "suggested_risk_level": "high"
+                }
+              ],
+              "general_exemptions": [],
+              "schema_version": 2,
+              "scoring_rules": [],
+              "stage_routes": {
+                "comment_audit": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "fusion_audit": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "image_evidence": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "video_frame_evidence": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ]
+              },
+              "temporary_ruleset": {
+                "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+                "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+                "proposal_version": 2,
+                "strategy": "temporary_ruleset"
+              },
+              "thresholds": {
+                "high": 80,
+                "medium": 60,
+                "review": 40
+              }
+            },
+            "run_crawler": true,
+            "scoring_template": "balanced",
+            "source_output_id": null,
+            "start_page": 1
+          },
+          "max_notes": 1,
+          "mode": "search",
+          "objective": "在小红书平台搜索招聘诈骗相关内容，识别以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘等典型模式。",
+          "platform": "xhs",
+          "recall_plan": {
+            "enabled_main_terms": [],
+            "lexicon_id": "",
+            "runtime_content_hash": "",
+            "source_lexicon_ids": [],
+            "strategy": "temporary_terms",
+            "temporary_terms": [
+              "招聘收费"
+            ]
+          },
+          "resolved_search_terms": [
+            "招聘收费"
+          ],
+          "schema_version": "investigation-run-config-v4",
+          "temporary_ruleset": {
+            "content": {
+              "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+              "categories": [
+                {
+                  "category_id": "recruitment_fee",
+                  "description": "以各种名义在入职前向求职者收取费用",
+                  "name": "入职前收费",
+                  "order": 0,
+                  "rules": [
+                    {
+                      "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                      "name": "入职前要求缴纳费用",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "pre_employment_fee",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                      "name": "培训贷",
+                      "order": 1,
+                      "rule_exemptions": [],
+                      "rule_id": "training_loan",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                      "name": "以安排工作为由收取培训费或培训贷",
+                      "order": 2,
+                      "rule_exemptions": [],
+                      "rule_id": "job_arrangement_training_fee",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "pyramid_recruitment",
+                  "description": "以招聘为名进行传销或拉人头式诈骗",
+                  "name": "传销式招聘",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                      "name": "拉人头式传销招聘",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "pyramid_scheme_recruitment",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "fake_high_salary",
+                  "description": "以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息",
+                  "name": "虚假高薪诱饵",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                      "name": "无门槛虚假高薪",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "fake_high_salary_no_barrier",
+                      "source_mappings": [],
+                      "suggested_risk_level": "medium"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "sensitive_info_collection",
+                  "description": "以招聘为名收集求职者敏感个人信息",
+                  "name": "骗取敏感个人信息",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                      "name": "入职前索要敏感个人信息",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "sensitive_info_collection",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                }
+              ],
+              "domain": "recruitment_fraud",
+              "general_exemptions": [],
+              "name": "招聘诈骗风险规则集",
+              "schema_version": 0
+            },
+            "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+            "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+            "proposal_version": 2,
+            "strategy": "temporary_ruleset"
+          },
+          "title": "小红书招聘诈骗调查"
+        },
+        "confirmed_by": "principal-a",
+        "confirmed_at": "2026-09-08T04:24:42.541988+00:00",
+        "job_id": "",
+        "pipeline_started_at": "",
+        "pipeline_returned_at": "",
+        "report_version_id": "",
+        "report_session_id": "",
+        "error_code": "",
+        "error_message": "",
+        "claimed_by": "",
+        "claim_token": "",
+        "claimed_at": "",
+        "heartbeat_at": "",
+        "recovery_required": false,
+        "created_at": "2026-09-08T04:24:42.541988+00:00",
+        "updated_at": "2026-09-08T04:24:42.541988+00:00",
+        "started_at": "",
+        "completed_at": ""
+      },
+      "status": "FAILED",
+      "error_code": "crawler_account_login_required",
+      "consumed": [
+        {
+          "job_id": "m3-17d98b74a5a0d9247335",
+          "execution": {
+            "platform": "xhs",
+            "display_name": "",
+            "crawl_mode": "search",
+            "keyword": "招聘收费",
+            "keyword_source": "keyword",
+            "lexicon_category": "",
+            "library_ids": [],
+            "capabilities": [
+              "text",
+              "ocr",
+              "asr",
+              "vision",
+              "comment"
+            ],
+            "scoring_template": "balanced",
+            "rule_snapshot": {
+              "decision_rules": [
+                {
+                  "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "recruitment_fee",
+                  "category_name": "入职前收费",
+                  "enabled": true,
+                  "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                  "name": "入职前要求缴纳费用",
+                  "order": 0,
+                  "rule_exemptions": [],
+                  "rule_id": "pre_employment_fee",
+                  "source_mappings": [],
+                  "suggested_risk_level": "high"
+                },
+                {
+                  "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "recruitment_fee",
+                  "category_name": "入职前收费",
+                  "enabled": true,
+                  "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                  "name": "培训贷",
+                  "order": 1,
+                  "rule_exemptions": [],
+                  "rule_id": "training_loan",
+                  "source_mappings": [],
+                  "suggested_risk_level": "high"
+                },
+                {
+                  "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "recruitment_fee",
+                  "category_name": "入职前收费",
+                  "enabled": true,
+                  "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                  "name": "以安排工作为由收取培训费或培训贷",
+                  "order": 2,
+                  "rule_exemptions": [],
+                  "rule_id": "job_arrangement_training_fee",
+                  "source_mappings": [],
+                  "suggested_risk_level": "high"
+                },
+                {
+                  "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "pyramid_recruitment",
+                  "category_name": "传销式招聘",
+                  "enabled": true,
+                  "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                  "name": "拉人头式传销招聘",
+                  "order": 0,
+                  "rule_exemptions": [],
+                  "rule_id": "pyramid_scheme_recruitment",
+                  "source_mappings": [],
+                  "suggested_risk_level": "high"
+                },
+                {
+                  "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "fake_high_salary",
+                  "category_name": "虚假高薪诱饵",
+                  "enabled": true,
+                  "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                  "name": "无门槛虚假高薪",
+                  "order": 0,
+                  "rule_exemptions": [],
+                  "rule_id": "fake_high_salary_no_barrier",
+                  "source_mappings": [],
+                  "suggested_risk_level": "medium"
+                },
+                {
+                  "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                  "application_stages": [
+                    "image_evidence",
+                    "video_frame_evidence",
+                    "comment_audit",
+                    "fusion_audit"
+                  ],
+                  "category_id": "sensitive_info_collection",
+                  "category_name": "骗取敏感个人信息",
+                  "enabled": true,
+                  "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                  "name": "入职前索要敏感个人信息",
+                  "order": 0,
+                  "rule_exemptions": [],
+                  "rule_id": "sensitive_info_collection",
+                  "source_mappings": [],
+                  "suggested_risk_level": "high"
+                }
+              ],
+              "general_exemptions": [],
+              "schema_version": 2,
+              "scoring_rules": [],
+              "stage_routes": {
+                "comment_audit": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "fusion_audit": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "image_evidence": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "video_frame_evidence": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ]
+              },
+              "temporary_ruleset": {
+                "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+                "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+                "proposal_version": 2,
+                "strategy": "temporary_ruleset"
+              },
+              "thresholds": {
+                "high": 80,
+                "medium": 60,
+                "review": 40
+              }
+            },
+            "lexicon_keywords": [],
+            "creator_url": "",
+            "creator_id": "",
+            "start_page": 1,
+            "max_notes": 1,
+            "max_comments": 1000,
+            "max_concurrency": 1,
+            "max_items_per_minute": 5,
+            "crawler_account_id": "0cffb0585459",
+            "crawler_account_display_name": "zc小红书账号",
+            "crawler_account_confirmed_state": {
+              "status": "active",
+              "has_auth_state": true,
+              "auth_state_updated_at": "2026-07-21T11:17:04",
+              "last_validated_at": "2026-07-21T11:17:04"
+            },
+            "get_sub_comment": false,
+            "analyze_limit": 1,
+            "run_crawler": true,
+            "source_output_id": null,
+            "analysis_batch_size": 5,
+            "prompt_profile_snapshot": {
+              "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+              "category_id": "recruitment_fraud",
+              "comment_prompt_template": "依据本次 RuleSet 逐条审核评论风险。结合帖子标题、正文和媒体摘要，独立判断每条评论；不得聚合多条评论，一条评论可独立触发召回。评论证据只归属于该评论，不得直接归责主帖作者。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nt 仅使用上述 category_id。“参考”只用于研判；实际 risk_level 仅依据当前评论证据，不得代填；s 按 none=0、low=40、medium=60、high=80 输出。\n\n只依据当前评论原文或可靠译文判断，不补写原文没有的交易、因果或参与意图。疑问、转述、批判、否定、举报和正常讨论不自动违规，也不自动豁免；语义或翻译不确定时最多 low。q 必须逐字摘自 source_text 且保持最短，t/rb 必须受 q 和可靠译文支持。每条 source_text 保持现有最多300字，已有 translation_zh 保持现有最多300字；不得改写评论正文。每个 comment_id 必须且只能输出一次。\n\n只输出合法 JSON 稀疏合同：\n{\"comments\":[{\"id\":\"原comment_id\",\"s\":0,\"risk_level\":\"none\",\"zh\":\"仅需要翻译时\"},{\"id\":\"原comment_id\",\"s\":80,\"lib\":\"主风险库id\",\"sec\":[\"次风险库id，可选\"],\"t\":\"短类别\",\"rb\":\"违规依据\",\"eb\":\"真实豁免依据，可选\",\"q\":\"source_text中的最短原句\",\"risk_level\":\"low|medium|high\",\"rule_id\":\"stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"],\"zh\":\"仅需要翻译时\"}]}\n必须保留 V1 稀疏语义：s=0 时只输出 id、s、risk_level，需翻译时加 zh；s>0 必须输出 id/s/lib/t/rb/q/risk_level/rule_id，sec、eb、matched_exemption_ids 仅在实际存在时输出。s 为0-100；rb 最多18字，eb 最多14字。需要翻译时 zh 必须准确、自然、完整；无需翻译时省略。不要输出空字符串、空数组或占位依据。",
+              "compiler_version": "ruleset-compiler-v3",
+              "fixed_prompt_chars": {
+                "comment_audit": 1972,
+                "fusion_audit": 1962,
+                "image_evidence": 1741,
+                "video_frame_evidence": 2152
+              },
+              "frame_prompt": "依据本次 RuleSet 提取视频分段风险证据。4x4 contact sheet 按真实时间排序；空白格非视频内容。结合标题、正文、逐帧 OCR 原文/译文及本段 ASR 审核；不复述 OCR/ASR 全文。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”仅供研判；实际 risk_level 由当前证据独立判断，不得代填；score 按 none=0、low=40、medium=60、high=80 输出。\n\nframe_id、ocr_chunk_id、asr_chunk_id 仅可取自输入。无明确风险时对应数组为空。每个非零风险项必须给出 stable rule_id、与 score 一致的 low|medium|high risk_level 和短原因；matched_exemption_ids 仅在真正命中豁免时输出。segment_score 和各项 score 均为0-100，reason 最多35字，segment_summary 客观且最多45字。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"segment_summary\":\"string\",\"segment_score\":0,\"risk_library_id\":\"string\",\"risk_library_label\":\"string\",\"visual_risks\":[{\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"ocr_risks\":[{\"ocr_chunk_id\":\"string\",\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"asr_risks\":[{\"asr_chunk_id\":\"string\",\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}]}",
+              "fusion_prompt_template": "依据本次 RuleSet 融合全帖风险。仅校准 evidence_catalog 现有证据的跨分段、跨模态含义；不重审媒体，不创造、复制或改写证据。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\ncategories 仅使用上述 category_id。“参考”仅供研判；实际 evidence_risk_level 和建议等级按已有证据独立判断，不得代填。\n\n结合上下文判断规则和豁免是否实际满足。评论独立；其证据主导时仅建议 review，summary 注明来自评论区，不直接归责主帖作者。title_zh/desc_zh 优先用于理解外文。content_title 须为8-18字中文主题短标题，不写内容ID、审核结论或风险等级。\n\n只输出合法 JSON：\n{\"schema_version\":\"audit_fusion_v4\",\"content_title\":\"\",\"summary\":\"\",\"decision_suggestion\":\"pass|review|reject\",\"risk_level_suggestion\":\"none|low|medium|high\",\"primary_risk\":\"\",\"categories\":[],\"evidence_items\":[{\"evidence_id\":\"目录ID\",\"evidence_risk_level\":\"low|medium|high\",\"reason\":\"短原因\"}],\"rule_matches\":[{\"rule_id\":\"stable rule_id\",\"evidence_ids\":[\"目录ID\"],\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}\n\nevidence_items 和 rule_matches 仅选 evidence_catalog 现有 ID。安全或豁免只写 summary，不得输出 none 证据；pass/none 时两个数组必须为空。summary 最多80字，reason 最多45字。不得输出 primary_modality、supporting_modalities、source、source_label、text、features 或 confidence。",
+              "image_prompt": "依据本次 RuleSet 提取图片风险证据，分析 OCR、二维码、界面及视觉；不作整帖最终处罚。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”只用于研判，必须依据当前证据独立输出实际 severity，不得照抄。\n\n逐字提取所有可见文字；看不清写 unreadable，无文字写空字符串。客观描述人物、物品、文字、二维码、联系方式和场景，不擅自定性。只有明确证据才输出 risk_items；证据不足输出空数组。每项必须引用图片文字或可见元素并说明原因，不得仅凭关键词、单个物品或无上下文画面判 high。severity 是该项实际证据风险等级。matched_exemption_ids 仅在真正命中豁免时输出。硬约束：visual_summary 必须始终存在且必须是 JSON 字符串，不得省略，也不得返回 null、数组或对象。即使未发现风险，也必须用 visual_summary 客观概括图片主要内容，并将 risk_items 返回空数组。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"ocr_text\":\"string\",\"visual_summary\":\"string\",\"benign_context\":\"string\",\"risk_items\":[{\"risk_type\":\"string\",\"evidence\":\"string\",\"reason\":\"string\",\"severity\":\"low|medium|high\",\"rule_id\":\"上述 stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}",
+              "libraries": [
+                {
+                  "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+                  "id": "recruitment_fraud",
+                  "output_labels": [
+                    "入职前收费",
+                    "传销式招聘",
+                    "虚假高薪诱饵",
+                    "骗取敏感个人信息"
+                  ],
+                  "ruleset_content_driven": true,
+                  "title": "招聘诈骗风险规则集"
+                }
+              ],
+              "prompt_version": "ruleset-v1-fd842de259a8fb71",
+              "schema_version": 2,
+              "stage_rule_ids": {
+                "comment_audit": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "fusion_audit": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "image_evidence": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ],
+                "video_frame_evidence": [
+                  "pre_employment_fee",
+                  "training_loan",
+                  "job_arrangement_training_fee",
+                  "pyramid_scheme_recruitment",
+                  "fake_high_salary_no_barrier",
+                  "sensitive_info_collection"
+                ]
+              },
+              "system_template_version": "audit-system-template-v3"
+            },
+            "policy_id": "",
+            "audit_config_revision": {
+              "source_policy_id": "",
+              "source_policy_name": "",
+              "source_policy_version": "",
+              "audit_config": {
+                "capabilities": [
+                  "text",
+                  "ocr",
+                  "asr",
+                  "vision",
+                  "comment"
+                ],
+                "compiler_version": "ruleset-compiler-v3",
+                "library_ids": [],
+                "prompt_version": "ruleset-v1-fd842de259a8fb71",
+                "schema_version": 2,
+                "scoring_rules": [],
+                "scoring_template": "balanced",
+                "source_policy_id": "",
+                "source_policy_name": "",
+                "source_policy_version": "",
+                "system_template_version": "audit-system-template-v3",
+                "temporary_ruleset": {
+                  "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+                  "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+                  "proposal_version": 2,
+                  "strategy": "temporary_ruleset"
+                },
+                "thresholds": {
+                  "high": 80,
+                  "medium": 60,
+                  "review": 40
+                }
+              },
+              "knowledge_package_snapshots": [],
+              "rule_snapshot": {
+                "decision_rules": [
+                  {
+                    "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "recruitment_fee",
+                    "category_name": "入职前收费",
+                    "enabled": true,
+                    "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                    "name": "入职前要求缴纳费用",
+                    "order": 0,
+                    "rule_exemptions": [],
+                    "rule_id": "pre_employment_fee",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "recruitment_fee",
+                    "category_name": "入职前收费",
+                    "enabled": true,
+                    "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                    "name": "培训贷",
+                    "order": 1,
+                    "rule_exemptions": [],
+                    "rule_id": "training_loan",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "recruitment_fee",
+                    "category_name": "入职前收费",
+                    "enabled": true,
+                    "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                    "name": "以安排工作为由收取培训费或培训贷",
+                    "order": 2,
+                    "rule_exemptions": [],
+                    "rule_id": "job_arrangement_training_fee",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "pyramid_recruitment",
+                    "category_name": "传销式招聘",
+                    "enabled": true,
+                    "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                    "name": "拉人头式传销招聘",
+                    "order": 0,
+                    "rule_exemptions": [],
+                    "rule_id": "pyramid_scheme_recruitment",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  },
+                  {
+                    "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "fake_high_salary",
+                    "category_name": "虚假高薪诱饵",
+                    "enabled": true,
+                    "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                    "name": "无门槛虚假高薪",
+                    "order": 0,
+                    "rule_exemptions": [],
+                    "rule_id": "fake_high_salary_no_barrier",
+                    "source_mappings": [],
+                    "suggested_risk_level": "medium"
+                  },
+                  {
+                    "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "category_id": "sensitive_info_collection",
+                    "category_name": "骗取敏感个人信息",
+                    "enabled": true,
+                    "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                    "name": "入职前索要敏感个人信息",
+                    "order": 0,
+                    "rule_exemptions": [],
+                    "rule_id": "sensitive_info_collection",
+                    "source_mappings": [],
+                    "suggested_risk_level": "high"
+                  }
+                ],
+                "general_exemptions": [],
+                "schema_version": 2,
+                "scoring_rules": [],
+                "stage_routes": {
+                  "comment_audit": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "fusion_audit": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "image_evidence": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "video_frame_evidence": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ]
+                },
+                "temporary_ruleset": {
+                  "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+                  "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+                  "proposal_version": 2,
+                  "strategy": "temporary_ruleset"
+                },
+                "thresholds": {
+                  "high": 80,
+                  "medium": 60,
+                  "review": 40
+                }
+              },
+              "prompt_profile_snapshot": {
+                "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+                "category_id": "recruitment_fraud",
+                "comment_prompt_template": "依据本次 RuleSet 逐条审核评论风险。结合帖子标题、正文和媒体摘要，独立判断每条评论；不得聚合多条评论，一条评论可独立触发召回。评论证据只归属于该评论，不得直接归责主帖作者。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nt 仅使用上述 category_id。“参考”只用于研判；实际 risk_level 仅依据当前评论证据，不得代填；s 按 none=0、low=40、medium=60、high=80 输出。\n\n只依据当前评论原文或可靠译文判断，不补写原文没有的交易、因果或参与意图。疑问、转述、批判、否定、举报和正常讨论不自动违规，也不自动豁免；语义或翻译不确定时最多 low。q 必须逐字摘自 source_text 且保持最短，t/rb 必须受 q 和可靠译文支持。每条 source_text 保持现有最多300字，已有 translation_zh 保持现有最多300字；不得改写评论正文。每个 comment_id 必须且只能输出一次。\n\n只输出合法 JSON 稀疏合同：\n{\"comments\":[{\"id\":\"原comment_id\",\"s\":0,\"risk_level\":\"none\",\"zh\":\"仅需要翻译时\"},{\"id\":\"原comment_id\",\"s\":80,\"lib\":\"主风险库id\",\"sec\":[\"次风险库id，可选\"],\"t\":\"短类别\",\"rb\":\"违规依据\",\"eb\":\"真实豁免依据，可选\",\"q\":\"source_text中的最短原句\",\"risk_level\":\"low|medium|high\",\"rule_id\":\"stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"],\"zh\":\"仅需要翻译时\"}]}\n必须保留 V1 稀疏语义：s=0 时只输出 id、s、risk_level，需翻译时加 zh；s>0 必须输出 id/s/lib/t/rb/q/risk_level/rule_id，sec、eb、matched_exemption_ids 仅在实际存在时输出。s 为0-100；rb 最多18字，eb 最多14字。需要翻译时 zh 必须准确、自然、完整；无需翻译时省略。不要输出空字符串、空数组或占位依据。",
+                "compiler_version": "ruleset-compiler-v3",
+                "fixed_prompt_chars": {
+                  "comment_audit": 1972,
+                  "fusion_audit": 1962,
+                  "image_evidence": 1741,
+                  "video_frame_evidence": 2152
+                },
+                "frame_prompt": "依据本次 RuleSet 提取视频分段风险证据。4x4 contact sheet 按真实时间排序；空白格非视频内容。结合标题、正文、逐帧 OCR 原文/译文及本段 ASR 审核；不复述 OCR/ASR 全文。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”仅供研判；实际 risk_level 由当前证据独立判断，不得代填；score 按 none=0、low=40、medium=60、high=80 输出。\n\nframe_id、ocr_chunk_id、asr_chunk_id 仅可取自输入。无明确风险时对应数组为空。每个非零风险项必须给出 stable rule_id、与 score 一致的 low|medium|high risk_level 和短原因；matched_exemption_ids 仅在真正命中豁免时输出。segment_score 和各项 score 均为0-100，reason 最多35字，segment_summary 客观且最多45字。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"segment_summary\":\"string\",\"segment_score\":0,\"risk_library_id\":\"string\",\"risk_library_label\":\"string\",\"visual_risks\":[{\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"ocr_risks\":[{\"ocr_chunk_id\":\"string\",\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"asr_risks\":[{\"asr_chunk_id\":\"string\",\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}]}",
+                "fusion_prompt_template": "依据本次 RuleSet 融合全帖风险。仅校准 evidence_catalog 现有证据的跨分段、跨模态含义；不重审媒体，不创造、复制或改写证据。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\ncategories 仅使用上述 category_id。“参考”仅供研判；实际 evidence_risk_level 和建议等级按已有证据独立判断，不得代填。\n\n结合上下文判断规则和豁免是否实际满足。评论独立；其证据主导时仅建议 review，summary 注明来自评论区，不直接归责主帖作者。title_zh/desc_zh 优先用于理解外文。content_title 须为8-18字中文主题短标题，不写内容ID、审核结论或风险等级。\n\n只输出合法 JSON：\n{\"schema_version\":\"audit_fusion_v4\",\"content_title\":\"\",\"summary\":\"\",\"decision_suggestion\":\"pass|review|reject\",\"risk_level_suggestion\":\"none|low|medium|high\",\"primary_risk\":\"\",\"categories\":[],\"evidence_items\":[{\"evidence_id\":\"目录ID\",\"evidence_risk_level\":\"low|medium|high\",\"reason\":\"短原因\"}],\"rule_matches\":[{\"rule_id\":\"stable rule_id\",\"evidence_ids\":[\"目录ID\"],\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}\n\nevidence_items 和 rule_matches 仅选 evidence_catalog 现有 ID。安全或豁免只写 summary，不得输出 none 证据；pass/none 时两个数组必须为空。summary 最多80字，reason 最多45字。不得输出 primary_modality、supporting_modalities、source、source_label、text、features 或 confidence。",
+                "image_prompt": "依据本次 RuleSet 提取图片风险证据，分析 OCR、二维码、界面及视觉；不作整帖最终处罚。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”只用于研判，必须依据当前证据独立输出实际 severity，不得照抄。\n\n逐字提取所有可见文字；看不清写 unreadable，无文字写空字符串。客观描述人物、物品、文字、二维码、联系方式和场景，不擅自定性。只有明确证据才输出 risk_items；证据不足输出空数组。每项必须引用图片文字或可见元素并说明原因，不得仅凭关键词、单个物品或无上下文画面判 high。severity 是该项实际证据风险等级。matched_exemption_ids 仅在真正命中豁免时输出。硬约束：visual_summary 必须始终存在且必须是 JSON 字符串，不得省略，也不得返回 null、数组或对象。即使未发现风险，也必须用 visual_summary 客观概括图片主要内容，并将 risk_items 返回空数组。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"ocr_text\":\"string\",\"visual_summary\":\"string\",\"benign_context\":\"string\",\"risk_items\":[{\"risk_type\":\"string\",\"evidence\":\"string\",\"reason\":\"string\",\"severity\":\"low|medium|high\",\"rule_id\":\"上述 stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}",
+                "libraries": [
+                  {
+                    "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+                    "id": "recruitment_fraud",
+                    "output_labels": [
+                      "入职前收费",
+                      "传销式招聘",
+                      "虚假高薪诱饵",
+                      "骗取敏感个人信息"
+                    ],
+                    "ruleset_content_driven": true,
+                    "title": "招聘诈骗风险规则集"
+                  }
+                ],
+                "prompt_version": "ruleset-v1-fd842de259a8fb71",
+                "schema_version": 2,
+                "stage_rule_ids": {
+                  "comment_audit": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "fusion_audit": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "image_evidence": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ],
+                  "video_frame_evidence": [
+                    "pre_employment_fee",
+                    "training_loan",
+                    "job_arrangement_training_fee",
+                    "pyramid_scheme_recruitment",
+                    "fake_high_salary_no_barrier",
+                    "sensitive_info_collection"
+                  ]
+                },
+                "system_template_version": "audit-system-template-v3"
+              },
+              "config_hash": "a7d3352a0ddd6eb9161d91eb3f6372a44b6f0a6cd3ae1e4cdb16d7826ca2c965"
+            },
+            "_verified_audit_config_revision_id": "audit-config-revision:8f9832ae1166c82b973c60c57644c6bd"
+          }
+        }
+      ],
+      "job": {
+        "id": "m3-17d98b74a5a0d9247335",
+        "status": "failed",
+        "rule_snapshot": {
+          "decision_rules": [
+            {
+              "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "recruitment_fee",
+              "category_name": "入职前收费",
+              "enabled": true,
+              "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+              "name": "入职前要求缴纳费用",
+              "order": 0,
+              "rule_exemptions": [],
+              "rule_id": "pre_employment_fee",
+              "source_mappings": [],
+              "suggested_risk_level": "high"
+            },
+            {
+              "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "recruitment_fee",
+              "category_name": "入职前收费",
+              "enabled": true,
+              "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+              "name": "培训贷",
+              "order": 1,
+              "rule_exemptions": [],
+              "rule_id": "training_loan",
+              "source_mappings": [],
+              "suggested_risk_level": "high"
+            },
+            {
+              "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "recruitment_fee",
+              "category_name": "入职前收费",
+              "enabled": true,
+              "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+              "name": "以安排工作为由收取培训费或培训贷",
+              "order": 2,
+              "rule_exemptions": [],
+              "rule_id": "job_arrangement_training_fee",
+              "source_mappings": [],
+              "suggested_risk_level": "high"
+            },
+            {
+              "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "pyramid_recruitment",
+              "category_name": "传销式招聘",
+              "enabled": true,
+              "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+              "name": "拉人头式传销招聘",
+              "order": 0,
+              "rule_exemptions": [],
+              "rule_id": "pyramid_scheme_recruitment",
+              "source_mappings": [],
+              "suggested_risk_level": "high"
+            },
+            {
+              "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "fake_high_salary",
+              "category_name": "虚假高薪诱饵",
+              "enabled": true,
+              "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+              "name": "无门槛虚假高薪",
+              "order": 0,
+              "rule_exemptions": [],
+              "rule_id": "fake_high_salary_no_barrier",
+              "source_mappings": [],
+              "suggested_risk_level": "medium"
+            },
+            {
+              "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "sensitive_info_collection",
+              "category_name": "骗取敏感个人信息",
+              "enabled": true,
+              "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+              "name": "入职前索要敏感个人信息",
+              "order": 0,
+              "rule_exemptions": [],
+              "rule_id": "sensitive_info_collection",
+              "source_mappings": [],
+              "suggested_risk_level": "high"
+            }
+          ],
+          "general_exemptions": [],
+          "schema_version": 2,
+          "scoring_rules": [],
+          "stage_routes": {
+            "comment_audit": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "fusion_audit": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "image_evidence": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "video_frame_evidence": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ]
+          },
+          "temporary_ruleset": {
+            "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+            "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+            "proposal_version": 2,
+            "strategy": "temporary_ruleset"
+          },
+          "thresholds": {
+            "high": 80,
+            "medium": 60,
+            "review": 40
+          }
+        },
+        "prompt_profile_snapshot": {
+          "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+          "category_id": "recruitment_fraud",
+          "comment_prompt_template": "依据本次 RuleSet 逐条审核评论风险。结合帖子标题、正文和媒体摘要，独立判断每条评论；不得聚合多条评论，一条评论可独立触发召回。评论证据只归属于该评论，不得直接归责主帖作者。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nt 仅使用上述 category_id。“参考”只用于研判；实际 risk_level 仅依据当前评论证据，不得代填；s 按 none=0、low=40、medium=60、high=80 输出。\n\n只依据当前评论原文或可靠译文判断，不补写原文没有的交易、因果或参与意图。疑问、转述、批判、否定、举报和正常讨论不自动违规，也不自动豁免；语义或翻译不确定时最多 low。q 必须逐字摘自 source_text 且保持最短，t/rb 必须受 q 和可靠译文支持。每条 source_text 保持现有最多300字，已有 translation_zh 保持现有最多300字；不得改写评论正文。每个 comment_id 必须且只能输出一次。\n\n只输出合法 JSON 稀疏合同：\n{\"comments\":[{\"id\":\"原comment_id\",\"s\":0,\"risk_level\":\"none\",\"zh\":\"仅需要翻译时\"},{\"id\":\"原comment_id\",\"s\":80,\"lib\":\"主风险库id\",\"sec\":[\"次风险库id，可选\"],\"t\":\"短类别\",\"rb\":\"违规依据\",\"eb\":\"真实豁免依据，可选\",\"q\":\"source_text中的最短原句\",\"risk_level\":\"low|medium|high\",\"rule_id\":\"stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"],\"zh\":\"仅需要翻译时\"}]}\n必须保留 V1 稀疏语义：s=0 时只输出 id、s、risk_level，需翻译时加 zh；s>0 必须输出 id/s/lib/t/rb/q/risk_level/rule_id，sec、eb、matched_exemption_ids 仅在实际存在时输出。s 为0-100；rb 最多18字，eb 最多14字。需要翻译时 zh 必须准确、自然、完整；无需翻译时省略。不要输出空字符串、空数组或占位依据。",
+          "compiler_version": "ruleset-compiler-v3",
+          "fixed_prompt_chars": {
+            "comment_audit": 1972,
+            "fusion_audit": 1962,
+            "image_evidence": 1741,
+            "video_frame_evidence": 2152
+          },
+          "frame_prompt": "依据本次 RuleSet 提取视频分段风险证据。4x4 contact sheet 按真实时间排序；空白格非视频内容。结合标题、正文、逐帧 OCR 原文/译文及本段 ASR 审核；不复述 OCR/ASR 全文。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”仅供研判；实际 risk_level 由当前证据独立判断，不得代填；score 按 none=0、low=40、medium=60、high=80 输出。\n\nframe_id、ocr_chunk_id、asr_chunk_id 仅可取自输入。无明确风险时对应数组为空。每个非零风险项必须给出 stable rule_id、与 score 一致的 low|medium|high risk_level 和短原因；matched_exemption_ids 仅在真正命中豁免时输出。segment_score 和各项 score 均为0-100，reason 最多35字，segment_summary 客观且最多45字。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"segment_summary\":\"string\",\"segment_score\":0,\"risk_library_id\":\"string\",\"risk_library_label\":\"string\",\"visual_risks\":[{\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"ocr_risks\":[{\"ocr_chunk_id\":\"string\",\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"asr_risks\":[{\"asr_chunk_id\":\"string\",\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}]}",
+          "fusion_prompt_template": "依据本次 RuleSet 融合全帖风险。仅校准 evidence_catalog 现有证据的跨分段、跨模态含义；不重审媒体，不创造、复制或改写证据。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\ncategories 仅使用上述 category_id。“参考”仅供研判；实际 evidence_risk_level 和建议等级按已有证据独立判断，不得代填。\n\n结合上下文判断规则和豁免是否实际满足。评论独立；其证据主导时仅建议 review，summary 注明来自评论区，不直接归责主帖作者。title_zh/desc_zh 优先用于理解外文。content_title 须为8-18字中文主题短标题，不写内容ID、审核结论或风险等级。\n\n只输出合法 JSON：\n{\"schema_version\":\"audit_fusion_v4\",\"content_title\":\"\",\"summary\":\"\",\"decision_suggestion\":\"pass|review|reject\",\"risk_level_suggestion\":\"none|low|medium|high\",\"primary_risk\":\"\",\"categories\":[],\"evidence_items\":[{\"evidence_id\":\"目录ID\",\"evidence_risk_level\":\"low|medium|high\",\"reason\":\"短原因\"}],\"rule_matches\":[{\"rule_id\":\"stable rule_id\",\"evidence_ids\":[\"目录ID\"],\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}\n\nevidence_items 和 rule_matches 仅选 evidence_catalog 现有 ID。安全或豁免只写 summary，不得输出 none 证据；pass/none 时两个数组必须为空。summary 最多80字，reason 最多45字。不得输出 primary_modality、supporting_modalities、source、source_label、text、features 或 confidence。",
+          "image_prompt": "依据本次 RuleSet 提取图片风险证据，分析 OCR、二维码、界面及视觉；不作整帖最终处罚。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”只用于研判，必须依据当前证据独立输出实际 severity，不得照抄。\n\n逐字提取所有可见文字；看不清写 unreadable，无文字写空字符串。客观描述人物、物品、文字、二维码、联系方式和场景，不擅自定性。只有明确证据才输出 risk_items；证据不足输出空数组。每项必须引用图片文字或可见元素并说明原因，不得仅凭关键词、单个物品或无上下文画面判 high。severity 是该项实际证据风险等级。matched_exemption_ids 仅在真正命中豁免时输出。硬约束：visual_summary 必须始终存在且必须是 JSON 字符串，不得省略，也不得返回 null、数组或对象。即使未发现风险，也必须用 visual_summary 客观概括图片主要内容，并将 risk_items 返回空数组。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"ocr_text\":\"string\",\"visual_summary\":\"string\",\"benign_context\":\"string\",\"risk_items\":[{\"risk_type\":\"string\",\"evidence\":\"string\",\"reason\":\"string\",\"severity\":\"low|medium|high\",\"rule_id\":\"上述 stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}",
+          "libraries": [
+            {
+              "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+              "id": "recruitment_fraud",
+              "output_labels": [
+                "入职前收费",
+                "传销式招聘",
+                "虚假高薪诱饵",
+                "骗取敏感个人信息"
+              ],
+              "ruleset_content_driven": true,
+              "title": "招聘诈骗风险规则集"
+            }
+          ],
+          "prompt_version": "ruleset-v1-fd842de259a8fb71",
+          "schema_version": 2,
+          "stage_rule_ids": {
+            "comment_audit": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "fusion_audit": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "image_evidence": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "video_frame_evidence": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ]
+          },
+          "system_template_version": "audit-system-template-v3"
+        },
+        "current_audit_config_revision_id": "audit-config-revision:8f9832ae1166c82b973c60c57644c6bd"
+      },
+      "audit_config_revision": {
+        "id": "audit-config-revision:8f9832ae1166c82b973c60c57644c6bd",
+        "job_id": "m3-17d98b74a5a0d9247335",
+        "version": 1,
+        "source_policy_id": "",
+        "source_policy_name": "",
+        "source_policy_version": "",
+        "config_hash": "a7d3352a0ddd6eb9161d91eb3f6372a44b6f0a6cd3ae1e4cdb16d7826ca2c965",
+        "effective_from": "2026-09-08T12:24:42",
+        "created_at": "2026-09-08T12:24:42",
+        "created_by": "m3-worker",
+        "audit_config": {
+          "capabilities": [
+            "text",
+            "ocr",
+            "asr",
+            "vision",
+            "comment"
+          ],
+          "compiler_version": "ruleset-compiler-v3",
+          "library_ids": [],
+          "prompt_version": "ruleset-v1-fd842de259a8fb71",
+          "schema_version": 2,
+          "scoring_rules": [],
+          "scoring_template": "balanced",
+          "source_policy_id": "",
+          "source_policy_name": "",
+          "source_policy_version": "",
+          "system_template_version": "audit-system-template-v3",
+          "temporary_ruleset": {
+            "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+            "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+            "proposal_version": 2,
+            "strategy": "temporary_ruleset"
+          },
+          "thresholds": {
+            "high": 80,
+            "medium": 60,
+            "review": 40
+          }
+        },
+        "knowledge_package_snapshots": [],
+        "rule_snapshot": {
+          "decision_rules": [
+            {
+              "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "recruitment_fee",
+              "category_name": "入职前收费",
+              "enabled": true,
+              "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+              "name": "入职前要求缴纳费用",
+              "order": 0,
+              "rule_exemptions": [],
+              "rule_id": "pre_employment_fee",
+              "source_mappings": [],
+              "suggested_risk_level": "high"
+            },
+            {
+              "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "recruitment_fee",
+              "category_name": "入职前收费",
+              "enabled": true,
+              "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+              "name": "培训贷",
+              "order": 1,
+              "rule_exemptions": [],
+              "rule_id": "training_loan",
+              "source_mappings": [],
+              "suggested_risk_level": "high"
+            },
+            {
+              "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "recruitment_fee",
+              "category_name": "入职前收费",
+              "enabled": true,
+              "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+              "name": "以安排工作为由收取培训费或培训贷",
+              "order": 2,
+              "rule_exemptions": [],
+              "rule_id": "job_arrangement_training_fee",
+              "source_mappings": [],
+              "suggested_risk_level": "high"
+            },
+            {
+              "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "pyramid_recruitment",
+              "category_name": "传销式招聘",
+              "enabled": true,
+              "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+              "name": "拉人头式传销招聘",
+              "order": 0,
+              "rule_exemptions": [],
+              "rule_id": "pyramid_scheme_recruitment",
+              "source_mappings": [],
+              "suggested_risk_level": "high"
+            },
+            {
+              "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "fake_high_salary",
+              "category_name": "虚假高薪诱饵",
+              "enabled": true,
+              "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+              "name": "无门槛虚假高薪",
+              "order": 0,
+              "rule_exemptions": [],
+              "rule_id": "fake_high_salary_no_barrier",
+              "source_mappings": [],
+              "suggested_risk_level": "medium"
+            },
+            {
+              "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+              "application_stages": [
+                "image_evidence",
+                "video_frame_evidence",
+                "comment_audit",
+                "fusion_audit"
+              ],
+              "category_id": "sensitive_info_collection",
+              "category_name": "骗取敏感个人信息",
+              "enabled": true,
+              "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+              "name": "入职前索要敏感个人信息",
+              "order": 0,
+              "rule_exemptions": [],
+              "rule_id": "sensitive_info_collection",
+              "source_mappings": [],
+              "suggested_risk_level": "high"
+            }
+          ],
+          "general_exemptions": [],
+          "schema_version": 2,
+          "scoring_rules": [],
+          "stage_routes": {
+            "comment_audit": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "fusion_audit": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "image_evidence": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "video_frame_evidence": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ]
+          },
+          "temporary_ruleset": {
+            "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+            "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+            "proposal_version": 2,
+            "strategy": "temporary_ruleset"
+          },
+          "thresholds": {
+            "high": 80,
+            "medium": 60,
+            "review": 40
+          }
+        },
+        "prompt_profile_snapshot": {
+          "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+          "category_id": "recruitment_fraud",
+          "comment_prompt_template": "依据本次 RuleSet 逐条审核评论风险。结合帖子标题、正文和媒体摘要，独立判断每条评论；不得聚合多条评论，一条评论可独立触发召回。评论证据只归属于该评论，不得直接归责主帖作者。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nt 仅使用上述 category_id。“参考”只用于研判；实际 risk_level 仅依据当前评论证据，不得代填；s 按 none=0、low=40、medium=60、high=80 输出。\n\n只依据当前评论原文或可靠译文判断，不补写原文没有的交易、因果或参与意图。疑问、转述、批判、否定、举报和正常讨论不自动违规，也不自动豁免；语义或翻译不确定时最多 low。q 必须逐字摘自 source_text 且保持最短，t/rb 必须受 q 和可靠译文支持。每条 source_text 保持现有最多300字，已有 translation_zh 保持现有最多300字；不得改写评论正文。每个 comment_id 必须且只能输出一次。\n\n只输出合法 JSON 稀疏合同：\n{\"comments\":[{\"id\":\"原comment_id\",\"s\":0,\"risk_level\":\"none\",\"zh\":\"仅需要翻译时\"},{\"id\":\"原comment_id\",\"s\":80,\"lib\":\"主风险库id\",\"sec\":[\"次风险库id，可选\"],\"t\":\"短类别\",\"rb\":\"违规依据\",\"eb\":\"真实豁免依据，可选\",\"q\":\"source_text中的最短原句\",\"risk_level\":\"low|medium|high\",\"rule_id\":\"stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"],\"zh\":\"仅需要翻译时\"}]}\n必须保留 V1 稀疏语义：s=0 时只输出 id、s、risk_level，需翻译时加 zh；s>0 必须输出 id/s/lib/t/rb/q/risk_level/rule_id，sec、eb、matched_exemption_ids 仅在实际存在时输出。s 为0-100；rb 最多18字，eb 最多14字。需要翻译时 zh 必须准确、自然、完整；无需翻译时省略。不要输出空字符串、空数组或占位依据。",
+          "compiler_version": "ruleset-compiler-v3",
+          "fixed_prompt_chars": {
+            "comment_audit": 1972,
+            "fusion_audit": 1962,
+            "image_evidence": 1741,
+            "video_frame_evidence": 2152
+          },
+          "frame_prompt": "依据本次 RuleSet 提取视频分段风险证据。4x4 contact sheet 按真实时间排序；空白格非视频内容。结合标题、正文、逐帧 OCR 原文/译文及本段 ASR 审核；不复述 OCR/ASR 全文。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”仅供研判；实际 risk_level 由当前证据独立判断，不得代填；score 按 none=0、low=40、medium=60、high=80 输出。\n\nframe_id、ocr_chunk_id、asr_chunk_id 仅可取自输入。无明确风险时对应数组为空。每个非零风险项必须给出 stable rule_id、与 score 一致的 low|medium|high risk_level 和短原因；matched_exemption_ids 仅在真正命中豁免时输出。segment_score 和各项 score 均为0-100，reason 最多35字，segment_summary 客观且最多45字。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"segment_summary\":\"string\",\"segment_score\":0,\"risk_library_id\":\"string\",\"risk_library_label\":\"string\",\"visual_risks\":[{\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"ocr_risks\":[{\"ocr_chunk_id\":\"string\",\"frame_ids\":[\"f0001\"],\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],\"asr_risks\":[{\"asr_chunk_id\":\"string\",\"score\":0,\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}]}",
+          "fusion_prompt_template": "依据本次 RuleSet 融合全帖风险。仅校准 evidence_catalog 现有证据的跨分段、跨模态含义；不重审媒体，不创造、复制或改写证据。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\ncategories 仅使用上述 category_id。“参考”仅供研判；实际 evidence_risk_level 和建议等级按已有证据独立判断，不得代填。\n\n结合上下文判断规则和豁免是否实际满足。评论独立；其证据主导时仅建议 review，summary 注明来自评论区，不直接归责主帖作者。title_zh/desc_zh 优先用于理解外文。content_title 须为8-18字中文主题短标题，不写内容ID、审核结论或风险等级。\n\n只输出合法 JSON：\n{\"schema_version\":\"audit_fusion_v4\",\"content_title\":\"\",\"summary\":\"\",\"decision_suggestion\":\"pass|review|reject\",\"risk_level_suggestion\":\"none|low|medium|high\",\"primary_risk\":\"\",\"categories\":[],\"evidence_items\":[{\"evidence_id\":\"目录ID\",\"evidence_risk_level\":\"low|medium|high\",\"reason\":\"短原因\"}],\"rule_matches\":[{\"rule_id\":\"stable rule_id\",\"evidence_ids\":[\"目录ID\"],\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}\n\nevidence_items 和 rule_matches 仅选 evidence_catalog 现有 ID。安全或豁免只写 summary，不得输出 none 证据；pass/none 时两个数组必须为空。summary 最多80字，reason 最多45字。不得输出 primary_modality、supporting_modalities、source、source_label、text、features 或 confidence。",
+          "image_prompt": "依据本次 RuleSet 提取图片风险证据，分析 OCR、二维码、界面及视觉；不作整帖最终处罚。\n\ndomain：recruitment_fraud\naudit_goal：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n允许的风险类别（category_id｜name）：\nrecruitment_fee｜入职前收费\npyramid_recruitment｜传销式招聘\nfake_high_salary｜虚假高薪诱饵\nsensitive_info_collection｜骗取敏感个人信息\n筛选后的业务规则：\npre_employment_fee｜参考 high｜内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\ntraining_loan｜参考 high｜内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\njob_arrangement_training_fee｜参考 high｜内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\npyramid_scheme_recruitment｜参考 high｜内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\nfake_high_salary_no_barrier｜参考 medium｜内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\nsensitive_info_collection｜参考 high｜内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\nrisk_type 仅使用上述 category_id。“参考”只用于研判，必须依据当前证据独立输出实际 severity，不得照抄。\n\n逐字提取所有可见文字；看不清写 unreadable，无文字写空字符串。客观描述人物、物品、文字、二维码、联系方式和场景，不擅自定性。只有明确证据才输出 risk_items；证据不足输出空数组。每项必须引用图片文字或可见元素并说明原因，不得仅凭关键词、单个物品或无上下文画面判 high。severity 是该项实际证据风险等级。matched_exemption_ids 仅在真正命中豁免时输出。硬约束：visual_summary 必须始终存在且必须是 JSON 字符串，不得省略，也不得返回 null、数组或对象。即使未发现风险，也必须用 visual_summary 客观概括图片主要内容，并将 risk_items 返回空数组。\n\n只输出合法 JSON，不要输出 Markdown：\n{\"ocr_text\":\"string\",\"visual_summary\":\"string\",\"benign_context\":\"string\",\"risk_items\":[{\"risk_type\":\"string\",\"evidence\":\"string\",\"reason\":\"string\",\"severity\":\"low|medium|high\",\"rule_id\":\"上述 stable rule_id\",\"matched_exemption_ids\":[\"实际命中的 exemption_id，可选\"]}]}",
+          "libraries": [
+            {
+              "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+              "id": "recruitment_fraud",
+              "output_labels": [
+                "入职前收费",
+                "传销式招聘",
+                "虚假高薪诱饵",
+                "骗取敏感个人信息"
+              ],
+              "ruleset_content_driven": true,
+              "title": "招聘诈骗风险规则集"
+            }
+          ],
+          "prompt_version": "ruleset-v1-fd842de259a8fb71",
+          "schema_version": 2,
+          "stage_rule_ids": {
+            "comment_audit": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "fusion_audit": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "image_evidence": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ],
+            "video_frame_evidence": [
+              "pre_employment_fee",
+              "training_loan",
+              "job_arrangement_training_fee",
+              "pyramid_scheme_recruitment",
+              "fake_high_salary_no_barrier",
+              "sensitive_info_collection"
+            ]
+          },
+          "system_template_version": "audit-system-template-v3"
+        }
+      },
+      "audit_results": []
+    }
+  ],
+  "qwen_turns": [
+    {
+      "label": "A-generate",
+      "message": "帮我在小红书搜索调查招聘诈骗，使用临时搜索词招聘收费。如果没有合适的规则，生成一套给我看看。",
+      "status": "completed",
+      "answer": "我已经为您生成了一套临时招聘诈骗规则集。这套规则覆盖了招聘诈骗的主要风险类型：\n\n**规则集概览**\n\n1. **入职前收费**（2条规则）\n   - 识别以培训费、押金、保证金、体检费等名义在入职前收费的行为\n   - 识别培训贷变种（以招聘为名要求求职者贷款支付培训费用）\n\n2. **传销式招聘**（1条规则）\n   - 识别以拉人头、发展下线、团队计酬为主要收入来源的招聘模式\n\n3. **虚假高薪诱饵**（1条规则）\n   - 识别无门槛承诺明显不合理高薪的职位（如\"零基础日入500+\"）\n\n4. **骗取敏感信息**（1条规则）\n   - 识别以招聘为名索要银行卡密码、身份证照片、手机验证码等敏感信息的行为\n\n所有规则都覆盖图片、视频、评论和融合审计四个阶段，确保全面识别各种形式的招聘诈骗内容。\n\n您指定了临时搜索词\"招聘收费\"。请确认是否使用这套规则创建调查？确认后我将创建完整的调查草稿。\n\n临时研判规则 · 完整规则快照\n名称：招聘诈骗风险规则集\n领域：recruitment_fraud\n版本：1\n方案标识：ruleset-proposal:52a0eb59bd984f209d74a9ff471521be\n内容指纹：bd9c629f38bd161b3bd25b99c3748cb8c32dd928f3664d45650c9ab29558a635\n研判目标：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n分类数：4；规则数：5\n通用豁免：无\n\n分类：入职前收费（recruitment_fee，排序 0）\n说明：以各种名义在入职前向求职者收取费用\n\n规则 1：入职前要求缴纳费用（pre_employment_fee）\n启用：是；排序：0\n命中条件：内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。\n规则豁免：无\n\n规则 2：培训贷（training_loan）\n启用：是；排序：1\n命中条件：内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。\n规则豁免：无\n\n分类：传销式招聘（pyramid_recruitment，排序 1）\n说明：以招聘为名进行传销或拉人头式诈骗\n\n规则 3：拉人头式传销招聘（pyramid_scheme_recruitment）\n启用：是；排序：0\n命中条件：内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。\n规则豁免：无\n\n分类：虚假高薪诱饵（fake_high_salary，排序 2）\n说明：以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息\n\n规则 4：无门槛虚假高薪（fake_high_salary_no_barrier）\n启用：是；排序：0\n命中条件：内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。\n规则豁免：无\n\n分类：骗取敏感个人信息（sensitive_info_collection，排序 3）\n说明：以招聘为名收集求职者敏感个人信息\n\n规则 5：入职前索要敏感个人信息（sensitive_info_collection）\n启用：是；排序：0\n命中条件：内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。\n规则豁免：无",
+      "artifact": {
+        "artifact_type": "ruleset_proposal_presentation",
+        "proposal_presentations": [
+          {
+            "assistant_message_id": "investigation-message:3e5ba005f82c83d0d476eca91d77b2cf",
+            "boundary": "durable_public_assistant_message",
+            "content_hash": "bd9c629f38bd161b3bd25b99c3748cb8c32dd928f3664d45650c9ab29558a635",
+            "presentation_format": "ruleset-proposal-text-v1",
+            "presentation_id": "ruleset-presentation:4f4aebbadbad8d7d1725c95079fa174e61e81f0c57ca55e7e36ee3dcc908bbe5",
+            "presented_at": "2026-09-08T04:22:43.991639+00:00",
+            "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+            "proposal_version": 1,
+            "session_id": "investigation-session:f368eb30a1d645b5ba66af9eb8cceed0",
+            "snapshot": {
+              "content": {
+                "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+                "categories": [
+                  {
+                    "category_id": "recruitment_fee",
+                    "description": "以各种名义在入职前向求职者收取费用",
+                    "name": "入职前收费",
+                    "order": 0,
+                    "rules": [
+                      {
+                        "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                        "name": "入职前要求缴纳费用",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "pre_employment_fee",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      },
+                      {
+                        "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                        "name": "培训贷",
+                        "order": 1,
+                        "rule_exemptions": [],
+                        "rule_id": "training_loan",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "pyramid_recruitment",
+                    "description": "以招聘为名进行传销或拉人头式诈骗",
+                    "name": "传销式招聘",
+                    "order": 1,
+                    "rules": [
+                      {
+                        "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                        "name": "拉人头式传销招聘",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "pyramid_scheme_recruitment",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "fake_high_salary",
+                    "description": "以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息",
+                    "name": "虚假高薪诱饵",
+                    "order": 2,
+                    "rules": [
+                      {
+                        "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                        "name": "无门槛虚假高薪",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "fake_high_salary_no_barrier",
+                        "source_mappings": [],
+                        "suggested_risk_level": "medium"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "sensitive_info_collection",
+                    "description": "以招聘为名收集求职者敏感个人信息",
+                    "name": "骗取敏感个人信息",
+                    "order": 3,
+                    "rules": [
+                      {
+                        "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                        "name": "入职前索要敏感个人信息",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "sensitive_info_collection",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  }
+                ],
+                "domain": "recruitment_fraud",
+                "general_exemptions": [],
+                "name": "招聘诈骗风险规则集",
+                "schema_version": 0
+              },
+              "content_hash": "bd9c629f38bd161b3bd25b99c3748cb8c32dd928f3664d45650c9ab29558a635",
+              "created_at": "2026-09-08T04:21:51.788995Z",
+              "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+              "session_id": "investigation-session:f368eb30a1d645b5ba66af9eb8cceed0",
+              "updated_at": "2026-09-08T04:21:51.788995Z",
+              "version": 1
+            },
+            "source_user_message_id": "investigation-message:7680b31db94a41a4b194af7182e5c9e0",
+            "source_user_turn_id": "investigation-turn:64c2779f719d4786af7349f8a60fde5c",
+            "text": "临时研判规则 · 完整规则快照\n名称：招聘诈骗风险规则集\n领域：recruitment_fraud\n版本：1\n方案标识：ruleset-proposal:52a0eb59bd984f209d74a9ff471521be\n内容指纹：bd9c629f38bd161b3bd25b99c3748cb8c32dd928f3664d45650c9ab29558a635\n研判目标：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n分类数：4；规则数：5\n通用豁免：无\n\n分类：入职前收费（recruitment_fee，排序 0）\n说明：以各种名义在入职前向求职者收取费用\n\n规则 1：入职前要求缴纳费用（pre_employment_fee）\n启用：是；排序：0\n命中条件：内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。\n规则豁免：无\n\n规则 2：培训贷（training_loan）\n启用：是；排序：1\n命中条件：内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。\n规则豁免：无\n\n分类：传销式招聘（pyramid_recruitment，排序 1）\n说明：以招聘为名进行传销或拉人头式诈骗\n\n规则 3：拉人头式传销招聘（pyramid_scheme_recruitment）\n启用：是；排序：0\n命中条件：内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。\n规则豁免：无\n\n分类：虚假高薪诱饵（fake_high_salary，排序 2）\n说明：以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息\n\n规则 4：无门槛虚假高薪（fake_high_salary_no_barrier）\n启用：是；排序：0\n命中条件：内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。\n规则豁免：无\n\n分类：骗取敏感个人信息（sensitive_info_collection，排序 3）\n说明：以招聘为名收集求职者敏感个人信息\n\n规则 5：入职前索要敏感个人信息（sensitive_info_collection）\n启用：是；排序：0\n命中条件：内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。\n规则豁免：无"
+          }
+        ]
+      }
+    },
+    {
+      "label": "A-edit",
+      "message": "增加一条：以安排工作为由要求先交培训费或办理培训贷，需要识别风险。先展示修改后的完整规则。",
+      "status": "completed",
+      "answer": "已为您增加新规则。以下是修改后的完整规则集：\n\n---\n\n## 招聘诈骗风险规则集（修订版）\n\n**领域：** recruitment_fraud  \n**审计目标：** 识别小红书平台上以招聘为名实施诈骗的风险内容，保护求职者免受财产损失和信息泄露。\n\n---\n\n### 类别1：入职前收费\n\n**规则1.1 入职前要求缴纳费用**（高风险）\n- 命中条件：内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\n- 审计阶段：图片、视频、评论、融合\n\n**规则1.2 培训贷**（高风险）\n- 命中条件：内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。\n- 审计阶段：图片、视频、评论、融合\n\n**规则1.3 以安排工作为由收取培训费或培训贷**（高风险）🆕\n- 命中条件：内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\n- 审计阶段：图片、视频、评论、融合\n\n---\n\n### 类别2：传销式招聘\n\n**规则2.1 拉人头式传销招聘**（高风险）\n- 命中条件：内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入。\n- 审计阶段：图片、视频、评论、融合\n\n---\n\n### 类别3：虚假高薪诱饵\n\n**规则3.1 无门槛虚假高薪**（中风险）\n- 命中条件：内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。\n- 审计阶段：图片、视频、评论、融合\n\n---\n\n### 类别4：骗取敏感个人信息\n\n**规则4.1 入职前索要敏感个人信息**（高风险）\n- 命中条件：内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息。\n- 审计阶段：图片、视频、评论、融合\n\n---\n\n规则集已更新完成。您指定使用临时搜索词\"招聘收费\"在小红书进行调查。是否确认使用这套规则创建\n\n临时研判规则 · 完整规则快照\n名称：招聘诈骗风险规则集\n领域：recruitment_fraud\n版本：2\n方案标识：ruleset-proposal:52a0eb59bd984f209d74a9ff471521be\n内容指纹：076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969\n研判目标：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n分类数：4；规则数：6\n通用豁免：无\n\n分类：入职前收费（recruitment_fee，排序 0）\n说明：以各种名义在入职前向求职者收取费用\n\n规则 1：入职前要求缴纳费用（pre_employment_fee）\n启用：是；排序：0\n命中条件：内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。\n规则豁免：无\n\n规则 2：培训贷（training_loan）\n启用：是；排序：1\n命中条件：内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。\n规则豁免：无\n\n规则 3：以安排工作为由收取培训费或培训贷（job_arrangement_training_fee）\n启用：是；排序：2\n命中条件：内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。\n规则豁免：无\n\n分类：传销式招聘（pyramid_recruitment，排序 1）\n说明：以招聘为名进行传销或拉人头式诈骗\n\n规则 4：拉人头式传销招聘（pyramid_scheme_recruitment）\n启用：是；排序：0\n命中条件：内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。\n规则豁免：无\n\n分类：虚假高薪诱饵（fake_high_salary，排序 2）\n说明：以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息\n\n规则 5：无门槛虚假高薪（fake_high_salary_no_barrier）\n启用：是；排序：0\n命中条件：内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。\n规则豁免：无\n\n分类：骗取敏感个人信息（sensitive_info_collection，排序 3）\n说明：以招聘为名收集求职者敏感个人信息\n\n规则 6：入职前索要敏感个人信息（sensitive_info_collection）\n启用：是；排序：0\n命中条件：内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。\n规则豁免：无",
+      "artifact": {
+        "artifact_type": "ruleset_proposal_presentation",
+        "proposal_presentations": [
+          {
+            "assistant_message_id": "investigation-message:c8f57f091093f1473de10d1a91f5b99c",
+            "boundary": "durable_public_assistant_message",
+            "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+            "presentation_format": "ruleset-proposal-text-v1",
+            "presentation_id": "ruleset-presentation:f3565042fe0f18e4a1f6511905342ea203b8a60492217e021e2554f0989df3dd",
+            "presented_at": "2026-09-08T04:23:42.170110+00:00",
+            "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+            "proposal_version": 2,
+            "session_id": "investigation-session:f368eb30a1d645b5ba66af9eb8cceed0",
+            "snapshot": {
+              "content": {
+                "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+                "categories": [
+                  {
+                    "category_id": "recruitment_fee",
+                    "description": "以各种名义在入职前向求职者收取费用",
+                    "name": "入职前收费",
+                    "order": 0,
+                    "rules": [
+                      {
+                        "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                        "name": "入职前要求缴纳费用",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "pre_employment_fee",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      },
+                      {
+                        "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                        "name": "培训贷",
+                        "order": 1,
+                        "rule_exemptions": [],
+                        "rule_id": "training_loan",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      },
+                      {
+                        "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                        "name": "以安排工作为由收取培训费或培训贷",
+                        "order": 2,
+                        "rule_exemptions": [],
+                        "rule_id": "job_arrangement_training_fee",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "pyramid_recruitment",
+                    "description": "以招聘为名进行传销或拉人头式诈骗",
+                    "name": "传销式招聘",
+                    "order": 1,
+                    "rules": [
+                      {
+                        "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                        "name": "拉人头式传销招聘",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "pyramid_scheme_recruitment",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "fake_high_salary",
+                    "description": "以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息",
+                    "name": "虚假高薪诱饵",
+                    "order": 2,
+                    "rules": [
+                      {
+                        "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                        "name": "无门槛虚假高薪",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "fake_high_salary_no_barrier",
+                        "source_mappings": [],
+                        "suggested_risk_level": "medium"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "sensitive_info_collection",
+                    "description": "以招聘为名收集求职者敏感个人信息",
+                    "name": "骗取敏感个人信息",
+                    "order": 3,
+                    "rules": [
+                      {
+                        "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                        "name": "入职前索要敏感个人信息",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "sensitive_info_collection",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  }
+                ],
+                "domain": "recruitment_fraud",
+                "general_exemptions": [],
+                "name": "招聘诈骗风险规则集",
+                "schema_version": 0
+              },
+              "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+              "created_at": "2026-09-08T04:21:51.788995Z",
+              "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+              "session_id": "investigation-session:f368eb30a1d645b5ba66af9eb8cceed0",
+              "updated_at": "2026-09-08T04:23:29.519368Z",
+              "version": 2
+            },
+            "source_user_message_id": "investigation-message:7280bbc56c864e59b6897bcb4a31810c",
+            "source_user_turn_id": "investigation-turn:85bf921aa98f45d3a788fd16dcdbef44",
+            "text": "临时研判规则 · 完整规则快照\n名称：招聘诈骗风险规则集\n领域：recruitment_fraud\n版本：2\n方案标识：ruleset-proposal:52a0eb59bd984f209d74a9ff471521be\n内容指纹：076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969\n研判目标：识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。\n分类数：4；规则数：6\n通用豁免：无\n\n分类：入职前收费（recruitment_fee，排序 0）\n说明：以各种名义在入职前向求职者收取费用\n\n规则 1：入职前要求缴纳费用（pre_employment_fee）\n启用：是；排序：0\n命中条件：内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。\n规则豁免：无\n\n规则 2：培训贷（training_loan）\n启用：是；排序：1\n命中条件：内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。\n规则豁免：无\n\n规则 3：以安排工作为由收取培训费或培训贷（job_arrangement_training_fee）\n启用：是；排序：2\n命中条件：内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。\n规则豁免：无\n\n分类：传销式招聘（pyramid_recruitment，排序 1）\n说明：以招聘为名进行传销或拉人头式诈骗\n\n规则 4：拉人头式传销招聘（pyramid_scheme_recruitment）\n启用：是；排序：0\n命中条件：内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。\n规则豁免：无\n\n分类：虚假高薪诱饵（fake_high_salary，排序 2）\n说明：以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息\n\n规则 5：无门槛虚假高薪（fake_high_salary_no_barrier）\n启用：是；排序：0\n命中条件：内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。\n规则豁免：无\n\n分类：骗取敏感个人信息（sensitive_info_collection，排序 3）\n说明：以招聘为名收集求职者敏感个人信息\n\n规则 6：入职前索要敏感个人信息（sensitive_info_collection）\n启用：是；排序：0\n命中条件：内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。\n规则豁免：无"
+          }
+        ]
+      }
+    },
+    {
+      "label": "A-adopt",
+      "message": "可以，就按现在这套规则创建调查草案。",
+      "status": "completed",
+      "answer": "调查草案已创建成功！以下是草案摘要：\n\n**草案：小红书招聘诈骗调查**\n- 草案ID：`investigation-draft:5fbb098046e5454cb5386527f8f7b248`\n- 状态：DRAFT（可编辑）\n- 平台：小红书\n- 模式：搜索\n- 搜索词：招聘收费（临时搜索词）\n- 判定规则：临时招聘诈骗规则集（4个类别、6条规则）\n- 确认状态：无阻塞，可以确认\n\n草案已绑定我们刚才修订的临时规则集（含新增的\"以安排工作为由收取培训费或培训贷\"规则）。您可以随时查看或修改草案内容，确认无误后告诉我\"确认并启动调查\"即可提交执行。",
+      "artifact": {
+        "artifact_type": "investigation_draft",
+        "confirmation_preview": {
+          "blockers": [],
+          "can_confirm": true,
+          "creator_url": "",
+          "draft_id": "investigation-draft:5fbb098046e5454cb5386527f8f7b248",
+          "draft_revision": 1,
+          "max_notes": 1,
+          "mode": "search",
+          "objective": "在小红书平台搜索招聘诈骗相关内容，识别以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘等典型模式。",
+          "platform": "xhs",
+          "recall_plan": {
+            "enabled_main_term_count": 0,
+            "enabled_main_terms": [],
+            "lexicon_id": "",
+            "lexicon_title": "",
+            "runtime_content_hash": "",
+            "source_lexicon_ids": [],
+            "strategy": "temporary_terms",
+            "temporary_terms": [
+              "招聘收费"
+            ]
+          },
+          "resolved_search_terms": [
+            "招聘收费"
+          ],
+          "ruleset_revision": null,
+          "temporary_ruleset": {
+            "content": {
+              "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+              "categories": [
+                {
+                  "category_id": "recruitment_fee",
+                  "description": "以各种名义在入职前向求职者收取费用",
+                  "name": "入职前收费",
+                  "order": 0,
+                  "rules": [
+                    {
+                      "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                      "name": "入职前要求缴纳费用",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "pre_employment_fee",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                      "name": "培训贷",
+                      "order": 1,
+                      "rule_exemptions": [],
+                      "rule_id": "training_loan",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                      "name": "以安排工作为由收取培训费或培训贷",
+                      "order": 2,
+                      "rule_exemptions": [],
+                      "rule_id": "job_arrangement_training_fee",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "pyramid_recruitment",
+                  "description": "以招聘为名进行传销或拉人头式诈骗",
+                  "name": "传销式招聘",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                      "name": "拉人头式传销招聘",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "pyramid_scheme_recruitment",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "fake_high_salary",
+                  "description": "以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息",
+                  "name": "虚假高薪诱饵",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                      "name": "无门槛虚假高薪",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "fake_high_salary_no_barrier",
+                      "source_mappings": [],
+                      "suggested_risk_level": "medium"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "sensitive_info_collection",
+                  "description": "以招聘为名收集求职者敏感个人信息",
+                  "name": "骗取敏感个人信息",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                      "name": "入职前索要敏感个人信息",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "sensitive_info_collection",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                }
+              ],
+              "domain": "recruitment_fraud",
+              "general_exemptions": [],
+              "name": "招聘诈骗风险规则集",
+              "schema_version": 0
+            },
+            "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+            "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+            "proposal_version": 2,
+            "strategy": "temporary_ruleset"
+          },
+          "title": "小红书招聘诈骗调查"
+        },
+        "draft": {
+          "configuration": {
+            "investigation": {
+              "mode": "search",
+              "recall_plan": {
+                "source_lexicon_ids": [],
+                "strategy": "temporary_terms",
+                "terms": [
+                  "招聘收费"
+                ]
+              }
+            },
+            "judgement": {
+              "content": {
+                "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+                "categories": [
+                  {
+                    "category_id": "recruitment_fee",
+                    "description": "以各种名义在入职前向求职者收取费用",
+                    "name": "入职前收费",
+                    "order": 0,
+                    "rules": [
+                      {
+                        "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                        "name": "入职前要求缴纳费用",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "pre_employment_fee",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      },
+                      {
+                        "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                        "name": "培训贷",
+                        "order": 1,
+                        "rule_exemptions": [],
+                        "rule_id": "training_loan",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      },
+                      {
+                        "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                        "name": "以安排工作为由收取培训费或培训贷",
+                        "order": 2,
+                        "rule_exemptions": [],
+                        "rule_id": "job_arrangement_training_fee",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "pyramid_recruitment",
+                    "description": "以招聘为名进行传销或拉人头式诈骗",
+                    "name": "传销式招聘",
+                    "order": 1,
+                    "rules": [
+                      {
+                        "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                        "name": "拉人头式传销招聘",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "pyramid_scheme_recruitment",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "fake_high_salary",
+                    "description": "以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息",
+                    "name": "虚假高薪诱饵",
+                    "order": 2,
+                    "rules": [
+                      {
+                        "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                        "name": "无门槛虚假高薪",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "fake_high_salary_no_barrier",
+                        "source_mappings": [],
+                        "suggested_risk_level": "medium"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "sensitive_info_collection",
+                    "description": "以招聘为名收集求职者敏感个人信息",
+                    "name": "骗取敏感个人信息",
+                    "order": 3,
+                    "rules": [
+                      {
+                        "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                        "name": "入职前索要敏感个人信息",
+                        "order": 0,
+                        "rule_exemptions": [],
+                        "rule_id": "sensitive_info_collection",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  }
+                ],
+                "domain": "recruitment_fraud",
+                "general_exemptions": [],
+                "name": "招聘诈骗风险规则集",
+                "schema_version": 0
+              },
+              "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+              "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+              "proposal_version": 2,
+              "strategy": "temporary_ruleset"
+            },
+            "platform": "xhs",
+            "schema_version": "investigation-draft-config-v4"
+          },
+          "confirmed_at": "",
+          "confirmed_revision": null,
+          "created_at": "2026-09-08T04:24:35.380942+00:00",
+          "current_revision": 1,
+          "id": "investigation-draft:5fbb098046e5454cb5386527f8f7b248",
+          "objective": "在小红书平台搜索招聘诈骗相关内容，识别以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘等典型模式。",
+          "status": "DRAFT",
+          "title": "小红书招聘诈骗调查",
+          "updated_at": "2026-09-08T04:24:35.380942+00:00"
+        },
+        "draft_id": "investigation-draft:5fbb098046e5454cb5386527f8f7b248",
+        "draft_revision": 1,
+        "presentation_stage": "suggestion",
+        "proposal_presentations": [],
+        "suggestion": {
+          "creator_url": "",
+          "mode": "search",
+          "objective": "在小红书平台搜索招聘诈骗相关内容，识别以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘等典型模式。",
+          "platform_options": [
+            {
+              "available": true,
+              "id": "dy",
+              "name": "抖音"
+            },
+            {
+              "available": true,
+              "id": "xhs",
+              "name": "小红书"
+            },
+            {
+              "available": true,
+              "id": "ks",
+              "name": "快手"
+            }
+          ],
+          "recall_lexicons": [],
+          "ruleset_revision": null,
+          "search_terms": [
+            "招聘收费"
+          ],
+          "selected_platform": "xhs",
+          "temporary_ruleset": {
+            "content": {
+              "audit_goal": "识别小红书平台上以招聘为名实施诈骗的风险内容，包括入职前收费、培训贷、传销式招聘、虚假高薪诱饵、收集敏感个人信息等典型招聘诈骗行为，保护求职者免受财产损失和信息泄露。",
+              "categories": [
+                {
+                  "category_id": "recruitment_fee",
+                  "description": "以各种名义在入职前向求职者收取费用",
+                  "name": "入职前收费",
+                  "order": 0,
+                  "rules": [
+                    {
+                      "adjudication_notes": "凡在入职/上岗前以任何名义要求求职者缴纳费用的内容均应判定为招聘诈骗高风险。常见话术包括：培训费、服装费、押金、保证金、体检费（指定医院）、工牌费、建档费等。无论金额大小、是否承诺退还，只要存在先缴费后入职的要求即命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中出现以招聘/入职/上岗为前提，要求求职者预先缴纳任何费用（包括但不限于培训费、服装费、押金、保证金、体检费、工牌费、建档费、材料费等），无论金额大小或是否承诺退还。",
+                      "name": "入职前要求缴纳费用",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "pre_employment_fee",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "培训贷是招聘诈骗的高危变种，通常以'先培训后上岗''带薪培训'为幌子，诱导求职者签署贷款协议。即使内容未直接出现'贷款'字样，只要存在自费培训+分期/缴费组合即命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘为名要求求职者参加付费培训，并通过贷款、分期付款、借贷平台等方式支付培训费用，或暗示培训费用需自行承担且金额较高。常见表述：先培训后上岗、带薪培训但需自付培训费、培训分期等。",
+                      "name": "培训贷",
+                      "order": 1,
+                      "rule_exemptions": [],
+                      "rule_id": "training_loan",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    },
+                    {
+                      "adjudication_notes": "以安排工作为诱饵要求求职者先交培训费或办理培训贷是典型的招聘诈骗模式。核心特征是承诺安排工作/就业，但前提是求职者必须先支付培训费用或办理培训贷款。无论培训内容是否真实、是否承诺包就业，只要存在'先付费后安排工作'的模式即命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中承诺为求职者安排工作/就业/上岗，但要求求职者先支付培训费用或办理培训贷款。典型话术：包就业培训、先培训后安排工作、交培训费包分配、培训后保证上岗等。",
+                      "name": "以安排工作为由收取培训费或培训贷",
+                      "order": 2,
+                      "rule_exemptions": [],
+                      "rule_id": "job_arrangement_training_fee",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "pyramid_recruitment",
+                  "description": "以招聘为名进行传销或拉人头式诈骗",
+                  "name": "传销式招聘",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "adjudication_notes": "传销式招聘核心特征是收入来源于发展下线而非实际劳动。只要内容中体现'招人赚钱''拉人提成''团队裂变'等模式即命中，无论是否使用'创业''合伙'等包装话术。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中的招聘/赚钱模式以发展下线、拉人入伙为主要收入来源，而非提供实际劳动或服务。典型特征：按人头提成、团队计酬、层级返利、需要发展成员才能获得收入、入门费+拉人奖励模式。常见话术：招人赚钱、拉人提成、团队裂变、人脉变现等。",
+                      "name": "拉人头式传销招聘",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "pyramid_scheme_recruitment",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "fake_high_salary",
+                  "description": "以不切实际的高薪为诱饵吸引求职者，实际目的为收费或骗取信息",
+                  "name": "虚假高薪诱饵",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "adjudication_notes": "当薪资承诺明显超出市场合理水平且无对应门槛要求时，高度疑似诈骗诱饵。需同时满足'高薪'和'低门槛'两个条件。若内容同时出现入职前收费则直接由收费规则命中，本规则侧重识别诱饵阶段。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中承诺的薪资明显超出该岗位市场合理水平（如日薪过千、月入数万等），同时几乎无学历、经验、技能等门槛要求，且未说明合理的高薪来源。典型表述：零基础日入500+、不限经验月入3万、轻松高薪等。",
+                      "name": "无门槛虚假高薪",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "fake_high_salary_no_barrier",
+                      "source_mappings": [],
+                      "suggested_risk_level": "medium"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "sensitive_info_collection",
+                  "description": "以招聘为名收集求职者敏感个人信息",
+                  "name": "骗取敏感个人信息",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正常招聘流程不需要求职者提供银行卡密码、网银信息、身份证原件照片等高度敏感信息。凡在面试/入职前要求提供此类信息的内容均应判定为风险。注意区分：正常入职可能需要身份证号和银行卡号用于发薪，但不应在面试前或入职前索要密码类信息。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘/入职/办理手续为由，要求求职者提供银行卡密码、网银登录信息、身份证正反面照片、手持身份证照片、手机验证码等与岗位无关的敏感个人信息，尤其是在面试前或入职前阶段索要。",
+                      "name": "入职前索要敏感个人信息",
+                      "order": 0,
+                      "rule_exemptions": [],
+                      "rule_id": "sensitive_info_collection",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                }
+              ],
+              "domain": "recruitment_fraud",
+              "general_exemptions": [],
+              "name": "招聘诈骗风险规则集",
+              "schema_version": 0
+            },
+            "content_hash": "076ce6955892a31102136fb89f11b56fbbbf90a910fad0328168a0efacbfb969",
+            "proposal_id": "ruleset-proposal:52a0eb59bd984f209d74a9ff471521be",
+            "proposal_version": 2,
+            "strategy": "temporary_ruleset"
+          },
+          "title": "小红书招聘诈骗调查"
+        }
+      }
+    }
+  ],
+  "scope": "Real Qwen A authoring; HTTP Confirm; real Worker, AuditPipeline, crawler and providers. B-D use controlled durable T4B setup; no scripted execution.",
+  "failure_type": "AssertionError"
+}

@@ -95,17 +95,42 @@ class AuditPipeline:
     def authoritative_provider_validator(configuration: dict) -> None:
         QwenClient.validate_authoritative_configuration(configuration)
 
+    def _verified_m3_snapshot(self):
+        validator = getattr(self, "_m3_snapshot_validator", None)
+        if callable(validator):
+            return validator()
+        if not self.job_id.startswith("m3-"):
+            return None
+        # Direct Job resume must pass the same Run/Job/revision boundary as Worker.
+        from backend.investigation_creation.store import InvestigationCreationStore
+        from backend.investigation_creation.adapters import AuditPipelineExecutionAdapter
+        run = InvestigationCreationStore().get_run_for_job(self.job_id)
+        if run is None:
+            raise ValueError("M3 Job has no authoritative frozen Run")
+        if run.confirmed_configuration.get("schema_version") not in {"investigation-run-config-v3", "investigation-run-config-v4"}:
+            return None
+        adapter = AuditPipelineExecutionAdapter()
+        configuration = adapter.verify_run_job(run)
+        adapter.validate_m3_configuration(configuration)
+        return configuration
+
     def run(self, request) -> None:
         try:
             job_store.update(self.job_id, status="running")
             job_store.log(self.job_id, "开始任务")
             job_snapshot = job_store.get(self.job_id) or {}
-            self.audit_config_revision_id = str(job_snapshot.get("current_audit_config_revision_id") or "")
-            self.rule_snapshot = self._rule_snapshot_from_source(job_snapshot or request)
-            self._set_prompt_context(
-                self._prompt_category_from_source(request),
-                self._prompt_profile_from_source(request),
-            )
+            verified = self._verified_m3_snapshot()
+            if verified is not None:
+                from types import SimpleNamespace
+                request = SimpleNamespace(**{**verified, "_authoritative_m3_contract": True,
+                    "_confirmed_analyze_limit": verified["analyze_limit"]})
+                self.audit_config_revision_id = verified["_verified_audit_config_revision_id"]
+                self.rule_snapshot = verified["rule_snapshot"]
+                self._set_prompt_context(self._prompt_category_from_source(request), verified["prompt_profile_snapshot"])
+            else:
+                self.audit_config_revision_id = str(job_snapshot.get("current_audit_config_revision_id") or "")
+                self.rule_snapshot = self._rule_snapshot_from_source(job_snapshot or request)
+                self._set_prompt_context(self._prompt_category_from_source(request), self._prompt_profile_from_source(request))
 
             def control() -> dict:
                 return job_store.control(self.job_id)
@@ -817,6 +842,12 @@ class AuditPipeline:
             job = job_store.get(self.job_id)
             if not job:
                 return
+            verified = self._verified_m3_snapshot()
+            if verified is not None:
+                job = {**job, **verified, "current_audit_config_revision_id": verified["_verified_audit_config_revision_id"]}
+                analyze_limit = verified["analyze_limit"]
+                analysis_batch_size = verified["analysis_batch_size"]
+                self.authoritative_m3 = True
             platform = str(job.get("platform") or "xhs")
             source_root = self._resume_source_root(job)
             refs = self.ingestion.pending_for_task(self.job_id, limit=max(0, analyze_limit))
