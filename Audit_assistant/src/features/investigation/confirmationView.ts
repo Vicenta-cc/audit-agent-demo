@@ -27,7 +27,7 @@ export function buildConfirmationCardView(
       : (preview?.resolved_search_terms || draft.keywords).join("、"),
     ruleSet: preview?.ruleset_revision
       ? preview.ruleset_revision.name
-      : "尚未绑定",
+      : preview?.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : "尚未绑定",
     recallStrategy: preview?.mode === "creator"
       ? "主页模式不使用召回词"
       : preview?.recall_plan.strategy === "temporary_terms"
@@ -57,6 +57,9 @@ export function parseInvestigationSearchTerms(value: string) {
 }
 
 export function formatConfirmationBlockerMessage(code: string, message: string) {
+  if (code === "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE") {
+    return "本次使用临时规则，暂不支持启动调查。";
+  }
   if (code === "NO_PUBLISHED_RULESET") {
     return "当前还没有匹配的已发布研判规则，配置后即可继续。";
   }

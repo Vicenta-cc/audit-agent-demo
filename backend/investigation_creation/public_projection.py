@@ -16,6 +16,7 @@ from .contracts import (
     RunStatus,
     StrictModel,
     TemporaryRuleSetProposal,
+    TemporaryRuleSetJudgement,
 )
 
 
@@ -61,10 +62,13 @@ class InvestigationDraftSuggestion(StrictModel):
     selected_platform: Platform
     search_terms: list[str] = Field(default_factory=list)
     ruleset_revision: RuleSetRevisionSummary | None = None
+    temporary_ruleset: TemporaryRuleSetJudgement | None = None
     recall_lexicons: list[RecallLexiconSummary] = Field(default_factory=list)
 
 
 class ProposalPresentation(StrictModel):
+    # Legacy records remain readable; absent identity never permits adoption.
+    presentation_id: str | None = None
     session_id: str
     source_user_turn_id: str
     source_user_message_id: str
@@ -196,6 +200,7 @@ def draft_artifact(
             selected_platform=preview.platform,
             search_terms=list(preview.resolved_search_terms),
             ruleset_revision=preview.ruleset_revision,
+            temporary_ruleset=preview.temporary_ruleset,
             recall_lexicons=[
                 lexicon
                 for lexicon in options.recall_lexicons

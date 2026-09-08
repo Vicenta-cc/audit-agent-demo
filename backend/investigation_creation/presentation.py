@@ -1,5 +1,7 @@
 """Deterministic Proposal text and evidence for the existing conversation message."""
 
+import hashlib
+import json
 from typing import Any
 
 from backend.rulesets.compiler import content_hash
@@ -52,7 +54,7 @@ def message_presentations(snapshots: list[dict[str, Any]], *, session_id: str,
         proposal = TemporaryRuleSetProposal.model_validate(snapshot)
         if proposal.session_id != session_id or content_hash(proposal.content) != proposal.content_hash:
             raise ValueError("Proposal presentation identity mismatch")
-        records.append({
+        record = {
             "session_id": session_id, "source_user_turn_id": turn_id,
             "source_user_message_id": user_message_id,
             "assistant_message_id": assistant_message_id, "presented_at": presented_at,
@@ -62,5 +64,9 @@ def message_presentations(snapshots: list[dict[str, Any]], *, session_id: str,
             "presentation_format": "ruleset-proposal-text-v1",
             "text": render_proposal(proposal),
             "boundary": "durable_public_assistant_message",
-        })
+        }
+        record["presentation_id"] = "ruleset-presentation:" + hashlib.sha256(
+            json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        records.append(record)
     return records

@@ -3082,6 +3082,7 @@ def test_hermes_creation_product_mode_registers_only_m3_application_tools():
         assert os.environ["HERMES_INVESTIGATION_TASK_MODE"] == "0"
         register_hermes_plugin(context)
     assert context.names == [
+        "use_ruleset_proposal",
         "query_investigation_options",
         "create_investigation_draft",
         "update_investigation_draft",

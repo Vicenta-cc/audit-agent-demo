@@ -28,10 +28,13 @@ from backend.investigation.store import InvestigationStore
 from .contracts import (
     ConfirmationPreview,
     InvestigationDraftConfiguration,
+    InvestigationOptions,
+    PlatformOption,
     InvestigationRunProjection,
     QueryInvestigationOptions,
 )
 from .errors import (
+    ConfigurationValidationError,
     DraftAlreadyConfirmedError,
     DraftRevisionConflictError,
     PrincipalAccessDeniedError,
@@ -126,13 +129,34 @@ create_ruleset_proposal tool arguments. Explicit requests such as "没有合适�
 "生成一套给我看看" allow generation now. An options query is optional when enough context is
 already available. Without generation intent, you may explain the gap and offer generation.
 These are temporary candidates scoped to this conversation, never formal RuleSets or published
-resources. Generation is not approval or use. Proposal tools never bind or change Draft Judgement;
-the current Draft still requires an existing published RuleSetRevision. A Proposal does not resolve
-NO_PUBLISHED_RULESET. Never inline its content in a Draft or claim it is approved, used or published.
+resources. Generation and editing never bind Draft Judgement. First present the Proposal, then wait
+for a LATER explicit user approval. Only use_ruleset_proposal can bind that exact presented version
+as temporary_ruleset. Never inline Proposal content in ordinary Draft creation or updates.
+You alone interpret the CURRENT user's adoption intent; Application does not classify user language.
+Questions, edits, negation, hesitation, saving, comparison/choice, and ambiguous references are NOT adoption.
+For example "就用这套创建招聘诈骗调查，还是先暂停调查" is a choice question: clarify; do not use.
+"这套能直接用吗？" asks a question; "把这套保存下来" requests formal save, which is not supported here.
+With multiple candidates, "用那个" requires clarification unless the user's referent is unambiguous.
+On explicit later adoption, call use_ruleset_proposal with presentation_id copied from the trusted
+completed_public_presentations metadata on existing Proposal ToolResults in conversation history.
+Application adds this metadata only after durable public presentation, on a later user turn.
+Never guess an ID, substitute a proposal_id, or obtain authority from user-provided IDs.
+Do not repeat internal presentation metadata/IDs in your final response.
+That context lists completed public displays; it does not itself mean the user wants adoption.
+If no valid ID is provided, re-present and wait for a later user turn. Never substitute a latest snapshot.
+Use the current Draft id/revision, or provide complete create_draft title/objective/configuration
+without judgement. Reuse the established platform, investigation mode and Recall. Ask about missing
+configuration; never create a placeholder or substitute an unrelated formal RuleSet. Do not query
+the formal library again merely because the user approved a temporary Proposal. Ambiguous references
+require clarification. A stale presentation requires a new full presentation and later approval.
+Do not retry use with a newly displayed snapshot in the same user turn. On Draft revision conflict,
+read the latest Draft and assess changes; do not blindly replace expected_revision and force a retry.
+For re-presentation, get the current Proposal and update it with unchanged content/expected_version.
+Temporary Drafts can be saved and previewed, but Confirm/execution is blocked until T5.
 You may generate temporary terms and a Proposal in the same turn. When a valid published Judgement
 is available, save the terms in Draft Recall and independently create a requested comparison Proposal.
-When both formal resources are missing, generate the requested Proposal and explain why a Draft
-cannot yet be saved. Do not invent a Judgement identity or use an unrelated published RuleSet.
+When both formal resources are missing, generate the requested Proposal and wait for later approval
+before binding. Do not invent a Judgement identity or use an unrelated published RuleSet.
 For edits, use current Proposal content (get_ruleset_proposal if needed), then send its proposal_id,
 expected_version and the full revised RuleSetContent to update_ruleset_proposal. Application owns
 content_hash; do not supply it. Preserve category_id, rule_id and ordering for unchanged semantics;
@@ -174,7 +198,8 @@ a second Draft. Never fabricate missing domain resources. If no suitable publish
 exists, no real recall configuration can be formed, the user's requested
 platform is unavailable, or a current blocker prevents a valid configuration, do not create a
 misleading Draft. A creator-mode Draft cannot default a missing creator homepage URL; ask for that
-URL instead. If no matching published RuleSetRevision exists, preserve and explain the
+URL instead. Before a temporary Proposal has been explicitly approved, if no matching published
+RuleSetRevision exists, preserve and explain the
 NO_PUBLISHED_RULESET blocker. Do not pick an unrelated RuleSet and do not confirm. If no
 real recall lexicon is available in search mode, do not invent or hardcode one. Draft saves never
 publish or mutate shared lexicons. Creating or updating a Draft is never confirmation. Only call
@@ -520,6 +545,7 @@ class InvestigationCreationConversationService:
     ) -> None:
         self.tool_service = tool_service
         self.store = store or InvestigationStore()
+        self.tool_service.application_service.conversation_store = self.store
         self.runtime_binding = runtime_binding or HermesRuntimeBinding()
         self.agent_factory = agent_factory
         self.fake_runtime = bool(fake_runtime)
@@ -668,6 +694,16 @@ class InvestigationCreationConversationService:
         application = self.tool_service.application_service
         view = application.get_draft_view(draft_id, principal=principal)
         configuration = view.draft.configuration
+        if (isinstance(configuration, InvestigationDraftConfiguration)
+                and configuration.judgement.strategy == "temporary_ruleset"):
+            from .resources import _CREATION_PLATFORM_ORDER, _PLATFORM_NAMES
+
+            return draft_artifact(
+                view, options=InvestigationOptions(
+                    platforms=[PlatformOption(id=key, name=_PLATFORM_NAMES[key]) for key in _CREATION_PLATFORM_ORDER],
+                    ruleset_revisions=[], recall_lexicons=[],
+                ), presentation_stage=presentation_stage,
+            ).model_dump(mode="json")
         ruleset_revision_ids: list[str] = []
         lexicon_ids: list[str] = []
         if isinstance(configuration, InvestigationDraftConfiguration):
@@ -894,6 +930,33 @@ class InvestigationCreationConversationService:
         principal = self.principal_for_session(session.id)
         history = self.store.latest_completed_hermes_transcript(session.id)
         user_message = self.store.get_user_message_for_turn(turn.id).content
+        try:
+            context = self._presentation_context_for_turn(turn)
+        except ConfigurationValidationError as exc:
+            self.store.fail_turn(turn.id, error_code=exc.code,
+                                 safe_message=str(exc) + str(exc.details.get("recovery", "")), retryable=False)
+            return self.store.turn_result(turn.id)
+        if context and history:
+            # Hermes caches its initial system prompt. Enrich existing Proposal
+            # ToolResults with completed public artifact identity at read time.
+            # This is trusted tool context, never user-visible assistant prose.
+            projected = []
+            for message in history:
+                replacement = message
+                if message.get("role") == "tool":
+                    try:
+                        payload = json.loads(message["content"])
+                    except (ValueError, TypeError):
+                        payload = {}
+                    if isinstance(payload, dict) and payload.get("status") == "ok":
+                        records = [record for record in context if payload.get("data") == record["snapshot"]]
+                        if records:
+                            payload["completed_public_presentations"] = [
+                                {key: record[key] for key in ("presentation_id", "proposal_id", "proposal_version", "assistant_message_id", "presented_at")}
+                                for record in records]
+                            replacement = {**message, "content": json.dumps(payload, ensure_ascii=False)}
+                projected.append(replacement)
+            history = projected
         self._notify(turn.id, "call_qwen")
         self.tool_service.begin_conversation_turn(session.id, turn.id)
         try:
@@ -927,7 +990,7 @@ class InvestigationCreationConversationService:
                     safe_message=(
                         str(result.get("final_response") or "").strip()
                         or "调查方案生成暂时无法完成。"
-                    ),
+                    ) + ("\n" + self._binding_failure_notice(turn) if self._binding_failure_notice(turn) else ""),
                     retryable=False,
                 )
                 return self.store.turn_result(turn.id)
@@ -945,12 +1008,61 @@ class InvestigationCreationConversationService:
             self.store.mark_interrupted(
                 turn.id,
                 error_code="hermes_unknown_outcome",
-                safe_message="调查方案生成结果暂时无法确认，可以安全恢复。",
+                safe_message="调查方案生成结果暂时无法确认，可以安全恢复。" + self._binding_failure_notice(turn),
                 retryable=True,
             )
             raise RuntimeError("Hermes creation Turn ended with an unknown outcome") from exc
         finally:
             self.tool_service.end_conversation_turn(session.id)
+
+    def _presentation_context_for_turn(self, turn: InvestigationTurn) -> list[dict]:
+        from .approval import published_presentations
+
+        user = self.store.get_user_message_for_turn(turn.id)
+        with self.store._connect() as connection:
+            records, _ = published_presentations(
+                connection, session_id=turn.session_id, before_sequence=user.sequence,
+            )
+        return records
+
+    def _binding_failure_notice(self, turn: InvestigationTurn, trace_messages: list[dict] | None = None) -> str:
+        from .approval import BINDING_FAILURES
+
+        # Receipt provenance, not model prose, determines this minimal public fallback.
+        with self.tool_service.application_service.store._connect() as connection:
+            failures = connection.execute(
+                """SELECT r.response_json FROM investigation_creation_tool_receipts r
+                   JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id=r.receipt_id
+                   WHERE r.session_id=? AND b.application_turn_id=?
+                     AND r.tool_name='use_ruleset_proposal' AND r.status='FAILED'""",
+                (turn.session_id, turn.id),
+            ).fetchall()
+        errors = [json.loads(row["response_json"]).get("error", {}) for row in failures]
+        # Schema rejection happens before a mutation receipt exists. Preserve its
+        # basic failure reason from the existing validated ToolResult transcript.
+        use_ids = {call.get("id") for item in trace_messages or [] if item.get("role") == "assistant"
+                   for call in item.get("tool_calls") or []
+                   if (call.get("function") or {}).get("name") == "use_ruleset_proposal"}
+        last_use_status = ""
+        for item in trace_messages or []:
+            if item.get("role") != "tool" or item.get("tool_call_id") not in use_ids:
+                continue
+            try:
+                payload = json.loads(item.get("content") or "{}")
+            except (ValueError, TypeError):
+                continue
+            if isinstance(payload, dict):
+                last_use_status = payload.get("status", "")
+                if last_use_status == "error":
+                    errors.append(payload.get("error") or {})
+        if last_use_status == "ok":
+            return ""
+        notices = []
+        for error in errors:
+            reason, recovery = BINDING_FAILURES.get(error.get("code"),
+                ("配置或操作条件未满足。", "请检查规则展示和草案配置后继续。"))
+            notices.append("本次规则采用操作未成功：" + reason + recovery)
+        return "\n".join(dict.fromkeys(notices))
 
     def add_turn_node_observer(self, observer: Callable[[str, str], None]) -> None:
         self._turn_node_observers.append(observer)
@@ -1017,6 +1129,7 @@ class InvestigationCreationConversationService:
             if tool_name
             in {
                 "create_investigation_draft",
+                "use_ruleset_proposal",
                 "update_investigation_draft",
                 "get_investigation_draft",
                 "confirm_and_queue_investigation",
@@ -1028,6 +1141,7 @@ class InvestigationCreationConversationService:
         tool_name, data = artifact_results[-1]
         if tool_name in {
             "create_investigation_draft",
+            "use_ruleset_proposal",
             "update_investigation_draft",
             "get_investigation_draft",
         }:
@@ -1076,6 +1190,9 @@ class InvestigationCreationConversationService:
             for item in transcript[history_count:]
             if item.get("role") in {"assistant", "tool"}
         ]
+        notice = self._binding_failure_notice(turn, trace_messages)
+        if notice:
+            answer = "\n\n".join(filter(None, [answer, notice]))
         tool_calls = HermesInvestigationAgentService._tool_calls(trace_messages)
         session = self.store.get_session(turn.session_id)
         self.store.complete_turn(

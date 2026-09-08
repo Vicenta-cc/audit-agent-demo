@@ -10,6 +10,8 @@ from uuid import uuid4
 
 from backend.audit_agent.config import settings
 from backend.rulesets.contracts import RuleSetContent
+from backend.rulesets.compiler import content_hash as ruleset_content_hash
+from .approval import UseRuleSetProposalInput, reject, resolve_approval
 
 from .contracts import (
     ConfirmationResolution,
@@ -20,6 +22,8 @@ from .contracts import (
     DraftStatus,
     InvestigationConfiguration,
     InvestigationDraft,
+    InvestigationDraftConfiguration,
+    TemporaryRuleSetJudgement,
     InvestigationRun,
     ReportGenerationBinding,
     RunStatus,
@@ -97,6 +101,20 @@ class InvestigationCreationStore:
                     content_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS ruleset_proposal_approvals (
+                    approval_id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    approving_user_turn_id TEXT NOT NULL,
+                    approving_user_message_id TEXT NOT NULL,
+                    presentation_assistant_message_id TEXT NOT NULL,
+                    proposal_id TEXT NOT NULL,
+                    proposal_version INTEGER NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    draft_id TEXT NOT NULL REFERENCES investigation_drafts(id),
+                    draft_revision INTEGER NOT NULL,
+                    approved_at TEXT NOT NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS investigation_draft_revisions (
@@ -204,6 +222,9 @@ class InvestigationCreationStore:
         # both observe and alter the same missing column.
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            self._ensure_column(connection, "ruleset_proposal_approvals", "presentation_id", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(connection, "ruleset_proposal_approvals", "tool_call_id", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(connection, "ruleset_proposal_approvals", "runtime_turn_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(
                 connection,
                 "investigation_drafts",
@@ -603,6 +624,116 @@ class InvestigationCreationStore:
         payload["content"] = json.loads(payload.pop("content_json"))
         return TemporaryRuleSetProposal.model_validate(payload)
 
+    @staticmethod
+    def protect_temporary_judgement(configuration: DraftConfiguration,
+                                    previous: DraftConfiguration | None = None) -> None:
+        judgement = getattr(configuration, "judgement", None)
+        if isinstance(judgement, TemporaryRuleSetJudgement):
+            if judgement != getattr(previous, "judgement", None):
+                reject("PROPOSAL_APPROVAL_REQUIRED", "Temporary judgement can only be bound by use_ruleset_proposal.")
+
+    def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str,
+                            turn_id: str, tool_call_id: str, runtime_turn_id: str, principal: str, conversation_db: Path,
+                            normalize: Callable) -> InvestigationDraft:
+        command = UseRuleSetProposalInput.model_validate(command.model_dump(mode="json"))
+        with self._connect() as connection:
+            # Lock both existing SQLite stores before reading the approval basis.
+            connection.execute("ATTACH DATABASE ? AS conversation", (str(conversation_db),))
+            connection.execute("BEGIN IMMEDIATE")
+            approval = resolve_approval(connection, session_id=session_id, turn_id=turn_id,
+                                        principal=principal, presentation_id=command.presentation_id)
+            presented = approval["presentation"]
+            try:
+                proposal = self._owned_proposal(connection, presented["proposal_id"], session_id)
+            except ProposalNotFoundError:
+                reject("PROPOSAL_NOT_PRESENTED")
+            except (ValueError, TypeError, KeyError):
+                reject("INVALID_PROPOSAL_PRESENTATION")
+            if (proposal.version != presented["proposal_version"]
+                    or proposal.content_hash != presented["content_hash"]
+                    or ruleset_content_hash(proposal.content) != proposal.content_hash
+                    or proposal.content.model_dump(mode="json") != presented["snapshot"]["content"]):
+                reject("PROPOSAL_PRESENTATION_STALE",
+                       "Proposal changed. Present the latest complete Proposal and wait for new explicit approval.")
+            judgement = TemporaryRuleSetJudgement(
+                strategy="temporary_ruleset", proposal_id=proposal.proposal_id,
+                proposal_version=proposal.version, content_hash=proposal.content_hash,
+                content=proposal.content,
+            )
+            now = self._now_text()
+            if command.draft_id:
+                try:
+                    row = self._owned_draft_row(connection, command.draft_id, principal)
+                except (DraftNotFoundError, PrincipalAccessDeniedError):
+                    reject("DRAFT_NOT_AUTHORIZED")
+                draft = self._draft(row)
+                if draft.status != DraftStatus.DRAFT:
+                    reject("DRAFT_NOT_EDITABLE")
+                if draft.current_revision != command.expected_revision:
+                    reject("DRAFT_REVISION_STALE")
+                if getattr(draft.configuration, "judgement", None) == judgement:
+                    return draft
+                if not isinstance(draft.configuration, InvestigationDraftConfiguration):
+                    reject("CONFIGURATION_INVALID", "Proposal approval requires a v4 Draft configuration.")
+                configuration = draft.configuration.model_copy(update={"judgement": judgement})
+                draft_id, revision = draft.id, draft.current_revision + 1
+                title, objective = draft.title, draft.objective
+            else:
+                previous_approval = connection.execute(
+                    "SELECT draft_id FROM ruleset_proposal_approvals WHERE session_id=? ORDER BY rowid DESC LIMIT 1",
+                    (session_id,),
+                ).fetchone()
+                existing_id = approval["current_draft_id"] or (previous_approval["draft_id"] if previous_approval else "")
+                if existing_id:
+                    existing = self._owned_draft_row(connection, existing_id, principal)
+                    reject("DRAFT_TARGET_REQUIRED", "Use the existing Draft with its expected revision.",
+                           draft_id=existing_id, expected_revision=existing["current_revision"])
+                creation = command.create_draft
+                configuration = InvestigationDraftConfiguration(
+                    **creation.configuration.model_dump(mode="json"), judgement=judgement,
+                )
+                draft_id, revision = f"investigation-draft:{uuid4().hex}", 1
+                title, objective = creation.title, creation.objective
+            configuration = normalize(configuration, previous=draft.configuration if command.draft_id else None)
+            if (configuration.investigation.mode == "search"
+                    and not (getattr(configuration.investigation.recall_plan, "terms", None)
+                             or getattr(configuration.investigation.recall_plan, "enabled_main_terms", None))):
+                reject("CONFIGURATION_INVALID", "Complete Recall configuration before adopting the Proposal.")
+            payload = self._json(configuration.model_dump(mode="json"))
+            if command.draft_id:
+                connection.execute(
+                    """UPDATE investigation_drafts SET configuration_json=?, current_revision=?,
+                       updated_by=?, updated_at=? WHERE id=?""",
+                    (payload, revision, principal, now, draft_id),
+                )
+            else:
+                connection.execute(
+                    """INSERT INTO investigation_drafts
+                       (id, owner_principal, status, current_revision, title, objective,
+                        configuration_json, created_by, updated_by, created_at, updated_at)
+                       VALUES (?, ?, 'DRAFT', 1, ?, ?, ?, ?, ?, ?, ?)""",
+                    (draft_id, principal, title, objective, payload, principal, principal, now, now),
+                )
+            connection.execute(
+                """INSERT INTO investigation_draft_revisions
+                   (draft_id, revision, title, objective, configuration_json, created_by, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (draft_id, revision, title, objective, payload, principal, now),
+            )
+            connection.execute(
+                """INSERT INTO ruleset_proposal_approvals
+                   (approval_id, session_id, approving_user_turn_id, approving_user_message_id,
+                    presentation_assistant_message_id, proposal_id, proposal_version, content_hash,
+                    draft_id, draft_revision, approved_at, presentation_id, tool_call_id, runtime_turn_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (f"proposal-approval:{uuid4().hex}", session_id, approval["approving_user_turn_id"],
+                 approval["approving_user_message_id"], presented["assistant_message_id"],
+                 proposal.proposal_id, proposal.version, proposal.content_hash, draft_id, revision, now,
+                 presented["presentation_id"], tool_call_id, runtime_turn_id),
+            )
+            result = self._draft(self._owned_draft_row(connection, draft_id, principal))
+        return result
+
     def create_draft(
         self,
         *,
@@ -611,6 +742,7 @@ class InvestigationCreationStore:
         objective: str,
         configuration: DraftConfiguration,
     ) -> InvestigationDraft:
+        self.protect_temporary_judgement(configuration)
         draft_id = f"investigation-draft:{uuid4().hex}"
         now = self._now_text()
         configuration_json = self._json(configuration.model_dump(mode="json"))
@@ -660,6 +792,8 @@ class InvestigationCreationStore:
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = self._owned_draft_row(connection, draft_id, principal)
+            if configuration is not None:
+                self.protect_temporary_judgement(configuration, self._draft(row).configuration)
             if str(row["status"]) != DraftStatus.DRAFT.value:
                 raise DraftAlreadyConfirmedError(draft_id)
             current_revision = int(row["current_revision"])
@@ -752,6 +886,8 @@ class InvestigationCreationStore:
                 return self._run(replay)
 
             draft = self._owned_draft_row(connection, draft_id, principal)
+            if isinstance(getattr(self._draft(draft).configuration, "judgement", None), TemporaryRuleSetJudgement):
+                reject("TEMPORARY_RULESET_EXECUTION_UNAVAILABLE", "Temporary RuleSet execution is not connected until T5.")
             current_revision = int(draft["current_revision"])
             if current_revision != expected_revision:
                 raise DraftRevisionConflictError(

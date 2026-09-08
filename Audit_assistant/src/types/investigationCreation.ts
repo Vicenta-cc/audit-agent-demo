@@ -46,6 +46,20 @@ export interface RecallLexiconSummary {
   available: boolean;
 }
 
+export interface TemporaryRuleSetJudgement {
+  strategy: "temporary_ruleset";
+  proposal_id: string;
+  proposal_version: number;
+  content_hash: string;
+  content: {
+    name: string;
+    domain: string;
+    audit_goal: string;
+    categories: { rules: { enabled: boolean; [key: string]: unknown }[]; [key: string]: unknown }[];
+    [key: string]: unknown;
+  };
+}
+
 export interface InvestigationDraftSuggestion {
   title: string;
   objective: string;
@@ -55,6 +69,7 @@ export interface InvestigationDraftSuggestion {
   selected_platform: InvestigationCreationPlatform;
   search_terms: string[];
   ruleset_revision: RuleSetRevisionSummary | null;
+  temporary_ruleset?: TemporaryRuleSetJudgement | null;
   recall_lexicons: RecallLexiconSummary[];
 }
 
@@ -78,7 +93,7 @@ export interface InvestigationDraftConfiguration {
             };
       }
     | { mode: "creator"; creator_url: string };
-  judgement: {
+  judgement: TemporaryRuleSetJudgement | {
     strategy: "existing_ruleset";
     ruleset_revision_id: string;
     expected_ruleset_version: number;
@@ -118,6 +133,7 @@ export interface ConfirmationPreview {
     source_lexicon_ids: string[];
   };
   ruleset_revision: RuleSetRevisionSummary | null;
+  temporary_ruleset?: TemporaryRuleSetJudgement | null;
   max_notes: 1;
   blockers: InvestigationBlocker[];
   can_confirm: boolean;
@@ -184,7 +200,7 @@ export type InvestigationConversationArtifact = (
   | InvestigationDraftArtifact
   | InvestigationRunArtifact
   | { artifact_type: "ruleset_proposal_presentation" }
-) & { proposal_presentations?: { assistant_message_id: string; text: string }[] };
+) & { proposal_presentations?: { presentation_id?: string | null; assistant_message_id: string; text: string }[] };
 
 export interface InvestigationWorkspaceSession {
   workspace_session_id: string;

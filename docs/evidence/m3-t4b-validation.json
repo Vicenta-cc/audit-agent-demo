@@ -1,0 +1,102 @@
+{
+  "baseline": {
+    "stats": {
+      "startTime": "2026-09-07T11:56:34.966Z",
+      "duration": 8488.978000000001,
+      "expected": 38,
+      "skipped": 0,
+      "unexpected": 5,
+      "flaky": 0
+    },
+    "failures": [
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "renders real Draft and ConfirmationPreview fields"
+      },
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "real analysis-plan drawer projects public resources without mock rule details"
+      },
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "blockers disable confirmation and expose the management URL"
+      },
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "creation diagnostics fail closed into user-facing copy"
+      },
+      {
+        "file": "investigationPresentation.spec.ts",
+        "title": "creation presentation hides internal diagnostics and keeps real management navigation"
+      }
+    ],
+    "errors": []
+  },
+  "current": {
+    "stats": {
+      "startTime": "2026-09-07T12:03:38.841Z",
+      "duration": 11528.018,
+      "expected": 43,
+      "skipped": 0,
+      "unexpected": 5,
+      "flaky": 0
+    },
+    "failures": [
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "renders real Draft and ConfirmationPreview fields"
+      },
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "real analysis-plan drawer projects public resources without mock rule details"
+      },
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "blockers disable confirmation and expose the management URL"
+      },
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "creation diagnostics fail closed into user-facing copy"
+      },
+      {
+        "file": "investigationPresentation.spec.ts",
+        "title": "creation presentation hides internal diagnostics and keeps real management navigation"
+      }
+    ],
+    "errors": []
+  },
+  "baseline_commit": "d418d5059007d072dc6eef597b27b8099b20fb25",
+  "identical_frontend_failures": true,
+  "pytest": {
+    "focused_t4b_t4a_t3_m3": {
+      "passed": 342,
+      "subtests_passed": 22
+    },
+    "full": {
+      "passed": 872,
+      "skipped": 24,
+      "subtests_passed": 66
+    },
+    "compiler_m1_m2": {
+      "passed": 188,
+      "skipped": 7,
+      "subtests_passed": 19
+    },
+    "t4b_cases": 50
+  },
+  "typescript": "passed",
+  "real_qwen": {
+    "runs": 2,
+    "passed": true,
+    "verified_evidence": "m3-t4b-qwen-acceptance-verified.json",
+    "stale_controlled": "PROPOSAL_PRESENTATION_STALE",
+    "run_count": 0,
+    "job_count": 0,
+    "report_count": 0,
+    "formal_resource_mutation": false
+  },
+  "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/bin/python",
+  "status": "HISTORICAL_PRE_CORRECTION",
+  "superseded_by": "m3-t4b-semantics-validation.json",
+  "note": "These original regex-based T4B results are historical. They do not validate the corrected approval semantics."
+}

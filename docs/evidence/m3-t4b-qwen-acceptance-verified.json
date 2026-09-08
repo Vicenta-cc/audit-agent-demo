@@ -1,0 +1,2857 @@
+{
+  "model": "qwen3.7-plus",
+  "cases": [
+    {
+      "label": "generate",
+      "message": "帮我调查招聘诈骗，如果没有合适的规则，就生成一套给我看看。",
+      "session_id": "investigation-session:8ed83d0f7fc7406298efda51c7a7f808",
+      "turn_id": "investigation-turn:647c071dd9584d9096cca0480a582235",
+      "status": "completed",
+      "events": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "domain_hint": "招聘诈骗",
+            "mode": "search"
+          },
+          "result": {
+            "status": "ok",
+            "data": {
+              "platforms": [
+                {
+                  "id": "dy",
+                  "name": "抖音",
+                  "available": true
+                },
+                {
+                  "id": "xhs",
+                  "name": "小红书",
+                  "available": true
+                },
+                {
+                  "id": "ks",
+                  "name": "快手",
+                  "available": true
+                }
+              ],
+              "ruleset_revisions": [
+                {
+                  "id": "ruleset-revision:gambling:v2",
+                  "ruleset_id": "ruleset.gambling",
+                  "name": "赌博博彩风险规则集",
+                  "domain": "gambling",
+                  "version": 2,
+                  "content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc",
+                  "enabled_rule_count": 7,
+                  "available": true
+                }
+              ],
+              "ruleset_revision_details": [],
+              "recall_lexicons": [
+                {
+                  "id": "recruitment-fraud",
+                  "title": "招聘诈骗召回词库",
+                  "risk_label": "招聘诈骗",
+                  "enabled_main_term_count": 3,
+                  "runtime_content_hash": "8be9cb896265edfff8012ee24725661a94b0af418065e9bb040c9011fe53a345",
+                  "enabled_main_terms": [],
+                  "enabled_main_terms_returned": 0,
+                  "terms_included": false,
+                  "terms_truncated": false,
+                  "available": true
+                },
+                {
+                  "id": "fraud",
+                  "title": "涉诈话术词库",
+                  "risk_label": "诈骗",
+                  "enabled_main_term_count": 3,
+                  "runtime_content_hash": "75df025e23a08d8e390fc12475f5c6ff20af42d1586f5f660d8e4c642c8fa66c",
+                  "enabled_main_terms": [],
+                  "enabled_main_terms_returned": 0,
+                  "terms_included": false,
+                  "terms_truncated": false,
+                  "available": true
+                },
+                {
+                  "id": "terror",
+                  "title": "暴恐风险知识包",
+                  "risk_label": "暴恐",
+                  "enabled_main_term_count": 3,
+                  "runtime_content_hash": "707c9e501c1ad94a4ef096743079f6664cd8f8accb2988e312ee3a8228891325",
+                  "enabled_main_terms": [],
+                  "enabled_main_terms_returned": 0,
+                  "terms_included": false,
+                  "terms_truncated": false,
+                  "available": true
+                },
+                {
+                  "id": "hate",
+                  "title": "民族意识形态风险知识包",
+                  "risk_label": "民族意识形态风险",
+                  "enabled_main_term_count": 3,
+                  "runtime_content_hash": "23ad400550bdb39668de9c8d23db45d6d1af34df87d5b912eb4667cfc74fb9c4",
+                  "enabled_main_terms": [],
+                  "enabled_main_terms_returned": 0,
+                  "terms_included": false,
+                  "terms_truncated": false,
+                  "available": true
+                },
+                {
+                  "id": "minority",
+                  "title": "民族意识形态风险词库",
+                  "risk_label": "民族意识形态风险",
+                  "enabled_main_term_count": 2,
+                  "runtime_content_hash": "fc79cc898efeeffad6c2068b362110c24d94640ac8873cf3cd5dbb9ecd4e78db",
+                  "enabled_main_terms": [],
+                  "enabled_main_terms_returned": 0,
+                  "terms_included": false,
+                  "terms_truncated": false,
+                  "available": true
+                },
+                {
+                  "id": "drug",
+                  "title": "涉毒风险知识包",
+                  "risk_label": "涉毒",
+                  "enabled_main_term_count": 3,
+                  "runtime_content_hash": "ec7ed6bb1e753b57c701a99bdbd7604aaaf5f3d7afe4474fe29ab242895ac6c9",
+                  "enabled_main_terms": [],
+                  "enabled_main_terms_returned": 0,
+                  "terms_included": false,
+                  "terms_truncated": false,
+                  "available": true
+                },
+                {
+                  "id": "gambling",
+                  "title": "赌博黑话词库",
+                  "risk_label": "赌博博彩",
+                  "enabled_main_term_count": 2,
+                  "runtime_content_hash": "3ef8792b1f996159dae5d16675fa03655e051b4e7c3b448af2aa124424967f5a",
+                  "enabled_main_terms": [],
+                  "enabled_main_terms_returned": 0,
+                  "terms_included": false,
+                  "terms_truncated": false,
+                  "available": true
+                },
+                {
+                  "id": "soft",
+                  "title": "软色情词库",
+                  "risk_label": "软色情",
+                  "enabled_main_term_count": 3,
+                  "runtime_content_hash": "3f439a11fbb8cbb37a6a17c6baeda92e08ffc17014894e2ea12fcbae018afa5c",
+                  "enabled_main_terms": [],
+                  "enabled_main_terms_returned": 0,
+                  "terms_included": false,
+                  "terms_truncated": false,
+                  "available": true
+                },
+                {
+                  "id": "prohibited",
+                  "title": "违禁引流知识包",
+                  "risk_label": "违禁引流",
+                  "enabled_main_term_count": 3,
+                  "runtime_content_hash": "97a08cb1f5c6276a0ea5b07a96aae0aaec920fdcbdd0f03060576706d854fee1",
+                  "enabled_main_terms": [],
+                  "enabled_main_terms_returned": 0,
+                  "terms_included": false,
+                  "terms_truncated": false,
+                  "available": true
+                }
+              ],
+              "blockers": [],
+              "next_cursor": "",
+              "management_url": "/rule-assistant/rulesets?return_to=/investigation"
+            }
+          }
+        },
+        {
+          "name": "create_ruleset_proposal",
+          "arguments": {
+            "content": {
+              "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+              "categories": [
+                {
+                  "category_id": "pre_employment_fee",
+                  "description": "以招聘为名在入职前向求职者收取各类费用",
+                  "name": "入职前收费",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                      "order": 1,
+                      "rule_id": "pre_employment_fee.any",
+                      "rule_exemptions": [
+                        {
+                          "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                          "exemption_id": "self_paid_medical",
+                          "name": "求职者自选公立医院体检"
+                        }
+                      ],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "false_high_salary",
+                  "description": "承诺明显超出市场水平的高薪且门槛极低",
+                  "name": "虚假高薪承诺",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "adjudication_notes": "需同时满足'异常高薪'和'极低门槛'两个要素。若岗位明确要求相关资质、经验或学历，即使薪资较高也不命中本规则（可能为真实岗位）。关注'日结''周结''无需经验''学历不限''年龄不限'等组合表述。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件。",
+                      "order": 2,
+                      "rule_id": "false_high_salary.easy_money",
+                      "rule_exemptions": [],
+                      "suggested_risk_level": "medium"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "sensitive_info_collection",
+                  "description": "以招聘为名套取求职者敏感个人信息",
+                  "name": "敏感信息套取",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                      "order": 3,
+                      "rule_id": "sensitive_info.financial",
+                      "rule_exemptions": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "mlm_recruitment",
+                  "description": "以招聘为名发展下线或拉人头",
+                  "name": "传销拉人头",
+                  "order": 4,
+                  "rules": [
+                    {
+                      "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                      "order": 4,
+                      "rule_id": "mlm_recruitment.downline",
+                      "rule_exemptions": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "brush_task_disguise",
+                  "description": "以招聘名义引导刷单或做任务返利",
+                  "name": "刷单任务引流",
+                  "order": 5,
+                  "rules": [
+                    {
+                      "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                      "order": 5,
+                      "rule_id": "brush_task_disguise.any",
+                      "rule_exemptions": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "overseas_high_risk",
+                  "description": "引导求职者前往境外高风险地区工作",
+                  "name": "境外高风险工作诱导",
+                  "order": 6,
+                  "rules": [
+                    {
+                      "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                      "order": 6,
+                      "rule_id": "overseas_high_risk.sea",
+                      "rule_exemptions": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                }
+              ],
+              "domain": "recruitment-fraud",
+              "general_exemptions": [],
+              "name": "招聘诈骗风险规则集",
+              "schema_version": 0
+            }
+          },
+          "result": {
+            "status": "error",
+            "error": {
+              "code": "INVALID_TOOL_ARGUMENTS",
+              "message": "Tool arguments do not match the required schema.",
+              "details": {
+                "receipt_created": false,
+                "mutation_applied": false,
+                "retryable": true,
+                "validation_errors": [
+                  {
+                    "loc": [
+                      "content",
+                      "categories",
+                      0,
+                      "rules",
+                      0,
+                      "name"
+                    ],
+                    "type": "missing",
+                    "message": "Field required"
+                  },
+                  {
+                    "loc": [
+                      "content",
+                      "categories",
+                      1,
+                      "rules",
+                      0,
+                      "name"
+                    ],
+                    "type": "missing",
+                    "message": "Field required"
+                  },
+                  {
+                    "loc": [
+                      "content",
+                      "categories",
+                      2,
+                      "rules",
+                      0,
+                      "name"
+                    ],
+                    "type": "missing",
+                    "message": "Field required"
+                  },
+                  {
+                    "loc": [
+                      "content",
+                      "categories",
+                      3,
+                      "rules",
+                      0,
+                      "name"
+                    ],
+                    "type": "missing",
+                    "message": "Field required"
+                  },
+                  {
+                    "loc": [
+                      "content",
+                      "categories",
+                      4,
+                      "rules",
+                      0,
+                      "name"
+                    ],
+                    "type": "missing",
+                    "message": "Field required"
+                  },
+                  {
+                    "loc": [
+                      "content",
+                      "categories",
+                      5,
+                      "rules",
+                      0,
+                      "name"
+                    ],
+                    "type": "missing",
+                    "message": "Field required"
+                  }
+                ],
+                "recovery": "Correct the arguments using the Tool schema and retry create_ruleset_proposal."
+              }
+            }
+          }
+        },
+        {
+          "name": "create_ruleset_proposal",
+          "arguments": {
+            "content": {
+              "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+              "categories": [
+                {
+                  "category_id": "pre_employment_fee",
+                  "description": "以招聘为名在入职前向求职者收取各类费用",
+                  "name": "入职前收费",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                      "name": "入职前收取任何费用",
+                      "order": 1,
+                      "rule_exemptions": [
+                        {
+                          "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                          "exemption_id": "self_paid_medical",
+                          "name": "求职者自选公立医院体检"
+                        }
+                      ],
+                      "rule_id": "pre_employment_fee.any",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "false_high_salary",
+                  "description": "承诺明显超出市场水平的高薪且门槛极低",
+                  "name": "虚假高薪承诺",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "adjudication_notes": "需同时满足'异常高薪'和'极低门槛'两个要素。若岗位明确要求相关资质、经验或学历，即使薪资较高也不命中本规则（可能为真实岗位）。关注'日结''周结''无需经验''学历不限''年龄不限'等组合表述。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件。",
+                      "name": "低门槛异常高薪",
+                      "order": 2,
+                      "rule_exemptions": [],
+                      "rule_id": "false_high_salary.easy_money",
+                      "suggested_risk_level": "medium"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "sensitive_info_collection",
+                  "description": "以招聘为名套取求职者敏感个人信息",
+                  "name": "敏感信息套取",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                      "name": "招聘早期索要敏感金融信息",
+                      "order": 3,
+                      "rule_exemptions": [],
+                      "rule_id": "sensitive_info.financial",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "mlm_recruitment",
+                  "description": "以招聘为名发展下线或拉人头",
+                  "name": "传销拉人头",
+                  "order": 4,
+                  "rules": [
+                    {
+                      "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                      "name": "以招聘名义发展下线",
+                      "order": 4,
+                      "rule_exemptions": [],
+                      "rule_id": "mlm_recruitment.downline",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "brush_task_disguise",
+                  "description": "以招聘名义引导刷单或做任务返利",
+                  "name": "刷单任务引流",
+                  "order": 5,
+                  "rules": [
+                    {
+                      "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                      "name": "以招聘名义引导刷单",
+                      "order": 5,
+                      "rule_exemptions": [],
+                      "rule_id": "brush_task_disguise.any",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "overseas_high_risk",
+                  "description": "引导求职者前往境外高风险地区工作",
+                  "name": "境外高风险工作诱导",
+                  "order": 6,
+                  "rules": [
+                    {
+                      "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                      "name": "诱导前往东南亚等高风险地区",
+                      "order": 6,
+                      "rule_exemptions": [],
+                      "rule_id": "overseas_high_risk.sea",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                }
+              ],
+              "domain": "recruitment-fraud",
+              "general_exemptions": [],
+              "name": "招聘诈骗风险规则集",
+              "schema_version": 0
+            }
+          },
+          "result": {
+            "status": "ok",
+            "data": {
+              "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+              "session_id": "investigation-session:8ed83d0f7fc7406298efda51c7a7f808",
+              "version": 1,
+              "content_hash": "d982ba653c1348572a470154c57b9ae3e2fef33085854d82b7c913461090233f",
+              "content": {
+                "schema_version": 0,
+                "name": "招聘诈骗风险规则集",
+                "domain": "recruitment-fraud",
+                "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+                "general_exemptions": [],
+                "categories": [
+                  {
+                    "category_id": "pre_employment_fee",
+                    "name": "入职前收费",
+                    "description": "以招聘为名在入职前向求职者收取各类费用",
+                    "order": 1,
+                    "rules": [
+                      {
+                        "rule_id": "pre_employment_fee.any",
+                        "name": "入职前收取任何费用",
+                        "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [
+                          {
+                            "exemption_id": "self_paid_medical",
+                            "name": "求职者自选公立医院体检",
+                            "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                            "source_mappings": []
+                          }
+                        ],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                        "enabled": true,
+                        "order": 1,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "false_high_salary",
+                    "name": "虚假高薪承诺",
+                    "description": "承诺明显超出市场水平的高薪且门槛极低",
+                    "order": 2,
+                    "rules": [
+                      {
+                        "rule_id": "false_high_salary.easy_money",
+                        "name": "低门槛异常高薪",
+                        "hit_condition": "内容中承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件。",
+                        "suggested_risk_level": "medium",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "需同时满足'异常高薪'和'极低门槛'两个要素。若岗位明确要求相关资质、经验或学历，即使薪资较高也不命中本规则（可能为真实岗位）。关注'日结''周结''无需经验''学历不限''年龄不限'等组合表述。",
+                        "enabled": true,
+                        "order": 2,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "sensitive_info_collection",
+                    "name": "敏感信息套取",
+                    "description": "以招聘为名套取求职者敏感个人信息",
+                    "order": 3,
+                    "rules": [
+                      {
+                        "rule_id": "sensitive_info.financial",
+                        "name": "招聘早期索要敏感金融信息",
+                        "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                        "enabled": true,
+                        "order": 3,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "mlm_recruitment",
+                    "name": "传销拉人头",
+                    "description": "以招聘为名发展下线或拉人头",
+                    "order": 4,
+                    "rules": [
+                      {
+                        "rule_id": "mlm_recruitment.downline",
+                        "name": "以招聘名义发展下线",
+                        "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                        "enabled": true,
+                        "order": 4,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "brush_task_disguise",
+                    "name": "刷单任务引流",
+                    "description": "以招聘名义引导刷单或做任务返利",
+                    "order": 5,
+                    "rules": [
+                      {
+                        "rule_id": "brush_task_disguise.any",
+                        "name": "以招聘名义引导刷单",
+                        "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                        "enabled": true,
+                        "order": 5,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "overseas_high_risk",
+                    "name": "境外高风险工作诱导",
+                    "description": "引导求职者前往境外高风险地区工作",
+                    "order": 6,
+                    "rules": [
+                      {
+                        "rule_id": "overseas_high_risk.sea",
+                        "name": "诱导前往东南亚等高风险地区",
+                        "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                        "enabled": true,
+                        "order": 6,
+                        "source_mappings": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "created_at": "2026-09-07T12:00:30.643759Z",
+              "updated_at": "2026-09-07T12:00:30.643759Z"
+            }
+          }
+        }
+      ],
+      "artifact": {
+        "artifact_type": "ruleset_proposal_presentation",
+        "proposal_presentations": [
+          {
+            "assistant_message_id": "investigation-message:51ae5444ec9d158428235998cc13f5c2",
+            "boundary": "durable_public_assistant_message",
+            "content_hash": "d982ba653c1348572a470154c57b9ae3e2fef33085854d82b7c913461090233f",
+            "presentation_format": "ruleset-proposal-text-v1",
+            "presented_at": "2026-09-07T12:00:46.910619+00:00",
+            "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+            "proposal_version": 1,
+            "session_id": "investigation-session:8ed83d0f7fc7406298efda51c7a7f808",
+            "snapshot": {
+              "content": {
+                "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+                "categories": [
+                  {
+                    "category_id": "pre_employment_fee",
+                    "description": "以招聘为名在入职前向求职者收取各类费用",
+                    "name": "入职前收费",
+                    "order": 1,
+                    "rules": [
+                      {
+                        "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                        "name": "入职前收取任何费用",
+                        "order": 1,
+                        "rule_exemptions": [
+                          {
+                            "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                            "exemption_id": "self_paid_medical",
+                            "name": "求职者自选公立医院体检",
+                            "source_mappings": []
+                          }
+                        ],
+                        "rule_id": "pre_employment_fee.any",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "false_high_salary",
+                    "description": "承诺明显超出市场水平的高薪且门槛极低",
+                    "name": "虚假高薪承诺",
+                    "order": 2,
+                    "rules": [
+                      {
+                        "adjudication_notes": "需同时满足'异常高薪'和'极低门槛'两个要素。若岗位明确要求相关资质、经验或学历，即使薪资较高也不命中本规则（可能为真实岗位）。关注'日结''周结''无需经验''学历不限''年龄不限'等组合表述。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件。",
+                        "name": "低门槛异常高薪",
+                        "order": 2,
+                        "rule_exemptions": [],
+                        "rule_id": "false_high_salary.easy_money",
+                        "source_mappings": [],
+                        "suggested_risk_level": "medium"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "sensitive_info_collection",
+                    "description": "以招聘为名套取求职者敏感个人信息",
+                    "name": "敏感信息套取",
+                    "order": 3,
+                    "rules": [
+                      {
+                        "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                        "name": "招聘早期索要敏感金融信息",
+                        "order": 3,
+                        "rule_exemptions": [],
+                        "rule_id": "sensitive_info.financial",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "mlm_recruitment",
+                    "description": "以招聘为名发展下线或拉人头",
+                    "name": "传销拉人头",
+                    "order": 4,
+                    "rules": [
+                      {
+                        "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                        "name": "以招聘名义发展下线",
+                        "order": 4,
+                        "rule_exemptions": [],
+                        "rule_id": "mlm_recruitment.downline",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "brush_task_disguise",
+                    "description": "以招聘名义引导刷单或做任务返利",
+                    "name": "刷单任务引流",
+                    "order": 5,
+                    "rules": [
+                      {
+                        "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                        "name": "以招聘名义引导刷单",
+                        "order": 5,
+                        "rule_exemptions": [],
+                        "rule_id": "brush_task_disguise.any",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "overseas_high_risk",
+                    "description": "引导求职者前往境外高风险地区工作",
+                    "name": "境外高风险工作诱导",
+                    "order": 6,
+                    "rules": [
+                      {
+                        "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                        "name": "诱导前往东南亚等高风险地区",
+                        "order": 6,
+                        "rule_exemptions": [],
+                        "rule_id": "overseas_high_risk.sea",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  }
+                ],
+                "domain": "recruitment-fraud",
+                "general_exemptions": [],
+                "name": "招聘诈骗风险规则集",
+                "schema_version": 0
+              },
+              "content_hash": "d982ba653c1348572a470154c57b9ae3e2fef33085854d82b7c913461090233f",
+              "created_at": "2026-09-07T12:00:30.643759Z",
+              "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+              "session_id": "investigation-session:8ed83d0f7fc7406298efda51c7a7f808",
+              "updated_at": "2026-09-07T12:00:30.643759Z",
+              "version": 1
+            },
+            "source_user_message_id": "investigation-message:405836c7c8a34901abc83c283e44f546",
+            "source_user_turn_id": "investigation-turn:647c071dd9584d9096cca0480a582235",
+            "text": "临时研判规则 · 完整规则快照\n名称：招聘诈骗风险规则集\n领域：recruitment-fraud\n版本：1\n方案标识：ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef\n内容指纹：d982ba653c1348572a470154c57b9ae3e2fef33085854d82b7c913461090233f\n研判目标：识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。\n分类数：6；规则数：6\n通用豁免：无\n\n分类：入职前收费（pre_employment_fee，排序 1）\n说明：以招聘为名在入职前向求职者收取各类费用\n\n规则 1：入职前收取任何费用（pre_employment_fee.any）\n启用：是；排序：1\n命中条件：内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。\n规则豁免：\n- 求职者自选公立医院体检（self_paid_medical）\n  条件：明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。\n\n分类：虚假高薪承诺（false_high_salary，排序 2）\n说明：承诺明显超出市场水平的高薪且门槛极低\n\n规则 2：低门槛异常高薪（false_high_salary.easy_money）\n启用：是；排序：2\n命中条件：内容中承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：需同时满足'异常高薪'和'极低门槛'两个要素。若岗位明确要求相关资质、经验或学历，即使薪资较高也不命中本规则（可能为真实岗位）。关注'日结''周结''无需经验''学历不限''年龄不限'等组合表述。\n规则豁免：无\n\n分类：敏感信息套取（sensitive_info_collection，排序 3）\n说明：以招聘为名套取求职者敏感个人信息\n\n规则 3：招聘早期索要敏感金融信息（sensitive_info.financial）\n启用：是；排序：3\n命中条件：内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。\n规则豁免：无\n\n分类：传销拉人头（mlm_recruitment，排序 4）\n说明：以招聘为名发展下线或拉人头\n\n规则 4：以招聘名义发展下线（mlm_recruitment.downline）\n启用：是；排序：4\n命中条件：内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。\n规则豁免：无\n\n分类：刷单任务引流（brush_task_disguise，排序 5）\n说明：以招聘名义引导刷单或做任务返利\n\n规则 5：以招聘名义引导刷单（brush_task_disguise.any）\n启用：是；排序：5\n命中条件：内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。\n规则豁免：无\n\n分类：境外高风险工作诱导（overseas_high_risk，排序 6）\n说明：引导求职者前往境外高风险地区工作\n\n规则 6：诱导前往东南亚等高风险地区（overseas_high_risk.sea）\n启用：是；排序：6\n命中条件：内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。\n规则豁免：无"
+          }
+        ]
+      },
+      "answer": "当前系统中没有招聘诈骗领域的已发布正式规则集，我已根据你的要求生成了一套临时候选规则。以下是规则集的完整内容：\n\n---\n\n## 招聘诈骗风险规则集（临时提案）\n\n**领域：** recruitment-fraud  \n**审计目标：** 识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。\n\n---\n\n### 分类 1：入职前收费\n| 规则 | 命中条件 | 风险等级 | 豁免 |\n|------|---------|---------|------|\n| 入职前收取任何费用 | 以招聘/入职为前提，要求缴纳培训费、押金、服装费、体检费、办证费、保证金等任何名目费用 | 高 | 求职者自行选择任意公立医院体检且费用直接付给医院 |\n\n### 分类 2：虚假高薪承诺\n| 规则 | 命中条件 | 风险等级 |\n|------|---------|---------|\n| 低门槛异常高薪 | 承诺日薪500+/月入过万等异常高薪，同时声称无需经验、学历不限、时间自由等极低门槛 | 中 |\n\n### 分类 3：敏感信息套取\n| 规则 | 命中条件 | 风险等级 |\n|------|---------|---------|\n| 招聘早期索要敏感金融信息 | 在招聘沟通阶段要求提供银行卡密码、验证码、支付密码、花呗/借呗额度截图等 | 高 |\n\n### 分类 4：传销拉人头\n| 规则 | 命中条件 | 风险等级 |\n|------|---------|---------|\n| 以招聘名义发展下线 | 要求发展下线、拉人头、组建团队，收入来自发展人员数量，或出现\"层级\"\"团队计酬\"\"裂变\"等传销特征 | 高 |\n\n### 分类 5：刷单任务引流\n| 规则 | 命中条件 | 风险等级 |\n|------|---------|---------|\n| 以招聘名义引导刷单 | 以招聘/兼职/副业为名，引导刷单、刷信誉、点赞返利、垫付返佣等 | 高 |\n\n### 分类 6：境外高风险工作诱导\n| 规则 | 命中条件 | 风险等级 |\n|------|---------|---------|\n| 诱导前往东南亚等高风险地区 | 招聘前往缅甸、柬埔寨、老挝、菲律宾、迪拜等地，高薪但工作模糊，或声称\"包机票\"\"无需护照\" | 高 |\n\n---\n\n**所有规则均应用于四个阶段：** 图片证据、视频帧证据、评论审核、融合审核。\n\n---\n\n**说明：**\n- 这是一套**临时候选规则**，仅存在于当前会话中，尚未绑定到任何调查任务。\n- 系统中已有一个可用的**招聘诈骗召回词库**（`recruitment-fraud`），可以直接用于搜索调查。\n- 如果你觉得这套规则合适，可以告诉我\"就按这套规则来\"，我会将其绑定到调查配置中；如果需要修改（增删规则、调整命中条件等），也可以直接告诉我。\n\n临时研判规则 · 完整规则快照\n名称：招聘诈骗风险规则集\n领域：recruitment-fraud\n版本：1\n方案标识：ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef\n内容指纹：d982ba653c1348572a470154c57b9ae3e2fef33085854d82b7c913461090233f\n研判目标：识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。\n分类数：6；规则数：6\n通用豁免：无\n\n分类：入职前收费（pre_employment_fee，排序 1）\n说明：以招聘为名在入职前向求职者收取各类费用\n\n规则 1：入职前收取任何费用（pre_employment_fee.any）\n启用：是；排序：1\n命中条件：内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。\n规则豁免：\n- 求职者自选公立医院体检（self_paid_medical）\n  条件：明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。\n\n分类：虚假高薪承诺（false_high_salary，排序 2）\n说明：承诺明显超出市场水平的高薪且门槛极低\n\n规则 2：低门槛异常高薪（false_high_salary.easy_money）\n启用：是；排序：2\n命中条件：内容中承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：需同时满足'异常高薪'和'极低门槛'两个要素。若岗位明确要求相关资质、经验或学历，即使薪资较高也不命中本规则（可能为真实岗位）。关注'日结''周结''无需经验''学历不限''年龄不限'等组合表述。\n规则豁免：无\n\n分类：敏感信息套取（sensitive_info_collection，排序 3）\n说明：以招聘为名套取求职者敏感个人信息\n\n规则 3：招聘早期索要敏感金融信息（sensitive_info.financial）\n启用：是；排序：3\n命中条件：内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。\n规则豁免：无\n\n分类：传销拉人头（mlm_recruitment，排序 4）\n说明：以招聘为名发展下线或拉人头\n\n规则 4：以招聘名义发展下线（mlm_recruitment.downline）\n启用：是；排序：4\n命中条件：内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。\n规则豁免：无\n\n分类：刷单任务引流（brush_task_disguise，排序 5）\n说明：以招聘名义引导刷单或做任务返利\n\n规则 5：以招聘名义引导刷单（brush_task_disguise.any）\n启用：是；排序：5\n命中条件：内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。\n规则豁免：无\n\n分类：境外高风险工作诱导（overseas_high_risk，排序 6）\n说明：引导求职者前往境外高风险地区工作\n\n规则 6：诱导前往东南亚等高风险地区（overseas_high_risk.sea）\n启用：是；排序：6\n命中条件：内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。\n规则豁免：无",
+      "drafts": []
+    },
+    {
+      "label": "edit",
+      "message": "第二条严格一点，把分期培训收费也明确进去。",
+      "session_id": "investigation-session:8ed83d0f7fc7406298efda51c7a7f808",
+      "turn_id": "investigation-turn:944d5ef3816f4440b4211e485e9a877b",
+      "status": "completed",
+      "events": [
+        {
+          "name": "get_ruleset_proposal",
+          "arguments": {
+            "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef"
+          },
+          "result": {
+            "status": "ok",
+            "data": {
+              "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+              "session_id": "investigation-session:8ed83d0f7fc7406298efda51c7a7f808",
+              "version": 1,
+              "content_hash": "d982ba653c1348572a470154c57b9ae3e2fef33085854d82b7c913461090233f",
+              "content": {
+                "schema_version": 0,
+                "name": "招聘诈骗风险规则集",
+                "domain": "recruitment-fraud",
+                "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+                "general_exemptions": [],
+                "categories": [
+                  {
+                    "category_id": "pre_employment_fee",
+                    "name": "入职前收费",
+                    "description": "以招聘为名在入职前向求职者收取各类费用",
+                    "order": 1,
+                    "rules": [
+                      {
+                        "rule_id": "pre_employment_fee.any",
+                        "name": "入职前收取任何费用",
+                        "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [
+                          {
+                            "exemption_id": "self_paid_medical",
+                            "name": "求职者自选公立医院体检",
+                            "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                            "source_mappings": []
+                          }
+                        ],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                        "enabled": true,
+                        "order": 1,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "false_high_salary",
+                    "name": "虚假高薪承诺",
+                    "description": "承诺明显超出市场水平的高薪且门槛极低",
+                    "order": 2,
+                    "rules": [
+                      {
+                        "rule_id": "false_high_salary.easy_money",
+                        "name": "低门槛异常高薪",
+                        "hit_condition": "内容中承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件。",
+                        "suggested_risk_level": "medium",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "需同时满足'异常高薪'和'极低门槛'两个要素。若岗位明确要求相关资质、经验或学历，即使薪资较高也不命中本规则（可能为真实岗位）。关注'日结''周结''无需经验''学历不限''年龄不限'等组合表述。",
+                        "enabled": true,
+                        "order": 2,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "sensitive_info_collection",
+                    "name": "敏感信息套取",
+                    "description": "以招聘为名套取求职者敏感个人信息",
+                    "order": 3,
+                    "rules": [
+                      {
+                        "rule_id": "sensitive_info.financial",
+                        "name": "招聘早期索要敏感金融信息",
+                        "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                        "enabled": true,
+                        "order": 3,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "mlm_recruitment",
+                    "name": "传销拉人头",
+                    "description": "以招聘为名发展下线或拉人头",
+                    "order": 4,
+                    "rules": [
+                      {
+                        "rule_id": "mlm_recruitment.downline",
+                        "name": "以招聘名义发展下线",
+                        "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                        "enabled": true,
+                        "order": 4,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "brush_task_disguise",
+                    "name": "刷单任务引流",
+                    "description": "以招聘名义引导刷单或做任务返利",
+                    "order": 5,
+                    "rules": [
+                      {
+                        "rule_id": "brush_task_disguise.any",
+                        "name": "以招聘名义引导刷单",
+                        "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                        "enabled": true,
+                        "order": 5,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "overseas_high_risk",
+                    "name": "境外高风险工作诱导",
+                    "description": "引导求职者前往境外高风险地区工作",
+                    "order": 6,
+                    "rules": [
+                      {
+                        "rule_id": "overseas_high_risk.sea",
+                        "name": "诱导前往东南亚等高风险地区",
+                        "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                        "enabled": true,
+                        "order": 6,
+                        "source_mappings": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "created_at": "2026-09-07T12:00:30.643759Z",
+              "updated_at": "2026-09-07T12:00:30.643759Z"
+            }
+          }
+        },
+        {
+          "name": "update_ruleset_proposal",
+          "arguments": {
+            "content": {
+              "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+              "categories": [
+                {
+                  "category_id": "pre_employment_fee",
+                  "description": "以招聘为名在入职前向求职者收取各类费用",
+                  "name": "入职前收费",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                      "name": "入职前收取任何费用",
+                      "order": 1,
+                      "rule_exemptions": [
+                        {
+                          "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                          "exemption_id": "self_paid_medical",
+                          "name": "求职者自选公立医院体检",
+                          "source_mappings": []
+                        }
+                      ],
+                      "rule_id": "pre_employment_fee.any",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "false_high_salary",
+                  "description": "承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训",
+                  "name": "虚假高薪承诺",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "adjudication_notes": "满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。",
+                      "name": "低门槛异常高薪或高薪诱导付费培训",
+                      "order": 2,
+                      "rule_exemptions": [],
+                      "rule_id": "false_high_salary.easy_money",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "sensitive_info_collection",
+                  "description": "以招聘为名套取求职者敏感个人信息",
+                  "name": "敏感信息套取",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                      "name": "招聘早期索要敏感金融信息",
+                      "order": 3,
+                      "rule_exemptions": [],
+                      "rule_id": "sensitive_info.financial",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "mlm_recruitment",
+                  "description": "以招聘为名发展下线或拉人头",
+                  "name": "传销拉人头",
+                  "order": 4,
+                  "rules": [
+                    {
+                      "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                      "name": "以招聘名义发展下线",
+                      "order": 4,
+                      "rule_exemptions": [],
+                      "rule_id": "mlm_recruitment.downline",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "brush_task_disguise",
+                  "description": "以招聘名义引导刷单或做任务返利",
+                  "name": "刷单任务引流",
+                  "order": 5,
+                  "rules": [
+                    {
+                      "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                      "name": "以招聘名义引导刷单",
+                      "order": 5,
+                      "rule_exemptions": [],
+                      "rule_id": "brush_task_disguise.any",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "overseas_high_risk",
+                  "description": "引导求职者前往境外高风险地区工作",
+                  "name": "境外高风险工作诱导",
+                  "order": 6,
+                  "rules": [
+                    {
+                      "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                      "name": "诱导前往东南亚等高风险地区",
+                      "order": 6,
+                      "rule_exemptions": [],
+                      "rule_id": "overseas_high_risk.sea",
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                }
+              ],
+              "domain": "recruitment-fraud",
+              "general_exemptions": [],
+              "name": "招聘诈骗风险规则集",
+              "schema_version": 0
+            },
+            "expected_version": 1,
+            "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef"
+          },
+          "result": {
+            "status": "ok",
+            "data": {
+              "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+              "session_id": "investigation-session:8ed83d0f7fc7406298efda51c7a7f808",
+              "version": 2,
+              "content_hash": "5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546",
+              "content": {
+                "schema_version": 0,
+                "name": "招聘诈骗风险规则集",
+                "domain": "recruitment-fraud",
+                "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+                "general_exemptions": [],
+                "categories": [
+                  {
+                    "category_id": "pre_employment_fee",
+                    "name": "入职前收费",
+                    "description": "以招聘为名在入职前向求职者收取各类费用",
+                    "order": 1,
+                    "rules": [
+                      {
+                        "rule_id": "pre_employment_fee.any",
+                        "name": "入职前收取任何费用",
+                        "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [
+                          {
+                            "exemption_id": "self_paid_medical",
+                            "name": "求职者自选公立医院体检",
+                            "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                            "source_mappings": []
+                          }
+                        ],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                        "enabled": true,
+                        "order": 1,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "false_high_salary",
+                    "name": "虚假高薪承诺",
+                    "description": "承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训",
+                    "order": 2,
+                    "rules": [
+                      {
+                        "rule_id": "false_high_salary.easy_money",
+                        "name": "低门槛异常高薪或高薪诱导付费培训",
+                        "hit_condition": "内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。",
+                        "enabled": true,
+                        "order": 2,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "sensitive_info_collection",
+                    "name": "敏感信息套取",
+                    "description": "以招聘为名套取求职者敏感个人信息",
+                    "order": 3,
+                    "rules": [
+                      {
+                        "rule_id": "sensitive_info.financial",
+                        "name": "招聘早期索要敏感金融信息",
+                        "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                        "enabled": true,
+                        "order": 3,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "mlm_recruitment",
+                    "name": "传销拉人头",
+                    "description": "以招聘为名发展下线或拉人头",
+                    "order": 4,
+                    "rules": [
+                      {
+                        "rule_id": "mlm_recruitment.downline",
+                        "name": "以招聘名义发展下线",
+                        "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                        "enabled": true,
+                        "order": 4,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "brush_task_disguise",
+                    "name": "刷单任务引流",
+                    "description": "以招聘名义引导刷单或做任务返利",
+                    "order": 5,
+                    "rules": [
+                      {
+                        "rule_id": "brush_task_disguise.any",
+                        "name": "以招聘名义引导刷单",
+                        "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                        "enabled": true,
+                        "order": 5,
+                        "source_mappings": []
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "overseas_high_risk",
+                    "name": "境外高风险工作诱导",
+                    "description": "引导求职者前往境外高风险地区工作",
+                    "order": 6,
+                    "rules": [
+                      {
+                        "rule_id": "overseas_high_risk.sea",
+                        "name": "诱导前往东南亚等高风险地区",
+                        "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                        "suggested_risk_level": "high",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                        "enabled": true,
+                        "order": 6,
+                        "source_mappings": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "created_at": "2026-09-07T12:00:30.643759Z",
+              "updated_at": "2026-09-07T12:02:07.674568Z"
+            }
+          }
+        }
+      ],
+      "artifact": {
+        "artifact_type": "ruleset_proposal_presentation",
+        "proposal_presentations": [
+          {
+            "assistant_message_id": "investigation-message:ddeb3eedfc941664ad2467d7792e9526",
+            "boundary": "durable_public_assistant_message",
+            "content_hash": "5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546",
+            "presentation_format": "ruleset-proposal-text-v1",
+            "presented_at": "2026-09-07T12:02:17.143397+00:00",
+            "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+            "proposal_version": 2,
+            "session_id": "investigation-session:8ed83d0f7fc7406298efda51c7a7f808",
+            "snapshot": {
+              "content": {
+                "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+                "categories": [
+                  {
+                    "category_id": "pre_employment_fee",
+                    "description": "以招聘为名在入职前向求职者收取各类费用",
+                    "name": "入职前收费",
+                    "order": 1,
+                    "rules": [
+                      {
+                        "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                        "name": "入职前收取任何费用",
+                        "order": 1,
+                        "rule_exemptions": [
+                          {
+                            "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                            "exemption_id": "self_paid_medical",
+                            "name": "求职者自选公立医院体检",
+                            "source_mappings": []
+                          }
+                        ],
+                        "rule_id": "pre_employment_fee.any",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "false_high_salary",
+                    "description": "承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训",
+                    "name": "虚假高薪承诺",
+                    "order": 2,
+                    "rules": [
+                      {
+                        "adjudication_notes": "满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。",
+                        "name": "低门槛异常高薪或高薪诱导付费培训",
+                        "order": 2,
+                        "rule_exemptions": [],
+                        "rule_id": "false_high_salary.easy_money",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "sensitive_info_collection",
+                    "description": "以招聘为名套取求职者敏感个人信息",
+                    "name": "敏感信息套取",
+                    "order": 3,
+                    "rules": [
+                      {
+                        "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                        "name": "招聘早期索要敏感金融信息",
+                        "order": 3,
+                        "rule_exemptions": [],
+                        "rule_id": "sensitive_info.financial",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "mlm_recruitment",
+                    "description": "以招聘为名发展下线或拉人头",
+                    "name": "传销拉人头",
+                    "order": 4,
+                    "rules": [
+                      {
+                        "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                        "name": "以招聘名义发展下线",
+                        "order": 4,
+                        "rule_exemptions": [],
+                        "rule_id": "mlm_recruitment.downline",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "brush_task_disguise",
+                    "description": "以招聘名义引导刷单或做任务返利",
+                    "name": "刷单任务引流",
+                    "order": 5,
+                    "rules": [
+                      {
+                        "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                        "name": "以招聘名义引导刷单",
+                        "order": 5,
+                        "rule_exemptions": [],
+                        "rule_id": "brush_task_disguise.any",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "overseas_high_risk",
+                    "description": "引导求职者前往境外高风险地区工作",
+                    "name": "境外高风险工作诱导",
+                    "order": 6,
+                    "rules": [
+                      {
+                        "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                        "name": "诱导前往东南亚等高风险地区",
+                        "order": 6,
+                        "rule_exemptions": [],
+                        "rule_id": "overseas_high_risk.sea",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  }
+                ],
+                "domain": "recruitment-fraud",
+                "general_exemptions": [],
+                "name": "招聘诈骗风险规则集",
+                "schema_version": 0
+              },
+              "content_hash": "5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546",
+              "created_at": "2026-09-07T12:00:30.643759Z",
+              "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+              "session_id": "investigation-session:8ed83d0f7fc7406298efda51c7a7f808",
+              "updated_at": "2026-09-07T12:02:07.674568Z",
+              "version": 2
+            },
+            "source_user_message_id": "investigation-message:8bf0738016254939915d6a238645626f",
+            "source_user_turn_id": "investigation-turn:944d5ef3816f4440b4211e485e9a877b",
+            "text": "临时研判规则 · 完整规则快照\n名称：招聘诈骗风险规则集\n领域：recruitment-fraud\n版本：2\n方案标识：ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef\n内容指纹：5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546\n研判目标：识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。\n分类数：6；规则数：6\n通用豁免：无\n\n分类：入职前收费（pre_employment_fee，排序 1）\n说明：以招聘为名在入职前向求职者收取各类费用\n\n规则 1：入职前收取任何费用（pre_employment_fee.any）\n启用：是；排序：1\n命中条件：内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。\n规则豁免：\n- 求职者自选公立医院体检（self_paid_medical）\n  条件：明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。\n\n分类：虚假高薪承诺（false_high_salary，排序 2）\n说明：承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训\n\n规则 2：低门槛异常高薪或高薪诱导付费培训（false_high_salary.easy_money）\n启用：是；排序：2\n命中条件：内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。\n规则豁免：无\n\n分类：敏感信息套取（sensitive_info_collection，排序 3）\n说明：以招聘为名套取求职者敏感个人信息\n\n规则 3：招聘早期索要敏感金融信息（sensitive_info.financial）\n启用：是；排序：3\n命中条件：内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。\n规则豁免：无\n\n分类：传销拉人头（mlm_recruitment，排序 4）\n说明：以招聘为名发展下线或拉人头\n\n规则 4：以招聘名义发展下线（mlm_recruitment.downline）\n启用：是；排序：4\n命中条件：内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。\n规则豁免：无\n\n分类：刷单任务引流（brush_task_disguise，排序 5）\n说明：以招聘名义引导刷单或做任务返利\n\n规则 5：以招聘名义引导刷单（brush_task_disguise.any）\n启用：是；排序：5\n命中条件：内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。\n规则豁免：无\n\n分类：境外高风险工作诱导（overseas_high_risk，排序 6）\n说明：引导求职者前往境外高风险地区工作\n\n规则 6：诱导前往东南亚等高风险地区（overseas_high_risk.sea）\n启用：是；排序：6\n命中条件：内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。\n规则豁免：无"
+          }
+        ]
+      },
+      "answer": "已更新。第二条规则现在更严格，具体修改如下：\n\n---\n\n### 分类 2：虚假高薪承诺（已修改）\n\n**分类描述：** 承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训\n\n| 规则 | 命中条件 | 风险等级 |\n|------|---------|---------|\n| 低门槛异常高薪或高薪诱导付费培训 | 满足以下任一情形即命中：(1) 异常高薪+极低门槛；(2) 以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或**分期培训收费**、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除 | **高**（原为中） |\n\n**关键变化：**\n- 新增\"高薪诱导付费培训\"作为独立命中条件，明确覆盖分期培训收费、贷款培训等变体\n- 即使声称\"培训费可分期\"\"可退还\"\"从工资扣除\"，只要本质是以高薪为诱饵要求先付费培训，一律命中\n- 风险等级从 medium 提升为 high\n\n---\n\n这套规则仍然是临时候选，尚未绑定到调查任务。如果你确认这套规则可以，告诉我\"就按这套来\"，我会将其用于调查配置；如果还需要调整其他规则，也可以继续说。\n\n临时研判规则 · 完整规则快照\n名称：招聘诈骗风险规则集\n领域：recruitment-fraud\n版本：2\n方案标识：ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef\n内容指纹：5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546\n研判目标：识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。\n分类数：6；规则数：6\n通用豁免：无\n\n分类：入职前收费（pre_employment_fee，排序 1）\n说明：以招聘为名在入职前向求职者收取各类费用\n\n规则 1：入职前收取任何费用（pre_employment_fee.any）\n启用：是；排序：1\n命中条件：内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。\n规则豁免：\n- 求职者自选公立医院体检（self_paid_medical）\n  条件：明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。\n\n分类：虚假高薪承诺（false_high_salary，排序 2）\n说明：承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训\n\n规则 2：低门槛异常高薪或高薪诱导付费培训（false_high_salary.easy_money）\n启用：是；排序：2\n命中条件：内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。\n规则豁免：无\n\n分类：敏感信息套取（sensitive_info_collection，排序 3）\n说明：以招聘为名套取求职者敏感个人信息\n\n规则 3：招聘早期索要敏感金融信息（sensitive_info.financial）\n启用：是；排序：3\n命中条件：内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。\n规则豁免：无\n\n分类：传销拉人头（mlm_recruitment，排序 4）\n说明：以招聘为名发展下线或拉人头\n\n规则 4：以招聘名义发展下线（mlm_recruitment.downline）\n启用：是；排序：4\n命中条件：内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。\n规则豁免：无\n\n分类：刷单任务引流（brush_task_disguise，排序 5）\n说明：以招聘名义引导刷单或做任务返利\n\n规则 5：以招聘名义引导刷单（brush_task_disguise.any）\n启用：是；排序：5\n命中条件：内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。\n规则豁免：无\n\n分类：境外高风险工作诱导（overseas_high_risk，排序 6）\n说明：引导求职者前往境外高风险地区工作\n\n规则 6：诱导前往东南亚等高风险地区（overseas_high_risk.sea）\n启用：是；排序：6\n命中条件：内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。\n规则豁免：无",
+      "drafts": []
+    },
+    {
+      "label": "approve",
+      "message": "可以，就按现在这套规则来。",
+      "session_id": "investigation-session:8ed83d0f7fc7406298efda51c7a7f808",
+      "turn_id": "investigation-turn:09d8db93bac64713996a0d46211425b5",
+      "status": "completed",
+      "events": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "include_lexicon_terms_for_ids": [
+              "recruitment-fraud"
+            ],
+            "lexicon_ids": [
+              "recruitment-fraud"
+            ]
+          },
+          "result": {
+            "status": "ok",
+            "data": {
+              "platforms": [
+                {
+                  "id": "dy",
+                  "name": "抖音",
+                  "available": true
+                },
+                {
+                  "id": "xhs",
+                  "name": "小红书",
+                  "available": true
+                },
+                {
+                  "id": "ks",
+                  "name": "快手",
+                  "available": true
+                }
+              ],
+              "ruleset_revisions": [
+                {
+                  "id": "ruleset-revision:gambling:v2",
+                  "ruleset_id": "ruleset.gambling",
+                  "name": "赌博博彩风险规则集",
+                  "domain": "gambling",
+                  "version": 2,
+                  "content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc",
+                  "enabled_rule_count": 7,
+                  "available": true
+                }
+              ],
+              "ruleset_revision_details": [],
+              "recall_lexicons": [
+                {
+                  "id": "recruitment-fraud",
+                  "title": "招聘诈骗召回词库",
+                  "risk_label": "招聘诈骗",
+                  "enabled_main_term_count": 3,
+                  "runtime_content_hash": "8be9cb896265edfff8012ee24725661a94b0af418065e9bb040c9011fe53a345",
+                  "enabled_main_terms": [
+                    "入职收费",
+                    "招聘培训贷",
+                    "分期培训费"
+                  ],
+                  "enabled_main_terms_returned": 3,
+                  "terms_included": true,
+                  "terms_truncated": false,
+                  "available": true
+                }
+              ],
+              "blockers": [],
+              "next_cursor": "",
+              "management_url": "/rule-assistant/rulesets?return_to=/investigation"
+            }
+          }
+        },
+        {
+          "name": "use_ruleset_proposal",
+          "arguments": {
+            "create_draft": {
+              "configuration": {
+                "investigation": {
+                  "mode": "search",
+                  "recall_plan": {
+                    "enabled_main_terms": [
+                      "入职收费",
+                      "招聘培训贷",
+                      "分期培训费"
+                    ],
+                    "expected_runtime_content_hash": "8be9cb896265edfff8012ee24725661a94b0af418065e9bb040c9011fe53a345",
+                    "lexicon_id": "recruitment-fraud",
+                    "strategy": "existing_lexicon"
+                  }
+                },
+                "platform": "dy"
+              },
+              "objective": "在抖音平台调查以招聘为名实施的欺诈行为，识别入职前收费、虚假高薪承诺、分期培训收费、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法。",
+              "title": "招聘诈骗调查"
+            },
+            "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef"
+          },
+          "result": {
+            "status": "ok",
+            "data": {
+              "draft": {
+                "id": "investigation-draft:b1177f86639d4e54a5d8cba52b920beb",
+                "status": "DRAFT",
+                "current_revision": 1,
+                "title": "招聘诈骗调查",
+                "objective": "在抖音平台调查以招聘为名实施的欺诈行为，识别入职前收费、虚假高薪承诺、分期培训收费、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法。",
+                "configuration": {
+                  "schema_version": "investigation-draft-config-v4",
+                  "platform": "dy",
+                  "investigation": {
+                    "mode": "search",
+                    "recall_plan": {
+                      "strategy": "existing_lexicon",
+                      "lexicon_id": "recruitment-fraud",
+                      "expected_runtime_content_hash": "8be9cb896265edfff8012ee24725661a94b0af418065e9bb040c9011fe53a345",
+                      "enabled_main_terms": [
+                        "入职收费",
+                        "招聘培训贷",
+                        "分期培训费"
+                      ]
+                    }
+                  },
+                  "judgement": {
+                    "strategy": "temporary_ruleset",
+                    "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+                    "proposal_version": 2,
+                    "content_hash": "5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546",
+                    "content": {
+                      "schema_version": 0,
+                      "name": "招聘诈骗风险规则集",
+                      "domain": "recruitment-fraud",
+                      "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+                      "general_exemptions": [],
+                      "categories": [
+                        {
+                          "category_id": "pre_employment_fee",
+                          "name": "入职前收费",
+                          "description": "以招聘为名在入职前向求职者收取各类费用",
+                          "order": 1,
+                          "rules": [
+                            {
+                              "rule_id": "pre_employment_fee.any",
+                              "name": "入职前收取任何费用",
+                              "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                              "suggested_risk_level": "high",
+                              "rule_exemptions": [
+                                {
+                                  "exemption_id": "self_paid_medical",
+                                  "name": "求职者自选公立医院体检",
+                                  "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                                  "source_mappings": []
+                                }
+                              ],
+                              "application_stages": [
+                                "image_evidence",
+                                "video_frame_evidence",
+                                "comment_audit",
+                                "fusion_audit"
+                              ],
+                              "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                              "enabled": true,
+                              "order": 1,
+                              "source_mappings": []
+                            }
+                          ]
+                        },
+                        {
+                          "category_id": "false_high_salary",
+                          "name": "虚假高薪承诺",
+                          "description": "承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训",
+                          "order": 2,
+                          "rules": [
+                            {
+                              "rule_id": "false_high_salary.easy_money",
+                              "name": "低门槛异常高薪或高薪诱导付费培训",
+                              "hit_condition": "内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。",
+                              "suggested_risk_level": "high",
+                              "rule_exemptions": [],
+                              "application_stages": [
+                                "image_evidence",
+                                "video_frame_evidence",
+                                "comment_audit",
+                                "fusion_audit"
+                              ],
+                              "adjudication_notes": "满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。",
+                              "enabled": true,
+                              "order": 2,
+                              "source_mappings": []
+                            }
+                          ]
+                        },
+                        {
+                          "category_id": "sensitive_info_collection",
+                          "name": "敏感信息套取",
+                          "description": "以招聘为名套取求职者敏感个人信息",
+                          "order": 3,
+                          "rules": [
+                            {
+                              "rule_id": "sensitive_info.financial",
+                              "name": "招聘早期索要敏感金融信息",
+                              "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                              "suggested_risk_level": "high",
+                              "rule_exemptions": [],
+                              "application_stages": [
+                                "image_evidence",
+                                "video_frame_evidence",
+                                "comment_audit",
+                                "fusion_audit"
+                              ],
+                              "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                              "enabled": true,
+                              "order": 3,
+                              "source_mappings": []
+                            }
+                          ]
+                        },
+                        {
+                          "category_id": "mlm_recruitment",
+                          "name": "传销拉人头",
+                          "description": "以招聘为名发展下线或拉人头",
+                          "order": 4,
+                          "rules": [
+                            {
+                              "rule_id": "mlm_recruitment.downline",
+                              "name": "以招聘名义发展下线",
+                              "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                              "suggested_risk_level": "high",
+                              "rule_exemptions": [],
+                              "application_stages": [
+                                "image_evidence",
+                                "video_frame_evidence",
+                                "comment_audit",
+                                "fusion_audit"
+                              ],
+                              "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                              "enabled": true,
+                              "order": 4,
+                              "source_mappings": []
+                            }
+                          ]
+                        },
+                        {
+                          "category_id": "brush_task_disguise",
+                          "name": "刷单任务引流",
+                          "description": "以招聘名义引导刷单或做任务返利",
+                          "order": 5,
+                          "rules": [
+                            {
+                              "rule_id": "brush_task_disguise.any",
+                              "name": "以招聘名义引导刷单",
+                              "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                              "suggested_risk_level": "high",
+                              "rule_exemptions": [],
+                              "application_stages": [
+                                "image_evidence",
+                                "video_frame_evidence",
+                                "comment_audit",
+                                "fusion_audit"
+                              ],
+                              "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                              "enabled": true,
+                              "order": 5,
+                              "source_mappings": []
+                            }
+                          ]
+                        },
+                        {
+                          "category_id": "overseas_high_risk",
+                          "name": "境外高风险工作诱导",
+                          "description": "引导求职者前往境外高风险地区工作",
+                          "order": 6,
+                          "rules": [
+                            {
+                              "rule_id": "overseas_high_risk.sea",
+                              "name": "诱导前往东南亚等高风险地区",
+                              "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                              "suggested_risk_level": "high",
+                              "rule_exemptions": [],
+                              "application_stages": [
+                                "image_evidence",
+                                "video_frame_evidence",
+                                "comment_audit",
+                                "fusion_audit"
+                              ],
+                              "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                              "enabled": true,
+                              "order": 6,
+                              "source_mappings": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                },
+                "created_by": "principal-a",
+                "updated_by": "principal-a",
+                "created_at": "2026-09-07T12:02:42.881426+00:00",
+                "updated_at": "2026-09-07T12:02:42.881426+00:00",
+                "confirmed_revision": null,
+                "confirmed_by": "",
+                "confirmed_at": ""
+              },
+              "confirmation_preview": {
+                "draft_id": "investigation-draft:b1177f86639d4e54a5d8cba52b920beb",
+                "draft_revision": 1,
+                "title": "招聘诈骗调查",
+                "objective": "在抖音平台调查以招聘为名实施的欺诈行为，识别入职前收费、虚假高薪承诺、分期培训收费、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法。",
+                "mode": "search",
+                "platform": "dy",
+                "resolved_search_terms": [
+                  "入职收费",
+                  "招聘培训贷",
+                  "分期培训费"
+                ],
+                "creator_url": "",
+                "recall_plan": {
+                  "strategy": "existing_lexicon",
+                  "lexicon_id": "recruitment-fraud",
+                  "lexicon_title": "招聘诈骗召回词库",
+                  "runtime_content_hash": "8be9cb896265edfff8012ee24725661a94b0af418065e9bb040c9011fe53a345",
+                  "enabled_main_term_count": 3,
+                  "enabled_main_terms": [
+                    "入职收费",
+                    "招聘培训贷",
+                    "分期培训费"
+                  ],
+                  "temporary_terms": [],
+                  "source_lexicon_ids": []
+                },
+                "ruleset_revision": null,
+                "temporary_ruleset": {
+                  "strategy": "temporary_ruleset",
+                  "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+                  "proposal_version": 2,
+                  "content_hash": "5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546",
+                  "content": {
+                    "schema_version": 0,
+                    "name": "招聘诈骗风险规则集",
+                    "domain": "recruitment-fraud",
+                    "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+                    "general_exemptions": [],
+                    "categories": [
+                      {
+                        "category_id": "pre_employment_fee",
+                        "name": "入职前收费",
+                        "description": "以招聘为名在入职前向求职者收取各类费用",
+                        "order": 1,
+                        "rules": [
+                          {
+                            "rule_id": "pre_employment_fee.any",
+                            "name": "入职前收取任何费用",
+                            "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                            "suggested_risk_level": "high",
+                            "rule_exemptions": [
+                              {
+                                "exemption_id": "self_paid_medical",
+                                "name": "求职者自选公立医院体检",
+                                "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                                "source_mappings": []
+                              }
+                            ],
+                            "application_stages": [
+                              "image_evidence",
+                              "video_frame_evidence",
+                              "comment_audit",
+                              "fusion_audit"
+                            ],
+                            "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                            "enabled": true,
+                            "order": 1,
+                            "source_mappings": []
+                          }
+                        ]
+                      },
+                      {
+                        "category_id": "false_high_salary",
+                        "name": "虚假高薪承诺",
+                        "description": "承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训",
+                        "order": 2,
+                        "rules": [
+                          {
+                            "rule_id": "false_high_salary.easy_money",
+                            "name": "低门槛异常高薪或高薪诱导付费培训",
+                            "hit_condition": "内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。",
+                            "suggested_risk_level": "high",
+                            "rule_exemptions": [],
+                            "application_stages": [
+                              "image_evidence",
+                              "video_frame_evidence",
+                              "comment_audit",
+                              "fusion_audit"
+                            ],
+                            "adjudication_notes": "满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。",
+                            "enabled": true,
+                            "order": 2,
+                            "source_mappings": []
+                          }
+                        ]
+                      },
+                      {
+                        "category_id": "sensitive_info_collection",
+                        "name": "敏感信息套取",
+                        "description": "以招聘为名套取求职者敏感个人信息",
+                        "order": 3,
+                        "rules": [
+                          {
+                            "rule_id": "sensitive_info.financial",
+                            "name": "招聘早期索要敏感金融信息",
+                            "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                            "suggested_risk_level": "high",
+                            "rule_exemptions": [],
+                            "application_stages": [
+                              "image_evidence",
+                              "video_frame_evidence",
+                              "comment_audit",
+                              "fusion_audit"
+                            ],
+                            "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                            "enabled": true,
+                            "order": 3,
+                            "source_mappings": []
+                          }
+                        ]
+                      },
+                      {
+                        "category_id": "mlm_recruitment",
+                        "name": "传销拉人头",
+                        "description": "以招聘为名发展下线或拉人头",
+                        "order": 4,
+                        "rules": [
+                          {
+                            "rule_id": "mlm_recruitment.downline",
+                            "name": "以招聘名义发展下线",
+                            "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                            "suggested_risk_level": "high",
+                            "rule_exemptions": [],
+                            "application_stages": [
+                              "image_evidence",
+                              "video_frame_evidence",
+                              "comment_audit",
+                              "fusion_audit"
+                            ],
+                            "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                            "enabled": true,
+                            "order": 4,
+                            "source_mappings": []
+                          }
+                        ]
+                      },
+                      {
+                        "category_id": "brush_task_disguise",
+                        "name": "刷单任务引流",
+                        "description": "以招聘名义引导刷单或做任务返利",
+                        "order": 5,
+                        "rules": [
+                          {
+                            "rule_id": "brush_task_disguise.any",
+                            "name": "以招聘名义引导刷单",
+                            "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                            "suggested_risk_level": "high",
+                            "rule_exemptions": [],
+                            "application_stages": [
+                              "image_evidence",
+                              "video_frame_evidence",
+                              "comment_audit",
+                              "fusion_audit"
+                            ],
+                            "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                            "enabled": true,
+                            "order": 5,
+                            "source_mappings": []
+                          }
+                        ]
+                      },
+                      {
+                        "category_id": "overseas_high_risk",
+                        "name": "境外高风险工作诱导",
+                        "description": "引导求职者前往境外高风险地区工作",
+                        "order": 6,
+                        "rules": [
+                          {
+                            "rule_id": "overseas_high_risk.sea",
+                            "name": "诱导前往东南亚等高风险地区",
+                            "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                            "suggested_risk_level": "high",
+                            "rule_exemptions": [],
+                            "application_stages": [
+                              "image_evidence",
+                              "video_frame_evidence",
+                              "comment_audit",
+                              "fusion_audit"
+                            ],
+                            "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                            "enabled": true,
+                            "order": 6,
+                            "source_mappings": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "max_notes": 1,
+                "blockers": [
+                  {
+                    "code": "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
+                    "message": "本次使用临时规则；临时规则执行尚未在 T5 接通。",
+                    "resource_type": "",
+                    "resource_id": "",
+                    "latest_safe_summary": {},
+                    "management_url": ""
+                  }
+                ],
+                "can_confirm": false
+              }
+            }
+          }
+        }
+      ],
+      "artifact": {
+        "artifact_type": "investigation_draft",
+        "confirmation_preview": {
+          "blockers": [
+            {
+              "code": "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
+              "latest_safe_summary": {},
+              "management_url": "",
+              "message": "本次使用临时规则；临时规则执行尚未在 T5 接通。",
+              "resource_id": "",
+              "resource_type": ""
+            }
+          ],
+          "can_confirm": false,
+          "creator_url": "",
+          "draft_id": "investigation-draft:b1177f86639d4e54a5d8cba52b920beb",
+          "draft_revision": 1,
+          "max_notes": 1,
+          "mode": "search",
+          "objective": "在抖音平台调查以招聘为名实施的欺诈行为，识别入职前收费、虚假高薪承诺、分期培训收费、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法。",
+          "platform": "dy",
+          "recall_plan": {
+            "enabled_main_term_count": 3,
+            "enabled_main_terms": [
+              "入职收费",
+              "招聘培训贷",
+              "分期培训费"
+            ],
+            "lexicon_id": "recruitment-fraud",
+            "lexicon_title": "招聘诈骗召回词库",
+            "runtime_content_hash": "8be9cb896265edfff8012ee24725661a94b0af418065e9bb040c9011fe53a345",
+            "source_lexicon_ids": [],
+            "strategy": "existing_lexicon",
+            "temporary_terms": []
+          },
+          "resolved_search_terms": [
+            "入职收费",
+            "招聘培训贷",
+            "分期培训费"
+          ],
+          "ruleset_revision": null,
+          "temporary_ruleset": {
+            "content": {
+              "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+              "categories": [
+                {
+                  "category_id": "pre_employment_fee",
+                  "description": "以招聘为名在入职前向求职者收取各类费用",
+                  "name": "入职前收费",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                      "name": "入职前收取任何费用",
+                      "order": 1,
+                      "rule_exemptions": [
+                        {
+                          "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                          "exemption_id": "self_paid_medical",
+                          "name": "求职者自选公立医院体检",
+                          "source_mappings": []
+                        }
+                      ],
+                      "rule_id": "pre_employment_fee.any",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "false_high_salary",
+                  "description": "承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训",
+                  "name": "虚假高薪承诺",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "adjudication_notes": "满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。",
+                      "name": "低门槛异常高薪或高薪诱导付费培训",
+                      "order": 2,
+                      "rule_exemptions": [],
+                      "rule_id": "false_high_salary.easy_money",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "sensitive_info_collection",
+                  "description": "以招聘为名套取求职者敏感个人信息",
+                  "name": "敏感信息套取",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                      "name": "招聘早期索要敏感金融信息",
+                      "order": 3,
+                      "rule_exemptions": [],
+                      "rule_id": "sensitive_info.financial",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "mlm_recruitment",
+                  "description": "以招聘为名发展下线或拉人头",
+                  "name": "传销拉人头",
+                  "order": 4,
+                  "rules": [
+                    {
+                      "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                      "name": "以招聘名义发展下线",
+                      "order": 4,
+                      "rule_exemptions": [],
+                      "rule_id": "mlm_recruitment.downline",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "brush_task_disguise",
+                  "description": "以招聘名义引导刷单或做任务返利",
+                  "name": "刷单任务引流",
+                  "order": 5,
+                  "rules": [
+                    {
+                      "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                      "name": "以招聘名义引导刷单",
+                      "order": 5,
+                      "rule_exemptions": [],
+                      "rule_id": "brush_task_disguise.any",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "overseas_high_risk",
+                  "description": "引导求职者前往境外高风险地区工作",
+                  "name": "境外高风险工作诱导",
+                  "order": 6,
+                  "rules": [
+                    {
+                      "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                      "name": "诱导前往东南亚等高风险地区",
+                      "order": 6,
+                      "rule_exemptions": [],
+                      "rule_id": "overseas_high_risk.sea",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                }
+              ],
+              "domain": "recruitment-fraud",
+              "general_exemptions": [],
+              "name": "招聘诈骗风险规则集",
+              "schema_version": 0
+            },
+            "content_hash": "5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546",
+            "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+            "proposal_version": 2,
+            "strategy": "temporary_ruleset"
+          },
+          "title": "招聘诈骗调查"
+        },
+        "draft": {
+          "configuration": {
+            "investigation": {
+              "mode": "search",
+              "recall_plan": {
+                "enabled_main_terms": [
+                  "入职收费",
+                  "招聘培训贷",
+                  "分期培训费"
+                ],
+                "expected_runtime_content_hash": "8be9cb896265edfff8012ee24725661a94b0af418065e9bb040c9011fe53a345",
+                "lexicon_id": "recruitment-fraud",
+                "strategy": "existing_lexicon"
+              }
+            },
+            "judgement": {
+              "content": {
+                "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+                "categories": [
+                  {
+                    "category_id": "pre_employment_fee",
+                    "description": "以招聘为名在入职前向求职者收取各类费用",
+                    "name": "入职前收费",
+                    "order": 1,
+                    "rules": [
+                      {
+                        "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                        "name": "入职前收取任何费用",
+                        "order": 1,
+                        "rule_exemptions": [
+                          {
+                            "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                            "exemption_id": "self_paid_medical",
+                            "name": "求职者自选公立医院体检",
+                            "source_mappings": []
+                          }
+                        ],
+                        "rule_id": "pre_employment_fee.any",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "false_high_salary",
+                    "description": "承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训",
+                    "name": "虚假高薪承诺",
+                    "order": 2,
+                    "rules": [
+                      {
+                        "adjudication_notes": "满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。",
+                        "name": "低门槛异常高薪或高薪诱导付费培训",
+                        "order": 2,
+                        "rule_exemptions": [],
+                        "rule_id": "false_high_salary.easy_money",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "sensitive_info_collection",
+                    "description": "以招聘为名套取求职者敏感个人信息",
+                    "name": "敏感信息套取",
+                    "order": 3,
+                    "rules": [
+                      {
+                        "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                        "name": "招聘早期索要敏感金融信息",
+                        "order": 3,
+                        "rule_exemptions": [],
+                        "rule_id": "sensitive_info.financial",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "mlm_recruitment",
+                    "description": "以招聘为名发展下线或拉人头",
+                    "name": "传销拉人头",
+                    "order": 4,
+                    "rules": [
+                      {
+                        "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                        "name": "以招聘名义发展下线",
+                        "order": 4,
+                        "rule_exemptions": [],
+                        "rule_id": "mlm_recruitment.downline",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "brush_task_disguise",
+                    "description": "以招聘名义引导刷单或做任务返利",
+                    "name": "刷单任务引流",
+                    "order": 5,
+                    "rules": [
+                      {
+                        "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                        "name": "以招聘名义引导刷单",
+                        "order": 5,
+                        "rule_exemptions": [],
+                        "rule_id": "brush_task_disguise.any",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  },
+                  {
+                    "category_id": "overseas_high_risk",
+                    "description": "引导求职者前往境外高风险地区工作",
+                    "name": "境外高风险工作诱导",
+                    "order": 6,
+                    "rules": [
+                      {
+                        "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                        "name": "诱导前往东南亚等高风险地区",
+                        "order": 6,
+                        "rule_exemptions": [],
+                        "rule_id": "overseas_high_risk.sea",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      }
+                    ]
+                  }
+                ],
+                "domain": "recruitment-fraud",
+                "general_exemptions": [],
+                "name": "招聘诈骗风险规则集",
+                "schema_version": 0
+              },
+              "content_hash": "5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546",
+              "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+              "proposal_version": 2,
+              "strategy": "temporary_ruleset"
+            },
+            "platform": "dy",
+            "schema_version": "investigation-draft-config-v4"
+          },
+          "confirmed_at": "",
+          "confirmed_revision": null,
+          "created_at": "2026-09-07T12:02:42.881426+00:00",
+          "current_revision": 1,
+          "id": "investigation-draft:b1177f86639d4e54a5d8cba52b920beb",
+          "objective": "在抖音平台调查以招聘为名实施的欺诈行为，识别入职前收费、虚假高薪承诺、分期培训收费、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法。",
+          "status": "DRAFT",
+          "title": "招聘诈骗调查",
+          "updated_at": "2026-09-07T12:02:42.881426+00:00"
+        },
+        "draft_id": "investigation-draft:b1177f86639d4e54a5d8cba52b920beb",
+        "draft_revision": 1,
+        "presentation_stage": "suggestion",
+        "proposal_presentations": [],
+        "suggestion": {
+          "creator_url": "",
+          "mode": "search",
+          "objective": "在抖音平台调查以招聘为名实施的欺诈行为，识别入职前收费、虚假高薪承诺、分期培训收费、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法。",
+          "platform_options": [
+            {
+              "available": true,
+              "id": "dy",
+              "name": "抖音"
+            },
+            {
+              "available": true,
+              "id": "xhs",
+              "name": "小红书"
+            },
+            {
+              "available": true,
+              "id": "ks",
+              "name": "快手"
+            }
+          ],
+          "recall_lexicons": [],
+          "ruleset_revision": null,
+          "search_terms": [
+            "入职收费",
+            "招聘培训贷",
+            "分期培训费"
+          ],
+          "selected_platform": "dy",
+          "temporary_ruleset": {
+            "content": {
+              "audit_goal": "识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。",
+              "categories": [
+                {
+                  "category_id": "pre_employment_fee",
+                  "description": "以招聘为名在入职前向求职者收取各类费用",
+                  "name": "入职前收费",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "adjudication_notes": "只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。",
+                      "name": "入职前收取任何费用",
+                      "order": 1,
+                      "rule_exemptions": [
+                        {
+                          "condition": "明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。",
+                          "exemption_id": "self_paid_medical",
+                          "name": "求职者自选公立医院体检",
+                          "source_mappings": []
+                        }
+                      ],
+                      "rule_id": "pre_employment_fee.any",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "false_high_salary",
+                  "description": "承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训",
+                  "name": "虚假高薪承诺",
+                  "order": 2,
+                  "rules": [
+                    {
+                      "adjudication_notes": "满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。",
+                      "name": "低门槛异常高薪或高薪诱导付费培训",
+                      "order": 2,
+                      "rule_exemptions": [],
+                      "rule_id": "false_high_salary.easy_money",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "sensitive_info_collection",
+                  "description": "以招聘为名套取求职者敏感个人信息",
+                  "name": "敏感信息套取",
+                  "order": 3,
+                  "rules": [
+                    {
+                      "adjudication_notes": "正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。",
+                      "name": "招聘早期索要敏感金融信息",
+                      "order": 3,
+                      "rule_exemptions": [],
+                      "rule_id": "sensitive_info.financial",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "mlm_recruitment",
+                  "description": "以招聘为名发展下线或拉人头",
+                  "name": "传销拉人头",
+                  "order": 4,
+                  "rules": [
+                    {
+                      "adjudication_notes": "关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。",
+                      "name": "以招聘名义发展下线",
+                      "order": 4,
+                      "rule_exemptions": [],
+                      "rule_id": "mlm_recruitment.downline",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "brush_task_disguise",
+                  "description": "以招聘名义引导刷单或做任务返利",
+                  "name": "刷单任务引流",
+                  "order": 5,
+                  "rules": [
+                    {
+                      "adjudication_notes": "刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。",
+                      "name": "以招聘名义引导刷单",
+                      "order": 5,
+                      "rule_exemptions": [],
+                      "rule_id": "brush_task_disguise.any",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                },
+                {
+                  "category_id": "overseas_high_risk",
+                  "description": "引导求职者前往境外高风险地区工作",
+                  "name": "境外高风险工作诱导",
+                  "order": 6,
+                  "rules": [
+                    {
+                      "adjudication_notes": "关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。",
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "enabled": true,
+                      "hit_condition": "内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。",
+                      "name": "诱导前往东南亚等高风险地区",
+                      "order": 6,
+                      "rule_exemptions": [],
+                      "rule_id": "overseas_high_risk.sea",
+                      "source_mappings": [],
+                      "suggested_risk_level": "high"
+                    }
+                  ]
+                }
+              ],
+              "domain": "recruitment-fraud",
+              "general_exemptions": [],
+              "name": "招聘诈骗风险规则集",
+              "schema_version": 0
+            },
+            "content_hash": "5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546",
+            "proposal_id": "ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef",
+            "proposal_version": 2,
+            "strategy": "temporary_ruleset"
+          },
+          "title": "招聘诈骗调查"
+        }
+      },
+      "answer": "已采用当前这套临时规则，并创建了调查草稿。配置如下：\n\n---\n\n### 调查草稿：招聘诈骗调查\n\n| 配置项 | 值 |\n|--------|-----|\n| **平台** | 抖音 |\n| **模式** | 搜索 |\n| **召回词库** | 招聘诈骗召回词库（3 个主词：入职收费、招聘培训贷、分期培训费） |\n| **判定规则** | 临时规则集 v2（6 类规则，含你修改后的分期培训收费严格版本） |\n| **草稿 ID** | `investigation-draft:b1177f86639d4e54a5d8cba52b920beb` |\n\n---\n\n### ⚠️ 当前阻塞\n\n系统提示：**临时规则执行尚未在 T5 接通**（`TEMPORARY_RULESET_EXECUTION_UNAVAILABLE`）。\n\n这意味着草稿已保存，你可以随时查看和编辑，但**暂时无法确认执行**。需要等待临时规则执行通道（T5）接通后，才能正式确认并启动调查。\n\n如果你需要修改草稿中的任何配置（平台、召回词、目标等），随时告诉我。",
+      "drafts": [
+        {
+          "id": "investigation-draft:b1177f86639d4e54a5d8cba52b920beb",
+          "owner_principal": "principal-a",
+          "status": "DRAFT",
+          "current_revision": 1,
+          "title": "招聘诈骗调查",
+          "objective": "在抖音平台调查以招聘为名实施的欺诈行为，识别入职前收费、虚假高薪承诺、分期培训收费、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法。",
+          "configuration_json": "{\"investigation\":{\"mode\":\"search\",\"recall_plan\":{\"enabled_main_terms\":[\"入职收费\",\"招聘培训贷\",\"分期培训费\"],\"expected_runtime_content_hash\":\"8be9cb896265edfff8012ee24725661a94b0af418065e9bb040c9011fe53a345\",\"lexicon_id\":\"recruitment-fraud\",\"strategy\":\"existing_lexicon\"}},\"judgement\":{\"content\":{\"audit_goal\":\"识别以招聘为名实施的欺诈行为，包括入职前收费、虚假高薪承诺、敏感信息套取、传销拉人头、刷单任务引流、境外高风险工作诱导等典型招聘诈骗手法，保护求职者免受财产损失和人身安全风险。\",\"categories\":[{\"category_id\":\"pre_employment_fee\",\"description\":\"以招聘为名在入职前向求职者收取各类费用\",\"name\":\"入职前收费\",\"order\":1,\"rules\":[{\"adjudication_notes\":\"只要出现入职前以任何名义向求职者收费的要求即命中。注意区分：求职者自行支付给第三方医院的标准体检费（非雇主指定机构）不视为本规则风险；但雇主指定机构并要求付费给该机构则命中。\",\"application_stages\":[\"image_evidence\",\"video_frame_evidence\",\"comment_audit\",\"fusion_audit\"],\"enabled\":true,\"hit_condition\":\"内容中出现以招聘、入职、上岗为前提，要求求职者缴纳培训费、押金、服装费、体检费、办证费、建档费、保证金、材料费、工牌费、伙食费等任何名目的费用，或暗示不缴费无法入职。\",\"name\":\"入职前收取任何费用\",\"order\":1,\"rule_exemptions\":[{\"condition\":\"明确说明体检由求职者自行选择任意公立医院完成，费用直接支付给医院而非雇主或雇主指定机构，且不以缴费作为入职前提。\",\"exemption_id\":\"self_paid_medical\",\"name\":\"求职者自选公立医院体检\",\"source_mappings\":[]}],\"rule_id\":\"pre_employment_fee.any\",\"source_mappings\":[],\"suggested_risk_level\":\"high\"}]},{\"category_id\":\"false_high_salary\",\"description\":\"承诺明显超出市场水平的高薪且门槛极低，或以高薪为诱饵引导求职者付费培训\",\"name\":\"虚假高薪承诺\",\"order\":2,\"rules\":[{\"adjudication_notes\":\"满足以下任一条件即命中：(1)异常高薪+极低门槛；(2)高薪承诺+付费培训（含分期）。若岗位明确要求相关资质、经验或学历，且无付费培训要求，即使薪资较高也不命中本规则。关注'日结''周结''无需经验''学历不限''年龄不限''先培训后上岗''培训费可分期'等组合表述。\",\"application_stages\":[\"image_evidence\",\"video_frame_evidence\",\"comment_audit\",\"fusion_audit\"],\"enabled\":true,\"hit_condition\":\"内容中出现以下任一情形：(1)承诺明显超出同类岗位市场水平的薪资（如日薪500+、月入过万等），同时声称无需经验、学历不限、年龄不限、时间自由、轻松简单等极低门槛条件；(2)以高薪岗位为诱饵，要求求职者先参加付费培训（含一次性缴费或分期培训收费、贷款培训），承诺培训后安排高薪工作或保证就业，无论培训费是否声称可分期、可退还、可从工资中扣除。\",\"name\":\"低门槛异常高薪或高薪诱导付费培训\",\"order\":2,\"rule_exemptions\":[],\"rule_id\":\"false_high_salary.easy_money\",\"source_mappings\":[],\"suggested_risk_level\":\"high\"}]},{\"category_id\":\"sensitive_info_collection\",\"description\":\"以招聘为名套取求职者敏感个人信息\",\"name\":\"敏感信息套取\",\"order\":3,\"rules\":[{\"adjudication_notes\":\"正规招聘流程会在入职后通过HR系统收集必要信息，但不会在初次接触阶段就要求提供银行卡密码、验证码等。本规则聚焦于在招聘沟通早期即索要高度敏感信息的行为。\",\"application_stages\":[\"image_evidence\",\"video_frame_evidence\",\"comment_audit\",\"fusion_audit\"],\"enabled\":true,\"hit_condition\":\"内容中在招聘沟通阶段要求求职者提供身份证正反面照片、银行卡号及密码、手机验证码、支付密码、芝麻信用分截图、花呗/借呗额度截图等高度敏感个人信息。\",\"name\":\"招聘早期索要敏感金融信息\",\"order\":3,\"rule_exemptions\":[],\"rule_id\":\"sensitive_info.financial\",\"source_mappings\":[],\"suggested_risk_level\":\"high\"}]},{\"category_id\":\"mlm_recruitment\",\"description\":\"以招聘为名发展下线或拉人头\",\"name\":\"传销拉人头\",\"order\":4,\"rules\":[{\"adjudication_notes\":\"关注收入来源是否主要来自发展下线而非实际劳动。若岗位核心是'招人''发展团队''裂变'且收入与下线数量挂钩，即使命中。正规销售岗位有明确产品/服务且收入来自客户成交，不命中。\",\"application_stages\":[\"image_evidence\",\"video_frame_evidence\",\"comment_audit\",\"fusion_audit\"],\"enabled\":true,\"hit_condition\":\"内容中以招聘为名，实际要求求职者发展下线、拉人头、组建团队，收入主要来自发展人员数量或下线缴费，或出现'层级''团队计酬''裂变''管道收益'等传销特征表述。\",\"name\":\"以招聘名义发展下线\",\"order\":4,\"rule_exemptions\":[],\"rule_id\":\"mlm_recruitment.downline\",\"source_mappings\":[],\"suggested_risk_level\":\"high\"}]},{\"category_id\":\"brush_task_disguise\",\"description\":\"以招聘名义引导刷单或做任务返利\",\"name\":\"刷单任务引流\",\"order\":5,\"rules\":[{\"adjudication_notes\":\"刷单本身是违法违规行为。若招聘内容引导求职者做'刷单''刷信誉''点赞关注返利''垫付任务'等，无论是否包装为'兼职''副业''在家工作'，均命中。\",\"application_stages\":[\"image_evidence\",\"video_frame_evidence\",\"comment_audit\",\"fusion_audit\"],\"enabled\":true,\"hit_condition\":\"内容中以招聘、兼职、副业为名，引导求职者进行刷单、刷信誉、点赞关注返利、垫付商品款后返佣、做任务返利等刷单类活动。\",\"name\":\"以招聘名义引导刷单\",\"order\":5,\"rule_exemptions\":[],\"rule_id\":\"brush_task_disguise.any\",\"source_mappings\":[],\"suggested_risk_level\":\"high\"}]},{\"category_id\":\"overseas_high_risk\",\"description\":\"引导求职者前往境外高风险地区工作\",\"name\":\"境外高风险工作诱导\",\"order\":6,\"rules\":[{\"adjudication_notes\":\"关注目的地是否为东南亚等已知电诈高发地区，以及是否以高薪诱导且模糊工作内容。正规跨国企业外派有明确公司背景和岗位职责，不命中。\",\"application_stages\":[\"image_evidence\",\"video_frame_evidence\",\"comment_audit\",\"fusion_audit\"],\"enabled\":true,\"hit_condition\":\"内容中招聘前往缅甸、柬埔寨、老挝、菲律宾、阿联酋迪拜等境外高风险地区的工作，承诺高薪但工作内容模糊，或声称'包机票''包食宿''无需护照'等异常条件。\",\"name\":\"诱导前往东南亚等高风险地区\",\"order\":6,\"rule_exemptions\":[],\"rule_id\":\"overseas_high_risk.sea\",\"source_mappings\":[],\"suggested_risk_level\":\"high\"}]}],\"domain\":\"recruitment-fraud\",\"general_exemptions\":[],\"name\":\"招聘诈骗风险规则集\",\"schema_version\":0},\"content_hash\":\"5dddca1d8cc753bfd8caeac2d9bfcbef8d9a4f0746a886b219fa4ccc799f3546\",\"proposal_id\":\"ruleset-proposal:fa88ceb0ec7b483b861e8cbe04a48bef\",\"proposal_version\":2,\"strategy\":\"temporary_ruleset\"},\"platform\":\"dy\",\"schema_version\":\"investigation-draft-config-v4\"}",
+          "created_by": "principal-a",
+          "updated_by": "principal-a",
+          "confirmed_revision": null,
+          "confirmed_by": "",
+          "confirmed_at": "",
+          "created_at": "2026-09-07T12:02:42.881426+00:00",
+          "updated_at": "2026-09-07T12:02:42.881426+00:00"
+        }
+      ]
+    }
+  ],
+  "pass": true,
+  "setup": "Isolated fixture includes a relevant recruitment Recall lexicon and supported platforms; no matching formal RuleSet.",
+  "stale_acceptance": {
+    "result": {
+      "status": "error",
+      "error": {
+        "code": "PROPOSAL_PRESENTATION_STALE",
+        "message": "Proposal changed. Present the latest complete Proposal and wait for new explicit approval.",
+        "details": {
+          "mutation_applied": false
+        }
+      }
+    },
+    "turn_id": "investigation-turn:27a160d58b9e48a1ad3cbc590d6f5b81",
+    "draft_unchanged": true
+  },
+  "no_formal_mutation": true,
+  "execution_counts": {
+    "run": 0,
+    "job": 0,
+    "report": 0
+  }
+}

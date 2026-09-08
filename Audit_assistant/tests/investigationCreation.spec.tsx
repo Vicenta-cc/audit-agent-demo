@@ -156,6 +156,23 @@ const suggestion = {
   }]
 };
 
+test("temporary approval survives recovery and blocks execution", () => {
+  const temporary = {
+    strategy: "temporary_ruleset" as const, proposal_id: "proposal-1", proposal_version: 2,
+    content_hash: "a".repeat(64), content: { name: "招聘诈骗规则", domain: "招聘诈骗", audit_goal: "招聘收费风险",
+      categories: [{ rules: [{ enabled: true }, { enabled: false }] }] }
+  };
+  const temporaryPreview = { ...preview, ruleset_revision: null, temporary_ruleset: temporary, can_confirm: false,
+    blockers: [{ code: "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE", message: "T5 pending",
+      resource_type: "", resource_id: "", latest_safe_summary: {}, management_url: "" }] };
+  const view = buildConfirmationCardView(draft, temporaryPreview);
+  expect(view.ruleSet).toBe("本次使用临时规则：招聘诈骗规则");
+  expect(view.canConfirm).toBe(false);
+  expect(formatConfirmationBlockerMessage(temporaryPreview.blockers[0].code, "")).toBe("本次使用临时规则，暂不支持启动调查。");
+  expect(buildDraftSuggestionPlanView({ ...suggestion, ruleset_revision: null, temporary_ruleset: temporary }))
+    .toMatchObject({ ruleSetName: "本次使用临时规则：招聘诈骗规则", ruleSetVersion: 2, enabledRuleCount: 1 });
+});
+
 test("authoritative Proposal survives conversation recovery without prose sanitization", () => {
   const text = "助手说明：只有一条。\n\n临时研判规则 · 完整规则快照\n规则数：3\nhttps://example.test <tag> ``` draft_id";
   const state = workspaceState({

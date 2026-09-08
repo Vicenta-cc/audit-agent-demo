@@ -1171,8 +1171,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   ...item.draft,
                   platforms: [candidate.id],
                   keywords: preview.resolved_search_terms,
-                  matchedRuleSet: preview.ruleset_revision?.name || "尚未绑定规则集",
-                  analysisPlanName: preview.ruleset_revision?.name || "尚未选择研判规则"
+                  matchedRuleSet: preview.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : preview.ruleset_revision?.name || "尚未绑定规则集",
+                  analysisPlanName: preview.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : preview.ruleset_revision?.name || "尚未选择研判规则"
                 },
                 creationBinding: {
                   ...item.creationBinding,

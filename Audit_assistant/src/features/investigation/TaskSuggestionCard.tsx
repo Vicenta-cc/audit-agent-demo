@@ -64,7 +64,7 @@ export function TaskSuggestionCard({
   const keywordsText = draft.keywords.join("、");
   const blockerLink = buildSuggestionBlockerLink(preview);
   const hasAnalysisPlan = preview
-    ? Boolean(preview.ruleset_revision)
+    ? Boolean(preview.ruleset_revision || preview.temporary_ruleset)
     : Boolean(draft.analysisPlanName || draft.matchedRuleSet);
   const [isEditingKeywords, setIsEditingKeywords] = useState(false);
   const [keywordDraft, setKeywordDraft] = useState(keywordsText);
@@ -285,7 +285,9 @@ export function TaskSuggestionCard({
           <button
             type="button"
             className="mt-button mt-button-primary"
-            disabled={isReadOnly || draft.platforms.length === 0 || Boolean(preview?.blockers.length)}
+            disabled={isReadOnly || draft.platforms.length === 0 || Boolean(preview?.blockers.some(
+              (blocker) => blocker.code !== "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE"
+            ))}
             onClick={onGenerateConfig}
           >
             生成任务配置

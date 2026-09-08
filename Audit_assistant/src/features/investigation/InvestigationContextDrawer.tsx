@@ -28,10 +28,12 @@ export function buildDraftSuggestionPlanView(
   suggestion: InvestigationDraftSuggestion
 ) {
   return {
-    ruleSetName: suggestion.ruleset_revision?.name || "尚未绑定规则集",
-    ruleSetVersion: suggestion.ruleset_revision?.version || null,
-    ruleSetDomain: suggestion.ruleset_revision?.domain || "",
-    enabledRuleCount: suggestion.ruleset_revision?.enabled_rule_count || 0,
+    ruleSetName: suggestion.temporary_ruleset ? `本次使用临时规则：${suggestion.temporary_ruleset.content.name}` : suggestion.ruleset_revision?.name || "尚未绑定规则集",
+    ruleSetVersion: suggestion.temporary_ruleset?.proposal_version || suggestion.ruleset_revision?.version || null,
+    ruleSetDomain: suggestion.temporary_ruleset?.content.domain || suggestion.ruleset_revision?.domain || "",
+    enabledRuleCount: suggestion.temporary_ruleset
+      ? suggestion.temporary_ruleset.content.categories.flatMap((category) => category.rules).filter((rule) => rule.enabled).length
+      : suggestion.ruleset_revision?.enabled_rule_count || 0,
     recallLexicons: suggestion.recall_lexicons.map((lexicon) => ({
       id: lexicon.id,
       title: lexicon.title,

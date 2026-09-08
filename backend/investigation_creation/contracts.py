@@ -101,6 +101,7 @@ InvestigationBlockerCode = Literal[
     "CRAWLER_ACCOUNT_LOGIN_REQUIRED",
     "CONFIRMATION_REQUIRED",
     "IDEMPOTENCY_CONFLICT",
+    "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
 ]
 
 
@@ -238,13 +239,41 @@ class ExistingRuleSetJudgement(StrictModel):
         return value.strip() if isinstance(value, str) else value
 
 
+class TemporaryRuleSetJudgement(StrictModel):
+    strategy: Literal["temporary_ruleset"]
+    proposal_id: StrictStr = Field(min_length=1, max_length=160)
+    proposal_version: StrictInt = Field(ge=1)
+    content_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
+    content: RuleSetContent
+
+    @model_validator(mode="after")
+    def validate_hash(self) -> "TemporaryRuleSetJudgement":
+        from backend.rulesets.compiler import content_hash
+
+        if content_hash(self.content) != self.content_hash:
+            raise ValueError("temporary RuleSet content hash mismatch")
+        return self
+
+
+RuleSetJudgement = Annotated[
+    ExistingRuleSetJudgement | TemporaryRuleSetJudgement, Field(discriminator="strategy")
+]
+
+
 class InvestigationDraftConfiguration(StrictModel):
     schema_version: Literal["investigation-draft-config-v4"] = (
         "investigation-draft-config-v4"
     )
     platform: Platform
     investigation: InvestigationMode
-    judgement: ExistingRuleSetJudgement
+    judgement: RuleSetJudgement
+
+    @field_validator("judgement", mode="before")
+    @classmethod
+    def preserve_existing_default(cls, value: object) -> object:
+        if isinstance(value, dict) and "strategy" not in value:
+            return {"strategy": "existing_ruleset", **value}
+        return value
 
     @model_validator(mode="before")
     @classmethod
@@ -495,7 +524,7 @@ class AuthoritativeDraftResolution(StrictModel):
     """Server-resolved resource truth for one effective Draft configuration."""
 
     normalized_configuration: InvestigationDraftConfiguration
-    ruleset_revision: RuleSetRevisionSummary
+    ruleset_revision: RuleSetRevisionSummary | None
     recall_lexicon: RecallLexiconSummary | None = None
     source_lexicons: list[RecallLexiconSummary] = Field(default_factory=list)
     editable_blockers: list[InvestigationBlocker] = Field(default_factory=list)
@@ -587,6 +616,7 @@ class ConfirmationPreview(StrictModel):
     creator_url: StrictStr = ""
     recall_plan: RecallPlanPreview
     ruleset_revision: RuleSetRevisionSummary | None = None
+    temporary_ruleset: TemporaryRuleSetJudgement | None = None
     max_notes: Literal[1] = 1
     blockers: list[InvestigationBlocker] = Field(default_factory=list)
     can_confirm: StrictBool

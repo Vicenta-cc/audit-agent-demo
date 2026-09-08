@@ -53,10 +53,10 @@ function publicMessage(
         taskName: suggestion.title,
         taskType: "平台话题采集",
         subject: suggestion.objective,
-        matchedRuleSet: suggestion.ruleset_revision?.name || "尚未绑定规则集",
+        matchedRuleSet: suggestion.temporary_ruleset ? `本次使用临时规则：${suggestion.temporary_ruleset.content.name}` : suggestion.ruleset_revision?.name || "尚未绑定规则集",
         ruleSetDescription: suggestion.ruleset_revision
           ? `已选择发布版本 v${suggestion.ruleset_revision.version}，包含 ${suggestion.ruleset_revision.enabled_rule_count} 条启用规则。`
-          : "等待选择已发布的研判规则。",
+          : suggestion.temporary_ruleset ? "本次使用临时规则，暂不支持启动调查。" : "等待选择已发布的研判规则。",
         platformsSelected: [suggestion.selected_platform],
         platformsConfirmed: confirmationVisible,
         interactionMode: "platform-selection"
@@ -96,13 +96,15 @@ function taskDraftFromArtifact(artifact: InvestigationDraftArtifact): TaskDraft 
     keywords: suggestion?.search_terms || preview.resolved_search_terms,
     matchedRuleSet: suggestion?.ruleset_revision?.name
       || preview.ruleset_revision?.name
+      || (preview.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : "")
       || "尚未绑定规则集",
     analysisPlanName: suggestion?.ruleset_revision?.name
       || preview.ruleset_revision?.name
+      || (preview.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : "")
       || "尚未选择研判规则",
     ruleSetDescription: preview.ruleset_revision
       ? `已选择发布版本 v${preview.ruleset_revision.version}，包含 ${preview.ruleset_revision.enabled_rule_count} 条启用规则。`
-      : "等待选择已发布的研判规则。",
+      : preview.temporary_ruleset ? "本次使用临时规则，暂不支持启动调查。" : "等待选择已发布的研判规则。",
     recommendedRecallLexicons: suggestion?.recall_lexicons.map((lexicon) => lexicon.title) || [],
     status: artifact.presentation_stage === "confirmation" ? "等待确认" : "配置中",
     confirmed: false

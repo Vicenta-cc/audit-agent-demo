@@ -1,0 +1,271 @@
+{
+  "stage": "T4B_APPROVAL_SEMANTICS_CORRECTION",
+  "pass": true,
+  "baseline": "d418d5059007d072dc6eef597b27b8099b20fb25",
+  "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/bin/python",
+  "deterministic_t4b_cases": 56,
+  "focused": "348 passed, 5 warnings, 22 subtests passed in 26.55s",
+  "compiler_m1_m2": "188 passed, 7 skipped, 5 warnings, 19 subtests passed in 5.27s",
+  "full_pytest": "878 passed, 24 skipped, 5 warnings, 66 subtests passed in 89.03s (0:01:29)",
+  "typescript": {
+    "result": "PASS",
+    "command": "pnpm run typecheck"
+  },
+  "frontend": {
+    "all_stats": {
+      "startTime": "2026-09-08T03:06:19.784Z",
+      "duration": 16054.761999999999,
+      "expected": 69,
+      "skipped": 2,
+      "unexpected": 5,
+      "flaky": 0
+    },
+    "relevant_status_counts": {
+      "expected": 45,
+      "unexpected": 5
+    },
+    "baseline_stats": {
+      "startTime": "2026-09-07T11:56:34.966Z",
+      "duration": 8488.978000000001,
+      "expected": 38,
+      "skipped": 0,
+      "unexpected": 5,
+      "flaky": 0
+    },
+    "identical_failures_including_assertion_messages": true,
+    "preexisting_failures": [
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "renders real Draft and ConfirmationPreview fields",
+        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoMatchObject\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 0\u001b[39m\n\n\u001b[33m@@ -1,7 +1,6 @@\u001b[39m\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"auditPolicy\": \"博彩引流审核策略\",\u001b[39m\n\u001b[2m    \"canConfirm\": true,\u001b[22m\n\u001b[2m    \"maxNotes\": 1,\u001b[22m\n\u001b[2m    \"objective\": \"识别世界杯期间的小红书博彩引流\",\u001b[22m\n\u001b[2m    \"platform\": \"小红书\",\u001b[22m\n\u001b[2m    \"recallStrategy\": \"本次临时搜索词\",\u001b[22m"
+      },
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "real analysis-plan drawer projects public resources without mock rule details",
+        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoMatchObject\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 0\u001b[39m\n\n\u001b[33m@@ -1,7 +1,6 @@\u001b[39m\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"policyName\": \"博彩引流审核策略\",\u001b[39m\n\u001b[2m    \"recallLexicons\": Array [\u001b[22m\n\u001b[2m      Object {\u001b[22m\n\u001b[2m        \"title\": \"博彩引流词库\",\u001b[22m\n\u001b[2m      },\u001b[22m\n\u001b[2m    ],\u001b[22m"
+      },
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "blockers disable confirmation and expose the management URL",
+        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"尚未选择审核策略\"\u001b[39m\nReceived: \u001b[31mundefined\u001b[39m"
+      },
+      {
+        "file": "investigationCreation.spec.tsx",
+        "title": "creation diagnostics fail closed into user-facing copy",
+        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m\"当前\u001b[7m还没有匹配的研判方案，配置后即可继续\u001b[27m。\"\u001b[39m\nReceived: \u001b[31m\"当前\u001b[7m操作暂时无法完成，请稍后重试\u001b[27m。\"\u001b[39m"
+      },
+      {
+        "file": "investigationPresentation.spec.ts",
+        "title": "creation presentation hides internal diagnostics and keeps real management navigation",
+        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 1\u001b[39m\n\n\u001b[2m  Object {\u001b[22m\n\u001b[32m-   \"label\": \"去配置研判方案\",\u001b[39m\n\u001b[31m+   \"label\": \"前往配置\",\u001b[39m\n\u001b[2m    \"managementUrl\": \"/rule-assistant/rulesets?return_to=/investigation\",\u001b[22m\n\u001b[2m  }\u001b[22m"
+      }
+    ]
+  },
+  "real_qwen": {
+    "evidence": "docs/evidence/m3-t4b-semantics-qwen-verified.json",
+    "pass": true,
+    "cases": [
+      {
+        "case": "generate",
+        "tools": [
+          {
+            "name": "query_investigation_options",
+            "status": "ok"
+          },
+          {
+            "name": "query_investigation_options",
+            "status": "ok"
+          },
+          {
+            "name": "create_ruleset_proposal",
+            "status": "ok"
+          }
+        ],
+        "draft_unchanged": true,
+        "audit_delta": 0,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": null
+      },
+      {
+        "case": "edit",
+        "tools": [
+          {
+            "name": "update_ruleset_proposal",
+            "status": "ok"
+          }
+        ],
+        "draft_unchanged": true,
+        "audit_delta": 0,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": null
+      },
+      {
+        "case": "approve",
+        "tools": [
+          {
+            "name": "use_ruleset_proposal",
+            "status": "ok",
+            "presentation_id": "ruleset-presentation:dffe5ec1a0a855d117983079231a127814979950d65eb530a40b1a67e94f91e4"
+          }
+        ],
+        "draft_unchanged": false,
+        "audit_delta": 1,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": null
+      },
+      {
+        "case": "J-stale",
+        "tools": [
+          {
+            "name": "use_ruleset_proposal",
+            "status": "error",
+            "code": "PROPOSAL_PRESENTATION_STALE",
+            "presentation_id": "ruleset-presentation:f0131fba2a9c26ec35771e3b43a12ae9dc90133eff56071e3a3544ee3653309f"
+          },
+          {
+            "name": "get_ruleset_proposal",
+            "status": "ok"
+          }
+        ],
+        "draft_unchanged": true,
+        "audit_delta": 0,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": true
+      },
+      {
+        "case": "A-positive",
+        "tools": [
+          {
+            "name": "use_ruleset_proposal",
+            "status": "ok",
+            "presentation_id": "ruleset-presentation:38c720995eaa1340b488dea720b8e7472983a51881528cfb8efee2d5b4c4ec27"
+          }
+        ],
+        "draft_unchanged": false,
+        "audit_delta": 1,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": true
+      },
+      {
+        "case": "B-edit",
+        "tools": [],
+        "draft_unchanged": true,
+        "audit_delta": 0,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": true
+      },
+      {
+        "case": "C-question",
+        "tools": [],
+        "draft_unchanged": true,
+        "audit_delta": 0,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": true
+      },
+      {
+        "case": "D-choice-regression",
+        "tools": [],
+        "draft_unchanged": true,
+        "audit_delta": 0,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": true
+      },
+      {
+        "case": "E-negation",
+        "tools": [],
+        "draft_unchanged": true,
+        "audit_delta": 0,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": true
+      },
+      {
+        "case": "F-save",
+        "tools": [],
+        "draft_unchanged": true,
+        "audit_delta": 0,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": true
+      },
+      {
+        "case": "G-multiple-ambiguous",
+        "tools": [],
+        "draft_unchanged": true,
+        "audit_delta": 0,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": true
+      },
+      {
+        "case": "H-multiple-explicit",
+        "tools": [
+          {
+            "name": "use_ruleset_proposal",
+            "status": "ok",
+            "presentation_id": "ruleset-presentation:8ec2e767b136d8d310e049738cd6d61cc61e814983b47e9a4debf619dd8e8db8"
+          }
+        ],
+        "draft_unchanged": false,
+        "audit_delta": 1,
+        "execution_counts": {
+          "run": 0,
+          "job": 0,
+          "report": 0
+        },
+        "semantic_case_pass": true
+      }
+    ],
+    "no_formal_mutation": true,
+    "execution_counts": {
+      "run": 0,
+      "job": 0,
+      "report": 0
+    }
+  },
+  "semantic_guarantee": "Chat approval trusts Qwen semantic judgement; intent misclassification risk is nonzero. Application performs no natural-language approval classification.",
+  "git_diff_check": 0,
+  "head": "d418d5059007d072dc6eef597b27b8099b20fb25",
+  "committed": false
+}

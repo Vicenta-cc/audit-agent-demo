@@ -289,6 +289,12 @@ class InvestigationResourceService:
         )
         resolution: AuthoritativeDraftResolution | None = None
         blockers: list[InvestigationBlocker] = []
+        temporary = configuration.judgement.strategy == "temporary_ruleset"
+        if temporary:
+            blockers.append(self._blocker(
+                "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
+                "本次使用临时规则；临时规则执行尚未在 T5 接通。",
+            ))
         try:
             resolution = self.resolve_authoritative_draft(
                 configuration,
@@ -370,6 +376,7 @@ class InvestigationResourceService:
             ),
             blockers=blockers,
             can_confirm=not blockers,
+            temporary_ruleset=configuration.judgement if temporary else None,
         )
 
     def validate_temporary_provenance(
@@ -416,88 +423,90 @@ class InvestigationResourceService:
             )
 
         selection = configuration.judgement
-        try:
-            revision = self.ruleset_service.get_published(
-                selection.ruleset_revision_id,
-                principal=principal,
-                connection=resource_connection,
-            )
-        except Exception as exc:
-            raise ConfigurationValidationError(
-                "The selected RuleSetRevision does not exist.",
-                code="INVALID_RESOURCE_REFERENCE",
-                details={
-                    "mutation_applied": False,
-                    "resource_type": "ruleset_revision",
-                    "resource_id": selection.ruleset_revision_id,
-                },
-            ) from exc
-
-        raw_version = int(revision.get("version") or 0)
-        raw_hash = str(revision.get("content_hash") or "").strip().lower()
-        if (
-            selection.expected_ruleset_version != raw_version
-            or selection.expected_ruleset_content_hash != raw_hash
-        ):
-            raise ResourceStaleError(
-                "The selected RuleSetRevision identity changed before the Draft revision was saved.",
-                details={
-                    "mutation_applied": False,
-                    "resource_type": "ruleset_revision",
-                    "resource_id": selection.ruleset_revision_id,
-                    "resource": {
-                        "id": str(revision.get("id") or ""),
-                        "ruleset_id": str(revision.get("ruleset_id") or ""),
-                        "version": raw_version,
-                        "content_hash": raw_hash,
+        ruleset_summary = None
+        if selection.strategy == "existing_ruleset":
+            try:
+                revision = self.ruleset_service.get_published(
+                    selection.ruleset_revision_id,
+                    principal=principal,
+                    connection=resource_connection,
+                )
+            except Exception as exc:
+                raise ConfigurationValidationError(
+                    "The selected RuleSetRevision does not exist.",
+                    code="INVALID_RESOURCE_REFERENCE",
+                    details={
+                        "mutation_applied": False,
+                        "resource_type": "ruleset_revision",
+                        "resource_id": selection.ruleset_revision_id,
                     },
-                },
-            )
+                ) from exc
 
-        try:
-            ruleset_summary, _ = self._ruleset_revision_resource(revision)
-        except Exception as exc:
-            raise ConfigurationValidationError(
-                "The selected RuleSetRevision is not a valid authoritative resource.",
-                code="INVALID_RULESET_REFERENCE",
-                details={
-                    "mutation_applied": False,
-                    "resource_type": "ruleset_revision",
-                    "resource_id": selection.ruleset_revision_id,
-                },
-            ) from exc
+            raw_version = int(revision.get("version") or 0)
+            raw_hash = str(revision.get("content_hash") or "").strip().lower()
+            if (
+                selection.expected_ruleset_version != raw_version
+                or selection.expected_ruleset_content_hash != raw_hash
+            ):
+                raise ResourceStaleError(
+                    "The selected RuleSetRevision identity changed before the Draft revision was saved.",
+                    details={
+                        "mutation_applied": False,
+                        "resource_type": "ruleset_revision",
+                        "resource_id": selection.ruleset_revision_id,
+                        "resource": {
+                            "id": str(revision.get("id") or ""),
+                            "ruleset_id": str(revision.get("ruleset_id") or ""),
+                            "version": raw_version,
+                            "content_hash": raw_hash,
+                        },
+                    },
+                )
 
-        current_revision = self.ruleset_service.get_current_published(
-            selection.ruleset_revision_id,
-            principal=principal,
-            connection=resource_connection,
-        )
-        if current_revision is None:
-            raise ResourceStaleError(
-                "The selected RuleSetRevision is not the RuleSet's current published revision.",
-                details={
-                    "mutation_applied": False,
-                    "resource_type": "ruleset_revision",
-                    "resource_id": selection.ruleset_revision_id,
-                    "resource": ruleset_summary.model_dump(mode="json"),
-                },
-            )
-        try:
-            self.ruleset_service.compile_for_execution(
+            try:
+                ruleset_summary, _ = self._ruleset_revision_resource(revision)
+            except Exception as exc:
+                raise ConfigurationValidationError(
+                    "The selected RuleSetRevision is not a valid authoritative resource.",
+                    code="INVALID_RULESET_REFERENCE",
+                    details={
+                        "mutation_applied": False,
+                        "resource_type": "ruleset_revision",
+                        "resource_id": selection.ruleset_revision_id,
+                    },
+                ) from exc
+
+            current_revision = self.ruleset_service.get_current_published(
                 selection.ruleset_revision_id,
                 principal=principal,
                 connection=resource_connection,
             )
-        except Exception as exc:
-            raise ConfigurationValidationError(
-                "The selected RuleSetRevision is not supported by the current compiler/runtime.",
-                code="INVALID_RULESET_REFERENCE",
-                details={
-                    "mutation_applied": False,
-                    "resource_type": "ruleset_revision",
-                    "resource_id": selection.ruleset_revision_id,
-                },
-            ) from exc
+            if current_revision is None:
+                raise ResourceStaleError(
+                    "The selected RuleSetRevision is not the RuleSet's current published revision.",
+                    details={
+                        "mutation_applied": False,
+                        "resource_type": "ruleset_revision",
+                        "resource_id": selection.ruleset_revision_id,
+                        "resource": ruleset_summary.model_dump(mode="json"),
+                    },
+                )
+            try:
+                self.ruleset_service.compile_for_execution(
+                    selection.ruleset_revision_id,
+                    principal=principal,
+                    connection=resource_connection,
+                )
+            except Exception as exc:
+                raise ConfigurationValidationError(
+                    "The selected RuleSetRevision is not supported by the current compiler/runtime.",
+                    code="INVALID_RULESET_REFERENCE",
+                    details={
+                        "mutation_applied": False,
+                        "resource_type": "ruleset_revision",
+                        "resource_id": selection.ruleset_revision_id,
+                    },
+                ) from exc
 
         normalized = configuration
         recall_summary: RecallLexiconSummary | None = None
@@ -609,6 +618,11 @@ class InvestigationResourceService:
         configuration = InvestigationDraftConfiguration.model_validate(
             draft.configuration.model_dump(mode="json")
         )
+        if configuration.judgement.strategy == "temporary_ruleset":
+            raise ConfigurationValidationError(
+                "Temporary RuleSet execution is not connected until T5.",
+                code="TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
+            )
         try:
             resolution = self.resolve_authoritative_draft(
                 configuration,

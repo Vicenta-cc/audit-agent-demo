@@ -22,6 +22,7 @@ from .contracts import (
     ResolvedExecutionConfiguration,
     UpdateDraftCommand,
     TemporaryRuleSetProposal,
+    TemporaryRuleSetJudgement,
     confirmed_configuration_hash,
 )
 from .errors import (
@@ -38,6 +39,7 @@ from .ports import (
 )
 from .store import InvestigationCreationStore
 from .principal import Principal
+from .approval import UseRuleSetProposalInput, reject
 
 
 class InvestigationCreationService:
@@ -55,6 +57,30 @@ class InvestigationCreationService:
         self.configuration_resolver = configuration_resolver
         self.resource_service = resource_service
         self.run_projector = run_projector or EmptyRunProjector()
+        self.conversation_store = None
+
+    def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str, turn_id: str,
+                            principal: Principal, tool_call_id: str = "", runtime_turn_id: str = "") -> InvestigationDraft:
+        if self.conversation_store is None or not turn_id or not tool_call_id:
+            reject("PROPOSAL_APPROVAL_REQUIRED", "An authoritative current conversation turn is required.")
+        if self.resource_service is None:
+            raise ConfigurationValidationError("investigation resource service is not configured")
+        with self.resource_service.authoritative_draft_fence() as resource_connection:
+            def normalize(configuration: InvestigationDraftConfiguration, *, previous) -> InvestigationDraftConfiguration:
+                self._reject_legacy_creation_platform(configuration)
+                sources = self._temporary_provenance(configuration)
+                if sources and sources != self._temporary_provenance(previous):
+                    self.resource_service.validate_temporary_provenance(
+                        sources, resource_connection=resource_connection,
+                    )
+                return self.resource_service.resolve_authoritative_draft(
+                    configuration, principal=principal, resource_connection=resource_connection,
+                ).normalized_configuration
+
+            return self.store.use_ruleset_proposal(
+                command, session_id=session_id, turn_id=turn_id, tool_call_id=tool_call_id, runtime_turn_id=runtime_turn_id or turn_id, principal=principal.id,
+                conversation_db=self.conversation_store.db_path, normalize=normalize,
+            )
 
     def create_ruleset_proposal(
         self, content: RuleSetContent | dict, *, session_id: str
@@ -102,6 +128,7 @@ class InvestigationCreationService:
         )
         self._reject_legacy_creation_platform(command.configuration)
         configuration = command.configuration
+        self.store.protect_temporary_judgement(configuration)
         if isinstance(configuration, InvestigationDraftConfiguration):
             if self.resource_service is None:
                 raise ConfigurationValidationError(
@@ -151,6 +178,7 @@ class InvestigationCreationService:
             else draft.configuration
         )
         self._reject_legacy_creation_platform(effective_configuration)
+        self.store.protect_temporary_judgement(effective_configuration, draft.configuration)
         if isinstance(effective_configuration, InvestigationDraftConfiguration):
             if self.resource_service is None:
                 raise ConfigurationValidationError(
@@ -282,6 +310,11 @@ class InvestigationCreationService:
         if not command.confirmed:
             raise ConfirmationRequiredError("explicit confirmation is required")
         draft = self.store.get_draft(command.draft_id, principal=principal.id)
+        if isinstance(getattr(draft.configuration, "judgement", None), TemporaryRuleSetJudgement):
+            raise ConfigurationValidationError(
+                "Temporary RuleSet execution is not connected until T5.",
+                code="TEMPORARY_RULESET_EXECUTION_UNAVAILABLE",
+            )
         if draft.current_revision != command.expected_revision:
             raise DraftRevisionConflictError(
                 f"expected revision {command.expected_revision}, "

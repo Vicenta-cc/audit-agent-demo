@@ -1,0 +1,32 @@
+ M Audit_assistant/src/features/investigation/InvestigationContextDrawer.tsx
+ M Audit_assistant/src/features/investigation/InvestigationPage.tsx
+ M Audit_assistant/src/features/investigation/TaskSuggestionCard.tsx
+ M Audit_assistant/src/features/investigation/confirmationView.ts
+ M Audit_assistant/src/features/investigation/suggestionPresentation.ts
+ M Audit_assistant/src/features/investigation/workspaceRecovery.ts
+ M Audit_assistant/src/types/investigationCreation.ts
+ M Audit_assistant/tests/investigationCreation.spec.tsx
+ M Audit_assistant/tests/mixedProposalPresentation.spec.ts
+ M backend/investigation_creation/contracts.py
+ M backend/investigation_creation/conversation.py
+ M backend/investigation_creation/presentation.py
+ M backend/investigation_creation/public_projection.py
+ M backend/investigation_creation/resources.py
+ M backend/investigation_creation/service.py
+ M backend/investigation_creation/store.py
+ M backend/investigation_creation/tools.py
+ M tests/test_investigation_creation_conversation.py
+ M tests/test_investigation_draft_configuration_m3.py
+?? backend/investigation_creation/approval.py
+?? docs/M3_PHASE_T4B_IMPLEMENTATION_REPORT.md
+?? docs/evidence/m3-t4b-qwen-acceptance-verified.json
+?? docs/evidence/m3-t4b-qwen-acceptance.json
+?? docs/evidence/m3-t4b-semantics-git-status.txt
+?? docs/evidence/m3-t4b-semantics-qwen-acceptance-verified.json
+?? docs/evidence/m3-t4b-semantics-qwen-acceptance.json
+?? docs/evidence/m3-t4b-semantics-qwen-final.json
+?? docs/evidence/m3-t4b-semantics-qwen-verified.json
+?? docs/evidence/m3-t4b-semantics-validation.json
+?? docs/evidence/m3-t4b-validation.json
+?? tests/m3_t4b_qwen_acceptance.py
+?? tests/test_ruleset_proposal_approval.py

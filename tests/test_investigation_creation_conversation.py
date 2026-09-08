@@ -1757,8 +1757,9 @@ def test_single_creation_turn_create_and_confirm_restores_workspace_run_and_repo
     assert _run_count(stack["creation_store"]) == 1
 
 
-def test_creation_mode_has_exactly_nine_tools() -> None:
+def test_creation_mode_has_exactly_ten_tools() -> None:
     assert set(M3_TOOL_INPUTS) == {
+        "use_ruleset_proposal",
         "create_ruleset_proposal",
         "update_ruleset_proposal",
         "get_ruleset_proposal",
@@ -2596,7 +2597,8 @@ def test_t1_generation_guidance_preserves_conversation_authority():
     assert "create the Draft in the same turn" in prompt
     assert "asking for generation permission again" in prompt
     assert "real recall lexicon when it is sufficiently suitable" in prompt
-    assert "Proposal tools never bind or change Draft Judgement" in prompt
+    assert "Generation and editing never bind Draft Judgement" in prompt
+    assert "Only use_ruleset_proposal can bind that exact presented version" in prompt
     assert "Preview and Confirm never generate or expand terms" in prompt
     assert "provenance references only" in prompt
 

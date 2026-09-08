@@ -20,6 +20,11 @@ export function buildSuggestionBlockerLink(preview?: ConfirmationPreview) {
 }
 
 export function buildSuggestionAssistantCopy(draft: TaskDraft, preview?: ConfirmationPreview) {
+  if (preview?.temporary_ruleset && preview.blockers.every(
+    (blocker) => blocker.code === "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE"
+  )) {
+    return "本次临时规则已采用，调查尚未启动。";
+  }
   if (preview?.blockers.length) {
     return "已根据你的调查主题整理出初步建议。当前还有一项必要配置需要处理，完成后即可继续。";
   }

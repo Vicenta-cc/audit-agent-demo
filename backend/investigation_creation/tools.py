@@ -19,12 +19,14 @@ from .contracts import (
     ConfirmAndQueueCommand,
     CreateDraftCommand,
     InvestigationDraftConfiguration,
+    InvestigationDraftView,
     QueryInvestigationOptions,
     StrictModel,
     UpdateDraftCommand,
 )
 from .errors import IdempotencyConflictError
 from .principal import Principal
+from .approval import UseRuleSetProposalInput
 
 
 @dataclass(frozen=True)
@@ -130,6 +132,7 @@ class UpdateRuleSetProposalInput(GetRuleSetProposalInput):
 
 
 M3_TOOL_INPUTS: dict[str, type[StrictModel]] = {
+    "use_ruleset_proposal": UseRuleSetProposalInput,
     "query_investigation_options": QueryInvestigationOptions,
     "create_investigation_draft": CreateInvestigationDraftInput,
     "update_investigation_draft": UpdateInvestigationDraftInput,
@@ -143,6 +146,7 @@ M3_TOOL_INPUTS: dict[str, type[StrictModel]] = {
 
 M3_MUTATION_TOOL_NAMES = frozenset(
     {
+        "use_ruleset_proposal",
         "create_ruleset_proposal",
         "update_ruleset_proposal",
         "create_investigation_draft",
@@ -153,6 +157,17 @@ M3_MUTATION_TOOL_NAMES = frozenset(
 
 
 M3_TOOL_DESCRIPTIONS = {
+    "use_ruleset_proposal": (
+        "You decide whether the CURRENT user explicitly intends adoption; Application validates structural facts, "
+        "not natural-language approval. Select presentation_id ONLY from the trusted completed presentation context. "
+        "Questions, edits, negation, hesitation, saving, comparison/choice and ambiguous references are not adoption. "
+        "For example '就用这套创建招聘诈骗调查，还是先暂停调查' asks a choice: clarify, do NOT call this tool. "
+        "Provide draft_id + expected_revision, OR complete create_draft title/objective/configuration "
+        "(platform and investigation/Recall, no judgement). Reuse established configuration; ask if missing. "
+        "Never guess IDs or automatically select latest. On stale presentation, re-present and WAIT for a new user "
+        "turn; never retry the newer snapshot in this turn. On Draft conflict, read and assess changes first; "
+        "never just replace expected_revision to force a retry. This binds a temporary Draft, not formal save or execution."
+    ),
     "create_ruleset_proposal": (
         "Author a temporary candidate RuleSet directly as canonical RuleSetContent JSON when "
         "the user asks to generate rules or another candidate. Application validates, compiles "
@@ -298,12 +313,27 @@ class InvestigationCreationToolService:
         *,
         principal: Principal,
         session_id: str = "",
+        runtime_identity: HermesToolExecutionIdentity | None = None,
     ) -> dict[str, Any]:
         schema = M3_TOOL_INPUTS.get(tool_name)
         if schema is None:
             raise ValueError("Hermes M3 tool name is not allowed")
         parsed = schema.model_validate(arguments)
-        if tool_name == "create_ruleset_proposal":
+        if tool_name == "use_ruleset_proposal":
+            with self._conversation_lock:
+                turn_id = self._conversation_turns.get(session_id, "")
+            draft = self.application_service.use_ruleset_proposal(
+                parsed, session_id=session_id, turn_id=turn_id, principal=principal,
+                runtime_turn_id=runtime_identity.turn_id if runtime_identity else "",
+                tool_call_id=runtime_identity.tool_call_id if runtime_identity and runtime_identity.session_id == session_id else "",
+            )
+            result = InvestigationDraftView(
+                draft=draft,
+                confirmation_preview=self.application_service.resource_service.confirmation_preview(
+                    draft, principal=principal,
+                ),
+            )
+        elif tool_name == "create_ruleset_proposal":
             result = self.application_service.create_ruleset_proposal(
                 parsed.content, session_id=session_id
             )
@@ -415,7 +445,7 @@ class InvestigationCreationToolService:
                 with self._conversation_lock:
                     application_turn_id = (
                         self._conversation_turns.get(identity.session_id, "")
-                        if tool_name in {"create_ruleset_proposal", "update_ruleset_proposal"} else ""
+                        if tool_name in {"create_ruleset_proposal", "update_ruleset_proposal", "use_ruleset_proposal"} else ""
                     )
                 receipt = self.application_service.store.begin_tool_execution(
                     session_id=identity.session_id,
@@ -445,6 +475,7 @@ class InvestigationCreationToolService:
                 raw_arguments,
                 principal=principal,
                 session_id=identity.session_id,
+                **({"runtime_identity": identity} if tool_name == "use_ruleset_proposal" else {}),
             )
             result = {"status": "ok", "data": payload}
         except Exception as exc:
