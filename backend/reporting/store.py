@@ -2120,6 +2120,8 @@ class ReportStore:
         )
         if report is None:
             raise ReportGenerationError("published ReportVersion metadata was not found")
+        if ((version.get("body") or {}).get("report_document") or {}).get("template_kind") == "all_pass":
+            return projection, None, str(report["task_id"])
         try:
             account_repository = AccountActivityRepository.load(
                 DEFAULT_ACCOUNT_FIXTURE_PATH

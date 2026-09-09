@@ -23,6 +23,7 @@ import type {
   ReportPresentationProjection
 } from "../../types/reports";
 import { resolvePublishedReportVersion } from "./reportRoute";
+import { ReportPostSourceDetails } from "./ReportPostSourceDetails";
 
 type AppendixView = "posts" | "standalone" | "evidence";
 
@@ -137,11 +138,12 @@ function AppendixPostDrawer({ reportVersionId, postRef, onClose }: { reportVersi
             <div><h3>{detail.title}</h3>{detail.author_display_name ? <span>作者：{detail.author_display_name}</span> : null}</div>
             <RiskTag risk={detail.risk_level} />
           </div>
+          <ReportPostSourceDetails detail={detail} />
           {detail.content_summary ? <section className="r31-drawer-section"><h3>内容摘要</h3><p>{detail.content_summary}</p></section> : null}
           <section className="r31-drawer-section">
             <h3>审核结论</h3>
             <p>{decisionLabels[detail.decision] || "审核决定未提供"} · {riskLabels[detail.risk_level] || "未分级"}</p>
-            <p>{detail.audit_summary}</p>
+            <p>{detail.audit_summary || "原审核结果未提供文字说明。"}</p>
           </section>
           {detail.direct_evidence.length ? (
             <section className="r31-drawer-section"><h3>直接研判依据</h3><EvidenceRows items={detail.direct_evidence} /></section>

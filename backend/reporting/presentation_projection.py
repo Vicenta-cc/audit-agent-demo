@@ -104,6 +104,16 @@ def build_presentation_projection(
         investigation_findings=investigation_findings,
         comment_statistics=comment_statistics,
     )
+    summary = _investigation_summary(statistics)
+    if document.get("template_kind") == "all_pass":
+        accounts["snapshot_summary"] = document.get("snapshot_account_summary")
+        coverage = document.get("comment_audit_coverage") or {}
+        statistics["independently_reviewed_comments"] = coverage.get("completed")
+        statistics["comment_own_risk"] = 0
+        overview = next(
+            (section for section in sections if section["section_type"] == "overview"), {}
+        )
+        summary = {"status": "available", "paragraphs": overview.get("paragraphs") or []}
     return {
         "schema_version": PRESENTATION_SCHEMA_VERSION,
         "report_metadata": {
@@ -114,7 +124,7 @@ def build_presentation_projection(
             "platform": _platform_projection(snapshot),
             "scope": _scope_projection(metadata),
         },
-        "investigation_summary": _investigation_summary(statistics),
+        "investigation_summary": summary,
         "statistics": statistics,
         "accounts": accounts,
         "ordered_sections": sections,
@@ -515,6 +525,13 @@ def _section_projection(
     if section_type == "standalone_risk_posts":
         output["standalone_items"] = standalone_items
         output["standalone_count"] = len(standalone_items)
+        return output
+    if section_type == "audit_samples":
+        refs = section.get("sample_post_refs") or []
+        if not refs or any(ref not in posts_by_ref for ref in refs):
+            raise ReportGenerationError("audit sample references are missing or invalid")
+        output["sample_posts"] = [_public_post(posts_by_ref[ref], audits_by_ref=audits_by_ref) for ref in refs]
+        output["sample_total"] = len(posts_by_ref)
         return output
     if section_type != "investigation_finding":
         return output
@@ -1006,6 +1023,10 @@ def _public_post(
         "decision": str(audit.get("decision") or ""),
         "risk_level": str(audit.get("risk_level") or ""),
         "audit_summary": str(audit.get("summary") or ""),
+        "published_at": str(post.get("published_at") or ""),
+        "source_url": str(post.get("source_url") or ""),
+        "original_text": str(post.get("original_text") or ""),
+        "transcripts": list(post.get("transcripts") or []),
     }
 
 

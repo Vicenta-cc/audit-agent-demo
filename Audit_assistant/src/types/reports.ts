@@ -131,6 +131,10 @@ export interface ReportPostPresentation {
   decision: string;
   risk_level: string;
   audit_summary: string;
+  published_at?: string;
+  source_url?: string;
+  original_text?: string;
+  transcripts?: string[];
 }
 
 export interface ReportEvidencePresentation {
@@ -172,6 +176,8 @@ export interface ReportPresentationSection {
   finding_binding?: AvailableFindingBinding | UnavailableFindingBinding;
   standalone_items?: Array<ReportPostPresentation & { disposition_note: string }>;
   standalone_count?: number;
+  sample_posts?: ReportPostPresentation[];
+  sample_total?: number;
 }
 
 export interface ReportPresentationProjection {
@@ -224,6 +230,10 @@ export interface ReportPresentationProjection {
       post_author_account_count: number;
       comment_author_account_count: number;
       distinct_account_count: number;
+    };
+    snapshot_summary?: {
+      entries: Array<{ display_name: string; published_post_count: number }>;
+      scope: string;
     };
     target_entries?: ReportAccountEntry[];
     post_author_entries?: ReportAccountEntry[];
