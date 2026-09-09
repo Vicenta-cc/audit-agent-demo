@@ -15,6 +15,7 @@ from backend.reporting.account_entries import (
 from backend.reporting.contracts import ReportGraphState
 from backend.reporting.errors import ReportValidationError
 from backend.reporting.r2_graph import RiskFindingReportGraph
+from backend.reporting.public_references import public_post_and_finding_refs
 
 
 R3_NODE_ORDER = (
@@ -223,14 +224,7 @@ class AccountEntryReportGraph(RiskFindingReportGraph):
         account_projection: dict[str, Any],
     ) -> dict[str, Any]:
         snapshot = self._snapshot(state["report_version_id"])
-        post_refs = {
-            item.ref: f"post-{index:03d}"
-            for index, item in enumerate(snapshot.posts, 1)
-        }
-        finding_refs = {
-            item.ref: f"audit-finding-{index:03d}"
-            for index, item in enumerate(snapshot.findings, 1)
-        }
+        post_refs, finding_refs = public_post_and_finding_refs(snapshot)
         evidence_refs = {
             item.ref: f"evidence-{index:03d}"
             for index, item in enumerate(snapshot.evidence, 1)
@@ -417,4 +411,3 @@ class AccountEntryReportGraph(RiskFindingReportGraph):
         if marker in body_markdown:
             return body_markdown.replace(marker, account_markdown + marker, 1)
         return body_markdown.rstrip() + "\n\n" + account_markdown
-

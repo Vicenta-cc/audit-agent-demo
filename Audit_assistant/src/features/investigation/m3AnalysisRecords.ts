@@ -125,7 +125,9 @@ export function mapM3PostToAnalysisRecord(input: {
     keyEvidence: evidence,
     reportVersionId: input.reportVersionId,
     postRef: input.post.post_ref,
-    findingRef: input.post.investigation_finding_refs[0]
+    findingRef: input.post.investigation_finding_refs[0],
+    taskId: input.post.audit_source?.task_id,
+    outputId: input.post.audit_source?.output_id
   };
 }
 
@@ -133,6 +135,12 @@ export function reportPostDetailPath(investigationId: string, record: AnalysisRe
   if (!record.reportVersionId || !record.postRef) return "";
   const query = new URLSearchParams({ report: record.reportVersionId, view: "posts", post_ref: record.postRef });
   return `/investigation/${encodeURIComponent(investigationId)}/report/evidence?${query}`;
+}
+
+export function auditDetailPath(source?: { task_id: string; output_id: string } | null) {
+  return source?.task_id && source.output_id
+    ? `/tasks/${encodeURIComponent(source.task_id)}/outputs/${encodeURIComponent(source.output_id)}`
+    : "";
 }
 
 export function mapReportEvidence(evidence: ReportEvidencePresentation): AnalysisKeyEvidence | null {

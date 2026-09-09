@@ -347,7 +347,7 @@ export function AgentCollaborationCard({
 
   const handleViewCompleteEvidence = (record: AnalysisRecord) => {
     setSelectedRecord(null);
-    if (record.source === "m3-report") {
+    if (record.source === "m3-report" && (!record.taskId || !record.outputId)) {
       const path = reportPostDetailPath(investigationId, record);
       if (path) navigate(path);
       return;
@@ -490,7 +490,9 @@ export function AgentCollaborationCard({
                   <button
                     type="button"
                     className="analysis-evidence-toggle"
-                    onClick={() => setSelectedRecord(record)}
+                    onClick={() => record.taskId && record.outputId
+                      ? handleViewCompleteEvidence(record)
+                      : setSelectedRecord(record)}
                     disabled={authoritative && !record.outputId && !(record.reportVersionId && record.postRef) && record.keyEvidence.length === 0}
                   >
                     <FileSearch size={14} />

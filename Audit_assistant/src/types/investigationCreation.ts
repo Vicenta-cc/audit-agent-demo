@@ -196,11 +196,33 @@ export interface InvestigationRunArtifact {
   run: InvestigationRunProjection;
 }
 
+export interface GeneratedRuleSetContent {
+  name: string;
+  audit_goal: string;
+  general_exemptions: { exemption_id: string; name: string; condition: string }[];
+  categories: {
+    category_id: string; name: string; description: string;
+    rules: {
+      rule_id: string; name: string; enabled: boolean;
+      hit_condition: string; suggested_risk_level: string;
+      adjudication_notes: string; application_stages: string[];
+      rule_exemptions: { exemption_id: string; name: string; condition: string }[];
+    }[];
+  }[];
+}
+
+export interface RuleSetProposalPresentation {
+  presentation_id?: string | null;
+  assistant_message_id: string;
+  text: string;
+  snapshot?: { version: number; content: GeneratedRuleSetContent };
+}
+
 export type InvestigationConversationArtifact = (
   | InvestigationDraftArtifact
   | InvestigationRunArtifact
   | { artifact_type: "ruleset_proposal_presentation" }
-) & { proposal_presentations?: { presentation_id?: string | null; assistant_message_id: string; text: string }[] };
+) & { proposal_presentations?: RuleSetProposalPresentation[] };
 
 export interface InvestigationWorkspaceSession {
   workspace_session_id: string;

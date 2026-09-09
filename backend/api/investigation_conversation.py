@@ -42,6 +42,19 @@ class CreateInvestigationWorkspaceRequest(BaseModel):
     workspace_key: str = Field(default="", max_length=200)
 
 
+class InvestigationWorkspaceListItem(BaseModel):
+    workspace_session_id: str
+    title: str
+    updated_at: str
+    run_status: str
+    presentation_stage: str
+
+
+class InvestigationWorkspaceListResponse(BaseModel):
+    items: list[InvestigationWorkspaceListItem]
+    has_more: bool
+
+
 def create_investigation_conversation_router(
     service: Any,
     executor: Any,
@@ -53,6 +66,18 @@ def create_investigation_conversation_router(
 ) -> APIRouter:
     router = APIRouter(tags=["investigation-creation-conversation"])
     provide_principal = principal_provider or LocalPrincipalProvider()
+
+    @router.get("/api/investigation-workspaces", response_model=InvestigationWorkspaceListResponse)
+    def list_workspaces(
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        principal: Principal = Depends(provide_principal),
+    ) -> InvestigationWorkspaceListResponse:
+        try:
+            items = service.list_workspaces(principal=principal, limit=limit + 1, offset=offset)
+            return InvestigationWorkspaceListResponse(items=items[:limit], has_more=len(items) > limit)
+        except Exception as exc:
+            _raise_public_error(exc)
 
     @router.post(
         "/api/investigation-workspaces",

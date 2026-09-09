@@ -169,63 +169,63 @@ M3_TOOL_DESCRIPTIONS = {
         "never just replace expected_revision to force a retry. This binds a temporary Draft, not formal save or execution."
     ),
     "create_ruleset_proposal": (
-        "Author a temporary candidate RuleSet directly as canonical RuleSetContent JSON when "
-        "the user asks to generate rules or another candidate. Application validates, compiles "
+        "Author a temporary candidate 审核规则 directly as canonical 审核规则完整内容 JSON when "
+        "the user asks to generate 审核规则 or another candidate. Application validates, compiles "
         "and persists it in this Session. Generation is not approval or use: it never binds "
-        "Draft Judgement, publishes or saves a formal RuleSet. No prior options query is required. "
+        "Draft Judgement, publishes or saves a formal 审核规则. No prior options query is required. "
         "Temporary terms and a Proposal may both be generated in the same turn. "
         "Choose each rule's stages by where its risk can independently appear: image_evidence "
-        "for image text/visual rules, video_frame_evidence for video/OCR/ASR rules, comment_audit "
-        "for comments themselves, fusion_audit for judgment using existing evidence. Rules supporting "
+        "for image text/visual 审核规则, video_frame_evidence for video/OCR/ASR 审核规则, comment_audit "
+        "for comments themselves, fusion_audit for judgment using existing evidence. 审核规则 supporting "
         "a final finding must explicitly include fusion_audit; the compiler does not add it. Do not default "
         "every rule to comment + fusion or to all four stages. Both exemption types remove risk; "
         "use only conditions that negate it, never identity/certification/reputation alone."
     ),
     "update_ruleset_proposal": (
         "Update a current Session Proposal using proposal_id, expected_version and the complete "
-        "new canonical RuleSetContent. Application maintains content_hash. Same content is a no-op. "
+        "new canonical 审核规则完整内容. Application maintains content_hash. Same content is a no-op. "
         "On stale version, read current content before editing; never assume an automatic merge. "
         "Preserve category_id, rule_id and ordering for unchanged semantics. This never approves, "
-        "uses or publishes the Proposal. Choose revised rules' application_stages by the evidence "
+        "uses or publishes the Proposal. Choose revised 审核规则' application_stages by the evidence "
         "modalities that can independently show their risk: image_evidence, video_frame_evidence "
         "(including OCR/ASR), comment_audit (comments themselves), fusion_audit (existing evidence). "
-        "Rules supporting final findings must explicitly include fusion_audit; it is not added automatically. "
+        "审核规则 supporting final findings must explicitly include fusion_audit; it is not added automatically. "
         "Do not mechanically assign comment + fusion or all four stages. general_exemptions and "
         "rule_exemptions remove risk, not just confidence; only use conditions that negate risk, "
         "never identity/certification/reputation alone."
     ),
     "get_ruleset_proposal": (
-        "Read the full current temporary RuleSet Proposal in this Session, including its version "
+        "Read the full current temporary 审核规则 Proposal in this Session, including its version "
         "and canonical content, before inspection or editing. This is read-only."
     ),
     "query_investigation_options": (
-        "Query currently available real platforms, published RuleSetRevisions, independent "
-        "recall lexicons, and blockers. Use it to discover, explain, "
+        "Query currently available real platforms, published 审核规则已发布版本, independent "
+        "recall 黑话库, and blockers. Use it to discover, explain, "
         "compare, recommend, or configure resources. For search, request enabled main terms "
-        "only for explicit candidate lexicon IDs. Request RuleSet categories, rules, hit "
+        "only for explicit candidate 黑话库 IDs. Request 审核规则 categories, 审核规则, hit "
         "conditions, exemptions, adjudication notes, and application stages only for exact "
         "published revision IDs. This query never creates a Draft, Run, or Job."
     ),
     "create_investigation_draft": (
         "Create an editable Investigation Draft when the user wants the currently defined "
         "configuration captured as an investigation. Use current real resource candidates. "
-        "Select a published RuleSetRevision directly as judgement. "
+        "Select a published 审核规则已发布版本 directly as judgement. "
         "Search Drafts prefer a suitable real existing_lexicon ID, hash, and enabled_main_terms "
         "snapshot. If none is sufficiently suitable and the conversation authorizes generating "
         "missing Recall, supply focused canonical strings directly in temporary_terms.terms; "
         "otherwise explain the gap and propose generation without creating a Draft or listing "
         "any candidate/example search terms in the reply. Never generate "
         "variants or query_type. source_lexicon_ids are write-time checked provenance, not runtime "
-        "dependencies. Temporary terms are not saved as a formal Lexicon. "
+        "dependencies. Temporary terms are not saved as a formal 黑话库. "
         "Creator Drafts must contain only a validated creator homepage URL and no "
         "recall plan. This never confirms or starts a Run."
     ),
     "update_investigation_draft": (
         "Update an editable Investigation Draft at its expected revision. User changes "
-        "to platform, RuleSet judgement, lexicon, or terms are allowed before confirmation; edited "
-        "lexicon terms must be represented as temporary_terms. Authorized generation of missing "
+        "to platform, 审核规则 judgement, 黑话库, or terms are allowed before confirmation; edited "
+        "黑话库 terms must be represented as temporary_terms. Authorized generation of missing "
         "Recall supplies canonical terms directly, without variants, query_type, or formal save. "
-        "Changed source_lexicon_ids must reference real Lexicons; unchanged provenance needs no "
+        "Changed source_lexicon_ids must reference real 黑话库; unchanged provenance needs no "
         "resource refresh. Each temporary term must be comma-free. This command never confirms "
         "or starts an investigation."
     ),
@@ -276,7 +276,7 @@ M3_PARAMETER_GUIDANCE = {
         'ID。'
     ),
     'create_ruleset_proposal': (
-        '参数只有 content，其值是完整 RuleSetContent 对象；不要用 canonical_content。分类和规则的名称字段均叫 name；风险字段叫 '
+        '参数只有 content，其值是完整 审核规则完整内容 对象；不要用 canonical_content。分类和规则的名称字段均叫 name；风险字段叫 '
         'suggested_risk_level；分类和规则均须有 order，规则还须有 adjudication_notes。具体必填项先读 '
         'schema。成功后展示规则及搜索词并结束本轮，等用户采用。'
     ),
@@ -304,7 +304,7 @@ M3_PARAMETER_GUIDANCE = {
 }
 M3_ADOPTION_GUIDANCE = {
     'create_investigation_draft': (
-        '本工具用于以已发布规则创建草案。采用本会话临时 RuleSet Proposal 时禁止调用本工具；必须直接调用 '
+        '本工具用于以已发布规则创建草案。采用本会话临时 审核规则 Proposal 时禁止调用本工具；必须直接调用 '
         'use_ruleset_proposal，由它一次性创建草案并绑定规则。不要把 Proposal 内容塞入本工具。 '
     ),
     'use_ruleset_proposal': (

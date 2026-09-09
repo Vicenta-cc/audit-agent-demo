@@ -79,6 +79,10 @@ def test_pass_report_publishes_without_provider_and_preserves_samples(tmp_path, 
     assert "private/transcript.json" not in json.dumps(view)
     assert "全部判定为通过" in view["investigation_summary"]["paragraphs"][0]
     assert detail["direct_evidence"] == []
+    assert detail["audit_source"]["task_id"] == "new-search-task"
+    with store._connect() as connection:
+        source_result = connection.execute("SELECT content_key FROM audit_results WHERE id=?", (detail["audit_source"]["output_id"],)).fetchone()
+    assert source_result["content_key"] == "10001"
     assert view["accounts"]["snapshot_summary"]["entries"] == [{"display_name": "生活记录者", "published_post_count": count}]
     app = FastAPI()
     app.include_router(create_reporting_router(reopened))

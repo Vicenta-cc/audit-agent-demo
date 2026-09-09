@@ -35,7 +35,7 @@ function publicMessage(
   sanitizeAssistant = true
 ): ChatMessage {
   const presentation = message.role === "assistant" && message.artifact?.proposal_presentations?.length
-    ? { content: message.content, authoritativeProposalPresentation: true }
+    ? { content: message.content, authoritativeProposalPresentation: true, rulePresentations: message.artifact.proposal_presentations }
     : {};
   const artifact = message.artifact?.artifact_type === "investigation_draft"
     ? message.artifact
@@ -53,7 +53,7 @@ function publicMessage(
         taskName: suggestion.title,
         taskType: "平台话题采集",
         subject: suggestion.objective,
-        matchedRuleSet: suggestion.temporary_ruleset ? `本次使用临时规则：${suggestion.temporary_ruleset.content.name}` : suggestion.ruleset_revision?.name || "尚未绑定规则集",
+        matchedRuleSet: suggestion.temporary_ruleset ? `本次使用临时规则：${suggestion.temporary_ruleset.content.name}` : suggestion.ruleset_revision?.name || "尚未绑定审核规则",
         ruleSetDescription: suggestion.ruleset_revision
           ? `已选择发布版本 v${suggestion.ruleset_revision.version}，包含 ${suggestion.ruleset_revision.enabled_rule_count} 条启用规则。`
           : suggestion.temporary_ruleset ? "本次使用临时规则，暂不支持启动调查。" : "等待选择已发布的研判规则。",
@@ -97,7 +97,7 @@ function taskDraftFromArtifact(artifact: InvestigationDraftArtifact): TaskDraft 
     matchedRuleSet: suggestion?.ruleset_revision?.name
       || preview.ruleset_revision?.name
       || (preview.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : "")
-      || "尚未绑定规则集",
+      || "尚未绑定审核规则",
     analysisPlanName: suggestion?.ruleset_revision?.name
       || preview.ruleset_revision?.name
       || (preview.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : "")
@@ -118,7 +118,7 @@ function emptyDraft(): TaskDraft {
     subject: "待确定",
     platforms: [],
     keywords: [],
-    matchedRuleSet: "待选择规则集",
+    matchedRuleSet: "待选择审核规则",
     ruleSetDescription: "等待调查方案生成。",
     status: "配置中",
     confirmed: false
@@ -244,7 +244,7 @@ export function restoreInvestigationWorkspace(
 
   return {
     id: workspaceSessionId,
-    title: artifact?.draft.title || "新调查需求",
+    title: artifact?.draft.title || state.messages.find(message => message.role === "user")?.content.slice(0, 48) || "新调查需求",
     status: run?.status === "PUBLISHED"
       ? "报告已生成"
       : run?.status === "AUDIT_COMPLETED"

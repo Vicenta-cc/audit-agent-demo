@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
   ArrowLeft,
@@ -32,6 +32,7 @@ import { useRuleAssistantWorkspace } from "../features/rule-assistant/RuleAssist
 import { RecallLibraryManager } from "./RecallLibraryManager";
 
 interface KnowledgeCenterPageProps {
+  embedded?: boolean;
   initialRuleSetId?: string;
   initialTab?: "rulesets" | "recall";
   backLabel?: string;
@@ -54,6 +55,7 @@ interface KnowledgeCenterPageProps {
 }
 
 export function KnowledgeCenterPage({
+  embedded = false,
   initialRuleSetId = "ruleset-erotic",
   initialTab = "rulesets",
   backLabel = "返回工作区",
@@ -62,7 +64,6 @@ export function KnowledgeCenterPage({
   preview
 }: KnowledgeCenterPageProps = {}) {
   const navigate = useNavigate();
-  const location = useLocation();
   const { appliedRuleSets, upsertRuleSet } = useRuleAssistantWorkspace();
   const [activeTab, setActiveTab] = useState<"rulesets" | "recall">(initialTab);
   const [isRecallEditorOpen, setIsRecallEditorOpen] = useState(false);
@@ -83,17 +84,7 @@ export function KnowledgeCenterPage({
       onOpenRuleAssistant(selectedRuleSet.id);
       return;
     }
-    navigate("/rule-assistant", {
-      state: {
-        entryRuleSetId: selectedRuleSet.id,
-        returnLocation: {
-          pathname: location.pathname,
-          search: location.search,
-          scrollTop: window.scrollY,
-          activeSubView: "knowledge-center"
-        }
-      }
-    });
+    navigate("/investigation");
   };
 
   // Drawer State for Creating / Editing a Rule
@@ -434,9 +425,9 @@ export function KnowledgeCenterPage({
   };
 
   return (
-    <div className="kc-page-root" style={{ background: "#f8fafc", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div className="kc-page-root" style={{ background: "#f8fafc", minHeight: embedded ? "100%" : "100vh", display: "flex", flexDirection: "column" }}>
       {/* Top Header Bar */}
-      {!isRecallEditorOpen ? <header
+      {!embedded && !isRecallEditorOpen ? <header
         style={{
           height: "56px",
           background: "#ffffff",
@@ -475,7 +466,7 @@ export function KnowledgeCenterPage({
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <BookOpen size={18} style={{ color: "#2563eb" }} />
             <span style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>
-              {isPreview ? "规则结构预览 ·" : "研判规则管理中心"}
+              {isPreview ? "规则结构预览 ·" : "审核规则管理"}
             </span>
             {isPreview ? <span className="kc-preview-status">尚未应用</span> : null}
           </div>
@@ -499,7 +490,7 @@ export function KnowledgeCenterPage({
             }}
             onClick={() => setActiveTab("rulesets")}
           >
-            研判规则集
+            审核规则
           </button>
           <button
             type="button"
@@ -517,21 +508,21 @@ export function KnowledgeCenterPage({
             }}
             onClick={() => setActiveTab("recall")}
           >
-            召回词库
+            黑话库
           </button>
         </div> : null}
       </header> : null}
 
       {/* Main Body Area */}
       <main style={{ flex: 1, padding: "20px 24px", overflowY: "auto" }}>
-        {/* TAB 1: 研判规则集编辑器 */}
+        {/* TAB 1: 审核规则编辑器 */}
         {activeTab === "rulesets" ? (
           <div style={{ display: "grid", gridTemplateColumns: isPreview ? "minmax(0, 1fr)" : "240px minmax(0, 1fr)", gap: "20px", maxWidth: "1400px", margin: "0 auto" }}>
             {/* Left: Rule Set Directory Tree */}
             {!isPreview ? <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "14px", display: "flex", flexDirection: "column", gap: "10px", height: "fit-content" }}>
               <div style={{ fontSize: "12.5px", fontWeight: "700", color: "#64748b", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
                 <Layers size={15} style={{ color: "#2563eb" }} />
-                <span>规则集列表</span>
+                <span>审核规则列表</span>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -579,7 +570,7 @@ export function KnowledgeCenterPage({
                   gap: "6px"
                 }}
                 onClick={() => {
-                  const name = window.prompt("请输入新研判规则集名称：");
+                  const name = window.prompt("请输入新审核规则名称：");
                   if (!name || !name.trim()) return;
                   const newSet: AuditRuleSet = {
                     id: `ruleset-${Date.now()}`,
@@ -598,7 +589,7 @@ export function KnowledgeCenterPage({
                 }}
               >
                 <Plus size={14} />
-                <span>新建规则集</span>
+                <span>新建审核规则</span>
               </button>
             </div> : null}
 
@@ -607,12 +598,12 @@ export function KnowledgeCenterPage({
               {/* Top Banner */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "20px", borderBottom: "1px solid #f1f5f9", paddingBottom: "14px" }}>
                 <div>
-                  {isPreview ? <div className="kc-preview-field-label">规则集名称</div> : null}
+                  {isPreview ? <div className="kc-preview-field-label">审核规则名称</div> : null}
                   <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", margin: "0 0 2px" }}>
                     {selectedRuleSet.name}
                   </h2>
                   <div style={{ fontSize: "12px", color: "#64748b", marginTop: isPreview ? "7px" : 0 }}>
-                    {isPreview ? <><strong style={{ color: "#475569" }}>规则集说明：</strong>{preview?.ruleSet.description}</> : selectedRuleSet.category}
+                    {isPreview ? <><strong style={{ color: "#475569" }}>审核规则说明：</strong>{preview?.ruleSet.description}</> : selectedRuleSet.category}
                   </div>
                 </div>
 
@@ -623,7 +614,7 @@ export function KnowledgeCenterPage({
                   {isPreview && preview?.mode === "create-only" ? (
                     <>
                       <button type="button" className="kc-preview-secondary" onClick={() => onBack?.()}>返回继续调整</button>
-                      <button type="button" className="kc-preview-primary" onClick={preview.onCreateRuleSet}>创建规则集</button>
+                      <button type="button" className="kc-preview-primary" onClick={preview.onCreateRuleSet}>创建审核规则</button>
                     </>
                   ) : null}
                   {isPreview && preview?.origin === "file" && preview?.mode === "replace-or-create" ? (
@@ -631,10 +622,10 @@ export function KnowledgeCenterPage({
                   ) : null}
                   {isPreview && preview?.origin === "conversation" ? (
                     <button type="button" className="kc-preview-primary" onClick={preview.onApplyToRuleSet}>
-                      <Save size={14} />应用到正式规则集
+                      <Save size={14} />应用到正式审核规则
                     </button>
                   ) : null}
-                  {!isPreview ? <button
+                  {!isPreview && !embedded ? <button
                     type="button"
                     style={{
                       padding: "6px 13px",
@@ -652,7 +643,7 @@ export function KnowledgeCenterPage({
                     onClick={handleOpenRuleAssistant}
                   >
                     <Sparkles size={14} />
-                    <span>使用规则助手打开</span>
+                    <span>返回调查对话</span>
                   </button> : null}
                   {!isPreview ? <button
                     type="button"
@@ -669,7 +660,7 @@ export function KnowledgeCenterPage({
                       alignItems: "center",
                       gap: "6px"
                     }}
-                    onClick={() => alert(`规则集《${selectedRuleSet.name}》修改已发布生效！`)}
+                    onClick={() => alert(`审核规则《${selectedRuleSet.name}》修改已发布生效！`)}
                   >
                     <Save size={14} />
                     <span>保存发布</span>
@@ -681,24 +672,24 @@ export function KnowledgeCenterPage({
                 <div className="kc-preview-notice">
                   <FileText size={17} />
                   <div>
-                    <strong>{preview?.origin === "file" ? "当前结构由上传文件独立生成，尚未写入任何规则集。" : `当前预览包含 ${modifiedChanges.length} 项调整和 ${addedChanges.length} 条新增规则，尚未应用。`}</strong>
+                    <strong>{preview?.origin === "file" ? "当前结构由上传文件独立生成，尚未写入任何审核规则。" : `当前预览包含 ${modifiedChanges.length} 项调整和 ${addedChanges.length} 条新增规则，尚未应用。`}</strong>
                     <span>{preview?.origin === "file" ? preview.fileName : `基于“${preview?.sourceRuleSetName}”生成，仅保存在当前前端预览中。`}</span>
                   </div>
                   {preview?.origin === "conversation" && previewChanges.length ? (
                     <div className="kc-preview-notice-actions">
                       <button type="button" className="kc-preview-notice-action" onClick={() => setPreviewDrawer({ type: "summary" })}>查看变更</button>
-                      <button type="button" className="kc-preview-notice-action is-primary" onClick={preview.onApplyToRuleSet}>应用到规则集</button>
+                      <button type="button" className="kc-preview-notice-action is-primary" onClick={preview.onApplyToRuleSet}>应用到审核规则</button>
                     </div>
                   ) : null}
                 </div>
               ) : null}
 
-              {/* Universal Exemption Strip (规则集通用豁免条件) */}
+              {/* Universal Exemption Strip (审核规则通用豁免条件) */}
               <div style={{ background: "#fafafa", border: "1px solid #e2e8f0", borderRadius: "6px", padding: "12px 16px" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
                   <div style={{ fontSize: "13px", fontWeight: "700", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
                     <ShieldCheck size={15} style={{ color: "#166534" }} />
-                    <span>通用豁免条件 (适用于本规则集全部规则)</span>
+                    <span>通用豁免条件 (适用于这套审核规则中的全部规则)</span>
                   </div>
                   {!isPreview ? <button
                     type="button"
@@ -1046,7 +1037,7 @@ export function KnowledgeCenterPage({
           </div>
         ) : null}
 
-        {/* TAB 2: 召回词库 */}
+        {/* TAB 2: 黑话库 */}
         {activeTab === "recall" ? (
           <RecallLibraryManager onEditorStateChange={setIsRecallEditorOpen} />
         ) : null}

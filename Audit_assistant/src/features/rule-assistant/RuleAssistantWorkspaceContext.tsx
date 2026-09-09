@@ -190,7 +190,7 @@ export function RuleAssistantWorkspaceProvider({ children }: { children: ReactNo
 
   const createRuleSetConversation = () => {
     const conversation = createEmptyRuleConversation(null, conversations.length + 1);
-    conversation.title = "创建新规则集";
+    conversation.title = "创建新审核规则";
     conversation.purpose = "create-rule-set";
     setConversations((current) => [conversation, ...current]);
     setActiveConversationId(conversation.id);
@@ -213,7 +213,7 @@ export function RuleAssistantWorkspaceProvider({ children }: { children: ReactNo
     const targetConversationId = conversationId || createdConversation!.id;
     const purpose = type === "rule-set" ? "create-rule-set" : "create-lexicon";
     const scenario = type === "rule-set" ? "create-terror-rule-set" : "create-terror-lexicon";
-    const title = type === "rule-set" ? "创建研判规则集" : "创建召回词库";
+    const title = type === "rule-set" ? "创建审核规则" : "创建黑话库";
     const bindForCreation = (conversation: RuleAssistantConversation): RuleAssistantConversation => ({
       ...conversation,
       title,
@@ -225,7 +225,7 @@ export function RuleAssistantWorkspaceProvider({ children }: { children: ReactNo
     });
     if (type === "rule-set") {
       setRuleSets((current) => [
-        { id: resourceId, name: "新建研判规则集", description: "正在通过对话创建", isDraft: true },
+        { id: resourceId, name: "新建审核规则", description: "正在通过对话创建", isDraft: true },
         ...current.filter((item) => (
           item.id !== resourceId
           && !(item.id === previousConversation?.ruleSetId && isDraftResource(item))
@@ -238,7 +238,7 @@ export function RuleAssistantWorkspaceProvider({ children }: { children: ReactNo
       setExpandedLexiconIds(new Set());
     } else {
       setLexicons((current) => [
-        { id: resourceId, name: "新建召回词库", description: "正在通过对话创建", isDraft: true },
+        { id: resourceId, name: "新建黑话库", description: "正在通过对话创建", isDraft: true },
         ...current.filter((item) => (
           item.id !== resourceId
           && !(item.id === previousConversation?.lexiconId && isDraftResource(item))
@@ -311,7 +311,7 @@ export function RuleAssistantWorkspaceProvider({ children }: { children: ReactNo
     const existingResourceId = type === "rule-set" ? creationConversation?.ruleSetId : creationConversation?.lexiconId;
     const resourceId = existingResourceId || `${type === "rule-set" ? "ruleset" : "lexicon"}-created-${Date.now()}`;
     if (type === "rule-set") {
-      const name = resource?.name || "暴恐风险规则集";
+      const name = resource?.name || "暴恐审核规则";
       const description = resource?.description || "暴恐与公共安全场景的风险分类与判断条件";
       setRuleSets((current) => current.some((item) => item.id === resourceId)
         ? current.map((item) => item.id === resourceId ? { ...item, name, description, isDraft: false } : item)
@@ -335,14 +335,14 @@ export function RuleAssistantWorkspaceProvider({ children }: { children: ReactNo
       setExpandedLexiconIds(new Set());
       setConversations((current) => current.map((conversation) => conversation.id === conversationId ? {
         ...conversation,
-        title: "从审核规范创建规则集",
+        title: "从审核规范创建审核规则",
         ruleSetId: resourceId,
         lexiconId: null,
         purpose: "standard",
         updatedAt: "刚刚"
       } : conversation));
     } else {
-      const name = resource?.name || "暴恐涉敏召回词库";
+      const name = resource?.name || "暴恐涉敏黑话库";
       const description = resource?.description || "暴恐组织、极端主义口号、袭击威胁及符号变体词";
       setLexicons((current) => current.some((item) => item.id === resourceId)
         ? current.map((item) => item.id === resourceId ? { ...item, name, description, isDraft: false } : item)
@@ -351,7 +351,7 @@ export function RuleAssistantWorkspaceProvider({ children }: { children: ReactNo
       setExpandedLexiconIds(new Set([resourceId]));
       setConversations((current) => current.map((conversation) => conversation.id === conversationId ? {
         ...conversation,
-        title: "从词表创建召回词库",
+        title: "从词表创建黑话库",
         ruleSetId: null,
         lexiconId: resourceId,
         purpose: "standard",
@@ -700,7 +700,7 @@ export function RuleAssistantWorkspaceProvider({ children }: { children: ReactNo
     if (creationConversation) {
       setConversations((current) => current.map((conversation) => conversation.id === creationConversation.id ? {
         ...conversation,
-        title: "从审核规范创建规则集",
+        title: "从审核规范创建审核规则",
         purpose: "standard",
         updatedAt: "刚刚"
       } : conversation));

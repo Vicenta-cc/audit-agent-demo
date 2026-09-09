@@ -105,7 +105,7 @@ export function createTerrorLexiconCandidate(id: string): RuleAssistantCandidate
 
   return {
     id,
-    name: "暴恐涉敏召回词库",
+    name: "暴恐涉敏黑话库",
     category: "暴恐涉敏",
     description: "用于召回恐怖组织、极端主义宣传、暴力袭击威胁及相关符号变体内容。",
     terms: coreTerms.map((primary, index) => ({
@@ -186,11 +186,11 @@ export const initialRuleAssistantConversations: RuleAssistantConversation[] = [
     updatedAt: "10:18",
     scenario: "global-resource",
     messages: [
-      { id: "global-private-domain-u1", role: "user", content: "系统里有哪些与私域引流相关的规则和召回词？分别在哪些规则集和词库里？" },
+      { id: "global-private-domain-u1", role: "user", content: "系统里有哪些与私域引流相关的规则和召回词？分别在哪些审核规则和词库里？" },
       assistantMessage(
         "global-private-domain-a1",
         "resource-inventory",
-        "目前找到 1 个相关规则集和 2 个相关召回词库。",
+        "目前找到 1 个相关审核规则和 2 个相关黑话库。",
         ["ruleset-gambling"],
         ["recall-gambling", "recall-fraud"]
       ),
@@ -215,11 +215,11 @@ export const initialRuleAssistantConversations: RuleAssistantConversation[] = [
       {
         id: "gambling-lexicon-direct-edit-u1",
         role: "user",
-        content: "请在涉赌博彩召回词库中补充世界杯相关召回词：世界杯滚球和世界杯外围按关键词，世界杯比分盘按标签，并生成常见表达变体。",
+        content: "请在涉赌博彩黑话库中补充世界杯相关召回词：世界杯滚球和世界杯外围按关键词，世界杯比分盘按标签，并生成常见表达变体。",
         resourceContext: {
           resourceId: "recall-gambling",
           resourceType: "lexicon",
-          resourceName: "通用涉赌博彩召回词库"
+          resourceName: "通用涉赌博彩黑话库"
         }
       },
       assistantMessage(
@@ -257,17 +257,17 @@ export const initialRuleAssistantConversations: RuleAssistantConversation[] = [
       {
         id: "erotic-ruleset-query-u1",
         role: "user",
-        content: "请问该规则集下有几个风险类别？",
+        content: "请问该审核规则下有几个风险类别？",
         resourceContext: {
           resourceId: "ruleset-erotic",
           resourceType: "rule-set",
-          resourceName: "色情低俗风险规则集"
+          resourceName: "色情低俗审核规则"
         }
       },
       assistantMessage(
         "erotic-ruleset-query-a1",
         "ruleset-summary",
-        "当前“色情低俗风险规则集”包含 1 个风险类别，即“身体隐私部位暴露”，共 2 条风险规则：“明确暴露”和“局部露拍”。该类别主要用于识别直接暴露敏感隐私部位，或通过镜头聚焦、局部特写等方式突出敏感部位的内容。",
+        "当前“色情低俗审核规则”包含 1 个风险类别，即“身体隐私部位暴露”，共 2 条风险规则：“明确暴露”和“局部露拍”。该类别主要用于识别直接暴露敏感隐私部位，或通过镜头聚焦、局部特写等方式突出敏感部位的内容。",
         ["ruleset-erotic"]
       ),
       {
@@ -277,7 +277,7 @@ export const initialRuleAssistantConversations: RuleAssistantConversation[] = [
         resourceContext: {
           resourceId: "ruleset-erotic",
           resourceType: "rule-set",
-          resourceName: "色情低俗风险规则集"
+          resourceName: "色情低俗审核规则"
         }
       },
       assistantMessage(
@@ -549,7 +549,7 @@ function createTerrorCandidatePreview({
     ruleChanges: {},
     ruleSet: {
       id: `candidate-${id}`,
-      name: "暴恐风险规则集",
+      name: "暴恐审核规则",
       description: "用于识别恐怖主义宣传、极端组织符号、暴力恐吓和公共安全威胁内容。",
       category: "暴恐与公共安全",
       version: "",

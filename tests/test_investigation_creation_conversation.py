@@ -303,6 +303,30 @@ def _draft_count(store: InvestigationCreationStore) -> int:
         )
 
 
+def test_workspace_list_recovers_sessions_and_respects_owner_and_pagination(creation_stack):
+    stack = creation_stack
+    conversation = stack["conversation"]
+    owner = Principal("principal-a")
+    first = conversation.create_session(principal=owner)
+    second = conversation.create_session(principal=owner)
+    hidden = conversation.create_session(principal=Principal("principal-b"))
+    closed = conversation.create_session(principal=owner)
+    conversation.store.close_session(closed.id)
+    client = stack["client"]
+    page = client.get("/api/investigation-workspaces", params={"limit": 1}).json()
+    assert page["has_more"] is True
+    next_page = client.get("/api/investigation-workspaces", params={"limit": 1, "offset": 1}).json()
+    assert next_page["has_more"] is False
+    ids = {item["workspace_session_id"] for item in page["items"] + next_page["items"]}
+    assert ids == {first.id, second.id}
+    assert hidden.id not in ids and closed.id not in ids
+    assert all(item["title"] == "新调查需求" for item in page["items"])
+    stack["principals"].current = Principal("principal-b")
+    other = client.get("/api/investigation-workspaces").json()
+    assert [item["workspace_session_id"] for item in other["items"]] == [hidden.id]
+    assert _draft_count(stack["creation_store"]) == 0
+
+
 def _run_count(store: InvestigationCreationStore) -> int:
     with sqlite3.connect(store.db_path) as connection:
         return int(
@@ -1866,7 +1890,7 @@ def test_creation_tool_descriptions_are_capability_oriented() -> None:
     query_description = M3_TOOL_DESCRIPTIONS["query_investigation_options"]
     create_description = M3_TOOL_DESCRIPTIONS["create_investigation_draft"]
     assert "discover, explain, compare, recommend, or configure" in query_description
-    assert "categories, rules, hit conditions, exemptions" in query_description
+    assert "categories, 审核规则, hit conditions, exemptions" in query_description
     assert "application stages" in query_description
     assert "when the user wants" in create_description
     descriptions = " ".join(M3_TOOL_DESCRIPTIONS.values())
@@ -2594,10 +2618,10 @@ def test_t1_generation_guidance_preserves_conversation_authority():
     assert "no Draft and no generated terms" in prompt
     assert "do not list even illustrative example terms or candidate terms" in prompt
     assert "Each generated Chinese query is natural continuous text with no whitespace" in prompt
-    assert "RuleSet Proposal, then show its rules and the complete search-term list, and END this turn" in prompt
+    assert "审核规则 Proposal, then show its 审核规则 and the complete search-term list, and END this turn" in prompt
     assert "create the Draft in the same turn" in prompt
     assert "Do not ask again for permission to generate terms" in prompt
-    assert "real recall lexicon when it is sufficiently suitable" in prompt
+    assert "real recall 黑话库 when it is sufficiently suitable" in prompt
     assert "Generation and editing never bind Draft Judgement" in prompt
     assert "Only use_ruleset_proposal can bind that exact presented version" in prompt
     assert "Preview and Confirm never generate or expand terms" in prompt

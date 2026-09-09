@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Bot, Check, Edit3, ExternalLink, Save } from "lucide-react";
 import type { PlatformCode, TaskDraft } from "../../types/investigation";
+import type { RuleSetProposalPresentation } from "../../types/investigationCreation";
+import { GeneratedRulesMessage } from "./GeneratedRulesMessage";
 import type { ConfirmationPreview } from "../../types/investigationCreation";
 import {
   formatConfirmationBlockerMessage,
@@ -28,6 +30,7 @@ const defaultPlatformOptions: Array<{ code: PlatformCode; label: string; availab
 interface TaskSuggestionCardProps {
   assistantContent: string;
   literalAssistantContent?: boolean;
+  rulePresentations?: RuleSetProposalPresentation[];
   shouldStream: boolean;
   showSuggestionCard: boolean;
   onStreamingComplete: () => void;
@@ -45,6 +48,7 @@ interface TaskSuggestionCardProps {
 export function TaskSuggestionCard({
   assistantContent,
   literalAssistantContent = false,
+  rulePresentations = [],
   shouldStream,
   showSuggestionCard,
   onStreamingComplete,
@@ -116,9 +120,7 @@ export function TaskSuggestionCard({
           <span>研判助手</span>
         </div>
         {literalAssistantContent ? (
-          <div className="task-suggestion-copy" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-            {assistantContent}
-          </div>
+          <GeneratedRulesMessage content={assistantContent} presentations={rulePresentations} />
         ) : <StreamingAssistantText
           text={assistantContent}
           shouldStream={shouldStream}
@@ -206,14 +208,14 @@ export function TaskSuggestionCard({
           </section>
 
           <section className="task-suggestion-section task-suggestion-plan-section">
-            <div className="task-suggestion-label">推荐研判规则</div>
+            <div className="task-suggestion-label">推荐审核规则</div>
             <div className="task-suggestion-field-body task-suggestion-plan-body">
               <div className="task-plan-row">
                 <div className="task-suggestion-plan-heading">
                   <div className={`task-suggestion-value${hasAnalysisPlan ? "" : " is-missing"}`}>
                     {hasAnalysisPlan
                       ? draft.analysisPlanName || draft.matchedRuleSet
-                      : "研判规则待配置"}
+                      : "审核规则待配置"}
                   </div>
                   {hasAnalysisPlan ? <span className="task-suggestion-recommend-tag">系统推荐</span> : null}
                 </div>
@@ -226,9 +228,9 @@ export function TaskSuggestionCard({
                 </button>
               </div>
               <p className="task-suggestion-help">
-                {hasAnalysisPlan ? draft.ruleSetDescription : "选择匹配的已发布研判规则后，系统将校验规则版本。"}
+                {hasAnalysisPlan ? draft.ruleSetDescription : "选择匹配的已发布审核规则后，系统将校验规则版本。"}
                 {draft.recommendedRecallLexicons?.length
-                  ? ` · 推荐召回词库：${draft.recommendedRecallLexicons.join("、")}`
+                  ? ` · 推荐黑话库：${draft.recommendedRecallLexicons.join("、")}`
                   : ""}
               </p>
             </div>

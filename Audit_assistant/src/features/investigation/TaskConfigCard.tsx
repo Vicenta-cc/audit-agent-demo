@@ -216,7 +216,7 @@ export function TaskConfigCard({
               className="ruleset-text-btn"
               onClick={onOpenRulesetDrawer}
             >
-              查看规则集
+              查看审核规则
             </button>
           ) : null}
         </div>

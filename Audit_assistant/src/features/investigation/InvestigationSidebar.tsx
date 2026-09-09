@@ -5,13 +5,14 @@ import {
   Users,
   Radio,
   BookOpen,
+  Tags,
   PanelLeftClose,
   MoreVertical,
   ShieldAlert
 } from "lucide-react";
 import type { InvestigationSession } from "../../types/investigation";
 
-export type SubViewType = "users" | "crawler-accounts" | "knowledge-center" | null;
+export type SubViewType = "users" | "crawler-accounts" | "audit-rules" | "slang-library" | null;
 
 interface InvestigationSidebarProps {
   sessions: InvestigationSession[];
@@ -198,11 +199,19 @@ export function InvestigationSidebar({
             </button>
             <button
               type="button"
-              className={`inv-nav-item ${activeSubView === "knowledge-center" ? "is-active" : ""}`}
-              onClick={() => onSelectSubView && onSelectSubView("knowledge-center")}
+              className={`inv-nav-item ${activeSubView === "audit-rules" ? "is-active" : ""}`}
+              onClick={() => onSelectSubView && onSelectSubView("audit-rules")}
             >
               <BookOpen size={15} />
-              <span>知识库资源中心</span>
+              <span>审核规则</span>
+            </button>
+            <button
+              type="button"
+              className={`inv-nav-item ${activeSubView === "slang-library" ? "is-active" : ""}`}
+              onClick={() => onSelectSubView?.("slang-library")}
+            >
+              <Tags size={15} />
+              <span>黑话库</span>
             </button>
           </div>
         </div>

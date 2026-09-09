@@ -39,7 +39,7 @@ export function RuleCandidatePreviewPage() {
 
   const sourceRuleSetName = (preview.sourceRuleSetId ? appliedRuleSets[preview.sourceRuleSetId]?.name : undefined)
     || ruleSets.find((item) => item.id === preview.sourceRuleSetId)?.name
-    || "色情低俗风险规则集";
+    || "色情低俗审核规则";
 
   const returnToConversation = () => {
     setActiveConversationId(preview.conversationId);
@@ -88,7 +88,7 @@ export function RuleCandidatePreviewPage() {
     if (!name) return;
     addRuleSet(name, newRuleSetDescription.trim(), preview.ruleSet, preview.conversationId);
     completeCandidatePreview(preview.id, "created");
-    appendResult(`已将候选结构保存为新的规则集“${name}”。`);
+    appendResult(`已将候选结构保存为新的审核规则“${name}”。`);
     setDialog(null);
     navigate("/rule-assistant");
   };
@@ -130,9 +130,9 @@ export function RuleCandidatePreviewPage() {
             <div className="ra-modal-head">
               <div>
                 <h2 id="ra-apply-title">
-                  {dialog === "apply" ? "应用到正式规则集" : dialog === "choice" ? "选择应用方式" : dialog === "replace" ? "替换当前规则集" : preview.mode === "create-only" ? "创建规则集" : "保存为新规则集"}
+                  {dialog === "apply" ? "应用到正式审核规则" : dialog === "choice" ? "选择应用方式" : dialog === "replace" ? "替换当前审核规则" : preview.mode === "create-only" ? "创建审核规则" : "保存为新审核规则"}
                 </h2>
-                <p>{dialog === "apply" ? `目标规则集：${sourceRuleSetName}` : "确认后将同步更新规则资源"}</p>
+                <p>{dialog === "apply" ? `目标审核规则：${sourceRuleSetName}` : "确认后将同步更新规则资源"}</p>
               </div>
               <button type="button" aria-label="关闭" onClick={() => setDialog(null)}><X size={18} /></button>
             </div>
@@ -140,11 +140,11 @@ export function RuleCandidatePreviewPage() {
             {dialog === "choice" ? (
               <div className="ra-apply-choice-list">
                 <button type="button" className="ra-apply-choice" onClick={() => setDialog("replace")}>
-                  <div><strong>替换当前规则集</strong><span>使用完整候选结构替换当前规则集，不进行自动合并。</span></div>
+                  <div><strong>替换当前审核规则</strong><span>使用完整候选结构替换当前审核规则，不进行自动合并。</span></div>
                   <RefreshCw size={17} />
                 </button>
                 <button type="button" className="ra-apply-choice" onClick={openCreateDialog}>
-                  <div><strong>保存为新规则集</strong><span>保留当前规则集，并在左侧新增一个规则集。</span></div>
+                  <div><strong>保存为新审核规则</strong><span>保留当前审核规则，并在左侧新增一个审核规则。</span></div>
                   <CopyPlus size={17} />
                 </button>
               </div>
@@ -158,7 +158,7 @@ export function RuleCandidatePreviewPage() {
                     <div><dt>规则调整</dt><dd>{modifiedCount} 项</dd></div>
                     <div><dt>新增规则</dt><dd>{addedCount} 条</dd></div>
                   </dl>
-                  <p>确认后，当前正式规则集将更新为这份预览中的规则结构。</p>
+                  <p>确认后，当前正式审核规则将更新为这份预览中的规则结构。</p>
                 </div>
                 <div className="ra-modal-actions">
                   <button type="button" onClick={() => setDialog(null)}>取消</button>
@@ -169,7 +169,7 @@ export function RuleCandidatePreviewPage() {
 
             {dialog === "replace" ? (
               <>
-                <p className="ra-apply-confirm-copy">{`确认替换“${sourceRuleSetName}”？\n\n当前规则集中的通用豁免、风险分类和风险规则，将全部替换为本次预览内容。\n\n本次操作不是合并。`}</p>
+                <p className="ra-apply-confirm-copy">{`确认替换“${sourceRuleSetName}”？\n\n当前审核规则中的通用豁免、风险分类和风险规则，将全部替换为本次预览内容。\n\n本次操作不是合并。`}</p>
                 <div className="ra-modal-actions">
                   <button type="button" onClick={() => setDialog("choice")}>取消</button>
                   <button type="button" className="is-primary" onClick={handleReplace}>确认替换</button>
@@ -180,15 +180,15 @@ export function RuleCandidatePreviewPage() {
             {dialog === "create" ? (
               <>
                 <div className="ra-apply-form">
-                  <label>规则集名称<input autoFocus value={newRuleSetName} onChange={(event) => setNewRuleSetName(event.target.value)} /></label>
-                  <label>规则集说明<textarea value={newRuleSetDescription} onChange={(event) => setNewRuleSetDescription(event.target.value)} /></label>
+                  <label>审核规则名称<input autoFocus value={newRuleSetName} onChange={(event) => setNewRuleSetName(event.target.value)} /></label>
+                  <label>审核规则说明<textarea value={newRuleSetDescription} onChange={(event) => setNewRuleSetDescription(event.target.value)} /></label>
                 </div>
                 <div className="ra-modal-actions">
                   <button type="button" onClick={() => preview.mode === "create-only" ? returnToConversation() : setDialog("choice")}>
                     {preview.mode === "create-only" ? "返回继续调整" : "取消"}
                   </button>
                   <button type="button" className="is-primary" disabled={!newRuleSetName.trim()} onClick={handleCreate}>
-                    {preview.mode === "create-only" ? "创建规则集" : "保存为新规则集"}<ChevronRight size={14} />
+                    {preview.mode === "create-only" ? "创建审核规则" : "保存为新审核规则"}<ChevronRight size={14} />
                   </button>
                 </div>
               </>

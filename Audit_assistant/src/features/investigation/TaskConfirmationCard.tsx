@@ -95,7 +95,7 @@ export function TaskConfirmationCard({
         {preview ? (
           <>
             <div className="task-final-field">
-              <span>研判规则</span>
+              <span>审核规则</span>
               <strong>
                 {view.ruleSet}
               </strong>
@@ -124,7 +124,7 @@ export function TaskConfirmationCard({
           ))}
           {view.rulesManagementUrl ? (
             <a href={view.rulesManagementUrl}>
-              编辑/新增研判规则 <ExternalLink size={13} aria-hidden="true" />
+              编辑/新增审核规则 <ExternalLink size={13} aria-hidden="true" />
             </a>
           ) : null}
         </div>

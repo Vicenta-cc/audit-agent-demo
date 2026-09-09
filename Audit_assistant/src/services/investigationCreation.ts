@@ -16,6 +16,27 @@ import type {
 } from "../types/investigations";
 import type { PublishedReportDetail } from "../types/reports";
 
+export interface InvestigationWorkspaceListItem {
+  workspace_session_id: string;
+  title: string;
+  updated_at: string;
+  run_status: string;
+  presentation_stage: string;
+}
+
+export async function listInvestigationWorkspaces() {
+  const items: InvestigationWorkspaceListItem[] = [];
+  let hasMore = true;
+  while (hasMore) {
+    const page = await apiRequest<{ items: InvestigationWorkspaceListItem[]; has_more: boolean }>(
+      withQuery("/api/investigation-workspaces", { limit: 50, offset: items.length })
+    );
+    items.push(...page.items);
+    hasMore = page.has_more && page.items.length > 0;
+  }
+  return items;
+}
+
 export function createInvestigationWorkspace(workspaceKey: string) {
   return apiRequest<InvestigationWorkspaceSession>("/api/investigation-workspaces", {
     method: "POST",

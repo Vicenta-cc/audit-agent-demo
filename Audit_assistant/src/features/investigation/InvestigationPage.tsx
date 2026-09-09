@@ -24,6 +24,7 @@ import {
   getInvestigationRun,
   getInvestigationWorkspacePublishedReport,
   getInvestigationWorkspaceState,
+  listInvestigationWorkspaces,
   resumeInvestigationCreationTurn,
   sendInvestigationCreationTurn,
   updateInvestigationDraft,
@@ -38,6 +39,7 @@ import { InvestigationSidebar, type SubViewType } from "./InvestigationSidebar";
 import { InvestigationCenterArea } from "./InvestigationCenterArea";
 import { InvestigationContextDrawer, type DrawerType } from "./InvestigationContextDrawer";
 import { FocusUsersPage } from "../focus-users/FocusUsersPage";
+import { KnowledgeCenterPage } from "../../pages/KnowledgeCenterPage";
 import { CrawlerAccountsPage } from "../crawler-accounts/CrawlerAccountsPage";
 import { buildPublishedReportSummary } from "./publishedReportSession";
 import { buildHistoricalReportSession } from "./historicalReportWorkspace";
@@ -531,9 +533,22 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     window.matchMedia("(max-width: 760px)").matches
   ));
   const [activeDrawer, setActiveDrawer] = useState<DrawerType>(null);
-  const [activeSubView, setActiveSubView] = useState<SubViewType>(
+  const [activeSubView, setActiveSubViewState] = useState<SubViewType>(
     routeState.restoreInvestigationState?.activeSubView ?? initialSubView
   );
+  useEffect(() => {
+    const view = new URLSearchParams(location.search).get("view");
+    setActiveSubViewState(view === "audit-rules" || view === "slang-library" || view === "users" || view === "crawler-accounts"
+      ? view : routeState.restoreInvestigationState?.activeSubView ?? initialSubView);
+  }, [location.search, initialSubView, routeState.restoreInvestigationState?.activeSubView]);
+
+  const setActiveSubView = (view: SubViewType) => {
+    setActiveSubViewState(view);
+    const params = new URLSearchParams(location.search);
+    if (view) params.set("view", view);
+    else params.delete("view");
+    navigate({ pathname: location.pathname, search: params.toString() }, { state: location.state });
+  };
   const [sendingMessageSessionId, setSendingMessageSessionId] = useState("");
   const [confirmingCreationSessionId, setConfirmingCreationSessionId] = useState("");
   const [historicalWorkspacesLoaded, setHistoricalWorkspacesLoaded] = useState(false);
@@ -545,6 +560,31 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const recoveredReportVersionsRef = useRef(new Set<string>());
   const generatingPreviewSessionsRef = useRef(new Set<string>());
   const loadingHistoricalWorkspacesRef = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    void listInvestigationWorkspaces().then((items) => {
+      if (!active) return;
+      const restored = items.map((item): InvestigationSession => ({
+        ...buildNewInvestigationWorkspaceSession(item.workspace_session_id),
+        title: item.title,
+        updatedAt: new Date(item.updated_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+        status: item.run_status === "PUBLISHED" ? "报告已生成"
+          : item.run_status === "AUDIT_COMPLETED" ? "审核完成"
+          : item.run_status === "FAILED" ? "调查失败"
+          : item.run_status === "INTERRUPTED" ? "调查已中断"
+          : item.run_status ? "研判中"
+          : item.presentation_stage === "confirmation" ? "等待确认" : "配置中"
+      }));
+      // Keep already loaded conversations and in-flight turns; summaries only fill missing rows.
+      setSessions((current) => [
+        ...current.filter((session) => Boolean(session.creationBinding)),
+        ...restored.filter((session) => !current.some((existing) => existing.id === session.id)),
+        ...current.filter((session) => !session.creationBinding)
+      ]);
+    }).catch((error) => console.error("Failed to load investigation workspaces", error));
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     const prevTitle = document.title;
@@ -586,7 +626,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         : null;
       if (requestedHistorical) {
         setActiveSessionId(requestedHistorical.id);
-      } else if (!investigationId && historicalSessions[0]) {
+      } else if (!investigationId && historicalSessions[0] && !new URLSearchParams(window.location.search).has("view")) {
         setActiveSessionId(historicalSessions[0].id);
         navigate(`/investigation/${encodeURIComponent(historicalSessions[0].id)}`, {
           replace: true
@@ -656,7 +696,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       && cachedWorkspaceSessionId !== investigationId
     ) {
       navigate(
-        `/investigation/${encodeURIComponent(cachedWorkspaceSessionId)}`,
+        `/investigation/${encodeURIComponent(cachedWorkspaceSessionId)}${location.search}`,
         { replace: true }
       );
       return;
@@ -667,8 +707,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       investigationId.startsWith("historical-report-")
       && !historicalWorkspacesLoaded
     ) return;
-    navigate(`/investigation/${encodeURIComponent(activeSessionId)}`, { replace: true });
-  }, [activeSessionId, historicalWorkspacesLoaded, investigationId, navigate, sessions]);
+    navigate(`/investigation/${encodeURIComponent(activeSessionId)}${location.search}`, { replace: true });
+  }, [activeSessionId, historicalWorkspacesLoaded, investigationId, location.search, navigate, sessions]);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
   const activeRuleSet = activeSession.creationBinding
@@ -1171,8 +1211,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   ...item.draft,
                   platforms: [candidate.id],
                   keywords: preview.resolved_search_terms,
-                  matchedRuleSet: preview.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : preview.ruleset_revision?.name || "尚未绑定规则集",
-                  analysisPlanName: preview.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : preview.ruleset_revision?.name || "尚未选择研判规则"
+                  matchedRuleSet: preview.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : preview.ruleset_revision?.name || "尚未绑定审核规则",
+                  analysisPlanName: preview.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : preview.ruleset_revision?.name || "尚未选择审核规则"
                 },
                 creationBinding: {
                   ...item.creationBinding,
@@ -1974,7 +2014,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             taskName: "博彩赌博类帖子分析任务",
             subject: "抖音平台博彩赌博类内容风险",
             platforms: ["dy"],
-            matchedRuleSet: "赌博博彩风险规则集",
+            matchedRuleSet: "赌博博彩审核规则",
             analysisPlanName: "博彩引流综合研判方案",
             ruleSetDescription: "结合正文、OCR、语音转写、画面与评论证据，识别博彩招募、盘口推广、资金结算和外部导流风险。",
             scopeDescription: "围绕抖音平台博彩赌博类内容开展采集、证据分析与风险研判。",
@@ -2003,7 +2043,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                 taskName: "博彩赌博类帖子分析任务",
                 taskType: "平台话题采集",
                 subject: "抖音平台博彩赌博类内容风险",
-                matchedRuleSet: "赌博博彩风险规则集",
+                matchedRuleSet: "赌博博彩审核规则",
                 ruleSetDescription: "结合正文、OCR、语音转写、画面与评论证据，识别博彩招募、盘口推广、资金结算和外部导流风险。",
                 keywordsNotice: "本次使用面向博彩招募、盘口和资金导流场景的专题搜索词。",
                 platformsSelected: ["dy"],
@@ -2026,7 +2066,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             taskName: "世界杯博彩专题采集与分析",
             subject: "世界杯博彩",
             platforms: [],
-            matchedRuleSet: "赌博博彩风险规则集",
+            matchedRuleSet: "赌博博彩审核规则",
             ruleSetDescription: "用于抓取后的博彩黑话、引流行为和风险线索识别，不会扩大本次采集范围。",
             analysisPlanName: "博彩引流综合研判方案",
             scopeDescription: "采集范围使用系统默认值；如需调整时间范围或采集数量，可进入高级配置。",
@@ -2046,7 +2086,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                 taskName: "世界杯博彩专题采集与分析",
                 taskType: "平台话题采集",
                 subject: "世界杯博彩",
-                matchedRuleSet: "赌博博彩风险规则集",
+                matchedRuleSet: "赌博博彩审核规则",
                 ruleSetDescription: "用于抓取后的博彩黑话、引流行为和风险线索识别，不会扩大本次采集范围。",
                 platformsSelected: [],
                 platformsConfirmed: false,
@@ -2068,7 +2108,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             taskName: "维汉民族关系专项调查",
             subject: "维汉民族关系",
             platforms: [],
-            matchedRuleSet: "民族意识形态风险规则集",
+            matchedRuleSet: "民族意识形态审核规则",
             analysisPlanName: "维汉民族关系专题研判方案",
             ruleSetDescription: "结合原帖、维吾尔语译文与评论上下文，识别民族刻板印象、侮辱歧视、排斥通婚和煽动对立等风险表达。",
             scopeDescription: "围绕维汉婚恋、家庭互动与相关评论争议开展专题采集。",
@@ -2088,7 +2128,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                 taskName: "维汉民族关系专项调查",
                 taskType: "平台话题采集",
                 subject: "维汉民族关系",
-                matchedRuleSet: "民族意识形态风险规则集",
+                matchedRuleSet: "民族意识形态审核规则",
                 ruleSetDescription: "结合原帖、维吾尔语译文与评论上下文，识别民族刻板印象、侮辱歧视、排斥通婚和煽动对立等风险表达。",
                 keywordsNotice: "现有民族宗教涉敏词库缺少维汉婚恋与家庭互动场景的精准检索词，建议本次使用 8 个专题搜索词。",
                 platformsSelected: [],
@@ -2163,22 +2203,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         onDeleteSession={handleDeleteSession}
         onRenameSession={handleRenameSession}
         activeSubView={activeSubView}
-        onSelectSubView={(subView) => {
-          if (subView === "knowledge-center") {
-            navigate("/rule-assistant", {
-              state: {
-                returnLocation: {
-                  pathname: `/investigation/${encodeURIComponent(activeSessionId)}`,
-                  activeSessionId,
-                  activeSubView: null,
-                  scrollTop: subViewScrollRef.current?.scrollTop || 0
-                }
-              }
-            });
-            return;
-          }
-          setActiveSubView(subView);
-        }}
+        onSelectSubView={setActiveSubView}
       />
 
       {/* Column 2: Center Content (Either Investigation Chat or Embedded SubView) */}
@@ -2210,7 +2235,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
               <span style={{ fontSize: "15px", fontWeight: "800", color: "#0f172a" }}>
                 {activeSubView === "users" && "重点用户管理"}
                 {activeSubView === "crawler-accounts" && "采集账号管理"}
-                {activeSubView === "knowledge-center" && "知识库资源中心"}
+                {activeSubView === "audit-rules" && "审核规则"}
+                {activeSubView === "slang-library" && "黑话库"}
               </span>
             </div>
           </div>
@@ -2219,6 +2245,16 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           <div ref={subViewScrollRef} style={{ flex: 1, overflowY: "auto" }}>
             {activeSubView === "users" && <FocusUsersPage />}
             {activeSubView === "crawler-accounts" && <CrawlerAccountsPage />}
+            {(activeSubView === "audit-rules" || activeSubView === "slang-library") && (
+              <KnowledgeCenterPage
+                key={activeSubView}
+                embedded
+                initialRuleSetId={new URLSearchParams(location.search).get("ruleSetId") || undefined}
+                initialTab={activeSubView === "audit-rules" ? "rulesets" : "recall"}
+                onBack={() => setActiveSubView(null)}
+                onOpenRuleAssistant={() => setActiveSubView(null)}
+              />
+            )}
           </div>
         </div>
       ) : (

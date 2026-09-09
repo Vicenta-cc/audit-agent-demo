@@ -656,6 +656,18 @@ class InvestigationStore:
                 )
         return self.get_session(session_id)
 
+    def list_creation_sessions(
+        self, *, principal: str, limit: int = 50, offset: int = 0
+    ) -> tuple[InvestigationSession, ...]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT * FROM investigation_sessions
+                   WHERE scope_type='creation' AND owner_principal=? AND status='active'
+                   ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?""",
+                (principal, limit, offset),
+            ).fetchall()
+        return tuple(self._session(row) for row in rows)
+
     def get_session(self, session_id: str) -> InvestigationSession:
         with self._connect() as connection:
             row = connection.execute(

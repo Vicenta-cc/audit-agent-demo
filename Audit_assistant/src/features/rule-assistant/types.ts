@@ -119,7 +119,7 @@ export interface RuleAssistantReturnLocation {
   search?: string;
   scrollTop?: number;
   activeSessionId?: string;
-  activeSubView?: "users" | "crawler-accounts" | "knowledge-center" | null;
+  activeSubView?: "users" | "crawler-accounts" | "audit-rules" | "slang-library" | null;
 }
 
 export interface RuleAssistantRouteState {

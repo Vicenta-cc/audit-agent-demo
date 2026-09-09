@@ -54,9 +54,9 @@ import type {
 
 const addRulePrompt = "在“身体隐私部位暴露”中增加一条“透明衣物透视展示”规则。";
 const modifyRulePrompt = "把“局部露拍”的风险等级调整为高风险，并补充持续聚焦、反复展示的判断条件。";
-const resourceInventoryPrompt = "系统里有哪些与私域引流相关的规则和召回词？分别在哪些规则集和词库里？";
+const resourceInventoryPrompt = "系统里有哪些与私域引流相关的规则和召回词？分别在哪些审核规则和词库里？";
 const resourceCoveragePrompt = "如果我要专门做“二维码和联系方式引流”这一类内容，现有资源够用吗？";
-const categoryCountPrompt = "请问该规则集下有几个风险类别？";
+const categoryCountPrompt = "请问该审核规则下有几个风险类别？";
 const highRiskPrompt = "高风险的规则有哪些？";
 const importRuleFilePrompt = "请解析这份规则文件，并整理成完整规则结构。";
 
@@ -72,9 +72,9 @@ type MockAttachment = {
 };
 
 const mockAttachments: MockAttachment[] = [
-  { name: mockRuleFileName, fileType: "DOCX", description: "导入或更新现有规则集" },
-  { name: mockTerrorRuleFileName, fileType: "DOCX", description: "创建暴恐风险规则集" },
-  { name: mockTerrorLexiconFileName, fileType: "XLSX", description: "创建暴恐涉敏召回词库" }
+  { name: mockRuleFileName, fileType: "DOCX", description: "导入或更新现有审核规则" },
+  { name: mockTerrorRuleFileName, fileType: "DOCX", description: "创建暴恐审核规则" },
+  { name: mockTerrorLexiconFileName, fileType: "XLSX", description: "创建暴恐涉敏黑话库" }
 ];
 
 function getConversationRecency(updatedAt: string, fallback: number) {
@@ -99,8 +99,8 @@ function inferResourceCreation(text: string): "rule-set" | "lexicon" | null {
   const normalized = text.replace(/\s/g, "");
   const requestsCreation = /(新建|创建|建立)/.test(normalized);
   if (!requestsCreation) return null;
-  if (/(召回词库|词库)/.test(normalized)) return "lexicon";
-  if (/(风险规则集|规则集)/.test(normalized)) return "rule-set";
+  if (/(黑话库|词库)/.test(normalized)) return "lexicon";
+  if (/(审核规则|审核规则)/.test(normalized)) return "rule-set";
   return null;
 }
 
@@ -115,7 +115,7 @@ function inferExistingResource(
   const matchedLexicon = lexicons.find((lexicon) => normalized.includes(lexicon.name.replace(/\s/g, "")));
   if (matchedLexicon) return { type: "lexicon", id: matchedLexicon.id };
   if (/(局部露拍|局部怼拍|色情低俗风险)/.test(normalized)) return { type: "rule-set", id: "ruleset-erotic" };
-  if (/(涉赌博彩召回词库|世界杯博彩召回词)/.test(normalized)) return { type: "lexicon", id: "recall-gambling" };
+  if (/(涉赌博彩黑话库|世界杯博彩召回词)/.test(normalized)) return { type: "lexicon", id: "recall-gambling" };
   return null;
 }
 
@@ -146,7 +146,7 @@ function getSuggestedPrompt(conversation: RuleAssistantConversation) {
   if (latestAssistantMessage?.kind === "high-risk-rules") return null;
 
   if (conversation.messages.length === 0) {
-    if (conversation.purpose === "create-rule-set") return "请先帮我梳理这份规则集需要覆盖的风险分类。";
+    if (conversation.purpose === "create-rule-set") return "请先帮我梳理这份审核规则需要覆盖的风险分类。";
     if (conversation.purpose === "create-lexicon") return "请先帮我梳理这份词库需要覆盖的召回主题。";
     if (conversation.lexiconId) return "当前有哪些世界杯博彩相关召回词？";
     if (conversation.ruleSetId === null) return resourceInventoryPrompt;
@@ -188,7 +188,7 @@ function buildMockReply(text: string, conversation: RuleAssistantConversation): 
       id: createId("resource-a"),
       role: "assistant",
       kind: "resource-inventory",
-      content: "目前找到 1 个相关规则集和 2 个相关召回词库。",
+      content: "目前找到 1 个相关审核规则和 2 个相关黑话库。",
       sourceRuleSetIds: ["ruleset-gambling"],
       sourceLexiconIds: ["recall-gambling", "recall-fraud"]
     };
@@ -210,7 +210,7 @@ function buildMockReply(text: string, conversation: RuleAssistantConversation): 
       id: createId("rule-a"),
       role: "assistant",
       kind: "ruleset-summary",
-      content: "当前“色情低俗风险规则集”包含 1 个风险类别，即“身体隐私部位暴露”，共 2 条风险规则：“明确暴露”和“局部露拍”。该类别主要用于识别直接暴露敏感隐私部位，或通过镜头聚焦、局部特写等方式突出敏感部位的内容。",
+      content: "当前“色情低俗审核规则”包含 1 个风险类别，即“身体隐私部位暴露”，共 2 条风险规则：“明确暴露”和“局部露拍”。该类别主要用于识别直接暴露敏感隐私部位，或通过镜头聚焦、局部特写等方式突出敏感部位的内容。",
       sourceRuleSetIds: [conversation.ruleSetId || "ruleset-erotic"]
     };
   }
@@ -282,8 +282,8 @@ function buildMockReply(text: string, conversation: RuleAssistantConversation): 
     content: isGlobal
       ? "当前综合问答聚焦私域引流资源检索与覆盖评估。你可以询问相关规则、召回词或专项建设缺口。"
       : isLexicon
-        ? "我已优先查看当前召回词库。你可以继续询问现有词条、表达变体或平台适配情况。"
-        : "我已优先查看当前规则集，并完成相关规则检索。你可以继续追问判断条件、豁免场景或修改影响。",
+        ? "我已优先查看当前黑话库。你可以继续询问现有词条、表达变体或平台适配情况。"
+        : "我已优先查看当前审核规则，并完成相关规则检索。你可以继续追问判断条件、豁免场景或修改影响。",
     sourceRuleSetIds: conversation.ruleSetId ? [conversation.ruleSetId] : undefined
   };
 }
@@ -581,7 +581,7 @@ export function RuleAssistantPage() {
             kind: "text",
             content: creationType === "lexicon"
               ? "可以，请上传暴恐涉敏召回词表。解析完成后，你可以先核对词条结构再创建词库。"
-              : "可以，请上传暴恐内容审核规范。解析完成后，你可以先核对规则结构再创建规则集。"
+              : "可以，请上传暴恐内容审核规范。解析完成后，你可以先核对规则结构再创建审核规则。"
           }]);
           setPendingConversationId((current) => current === conversationId ? null : current);
         }, 420);
@@ -688,7 +688,7 @@ export function RuleAssistantPage() {
       appendMessages(conversationId, [{
         id: createId("lexicon-u-file"),
         role: "user",
-        content: prompt || "请整理这份词表，创建一套暴恐涉敏召回词库。",
+        content: prompt || "请整理这份词表，创建一套暴恐涉敏黑话库。",
         resourceContext: messageResourceContext,
         fileName
       }]);
@@ -698,7 +698,7 @@ export function RuleAssistantPage() {
           id: createId("lexicon-a-file"),
           role: "assistant",
           kind: "lexicon-file-analysis",
-          content: "已根据文件整理出一套完整召回词库结构。",
+          content: "已根据文件整理出一套完整黑话库结构。",
           fileName,
           previewId: lexiconPreviewId,
           lexiconDraft: createTerrorLexiconCandidate(lexiconDraftId)
@@ -792,7 +792,7 @@ export function RuleAssistantPage() {
           id: createId("rule-a-preview-updated"),
           role: "assistant" as const,
           kind: "text" as const,
-          content: "已更新规则结构预览，尚未应用到正式规则集。"
+          content: "已更新规则结构预览，尚未应用到正式审核规则。"
         }
       ]
     }));
@@ -845,7 +845,7 @@ export function RuleAssistantPage() {
   const finishMockResourceCreation = () => {
     const type = activeConversation.purpose === "create-lexicon" ? "lexicon" : "rule-set";
     completeResourceCreation(activeConversation.id, type);
-    setToast(type === "lexicon" ? "已创建暴恐涉敏召回词库" : "已创建暴恐风险规则集");
+    setToast(type === "lexicon" ? "已创建暴恐涉敏黑话库" : "已创建暴恐审核规则");
   };
 
   const openResourceManager = (type: "rule-set" | "lexicon", resourceId?: string | null) => {
@@ -923,18 +923,18 @@ export function RuleAssistantPage() {
             <section className="ra-compact-basis-group">
               <h4><FileText size={14} />研判规则</h4>
               <div className="ra-compact-basis-item">
-                <strong>赌博博彩风险规则集</strong>
+                <strong>赌博博彩审核规则</strong>
                 <p>覆盖二维码、外部链接、第三方联系方式、评论区私聊等导流行为。</p>
               </div>
             </section>
             <section className="ra-compact-basis-group">
-              <h4><Tags size={14} />召回词库</h4>
+              <h4><Tags size={14} />黑话库</h4>
               <div className="ra-compact-basis-item">
-                <strong>通用涉赌博彩召回词库</strong>
+                <strong>通用涉赌博彩黑话库</strong>
                 <p>包含“外围盘口”“代理开户”等博彩场景引流词。</p>
               </div>
               <div className="ra-compact-basis-item">
-                <strong>诈骗黑色产业链召回词库</strong>
+                <strong>诈骗黑色产业链黑话库</strong>
                 <p>包含“高额返利群”“内幕荐股群”等诈骗场景引流词。</p>
               </div>
             </section>
@@ -1003,7 +1003,7 @@ export function RuleAssistantPage() {
             <section><span>实时玩法</span><strong>世界杯滚球 · 世界杯走地</strong></section>
             <section><span>盘口表达</span><strong>世界杯比分盘 · 世界杯外围</strong></section>
           </div>
-          <div className="ra-sources"><span>参考词库</span><div><button type="button"><Tags size={13} />{activeLexicon?.name || "通用涉赌博彩召回词库"}</button></div></div>
+          <div className="ra-sources"><span>参考词库</span><div><button type="button"><Tags size={13} />{activeLexicon?.name || "通用涉赌博彩黑话库"}</button></div></div>
         </>
       );
     }
@@ -1015,7 +1015,7 @@ export function RuleAssistantPage() {
           <div className="ra-completed-result">
             <div className="ra-success-state"><CheckCircle2 size={18} /><div><strong>已添加到正式词库</strong><p>新增词条及其查询类型、表达变体已生效。</p></div></div>
             <div className="ra-card-actions ra-success-actions">
-              <button type="button" onClick={() => openResourceManager("lexicon")}><Tags size={14} />回到召回词库</button>
+              <button type="button" onClick={() => openResourceManager("lexicon")}><Tags size={14} />回到黑话库</button>
             </div>
           </div>
         );
@@ -1035,7 +1035,7 @@ export function RuleAssistantPage() {
       return (
         <div className="ra-proposal-card ra-lexicon-suggestion-card">
           <div className="ra-card-kicker"><Tags size={15} />新增召回词建议</div>
-          <div className="ra-field-row"><span>目标词库</span><strong>{activeLexicon?.name || "通用涉赌博彩召回词库"}</strong></div>
+          <div className="ra-field-row"><span>目标词库</span><strong>{activeLexicon?.name || "通用涉赌博彩黑话库"}</strong></div>
           <div className="ra-lexicon-suggestion-list" role="table" aria-label="新增召回词建议">
             <div className="ra-lexicon-suggestion-head" role="row"><span>主词</span><span>查询类型</span><span>表达变体</span></div>
             {gamblingLexiconSuggestedTerms.map((term) => (
@@ -1062,20 +1062,20 @@ export function RuleAssistantPage() {
         return (
           <div className="ra-cancelled-state">
             <X size={18} />
-            <div><strong>已取消本次导入</strong><p>文件解析结果未应用，未创建正式召回词库。</p></div>
+            <div><strong>已取消本次导入</strong><p>文件解析结果未应用，未创建正式黑话库。</p></div>
           </div>
         );
       }
       return (
         <div className="ra-file-result-card">
           <div className="ra-file-result-head"><FileCheck2 size={19} /><div><strong>{isTerrorLexicon ? "文件解析完成" : "词表解析完成"}</strong><span>{message.fileName}</span></div></div>
-          <p className="ra-file-summary">{isTerrorLexicon ? "已根据文件整理出一套完整召回词库结构：" : message.content}</p>
+          <p className="ra-file-summary">{isTerrorLexicon ? "已根据文件整理出一套完整黑话库结构：" : message.content}</p>
           <dl className="ra-file-metrics">
             <div><dt>词条分组</dt><dd>4 个</dd></div>
             <div><dt>{isTerrorLexicon ? "核心词" : "召回词"}</dt><dd>38 个</dd></div>
             <div><dt>表达变体</dt><dd>{isTerrorLexicon ? "21 个" : "12 条"}</dd></div>
           </dl>
-          {isTerrorLexicon ? <p className={isCompleted ? "ra-file-applied" : "ra-file-pending"}>{isCompleted ? "已创建召回词库，可继续在当前对话中补充词条。" : "当前结构尚未应用。"}</p> : null}
+          {isTerrorLexicon ? <p className={isCompleted ? "ra-file-applied" : "ra-file-pending"}>{isCompleted ? "已创建黑话库，可继续在当前对话中补充词条。" : "当前结构尚未应用。"}</p> : null}
           {isTerrorLexicon && !isCompleted ? (
             <div className="ra-card-actions">
               <button type="button" onClick={() => cancelFileImport(message)}><X size={14} />取消</button>
@@ -1084,7 +1084,7 @@ export function RuleAssistantPage() {
           ) : null}
           {isTerrorLexicon && isCompleted ? (
             <div className="ra-card-actions ra-success-actions">
-              <button type="button" onClick={() => openResourceManager("lexicon")}><Tags size={14} />回到召回词库</button>
+              <button type="button" onClick={() => openResourceManager("lexicon")}><Tags size={14} />回到黑话库</button>
             </div>
           ) : null}
         </div>
@@ -1100,10 +1100,10 @@ export function RuleAssistantPage() {
           <div className="ra-completed-result">
             <div className="ra-success-state">
               <CheckCircle2 size={18} />
-              <div><strong>已应用到正式规则集</strong><p>局部露拍的调整已写入当前规则集。</p></div>
+              <div><strong>已应用到正式审核规则</strong><p>局部露拍的调整已写入当前审核规则。</p></div>
             </div>
             <div className="ra-card-actions ra-success-actions">
-              <button type="button" onClick={() => openResourceManager("rule-set", activeConversation.ruleSetId)}><BookOpenText size={14} />回到规则集</button>
+              <button type="button" onClick={() => openResourceManager("rule-set", activeConversation.ruleSetId)}><BookOpenText size={14} />回到审核规则</button>
             </div>
           </div>
         );
@@ -1114,7 +1114,7 @@ export function RuleAssistantPage() {
             <CheckCircle2 size={18} />
             <div>
               <strong>已加入规则结构预览</strong>
-              <p>局部露拍已调整，尚未应用到正式规则集。可继续调整，保存后会同步更新当前预览。</p>
+              <p>局部露拍已调整，尚未应用到正式审核规则。可继续调整，保存后会同步更新当前预览。</p>
               <div className="ra-card-actions ra-success-actions">
                 {message.previewId ? <button type="button" onClick={() => navigate(`/rule-assistant/import-preview/${encodeURIComponent(message.previewId!)}`)}>查看规则结构预览</button> : null}
                 <button type="button" className="is-primary" onClick={() => setDrawer({ type: "candidate-editor", payloadId: message.id })}>继续调整</button>
@@ -1158,10 +1158,10 @@ export function RuleAssistantPage() {
           <div className="ra-completed-result">
             <div className="ra-success-state">
               <CheckCircle2 size={18} />
-              <div><strong>已应用到正式规则集</strong><p>透明衣物透视展示已写入当前规则集。</p></div>
+              <div><strong>已应用到正式审核规则</strong><p>透明衣物透视展示已写入当前审核规则。</p></div>
             </div>
             <div className="ra-card-actions ra-success-actions">
-              <button type="button" onClick={() => openResourceManager("rule-set", activeConversation.ruleSetId)}><BookOpenText size={14} />回到规则集</button>
+              <button type="button" onClick={() => openResourceManager("rule-set", activeConversation.ruleSetId)}><BookOpenText size={14} />回到审核规则</button>
             </div>
           </div>
         );
@@ -1172,7 +1172,7 @@ export function RuleAssistantPage() {
             <CheckCircle2 size={18} />
             <div>
               <strong>已加入规则结构预览</strong>
-              <p>透明衣物透视展示已新增，尚未应用到正式规则集。可继续调整，保存后会同步更新当前预览。</p>
+              <p>透明衣物透视展示已新增，尚未应用到正式审核规则。可继续调整，保存后会同步更新当前预览。</p>
               <div className="ra-card-actions ra-success-actions">
                 {message.previewId ? <button type="button" onClick={() => navigate(`/rule-assistant/import-preview/${encodeURIComponent(message.previewId!)}`)}>查看规则结构预览</button> : null}
                 <button type="button" className="is-primary" onClick={() => setDrawer({ type: "candidate-editor", payloadId: message.id })}>继续调整</button>
@@ -1210,7 +1210,7 @@ export function RuleAssistantPage() {
         return (
           <div className="ra-cancelled-state">
             <X size={18} />
-            <div><strong>已取消本次导入</strong><p>文件解析结果未应用，未创建或更新正式规则集。</p></div>
+            <div><strong>已取消本次导入</strong><p>文件解析结果未应用，未创建或更新正式审核规则。</p></div>
           </div>
         );
       }
@@ -1219,10 +1219,10 @@ export function RuleAssistantPage() {
           <div className="ra-file-result-head"><FileCheck2 size={19} /><div><strong>文件解析完成</strong><span>{message.fileName}</span></div></div>
           <p className="ra-file-summary">已根据文件整理出一套完整规则结构：</p>
           <dl className="ra-file-metrics"><div><dt>风险分类</dt><dd>{categoryCount} 个</dd></div><div><dt>风险规则</dt><dd>{ruleCount} 条</dd></div><div><dt>通用豁免</dt><dd>{exemptionCount} 条</dd></div></dl>
-          <p className={isCompleted ? "ra-file-applied" : "ra-file-pending"}>{isCompleted ? isCreatingRuleSet ? "已创建暴恐风险规则集。" : "已完成所选应用方式，可继续新增或修改规则。" : isCreatingRuleSet ? "当前结构尚未应用。" : "当前结构尚未应用，可继续新增或修改后统一确认。"}</p>
+          <p className={isCompleted ? "ra-file-applied" : "ra-file-pending"}>{isCompleted ? isCreatingRuleSet ? "已创建暴恐审核规则。" : "已完成所选应用方式，可继续新增或修改规则。" : isCreatingRuleSet ? "当前结构尚未应用。" : "当前结构尚未应用，可继续新增或修改后统一确认。"}</p>
           <div className="ra-card-actions">
             {isCompleted ? (
-              <button type="button" onClick={() => openResourceManager("rule-set", preview?.sourceRuleSetId || activeConversation.ruleSetId)}><BookOpenText size={14} />回到规则集</button>
+              <button type="button" onClick={() => openResourceManager("rule-set", preview?.sourceRuleSetId || activeConversation.ruleSetId)}><BookOpenText size={14} />回到审核规则</button>
             ) : (
               <>
                 <button type="button" onClick={() => cancelFileImport(message)}><X size={14} />取消</button>
@@ -1244,8 +1244,8 @@ export function RuleAssistantPage() {
           <div className="ra-brand"><span><ShieldCheck size={18} /></span><strong>知识助手</strong></div>
           <nav className="ra-primary-nav" aria-label="知识助手固定导航">
             <button type="button" className="is-new" onClick={startBlankConversation}><SquarePen size={17} />新建对话</button>
-            <button type="button" className="is-ruleset" onClick={() => { navigate("/rule-assistant/rulesets"); setIsMobileSidebarOpen(false); }}><BookOpenText size={17} />规则集</button>
-            <button type="button" className="is-lexicon" onClick={() => { navigate("/rule-assistant/lexicons"); setIsMobileSidebarOpen(false); }}><Tags size={17} />召回词库</button>
+            <button type="button" className="is-ruleset" onClick={() => { navigate("/rule-assistant/rulesets"); setIsMobileSidebarOpen(false); }}><BookOpenText size={17} />审核规则</button>
+            <button type="button" className="is-lexicon" onClick={() => { navigate("/rule-assistant/lexicons"); setIsMobileSidebarOpen(false); }}><Tags size={17} />黑话库</button>
           </nav>
         </div>
 
@@ -1502,7 +1502,7 @@ function ConversationRow({
       {isMenuOpen ? (
         <div className="ra-popover-menu ra-row-popover">
           <button type="button" onClick={() => onMockAction("重命名")}><Pencil size={13} />重命名</button>
-          <button type="button" onClick={() => onMockAction("移动到其他规则集")}><GitCompareArrows size={13} />移动到其他规则集</button>
+          <button type="button" onClick={() => onMockAction("移动到其他审核规则")}><GitCompareArrows size={13} />移动到其他审核规则</button>
           <button type="button" onClick={() => onMockAction("删除")}><Trash2 size={13} />删除</button>
         </div>
       ) : null}
@@ -1542,8 +1542,8 @@ function EmptyConversation({
       ];
 
   const title = resourceType === "blank" ? "新对话"
-    : resourceType === "create-rule-set" ? "创建研判规则集"
-    : resourceType === "create-lexicon" ? "创建召回词库"
+    : resourceType === "create-rule-set" ? "创建审核规则"
+    : resourceType === "create-lexicon" ? "创建黑话库"
       : resourceType === "global" ? "知识资源综合问答" : resourceName;
   const description = resourceType === "blank" ? null
     : resourceType === "create-rule-set"
@@ -1551,10 +1551,10 @@ function EmptyConversation({
     : resourceType === "create-lexicon"
       ? "你可以描述需要召回的内容范围，也可以上传一份词表文件，由知识助手整理成词库结构。"
       : resourceType === "global"
-        ? "你可以查询、比较全部规则集和召回词库，也可以检查重复、冲突与覆盖情况。"
+        ? "你可以查询、比较全部审核规则和黑话库，也可以检查重复、冲突与覆盖情况。"
         : isLexicon
           ? "你可以询问当前词条、补充表达变体，或上传文件整理词库结构。"
-          : "你可以询问当前规则、比较其他规则集，或上传文件整理完整规则结构。";
+          : "你可以询问当前规则、比较其他审核规则，或上传文件整理完整规则结构。";
 
   return (
     <div className="ra-empty-state">
@@ -1566,7 +1566,7 @@ function EmptyConversation({
         <button type="button" onClick={onFile}><Paperclip size={16} /><span>{resourceType === "create-rule-set" ? "上传规则文件" : resourceType === "create-lexicon" ? "上传词表文件" : resourceType === "global" ? "导入综合资源文件" : isLexicon ? "导入词表文件" : "4. 导入规则文件"}</span><ChevronRight size={15} /></button>
         {isCreating ? (
           <>
-            <button type="button" onClick={() => onPrompt(isLexicon ? "参考现有召回词库，帮我整理一份新的召回词库。" : "参考现有规则集，帮我整理一份新的研判规则集。")}>{isLexicon ? <Tags size={16} /> : <BookOpenText size={16} />}<span>{isLexicon ? "参考现有召回词库" : "参考现有规则集"}</span><ChevronRight size={15} /></button>
+            <button type="button" onClick={() => onPrompt(isLexicon ? "参考现有黑话库，帮我整理一份新的黑话库。" : "参考现有审核规则，帮我整理一份新的审核规则。")}>{isLexicon ? <Tags size={16} /> : <BookOpenText size={16} />}<span>{isLexicon ? "参考现有黑话库" : "参考现有审核规则"}</span><ChevronRight size={15} /></button>
             <button type="button" onClick={onCreate}><Plus size={16} /><span>从空白开始</span><ChevronRight size={15} /></button>
           </>
         ) : null}
@@ -1675,8 +1675,8 @@ function ResourceMentionPicker({
     >
       <header><strong>选择工作资源</strong><button type="button" aria-label="关闭资源选择" onClick={onClose}><X size={15} /></button></header>
       <section><h3>最近使用</h3>{renderResources(recentResources, "recent")}</section>
-      <section><h3>规则集</h3>{renderResources(resources.filter((item) => item.type === "rule-set"), "rule-set")}</section>
-      <section><h3>召回词库</h3>{renderResources(resources.filter((item) => item.type === "lexicon"), "lexicon")}</section>
+      <section><h3>审核规则</h3>{renderResources(resources.filter((item) => item.type === "rule-set"), "rule-set")}</section>
+      <section><h3>黑话库</h3>{renderResources(resources.filter((item) => item.type === "lexicon"), "lexicon")}</section>
     </div>
   );
 }
@@ -1719,23 +1719,23 @@ function NewWorkModal({
 
         {view === "start" ? (
           <div className="ra-new-work-options">
-            <button type="button" onClick={onCreateGlobal}><Bot size={18} /><div><strong>综合问答</strong><span>查询、比较多个规则集和召回词库</span></div><ChevronRight size={16} /></button>
-            <button type="button" onClick={() => onViewChange("resource")}><FolderSearch size={18} /><div><strong>基于已有资源继续</strong><span>围绕现有规则集或召回词库开展工作</span></div><ChevronRight size={16} /></button>
-            <button type="button" onClick={() => onViewChange("resource-type")}><Plus size={18} /><div><strong>创建新资源</strong><span>通过对话创建新的规则集或召回词库</span></div><ChevronRight size={16} /></button>
+            <button type="button" onClick={onCreateGlobal}><Bot size={18} /><div><strong>综合问答</strong><span>查询、比较多个审核规则和黑话库</span></div><ChevronRight size={16} /></button>
+            <button type="button" onClick={() => onViewChange("resource")}><FolderSearch size={18} /><div><strong>基于已有资源继续</strong><span>围绕现有审核规则或黑话库开展工作</span></div><ChevronRight size={16} /></button>
+            <button type="button" onClick={() => onViewChange("resource-type")}><Plus size={18} /><div><strong>创建新资源</strong><span>通过对话创建新的审核规则或黑话库</span></div><ChevronRight size={16} /></button>
           </div>
         ) : null}
 
         {view === "resource" ? (
           <div className="ra-resource-picker">
-            <ResourceRadioGroup title="规则集" type="rule-set" items={ruleSets} selectedResource={selectedResource} onSelect={onSelectResource} />
-            <ResourceRadioGroup title="召回词库" type="lexicon" items={lexicons} selectedResource={selectedResource} onSelect={onSelectResource} />
+            <ResourceRadioGroup title="审核规则" type="rule-set" items={ruleSets} selectedResource={selectedResource} onSelect={onSelectResource} />
+            <ResourceRadioGroup title="黑话库" type="lexicon" items={lexicons} selectedResource={selectedResource} onSelect={onSelectResource} />
           </div>
         ) : null}
 
         {view === "resource-type" ? (
           <div className="ra-resource-type-picker">
-            <label className={selectedResourceType === "rule-set" ? "is-selected" : ""}><input type="radio" name="resource-type" checked={selectedResourceType === "rule-set"} onChange={() => onSelectResourceType("rule-set")} /><BookOpenText size={18} /><div><strong>研判规则集</strong><span>管理风险分类、判断条件、豁免条件和研判要求</span></div></label>
-            <label className={selectedResourceType === "lexicon" ? "is-selected" : ""}><input type="radio" name="resource-type" checked={selectedResourceType === "lexicon"} onChange={() => onSelectResourceType("lexicon")} /><Tags size={18} /><div><strong>召回词库</strong><span>管理搜索词、表达变体</span></div></label>
+            <label className={selectedResourceType === "rule-set" ? "is-selected" : ""}><input type="radio" name="resource-type" checked={selectedResourceType === "rule-set"} onChange={() => onSelectResourceType("rule-set")} /><BookOpenText size={18} /><div><strong>审核规则</strong><span>管理风险分类、判断条件、豁免条件和研判要求</span></div></label>
+            <label className={selectedResourceType === "lexicon" ? "is-selected" : ""}><input type="radio" name="resource-type" checked={selectedResourceType === "lexicon"} onChange={() => onSelectResourceType("lexicon")} /><Tags size={18} /><div><strong>黑话库</strong><span>管理搜索词、表达变体</span></div></label>
           </div>
         ) : null}
 
@@ -1803,12 +1803,12 @@ function RuleAssistantDrawer({
       <div className="ra-drawer-body">
         {drawer.type === "rule" ? (
           drawer.ruleSetId === "ruleset-gambling" ? <>
-              <div className="ra-drawer-rule-head"><span>所属规则集</span><strong>{ruleSetName || "赌博博彩风险规则集"}</strong></div>
+              <div className="ra-drawer-rule-head"><span>所属审核规则</span><strong>{ruleSetName || "赌博博彩审核规则"}</strong></div>
               <section><h3>明确展示下注入口或二维码</h3><p>直接展示非法外部赌博网站、App 下载二维码或第三方联系方式。</p></section>
               <section><h3>评论区诱导外部私聊</h3><p>使用“看主页联系方式”“带单稳赢私”等表达引导用户离开平台。</p></section>
               <div className="ra-drawer-note"><CircleAlert size={15} /><p>两条规则均依赖赌博或盘口语境，不能替代跨场景的通用私域引流规则。</p></div>
             </> : <>
-              <div className="ra-drawer-rule-head"><span>所属规则集</span><strong>{ruleSetName || "色情低俗风险规则集"}</strong></div>
+              <div className="ra-drawer-rule-head"><span>所属审核规则</span><strong>{ruleSetName || "色情低俗审核规则"}</strong></div>
               <section><h3>局部露拍</h3><p>镜头刻意聚焦胸部、臀部、裆部或大腿根等敏感部位，并明显弱化人物整体、服装或场景。</p></section>
               <section><h3>建议风险等级</h3><p>中风险</p></section>
               <section><h3>豁免条件</h3><p>正常体育运动、舞蹈表演、健身赛事或服装展示中短暂出现的合理镜头。</p></section>
@@ -1818,7 +1818,7 @@ function RuleAssistantDrawer({
         ) : null}
         {drawer.type === "lexicon" ? (
           <>
-            <div className="ra-drawer-rule-head"><span>召回词库</span><strong>{lexicon?.name || "召回词库"}</strong></div>
+            <div className="ra-drawer-rule-head"><span>黑话库</span><strong>{lexicon?.name || "黑话库"}</strong></div>
             <section><h3>使用范围</h3><p>{lexicon?.description || "用于特定风险场景下的内容检索与召回。"}</p></section>
             <section>
               <h3>相关证据词</h3>

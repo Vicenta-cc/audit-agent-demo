@@ -316,6 +316,7 @@ export interface ReportAccountDetail {
 }
 
 export interface ReportPostDetail extends ReportPostPresentation {
+  audit_source?: { task_id: string; output_id: string } | null;
   investigation_finding_refs: string[];
   direct_evidence: ReportEvidencePresentation[];
 }

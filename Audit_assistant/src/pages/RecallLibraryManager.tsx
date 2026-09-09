@@ -64,7 +64,7 @@ const buildLibraryDrafts = (
     summary.isDraft === undefined
     && (
       summary.id.startsWith("lexicon-draft-")
-      || (summary.name === "新建召回词库" && summary.description === "正在通过对话创建")
+      || (summary.name === "新建黑话库" && summary.description === "正在通过对话创建")
     )
   );
   return workspaceLexicons.filter((summary) => (
@@ -74,7 +74,7 @@ const buildLibraryDrafts = (
     const library = mockById.get(summary.id) || {
       id: summary.id,
       name: summary.name,
-      category: "自定义召回词库",
+      category: "自定义黑话库",
       usageDescription: summary.description || "",
       words: [],
       applicablePlatforms: ["抖音", "小红书", "微博", "快手"],
@@ -107,7 +107,7 @@ const buildLibraryDrafts = (
 const createEmptyLibrary = (): RecallLibraryDraft => ({
   id: `recall-${Date.now()}`,
   name: "",
-  category: "自定义召回词库",
+  category: "自定义黑话库",
   usageDescription: "",
   words: [],
   applicablePlatforms: ["抖音", "小红书", "微博", "快手"],
@@ -313,12 +313,12 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
         <div className="recall-editor-header">
           <button type="button" className="recall-back-button" onClick={closeEditor}>
             <ArrowLeft size={15} />
-            <span>{preview ? "返回词库对话" : "返回召回词库"}</span>
+            <span>{preview ? "返回词库对话" : "返回黑话库"}</span>
           </button>
           <span className="recall-header-divider" aria-hidden="true" />
           <div className="recall-editor-heading">
-            <h2>{isAppendPreview ? "词库变更预览" : preview ? "词库结构预览" : isExistingLibrary ? "编辑召回词库" : "新建召回词库"}</h2>
-            <p>{draft.name || "未命名召回词库"}</p>
+            <h2>{isAppendPreview ? "词库变更预览" : preview ? "词库结构预览" : isExistingLibrary ? "编辑黑话库" : "新建黑话库"}</h2>
+            <p>{draft.name || "未命名黑话库"}</p>
           </div>
         </div>
 
@@ -340,7 +340,7 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
                 type="text"
                 value={draft.name}
                 onChange={(event) => updateDraft({ name: event.target.value })}
-                placeholder="请输入召回词库名称"
+                placeholder="请输入黑话库名称"
               />
             </label>
             <label className="recall-form-field recall-description-field">
@@ -470,7 +470,7 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
             <button type="button" className="recall-secondary-button" onClick={closeEditor}>{preview ? "返回词库对话" : "取消"}</button>
             <button type="button" className="recall-primary-button recall-save-button" onClick={saveLibrary}>
               <Save size={15} />
-              <span>{isAppendPreview ? "确认添加到词库" : preview ? "创建召回词库" : "保存配置"}</span>
+              <span>{isAppendPreview ? "确认添加到词库" : preview ? "创建黑话库" : "保存配置"}</span>
             </button>
           </div>
         </div>
@@ -487,13 +487,13 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
             type="search"
             value={librarySearch}
             onChange={(event) => setLibrarySearch(event.target.value)}
-            placeholder="搜索召回词库..."
-            aria-label="搜索召回词库"
+            placeholder="搜索黑话库..."
+            aria-label="搜索黑话库"
           />
         </label>
         <button type="button" className="recall-primary-button" onClick={() => openEditor()}>
           <Plus size={15} />
-          <span>新建召回词库</span>
+          <span>新建黑话库</span>
         </button>
       </div>
 
@@ -530,7 +530,7 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
       ) : (
         <div className="recall-library-empty">
           <Search size={20} />
-          <strong>没有找到匹配的召回词库</strong>
+          <strong>没有找到匹配的黑话库</strong>
           <span>请调整搜索内容后重试</span>
         </div>
       )}

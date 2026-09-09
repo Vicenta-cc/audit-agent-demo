@@ -12,7 +12,7 @@ export function buildSuggestionBlockerLink(preview?: ConfirmationPreview) {
         label: blocker.code === "NO_PUBLISHED_RULESET"
           ? "去配置研判规则"
           : blocker.code === "NO_PUBLISHED_RECALL_LEXICON"
-            ? "去配置召回词库"
+            ? "去配置黑话库"
             : "前往配置",
         managementUrl: blocker.management_url
       }

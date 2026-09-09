@@ -11,7 +11,7 @@ from .contracts import TemporaryRuleSetProposal
 def render_proposal(proposal: TemporaryRuleSetProposal) -> str:
     content = proposal.content
     lines = [
-        "临时研判规则 · 完整规则快照",
+        "临时审核规则 · 完整规则快照",
         f"名称：{content.name}", f"领域：{content.domain}",
         f"版本：{proposal.version}", f"方案标识：{proposal.proposal_id}",
         f"内容指纹：{proposal.content_hash}", f"研判目标：{content.audit_goal}",

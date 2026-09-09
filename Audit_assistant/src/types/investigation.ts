@@ -154,6 +154,7 @@ export interface ReportSupportTarget {
 
 export interface ChatMessage {
   authoritativeProposalPresentation?: boolean;
+  rulePresentations?: import("./investigationCreation").RuleSetProposalPresentation[];
   id: string;
   sender: "user" | "assistant" | "system";
   timestamp: string;

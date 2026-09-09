@@ -164,7 +164,7 @@ export function AnalysisRecordsPage() {
   };
 
   const handleViewEvidence = (record: AnalysisRecord) => {
-    if (authoritative) {
+    if (authoritative && (!record.taskId || !record.outputId)) {
       setSelectedRecord(record);
       return;
     }
@@ -181,6 +181,10 @@ export function AnalysisRecordsPage() {
 
   const handleViewCompleteEvidence = (record: AnalysisRecord) => {
     setSelectedRecord(null);
+    if (record.taskId && record.outputId) {
+      handleViewEvidence(record);
+      return;
+    }
     const path = reportPostDetailPath(investigationId, record);
     if (path) navigate(path);
   };

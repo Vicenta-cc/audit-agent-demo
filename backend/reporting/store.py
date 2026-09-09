@@ -2135,9 +2135,23 @@ class ReportStore:
     ) -> dict[str, Any]:
         from backend.reporting.presentation_projection import build_post_detail
 
-        return build_post_detail(
+        detail = build_post_detail(
             self.get_frontend_report(report_version_id), post_ref=post_ref
         )
+        # Use the same immutable aliases as report generation. A model-written
+        # title, URL or numeric-looking public alias is not a navigation target.
+        from backend.reporting.public_references import public_post_and_finding_refs
+
+        detail["audit_source"] = None
+        if self.get_source_snapshot(report_version_id) is not None:
+            snapshot = self.load_immutable_snapshot(report_version_id)
+            post_refs, finding_refs = public_post_and_finding_refs(snapshot)
+            source = next((finding for finding in snapshot.findings
+                           if post_refs.get(finding.post_ref) == post_ref
+                           and finding_refs.get(finding.ref) == detail["audit_finding_ref"]), None)
+            if source:
+                detail["audit_source"] = {"task_id": snapshot.task_id, "output_id": str(source.audit_result_id)}
+        return detail
 
     def get_presentation_finding_evidence(
         self, report_version_id: str, *, investigation_finding_ref: str

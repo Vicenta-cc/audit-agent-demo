@@ -28,7 +28,7 @@ export function buildDraftSuggestionPlanView(
   suggestion: InvestigationDraftSuggestion
 ) {
   return {
-    ruleSetName: suggestion.temporary_ruleset ? `本次使用临时规则：${suggestion.temporary_ruleset.content.name}` : suggestion.ruleset_revision?.name || "尚未绑定规则集",
+    ruleSetName: suggestion.temporary_ruleset ? `本次使用临时规则：${suggestion.temporary_ruleset.content.name}` : suggestion.ruleset_revision?.name || "尚未绑定审核规则",
     ruleSetVersion: suggestion.temporary_ruleset?.proposal_version || suggestion.ruleset_revision?.version || null,
     ruleSetDomain: suggestion.temporary_ruleset?.content.domain || suggestion.ruleset_revision?.domain || "",
     enabledRuleCount: suggestion.temporary_ruleset
@@ -68,7 +68,7 @@ export function InvestigationContextDrawer({
       case "evidence": return "原始与多媒体证据链";
       case "key_users": return "重点作者候选列表";
       case "agent_logs": return "4 名 Agent 协同执行日志";
-      case "ruleset": return "研判规则配置";
+      case "ruleset": return "审核规则配置";
       default: return "上下文详情";
     }
   };
@@ -99,7 +99,7 @@ export function InvestigationContextDrawer({
             </div>
 
             <div>
-              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>推荐研判规则</div>
+              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>推荐审核规则</div>
               <div style={{ color: "#0f172a", fontSize: "13px", fontWeight: "700" }}>
                 {draft.analysisPlanName || draft.matchedRuleSet}
               </div>
@@ -287,7 +287,7 @@ export function InvestigationContextDrawer({
               <div style={{ fontSize: "12px", color: "#64748b", lineHeight: "1.55", marginTop: "8px" }}>
                 {draftSuggestionPlan.ruleSetVersion
                   ? `${draftSuggestionPlan.ruleSetDomain} · 启用规则 ${draftSuggestionPlan.enabledRuleCount} 条`
-                  : "等待选择已发布的研判规则。"}
+                  : "等待选择已发布的审核规则。"}
               </div>
             </div>
 
@@ -307,7 +307,7 @@ export function InvestigationContextDrawer({
             </div>
 
             <div>
-              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>推荐召回词库 ({draftSuggestionPlan.recallLexicons.length} 个)</div>
+              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>推荐黑话库 ({draftSuggestionPlan.recallLexicons.length} 个)</div>
               {draftSuggestionPlan.recallLexicons.map((lexicon) => (
                 <div key={lexicon.id} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "8px 10px", borderRadius: "6px", marginBottom: "6px", fontSize: "12px" }}>
                   <div style={{ fontWeight: "700", color: "#0f172a" }}>{lexicon.title}</div>

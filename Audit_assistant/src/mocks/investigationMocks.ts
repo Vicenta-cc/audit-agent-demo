@@ -27,7 +27,7 @@ export const platformOptionsList: PlatformOption[] = [
 export const mockRecallLibraries: RecallLibraryItem[] = [
   {
     id: "recall-gambling",
-    name: "通用涉赌博彩召回词库",
+    name: "通用涉赌博彩黑话库",
     category: "网络赌博与黑产",
     usageDescription: "用于监测各类网络赌博、盘口引流、外围下注及带单派单相关信息。",
     words: [
@@ -41,7 +41,7 @@ export const mockRecallLibraries: RecallLibraryItem[] = [
   },
   {
     id: "recall-ethnicity",
-    name: "民族宗教涉敏召回词库",
+    name: "民族宗教涉敏黑话库",
     category: "意识形态与民族关系",
     usageDescription: "用于检索涉及民族关系、宗教话题、跨民族婚姻及地域歧视的公开讨论。",
     words: [
@@ -55,7 +55,7 @@ export const mockRecallLibraries: RecallLibraryItem[] = [
   },
   {
     id: "recall-fraud",
-    name: "诈骗黑色产业链召回词库",
+    name: "诈骗黑色产业链黑话库",
     category: "电信网络诈骗",
     usageDescription: "用于检索虚假投资理财、兼职刷单、虚假兼职招聘和冒充客服引流。",
     words: [
@@ -71,7 +71,7 @@ export const mockRecallLibraries: RecallLibraryItem[] = [
 export const mockAuditRuleSets: AuditRuleSet[] = [
   {
     id: "ruleset-gambling",
-    name: "赌博博彩风险规则集",
+    name: "赌博博彩审核规则",
     category: "网络赌博",
     version: "v2.1",
     status: "已发布",
@@ -143,7 +143,7 @@ export const mockAuditRuleSets: AuditRuleSet[] = [
   },
   {
     id: "ruleset-ethnicity",
-    name: "民族意识形态风险规则集",
+    name: "民族意识形态审核规则",
     category: "意识形态与民族团结",
     version: "v1.8",
     status: "已发布",
@@ -192,7 +192,7 @@ export const mockAuditRuleSets: AuditRuleSet[] = [
   },
   {
     id: "ruleset-erotic",
-    name: "色情低俗风险规则集",
+    name: "色情低俗审核规则",
     category: "网络生态净化",
     version: "v3.0",
     status: "已发布",
@@ -256,7 +256,7 @@ export const initialSessions: InvestigationSession[] = [
         "世界杯比分盘",
         "世界杯带单"
       ],
-      matchedRuleSet: "赌博博彩风险规则集",
+      matchedRuleSet: "赌博博彩审核规则",
       ruleSetDescription: "分析采集内容中是否存在赌球推广、下注诱导、盘口宣传、外围引流或外部联系方式导流等风险。",
       status: "已创建",
       confirmed: true
@@ -279,9 +279,9 @@ export const initialSessions: InvestigationSession[] = [
           taskName: "世界杯博彩专题采集",
           taskType: "平台话题采集",
           subject: "世界杯博彩",
-          matchedRuleSet: "赌博博彩风险规则集",
+          matchedRuleSet: "赌博博彩审核规则",
           ruleSetDescription: "分析采集内容中是否存在赌球推广、下注诱导、盘口宣传、外围引流或外部联系方式导流等风险。",
-          keywordsNotice: "当前没有专门的‘世界杯博彩专题召回词库’，通用赌博博彩召回词覆盖范围较大，不适合直接完整用于本次专题搜索。建议本次使用 7 个临时召回词。",
+          keywordsNotice: "当前没有专门的‘世界杯博彩专题黑话库’，通用赌博博彩召回词覆盖范围较大，不适合直接完整用于本次专题搜索。建议本次使用 7 个临时召回词。",
           platformsSelected: ["dy", "xhs"],
           platformsConfirmed: true
         }
@@ -403,7 +403,7 @@ export const initialSessions: InvestigationSession[] = [
         "通婚争议",
         "民族刻板印象"
       ],
-      matchedRuleSet: "民族意识形态风险规则集",
+      matchedRuleSet: "民族意识形态审核规则",
       analysisPlanName: "维汉民族关系专题研判方案",
       ruleSetDescription: "结合原帖、维吾尔语译文与评论上下文，识别民族刻板印象、侮辱歧视、排斥通婚和煽动对立等风险表达。",
       scopeDescription: "围绕维汉婚恋、家庭互动与相关评论争议开展专题采集。",
@@ -429,7 +429,7 @@ export const initialSessions: InvestigationSession[] = [
           taskName: "维汉民族关系专项调查",
           taskType: "平台话题采集",
           subject: "维汉民族关系",
-          matchedRuleSet: "民族意识形态风险规则集",
+          matchedRuleSet: "民族意识形态审核规则",
           ruleSetDescription: "结合原帖、维吾尔语译文与评论上下文，识别民族刻板印象、侮辱歧视、排斥通婚和煽动对立等风险表达。",
           keywordsNotice: "现有民族宗教涉敏词库缺少维汉婚恋与家庭互动场景的精准检索词，建议本次使用 8 个专题搜索词。",
           platformsSelected: [],
@@ -450,7 +450,7 @@ export const initialSessions: InvestigationSession[] = [
       subject: "重点用户及其关联导流网络",
       platforms: ["dy"],
       keywords: ["球赛情报局长", "bet_2026_wc"],
-      matchedRuleSet: "赌博博彩风险规则集",
+      matchedRuleSet: "赌博博彩审核规则",
       ruleSetDescription: "穿透重点用户主页历史动态、关联互动高频账号及跨平台同名引流矩阵。",
       status: "已创建",
       confirmed: true

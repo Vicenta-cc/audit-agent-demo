@@ -64,7 +64,7 @@ export function formatConfirmationBlockerMessage(code: string, message: string) 
     return "当前还没有匹配的已发布研判规则，配置后即可继续。";
   }
   if (code === "NO_PUBLISHED_RECALL_LEXICON") {
-    return "当前没有适合本次主题的召回词库，请先配置或选择一个词库。";
+    return "当前没有适合本次主题的黑话库，请先配置或选择一个词库。";
   }
   if (code === "NO_SEARCH_TERMS") {
     return "当前没有可用于本次调查的召回词，请补充调查主题或配置词库。";

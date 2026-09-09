@@ -127,7 +127,7 @@ export function LexiconCandidatePreviewPage() {
           id: `lexicon-created-${Date.now()}`,
           role: "assistant" as const,
           kind: "text" as const,
-          content: `已创建召回词库“${library.name}”，当前对话已归档到该词库下。`
+          content: `已创建黑话库“${library.name}”，当前对话已归档到该词库下。`
         }
       ]
     }));

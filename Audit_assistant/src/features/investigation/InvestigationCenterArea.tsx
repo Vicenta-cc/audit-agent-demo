@@ -23,6 +23,7 @@ import { buildSuggestionAssistantCopy } from "./suggestionPresentation";
 import { TaskConfirmationCard } from "./TaskConfirmationCard";
 import { InvestigationReportCard } from "./InvestigationReportCard";
 import { StreamingAssistantText } from "./StreamingAssistantText";
+import { GeneratedRulesMessage } from "./GeneratedRulesMessage";
 import { AssistantMarkdown } from "./AssistantMarkdown";
 import { HistoricalReportPendingStatus } from "./HistoricalReportPendingStatus";
 import { shouldShowHistoricalPending } from "./historicalReportPresentation";
@@ -226,7 +227,7 @@ export function InvestigationCenterArea({
       return "询问报告内容、典型案例或证据……";
     }
     if (session.messages.length === 0) {
-      return "描述你希望调查的话题、账号或内容……";
+      return "描述调查需求，或让助手生成审核规则、黑话库……";
     }
     if (session.executionPhase !== "idle" && session.executionPhase !== "completed") {
       return "可以继续补充要求，或询问当前 Agent 执行进度……";
@@ -276,7 +277,7 @@ export function InvestigationCenterArea({
             className="inv-head-btn"
             onClick={() => onOpenDrawer("ruleset")}
           >
-            <span>引用规则集</span>
+            <span>引用审核规则</span>
           </button>
         </div>
       </header>
@@ -292,7 +293,7 @@ export function InvestigationCenterArea({
               </div>
               <h2 className="inv-welcome-title">发起专项调查研判</h2>
               <p className="inv-welcome-desc">
-                输入调查主题或事件名称，系统将自动关联风险规则集并调度既有调查流水线开展协同研判。
+                可以发起调查、生成审核规则和黑话库，也可以在已有报告会话中追问内容与证据。
               </p>
 
               <div className="inv-example-prompts">
@@ -347,9 +348,7 @@ export function InvestigationCenterArea({
                 <Fragment key={msg.id}>
                   <div className="inv-msg-asst-card">
                     <div className="inv-asst-head"><Bot size={16} /><span>研判助手</span></div>
-                    <div className="inv-assistant-text" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-                      {msg.content}
-                    </div>
+                    <GeneratedRulesMessage content={msg.content || ""} presentations={msg.rulePresentations || []} />
                   </div>
                   {card}
                 </Fragment>
@@ -360,6 +359,7 @@ export function InvestigationCenterArea({
                     <TaskSuggestionCard
                       key={msg.id}
                       literalAssistantContent={msg.authoritativeProposalPresentation}
+                      rulePresentations={msg.rulePresentations}
                       assistantContent={msg.authoritativeProposalPresentation
                         ? msg.content || ""
                         : session.creationBinding
@@ -703,9 +703,7 @@ export function InvestigationCenterArea({
                     <span>研判助手</span>
                   </div>
                   {msg.authoritativeProposalPresentation ? (
-                    <div className="inv-assistant-text" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-                      {msg.content}
-                    </div>
+                    <GeneratedRulesMessage content={msg.content || ""} presentations={msg.rulePresentations || []} />
                   ) : isHistoricalAnswer ? (
                     <AssistantMarkdown content={msg.content || ""} />
                   ) : (
