@@ -42,6 +42,9 @@ class Settings:
         2,
         int(os.getenv("HERMES_INVESTIGATION_MAX_WORKERS", "2")),
     )
+    hermes_turn_timeout_seconds = max(
+        1.0, float(os.getenv("HERMES_TURN_TIMEOUT_SECONDS", "600"))
+    )
     hermes_creation_fake_runtime = (
         os.getenv("HERMES_CREATION_FAKE_RUNTIME", "false").lower() == "true"
         or os.getenv("HERMES_CREATION_FAKE_RUNTIME", "") == "1"

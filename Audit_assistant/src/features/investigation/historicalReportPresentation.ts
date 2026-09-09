@@ -66,6 +66,7 @@ export function historicalPendingStatus(
     case "completed":
       return "正在整理回答……";
     case "accepted":
+      return "已接收，等待开始回答……";
     case "planning":
     case "interrupted":
     case "failed":

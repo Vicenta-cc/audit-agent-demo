@@ -218,6 +218,7 @@ export function InvestigationCenterArea({
 
   const getPlaceholder = () => {
     if (isSendingMessage) {
+      if (sendingMessageStage === "accepted") return "已接收，等待开始回答……";
       if (sendingMessageStage === "acquiring_source") return "正在查询报告资料……";
       if (sendingMessageStage === "answering") return "正在整理回答……";
       if (sendingMessageStage === "preparing_sources") return "正在准备所需资料……";
@@ -774,6 +775,7 @@ export function InvestigationCenterArea({
 }
 
 function creationPendingLabel(stage?: InvestigationTurnStage) {
+  if (stage === "accepted") return "已接收，等待开始处理";
   if (stage === "planning") return "正在理解调查目标";
   if (stage === "preparing_sources") return "正在查询可用研判资源";
   if (stage === "acquiring_source") return "正在等待 Tool 和后端返回";

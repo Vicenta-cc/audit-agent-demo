@@ -42,6 +42,11 @@ _CREATION_MODE_FLAG = "HERMES_INVESTIGATION_CREATION_MODE"
 _PRODUCT_MODE_EXECUTION_LOCK = RLock()
 
 
+def session_runtime_home(root: Path, session_id: str) -> Path:
+    """Keep Hermes config/log files private; durable tool ledgers stay put."""
+    return root / "sessions" / sha256(session_id.encode("utf-8")).hexdigest()
+
+
 class HermesRuntimeUnavailable(RuntimeError):
     """Raised when the pinned Hermes runtime is absent or has the wrong version."""
 

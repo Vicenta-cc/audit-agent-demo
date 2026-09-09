@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import Future, ThreadPoolExecutor
-from threading import Lock
+from threading import RLock
 from typing import Any, Callable
 
 
@@ -12,14 +12,16 @@ logger = logging.getLogger(__name__)
 class InvestigationTurnExecutor:
     """Application-scoped durable executor for public investigation Turns."""
 
-    def __init__(self, service: Any, *, max_workers: int = 2):
+    def __init__(self, service: Any, *, max_workers: int = 2, process_runner: Any = None):
         self.service = service
         self.store = service.store
         self._pool = ThreadPoolExecutor(
             max_workers=max(1, int(max_workers)),
             thread_name_prefix="investigation-turn",
         )
-        self._lock = Lock()
+        # add_done_callback runs inline when a Future has already completed.
+        self._lock = RLock()
+        self._process_runner = process_runner
         self._futures: dict[str, Future[Any]] = {}
         self.service.add_turn_node_observer(self._observe_node)
 
@@ -102,9 +104,17 @@ class InvestigationTurnExecutor:
         )
 
     def _run(self, turn_id: str, operation: Callable[[str], Any]) -> None:
-        self.store.append_public_turn_event(turn_id, stage="planning")
         try:
-            operation(turn_id)
+            self.store.append_public_turn_event(turn_id, stage="planning")
+            if self._process_runner is None:
+                operation(turn_id)
+            else:
+                # Startup recovery must not automatically replay a Turn whose
+                # child may have made a tool mutation before the API crashed.
+                self.store.set_turn_node(turn_id, "isolated_execution")
+                self._process_runner.run(
+                    turn_id, resume=operation == self.service.execute_resume
+                )
         except Exception:
             logger.exception("investigation Turn execution failed", extra={"turn_id": turn_id})
         self._append_terminal_event(turn_id)

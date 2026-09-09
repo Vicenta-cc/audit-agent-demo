@@ -96,7 +96,7 @@ test("display terminology is localized without mutating the underlying answer", 
 });
 
 test("pending stages have stable Chinese live-region copy", () => {
-  expect(historicalPendingStatus("accepted")).toBe("正在理解你的问题……");
+  expect(historicalPendingStatus("accepted")).toBe("已接收，等待开始回答……");
   expect(historicalPendingStatus("planning")).toBe("正在理解你的问题……");
   expect(historicalPendingStatus("preparing_sources")).toBe("正在准备所需资料……");
   expect(historicalPendingStatus("acquiring_source")).toBe("正在查询报告资料……");

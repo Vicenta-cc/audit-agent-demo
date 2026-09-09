@@ -56,6 +56,7 @@ from .audit_agent.rule_compiler import (
 from .reporting.store import ReportStore
 from .reporting.runtime import R31ReportRuntime
 from .hermes_runtime.service import HermesInvestigationAgentService
+from .hermes_runtime.turn_process import TurnProcessRunner
 from .historical_reports import (
     HISTORICAL_REPORT_SPECS,
     HistoricalReportDemoService,
@@ -174,6 +175,9 @@ configure_hermes_investigation_creation_tools(
 investigation_turn_executor = InvestigationTurnExecutor(
     investigation_agent_service,
     max_workers=settings.hermes_investigation_max_workers,
+    process_runner=(None if settings.hermes_creation_fake_runtime else TurnProcessRunner(
+        "report", timeout_seconds=settings.hermes_turn_timeout_seconds,
+    )),
 )
 historical_report_workspace_store = HistoricalReportWorkspaceStore()
 historical_report_demo_service = HistoricalReportDemoService(
@@ -186,6 +190,9 @@ historical_report_demo_service = HistoricalReportDemoService(
 investigation_creation_turn_executor = InvestigationTurnExecutor(
     investigation_creation_conversation_service,
     max_workers=settings.hermes_investigation_max_workers,
+    process_runner=(None if settings.hermes_creation_fake_runtime else TurnProcessRunner(
+        "creation", timeout_seconds=settings.hermes_turn_timeout_seconds,
+    )),
 )
 app.include_router(
     create_reporting_router(

@@ -8,7 +8,7 @@ from threading import RLock
 from typing import Any, Callable
 
 from backend.audit_agent.config import settings
-from backend.hermes_runtime.adapter import HermesRuntimeBinding
+from backend.hermes_runtime.adapter import HermesRuntimeBinding, session_runtime_home
 from backend.investigation.contracts import (
     InvestigationMessage,
     InvestigationSession,
@@ -133,7 +133,8 @@ class HermesInvestigationAgentService:
         try:
             mode_scope = (
                 self.runtime_binding.product_mode_execution(
-                    self.hermes_state_dir, product_mode="account-activity"
+                    session_runtime_home(self.hermes_state_dir, session.id),
+                    product_mode="account-activity"
                 )
                 if self.bind_runtime
                 else nullcontext()
@@ -142,6 +143,12 @@ class HermesInvestigationAgentService:
                 self._bind_session(session)
                 agent = self._agent(session.id)
                 history = self._conversation_history(session.id)
+                if self.bind_runtime and history:
+                    from hermes_m0.runtime import report_task_runtime_for_session
+                    from hermes_m0.reference_state import restore_legacy_transcript
+                    tool_service = report_task_runtime_for_session(session.id)
+                    if session.id not in tool_service.restored_reference_sessions:
+                        restore_legacy_transcript(tool_service, session.id, history)
                 user_message = self.store.get_user_message_for_turn(turn.id).content
                 result = agent.run_conversation(
                     user_message,
@@ -249,7 +256,9 @@ class HermesInvestigationAgentService:
         if session.id in self._bound_sessions and not callable(is_bound):
             return
         with self._agent_lock:
-            self.runtime_binding.configure_product_home(self.hermes_state_dir)
+            self.runtime_binding.configure_product_home(
+                session_runtime_home(self.hermes_state_dir, session.id)
+            )
             self.runtime_binding.discover_plugins(force=not self._bound_sessions)
         additional_contexts = self._authorized_report_contexts(session)
         self.runtime_binding.bind_published_report_session(

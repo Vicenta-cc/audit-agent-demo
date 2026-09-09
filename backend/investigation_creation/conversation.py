@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 from backend.audit_agent.config import settings
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
-from backend.hermes_runtime.adapter import HermesRuntimeBinding
+from backend.hermes_runtime.adapter import HermesRuntimeBinding, session_runtime_home
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 from backend.investigation.contracts import (
     InvestigationMessage,
@@ -1005,7 +1005,8 @@ class InvestigationCreationConversationService:
                 )
             else:
                 with self.runtime_binding.product_mode_execution(
-                    self.hermes_state_dir, product_mode="creation"
+                    session_runtime_home(self.hermes_state_dir, session.id),
+                    product_mode="creation"
                 ):
                     agent = self._agent(session.id)
                     result = agent.run_conversation(

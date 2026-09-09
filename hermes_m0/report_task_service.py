@@ -85,6 +85,8 @@ class ReportTaskInvestigationToolService:
         self.refs = refs or ReportTaskReferenceRegistry()
         self.ledger = ledger
         self.account_activity = account_activity
+        self.restored_reference_sessions: set[str] = set()
+        self._reference_state_lock = threading.RLock()
         self._search_lock = threading.RLock()
         self._search_turn_usage: dict[tuple[str, int, str], SearchTurnUsage] = {}
         self._handlers: dict[str, Callable[..., str]] = {
@@ -156,6 +158,14 @@ class ReportTaskInvestigationToolService:
                 content_hash=scope.content_hash,
                 force_new_generation=force_new_generation,
             )
+        if self.ledger is not None and not force_new_generation:
+            from .reference_state import restore
+            if restore(self, session_id):
+                self.restored_reference_sessions.add(session_id)
+                scope = self.refs.scope(session_id)
+        elif self.ledger is not None:
+            from .reference_state import save
+            save(self, session_id)
         return scope
 
     def has_session(self, session_id: str) -> bool:
@@ -176,12 +186,18 @@ class ReportTaskInvestigationToolService:
                 code="idempotency_ledger_unavailable",
                 message="The Investigation tool execution ledger is not configured.",
             )
+        def execute_and_checkpoint(arguments):
+            result = next_call(arguments)
+            from .reference_state import save
+            save(self, session_id)
+            return result
+
         return self.ledger.execute(
             session_id=session_id,
             tool_call_id=tool_call_id,
             tool_name=tool_name,
             args=args,
-            next_call=next_call,
+            next_call=execute_and_checkpoint,
         )
 
     def dispatch(
