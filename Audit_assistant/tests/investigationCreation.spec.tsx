@@ -995,13 +995,14 @@ test("empty crawl stays failed on workspace recovery and explains that no audit 
   expect(restoreInvestigationWorkspace(workspaceState({ run: run("INTERRUPTED") })).status).toBe("调查已中断");
 });
 
-test("audit-completed records come directly from the current Job projection", async () => {
+for (const status of ["RUNNING", "AUDIT_COMPLETED", "INTERRUPTED"] as const) {
+test(`${status} records come directly from the current Job projection`, async () => {
   let fetchCalls = 0;
   globalThis.fetch = async () => {
     fetchCalls += 1;
     throw new Error("AUDIT_COMPLETED must not fetch ReportVersion data");
   };
-  const result = await loadM3AnalysisRecords(run("AUDIT_COMPLETED", {
+  const result = await loadM3AnalysisRecords(run(status, {
     crawl_status: "completed",
     analysis_status: "completed",
     task_stats: { ingested_count: 1, completed_analysis_count: 1 },
@@ -1040,6 +1041,7 @@ test("audit-completed records come directly from the current Job projection", as
     evidenceCounts: { text: 0, ocr: 0, asr: 1, comment: 0, vision: 0 }
   });
 });
+}
 
 test("published M3 records fail closed when the ReportVersion has no structured report", async () => {
   globalThis.fetch = async () => new Response(JSON.stringify({

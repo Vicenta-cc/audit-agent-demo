@@ -25,7 +25,7 @@ export interface M3AnalysisRecordsResult {
 export async function loadM3AnalysisRecords(
   run: InvestigationRunProjection
 ): Promise<M3AnalysisRecordsResult> {
-  if (run.status === "AUDIT_COMPLETED") {
+  if (run.status !== "PUBLISHED" && (run.status === "AUDIT_COMPLETED" || run.audit_results.length > 0)) {
     const records = run.audit_results.map((item, index) => {
       const risk = normalizeRisk(item.risk_level, item.decision);
       const evidence = item.evidence.map((value) => ({

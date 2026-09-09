@@ -171,8 +171,8 @@ export function writeCachedJobsSnapshot(snapshot: JobsSnapshot) {
   }
 }
 
-export function fetchAuditResultDetail(resultId: number | string) {
-  return apiRequest<AuditResultDetail>(`/api/audit-results/${encodeURIComponent(String(resultId))}`);
+export function fetchAuditResultDetail(resultId: number | string, jobId?: string) {
+  return apiRequest<AuditResultDetail>(withQuery(`/api/audit-results/${encodeURIComponent(String(resultId))}`, { job_id: jobId }));
 }
 
 export function linkCommentUserRelation(relationContext: Record<string, unknown>) {

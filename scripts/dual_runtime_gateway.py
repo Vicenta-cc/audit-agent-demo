@@ -106,7 +106,12 @@ def create_app(registry_path: Path, demo_url: str, production_url: str,
     @app.api_route('/{path:path}', methods=['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS', 'HEAD'])
     async def forward(path: str, request: Request):
         try:
-            name = backend_for_path(path, production_ids(registry()))
+            owned = production_ids(registry())
+            name = backend_for_path(path, owned)
+            # Audit result numeric IDs can collide across databases; route these
+            # reads by the explicit originating job, never by the result ID.
+            if request.method == 'GET' and (path == 'api/audit-results' or path.startswith('api/audit-results/')):
+                name = 'production' if request.query_params.get('job_id') in owned else 'demo'
         except (OSError, sqlite3.Error, ValueError):
             # Never misroute a mutation when ownership cannot be established.
             return JSONResponse({'detail': 'Task routing registry is unavailable'}, status_code=503)

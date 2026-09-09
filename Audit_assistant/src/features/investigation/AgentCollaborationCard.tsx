@@ -192,7 +192,7 @@ export function AgentCollaborationCard({
     const runCounts = readRunAnalysisCounts(run);
     setAuthoritativeCounts(runCounts);
     setRecordsError("");
-    if (run.status !== "AUDIT_COMPLETED" && (run.status !== "PUBLISHED" || !run.report_version_id)) {
+    if (run.audit_results.length === 0 && run.status !== "AUDIT_COMPLETED" && (run.status !== "PUBLISHED" || !run.report_version_id)) {
       setAnalysisRecords([]);
       setRecordsLoading(false);
       return;
@@ -218,7 +218,7 @@ export function AgentCollaborationCard({
     return () => {
       current = false;
     };
-  }, [authoritative, run?.run_id, run?.status, run?.report_version_id, run?.updated_at]);
+  }, [authoritative, run?.run_id, run?.status, run?.report_version_id, run?.updated_at, run?.audit_results.length]);
 
   useEffect(() => {
     if (phase !== "collection_waking") return;

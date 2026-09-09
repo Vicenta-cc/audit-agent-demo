@@ -896,7 +896,7 @@ function EvidenceDetail({
 async function loadOutputDetail(taskId: string, outputId: string): Promise<AuditResultDetail> {
   if (/^\d+$/.test(outputId)) {
     try {
-      return await fetchAuditResultDetail(outputId);
+      return await fetchAuditResultDetail(outputId, taskId);
     } catch {
       // Fall back to the task result list below for non-numeric or stale route ids.
     }
@@ -912,7 +912,7 @@ async function loadOutputDetail(taskId: string, outputId: string): Promise<Audit
   const resultId = matched.audit_result_id || matched.id;
   if (resultId) {
     try {
-      return await fetchAuditResultDetail(resultId);
+      return await fetchAuditResultDetail(resultId, taskId);
     } catch {
       return { audit_result: matched, evidence_groups: buildFallbackGroups(matched), is_historical_config: false };
     }

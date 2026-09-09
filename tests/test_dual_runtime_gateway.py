@@ -81,3 +81,18 @@ def test_list_merges_only_registered_tasks_and_survives_one_backend_failure(tmp_
         assert response.status_code == 200
         assert response.json()['unavailable_runtimes'] == ['production']
         assert response.json()['items'][0]['workspace_session_id'] == 'd'
+
+
+def test_audit_reads_are_scoped_to_job_not_colliding_numeric_ids(tmp_path, monkeypatch):
+    registry = tmp_path / 'registry.json'
+    registry.write_text('{}')
+    monkeypatch.setattr(gateway, 'production_ids', lambda _: {'job:prod'})
+
+    async def handle(request):
+        return httpx.Response(200, stream=Body(), headers={'x-test-backend': request.url.host})
+
+    with TestClient(gateway.create_app(registry, 'http://demo', 'http://production', httpx.MockTransport(handle))) as client:
+        for path in ('/api/audit-results', '/api/audit-results/813'):
+            assert client.get(path, params={'job_id': 'job:prod'}).headers['x-test-backend'] == 'production'
+            assert client.get(path, params={'job_id': 'job:demo'}).headers['x-test-backend'] == 'demo'
+            assert client.get(path).headers['x-test-backend'] == 'demo'
