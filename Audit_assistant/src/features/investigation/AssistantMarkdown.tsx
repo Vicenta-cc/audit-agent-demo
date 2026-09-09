@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { formatHistoricalReportText } from "./historicalReportPresentation";
+import { formatHistoricalReportText, formatReportVocabulary } from "./historicalReportPresentation";
 
 interface MarkdownNode {
   type: string;
@@ -31,6 +31,10 @@ function transformDisplayTerms(
   tableCell = false,
   enumContext = false
 ) {
+  if (node.type === "inlineCode" && typeof node.value === "string") {
+    node.value = formatReportVocabulary(node.value);
+    return;
+  }
   if (PRESERVED_NODE_TYPES.has(node.type)) return;
   const isTableCell = tableCell || node.type === "tableCell";
   const isEnumContext = enumContext || isTableCell || (

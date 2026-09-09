@@ -119,6 +119,37 @@ def test_pending_comments_are_reported_as_unreviewed(tmp_path):
     assert "不纳入无风险结论" in json.dumps(document, ensure_ascii=False)
 
 
+@pytest.mark.parametrize("status", ["failed", "pending", "queued"])
+@pytest.mark.parametrize("risk", [None, "", "unknown", "unavailable"])
+def test_missing_comment_verdict_does_not_block_publication(tmp_path, status, risk):
+    source, store = seed_audit(tmp_path, comments=[
+        {"comment_id": "ok", "audit_status": "completed", "risk_level": "none"},
+        {"comment_id": "missing", "audit_status": status, "risk_level": risk,
+         "content": "保留这条评论", "audit_error": "comment result missing after retries"},
+    ])
+    result = R31ReportRuntime(store).generate("new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3")
+    assert store.get_version(result.report_version_id)["status"] == "published"
+    document = store.get_frontend_report(result.report_version_id)
+    assert document["comment_audit_coverage"] == {"total": 2, "completed": 1, "unreviewed": 1}
+    assert "不纳入无风险结论" in json.dumps(document, ensure_ascii=False)
+    with store._connect() as connection:
+        payload = json.loads(connection.execute("SELECT payload_json FROM report_snapshot_posts WHERE report_version_id=?", (result.report_version_id,)).fetchone()[0])
+        raw = json.loads(connection.execute("SELECT result_json FROM audit_results").fetchone()[0])
+    missing = next(c for c in payload["comments"] if c["comment_id"] == "missing")
+    assert missing["audit_status"] == status
+    assert missing["risk_level"] == "unavailable"
+    assert missing["content"] == "保留这条评论"
+    assert raw["comments"][1]["audit_error"] == "comment result missing after retries"
+    assert raw["comments"][1]["risk_level"] == risk
+
+
+@pytest.mark.parametrize("status,risk", [("completed", None), ("completed", "unknown"), ("failed", "garbage")])
+def test_invalid_comment_verdict_still_blocks_publication(tmp_path, status, risk):
+    source, store = seed_audit(tmp_path, comments=[{"comment_id": "invalid", "audit_status": status, "risk_level": risk}])
+    with pytest.raises(ValueError, match="invalid risk level"):
+        R31ReportRuntime(store).generate("new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3")
+
+
 def test_in_progress_task_cannot_publish_a_partial_all_pass_report(tmp_path):
     source, store = seed_audit(tmp_path)
     JobStore(store.db_path).update("new-search-task", status="analysis_running")

@@ -242,7 +242,7 @@ class HermesSessionTurnClosureTest(unittest.TestCase):
             def configure_product_home(self, _path):
                 return None
 
-            def discover_plugins(self, *, force=False):
+            def discover_plugins(self, *, force=False, product_mode="account-activity"):
                 return None
 
             def bind_published_report_session(self, **options):
@@ -273,10 +273,11 @@ class HermesSessionTurnClosureTest(unittest.TestCase):
             report_version_id="report-version:second",
             snapshot_hash="snapshot:second",
         )
-        service._bind_session(first)
-        service._bind_session(first)
-        service._bind_session(second)
-        service._bind_session(first)
+        with patch.object(service, "_product_mode", return_value="account-activity"):
+            service._bind_session(first)
+            service._bind_session(first)
+            service._bind_session(second)
+            service._bind_session(first)
         self.assertEqual(
             binding.bound,
             ["session-first", "session-second"],

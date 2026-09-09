@@ -129,8 +129,12 @@ class PublishedReportRepository(InvestigationRepository):
         report_account_projection_hash: str = "",
         report_comments: tuple[FrozenReportComment, ...] = (),
         evidence_relations: tuple[FrozenEvidenceRelation, ...] = (),
+        template_kind: str = "",
+        snapshot_payloads: Mapping[str, dict[str, Any]] | None = None,
     ) -> None:
         super().__init__(fixture)
+        self.template_kind = template_kind
+        self.snapshot_payloads = MappingProxyType(dict(snapshot_payloads or {}))
         self.database_path = database_path
         self.database_sha256 = database_sha256
         self.content_hash = content_hash
@@ -234,6 +238,8 @@ class PublishedReportRepository(InvestigationRepository):
             ],
             report_comments=loaded["report_comments"],
             evidence_relations=loaded["evidence_relations"],
+            template_kind=loaded["template_kind"],
+            snapshot_payloads=loaded["snapshot_payloads"],
         )
 
     def post_content(self, post_id: str) -> dict[str, Any]:
@@ -445,6 +451,10 @@ def _load_report_graph(
         raise PublishedReportLoadError("Report and Snapshot task mismatch")
 
     body_json = _json_object(version["body_json"], "ReportVersion body_json")
+    template_kind = (body_json.get("report_document") or {}).get("template_kind", "")
+    all_pass = template_kind == "all_pass"
+    single_risk = template_kind == "single_risk_post"
+    snapshot_template = all_pass or single_risk
     audit_model = _require_object(body_json.get("audit_model"), "audit_model")
     human_report = _require_object(body_json.get("human_report"), "human_report")
     account_model_raw = body_json.get("account_model")
@@ -456,13 +466,13 @@ def _load_report_graph(
     sections = _require_list(audit_model.get("sections"), "audit_model sections")
     categories_json = _require_list(audit_model.get("categories"), "report categories")
     investigation_json = _require_list(
-        audit_model.get("investigation_findings"), "InvestigationFindings"
+        audit_model.get("investigation_findings", [] if snapshot_template else None), "InvestigationFindings"
     )
     standalone_json = _json_list(
         version["standalone_risk_posts_json"], "standalone risk posts"
     )
     if standalone_json != _require_list(
-        audit_model.get("standalone_risk_posts"), "audit_model standalone risk posts"
+        audit_model.get("standalone_risk_posts", [] if snapshot_template else None), "audit_model standalone risk posts"
     ):
         raise PublishedReportLoadError("standalone risk post projections disagree")
     recomputed_content_hash = _stable_hash(
@@ -602,22 +612,37 @@ def _load_report_graph(
         body_items=categories_json,
         investigations=investigations,
     )
+    if all_pass:
+        if evidence_rows or any(p.get("decision") != "pass" or p.get("risk_level") != "none" for p in finding_payloads.values()):
+            raise PublishedReportLoadError("all-pass snapshot contains non-pass results")
+    if single_risk:
+        if len(post_rows) != 1 or investigations or standalone:
+            raise PublishedReportLoadError("single-risk snapshot must contain one ungrouped post")
+        row = finding_rows[0]
+        verdict = finding_payloads[str(row["finding_ref"])]
+        if verdict.get("decision") not in {"review", "reject"} or verdict.get("risk_level") not in {"low", "medium", "high"}:
+            raise PublishedReportLoadError("single-risk snapshot requires a risk verdict")
+        standalone = (StandaloneRiskPost(
+            post_id=str(row["post_ref"]), audit_finding_id=str(row["finding_ref"]),
+            disposition_note="单条审核样本，保留原审核结论与依据，不推断跨帖子共性。",
+        ),)
     _validate_risk_coverage(
         investigations,
         standalone,
         finding_rows=finding_rows,
         finding_payloads=finding_payloads,
-        audit_model=audit_model,
+        audit_model=({**audit_model, "risk_post_coverage_complete": True} if snapshot_template else audit_model),
     )
     report_overview = _load_sections(
         connection,
         report_version_id=report_version_id,
         body_sections=sections,
+        all_pass=snapshot_template,
     )
     report_account_entries, report_account_projection_hash = _load_report_accounts(
         connection,
         report_version_id=report_version_id,
-        account_model=account_model,
+        account_model=None if snapshot_template else account_model,
         snapshot_hash=snapshot_hash,
     )
 
@@ -631,11 +656,17 @@ def _load_report_graph(
     for row in post_rows:
         post_ref = str(row["post_ref"])
         payload = post_payloads[post_ref]
-        projected_content = _project_post_content(payload)
+        if snapshot_template:
+            from .pass_support import project_pass_content
+            projected_content = project_pass_content(payload)
+        else:
+            projected_content = _project_post_content(payload)
         post_content[post_ref] = projected_content
         for comment in _project_frozen_comments(
             post_ref, payload, platform=str(payload.get("platform") or "")
         ):
+            if all_pass and comment.audit_status == "completed" and comment.risk_level in {"low", "medium", "high"}:
+                raise PublishedReportLoadError("all-pass snapshot contains risk comments")
             report_comments.append(comment)
         posts.append(
             Post(
@@ -792,6 +823,8 @@ def _load_report_graph(
         evidence=tuple(evidence),
     )
     return {
+        "template_kind": template_kind,
+        "snapshot_payloads": post_payloads if snapshot_template else {},
         "fixture": fixture,
         "content_hash": content_hash,
         "snapshot_hash": snapshot_hash,
@@ -1281,6 +1314,7 @@ def _load_sections(
     *,
     report_version_id: str,
     body_sections: list[Any],
+    all_pass: bool = False,
 ) -> str:
     rows = list(
         connection.execute(
@@ -1302,7 +1336,7 @@ def _load_sections(
             or str(row["content_hash"]) != _stable_hash(section)
         ):
             raise PublishedReportLoadError("report section projection or hash mismatch")
-        if str(row["section_id"]) == "overview":
+        if str(row["section_id"]) == "overview" or (all_pass and section.get("section_type") == "overview"):
             overview = str(row["body"])
     if not overview:
         raise PublishedReportLoadError("published report overview section is missing")
@@ -1432,6 +1466,10 @@ def _project_frozen_comments(
             risk_level = "unavailable"
         elif audit_status not in {"completed", "failed", "pending", "queued"}:
             raise PublishedReportLoadError("Snapshot Comment audit status is invalid")
+        elif audit_status in {"failed", "pending", "queued"} and risk_level in {
+            "", "unknown", "unavailable"
+        }:
+            risk_level = "unavailable"
         elif risk_level not in {"none", "low", "medium", "high"}:
             raise PublishedReportLoadError("Snapshot Comment risk level is invalid")
         try:

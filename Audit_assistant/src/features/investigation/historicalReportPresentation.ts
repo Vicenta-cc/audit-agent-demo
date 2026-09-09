@@ -1,5 +1,28 @@
 import type { InvestigationTurnStage } from "../../types/investigations";
 
+// Normalize known adapter vocabulary in assistant prose without exposing query
+// implementation names. Report evidence and data sources remain unchanged.
+const REPORT_VOCABULARY: Record<string, string> = {
+  membership_evidence_subset: "本项调查发现的归类证据子集",
+  deterministic_statistics: "统计结果",
+  report_statement: "报告综合结论",
+  author_caption: "作者配文",
+  directory_complete_for_post: "该帖目录已完整返回",
+  post_in_current_report_risk_summary: "是否列入当前报告风险汇总",
+  text_complete: "完整原文",
+  text_preview: "原文预览",
+  read_posts: "帖子详情查询",
+  list_finding_posts: "关联帖子查询",
+  list_post_risk_comments: "风险评论查询",
+  list_post_comments: "评论查询",
+  read_account_occurrence: "账号活动详情查询"
+};
+const REPORT_VOCABULARY_PATTERN = new RegExp(`\\b(${Object.keys(REPORT_VOCABULARY).join("|")})\\b`, "g");
+
+export function formatReportVocabulary(value: string) {
+  return value.replace(REPORT_VOCABULARY_PATTERN, term => REPORT_VOCABULARY[term]);
+}
+
 const DISPLAY_TERMS = {
   none: "无风险",
   low: "低风险",
@@ -19,9 +42,11 @@ export function formatHistoricalReportText(
   value: string,
   options: { tableCell?: boolean; enumContext?: boolean } = {}
 ) {
-  let formatted = value
+  let formatted = formatReportVocabulary(value)
+    .replace(/\bInvestigationFinding statement\b/g, "报告综合结论")
     .replace(/\bInvestigationFinding\b/g, "调查发现")
     .replace(/\bdirect Evidence\b/gi, "直接证据")
+    .replace(/\bEvidence\b/g, "证据")
     .replace(/\bFinding\b/g, "调查发现")
     .replace(LABELED_ENUM_PATTERN, (_, prefix: string, term: string) => (
       `${prefix}${DISPLAY_TERMS[term.toLowerCase() as keyof typeof DISPLAY_TERMS]}`

@@ -342,6 +342,12 @@ def build_immutable_snapshot(
                 raise ValueError(
                     f"Comment {comment_id} has invalid audit status"
                 )
+            elif comment_audit_status in {"failed", "pending", "queued"} and comment_risk_level in {
+                "", "unknown", "unavailable"
+            }:
+                # Missing results are not a safe verdict. Preserve the audit
+                # status and include the comment in incomplete coverage.
+                comment_risk_level = "unavailable"
             elif comment_risk_level not in {"none", "low", "medium", "high"}:
                 raise ValueError(
                     f"Comment {comment_id} has invalid risk level"

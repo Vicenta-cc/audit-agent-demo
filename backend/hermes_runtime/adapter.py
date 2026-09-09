@@ -66,9 +66,12 @@ class HermesRuntimeBinding:
 
     expected_version: str = EXPECTED_HERMES_VERSION
 
-    def product_system_prompt(self) -> str:
+    def product_system_prompt(self, product_mode: str = "account-activity") -> str:
         """Load and hash-fence the canonical M2.2 product System Prompt."""
 
+        if product_mode == "pass-report":
+            from hermes_m0.pass_support import PASS_SYSTEM_PROMPT
+            return PASS_SYSTEM_PROMPT
         prompt = (
             files("hermes_m0")
             .joinpath(PRODUCT_PROMPT_RESOURCE)
@@ -85,7 +88,7 @@ class HermesRuntimeBinding:
     def activate_product_mode(mode: str = "account-activity") -> None:
         """Select the sole product catalog and reject historical optional modes."""
 
-        if mode not in {"account-activity", "creation"}:
+        if mode not in {"account-activity", "creation", "pass-report"}:
             raise HermesRuntimeUnavailable(f"unsupported Hermes product mode: {mode}")
         enabled_legacy = [
             name for name in _LEGACY_MODE_FLAGS if os.environ.get(name) == "1"
@@ -107,6 +110,7 @@ class HermesRuntimeBinding:
             else _ACCOUNT_ACTIVITY_MODE_FLAG
         )
         os.environ[selected_flag] = "1"
+        os.environ["HERMES_INVESTIGATION_PASS_REPORT"] = "1" if mode == "pass-report" else "0"
         os.environ["HERMES_ENABLE_PROJECT_PLUGINS"] = "1"
 
     def configure_product_home(self, home: Path) -> None:

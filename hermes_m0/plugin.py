@@ -112,7 +112,7 @@ def _idempotent_tool_execution(**kwargs: Any) -> Any:
                 code=str(getattr(exc, "code", "idempotency_ledger_failure")),
                 message=str(exc),
             )
-    if tool_name not in _TOOL_NAMES:
+    if tool_name not in _TOOL_NAMES and tool_name != "list_post_comments":
         return next_call(args)
     try:
         session_id = str(kwargs.get("session_id") or "")
@@ -180,6 +180,9 @@ def register(ctx: Any) -> None:
             + ", ".join(name for name, _ in active)
         )
     schemas = list(active[0][1]) if active else list(TOOLS)
+    if active and active[0][0] == "account-activity" and os.environ.get("HERMES_INVESTIGATION_PASS_REPORT") == "1":
+        from .pass_support import pass_tool_schemas
+        schemas = pass_tool_schemas()
     for schema in schemas:
         ctx.register_tool(
             name=schema["name"],

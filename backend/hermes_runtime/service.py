@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import closing, nullcontext
+import json
+import sqlite3
 from pathlib import Path
 from threading import RLock
 from typing import Any, Callable
@@ -134,7 +136,7 @@ class HermesInvestigationAgentService:
             mode_scope = (
                 self.runtime_binding.product_mode_execution(
                     session_runtime_home(self.hermes_state_dir, session.id),
-                    product_mode="account-activity"
+                    product_mode=self._product_mode(session.id),
                 )
                 if self.bind_runtime
                 else nullcontext()
@@ -152,7 +154,11 @@ class HermesInvestigationAgentService:
                 user_message = self.store.get_user_message_for_turn(turn.id).content
                 result = agent.run_conversation(
                     user_message,
-                    system_message=self.runtime_binding.product_system_prompt(),
+                    system_message=(
+                        self.runtime_binding.product_system_prompt("pass-report")
+                        if self._product_mode(session.id) == "pass-report"
+                        else self.runtime_binding.product_system_prompt()
+                    ),
                     conversation_history=history,
                     task_id=turn.id,
                 )
@@ -233,6 +239,21 @@ class HermesInvestigationAgentService:
             session_id, include_tool_messages=include_tool_messages
         )
 
+    def _product_mode(self, session_id: str) -> str:
+        if not self.bind_runtime:
+            return "account-activity"
+        session = self.store.get_session(session_id)
+        uri = self.report_facade.db_path.resolve().as_uri() + "?mode=ro"
+        with closing(sqlite3.connect(uri, uri=True)) as connection:
+            row = connection.execute(
+                "SELECT body_json FROM report_versions WHERE id=? AND status='published'",
+                (session.report_version_id,),
+            ).fetchone()
+        document = (json.loads(row[0]).get("report_document") or {}) if row else {}
+        if document.get("template_kind") == "all_pass":
+            return "pass-report"
+        return "account-activity"
+
     def _agent(self, session_id: str) -> Any:
         with self._agent_lock:
             agent = self._agents.get(session_id)
@@ -240,6 +261,7 @@ class HermesInvestigationAgentService:
                 agent = self.runtime_binding.create_agent(
                     session_id=session_id,
                     agent_factory=self.agent_factory,
+                    product_mode=self._product_mode(session_id),
                     base_url=settings.dashscope_base_url,
                     api_key=settings.dashscope_api_key,
                     stream_delta_callback=lambda _delta: None,
@@ -259,7 +281,9 @@ class HermesInvestigationAgentService:
             self.runtime_binding.configure_product_home(
                 session_runtime_home(self.hermes_state_dir, session.id)
             )
-            self.runtime_binding.discover_plugins(force=not self._bound_sessions)
+            self.runtime_binding.discover_plugins(
+                force=not self._bound_sessions, product_mode=self._product_mode(session.id)
+            )
         additional_contexts = self._authorized_report_contexts(session)
         self.runtime_binding.bind_published_report_session(
             session_id=session.id,
@@ -279,10 +303,17 @@ class HermesInvestigationAgentService:
     ) -> tuple[Any, ...]:
         if self.authorized_context_anchor_prefixes is not None:
             anchor = self.store.session_anchor(session.id)
-            if not any(
+            allowed_anchor = any(
                 anchor.startswith(prefix)
                 for prefix in self.authorized_context_anchor_prefixes
-            ):
+            )
+            # Published M3 pass reports reuse the server's explicitly authorized
+            # account sources. Report navigation remains bound to their own snapshot.
+            pass_report_anchor = (
+                anchor.startswith("m3-run:")
+                and self._product_mode(session.id) == "pass-report"
+            )
+            if not allowed_anchor and not pass_report_anchor:
                 return ()
 
         additional_contexts = []
