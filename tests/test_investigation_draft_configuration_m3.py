@@ -2053,6 +2053,7 @@ def test_creator_mode_has_no_recall_and_reports_platform_mismatch(m3_stack: dict
     assert snapshot["execution"]["crawler_account_display_name"] == account["display_name"]
     assert snapshot["execution"]["crawler_account_confirmed_state"]["has_auth_state"] is True
     assert snapshot["execution"]["max_notes"] == 1
+    assert snapshot["execution"]["max_comments"] == 300
     assert snapshot["execution"]["analyze_limit"] == 1
 
     mismatched = dict(configuration)
@@ -2647,6 +2648,7 @@ def test_existing_lexicon_snapshot_is_clean_frozen_and_server_limited(m3_stack: 
     assert snapshot["recall_plan"]["runtime_content_hash"] == runtime_hash
     assert snapshot["max_notes"] == 1
     assert snapshot["execution"]["max_notes"] == 1
+    assert snapshot["execution"]["max_comments"] == 300
     assert snapshot["ruleset_revision"]["content_hash"]
     assert "audit_policy" not in snapshot
     assert snapshot["execution"]["policy_id"] == ""

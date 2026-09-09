@@ -2593,9 +2593,10 @@ def test_t1_generation_guidance_preserves_conversation_authority():
     assert "Without that authorization" in prompt
     assert "no Draft and no generated terms" in prompt
     assert "do not list even illustrative example terms or candidate terms" in prompt
-    assert "Choose one canonical wording per core concept" in prompt
+    assert "Each generated Chinese query is natural continuous text with no whitespace" in prompt
+    assert "RuleSet Proposal, then show its rules and the complete search-term list, and END this turn" in prompt
     assert "create the Draft in the same turn" in prompt
-    assert "asking for generation permission again" in prompt
+    assert "Do not ask again for permission to generate terms" in prompt
     assert "real recall lexicon when it is sufficiently suitable" in prompt
     assert "Generation and editing never bind Draft Judgement" in prompt
     assert "Only use_ruleset_proposal can bind that exact presented version" in prompt

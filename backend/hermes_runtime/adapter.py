@@ -178,7 +178,12 @@ class HermesRuntimeBinding:
         with _PRODUCT_MODE_EXECUTION_LOCK:
             self.configure_product_home(home)
             self.discover_plugins(force=True, product_mode=product_mode)
-            yield
+            if product_mode == "creation":
+                from .creation_discovery import creation_discovery_guidance
+                with creation_discovery_guidance(_load_module("tools.tool_search")):
+                    yield
+            else:
+                yield
 
     def tool_definitions(
         self,

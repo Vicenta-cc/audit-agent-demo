@@ -295,7 +295,7 @@ class CollectionConfiguration(StrictModel):
     display_name: StrictStr = ""
     start_page: StrictInt = Field(default=1, ge=1)
     max_notes: StrictInt = Field(default=10_000, ge=1)
-    max_comments: StrictInt = Field(default=1_000, ge=0)
+    max_comments: StrictInt = Field(default=300, ge=0)
     max_concurrency: StrictInt = Field(default=1, ge=1)
     max_items_per_minute: StrictInt = Field(default=5, ge=1, le=5)
     crawler_account_id: StrictStr | None = None

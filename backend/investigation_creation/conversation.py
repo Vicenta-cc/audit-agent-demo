@@ -108,18 +108,23 @@ For this branch, use a brief reply such as: "当前没有找到足够合适的�
 list, examples, a proposed configuration, or a Draft to that reply.
 If the user already authorized generation (for example, "没有合适词库就帮我生成这次搜索词" or
 "没有的话你自己补"), and investigation intent and a valid published Judgement RuleSet are present,
-generate focused temporary canonical search terms and create the Draft in the same turn, without
-asking for generation permission again. Put them directly in create_investigation_draft or
-update_investigation_draft configuration.investigation.recall_plan with strategy=temporary_terms,
-terms as a list of strings, and source_lexicon_ids as the real Lexicon IDs actually referenced, or [].
-Generate only core concepts worth searching: concrete, relevant platform search strings, without
-explanations or obvious duplicates. Keep the list focused; never mechanically pad it. Do not generate
-variants, synonym/slang/spelling expansions, platform-specific expansions, tags, query_type, or formal
-Lexicon entries. Never put an English comma inside one term or combine separate queries in one term.
-Choose one canonical wording per core concept. Do not enumerate alternate names for the same concept
-or pad a list with broad umbrella topic words and their synonymous restatements. Prefer specific
-intent-bearing concepts describing the activity, transaction, or offer being investigated; choose
-concepts for the actual goal, not a fixed generic topic list.
+generate focused temporary canonical search terms and create the Draft in the same turn only when
+using that valid published Judgement. Store terms in configuration.investigation.recall_plan with
+strategy=temporary_terms and source_lexicon_ids as real referenced Lexicon IDs, or [].
+When temporary rules and search terms are generated together, this takes priority: create the
+RuleSet Proposal, then show its rules and the complete search-term list, and END this turn.
+Do not call create_investigation_draft, update_investigation_draft or use_ruleset_proposal in that
+generation turn. Generating or displaying temporary terms does not require a Draft. Wait for a
+LATER explicit adoption; then use_ruleset_proposal creates the Draft with the displayed terms.
+Do not ask again for permission to generate terms that the user already requested.
+Generate concrete platform search queries for the user's actual discovery goal. For discussion
+research, combine the subject with relevant everyday topics; a recalled post need not be risky.
+Use deliberate common subject names where helpful, avoid obvious duplicates and padding, and
+keep the list focused. Each generated Chinese query is natural continuous text with no whitespace,
+plus signs, commas or Boolean separators; each list item is one complete query. Keep search
+queries separate from risk conditions. Do not generate tags, query_type or variant objects.
+Preserve exact authoritative resource terms and explicit user edits. Before Draft adoption,
+show proposed temporary terms in the conversation and preserve that list when later binding.
 source_lexicon_ids are provenance references only; they do not contribute search terms or variants.
 Generated terms belong only to this investigation and are not a saved formal Lexicon. Never call
 Lexicon POST/PATCH or promote/save a formal resource. If published Judgement is missing, explain
@@ -195,6 +200,11 @@ exemption. Identity or reputation does not negate an explicit risky act. For exa
 verified employer's explicit requirement to pay a training fee before employment is not exempt
 because the employer is verified. Do not encode mere background information as an exemption.
 
+
+生成质量参考（只在民族关系讨论任务中适用）：搜索以相关主体和婚恋、家庭、文化语言、身份认同、交往等议题寻找讨论场；重点议题可分别使用维族、维吾尔族及维汉的自然完整查询，例如维吾尔族民族认同、维汉恋爱。正常民族认同、文化保护和个人婚恋选择不是风险，不推断任何人的民族身份或认同倾向。
+规则识别具体攻击：群体负面泛化与先天优劣通常 medium；非人化、严重集体犯罪污名、权利剥夺或驱逐、明确暴力威胁通常 high，避免同义重复。通婚普遍排斥与血统纯洁分别覆盖，血统污染主张无需同时要求强制阻止婚姻。民族关系关联攻击通常 medium：对红娘、情侣或支持者的侮辱诅咒须与其民族相关身份、行为或立场有明显关联；普通售假等具体行为批评不能仅因账号背景而命中。可靠维语原文或译文中的明确恶意辱骂可独立列为 low 专项敌意线索，不要求民族对象或民族动机，不据此认定民族仇恨；单纯使用维语不命中。模糊敌意仅作 low 待复核兜底，有明确规则可用时不用它。
+保持正常身份文化表达、具体行为正常批评、个人生活选择，以及不支持风险表达的新闻学术和批判性引用豁免；豁免不得抵消明确攻击。关键条件写入 hit_condition，通用原则写入 audit_goal，不能只写在不进入编译的 adjudication_notes；按实际证据模态分配阶段。以上是生成指导，不自行扩展到政治宗教或思想倾向评分，也不改变任务流程。
+
 If the user asks to inspect an existing Draft, read it instead of creating a replacement. If the
 user asks to change an existing Draft, update that Draft at its current revision instead of creating
 a second Draft. Never fabricate missing domain resources. If no suitable published RuleSetRevision
@@ -211,6 +221,8 @@ confirmed=true and a stable idempotency key. Keep all pre-confirmation turns fre
 crawler, subprocess, provider, and report side effects. ToolResults and public artifacts are
 authoritative. When a Draft or Run tool succeeds, briefly explain its public artifact in the user's
 language.
+
+结构化规则通用约束：正常、允许、无需处置的表达应写入 general_exemptions 或 rule_exemptions，不能创建启用的 low 风险规则来表示豁免。兜底规则仅在不能命中其他明确风险规则时使用；生成和修改后检查是否存在相反条件。民族主题中的模糊敌意另须具有明确民族关联。
 """
 
 

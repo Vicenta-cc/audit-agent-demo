@@ -262,6 +262,64 @@ def _creation_tool_schema(schema: type[StrictModel]) -> dict[str, Any]:
     return parameters
 
 
+# Attach guidance before freezing the schemas used by deferred discovery.
+M3_PARAMETER_GUIDANCE = {
+    'use_ruleset_proposal': (
+        '新建草案时 arguments 结构为 '
+        '{"presentation_id":"展示记录返回的真实ID","create_draft":{"title":"任务标题","objective":"任务目标","configuration":{"platform":"dy","investigation":{"mode":"search","recall_plan":{"strategy":"temporary_terms","terms":["已展示的搜索词"]}}}}}。title/objective/configuration'
+        ' 必须放在 create_draft 内；recall_plan 直接放 terms，不嵌套 temporary_terms。已有草案则传 '
+        'presentation_id、draft_id、expected_revision，不传 create_draft。'
+    ),
+    'query_investigation_options': (
+        '最小查询参数 {"platform":"dy","mode":"search"}。平台字段叫 platform，抖音值为 dy；不要传 platform_id 或 '
+        'include_ruleset_categories。详细规则用 include_ruleset_details_for_revision_ids 指定真实 revision '
+        'ID。'
+    ),
+    'create_ruleset_proposal': (
+        '参数只有 content，其值是完整 RuleSetContent 对象；不要用 canonical_content。分类和规则的名称字段均叫 name；风险字段叫 '
+        'suggested_risk_level；分类和规则均须有 order，规则还须有 adjudication_notes。具体必填项先读 '
+        'schema。成功后展示规则及搜索词并结束本轮，等用户采用。'
+    ),
+    'update_ruleset_proposal': (
+        '参数为 proposal_id、expected_version、content（完整新内容）。先读取当前提案，按 rule_id 修改目标并保持其他规则。不是局部 '
+        'patch，也不传 ruleset_id。'
+    ),
+    'get_ruleset_proposal': (
+        '参数只有 proposal_id，使用工具返回的真实 ID。'
+    ),
+    'get_investigation_draft': (
+        '参数只有 draft_id，使用工具返回的真实 ID。'
+    ),
+    'update_investigation_draft': (
+        '参数须有 draft_id、expected_revision，另传需要修改的 title、objective 或完整 configuration。先读当前草案；修改搜索词时保留 '
+        'platform 和 judgement，修改 investigation.recall_plan.terms。不要传 patch 或 expected_version。'
+    ),
+    'confirm_and_queue_investigation': (
+        '用户明确启动后调用。参数为 draft_id、expected_revision、confirmed:true、idempotency_key。revision '
+        '取最新草案；只采用或只创建草案不等于启动授权。'
+    ),
+    'get_investigation_run': (
+        '参数只有 run_id，使用确认工具返回的真实 ID。'
+    ),
+}
+M3_ADOPTION_GUIDANCE = {
+    'create_investigation_draft': (
+        '本工具用于以已发布规则创建草案。采用本会话临时 RuleSet Proposal 时禁止调用本工具；必须直接调用 '
+        'use_ruleset_proposal，由它一次性创建草案并绑定规则。不要把 Proposal 内容塞入本工具。 '
+    ),
+    'use_ruleset_proposal': (
+        '本工具既能采用临时规则，也能直接创建 Draft，无需先调用 create_investigation_draft。用户明确采用已展示 Proposal 且尚无 Draft '
+        '时，直接传 presentation_id 和 create_draft（title、objective、configuration；configuration 只有 '
+        'platform 与 investigation，不传 judgement）。 '
+    ),
+}
+for _name in M3_TOOL_DESCRIPTIONS:
+    M3_TOOL_DESCRIPTIONS[_name] = (
+        M3_PARAMETER_GUIDANCE.get(_name, "") + " "
+        + M3_ADOPTION_GUIDANCE.get(_name, "")
+        + M3_TOOL_DESCRIPTIONS[_name]
+    ).strip()
+
 HERMES_M3_TOOL_SCHEMAS = tuple(
     {
         "name": name,
