@@ -687,6 +687,7 @@ class InvestigationResourceService:
                 "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
             }
+        collection["display_name"] = draft.title
         execution_input = {
             "platform": configuration.platform.value,
             "collection": collection,

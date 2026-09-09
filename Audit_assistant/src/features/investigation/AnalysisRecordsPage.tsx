@@ -22,7 +22,7 @@ import {
 } from "./analysisRecords";
 import { getInvestigationWorkspaceState } from "../../services/investigationCreation";
 import { AnalysisBasisDrawer } from "./AnalysisBasisDrawer";
-import { loadM3AnalysisRecords } from "./m3AnalysisRecords";
+import { loadM3AnalysisRecords, reportPostDetailPath } from "./m3AnalysisRecords";
 
 type RiskFilter = "all" | AnalysisRisk;
 type SortKey = "latest" | "risk";
@@ -181,12 +181,8 @@ export function AnalysisRecordsPage() {
 
   const handleViewCompleteEvidence = (record: AnalysisRecord) => {
     setSelectedRecord(null);
-    if (!record.reportVersionId || !record.findingRef) return;
-    navigate(
-      `/investigation/${encodeURIComponent(investigationId)}/report/evidence`
-        + `?report=${encodeURIComponent(record.reportVersionId)}`
-        + `&finding_ref=${encodeURIComponent(record.findingRef)}&view=evidence`
-    );
+    const path = reportPostDetailPath(investigationId, record);
+    if (path) navigate(path);
   };
 
   return (

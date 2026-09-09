@@ -47,6 +47,7 @@ _PLATFORM_PRESENTATION = {
 
 _DECISION_PRESENTATION = (
     ("pass", "通过"),
+    ("review", "复审"),
     ("reject", "拒绝"),
 )
 
@@ -105,11 +106,11 @@ def build_presentation_projection(
         comment_statistics=comment_statistics,
     )
     summary = _investigation_summary(statistics)
-    if document.get("template_kind") == "all_pass":
+    if document.get("template_kind") in {"all_pass", "single_risk_post"}:
         accounts["snapshot_summary"] = document.get("snapshot_account_summary")
         coverage = document.get("comment_audit_coverage") or {}
         statistics["independently_reviewed_comments"] = coverage.get("completed")
-        statistics["comment_own_risk"] = 0
+        statistics["comment_own_risk"] = int(coverage.get("risk") or 0)
         overview = next(
             (section for section in sections if section["section_type"] == "overview"), {}
         )

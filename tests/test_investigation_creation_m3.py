@@ -1067,6 +1067,10 @@ class WorkerRecoveryAndFencingTest(M3TestCase):
         for state, expected_code in (
             ({"status": "failed", "error": "failed", "task_stats": {}}, "audit_job_failed"),
             (
+                {"status": "failed", "error": "no_valid_content_selected: crawler returned no content", "task_stats": {}},
+                "no_valid_content_selected",
+            ),
+            (
                 {
                     "status": "failed",
                     "error": "selected_content_payload_unavailable: missing raw item",

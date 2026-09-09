@@ -146,7 +146,7 @@ def test_resume_uses_frozen_pass_template_without_provider_or_live_reclassificat
 
 @pytest.mark.parametrize("decision,risk", [("review", "high"), ("reject", "high"), ("pass", "low")])
 def test_risk_results_keep_the_existing_risk_graph(tmp_path, decision, risk):
-    source, store = seed_audit(tmp_path, decision=decision, risk=risk)
+    source, store = seed_audit(tmp_path, count=2, decision=decision, risk=risk)
     graph = R31ReportRuntime(store).generation_graph(source=source, task_id="new-search-task", checkpoint_path=tmp_path / "checkpoints.sqlite3")
     try:
         assert isinstance(graph, AccountOverviewReportGraph)

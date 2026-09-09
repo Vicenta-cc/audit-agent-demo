@@ -1372,6 +1372,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   ? "报告已生成"
                   : run.status === "AUDIT_COMPLETED"
                     ? "审核完成"
+                    : run.status === "FAILED"
+                      ? "调查失败"
+                      : run.status === "INTERRUPTED"
+                        ? "调查已中断"
                     : "研判中",
                 executionPhase: view.phase,
                 executionProgress: run.status === "PUBLISHED"

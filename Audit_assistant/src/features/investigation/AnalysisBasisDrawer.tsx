@@ -329,13 +329,13 @@ export function AnalysisBasisDrawer({
           ) : (
             <button
               type="button"
-              disabled={record.source === "m3-report" && (!record.reportVersionId || !record.findingRef)}
+              disabled={record.source === "m3-report" && (!record.reportVersionId || !record.postRef)}
               onClick={() => onViewCompleteEvidence(record)}
             >
               <FileSearch size={17} />
-              <span>{record.source === "m3-report" && (!record.reportVersionId || !record.findingRef)
+              <span>{record.source === "m3-report" && (!record.reportVersionId || !record.postRef)
                 ? "研判依据暂不可用"
-                : "查看完整证据"}</span>
+                : record.source === "m3-report" ? "查看报告帖子详情" : "查看完整证据"}</span>
               <ArrowRight size={16} />
             </button>
           )}

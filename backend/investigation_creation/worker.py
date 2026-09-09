@@ -229,6 +229,8 @@ class InvestigationWorker:
                 if error_message.startswith("audit_provider_unavailable:")
                 else "audit_provider_failed"
                 if error_message.startswith("audit_provider_failed:")
+                else "no_valid_content_selected"
+                if error_message.startswith("no_valid_content_selected:")
                 else "audit_job_failed"
             )
             return self.store.mark_failed(
@@ -266,12 +268,6 @@ class InvestigationWorker:
                 error_code=error_code,
                 error_message=error_message,
             )
-        snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
-        if snapshot.schema_version in {
-            "investigation-run-config-v3",
-            "investigation-run-config-v4",
-        }:
-            return self.store.mark_audit_completed(run.id, run.claim_token)
         run = self.store.mark_report_generating(run.id, run.claim_token)
         return self._finish_report(run, allow_generation=True)
 

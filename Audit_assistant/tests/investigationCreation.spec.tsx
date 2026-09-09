@@ -12,6 +12,7 @@ import {
   loadM3AnalysisRecords,
   mapM3PostToAnalysisRecord,
   mapReportEvidence,
+  reportPostDetailPath,
   readRunAnalysisCounts
 } from "../src/features/investigation/m3AnalysisRecords";
 import { buildDraftSuggestionPlanView } from "../src/features/investigation/InvestigationContextDrawer";
@@ -313,7 +314,6 @@ test("renders real Draft and ConfirmationPreview fields", () => {
   expect(view).toMatchObject({
     platform: "小红书",
     objective: preview.objective,
-    auditPolicy: "博彩引流审核策略",
     ruleSet: "博彩风险规则",
     recallStrategy: "本次临时搜索词",
     maxNotes: 1,
@@ -451,7 +451,6 @@ test("real analysis-plan drawer projects public resources without mock rule deta
   const view = buildDraftSuggestionPlanView(suggestion);
 
   expect(view).toMatchObject({
-    policyName: "博彩引流审核策略",
     ruleSetName: "博彩风险规则",
     ruleSetVersion: 7,
     recallLexicons: [{ title: "博彩引流词库" }],
@@ -669,9 +668,9 @@ test("blockers disable confirmation and expose the management URL", () => {
     ruleset_revision: null,
     can_confirm: false,
     blockers: [{
-      code: "NO_PUBLISHED_AUDIT_POLICY",
-      message: "尚无已发布审核策略",
-      resource_type: "audit_policy",
+      code: "NO_PUBLISHED_RULESET",
+      message: "尚无已发布研判规则",
+      resource_type: "ruleset",
       resource_id: "",
       latest_safe_summary: {},
       management_url: "/rule-assistant/rulesets?return_to=/investigation"
@@ -679,17 +678,17 @@ test("blockers disable confirmation and expose the management URL", () => {
   } satisfies ConfirmationPreview;
   const view = buildConfirmationCardView(draft, blocked);
   expect(view.canConfirm).toBe(false);
-  expect(view.auditPolicy).toBe("尚未选择审核策略");
+  expect(view.ruleSet).toBe("尚未绑定");
   expect(view.rulesManagementUrl).toBe(
     "/rule-assistant/rulesets?return_to=/investigation"
   );
   expect(formatConfirmationBlockerMessage(
     blocked.blockers[0].code,
-    "A valid published AuditPolicy must be selected before confirmation."
-  )).toBe("当前还没有匹配的研判方案，配置后即可继续。");
+    "A valid published RuleSet must be selected before confirmation."
+  )).toBe("当前还没有匹配的已发布研判规则，配置后即可继续。");
 
   expect(buildSuggestionBlockerLink(blocked)).toEqual({
-    label: "去配置研判方案",
+    label: "去配置研判规则",
     managementUrl: "/rule-assistant/rulesets?return_to=/investigation"
   });
   expect(buildSuggestionAssistantCopy(draft, blocked)).toBe(
@@ -702,8 +701,8 @@ test("creation diagnostics fail closed into user-facing copy", () => {
     "| 项目 | 内容 |\n|---|---|\n| Draft ID | investigation-draft:secret |"
   )).toBe("当前操作暂时无法完成，请稍后重试。");
   expect(presentCreationAssistantContent(
-    "NO_PUBLISHED_AUDIT_POLICY /rule-assistant/rulesets?return_to=/investigation"
-  )).toBe("当前还没有匹配的研判方案，配置后即可继续。");
+    "NO_PUBLISHED_RULESET /rule-assistant/rulesets?return_to=/investigation"
+  )).toBe("当前还没有匹配的已发布研判规则，配置后即可继续。");
   expect(formatCreationErrorMessage("RESOURCE_STALE revision conflict")).toBe(
     "配置刚刚发生变化，已载入最新内容，请重新核对。"
   );
@@ -943,6 +942,9 @@ test("maps one real report post and its five-category Evidence without invented 
   });
   expect(record.taskId).toBeUndefined();
   expect(record.outputId).toBeUndefined();
+  expect(record.decisionLabel).toBe("拒绝");
+  expect(reportPostDetailPath("workspace-1", { ...record, findingRef: undefined, keyEvidence: [] }))
+    .toBe("/investigation/workspace-1/report/evidence?report=report-version-1&view=posts&post_ref=post-1");
   expect(mapReportEvidence(evidence[2])).toMatchObject({
     type: "asr", translation: "中文音频译文", explanation: "真实命中解释 3"
   });
@@ -981,6 +983,16 @@ test("run progress exposes only curated business counts and sanitizes provider f
     { label: "已完成", value: 0 }
   ]);
   expect(formatRunFailureMessage(projection)).toBe("研判服务返回异常，本次调查已停止。");
+});
+
+test("empty crawl stays failed on workspace recovery and explains that no audit or report ran", () => {
+  const projection = run("FAILED", {
+    error_code: "no_valid_content_selected",
+    error_message: "no_valid_content_selected: crawler returned no content"
+  });
+  expect(restoreInvestigationWorkspace(workspaceState({ run: projection })).status).toBe("调查失败");
+  expect(formatRunFailureMessage(projection)).toContain("尚未进行审核或生成报告");
+  expect(restoreInvestigationWorkspace(workspaceState({ run: run("INTERRUPTED") })).status).toBe("调查已中断");
 });
 
 test("audit-completed records come directly from the current Job projection", async () => {

@@ -769,9 +769,9 @@ def test_m3_account_changed_after_draft_blocks_run_and_worker_never_creates_job(
 
 @pytest.mark.parametrize(
     ("decision", "risk_level", "expected_evidence_count"),
-    [("review", "high", 1), ("pass", "none", 0)],
+    [("review", "high", 1), ("reject", "high", 1), ("pass", "none", 0)],
 )
-def test_douyin_jsonl_to_durable_audit_completed_without_report_or_session(
+def test_douyin_jsonl_to_durable_published_report_and_session(
     m3_stack: dict,
     tmp_path: Path,
     decision: str,
@@ -849,7 +849,7 @@ def test_douyin_jsonl_to_durable_audit_completed_without_report_or_session(
                 "risk_level": risk_level,
                 "summary": (
                     "视频包含稳赚承诺和站外引流，建议复核。"
-                    if decision == "review"
+                    if decision != "pass"
                     else "本次审核未发现明确风险。"
                 ),
                 "evidence_items": evidence,
@@ -928,9 +928,20 @@ def test_douyin_jsonl_to_durable_audit_completed_without_report_or_session(
             )
             jobs.update(self.job_id, status="completed", items=[persisted])
 
-    class ForbiddenReportOrSessionAdapter:
-        def __getattr__(self, name: str):
-            raise AssertionError(f"v3 audit completion must not call {name}")
+    from backend.investigation_creation.adapters import R31ReportAdapter, ProductSessionAdapter
+    from backend.reporting.store import ReportStore
+    from backend.investigation.report_query import ReportQueryFacade
+    from backend.investigation.store import InvestigationStore
+    from backend.hermes_runtime.service import HermesInvestigationAgentService
+
+    report_store = ReportStore(resource_db)
+    report_adapter = R31ReportAdapter(store=report_store)
+    report_service = HermesInvestigationAgentService(
+        report_facade=ReportQueryFacade(resource_db),
+        store=InvestigationStore(tmp_path / "report-sessions.sqlite3"),
+        bind_runtime=False,
+    )
+    session_adapter = ProductSessionAdapter(report_service)
 
     draft = _create_draft(m3_stack, _douyin_configuration(m3_stack))
     public_draft_payload = draft.model_dump(mode="json")
@@ -963,17 +974,17 @@ def test_douyin_jsonl_to_durable_audit_completed_without_report_or_session(
     worker = InvestigationWorker(
         m3_stack["store"],
         execution_adapter=adapter,
-        report_adapter=ForbiddenReportOrSessionAdapter(),
-        session_adapter=ForbiddenReportOrSessionAdapter(),
+        report_adapter=report_adapter,
+        session_adapter=session_adapter,
     )
 
     completed = worker.run_once()
 
     assert completed is not None
-    assert completed.status.value == "AUDIT_COMPLETED"
+    assert completed.status.value == "PUBLISHED"
     assert completed.job_id == adapter.job_id_for_run(run.id)
-    assert completed.report_version_id == ""
-    assert completed.report_session_id == ""
+    assert completed.report_version_id
+    assert completed.report_session_id
     assert "_authoritative_m3_contract" not in json.dumps(
         jobs.get(completed.job_id)
     )
@@ -1018,11 +1029,11 @@ def test_douyin_jsonl_to_durable_audit_completed_without_report_or_session(
             completed.id, principal=_principal(m3_stack)
         )
     ).model_dump(mode="json")
-    assert projection["status"] == "AUDIT_COMPLETED"
+    assert projection["status"] == "PUBLISHED"
     assert projection["crawl_status"] == "completed"
     assert projection["analysis_status"] == "completed"
-    assert projection["report_status"] == "pending"
-    assert projection["report_version_id"] == ""
+    assert projection["report_status"] == "published"
+    assert projection["report_version_id"] == completed.report_version_id
     assert projection["audit_results"][0]["author_display_name"] == "内容作者甲"
     assert projection["audit_results"][0]["summary"] == stored_result["summary"]
     assert len(projection["audit_results"][0]["evidence"]) == expected_evidence_count
@@ -1034,19 +1045,30 @@ def test_douyin_jsonl_to_durable_audit_completed_without_report_or_session(
 
     reopened = InvestigationCreationStore(m3_stack["store"].db_path)
     durable = reopened.get_run(completed.id, principal=_principal(m3_stack).id)
-    assert durable.status.value == "AUDIT_COMPLETED"
+    assert durable.status.value == "PUBLISHED"
     assert InvestigationWorker(
         reopened,
         execution_adapter=adapter,
-        report_adapter=ForbiddenReportOrSessionAdapter(),
-        session_adapter=ForbiddenReportOrSessionAdapter(),
+        report_adapter=report_adapter,
+        session_adapter=session_adapter,
     ).run_once() is None
     assert fake_calls == {"pipeline": 1, "asr": 1, "qwen": 1}
     assert audit_results.list_results(job_id=completed.job_id)["total"] == 1
     with sqlite3.connect(m3_stack["store"].db_path) as connection:
         assert connection.execute(
             "SELECT COUNT(*) FROM investigation_report_generation_bindings"
-        ).fetchone()[0] == 0
+        ).fetchone()[0] == 1
+    view = report_store.get_presentation_projection(completed.report_version_id)
+    assert jobs.get(completed.job_id)["display_name"] == draft.title
+    assert view["report_metadata"]["title"] == draft.title + "调查报告"
+    sample = next(s for s in view["ordered_sections"] if s["presentation_kind"] == "audit_samples")
+    assert sample["sample_posts"][0]["decision"] == decision
+    detail = report_store.get_presentation_post_detail(
+        completed.report_version_id, post_ref=sample["sample_posts"][0]["post_ref"]
+    )
+    assert len(detail["direct_evidence"]) == expected_evidence_count
+    assert report_store.get_version(completed.report_version_id)["model"] == "deterministic"
+    report_service.close()
 
 
 def test_authoritative_m3_missing_provider_fails_before_job_creation(

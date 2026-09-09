@@ -162,13 +162,13 @@ class RiskFindingReportGraph(IntegrationReportGraph):
         findings = [
             item
             for item in snapshot.findings
-            if item.payload.get("decision") == "review"
+            if item.payload.get("decision") in {"review", "reject"}
             and item.payload.get("risk_level") in {"low", "medium", "high"}
         ]
         if not findings:
             raise ReportValidationError(
                 "prepare_risk_inputs",
-                ["the frozen Snapshot does not contain any review risk posts"],
+                ["the frozen Snapshot does not contain any review or reject risk posts"],
             )
         evidence_by_post: dict[str, list[Any]] = {}
         for item in snapshot.evidence:
@@ -211,7 +211,7 @@ class RiskFindingReportGraph(IntegrationReportGraph):
             "max_input_chars": self.r2_max_input_chars,
             "risk_post_count": len(risk_inputs),
             # Snapshot-level direct Evidence can include material outside the
-            # eligible review-risk set. Keep both counts explicit rather than
+            # eligible risk-post set. Keep both counts explicit rather than
             # treating the model input as the entire frozen Evidence corpus.
             "direct_evidence_count": len(snapshot.evidence),
             "risk_input_direct_evidence_count": evidence_counter,

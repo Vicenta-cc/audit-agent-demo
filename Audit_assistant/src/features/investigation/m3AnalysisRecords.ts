@@ -114,6 +114,7 @@ export function mapM3PostToAnalysisRecord(input: {
     itemNumber: input.itemNumber,
     risk,
     riskLabel: riskLabel(risk),
+    decisionLabel: decisionLabel(input.post.decision),
     summary: input.post.content_summary || input.post.audit_summary || "报告未提供分析摘要",
     conclusion: input.post.audit_summary || input.post.content_summary || "报告未提供研判结论",
     contentTitle: input.post.title || "未命名内容",
@@ -124,8 +125,14 @@ export function mapM3PostToAnalysisRecord(input: {
     keyEvidence: evidence,
     reportVersionId: input.reportVersionId,
     postRef: input.post.post_ref,
-    findingRef: input.post.audit_finding_ref || input.post.investigation_finding_refs[0]
+    findingRef: input.post.investigation_finding_refs[0]
   };
+}
+
+export function reportPostDetailPath(investigationId: string, record: AnalysisRecord) {
+  if (!record.reportVersionId || !record.postRef) return "";
+  const query = new URLSearchParams({ report: record.reportVersionId, view: "posts", post_ref: record.postRef });
+  return `/investigation/${encodeURIComponent(investigationId)}/report/evidence?${query}`;
 }
 
 export function mapReportEvidence(evidence: ReportEvidencePresentation): AnalysisKeyEvidence | null {

@@ -9,6 +9,7 @@ from backend.audit_agent.config import settings
 from backend.reporting.integration_source import CanonicalReportSource
 from backend.reporting.r31_graph import AccountOverviewReportGraph
 from backend.reporting.pass_graph import PASS_TEMPLATE_VERSION, PassReportGraph
+from backend.reporting.single_post_graph import SINGLE_POST_TEMPLATE_VERSION, SinglePostReportGraph
 from backend.reporting.store import ReportStore
 
 
@@ -35,17 +36,21 @@ class R31ReportRuntime:
         template_version: str | None = None,
     ) -> Any:
         canonical_source = source or CanonicalReportSource(
-            settings.data_dir / "audit_index.sqlite3",
+            self.store.db_path,
             settings.outputs_dir,
         )
         factory = self.graph_factory
         if factory is AccountOverviewReportGraph:
             if template_version == PASS_TEMPLATE_VERSION:
                 factory = PassReportGraph
+            elif template_version == SINGLE_POST_TEMPLATE_VERSION:
+                factory = SinglePostReportGraph
             elif task_id is not None and template_version is None:
                 rows = canonical_source.canonical_rows(task_id)
                 if rows and all(row["decision"] == "pass" and row["risk_level"] == "none" for row in rows):
                     factory = PassReportGraph
+                elif len(rows) == 1:
+                    factory = SinglePostReportGraph
         return factory(
             source=canonical_source,
             store=self.store,

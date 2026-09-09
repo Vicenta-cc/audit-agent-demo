@@ -13,7 +13,7 @@ import {
   type AnalysisScenario,
   type AnalysisRecord
 } from "./analysisRecords";
-import { loadM3AnalysisRecords, readRunAnalysisCounts } from "./m3AnalysisRecords";
+import { loadM3AnalysisRecords, readRunAnalysisCounts, reportPostDetailPath } from "./m3AnalysisRecords";
 import { buildRunProgressItems, formatRunFailureMessage } from "./runPresentation";
 
 export { buildRunProgressItems, formatRunFailureMessage } from "./runPresentation";
@@ -347,12 +347,9 @@ export function AgentCollaborationCard({
 
   const handleViewCompleteEvidence = (record: AnalysisRecord) => {
     setSelectedRecord(null);
-    if (record.source === "m3-report" && record.reportVersionId && record.findingRef) {
-      navigate(
-        `/investigation/${encodeURIComponent(investigationId)}/report/evidence`
-          + `?report=${encodeURIComponent(record.reportVersionId)}`
-          + `&finding_ref=${encodeURIComponent(record.findingRef)}&view=evidence`
-      );
+    if (record.source === "m3-report") {
+      const path = reportPostDetailPath(investigationId, record);
+      if (path) navigate(path);
       return;
     }
     if (!record.taskId || !record.outputId) return;
@@ -494,10 +491,10 @@ export function AgentCollaborationCard({
                     type="button"
                     className="analysis-evidence-toggle"
                     onClick={() => setSelectedRecord(record)}
-                    disabled={authoritative && !record.outputId && record.keyEvidence.length === 0}
+                    disabled={authoritative && !record.outputId && !(record.reportVersionId && record.postRef) && record.keyEvidence.length === 0}
                   >
                     <FileSearch size={14} />
-                    {authoritative && !record.outputId && record.keyEvidence.length === 0
+                    {authoritative && !record.outputId && !(record.reportVersionId && record.postRef) && record.keyEvidence.length === 0
                       ? "审核详情暂不可用"
                       : "查看研判依据"}
                   </button>

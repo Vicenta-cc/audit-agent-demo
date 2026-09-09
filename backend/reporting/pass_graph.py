@@ -65,11 +65,15 @@ def validate_pass_snapshot(snapshot):
 
 
 class PassReportGraph(IntegrationReportGraph):
+    template_kind = "all_pass"
+    template_version = PASS_TEMPLATE_VERSION
+    _validate_snapshot = staticmethod(validate_pass_snapshot)
+
     def __init__(self, *, source, store=None, model_client=None, checkpoint_path=None):
         # No provider is constructed or invoked. Generation metadata records the
         # template rather than attributing these deterministic sections to Qwen.
         super().__init__(source=source, store=store, checkpoint_path=checkpoint_path,
-                         model_client=SimpleNamespace(model="deterministic", prompt_version=PASS_TEMPLATE_VERSION))
+                         model_client=SimpleNamespace(model="deterministic", prompt_version=self.template_version))
 
     def _build_graph(self):
         graph = StateGraph(ReportGraphState)
@@ -94,7 +98,7 @@ class PassReportGraph(IntegrationReportGraph):
                 "validate_pass_snapshot", ["all-pass reporting requires a completed audit task"]
             )
         snapshot = self._snapshot(state["report_version_id"])
-        comments = validate_pass_snapshot(snapshot)
+        comments = self._validate_snapshot(snapshot)
         count = len(snapshot.posts)
         sample_count = min(count, SAMPLE_LIMIT)
         summary = f"本次共完成 {count} 条帖子的审核，全部判定为通过，风险等级为无风险。未在本次已审核样本中检出所用审核规则覆盖的风险。"
@@ -135,7 +139,7 @@ class PassReportGraph(IntegrationReportGraph):
 
     def _assemble_pass_report(self, state):
         snapshot = self._snapshot(state["report_version_id"])
-        comments = validate_pass_snapshot(snapshot)
+        comments = self._validate_snapshot(snapshot)
         result = super()._assemble_report(state)
         account_model = {
             "projection_hash": snapshot.snapshot_hash,
@@ -148,8 +152,8 @@ class PassReportGraph(IntegrationReportGraph):
             sections=state["section_drafts"], account_projection=account_model,
         )
         document["schema_version"] = STRUCTURED_REPORT_SCHEMA_VERSION
-        document["template_kind"] = "all_pass"
-        document["template_version"] = PASS_TEMPLATE_VERSION
+        document["template_kind"] = self.template_kind
+        document["template_version"] = self.template_version
         document["report_metadata"]["investigation_scope"] = SCOPE
         document.pop("provenance", None)
         document.pop("account_entries", None)
@@ -184,7 +188,7 @@ class PassReportGraph(IntegrationReportGraph):
 
     def _publish_report_version(self, state):
         # Recheck the frozen source on resume, before making a report public.
-        validate_pass_snapshot(self._snapshot(state["report_version_id"]))
+        self._validate_snapshot(self._snapshot(state["report_version_id"]))
         body = state["assembled_report"]["body_json"]
         validate_structured_report_document(body["report_document"], account_model=body["account_model"])
         return super()._publish_report_version(state)

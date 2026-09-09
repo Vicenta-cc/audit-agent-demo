@@ -27,9 +27,9 @@ python scripts/preview_pass_report.py \
 
 ## 集成边界
 
-本次实现打通“已有审核结果 → 全 pass 报告生成/发布 → 前端正文和附录”。对话确认后抓取、审核完成后自动触发报告、会话绑定及状态回传仍属于后续流程整合，不能把历史样本预览当作新抓取的完整演示。
+原模板提交 `f7d6a40` 打通“已有审核结果 → 全 pass 报告生成/发布 → 前端正文和附录”，不含调查 worker 自动触发。当前分支在 `47b83b6` 后补全了自动触发、会话绑定、状态回传及详情跳转，见 [报告闭环补全记录](M3_REPORT_COMPLETION_20260909.md)。历史样本预览仍不能当作新抓取的完整演示。
 
-当前工作树为 `codex/report-pass-template`，基于共同冻结基线 `7c32921`。此前的 reject 聚类修复 `1dbde3f` 是另一项独立变更，最终整合时需同时带入；本分支没有修改 Deep-link、T6-A 或 authoritative 工作树。
+原模板分支为 `codex/report-pass-template`，基于共同冻结基线 `7c32921`。当前 `codex/m3-prompt-300-frozen-baseline` 已迁入 `1dbde3f` 的 reject 聚类修复和 `3854674` 的报告整合差异；没有修改原模板、Deep-link、T6-A 或 authoritative 工作树。
 
 ## 验证
 

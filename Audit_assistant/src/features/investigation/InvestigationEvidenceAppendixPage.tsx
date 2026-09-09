@@ -178,6 +178,7 @@ export function InvestigationEvidenceAppendixPage() {
   const view: AppendixView = isAppendixView(requestedView) ? requestedView : "posts";
   const findingRef = view === "standalone" ? "" : searchParams.get("finding_ref") || "";
   const explicitReportVersion = searchParams.get("report") || "";
+  const requestedPostRef = searchParams.get("post_ref") || "";
   const [reportVersionId, setReportVersionId] = useState("");
   const [report, setReport] = useState<ReportPresentationProjection | null>(null);
   const [page, setPage] = useState<ReportAppendixPage | null>(null);
@@ -187,6 +188,10 @@ export function InvestigationEvidenceAppendixPage() {
   const [tocOpen, setTocOpen] = useState(false);
   const [postRef, setPostRef] = useState("");
   const copy = viewCopy[view];
+
+  useEffect(() => {
+    if (reportVersionId) setPostRef(requestedPostRef);
+  }, [reportVersionId, requestedPostRef]);
 
   useEffect(() => {
     let active = true;

@@ -144,7 +144,7 @@ class R31PresentationProjectionRealReportTest(unittest.TestCase):
                 "帖子级审核发现",
             ):
                 self.assertIn(translated, summary)
-            self.assertNotIn("复审", summary)
+            self.assertIn("复审", summary)
             self.assertNotIn("需人工核验", summary)
             for source_term in ("pass", "review", "none", "low", "medium", "high", "Evidence", "Finding"):
                 self.assertNotIn(source_term, summary)

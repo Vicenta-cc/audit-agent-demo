@@ -47,6 +47,7 @@ type DrawerState =
 
 const decisionLabels: Record<string, string> = {
   pass: "通过",
+  review: "复审",
   reject: "拒绝"
 };
 
@@ -294,7 +295,7 @@ function ReportSection({
         <div className="r31-table-wrap">
           <table className="r31-stat-table">
             <tbody>
-              <tr><th>审核决定</th><td>通过 {displayNumber(statistics.decision.pass)}</td><td colSpan={2}>拒绝 {displayNumber(statistics.decision.reject)}</td></tr>
+              <tr><th>审核决定</th><td>通过 {displayNumber(statistics.decision.pass)}</td><td>复审 {displayNumber(statistics.decision.review)}</td><td>拒绝 {displayNumber(statistics.decision.reject)}</td></tr>
               <tr><th>风险等级</th><td>高风险 {displayNumber(statistics.risk_level.high)}</td><td>中风险 {displayNumber(statistics.risk_level.medium)} · 低风险 {displayNumber(statistics.risk_level.low)}</td><td>无风险 {displayNumber(statistics.risk_level.none)}</td></tr>
               <tr><th>评论审核</th><td colSpan={2}>已完成独立审核评论 {displayNumber(statistics.independently_reviewed_comments)}</td><td>评论自身风险 {displayNumber(statistics.comment_own_risk)}</td></tr>
               <tr><th>审核材料</th><td>直接研判依据 {displayNumber(statistics.evidence.direct)}</td><td>辅助材料 {displayNumber(statistics.evidence.indirect)}</td><td>边界材料 {displayNumber(statistics.evidence.counter)}</td></tr>
