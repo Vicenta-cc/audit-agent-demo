@@ -134,7 +134,10 @@ export interface ConfirmationPreview {
   };
   ruleset_revision: RuleSetRevisionSummary | null;
   temporary_ruleset?: TemporaryRuleSetJudgement | null;
-  max_notes: 1;
+  max_notes: number;
+  max_posts_per_keyword?: number;
+  max_comments_per_post?: number;
+  get_sub_comment?: boolean;
   blockers: InvestigationBlocker[];
   can_confirm: boolean;
 }

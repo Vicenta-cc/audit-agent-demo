@@ -11,6 +11,7 @@ from backend.audit_agent.audit_policy_store import (
     TaskAuditConfigRevisionStore,
 )
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+from backend.audit_agent.config import settings
 from backend.audit_agent.creator_url import validate_creator_url
 from backend.audit_agent.ingestion import AuditResultStore, IngestionStore
 from backend.audit_agent.job_store import JobStore
@@ -640,10 +641,12 @@ class AuditPipelineExecutionAdapter:
     def validate_m3_configuration(
         self, configuration: dict[str, Any]
     ) -> None:
-        if int(configuration.get("max_notes") or 0) != 1:
-            raise RuntimeError("M3 execution requires max_notes=1")
+        if not 1 <= int(configuration.get("max_notes") or 0) <= settings.m3_posts_per_keyword:
+            raise ValueError("M3 execution exceeds this backend's per-keyword limit")
+        if not 1 <= int(configuration.get("analyze_limit") or 0) <= settings.m3_analyze_limit:
+            raise ValueError("M3 execution exceeds this backend's analysis limit")
         if int(configuration.get("max_concurrency") or 0) != 1:
-            raise RuntimeError("M3 execution requires max_concurrency=1")
+            raise ValueError("M3 execution requires max_concurrency=1")
         account_id = str(configuration.get("crawler_account_id") or "").strip()
         if not account_id:
             raise CrawlerAccountAuthenticationRequiredError(

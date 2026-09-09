@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import fcntl
 import json
 import os
 import shutil
@@ -106,7 +107,7 @@ class MediaCrawlerAdapter:
             command=command,
             save_root=save_root,
             platform=platform,
-            max_notes=max_notes,
+            max_notes=max_notes * len([term for term in keyword.split(",") if term.strip()]),
             progress_callback=progress_callback,
             content_callback=content_callback,
             stop_checker=stop_checker,
@@ -187,6 +188,31 @@ class MediaCrawlerAdapter:
         content_callback: ContentCallback | None,
         stop_checker: StopChecker | None = None,
         auth_state: dict | None = None,
+        started_callback: StartedCallback | None = None,
+    ) -> CrawlOutput:
+        # Both local backends use the same MediaCrawler browser profile. Serialize
+        # across worker processes as well as the existing in-process pipeline lock.
+        with (self.media_crawler_dir / '.xhs-audit-crawler.lock').open('a') as lock:
+            while True:
+                if stop_checker and stop_checker():
+                    raise RuntimeError('采集任务在等待采集服务时已停止')
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    sleep(0.5)
+            try:
+                return self._run_command_locked(
+                    command, save_root, platform, max_notes, progress_callback,
+                    content_callback, stop_checker, auth_state, started_callback,
+                )
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+    def _run_command_locked(
+        self, command: list[str], save_root: Path, platform: str, max_notes: int,
+        progress_callback: ProgressCallback | None, content_callback: ContentCallback | None,
+        stop_checker: StopChecker | None = None, auth_state: dict | None = None,
         started_callback: StartedCallback | None = None,
     ) -> CrawlOutput:
         save_root.mkdir(parents=True, exist_ok=True)

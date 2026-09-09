@@ -108,8 +108,14 @@ export function TaskConfirmationCard({
             </div>
             <div className="task-final-field">
               <span>采集数量</span>
-              <strong>本次选择 {preview.max_notes} 条进入研判</strong>
+              <strong>本次最多选择 {preview.max_notes} 条进入研判</strong>
             </div>
+            {preview.max_posts_per_keyword !== undefined ? (
+              <div className="task-final-field">
+                <span>采集范围</span>
+                <strong>每词最多 {preview.max_posts_per_keyword} 条；每帖最多 {preview.max_comments_per_post} 条评论；{preview.get_sub_comment ? "含楼中楼" : "仅一级评论"}</strong>
+              </div>
+            ) : null}
           </>
         ) : null}
       </div>

@@ -2639,3 +2639,50 @@ def test_t1_draft_card_does_not_recommend_provenance_as_runtime_lexicon(creation
     assert artifact["suggestion"]["recall_lexicons"] == []
     assert artifact["suggestion"]["search_terms"] == arguments["configuration"]["investigation"]["recall_plan"]["terms"]
     assert artifact["confirmation_preview"]["recall_plan"]["source_lexicon_ids"] == ["gambling"]
+
+
+def test_production_limits_are_previewed_and_frozen_without_changing_demo_defaults(creation_stack, monkeypatch):
+    from backend.audit_agent.config import settings
+    from backend.investigation_creation.contracts import ConfirmedConfigurationSnapshotV4
+    stack = creation_stack
+    options = stack['app_service'].query_investigation_options(
+        QueryInvestigationOptions(domain_hint='博彩', mode='search', include_lexicon_terms_for_ids=['gambling']),
+        principal=Principal('principal-a'),
+    ).model_dump(mode='json')
+    arguments = _search_draft_from_options([options])
+    response = stack['client'].post('/api/investigation-drafts', json=arguments)
+    assert response.status_code == 201, response.text
+    draft = response.json()
+    endpoint = '/api/investigation-drafts/' + draft['id']
+    demo = stack['client'].get(endpoint + '/confirmation-preview').json()
+    assert demo['max_notes'] == 1
+    monkeypatch.setattr(settings, 'm3_posts_per_keyword', 20)
+    monkeypatch.setattr(settings, 'm3_analyze_limit', 340)
+    monkeypatch.setattr(settings, 'm3_comments_per_post', 1000)
+    preview = stack['client'].get(endpoint + '/confirmation-preview').json()
+    assert preview['max_notes'] == min(340, len(preview['resolved_search_terms']) * 20)
+    assert preview['max_posts_per_keyword'] == 20
+    assert preview['max_comments_per_post'] == 1000
+    assert preview['get_sub_comment'] is False
+    queued = stack['client'].post(endpoint + '/confirm-and-queue', json={'expected_revision': draft['current_revision'], 'confirmed': True}, headers={'Idempotency-Key': 'production-limits'})
+    assert queued.status_code == 202, queued.text
+    run = stack['creation_store'].get_run(queued.json()['run_id'], principal='principal-a')
+    snapshot = ConfirmedConfigurationSnapshotV4.model_validate(run.confirmed_configuration)
+    assert snapshot.max_notes == snapshot.execution.max_notes == 20
+    assert snapshot.execution.analyze_limit == 340
+    assert snapshot.execution.max_comments == 1000
+    assert snapshot.execution.max_concurrency == 1
+    assert snapshot.execution.get_sub_comment is False
+    from backend.investigation_creation.adapters import AuditPipelineExecutionAdapter
+    adapter = AuditPipelineExecutionAdapter.__new__(AuditPipelineExecutionAdapter)
+    adapter.crawler_account_store = CrawlerAccountStore(stack['resource_db'])
+    adapter._provider_validator = lambda configuration: None
+    adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
+    monkeypatch.setattr(settings, 'm3_posts_per_keyword', 1)
+    monkeypatch.setattr(settings, 'm3_analyze_limit', 1)
+    with pytest.raises(ValueError, match='per-keyword limit'):
+        adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
+    changed = snapshot.model_dump(mode='json')
+    changed['max_notes'] = 1
+    with pytest.raises(ValidationError):
+        ConfirmedConfigurationSnapshotV4.model_validate(changed)

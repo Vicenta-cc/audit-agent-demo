@@ -390,8 +390,7 @@ class InvestigationCreationService:
         configuration_hash: str,
         confirmation_resolution: dict[str, Any] | None,
     ) -> InvestigationRun:
-        execution_overrides = {"max_notes": 1}
-        resolved = resolved_model.model_copy(update=execution_overrides).model_dump(mode="json")
+        resolved = resolved_model.model_dump(mode="json")
         if confirmation_resolution is not None:
             confirmation_resolution["execution"] = resolved
         fingerprint = self.store.confirmation_fingerprint(

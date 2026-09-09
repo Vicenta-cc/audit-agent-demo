@@ -474,7 +474,7 @@ class InvestigationWorker:
                 error_code=exc.code,
                 error_message=str(exc),
             )
-        except ValidationError as exc:
+        except (ValidationError, ValueError) as exc:
             return self.store.mark_failed(
                 run.id,
                 run.claim_token,

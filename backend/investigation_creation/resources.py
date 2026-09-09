@@ -7,6 +7,7 @@ import sqlite3
 from typing import Any, Iterator
 import unicodedata
 
+from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
 from backend.audit_agent.crawler_adapter import SUPPORTED_PLATFORMS
@@ -366,6 +367,11 @@ class InvestigationResourceService:
             resolved_search_terms=resolved_terms,
             creator_url=creator_url,
             recall_plan=recall_preview,
+            max_notes=min(settings.m3_analyze_limit,
+                          settings.m3_posts_per_keyword * max(1, len(resolved_terms))),
+            max_posts_per_keyword=settings.m3_posts_per_keyword,
+            max_comments_per_post=settings.m3_comments_per_post,
+            get_sub_comment=False,
             ruleset_revision=(
                 resolution.ruleset_revision if resolution is not None else None
             ),
@@ -673,7 +679,7 @@ class InvestigationResourceService:
                     == "existing_lexicon"
                     else configuration.investigation.recall_plan.terms
                 ),
-                "max_notes": 1,
+                "max_notes": settings.m3_posts_per_keyword,
                 "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
             }
@@ -683,16 +689,18 @@ class InvestigationResourceService:
                 "keyword_source": "keyword",
                 "keywords": [],
                 "creator_url": configuration.investigation.creator_url,
-                "max_notes": 1,
+                "max_notes": settings.m3_posts_per_keyword,
                 "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
             }
+        collection.update(max_comments=settings.m3_comments_per_post,
+                          max_concurrency=1, get_sub_comment=False)
         collection["display_name"] = draft.title
         execution_input = {
             "platform": configuration.platform.value,
             "collection": collection,
             "analysis": {
-                "analyze_limit": 1,
+                "analyze_limit": settings.m3_analyze_limit,
             },
         }
         recall_library_ids = []
@@ -722,8 +730,8 @@ class InvestigationResourceService:
         )
         resolved.update(
             {
-                "max_notes": 1,
-                "analyze_limit": 1,
+                "max_notes": settings.m3_posts_per_keyword,
+                "analyze_limit": settings.m3_analyze_limit,
                 "crawler_account_id": selected_account["id"],
                 "crawler_account_display_name": selected_account["display_name"],
                 "crawler_account_confirmed_state": CrawlerAccountConfirmedState(

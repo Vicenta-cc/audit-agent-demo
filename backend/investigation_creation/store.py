@@ -1007,7 +1007,7 @@ class InvestigationCreationStore:
                             "title": str(draft["title"]),
                             "objective": str(draft["objective"]),
                             **resolution.model_dump(mode="json"),
-                            "max_notes": 1,
+                            "max_notes": resolution.execution.max_notes,
                             "confirmed_by": principal,
                             "confirmed_at": now,
                         }

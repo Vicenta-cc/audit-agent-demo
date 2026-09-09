@@ -618,7 +618,10 @@ class ConfirmationPreview(StrictModel):
     recall_plan: RecallPlanPreview
     ruleset_revision: RuleSetRevisionSummary | None = None
     temporary_ruleset: TemporaryRuleSetJudgement | None = None
-    max_notes: Literal[1] = 1
+    max_notes: StrictInt = Field(default=1, ge=1)
+    max_posts_per_keyword: StrictInt = Field(default=1, ge=1)
+    max_comments_per_post: StrictInt = Field(default=300, ge=0)
+    get_sub_comment: StrictBool = False
     blockers: list[InvestigationBlocker] = Field(default_factory=list)
     can_confirm: StrictBool
 
@@ -904,7 +907,7 @@ class ConfirmedConfigurationSnapshotV4(FrozenRuleSetSource):
     resolved_search_terms: list[StrictStr] = Field(default_factory=list)
     creator_url: StrictStr = ""
     recall_plan: ConfirmedRecallPlanSnapshot | None = None
-    max_notes: Literal[1]
+    max_notes: StrictInt = Field(ge=1)
     execution: ResolvedExecutionConfiguration
     config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
     confirmed_by: StrictStr
@@ -941,8 +944,8 @@ class ConfirmedConfigurationSnapshotV4(FrozenRuleSetSource):
             )
         ):
             raise ValueError("confirmed snapshot identity fields must not be blank")
-        if self.execution.max_notes != 1:
-            raise ValueError("confirmed execution max_notes must be 1")
+        if self.execution.max_notes != self.max_notes:
+            raise ValueError("confirmed max_notes must match frozen execution")
         return self
 
 

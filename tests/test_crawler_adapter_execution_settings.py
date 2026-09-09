@@ -1,5 +1,7 @@
 import base64
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,6 +32,31 @@ class RecordingAdapter(MediaCrawlerAdapter):
 
 
 class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
+    def test_shared_crawler_lock_prevents_a_second_process_from_starting(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            code = "import fcntl,sys; f=open(sys.argv[1],'a'); fcntl.flock(f,fcntl.LOCK_EX); print('locked',flush=True); sys.stdin.read()"
+            child = subprocess.Popen([sys.executable, '-c', code, str(Path(temp_dir) / '.xhs-audit-crawler.lock')], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+            try:
+                self.assertEqual(child.stdout.readline().strip(), 'locked')
+                adapter = MediaCrawlerAdapter(Path(temp_dir))
+                with patch.object(adapter, '_run_command_locked') as run, patch('backend.audit_agent.crawler_adapter.sleep'):
+                    with self.assertRaisesRegex(RuntimeError, '已停止'):
+                        adapter._run_command(command=[], save_root=Path(temp_dir) / 'output', platform='dy', max_notes=20,
+                                             progress_callback=None, content_callback=None,
+                                             stop_checker=iter([False, True]).__next__)
+                    run.assert_not_called()
+            finally:
+                child.communicate(timeout=5)
+
+    def test_keyword_limit_remains_per_keyword_while_progress_counts_all_keywords(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = RecordingAdapter(Path(temp_dir))
+            result = adapter.run_search(platform='dy', keyword='词一,词二', start_page=1, max_notes=20,
+                                        max_comments=1000, max_concurrency=1, max_items_per_minute=3,
+                                        get_sub_comment=False, save_root=Path(temp_dir) / 'output')
+            self.assertEqual(result.command[result.command.index('--crawler_max_notes_count') + 1], '20')
+            self.assertEqual(adapter.recorded['max_notes'], 40)
+
     def test_command_contains_rate_and_concurrency_but_not_login_state(self):
         auth_state = {
             "cookies": [{"name": "session", "value": "plain-cookie-secret"}],

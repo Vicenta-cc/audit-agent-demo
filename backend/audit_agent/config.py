@@ -135,6 +135,10 @@ class Settings:
     auto_analyze_crawled_content = os.getenv("AUTO_ANALYZE_CRAWLED_CONTENT", "true").lower() == "true"
     analysis_media_scope = os.getenv("ANALYSIS_MEDIA_SCOPE", "all").strip().lower()
     stream_crawl_analysis = os.getenv("STREAM_CRAWL_ANALYSIS", "true").lower() == "true"
+    # Separate deployments retain the one-post demo unless explicitly configured.
+    m3_posts_per_keyword = max(1, int(os.getenv("M3_POSTS_PER_KEYWORD", "1")))
+    m3_analyze_limit = max(1, int(os.getenv("M3_ANALYZE_LIMIT", "1")))
+    m3_comments_per_post = max(0, int(os.getenv("M3_COMMENTS_PER_POST", "300")))
     crawler_max_concurrency = int(os.getenv("CRAWLER_MAX_CONCURRENCY", "3"))
     crawler_sleep_seconds = float(os.getenv("CRAWLER_SLEEP_SECONDS", "6"))
     crawler_login_timeout_seconds = max(
