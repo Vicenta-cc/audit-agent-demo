@@ -3,13 +3,20 @@ from __future__ import annotations
 import base64
 import io
 import json
+import logging
 import mimetypes
+import time
 from pathlib import Path
+from typing import Callable, TypeVar
 
 import requests
 
 from .config import settings
 from .remote_inference import RemoteInferenceClient
+
+
+logger = logging.getLogger(__name__)
+T = TypeVar("T")
 
 
 class ChatCompletionText(str):
@@ -21,6 +28,10 @@ class ChatCompletionText(str):
 
 class QwenProviderError(RuntimeError):
     pass
+
+
+class QwenTimeoutError(QwenProviderError):
+    """The request and its one timeout retry both timed out."""
 
 
 class QwenClient:
@@ -158,13 +169,15 @@ class QwenClient:
             if not self.remote.enabled:
                 raise RuntimeError("USE_REMOTE_LLM=true but REMOTE_INFERENCE_BASE_URL is empty")
             try:
-                return self.remote.audit_text(
+                return self._with_timeout_retry(lambda: self.remote.audit_text(
                     prompt,
                     max_tokens=max_tokens,
                     model=model,
                     enable_thinking=enable_thinking,
                     request_timeout=request_timeout,
-                )
+                ))
+            except QwenTimeoutError:
+                raise
             except Exception as exc:
                 raise self._provider_error("text Provider request failed", exc) from exc
 
@@ -186,7 +199,7 @@ class QwenClient:
 
     def _post_chat(self, payload: dict, *, request_timeout: int | float | None = None) -> str:
         try:
-            response = requests.post(
+            response = self._with_timeout_retry(lambda: requests.post(
                 self.chat_url,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
@@ -194,7 +207,9 @@ class QwenClient:
                 },
                 json=payload,
                 timeout=request_timeout or settings.request_timeout,
-            )
+            ))
+        except QwenTimeoutError:
+            raise
         except Exception as exc:
             raise self._provider_error("Provider request failed", exc) from exc
         try:
@@ -222,6 +237,24 @@ class QwenClient:
         }
         metadata = {key: value for key, value in metadata.items() if value is not None}
         return ChatCompletionText(choice["message"]["content"], metadata)
+
+    def _with_timeout_retry(self, request: Callable[[], T]) -> T:
+        for attempt in (1, 2):
+            try:
+                result = request()
+            except requests.Timeout as exc:
+                if attempt == 2:
+                    self.provider_failure = "Provider request timed out after one retry"
+                    logger.error("Qwen request timed out on attempt 2/2; retry exhausted")
+                    raise QwenTimeoutError(self.provider_failure) from exc
+                # Do not log prompts, credentials, URLs, or raw exception messages.
+                logger.warning("Qwen request timed out on attempt 1/2; retrying once")
+                time.sleep(1)
+            else:
+                if attempt == 2:
+                    logger.info("Qwen request succeeded on timeout retry 2/2")
+                return result
+        raise AssertionError("unreachable")
 
     def _provider_error(self, message: str, exc: BaseException) -> QwenProviderError:
         self.provider_failure = message

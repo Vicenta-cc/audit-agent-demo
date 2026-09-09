@@ -1,0 +1,24 @@
+{
+  "ruleset_id": "ruleset.ethnic-content-review.k-trial.v1",
+  "files": {
+    "ruleset.json": "3823ad8eda065ce813dfae77797388226e39fc0f2a672fa7badd4b8cdc0cfab0",
+    "prompt-profile.json": "e72d7e5357002d6d777259a36f0e3dc95bb23864b57825677e53fe477ef561a3",
+    "comment-template.txt": "0e885271ac8f4d2a1094f739f27d9f261f9254248c56bbecb4792111e92ca7dc"
+  },
+  "inference_settings": {
+    "comment_audit": {
+      "model": "qwen3.7-plus",
+      "enable_thinking": true,
+      "max_tokens": 6000,
+      "request_timeout": 120
+    },
+    "fusion_audit": {
+      "model": "qwen3.7-plus",
+      "enable_thinking": true,
+      "max_tokens": 3000,
+      "request_timeout": 120
+    }
+  },
+  "status": "experimental_trial",
+  "source_prompt_version": "experimental-d6df7ac781f5d2ff"
+}

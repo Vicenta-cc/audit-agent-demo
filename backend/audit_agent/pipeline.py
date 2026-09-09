@@ -31,7 +31,7 @@ from .knowledge_packages import get_default_knowledge_package
 from .models import AuditSubject
 from .ocr_processor import VideoOCRTracker
 from .prompts import get_prompt_set
-from .qwen_client import QwenClient
+from .qwen_client import QwenClient, QwenTimeoutError
 from .rule_compiler import DEFAULT_THRESHOLDS, compact_library_policy
 from .translation import TranslationProcessor
 from .video_processor import DemoAudioProcessor, DemoFrameExtractor
@@ -2546,25 +2546,41 @@ class AuditPipeline:
             return "review"
         return "pass"
 
+    def _text_inference_options(self, stage: str) -> dict:
+        """Use the verified task snapshot; historical jobs retain their defaults."""
+        if stage == "comment_audit":
+            options = {"max_tokens": settings.comment_audit_max_tokens,
+                       "model": settings.qwen_text_model, "enable_thinking": False}
+        elif stage == "fusion_audit":
+            options = {"max_tokens": settings.fusion_max_tokens, "enable_thinking": False,
+                       "request_timeout": max(1, settings.fusion_request_timeout)}
+        else:
+            raise ValueError("unsupported text inference stage")
+        profile = getattr(self, "prompt_profile_snapshot", {}) or {}
+        overrides = profile.get("inference_settings", {}).get(stage, {})
+        for key in ("model", "max_tokens", "enable_thinking", "request_timeout"):
+            if key in overrides:
+                options[key] = overrides[key]
+        return options
+
     def _run_fusion_audit(self, note_id: str, prompt: str, *, contract_validator=None) -> dict:
         authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
         retries = max(0, settings.fusion_timeout_retries)
         attempts = retries + 1
-        timeout = max(1, settings.fusion_request_timeout)
+        inference_options = self._text_inference_options("fusion_audit")
+        timeout = inference_options["request_timeout"]
         for attempt in range(1, attempts + 1):
             job_store.log(
                 self.job_id,
                 f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 开始，"
-                f"prompt_chars={len(prompt)}，max_tokens={settings.fusion_max_tokens}，"
-                f"thinking=off，timeout={timeout}s",
+                f"prompt_chars={len(prompt)}，max_tokens={inference_options['max_tokens']}，"
+                f"thinking={'on' if inference_options['enable_thinking'] else 'off'}，timeout={timeout}s",
             )
             started_at = perf_counter()
             try:
                 audit = self.qwen.audit_text(
                     prompt,
-                    max_tokens=settings.fusion_max_tokens,
-                    enable_thinking=False,
-                    request_timeout=timeout,
+                    **inference_options,
                 )
             except Exception as exc:
                 elapsed = perf_counter() - started_at
@@ -2579,7 +2595,7 @@ class AuditPipeline:
                             "text Provider request failed"
                         ) from exc
                     raise
-                if attempt < attempts:
+                if attempt < attempts and not isinstance(exc, QwenTimeoutError):
                     job_store.log(
                         self.job_id,
                         f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 超时，"
@@ -2596,7 +2612,7 @@ class AuditPipeline:
                         "text Provider request timed out"
                     ) from exc
                 raise FusionAuditTimeoutError(
-                    f"连续 {attempts} 次调用超时，单次上限 {timeout}s"
+                    f"连续 {2 if isinstance(exc, QwenTimeoutError) else attempts} 次调用超时，单次上限 {timeout}s"
                 ) from exc
 
             try:
@@ -4427,18 +4443,17 @@ class AuditPipeline:
                     if len(request_batches) > 1
                     else ""
                 )
+                inference_options = self._text_inference_options("comment_audit")
                 job_store.log(
                     self.job_id,
                     f"笔记 {subject.note_id}：评论审核批次 {batch_label} 模型调用 {attempt}/2"
-                    f"{sub_batch_label} 开始，thinking=off，评论={len(requested)}",
+                    f"{sub_batch_label} 开始，thinking={'on' if inference_options['enable_thinking'] else 'off'}，评论={len(requested)}",
                 )
                 try:
                     prompt = self._render_comment_audit_prompt(subject, media_summary, requested)
                     raw = self.qwen.audit_text(
                         prompt,
-                        max_tokens=settings.comment_audit_max_tokens,
-                        model=settings.qwen_text_model,
-                        enable_thinking=False,
+                        **inference_options,
                     )
                     raw_response = str(raw.get("raw_response") or "")
                     llm_meta = raw.get("_llm_meta") if isinstance(raw.get("_llm_meta"), dict) else {}
@@ -4460,6 +4475,11 @@ class AuditPipeline:
                     else:
                         current = self._normalize_comment_audit_results(raw, requested)
                         error = "model omitted comment result"
+                except QwenTimeoutError as exc:
+                    # The client already used the one allowed timeout retry.
+                    # Do not turn this into another split-batch compensation round.
+                    job_store.log(self.job_id, "评论审核请求连续两次超时，停止重试")
+                    raise AuditProviderCallError("text Provider request timed out after one retry") from exc
                 except Exception as exc:
                     current = {}
                     error = str(exc)

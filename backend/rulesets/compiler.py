@@ -88,6 +88,8 @@ def compile_ruleset_revision(
         system_template_version=system_template_version,
         compiler_version=compiler_version,
     )
+    from .trial_profiles import apply_trial_profile
+    apply_trial_profile(revision, compiled)
     ruleset_ref = {
         "ruleset_id": str(revision.get("ruleset_id") or ""),
         "revision_id": revision_id,
