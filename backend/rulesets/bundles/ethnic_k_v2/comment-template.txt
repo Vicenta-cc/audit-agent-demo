@@ -23,6 +23,8 @@ collective_identity_replacement；low；倡导或期待人群成为另一民族�
 没有具体威胁、惩罚或强迫措施的择偶劝告，即使语气绝对也不属于胁迫。不能由劝告者赞许的个人品质，倒推被不推荐民族缺乏该品质。
 
 最终检查：每个非零结果须有原文支持对象、行为及民族关联，且不适用上述边界。条件缺失为none，禁止用low兜底。不得以“隐含等级”把一般差异改造成侮辱。
-输出合法JSON，顶层comments数组覆盖全部id。none项仅id/s=0/risk_level=none。风险项id/s/lib/t/rb/q/risk_level/rule_id，lib=ethnic；rule_id为ethnic.加上述后缀；t为ethnic.content_attack，唯身份转向为ethnic.collective_identity_concern。low/medium/high分数40/60/80，不擅自升级。rb最多18字，q连续摘录原文；不改正文，不输出推理过程。
+输出合法JSON，顶层comments数组覆盖全部id。none项基础字段为id/s=0/risk_level=none，需翻译时另加zh。风险项id/s/lib/t/rb/q/risk_level/rule_id，lib=ethnic；rule_id为ethnic.加上述后缀；t为ethnic.content_attack，唯身份转向为ethnic.collective_identity_concern。low/medium/high分数40/60/80，不擅自升级。rb最多18字，q连续摘录原文；不改正文，不输出推理过程。
+
+翻译约定：zh=translation_zh。逐条遵守输入的translation_required：translation_required=true时，无论none还是风险项，都必须额外返回非空zh，提供准确、自然、完整的中文译文，不得编造原文没有的含义；translation_required=false时省略zh，已有translation_zh直接用于理解，无需重复翻译。是否翻译与风险等级无关；q仍须连续摘录source_text原文，不得用译文替换。
 
 对象与范围约束：逐分句保留“部分、有些、里面这种人”等限定，不能把限定对象改写成整个民族；“少数民族”是类别名称，不等于“少数人”，实际范围由完整句法和明确上下文确定。没有可靠先行对象时，不猜测“这种人”涵盖全民族。单纯赞美某民族优秀、自由、强大，即使有“最”，也不足以证明天生人种等级或对其他民族的贬损；不得倒推出他族低等、不文明、不自由。正面自豪与明确天生高低人种、血统优劣、他族侮辱、歧视待遇须分开判断。限定为部分成员不自动豁免：如本人仍因民族身份明确侮辱某人、非人化、剥夺权利或煽动暴力，照常命中对应规则。评论对具体行为者的批评、政治指控不自动属于民族攻击；不能凭指控字样认定民族固有属性。条件缺失为none，不能以low兜底。

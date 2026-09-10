@@ -46,3 +46,17 @@ K2 在图像、视频、评论、融合的规则上下文补充相同边界：�
 同步了使用线程事件的故障隔离测试，明确先发生审核失败，再继续采集后续帖子；新增续跑失败结果禁止落盘/入库、部分失败报告投影回归检查。保留本机 K2 测试与规则，未整目录覆盖交付版；两版无需具有相同提交号，交付版仍为 K1 范围。
 
 本次 162 项测试及 23 项子测试通过，前端类型检查和构建通过（构建显式配置本机网关地址；保留已有 bundle 体积提示）。未调用真实审核模型、未启动或恢复抓取。生产 API 仅在确认无活动 Run 后重载。
+
+## 2026-09-10 K2 评论按需翻译约定修复
+
+基于 `cad3eab`，在 `codex/k2-comment-timeout-diagnostics` 独立修复。K2 固定评论模板此前未声明 `zh`，且要求 none 项仅返回 id/s/risk_level；后台却对 `translation_required=true` 的评论校验译文，导致按旧模板返回的审核结果被判漏项并补试。
+
+现在 none 与风险项均按输入标记决定是否附带 `zh=translation_zh`：true 必须输出非空、忠实的完整中文译文；false 省略 zh，输入已有译文直接复用。风险引用 q 仍摘自原文。同步固定 Prompt 配置、字符数和 bundle 哈希，来源版本为 `ethnic-k2-scope-boundaries-translation-v1`。风险规则、其他阶段 Prompt、翻译触发条件和补试上限保持原样。
+
+新增 8 项回归通过真实 K2 编译和评论处理入口验证：渲染后的固定模板包含翻译约定；中维混合批次仅翻译需要的评论并复用已有译文；none/medium 在首次返回译文、补试返回译文、连续缺译文三种情况下正确保存或失败。补试仅请求未完成项并重新映射短编号，最多一次。旧模板下新增测试为 1 失败、7 通过；修复后以下相关回归共 78 项通过：
+
+```sh
+python -m pytest -q tests/test_k2_comment_translation.py tests/test_ethnic_k_profile.py tests/test_comment_alias_and_failure_isolation.py tests/test_prompt_id_scope.py tests/test_qwen_timeout_retry.py tests/test_review_pipeline.py
+```
+
+本次验证使用临时数据目录和模拟模型响应，未回放真实模型，不能据此判断原失败评论的翻译质量或模型能力。未引入 M3 资源实验、续抓 V2 或其他开发线，未修改运行工作区、数据库或服务。现有任务的冻结 Prompt 不会自动更新；后续将补丁整合到运行代码后，新编译的 K2 执行快照才包含修复，不应原地改写在途任务快照。

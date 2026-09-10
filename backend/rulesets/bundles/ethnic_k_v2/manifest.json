@@ -2,8 +2,8 @@
   "ruleset_id": "ruleset.ethnic-content-review.k-trial.v2",
   "files": {
     "ruleset.json": "6ff38b2d25bb6b7c9fb7bc30d531f4b076eb99841b95bd25a31dc39eb8434e74",
-    "prompt-profile.json": "15181c8313a0ad904d703debac3931f48fcd60b98f8e9f16c6c108d441bdcd72",
-    "comment-template.txt": "d12fb43368a420e65871397fb2b8c55d72a49c97c7b712f2a3b9596e5d705760"
+    "prompt-profile.json": "2ced5a9eb0bd34b66098d023a61bf62519800796b7558ad60d9f6456c7c0fb59",
+    "comment-template.txt": "d9743ac8a2bb446f7eb8873e1af69b444b10a764d0b0947371218730d7ae44ec"
   },
   "inference_settings": {
     "comment_audit": {
@@ -20,5 +20,5 @@
     }
   },
   "status": "experimental_trial",
-  "source_prompt_version": "ethnic-k2-scope-boundaries-candidate"
+  "source_prompt_version": "ethnic-k2-scope-boundaries-translation-v1"
 }
