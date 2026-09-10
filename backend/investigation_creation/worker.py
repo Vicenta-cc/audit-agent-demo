@@ -259,7 +259,8 @@ class InvestigationWorker:
                 error_code="collection_result_unknown",
                 error_message=f"Job has non-final status: {status or 'unknown'}",
             )
-        gate_failure = self._completion_gate_failure(run, state=state)
+        failed_posts = int((state.get("task_stats") or {}).get("failed_analysis_count") or 0)
+        gate_failure = self._completion_gate_failure(run, state=state, allow_failed_posts=failed_posts > 0)
         if gate_failure is not None:
             error_code, error_message = gate_failure
             return self.store.mark_failed(
@@ -268,6 +269,9 @@ class InvestigationWorker:
                 error_code=error_code,
                 error_message=error_message,
             )
+        if failed_posts:
+            # Processing finished with recorded post failures. Do not claim a complete report.
+            return self.store.mark_audit_completed(run.id, run.claim_token)
         run = self.store.mark_report_generating(run.id, run.claim_token)
         return self._finish_report(run, allow_generation=True)
 
@@ -515,6 +519,7 @@ class InvestigationWorker:
         run: InvestigationRun,
         *,
         state: dict[str, Any] | None = None,
+        allow_failed_posts: bool = False,
     ) -> tuple[str, str] | None:
         if not run.job_id:
             return "job_result_missing", "Run has no Job binding."
@@ -532,6 +537,7 @@ class InvestigationWorker:
         pending = int(stats.get("pending_analysis_count") or 0)
         analyzing = int(stats.get("analyzing_count") or 0)
         completed = int(stats.get("completed_analysis_count") or 0)
+        failed = int(stats.get("failed_analysis_count") or 0) if allow_failed_posts else 0
         if ingested < 1:
             return "no_valid_content_selected", "No valid content was selected for analysis."
         if analyze_limit < 1 or ingested > analyze_limit:
@@ -539,12 +545,12 @@ class InvestigationWorker:
                 "ingested_count_exceeds_analyze_limit",
                 f"Job selected {ingested} contents with analyze_limit={analyze_limit}.",
             )
-        if pending or analyzing:
+        if pending != failed or analyzing:
             return (
                 "analysis_not_drained",
                 f"Job has pending={pending}, analyzing={analyzing} before audit completion.",
             )
-        if completed != ingested:
+        if completed + failed != ingested:
             return (
                 "completed_analysis_count_mismatch",
                 f"Job completed {completed} analyses for {ingested} selected contents.",

@@ -14,5 +14,12 @@
   "production_accounts_included": false,
   "hermes_commit": "e624e9fde561e1add9388384012b295fde669ade",
   "hermes_install_mode": "editable pinned git submodule; no core source patch required",
-  "seed_manifest": "demo/seed/manifest.json"
+  "seed_manifest": "demo/seed/manifest.json",
+  "reviewed_code_updates": [
+    {
+      "source_commit": "0704932fe9614fb74969491d1a88a369ec5e4983",
+      "scope": "post failure isolation, comment aliases, run projection; K2 rules and trial profile excluded",
+      "review": "docs/release/ROBUSTNESS_REVIEW.md"
+    }
+  ]
 }

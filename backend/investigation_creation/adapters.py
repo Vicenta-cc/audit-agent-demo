@@ -706,6 +706,8 @@ class InvestigationRunProjector:
                 )
                 crawl_status, analysis_status = self._job_projection(job, task_stats)
         report_status = self._report_status(run)
+        if run.status == RunStatus.AUDIT_COMPLETED and int(task_stats.get("failed_analysis_count") or 0) > 0:
+            report_status = "blocked_by_failed_posts"
         return {
             "crawl_status": crawl_status,
             "analysis_status": analysis_status,
@@ -747,12 +749,16 @@ class InvestigationRunProjector:
 
         if status == "failed":
             analysis_status = "failed"
+        elif control.get("analysis_stop_requested") or status == "analysis_stopped":
+            analysis_status = "stopped"
         elif control.get("analysis_paused") or status == "analysis_paused":
             analysis_status = "paused"
         elif status in {"running", "analysis_running", "crawl_pausing"}:
             analysis_status = "running"
         elif int(stats.get("analyzing_count") or 0) > 0:
             analysis_status = "running"
+        elif status == "completed" and int(stats.get("failed_analysis_count") or 0) > 0:
+            analysis_status = "partial"
         elif int(stats.get("pending_analysis_count") or 0) > 0:
             analysis_status = "pending"
         elif status == "completed":

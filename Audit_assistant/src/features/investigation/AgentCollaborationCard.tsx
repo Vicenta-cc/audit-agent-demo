@@ -367,7 +367,7 @@ export function AgentCollaborationCard({
       <div className="agent-exec-clean-head">
         <span className="agent-exec-title">
           {auditCompleted
-            ? "审核完成"
+            ? runView?.label
             : done
               ? "调查流水线已完成"
             : terminalError
@@ -379,7 +379,7 @@ export function AgentCollaborationCard({
         {auditCompleted ? (
           <span className="agent-exec-status-tag is-done">
             <CheckCircle2 size={13} />
-            审核完成
+            {runView?.label}
           </span>
         ) : done ? (
           <span className="agent-exec-status-tag is-done">
@@ -518,9 +518,9 @@ export function AgentCollaborationCard({
 }
 
 function statusLabel(status: string) {
-  return ({ completed: "完成", pending: "待处理", running: "进行中", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || "处理中";
+  return ({ completed: "完成", partial: "处理完成，部分帖子失败", pending: "待处理", running: "进行中", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || "处理中";
 }
 
 function reportStatusLabel(status: string) {
-  return ({ pending: "待生成", generating: "生成中", published: "已生成", failed: "失败", interrupted: "已中断" } as Record<string, string>)[status] || "待处理";
+  return ({ blocked_by_failed_posts: "部分帖子失败，未生成完整报告", pending: "待生成", generating: "生成中", published: "已生成", failed: "失败", interrupted: "已中断" } as Record<string, string>)[status] || "待处理";
 }

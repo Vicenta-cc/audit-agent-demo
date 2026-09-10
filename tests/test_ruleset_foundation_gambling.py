@@ -1717,7 +1717,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
         self.assertIn("独立判断每条评论", prompt)
         self.assertNotIn("当前阶段：comment_audit", prompt)
         self.assertIn("gambling.comment_organized_participation", prompt)
-        self.assertIn('"comment_id":"c1"', prompt)
+        self.assertIn('"comment_id":"C01"', prompt)
         self.assertEqual(normalized, {})
 
     def test_v2_comment_batches_preserve_order_without_omission_and_cap_at_twenty(self) -> None:
@@ -1781,8 +1781,8 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
             [len(batch) for batch in pipeline.qwen.requested_ids],
             [20, 20, 5],
         )
-        self.assertEqual(requested, expected)
-        self.assertEqual(len(requested), len(set(requested)))
+        self.assertEqual(requested, [f"C{i:02d}" for n in [20, 20, 5] for i in range(1, n + 1)])
+        self.assertEqual(len(requested), len(expected))
         self.assertEqual([item["comment_id"] for item in results], expected)
 
     def test_v2_comment_batches_are_greedily_split_by_total_prompt_budget(self) -> None:
@@ -1853,7 +1853,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
 
         self.assertEqual(
             pipeline.qwen.requested_ids,
-            [["c1"], ["c2"], ["c3"], ["c4"], ["c5"]],
+            [["C01"]] * 5,
         )
         self.assertTrue(
             all(length <= one_comment_budget for length in pipeline.qwen.prompt_lengths)
@@ -1947,7 +1947,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
             results = pipeline._audit_comments(subject, "媒体摘要")
 
         by_id = {item["comment_id"]: item for item in results}
-        self.assertEqual(pipeline.qwen.requested_ids, [["c1"], ["c3"]])
+        self.assertEqual(pipeline.qwen.requested_ids, [["C01"], ["C01"]])
         self.assertEqual(by_id["c1"]["audit_status"], "completed")
         self.assertEqual(by_id["c3"]["audit_status"], "completed")
         self.assertEqual(by_id["c2"]["audit_status"], "failed")
@@ -2679,13 +2679,13 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                 "v1": {
                     "image_evidence": 0,
                     "video_frame_evidence": 532,
-                    "comment_audit": 420,
+                    "comment_audit": 422,
                     "fusion_audit": 1177,
                 },
                 "v2": {
                     "image_evidence": 0,
                     "video_frame_evidence": 532,
-                    "comment_audit": 420,
+                    "comment_audit": 422,
                     "fusion_audit": 943,
                 },
             },
@@ -2710,13 +2710,13 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                 "v1": {
                     "image_evidence": {"fixed": 995, "dynamic": 0, "total": 995},
                     "video_frame_evidence": {"fixed": 2093, "dynamic": 532, "total": 2625},
-                    "comment_audit": {"fixed": 3007, "dynamic": 420, "total": 3427},
+                    "comment_audit": {"fixed": 3007, "dynamic": 422, "total": 3429},
                     "fusion_audit": {"fixed": 2250, "dynamic": 1177, "total": 3427},
                 },
                 "v2": {
                     "image_evidence": {"fixed": 1840, "dynamic": 0, "total": 1840},
                     "video_frame_evidence": {"fixed": 2251, "dynamic": 532, "total": 2783},
-                    "comment_audit": {"fixed": 2152, "dynamic": 420, "total": 2572},
+                    "comment_audit": {"fixed": 2152, "dynamic": 422, "total": 2574},
                     "fusion_audit": {"fixed": 2297, "dynamic": 943, "total": 3240},
                 },
             },

@@ -578,8 +578,8 @@ def test_authoritative_video_asr_failure_never_completes_audit_result(
         mode=mode,
     )
 
-    assert job["status"] == "failed"
-    assert job["error"] == "audit_provider_failed: 审核服务调用失败"
+    assert job["status"] == "completed"
+    assert stats["failed_analysis_count"] == 1
     assert result_page["total"] == 0
     assert stats["completed_analysis_count"] == 0
     assert stats["failed_analysis_count"] == 1
@@ -602,8 +602,8 @@ def test_authoritative_video_audio_extraction_exception_fails_closed(
         ),
     )
 
-    assert job["status"] == "failed"
-    assert job["error"] == "audit_provider_failed: 审核服务调用失败"
+    assert job["status"] == "completed"
+    assert stats["failed_analysis_count"] == 1
     assert result_page["total"] == 0
     assert stats["completed_analysis_count"] == 0
 
@@ -629,8 +629,8 @@ def test_authoritative_video_missing_asr_configuration_is_unavailable(
         ),
     )
 
-    assert job["status"] == "failed"
-    assert job["error"] == "audit_provider_unavailable: 审核服务当前不可用"
+    assert job["status"] == "analysis_stopped"
+    assert stats["failed_analysis_count"] == 1
     assert result_page["total"] == 0
     assert stats["completed_analysis_count"] == 0
 
@@ -657,8 +657,8 @@ def test_visual_configuration_comes_from_selected_content_modality(
         configure_vision=False,
     )
 
-    assert job["status"] == "failed"
-    assert job["error"] == "audit_provider_unavailable: 审核服务当前不可用"
+    assert job["status"] == "analysis_stopped"
+    assert stats["failed_analysis_count"] == 1
     assert result_page["total"] == 0
     assert stats["completed_analysis_count"] == 0
 
@@ -707,8 +707,8 @@ def test_authoritative_visual_provider_failure_never_persists_result(
         ),
     )
 
-    assert job["status"] == "failed"
-    assert job["error"] == "audit_provider_failed: 审核服务调用失败"
+    assert job["status"] == "completed"
+    assert stats["failed_analysis_count"] == 1
     assert result_page["total"] == 0
     assert stats["completed_analysis_count"] == 0
 
@@ -774,8 +774,8 @@ def test_authoritative_image_invalid_response_fails_full_pipeline(
         mode=mode,
     )
 
-    assert job["status"] == "failed"
-    assert job["error"] == "audit_provider_failed: 审核服务调用失败"
+    assert job["status"] == "completed"
+    assert stats["failed_analysis_count"] == 1
     assert stats["completed_analysis_count"] == 0
     assert result_page["total"] == 0
 
@@ -827,8 +827,8 @@ def test_authoritative_image_contract_applies_to_both_visual_provider_routes(
         use_remote_vlm=use_remote_vlm,
     )
 
-    assert job["status"] == "failed"
-    assert job["error"] == "audit_provider_failed: 审核服务调用失败"
+    assert job["status"] == "completed"
+    assert stats["failed_analysis_count"] == 1
     assert stats["completed_analysis_count"] == 0
     assert result_page["total"] == 0
 
@@ -964,9 +964,8 @@ def test_invalid_visual_response_fails_worker_run_without_report_or_session(
     failed = worker.run_once()
 
     assert failed is not None
-    assert failed.status == RunStatus.FAILED
-    assert failed.status != RunStatus.AUDIT_COMPLETED
-    assert failed.error_code == "audit_provider_failed"
+    assert failed.status == RunStatus.AUDIT_COMPLETED
+    assert not failed.error_code
     assert failed.job_id == execution.job_id_for_run(queued.id)
     stats = ingestion.stats_for_task(failed.job_id)
     assert stats["completed_analysis_count"] == 0
@@ -1164,8 +1163,8 @@ def test_authoritative_video_invalid_response_fails_full_pipeline(
         qwen=ExplicitQwenTestDouble(video_response=response),
     )
 
-    assert job["status"] == "failed"
-    assert job["error"] == "audit_provider_failed: 审核服务调用失败"
+    assert job["status"] == "completed"
+    assert stats["failed_analysis_count"] == 1
     assert stats["completed_analysis_count"] == 0
     assert result_page["total"] == 0
 
