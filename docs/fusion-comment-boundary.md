@@ -1,0 +1,15 @@
+# Fusion comment ownership
+
+RuleSet v2 comment judgments remain owned by comment audit. Fusion receives only completed, nonzero-risk comments whose IDs occur in the actual prompt catalog. It selects up to `comment_fusion_top_k` representatives, covering `(risk_level, rule_id)` groups in descending severity before filling spare positions. When groups exceed the limit, severity takes priority; full counts still cover every group. Pass and failed comments never fill unused positions.
+
+The prompt's comment catalog is reduced to these representatives. Prompt budget reductions recheck `top_comments` against the remaining catalog. The saved evidence index and all comment records are unchanged. Counts (total, completed, failed, level and rule counts) come from all saved judgments and survive prompt trimming. Failed records are excluded from pass counts.
+
+For comment evidence, the model may select only an `evidence_id`; the program restores the original rule, grade and reason. Explicitly changed judgment fields or additional exemptions fail validation. Model references must be present in the actual transmitted catalog, including after trimming. Full saved risk-comment judgments are carried into validated evidence even if the model selected only representatives. This native carry-forward is separate from accepting a model reference to an unseen ID. Final per-comment records and statistics come from saved results. Media evidence retains its existing contextual calibration; third-party comment risk still produces review attribution rather than author blame.
+
+On a fusion contract failure, `assets/<post>/fusion_failures/` retains the exact request, parsed response, captured provider response, error and illegal/legal IDs. One subsequent fusion attempt receives the error and allowed IDs. Another failure propagates to the existing task stop policy. The configured outer retry count is capped at one. Existing transport timeout retry behavior is retained.
+
+The K rules, frozen business templates, model, thinking setting and token budgets were not changed. Runtime prompt assembly adds the versioned `risk-only-final-comments-v1` protocol.
+
+Validation on 2026-09-10: 315 tests and 19 subtests passed. Isolated live fusion replay used six saved datasets: historical K judgments for 1,022 comments (51 batches), two overnight completed posts (673 comments), and the failed post (57 comments). All six passed with thinking enabled and original low/medium judgments retained. An additional synthetic 32-risk-comment case retained all judgments while sending 20 representatives. Eight calls across seven cases included one successful corrective retry after the model rewrote a reason; no invalid evidence references occurred. This validates the specific boundary, not indefinite runtime or model stability.
+
+Replay artifacts: main project's `artifacts/diagnostics/fusion-7683517950170985114-20260910/implementation-replay`. Comment-stage model calls were not rerun; the replay consumed complete saved K judgments and used the native post assembly and real fusion provider.

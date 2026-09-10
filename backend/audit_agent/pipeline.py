@@ -9,7 +9,7 @@ import shlex
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from time import perf_counter
+from time import perf_counter, time_ns
 
 import requests
 
@@ -59,7 +59,9 @@ class FusionAuditTimeoutError(RuntimeError):
 
 
 class FusionAuditContractError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, invalid_evidence_ids=()):
+        super().__init__(message)
+        self.invalid_evidence_ids = list(invalid_evidence_ids)
 
 
 class AuditProviderCallError(RuntimeError):
@@ -1597,6 +1599,7 @@ class AuditPipeline:
                 lambda value: self._validate_v2_fusion_contract(
                     self._recover_truncated_fusion_audit(value),
                     evidence_index,
+                    visible_evidence_ids=self._fusion_visible_ids(prompt),
                 )
             ) if self._is_ruleset_v2() else None,
         )
@@ -2233,7 +2236,9 @@ class AuditPipeline:
             })
         return out
 
-    def _validate_v2_fusion_contract(self, audit: dict, evidence_index: dict) -> dict:
+    def _validate_v2_fusion_contract(
+        self, audit: dict, evidence_index: dict, *, visible_evidence_ids: set[str] | None = None,
+    ) -> dict:
         if not isinstance(audit, dict):
             raise FusionAuditContractError("fusion response is not a JSON object")
         required_fields = {
@@ -2265,6 +2270,38 @@ class AuditPipeline:
             for item in evidence_index.get("evidence_catalog") or []
             if isinstance(item, dict) and item.get("evidence_id")
         }
+        selectable_ids = catalog_ids if visible_evidence_ids is None else catalog_ids & visible_evidence_ids
+        comment_decisions = {
+            str(item["evidence_id"]): item
+            for item in evidence_index.get("evidence_catalog") or []
+            if isinstance(item, dict) and str(item.get("evidence_id", "")).startswith("comment:")
+            and item.get("rule_id") and item.get("evidence_risk_level") in {"low", "medium", "high"}
+        }
+        # Resolve ID-only selections from saved judgments. Explicit attempts to
+        # change a judgment still fail; absent fields are not model judgments.
+        audit = {**audit, "evidence_items": [dict(x) if isinstance(x, dict) else x for x in audit["evidence_items"]],
+                 "rule_matches": [dict(x) if isinstance(x, dict) else x for x in audit["rule_matches"]]}
+        for item in audit["evidence_items"]:
+            if not isinstance(item, dict):
+                continue
+            evidence_id = str(item.get("evidence_id") or "").strip()
+            original = comment_decisions.get(evidence_id)
+            if original is None:
+                continue
+            for key in ("rule_id", "evidence_risk_level", "reason"):
+                if key in item and item[key] != original.get(key, ""):
+                    raise FusionAuditContractError(f"fusion cannot change completed comment {key}")
+                item[key] = original.get(key, "")
+            for key, source_key in (("risk_score", "risk_score"), ("risk_level", "evidence_risk_level"), ("risk_basis", "reason")):
+                if key in item and item[key] != original.get(source_key):
+                    raise FusionAuditContractError(f"fusion cannot change completed comment {key}")
+            if item.get("matched_exemption_ids"):
+                raise FusionAuditContractError("fusion cannot exempt a completed risk comment")
+            item.clear()
+            item.update({key: original.get(key, "") for key in ("evidence_id", "rule_id", "evidence_risk_level", "reason")})
+            if not any(evidence_id in (match.get("evidence_ids") or [])
+                       for match in audit["rule_matches"] if isinstance(match, dict)):
+                audit["rule_matches"].append({"rule_id": original["rule_id"], "evidence_ids": [evidence_id]})
         allowed_rule_ids = self._stage_rule_ids("fusion_audit")
         legal_matches: list[dict] = []
         exempted_evidence_ids: set[str] = set()
@@ -2281,10 +2318,14 @@ class AuditPipeline:
             evidence_ids = []
             for value in raw_evidence_ids:
                 evidence_id = str(value or "").strip()
-                if evidence_id not in catalog_ids:
+                if evidence_id not in selectable_ids:
                     raise FusionAuditContractError(
-                        "fusion rule_match references an invalid evidence_id"
+                        "fusion rule_match references an invalid evidence_id",
+                        invalid_evidence_ids=[evidence_id],
                     )
+                original = comment_decisions.get(evidence_id)
+                if original and (rule_id != original["rule_id"] or raw_match.get("matched_exemption_ids")):
+                    raise FusionAuditContractError("fusion cannot change a completed comment rule or exemption")
                 if evidence_id not in evidence_ids:
                     evidence_ids.append(evidence_id)
             if not evidence_ids:
@@ -2315,9 +2356,10 @@ class AuditPipeline:
             if not isinstance(raw_item, dict):
                 raise FusionAuditContractError("fusion evidence_item is not an object")
             evidence_id = str(raw_item.get("evidence_id") or "").strip()
-            if evidence_id not in catalog_ids:
+            if evidence_id not in selectable_ids:
                 raise FusionAuditContractError(
-                    "fusion evidence_item references an invalid evidence_id"
+                    "fusion evidence_item references an invalid evidence_id",
+                    invalid_evidence_ids=[evidence_id],
                 )
             if evidence_id in exempted_evidence_ids:
                 continue
@@ -2338,6 +2380,17 @@ class AuditPipeline:
                 "evidence_risk_level": risk_level,
             })
 
+        # Representative selection never deletes saved comment judgments. These
+        # additions come from the full stored catalog, not from model references.
+        selected_ids = {item["evidence_id"] for item in legal_evidence}
+        for evidence_id, original in comment_decisions.items():
+            if evidence_id not in selected_ids:
+                if original["rule_id"] not in allowed_rule_ids:
+                    raise FusionAuditContractError("completed comment has no valid fusion rule")
+                legal_evidence.append({key: original.get(key, "") for key in (
+                    "evidence_id", "rule_id", "evidence_risk_level", "reason",
+                )})
+                legal_matches.append({"rule_id": original["rule_id"], "evidence_ids": [evidence_id]})
         retained_ids = {item["evidence_id"] for item in legal_evidence}
         legal_matches = [
             {**match, "evidence_ids": [value for value in match["evidence_ids"] if value in retained_ids]}
@@ -2363,6 +2416,10 @@ class AuditPipeline:
             raise FusionAuditContractError("fusion decision and risk level are inconsistent")
         if declares_pass and legal_evidence:
             raise FusionAuditContractError("pass/none retained risk evidence")
+        if comment_decisions and self._risk_level_rank(risk_level) < max(
+            self._risk_level_rank(item["evidence_risk_level"]) for item in comment_decisions.values()
+        ):
+            raise FusionAuditContractError("fusion cannot understate completed comment risk")
         if declares_risk and not legal_evidence:
             if not applied_exemption_ids:
                 raise FusionAuditContractError(
@@ -2565,21 +2622,22 @@ class AuditPipeline:
 
     def _run_fusion_audit(self, note_id: str, prompt: str, *, contract_validator=None) -> dict:
         authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
-        retries = max(0, settings.fusion_timeout_retries)
+        retries = min(1, max(0, settings.fusion_timeout_retries))
         attempts = retries + 1
+        request_prompt = prompt
         inference_options = self._text_inference_options("fusion_audit")
         timeout = inference_options["request_timeout"]
         for attempt in range(1, attempts + 1):
             job_store.log(
                 self.job_id,
                 f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} 开始，"
-                f"prompt_chars={len(prompt)}，max_tokens={inference_options['max_tokens']}，"
+                f"prompt_chars={len(request_prompt)}，max_tokens={inference_options['max_tokens']}，"
                 f"thinking={'on' if inference_options['enable_thinking'] else 'off'}，timeout={timeout}s",
             )
             started_at = perf_counter()
             try:
                 audit = self.qwen.audit_text(
-                    prompt,
+                    request_prompt,
                     **inference_options,
                 )
             except Exception as exc:
@@ -2620,12 +2678,36 @@ class AuditPipeline:
                     audit = contract_validator(audit)
             except FusionAuditContractError as exc:
                 elapsed = perf_counter() - started_at
+                diagnostic_dir = settings.outputs_dir / self.job_id / "assets" / note_id / "fusion_failures"
+                diagnostic_dir.mkdir(parents=True, exist_ok=True)
+                try:
+                    valid_ids = sorted(self._fusion_visible_ids(prompt))
+                except (ValueError, IndexError, TypeError):
+                    valid_ids = []
+                capture = getattr(self.qwen, "last_raw_response", None)
+                raw_response = capture() if callable(capture) else None
+                diagnostic = {
+                    "attempt": attempt, "error": str(exc),
+                    "invalid_evidence_ids": exc.invalid_evidence_ids,
+                    "valid_evidence_ids": valid_ids,
+                    "request_prompt": request_prompt,
+                    "raw_provider_response": raw_response,
+                    "parsed_response": audit,
+                }
+                # Exclusive names retain earlier failures when a post is replayed.
+                with (diagnostic_dir / f"attempt-{attempt}-{time_ns()}.json").open("x", encoding="utf-8") as handle:
+                    json.dump(diagnostic, handle, ensure_ascii=False, indent=2)
                 job_store.log(
                     self.job_id,
                     f"笔记 {note_id}：融合模型调用 {attempt}/{attempts} contract-invalid，"
                     f"耗时={elapsed:.1f}s，error={exc}",
                 )
                 if attempt < attempts:
+                    request_prompt = prompt + "\n上次输出未通过程序校验，请仅纠正合同错误后重新输出 JSON：\n" + json.dumps({
+                        "error": str(exc), "invalid_evidence_ids": exc.invalid_evidence_ids,
+                        "allowed_evidence_ids": valid_ids,
+                        "comment_constraint": "评论只选择合法 evidence_id；等级、规则与依据沿用已有结果，禁止改判。",
+                    }, ensure_ascii=False)
                     continue
                 if authoritative_m3:
                     raise AuditProviderCallError(
@@ -2651,7 +2733,7 @@ class AuditPipeline:
                 audit["_provider_provenance"] = {
                     "provider": provider,
                     "model": str(llm_meta.get("model") or settings.qwen_text_model),
-                    "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+                    "prompt_sha256": hashlib.sha256(request_prompt.encode("utf-8")).hexdigest(),
                     "prompt_version": self.prompt_set.prompt_version,
                 }
             job_store.log(
@@ -4652,6 +4734,14 @@ class AuditPipeline:
         value = json.loads(json.dumps(payload, ensure_ascii=False))
 
         def render() -> str:
+            if kind == "fusion":
+                # Recheck after each budget reduction: the shortened catalog is
+                # the only set of IDs the model can legally select.
+                visible_ids = {item.get("evidence_id") for item in value.get("evidence_catalog") or []}
+                value["top_comments"] = [
+                    item for item in value.get("top_comments") or []
+                    if item.get("evidence_id") in visible_ids
+                ]
             return fixed_prompt + separator + json.dumps(
                 value,
                 ensure_ascii=False,
@@ -4907,6 +4997,11 @@ class AuditPipeline:
         thresholds = self._active_thresholds()
         review_threshold = int(thresholds.get("review", 40))
         completed = [item for item in comments if item.get("audit_status") == "completed"]
+        rule_counts: dict[str, int] = {}
+        for item in completed:
+            rule_id = str(item.get("rule_id") or "")
+            if int(item.get("risk_score") or 0) > 0 and rule_id:
+                rule_counts[rule_id] = rule_counts.get(rule_id, 0) + 1
         return {
             "total": len(comments),
             "completed": len(completed),
@@ -4921,6 +5016,9 @@ class AuditPipeline:
             "review_count": sum(int(item.get("risk_score") or 0) >= review_threshold for item in completed),
             "high_count": sum(item.get("risk_level") == "high" for item in completed),
             "max_score": max((int(item.get("risk_score") or 0) for item in completed), default=0),
+            "level_counts": {level: sum(item.get("risk_level") == level for item in completed)
+                             for level in ("none", "low", "medium", "high")},
+            "rule_counts": rule_counts,
         }
 
     def _compact_audit_policy(self) -> dict:
@@ -5263,6 +5361,24 @@ class AuditPipeline:
             )
         return prompt
 
+    @staticmethod
+    def _fusion_visible_ids(prompt: str) -> set[str]:
+        payload = json.loads(prompt.split("\n输入 JSON：\n", 1)[1])
+        return {str(item["evidence_id"]) for item in payload.get("evidence_catalog") or [] if item.get("evidence_id")}
+
+    @staticmethod
+    def _representative_risk_comments(comments: list[dict], limit: int) -> list[dict]:
+        ordered = sorted(comments, key=lambda item: int(item.get("risk_score") or 0), reverse=True)
+        selected, remainder, groups = [], [], set()
+        for item in ordered:
+            group = (item.get("risk_level"), item.get("rule_id"))
+            if group not in groups:
+                groups.add(group)
+                selected.append(item)
+            else:
+                remainder.append(item)
+        return (selected + remainder)[:max(0, limit)]
+
     def _render_compact_fusion_prompt(
         self,
         subject: AuditSubject,
@@ -5310,14 +5426,32 @@ class AuditPipeline:
             "summary": self._truncate_text(item.get("segment_summary", ""), 120),
             "score": item.get("segment_score", 0),
         } for item in evidence_index.get("segment_reviews") or [])
+        catalog_ids = {entry.get("evidence_id") for entry in catalog}
         completed_comments = [
             item for item in comments if item.get("audit_status") == "completed"
+            and (
+                not self._is_ruleset_v2()
+                or (
+                    int(item.get("risk_score") or 0) > 0
+                    and f"comment:{item.get('comment_id')}" in catalog_ids
+                )
+            )
         ]
         top_comments = sorted(
             completed_comments,
             key=lambda item: int(item.get("risk_score") or 0),
             reverse=True,
         )[: max(0, settings.comment_fusion_top_k)]
+        if self._is_ruleset_v2():
+            top_comments = self._representative_risk_comments(completed_comments, settings.comment_fusion_top_k)
+            representative_ids = {f"comment:{item.get('comment_id')}" for item in top_comments}
+            comment_catalog = {item["evidence_id"]: item for item in compact_catalog
+                               if item.get("evidence_id") in representative_ids}
+            # Only representative risk comments enter either copy of the prompt.
+            # The complete evidence index on disk is not shortened.
+            compact_catalog = [comment_catalog[f"comment:{item.get('comment_id')}"] for item in top_comments] + [
+                item for item in compact_catalog if not str(item.get("evidence_id", "")).startswith("comment:")
+            ]
         scoring_rules = [
             {
                 "rule_id": rule.get("id") or rule.get("rule_id"),
@@ -5369,6 +5503,20 @@ class AuditPipeline:
         )
         if self._is_ruleset_v2() and fusion_template:
             payload["scoring_rules"] = []
+            payload["comment_fusion_contract"] = {
+                "version": "risk-only-final-comments-v1",
+                "instructions": (
+                    "评论判断已完成，融合只归纳和选择代表证据，不复审或新增评论风险。"
+                    "不得改变已保存的评论等级、rule_id、依据或豁免；需要改判须另走显式复审。"
+                    "评论 evidence_items 仅返回 {evidence_id:目录ID}，不写等级或reason；"
+                    "评论 rule_matches 省略，程序从已保存结果恢复全部风险评论的判断与依据。"
+                    "如提供这些字段必须与原值完全相同。上述评论专用协议优先于通用输出示例。"
+                    "comment_stats 是全量初审统计，包含未入选代表样本的评论；失败不算pass。"
+                    "summary 不得将样本数量当全量，也不得否认已存在的风险评论。"
+                    "整帖建议等级不低于评论初审最高等级；评论风险只建议review，不归责主帖作者。"
+                    "其他模态继续结合风险证据与必要背景判断引用、反驳等语境。"
+                ),
+            }
             return self._render_v2_json_prompt(
                 fusion_template,
                 payload,

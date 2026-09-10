@@ -6,6 +6,7 @@ import json
 import logging
 import mimetypes
 import time
+import threading
 from pathlib import Path
 from typing import Callable, TypeVar
 
@@ -41,6 +42,11 @@ class QwenClient:
         self.chat_url = f"{self.base_url}/chat/completions"
         self.remote = RemoteInferenceClient()
         self.provider_failure = ""
+        self._response_capture = threading.local()
+
+    def last_raw_response(self):
+        """Current thread's response for failure diagnostics; never headers."""
+        return getattr(getattr(self, "_response_capture", None), "value", None)
 
     @property
     def enabled(self) -> bool:
@@ -165,6 +171,9 @@ class QwenClient:
         enable_thinking: bool | None = None,
         request_timeout: int | float | None = None,
     ) -> dict:
+        if not hasattr(self, "_response_capture"):
+            self._response_capture = threading.local()
+        self._response_capture.value = None
         if settings.use_remote_llm:
             if not self.remote.enabled:
                 raise RuntimeError("USE_REMOTE_LLM=true but REMOTE_INFERENCE_BASE_URL is empty")
@@ -223,6 +232,8 @@ class QwenClient:
             ) from exc
         try:
             data = response.json()
+            if hasattr(self, "_response_capture"):
+                self._response_capture.value = data
             choice = data["choices"][0]
         except Exception as exc:
             raise self._provider_error("Provider response is invalid", exc) from exc
