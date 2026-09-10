@@ -391,6 +391,10 @@ def test_single_risk_report_uses_existing_risk_tools(tmp_path):
     assert type(svc) is ReportTaskInvestigationToolService
     assert svc.repository.template_kind == "single_risk_post"
     report = call(svc, "read_report", {})
+    assert report["report"]["deterministic_statistics"]["comment_audit_coverage"] == {
+        "total": 2, "completed": 1, "failed": 1, "pending": 0, "unknown": 0,
+        "scope": "stored_snapshot_comments_not_platform_total",
+    }
     post = report["standalone_risk_post_previews"][0]["ref"]
     details = call(svc, "read_posts", {"post_refs": [post]})["post_groups"][0]
     assert details["effective_finding"]["decision"] == "review"
@@ -400,4 +404,23 @@ def test_single_risk_report_uses_existing_risk_tools(tmp_path):
     assert "风险评论" in json.dumps(comments, ensure_ascii=False)
     overview = call(svc, "get_account_overview", {"account_ref": details["author"]["account_ref"]})
     assert overview["statistics"]["published_post_count"] == 1
+    assert hashlib.sha256(store.db_path.read_bytes()).hexdigest() == before
+
+
+def test_single_risk_report_comment_total_is_not_publisher_participation(tmp_path):
+    factory, store = make_report(tmp_path, decision="review", risk="medium", comments=[
+        {"comment_id": str(i), "audit_status": "completed", "risk_level": "none",
+         "content": "普通读者评论", "sec_uid": f"reader-{i}", "nickname": f"读者{i}"}
+        for i in range(3)
+    ])
+    before = hashlib.sha256(store.db_path.read_bytes()).hexdigest()
+    svc = factory()
+    report = call(svc, "read_report", {})
+    coverage = report["report"]["deterministic_statistics"]["comment_audit_coverage"]
+    assert coverage["total"] == coverage["completed"] == 3
+    assert sum(coverage[key] for key in ("completed", "failed", "pending", "unknown")) == 3
+    post = report["standalone_risk_post_previews"][0]["ref"]
+    details = call(svc, "read_posts", {"post_refs": [post]})["post_groups"][0]
+    author = call(svc, "get_account_overview", {"account_ref": details["author"]["account_ref"]})
+    assert author["statistics"]["comment_count"] == 0
     assert hashlib.sha256(store.db_path.read_bytes()).hexdigest() == before

@@ -465,6 +465,32 @@ class ReportTaskInvestigationToolService:
             "Standalone risk items were reviewed but were not assigned to a common InvestigationFinding.",
             "All returned items are previews; use the appropriate detail tool before presenting detail.",
         ]
+        if repository.template_kind == "single_risk_post":
+            # Use the same verified compact snapshot as the published report's
+            # coverage section, rather than per-account participation counts.
+            comments = [
+                comment
+                for payload in repository.snapshot_payloads.values()
+                for comment in (payload.get("comments") or [])
+            ]
+            statuses = [comment.get("audit_status") for comment in comments]
+            data["report"]["deterministic_statistics"]["comment_audit_coverage"] = {
+                "total": len(comments),
+                "completed": statuses.count("completed"),
+                "failed": statuses.count("failed"),
+                "pending": sum(status in {"pending", "queued"} for status in statuses),
+                "unknown": sum(
+                    status not in {"completed", "failed", "pending", "queued"}
+                    for status in statuses
+                ),
+                "scope": "stored_snapshot_comments_not_platform_total",
+            }
+            limitations.append(
+                "Report comment_audit_coverage counts all collected snapshot comments. "
+                "Account comment_count counts only comments authored by that account; "
+                "it is not the report's total or the number of comments under its posts. "
+                "Failed, pending and unknown comments have no completed audit conclusion."
+            )
         if self.account_activity is not None:
             data["account_activity_entries"] = account_entries
             data["account_activity_entry_count"] = len(account_entries)
