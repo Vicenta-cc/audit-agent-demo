@@ -1,0 +1,5 @@
+# Optional canonical Agent runtime for Product Baseline Consolidation R0.
+# The source commit is recorded in docs/product-baseline-r0/HERMES_RUNTIME_MANIFEST.md.
+# This dependency is intentionally separate from the legacy FastAPI compatibility
+# surface so deterministic tests can run without provider credentials.
+hermes-agent @ git+https://github.com/NousResearch/hermes-agent.git@e624e9fde561e1add9388384012b295fde669ade

@@ -1,0 +1,2550 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>内容巡查研判平台 · 静态伪数据 Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --surface-soft: #f8fafc;
+      --surface-tint: #eef5ff;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --text: #111827;
+      --muted: #64748b;
+      --soft: #94a3b8;
+      --brand: #2563eb;
+      --brand-weak: #eaf2ff;
+      --success: #15803d;
+      --success-bg: #dcfce7;
+      --warning: #b45309;
+      --warning-bg: #fef3c7;
+      --danger: #dc2626;
+      --danger-bg: #fee2e2;
+      --purple: #7c3aed;
+      --purple-bg: #f3e8ff;
+      --shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+      --radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 1180px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(244, 246, 249, 0.72) 32%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app-shell {
+      max-width: 1580px;
+      min-height: 100vh;
+      margin: 0 auto;
+      background: var(--bg);
+      border-left: 1px solid rgba(226, 232, 240, 0.75);
+      border-right: 1px solid rgba(226, 232, 240, 0.75);
+      box-shadow: 0 0 42px rgba(15, 23, 42, 0.08);
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) auto minmax(230px, 1fr);
+      align-items: center;
+      gap: 22px;
+      height: 76px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(16px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border-radius: 10px;
+      background: var(--brand-weak);
+      color: var(--brand);
+      flex: 0 0 auto;
+    }
+
+    .brand-mark svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 17px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .brand small {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .main-nav {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      gap: 26px;
+      height: 100%;
+    }
+
+    .nav-tab {
+      position: relative;
+      border: 0;
+      background: transparent;
+      color: #1f2937;
+      padding: 0 4px;
+      font-size: 15px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .nav-tab::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      border-radius: 999px;
+      background: transparent;
+    }
+
+    .nav-tab:hover {
+      color: var(--brand);
+    }
+
+    .nav-tab.is-active {
+      color: var(--brand);
+    }
+
+    .nav-tab.is-active::after {
+      background: var(--brand);
+    }
+
+    .account-area {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .icon-btn {
+      display: inline-grid;
+      width: 36px;
+      height: 36px;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: #1f2937;
+    }
+
+    .icon-btn:hover,
+    .ghost-btn:hover,
+    .outline-btn:hover {
+      border-color: #b7c4d4;
+      background: #f8fafc;
+    }
+
+    .avatar {
+      display: inline-grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 50% 18%, #f8fafc 0 13%, transparent 14%),
+        linear-gradient(180deg, #9fb8d8 0%, #37506e 54%, #111827 100%);
+      color: #ffffff;
+      font-size: 0;
+      overflow: hidden;
+      flex: 0 0 auto;
+    }
+
+    .avatar::before {
+      content: "";
+      align-self: end;
+      width: 26px;
+      height: 22px;
+      margin-bottom: 2px;
+      border-radius: 50% 50% 8px 8px;
+      background: rgba(17, 24, 39, 0.9);
+    }
+
+    .avatar.gray {
+      background:
+        radial-gradient(circle at 50% 28%, #ffffff 0 18%, transparent 19%),
+        linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
+    }
+
+    .avatar.gray::before {
+      background: #ffffff;
+    }
+
+    .avatar.rose {
+      background:
+        radial-gradient(circle at 50% 25%, #fff7ed 0 17%, transparent 18%),
+        linear-gradient(180deg, #fecdd3 0%, #fb7185 100%);
+    }
+
+    .avatar.teal {
+      background:
+        radial-gradient(circle at 50% 22%, #ecfeff 0 15%, transparent 16%),
+        linear-gradient(180deg, #99f6e4 0%, #0f766e 100%);
+    }
+
+    .account-name {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #1f2937;
+      font-size: 14px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .page {
+      display: none;
+      padding: 16px 18px 22px;
+    }
+
+    .page.is-active {
+      display: block;
+    }
+
+    .page-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 8px 18px 18px;
+    }
+
+    .page-head h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .page-head p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .primary-btn,
+    .outline-btn,
+    .ghost-btn,
+    .danger-btn {
+      display: inline-flex;
+      min-height: 36px;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      border-radius: var(--radius);
+      padding: 0 14px;
+      font-size: 14px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .primary-btn {
+      border: 1px solid var(--brand);
+      background: var(--brand);
+      color: #ffffff;
+      box-shadow: 0 6px 14px rgba(37, 99, 235, 0.18);
+    }
+
+    .primary-btn:hover {
+      background: #1d4ed8;
+    }
+
+    .outline-btn,
+    .ghost-btn {
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+      color: #1f2937;
+    }
+
+    .outline-btn.brand {
+      border-color: #9dbbff;
+      color: var(--brand);
+      background: #ffffff;
+    }
+
+    .danger-btn {
+      border: 1px solid var(--danger);
+      background: var(--danger);
+      color: #ffffff;
+    }
+
+    .btn-sm {
+      min-height: 32px;
+      padding: 0 12px;
+      font-size: 13px;
+    }
+
+    .btn-icon {
+      width: 36px;
+      padding: 0;
+      flex: 0 0 auto;
+    }
+
+    .card,
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 10px 32px rgba(15, 23, 42, 0.04);
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 14px;
+      color: #111827;
+      font-size: 18px;
+      line-height: 1.35;
+    }
+
+    .section-title small {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-flex;
+      min-height: 24px;
+      align-items: center;
+      gap: 4px;
+      border-radius: 6px;
+      padding: 2px 8px;
+      background: #eef2f7;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.3;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    .badge.blue {
+      background: var(--brand-weak);
+      color: var(--brand);
+    }
+
+    .badge.green {
+      background: var(--success-bg);
+      color: var(--success);
+    }
+
+    .badge.yellow {
+      background: var(--warning-bg);
+      color: var(--warning);
+    }
+
+    .badge.red {
+      background: var(--danger-bg);
+      color: var(--danger);
+    }
+
+    .badge.purple {
+      background: var(--purple-bg);
+      color: var(--purple);
+    }
+
+    .badge.gray {
+      background: #edf2f7;
+      color: #64748b;
+    }
+
+    .mini-icon {
+      display: inline-flex;
+      width: 16px;
+      height: 16px;
+      align-items: center;
+      justify-content: center;
+      color: currentColor;
+      flex: 0 0 auto;
+    }
+
+    .mini-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 2;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .left-rail {
+      min-height: calc(100vh - 116px);
+      padding: 16px 18px;
+    }
+
+    .rail-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      color: #111827;
+      font-weight: 700;
+    }
+
+    .search-box {
+      position: relative;
+      margin-bottom: 8px;
+    }
+
+    .search-box input {
+      width: 100%;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0 12px 0 36px;
+      background: #ffffff;
+      color: #111827;
+      outline: none;
+    }
+
+    .search-box svg {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      width: 16px;
+      height: 16px;
+      color: #64748b;
+      transform: translateY(-50%);
+    }
+
+    .monitor-list {
+      display: grid;
+      margin: 0 -18px;
+    }
+
+    .monitor-item {
+      display: grid;
+      grid-template-columns: 48px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      min-height: 92px;
+      border: 0;
+      border-left: 2px solid transparent;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+      background: transparent;
+      padding: 12px 18px;
+      text-align: left;
+    }
+
+    .monitor-item:hover,
+    .monitor-item.is-active {
+      background: #eef5ff;
+    }
+
+    .monitor-item.is-active {
+      border-left-color: var(--brand);
+    }
+
+    .monitor-main {
+      min-width: 0;
+    }
+
+    .monitor-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 15px;
+      font-weight: 750;
+      color: #111827;
+      min-width: 0;
+    }
+
+    .monitor-name span:first-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .monitor-scope {
+      color: #475569;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .content-stack {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .account-card {
+      overflow: hidden;
+    }
+
+    .account-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 62px;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .account-card-head h2 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.35;
+    }
+
+    .account-summary {
+      display: grid;
+      grid-template-columns: 330px repeat(4, minmax(150px, 1fr));
+      align-items: center;
+      min-height: 150px;
+      padding: 22px;
+    }
+
+    .profile-block {
+      display: grid;
+      grid-template-columns: 74px minmax(0, 1fr);
+      gap: 16px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .profile-block .avatar {
+      width: 72px;
+      height: 72px;
+    }
+
+    .profile-title {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 19px;
+      font-weight: 760;
+    }
+
+    .copy-id {
+      display: inline-flex;
+      width: 18px;
+      height: 18px;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      vertical-align: middle;
+    }
+
+    .profile-meta {
+      display: grid;
+      gap: 6px;
+      color: #475569;
+      font-size: 14px;
+      line-height: 1.3;
+    }
+
+    .metric {
+      min-height: 88px;
+      padding: 4px 24px;
+      border-left: 1px solid var(--line);
+    }
+
+    .metric-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      color: #64748b;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 4px;
+      color: #111827;
+      font-size: 29px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .metric span {
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    .mini-link {
+      border: 0;
+      background: transparent;
+      color: var(--brand);
+      padding: 0;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .sub-nav {
+      display: flex;
+      min-height: 52px;
+      align-items: center;
+      gap: 36px;
+      padding: 0 30px;
+    }
+
+    .sub-tab {
+      position: relative;
+      border: 0;
+      background: transparent;
+      color: #475569;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 16px 0;
+    }
+
+    .sub-tab.is-active {
+      color: var(--brand);
+    }
+
+    .sub-tab.is-active::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 2px;
+      border-radius: 999px;
+      background: var(--brand);
+    }
+
+    .two-column {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(420px, 1.05fr);
+      gap: 10px;
+    }
+
+    .panel {
+      padding: 18px 20px;
+      min-width: 0;
+    }
+
+    .empty-state {
+      display: grid;
+      min-height: 250px;
+      place-items: center;
+      text-align: center;
+      color: #64748b;
+    }
+
+    .empty-illustration {
+      display: grid;
+      width: 120px;
+      height: 94px;
+      place-items: center;
+      margin: 0 auto 16px;
+      color: #93c5fd;
+    }
+
+    .empty-state strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #111827;
+      font-size: 17px;
+    }
+
+    .empty-state p {
+      margin: 0 0 20px;
+      font-size: 14px;
+    }
+
+    .table-card {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .table-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 20px;
+    }
+
+    .table-head h3 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th {
+      height: 40px;
+      background: #f8fafc;
+      color: #64748b;
+      font-weight: 650;
+      text-align: left;
+    }
+
+    th,
+    td {
+      border-top: 1px solid var(--line);
+      padding: 10px 14px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    td {
+      color: #1f2937;
+    }
+
+    .empty-row {
+      height: 146px;
+      color: #94a3b8;
+      text-align: center;
+    }
+
+    .related-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .related-item {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 12px;
+      min-height: 88px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fafbfc;
+    }
+
+    .related-info {
+      min-width: 0;
+    }
+
+    .related-info b {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 16px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .related-info p {
+      margin: 0 0 4px;
+      color: #475569;
+      font-size: 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .center-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 16px;
+      color: var(--brand);
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .plan-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px 44px;
+      margin-top: 12px;
+      color: #475569;
+      font-size: 14px;
+    }
+
+    .plan-grid b {
+      color: #111827;
+      font-weight: 650;
+    }
+
+    .stats-band {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(160px, 1fr));
+      margin: 0 18px 26px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .stat-cell {
+      min-height: 118px;
+      padding: 18px 22px;
+      border-left: 1px solid var(--line);
+    }
+
+    .stat-cell:first-child {
+      border-left: 0;
+    }
+
+    .stat-cell span {
+      color: #475569;
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .stat-cell strong {
+      display: block;
+      margin: 8px 0 6px;
+      color: #111827;
+      font-size: 30px;
+      line-height: 1;
+    }
+
+    .stat-cell small {
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    .stat-cell.warning strong {
+      color: var(--warning);
+    }
+
+    .task-panel {
+      margin: 0 18px 18px;
+      padding: 0;
+      overflow: visible;
+    }
+
+    .task-panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 22px 22px 12px;
+    }
+
+    .task-panel-head h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px;
+      font-size: 20px;
+    }
+
+    .task-panel-head p {
+      margin: 0;
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    .task-toolbar {
+      display: flex;
+      gap: 10px;
+    }
+
+    .select-btn {
+      min-width: 116px;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: #1f2937;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .task-table {
+      padding: 0 14px 12px;
+    }
+
+    .task-row {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(420px, 1.4fr) minmax(400px, 1fr) 118px 190px;
+      align-items: center;
+      min-height: 106px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #ffffff;
+      margin-bottom: 8px;
+      padding: 14px 16px;
+    }
+
+    .task-info {
+      display: grid;
+      grid-template-columns: 50px minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .round-mark {
+      display: grid;
+      width: 46px;
+      height: 46px;
+      place-items: center;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #2563eb, #1d4ed8);
+      color: #ffffff;
+    }
+
+    .round-mark.green {
+      background: linear-gradient(180deg, #34d399, #059669);
+    }
+
+    .task-title {
+      margin-bottom: 6px;
+      color: #111827;
+      font-size: 17px;
+      font-weight: 760;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .task-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .run-data {
+      display: grid;
+      grid-template-columns: repeat(6, 52px);
+      align-items: center;
+      gap: 8px;
+    }
+
+    .run-data div {
+      text-align: left;
+    }
+
+    .run-data strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #111827;
+      font-size: 18px;
+    }
+
+    .run-data span {
+      color: #64748b;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .run-split {
+      width: 1px;
+      height: 52px;
+      background: var(--line-strong);
+      margin: 0 8px;
+    }
+
+    .status-cell {
+      text-align: left;
+    }
+
+    .task-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .dropdown {
+      position: absolute;
+      right: 14px;
+      top: 86px;
+      display: none;
+      width: 150px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      z-index: 8;
+    }
+
+    .task-row.menu-open .dropdown {
+      display: grid;
+    }
+
+    .dropdown button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #111827;
+      padding: 0 8px;
+      text-align: left;
+    }
+
+    .dropdown button:hover {
+      background: #f1f5f9;
+    }
+
+    .dropdown button.danger {
+      color: var(--danger);
+    }
+
+    .compare-area {
+      display: grid;
+      grid-template-columns: 1fr 72px 1fr;
+      gap: 24px;
+      align-items: center;
+      margin: 0 18px;
+    }
+
+    .compare-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 10px;
+      color: #111827;
+      font-weight: 750;
+    }
+
+    .compare-label.red {
+      color: #7f1d1d;
+    }
+
+    .compare-label.green {
+      color: var(--success);
+    }
+
+    .compare-card {
+      min-height: 138px;
+      padding: 18px 20px;
+    }
+
+    .compare-card .task-meta {
+      margin-top: 8px;
+      font-size: 13px;
+    }
+
+    .arrow-cell {
+      display: grid;
+      place-items: center;
+      color: #cbd5e1;
+    }
+
+    .config-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 454px;
+      gap: 12px;
+      align-items: start;
+      padding: 0 18px;
+    }
+
+    .config-main {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .config-card {
+      padding: 18px;
+    }
+
+    .config-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .config-card-head h2 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+
+    .config-card-head p {
+      margin: 0;
+      color: #64748b;
+      font-size: 14px;
+    }
+
+    .filter-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .filter-chip {
+      display: inline-flex;
+      min-height: 30px;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: #475569;
+      padding: 0 10px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .filter-chip.is-active {
+      border-color: #bed4ff;
+      background: #edf4ff;
+      color: var(--brand);
+    }
+
+    .compact-search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .compact-search input {
+      width: 180px;
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      padding: 0 10px;
+      outline: none;
+    }
+
+    .data-table-wrap {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .data-table-wrap table {
+      font-size: 13px;
+    }
+
+    .data-table-wrap th,
+    .data-table-wrap td {
+      padding: 11px 14px;
+    }
+
+    .row-link {
+      border: 0;
+      background: transparent;
+      color: var(--brand);
+      padding: 0;
+      font-weight: 700;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      color: #64748b;
+      font-size: 13px;
+    }
+
+    .pager-buttons {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .page-box {
+      display: grid;
+      min-width: 32px;
+      height: 32px;
+      place-items: center;
+      border: 1px solid #9dbbff;
+      border-radius: 6px;
+      color: var(--brand);
+      font-weight: 700;
+    }
+
+    .drawer {
+      position: sticky;
+      top: 88px;
+      min-height: calc(100vh - 106px);
+      padding: 20px;
+    }
+
+    .drawer-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .drawer h2 {
+      margin: 0 0 8px;
+      font-size: 22px;
+    }
+
+    .drawer-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      color: #64748b;
+      font-size: 13px;
+    }
+
+    .drawer-section {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #ffffff;
+    }
+
+    .drawer-section h3 {
+      margin: 0 0 12px;
+      font-size: 15px;
+    }
+
+    .cap-grid,
+    .field-grid {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .token {
+      display: inline-flex;
+      min-height: 26px;
+      align-items: center;
+      gap: 6px;
+      border-radius: 6px;
+      background: #f1f5f9;
+      color: #334155;
+      padding: 0 9px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .knowledge-row,
+    .version-row,
+    .ref-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 10px;
+      color: #475569;
+      font-size: 13px;
+    }
+
+    .version-row,
+    .ref-row {
+      border: 0;
+      border-radius: 0;
+      border-top: 1px solid var(--line);
+      min-height: 44px;
+      padding: 0;
+    }
+
+    .version-row:first-of-type,
+    .ref-row:first-of-type {
+      border-top: 0;
+    }
+
+    .drawer-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 28px;
+      z-index: 99;
+      display: grid;
+      gap: 3px;
+      min-width: 260px;
+      max-width: 420px;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      background: #111827;
+      color: #ffffff;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translate(-50%, 12px);
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .toast strong {
+      font-size: 14px;
+    }
+
+    .toast span {
+      color: #cbd5e1;
+      font-size: 12px;
+    }
+
+    @media (max-width: 1240px) {
+      body {
+        min-width: 1040px;
+      }
+
+      .account-summary {
+        grid-template-columns: 280px repeat(4, minmax(130px, 1fr));
+      }
+
+      .metric {
+        padding: 4px 16px;
+      }
+
+      .config-layout {
+        grid-template-columns: minmax(0, 1fr) 400px;
+      }
+
+      .task-row {
+        grid-template-columns: minmax(330px, 1fr) minmax(330px, 1fr) 110px 174px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      body {
+        min-width: 0;
+      }
+
+      .app-shell {
+        min-width: 0;
+        border: 0;
+      }
+
+      .topbar {
+        position: static;
+        grid-template-columns: minmax(0, 1fr);
+        height: auto;
+        padding: 14px;
+      }
+
+      .main-nav {
+        justify-content: flex-start;
+        gap: 18px;
+        min-width: 0;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+
+      .account-area {
+        justify-content: flex-start;
+      }
+
+      .page {
+        padding: 12px;
+      }
+
+      .page-head {
+        display: grid;
+        padding: 4px 0 14px;
+      }
+
+      .page-head h1 {
+        font-size: 24px;
+      }
+
+      .actions {
+        justify-content: flex-start;
+      }
+
+      .stats-band,
+      .dashboard-grid,
+      .two-column,
+      .config-layout,
+      .compare-area {
+        grid-template-columns: minmax(0, 1fr);
+        margin-left: 0;
+        margin-right: 0;
+      }
+
+      .stat-cell {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .stat-cell:first-child {
+        border-top: 0;
+      }
+
+      .left-rail {
+        min-height: auto;
+      }
+
+      .account-summary {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+      }
+
+      .metric {
+        min-height: auto;
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        padding: 14px 0 0;
+      }
+
+      .sub-nav {
+        gap: 20px;
+        overflow-x: auto;
+        padding: 0 14px;
+      }
+
+      .related-item {
+        grid-template-columns: 48px minmax(0, 1fr);
+      }
+
+      .related-item .outline-btn {
+        grid-column: 1 / -1;
+        justify-self: start;
+      }
+
+      .plan-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .task-panel {
+        margin-left: 0;
+        margin-right: 0;
+      }
+
+      .task-panel-head {
+        display: grid;
+      }
+
+      .task-toolbar {
+        flex-wrap: wrap;
+      }
+
+      .task-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+      }
+
+      .run-data {
+        grid-template-columns: repeat(3, minmax(58px, 1fr));
+      }
+
+      .run-split {
+        display: none;
+      }
+
+      .task-actions {
+        justify-content: flex-start;
+      }
+
+      .dropdown {
+        left: 16px;
+        right: auto;
+        top: auto;
+        bottom: 54px;
+      }
+
+      .arrow-cell {
+        display: none;
+      }
+
+      .drawer {
+        position: static;
+        min-height: auto;
+      }
+
+      .compact-search {
+        width: 100%;
+        margin-left: 0;
+      }
+
+      .compact-search input {
+        width: min(100%, 280px);
+      }
+
+      .data-table-wrap {
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+    <symbol id="i-shield" viewBox="0 0 24 24">
+      <path d="M12 3 5.5 5.6v5.8c0 4.4 2.7 7.3 6.5 9.1 3.8-1.8 6.5-4.7 6.5-9.1V5.6L12 3Z" fill="none" stroke="currentColor" stroke-linejoin="round"/>
+      <path d="M9.2 12.1 11 14l4-4.3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 24 24">
+      <path d="m21 21-4.3-4.3" fill="none" stroke="currentColor" stroke-linecap="round"/>
+      <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor"/>
+    </symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24">
+      <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-user" viewBox="0 0 24 24">
+      <path d="M20 21a8 8 0 0 0-16 0" fill="none" stroke="currentColor" stroke-linecap="round"/>
+      <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor"/>
+    </symbol>
+    <symbol id="i-users" viewBox="0 0 24 24">
+      <path d="M16 21a5 5 0 0 0-10 0" fill="none" stroke="currentColor" stroke-linecap="round"/>
+      <circle cx="11" cy="9" r="4" fill="none" stroke="currentColor"/>
+      <path d="M22 21a4 4 0 0 0-4-4m-1-11a3 3 0 0 1 0 6" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24">
+      <path d="M20 6v5h-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M20 11a8 8 0 0 0-14.9-4" fill="none" stroke="currentColor" stroke-linecap="round"/>
+      <path d="M4 18v-5h5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M4 13a8 8 0 0 0 14.9 4" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24">
+      <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-more" viewBox="0 0 24 24">
+      <circle cx="5" cy="12" r="1.6" fill="currentColor"/>
+      <circle cx="12" cy="12" r="1.6" fill="currentColor"/>
+      <circle cx="19" cy="12" r="1.6" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24">
+      <path d="m3 3 18 18" fill="none" stroke="currentColor" stroke-linecap="round"/>
+      <path d="M10.7 5.1A10.5 10.5 0 0 1 12 5c5 0 8.5 4.6 9.5 6.4a1.4 1.4 0 0 1 0 1.2 17.4 17.4 0 0 1-3 3.8" fill="none" stroke="currentColor" stroke-linecap="round"/>
+      <path d="M6.6 6.7A17.4 17.4 0 0 0 2.5 11.4a1.4 1.4 0 0 0 0 1.2C3.5 14.4 7 19 12 19c1.5 0 2.9-.4 4.1-1" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor"/>
+      <path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-list" viewBox="0 0 24 24">
+      <path d="M8 6h13M8 12h13M8 18h13" fill="none" stroke="currentColor" stroke-linecap="round"/>
+      <circle cx="4" cy="6" r="1" fill="currentColor"/>
+      <circle cx="4" cy="12" r="1" fill="currentColor"/>
+      <circle cx="4" cy="18" r="1" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-book" viewBox="0 0 24 24">
+      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5A2.5 2.5 0 0 0 4 21V5.5Z" fill="none" stroke="currentColor" stroke-linejoin="round"/>
+      <path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-stack" viewBox="0 0 24 24">
+      <path d="m12 3 8 4-8 4-8-4 8-4Z" fill="none" stroke="currentColor" stroke-linejoin="round"/>
+      <path d="m4 12 8 4 8-4M4 17l8 4 8-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24">
+      <path d="m9 18 6-6-6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24">
+      <path d="M5 12h14m-6-6 6 6-6 6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-play" viewBox="0 0 24 24">
+      <path d="M8 5.5v13l11-6.5-11-6.5Z" fill="none" stroke="currentColor" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24">
+      <path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24">
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24">
+      <path d="M4 5h16l-6.5 7.5V19l-3 1v-7.5L4 5Z" fill="none" stroke="currentColor" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24">
+      <path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-file" viewBox="0 0 24 24">
+      <path d="M7 3h7l5 5v13H7V3Z" fill="none" stroke="currentColor" stroke-linejoin="round"/>
+      <path d="M14 3v5h5M9.5 13h5M9.5 17h5" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+  </svg>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"><svg><use href="#i-shield"></use></svg></span>
+        <div>
+          <strong>内容巡查研判平台</strong>
+          <small>风险内容 · 证据固化 · 用户归并</small>
+        </div>
+      </div>
+
+      <nav class="main-nav" aria-label="主导航">
+        <button class="nav-tab" data-page="risk" type="button">风险研判</button>
+        <button class="nav-tab is-active" data-page="tasks" type="button">监控任务</button>
+        <button class="nav-tab" data-page="users" type="button">重点用户</button>
+        <button class="nav-tab" data-page="config" type="button">配置底座</button>
+      </nav>
+
+      <div class="account-area">
+        <button class="icon-btn" type="button" title="通知"><svg class="mini-icon"><use href="#i-bell"></use></svg></button>
+        <span class="avatar" aria-hidden="true"></span>
+        <span class="account-name">张警官 <svg class="mini-icon"><use href="#i-chevron"></use></svg></span>
+      </div>
+    </header>
+
+    <main>
+      <section class="page is-active" id="page-tasks" aria-label="监控任务">
+        <div class="page-head">
+          <div>
+            <h1>监控任务</h1>
+            <p>平台抓取、直播接入、重点用户、本地视频四类来源的运行操作台</p>
+          </div>
+          <div class="actions">
+            <button class="primary-btn" type="button" data-toast="新建任务|这里是静态 demo，已模拟进入创建流程"><svg class="mini-icon"><use href="#i-plus"></use></svg>新建监控任务</button>
+          </div>
+        </div>
+
+        <section class="stats-band" aria-label="任务指标">
+          <div class="stat-cell"><span>运行中任务</span><strong>0</strong><small>当前</small></div>
+          <div class="stat-cell"><span>新增风险</span><strong>128</strong><small>近 7 天</small></div>
+          <div class="stat-cell"><span>直播接入</span><strong>4</strong><small>实时</small></div>
+          <div class="stat-cell"><span>重点用户</span><strong>37</strong><small>账号</small></div>
+          <div class="stat-cell warning"><span>本地待分析</span><strong>6</strong><small>队列</small></div>
+        </section>
+
+        <section class="panel task-panel">
+          <div class="task-panel-head">
+            <div>
+              <h2><svg class="mini-icon"><use href="#i-list"></use></svg>任务运行列表</h2>
+              <p>点击任务行或「查看产出」进入产出详情，可暂停 / 补抓 / 暂停分析 / 继续分析等操作。</p>
+            </div>
+            <div class="task-toolbar">
+              <button class="select-btn" type="button">默认排序⌄</button>
+              <button class="outline-btn btn-icon" type="button" data-toast="任务列表已刷新|伪数据时间更新到 07-09 17:06"><svg class="mini-icon"><use href="#i-refresh"></use></svg></button>
+            </div>
+          </div>
+
+          <div class="task-table">
+            <article class="task-row menu-open">
+              <div class="task-info">
+                <span class="round-mark"><svg class="mini-icon"><use href="#i-user"></use></svg></span>
+                <div>
+                  <div class="task-title">评论用户 · @@渔夫 分析</div>
+                  <div class="task-meta">
+                    <span>重点用户监控 · 抖音 · 用户尾号 BK47UjoOOA</span>
+                    <span>⚙ 引用：赌博博彩研判方案 v1.1</span>
+                    <span>更新于 07-09 17:06</span>
+                  </div>
+                </div>
+              </div>
+              <div class="run-data">
+                <div><strong>20</strong><span>已抓取</span></div>
+                <div><strong>3</strong><span>已分析</span></div>
+                <div><strong>17</strong><span>待处理</span></div>
+                <div><strong>0</strong><span>失败</span></div>
+                <span class="run-split"></span>
+                <div><strong>3</strong><span>产出</span></div>
+                <div><strong>0</strong><span>高危</span></div>
+              </div>
+              <div class="status-cell"><span class="badge yellow">已暂停</span><br><span class="muted">—</span></div>
+              <div class="task-actions">
+                <button class="primary-btn btn-sm" type="button" data-nav-users>查看产出</button>
+                <button class="outline-btn btn-sm" type="button" data-menu-toggle>更多⌄</button>
+              </div>
+              <div class="dropdown">
+                <button type="button" data-toast="抓取已暂停|评论用户 · @@渔夫 分析"><svg class="mini-icon"><use href="#i-pause"></use></svg>暂停抓取</button>
+                <button type="button" data-toast="补抓任务已创建|近 7 天发布已进入队列"><svg class="mini-icon"><use href="#i-refresh"></use></svg>补抓</button>
+                <button type="button" data-toast="分析已暂停|等待人工继续"><svg class="mini-icon"><use href="#i-pause"></use></svg>暂停分析</button>
+                <button type="button" data-toast="继续分析已启动|剩余 17 条进入分析队列"><svg class="mini-icon"><use href="#i-play"></use></svg>继续分析</button>
+                <button class="danger" type="button" data-toast="删除任务|静态 demo 未真正删除"><svg class="mini-icon"><use href="#i-trash"></use></svg>删除任务</button>
+              </div>
+            </article>
+
+            <article class="task-row">
+              <div class="task-info">
+                <span class="round-mark green"><svg class="mini-icon"><use href="#i-user"></use></svg></span>
+                <div>
+                  <div class="task-title">评论用户 · 666666666 分析</div>
+                  <div class="task-meta">
+                    <span>重点用户监控 · 抖音 · 用户尾号 qSJCwwx6U8</span>
+                    <span>⚙ 引用：赌博博彩研判方案 v1.1</span>
+                    <span>更新于 07-09 16:15</span>
+                  </div>
+                </div>
+              </div>
+              <div class="run-data">
+                <div><strong>0</strong><span>已抓取</span></div>
+                <div><strong>0</strong><span>已分析</span></div>
+                <div><strong>0</strong><span>待处理</span></div>
+                <div><strong>0</strong><span>失败</span></div>
+                <span class="run-split"></span>
+                <div><strong>0</strong><span>产出</span></div>
+                <div><strong>0</strong><span>高危</span></div>
+              </div>
+              <div class="status-cell"><span class="badge green">已完成</span><br><span class="muted">—</span></div>
+              <div class="task-actions">
+                <button class="outline-btn brand btn-sm" type="button" data-nav-users>查看产出</button>
+                <button class="outline-btn btn-sm" type="button" data-menu-toggle>更多⌄</button>
+              </div>
+              <div class="dropdown">
+                <button type="button" data-toast="补抓任务已创建|评论用户 · 666666666 分析"><svg class="mini-icon"><use href="#i-refresh"></use></svg>补抓</button>
+                <button type="button" data-toast="继续分析已启动|暂无待处理内容"><svg class="mini-icon"><use href="#i-play"></use></svg>继续分析</button>
+              </div>
+            </article>
+
+            <article class="task-row">
+              <div class="task-info">
+                <span class="round-mark green"><svg class="mini-icon"><use href="#i-user"></use></svg></span>
+                <div>
+                  <div class="task-title">评论用户 · 真的好困 分析</div>
+                  <div class="task-meta">
+                    <span>重点用户监控 · 抖音 · 用户尾号 htW7IHd6PC</span>
+                    <span>⚙ 引用：赌博博彩研判方案 v1.1</span>
+                    <span>更新于 07-09 15:53</span>
+                  </div>
+                </div>
+              </div>
+              <div class="run-data">
+                <div><strong>2</strong><span>已抓取</span></div>
+                <div><strong>2</strong><span>已分析</span></div>
+                <div><strong>0</strong><span>待处理</span></div>
+                <div><strong>0</strong><span>失败</span></div>
+                <span class="run-split"></span>
+                <div><strong>2</strong><span>产出</span></div>
+                <div><strong>0</strong><span>高危</span></div>
+              </div>
+              <div class="status-cell"><span class="badge green">已完成</span><br><span class="muted">—</span></div>
+              <div class="task-actions">
+                <button class="outline-btn brand btn-sm" type="button" data-nav-users>查看产出</button>
+                <button class="outline-btn btn-sm" type="button" data-menu-toggle>更多⌄</button>
+              </div>
+              <div class="dropdown">
+                <button type="button" data-toast="补抓任务已创建|评论用户 · 真的好困 分析"><svg class="mini-icon"><use href="#i-refresh"></use></svg>补抓</button>
+                <button type="button" data-toast="任务已继续|已恢复持续观察"><svg class="mini-icon"><use href="#i-play"></use></svg>继续观察</button>
+              </div>
+            </article>
+          </div>
+
+          <div class="pagination" style="padding: 0 24px 16px;">
+            <span>共 12 条</span>
+            <div class="pager-buttons">
+              <button class="select-btn" type="button">10 条/页⌄</button>
+              <button class="outline-btn btn-icon" type="button">‹</button>
+              <span class="page-box">1</span>
+              <button class="outline-btn btn-icon" type="button">2</button>
+              <button class="outline-btn btn-icon" type="button">›</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="compare-area">
+          <div>
+            <div class="compare-label red">优化前后对比</div>
+            <article class="card compare-card">
+              <div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
+                <div>
+                  <div class="task-title">评论用户 · @@渔夫 分析</div>
+                  <div class="task-meta">
+                    <span>重点用户监控 · 抖音 · 用户尾号 BK47UjoOOA</span>
+                    <span>引用：赌博博彩研判方案 v1.1 · 更新于 07-09 17:06</span>
+                    <span>已抓取 20 · 已分析 3 · 待处理 17 · 失败 0</span>
+                  </div>
+                </div>
+                <span class="badge yellow">已暂停</span>
+              </div>
+              <div class="actions" style="justify-content:flex-start;margin-top:14px">
+                <button class="primary-btn btn-sm" type="button">查看产出</button>
+                <button class="outline-btn btn-sm" type="button"><svg class="mini-icon"><use href="#i-pause"></use></svg>暂停抓取</button>
+                <button class="outline-btn btn-sm" type="button"><svg class="mini-icon"><use href="#i-refresh"></use></svg>补抓</button>
+                <button class="outline-btn btn-sm" type="button"><svg class="mini-icon"><use href="#i-pause"></use></svg>暂停分析</button>
+                <button class="danger-btn btn-sm" type="button"><svg class="mini-icon"><use href="#i-trash"></use></svg>删除</button>
+              </div>
+            </article>
+          </div>
+
+          <div class="arrow-cell"><svg width="48" height="48"><use href="#i-arrow"></use></svg></div>
+
+          <div>
+            <div class="compare-label green">优化后</div>
+            <article class="card compare-card">
+              <div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
+                <div>
+                  <div class="task-title">评论用户 · @@渔夫 分析</div>
+                  <div class="task-meta">
+                    <span>重点用户监控 · 抖音 · 用户尾号 BK47UjoOOA</span>
+                    <span>引用：赌博博彩研判方案 v1.1 · 更新于 07-09 17:06</span>
+                  </div>
+                </div>
+                <span class="badge yellow">已暂停</span>
+              </div>
+              <div class="run-data" style="margin-top:12px;grid-template-columns:repeat(6,56px) 1fr">
+                <div><strong>20</strong><span>已抓取</span></div>
+                <div><strong>3</strong><span>已分析</span></div>
+                <div><strong>17</strong><span>待处理</span></div>
+                <div><strong>0</strong><span>失败</span></div>
+                <span class="run-split"></span>
+                <div><strong>3</strong><span>产出</span></div>
+                <div><strong>0</strong><span>高危</span></div>
+                <div class="actions" style="justify-content:flex-end">
+                  <button class="outline-btn brand btn-sm" type="button">查看产出</button>
+                  <button class="outline-btn btn-sm" type="button">更多⌄</button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <section class="page" id="page-users" aria-label="重点用户">
+        <div class="dashboard-grid">
+          <aside class="card left-rail">
+            <div class="rail-head"><svg class="mini-icon"><use href="#i-users"></use></svg>监控对象</div>
+            <label class="search-box">
+              <svg><use href="#i-search"></use></svg>
+              <input id="user-search" placeholder="搜索账号名称 / ID" />
+            </label>
+            <div class="monitor-list" id="monitor-list"></div>
+            <button class="outline-btn" type="button" style="width:100%;margin-top:14px" data-toast="新增监控账号|静态 demo 已模拟打开表单"><svg class="mini-icon"><use href="#i-plus"></use></svg>新增监控账号</button>
+          </aside>
+
+          <div class="content-stack">
+            <section class="card account-card">
+              <div class="account-card-head">
+                <h2>当前账号详情</h2>
+                <div class="actions">
+                  <button class="outline-btn brand" type="button" data-toast="补抓近期发布|已创建最近 7 天补抓任务"><svg class="mini-icon"><use href="#i-refresh"></use></svg>补抓近期发布</button>
+                  <button class="outline-btn" type="button" data-toast="持续观察已取消|该账号保留历史记录"><svg class="mini-icon"><use href="#i-eye-off"></use></svg>取消持续观察</button>
+                  <button class="outline-btn btn-icon" type="button"><svg class="mini-icon"><use href="#i-more"></use></svg></button>
+                </div>
+              </div>
+
+              <div class="account-summary">
+                <div class="profile-block">
+                  <span class="avatar" id="detail-avatar"></span>
+                  <div>
+                    <div class="profile-title"><span id="detail-name">门老师</span><span class="badge blue">抖音</span></div>
+                    <div class="profile-meta">
+                      <span>抖音号： <b id="detail-id">menlaoshi_2024</b> <span class="copy-id">▣</span></span>
+                      <span>监控范围： <b id="detail-scope">主页 · 发布 · 评论互动</b></span>
+                    </div>
+                  </div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label"><svg class="mini-icon"><use href="#i-users"></use></svg>近期风险产出</div>
+                  <strong id="detail-risk">0<span style="font-size:14px;margin-left:4px">条</span></strong>
+                  <span>近 7 天</span>
+                </div>
+                <div class="metric">
+                  <div class="metric-label"><svg class="mini-icon"><use href="#i-users"></use></svg>疑似关联账号</div>
+                  <strong id="detail-related">3<span style="font-size:14px;margin-left:4px">个</span></strong>
+                </div>
+                <div class="metric">
+                  <div class="metric-label"><svg class="mini-icon"><use href="#i-clock"></use></svg>最近同步时间</div>
+                  <strong id="detail-sync" style="font-size:24px">07-09 17:06</strong>
+                  <span>2 分钟前</span>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">当前分析任务</div>
+                  <strong style="font-size:16px" id="detail-task">主页分析 <span class="badge yellow">已暂停</span></strong>
+                  <button class="mini-link" type="button" data-nav-tasks>查看任务</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="card sub-nav" aria-label="重点用户详情页签">
+              <button class="sub-tab is-active" type="button">风险产出</button>
+              <button class="sub-tab" type="button" data-toast="关联账号|已在右侧展示疑似关联账号">关联账号</button>
+              <button class="sub-tab" type="button" data-toast="监控时间线|这里可接入真实同步日志">监控时间线</button>
+              <button class="sub-tab" type="button" data-toast="监控计划|下方计划区已展示配置摘要">监控计划</button>
+            </section>
+
+            <section class="two-column">
+              <div class="content-stack">
+                <section class="panel">
+                  <h3 class="section-title">最新异常内容</h3>
+                  <div class="empty-state">
+                    <div>
+                      <div class="empty-illustration">
+                        <svg width="120" height="94" viewBox="0 0 120 94" fill="none">
+                          <rect x="34" y="22" width="60" height="42" rx="8" fill="#dbeafe"/>
+                          <rect x="42" y="30" width="22" height="5" rx="2.5" fill="#ffffff"/>
+                          <rect x="42" y="43" width="34" height="5" rx="2.5" fill="#bfdbfe"/>
+                          <circle cx="83" cy="54" r="16" fill="#dbeafe" stroke="#93c5fd" stroke-width="5"/>
+                          <path d="m95 66 14 14" stroke="#60a5fa" stroke-width="5" stroke-linecap="round"/>
+                          <circle cx="28" cy="24" r="3" fill="#bfdbfe"/>
+                          <circle cx="100" cy="30" r="3" fill="#bfdbfe"/>
+                        </svg>
+                      </div>
+                      <strong>暂无近期风险产出</strong>
+                      <p>最近一次分析未发现高危内容</p>
+                      <div class="actions" style="justify-content:center">
+                        <button class="outline-btn brand" type="button" data-toast="历史产出|已切换到历史记录表">查看历史产出</button>
+                        <button class="primary-btn" type="button" data-toast="补抓任务已创建|重点用户近期发布进入抓取队列">立即补抓</button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="panel table-card">
+                  <div class="table-head">
+                    <h3>历史产出记录</h3>
+                    <button class="mini-link" type="button" data-toast="查看全部|共 8 条历史产出">查看全部 ›</button>
+                  </div>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>风险等级</th>
+                        <th>内容摘要</th>
+                        <th>来源类型</th>
+                        <th>发现时间</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td colspan="5" class="empty-row"><svg class="mini-icon"><use href="#i-file"></use></svg><br>暂无历史产出记录</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </section>
+              </div>
+
+              <div class="content-stack">
+                <section class="panel">
+                  <h3 class="section-title">疑似关联账号（3）</h3>
+                  <div class="related-list" id="related-list"></div>
+                  <a class="center-link" href="javascript:void(0)" data-toast="关联账号|已加载全部关联线索">查看全部关联账号 <svg class="mini-icon"><use href="#i-chevron"></use></svg></a>
+                </section>
+
+                <section class="panel">
+                  <h3 class="section-title">
+                    <span>监控计划</span>
+                    <button class="outline-btn brand btn-sm" type="button" data-toast="监控计划|可在真实版本中修改频率、策略与引用方案">调整计划</button>
+                  </h3>
+                  <div class="plan-grid">
+                    <div>绑定黑话库： <b>按关联任务审核配置</b></div>
+                    <div>监控频率： <b>任务创建后同步</b></div>
+                    <div>分析策略： <b>评论用户主页分析</b></div>
+                    <div>引用方案： <b>赌博博彩研判方案 v1.1</b></div>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="page" id="page-config" aria-label="配置底座">
+        <div class="config-layout">
+          <div class="config-main">
+            <section class="card config-card">
+              <div class="config-card-head">
+                <div>
+                  <h2><svg class="mini-icon"><use href="#i-stack"></use></svg>研判方案</h2>
+                  <p>监控任务引用的方案，包含检测范围、检测能力和风险评分规则。</p>
+                </div>
+                <button class="primary-btn" type="button" data-toast="新建方案|静态 demo 已模拟创建入口"><svg class="mini-icon"><use href="#i-plus"></use></svg>新建方案</button>
+              </div>
+
+              <div class="filter-strip">
+                <button class="filter-chip is-active" type="button">全部 8</button>
+                <button class="filter-chip" type="button">已发布 6</button>
+                <button class="filter-chip" type="button">草稿 2</button>
+                <button class="filter-chip is-active" type="button">全部</button>
+                <button class="filter-chip" type="button">赌博 2</button>
+                <button class="filter-chip" type="button">诈骗 2</button>
+                <button class="filter-chip" type="button">违禁引流 1</button>
+                <button class="filter-chip" type="button">软色情 1</button>
+                <button class="filter-chip" type="button">暴恐 1</button>
+                <button class="filter-chip" type="button">其他 1</button>
+                <div class="compact-search">
+                  <input placeholder="搜索方案名称 / ID" />
+                  <button class="outline-btn btn-icon" type="button"><svg class="mini-icon"><use href="#i-filter"></use></svg></button>
+                </div>
+              </div>
+
+              <div class="data-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>方案名称</th>
+                      <th>状态</th>
+                      <th>方案 ID</th>
+                      <th>知识库</th>
+                      <th>检测能力</th>
+                      <th>被引用任务</th>
+                      <th>最近更新</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="policy-table"></tbody>
+                </table>
+              </div>
+
+              <div class="pagination">
+                <span>共 8 条</span>
+                <div class="pager-buttons">
+                  <button class="select-btn" type="button">10 条/页⌄</button>
+                  <button class="outline-btn btn-icon" type="button">‹</button>
+                  <span class="page-box">1</span>
+                  <button class="outline-btn btn-icon" type="button">›</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="card config-card">
+              <div class="config-card-head">
+                <div>
+                  <h2><svg class="mini-icon"><use href="#i-book"></use></svg>黑话库 · 可复用素材</h2>
+                  <p>按风险分类维护词库，可被多个方案复用。</p>
+                </div>
+                <button class="primary-btn" type="button" data-toast="新建黑话库|这里可接入词库管理接口"><svg class="mini-icon"><use href="#i-plus"></use></svg>新建黑话库</button>
+              </div>
+
+              <div class="data-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>分类</th>
+                      <th>词库名称</th>
+                      <th>词条数</th>
+                      <th>被方案使用</th>
+                      <th>示例词</th>
+                      <th>最近更新</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><span class="badge blue">赌博博彩</span></td>
+                      <td><b>赌博黑话词库</b></td>
+                      <td>3,256</td>
+                      <td>1 个方案</td>
+                      <td>盘口、回血、上分、下分、反水...</td>
+                      <td>2026-07-09</td>
+                      <td><button class="row-link" type="button">查看</button>　<button class="row-link" type="button">维护</button>　···</td>
+                    </tr>
+                    <tr>
+                      <td><span class="badge red">诈骗</span></td>
+                      <td><b>涉诈话术词库</b></td>
+                      <td>2,134</td>
+                      <td>2 个方案</td>
+                      <td>刷流水、认证金、解冻、保证金...</td>
+                      <td>2026-07-09</td>
+                      <td><button class="row-link" type="button">查看</button>　<button class="row-link" type="button">维护</button>　···</td>
+                    </tr>
+                    <tr>
+                      <td><span class="badge yellow">违禁引流</span></td>
+                      <td><b>违禁引流知识包</b></td>
+                      <td>1,876</td>
+                      <td>2 个方案</td>
+                      <td>私信、看主页、加群、暗号、...</td>
+                      <td>2026-07-08</td>
+                      <td><button class="row-link" type="button">查看</button>　<button class="row-link" type="button">维护</button>　···</td>
+                    </tr>
+                    <tr>
+                      <td><span class="badge purple">软色情</span></td>
+                      <td><b>软色情词库</b></td>
+                      <td>3,421</td>
+                      <td>2 个方案</td>
+                      <td>泳装、偷拍、擦边、诱导、...</td>
+                      <td>2026-07-08</td>
+                      <td><button class="row-link" type="button">查看</button>　<button class="row-link" type="button">维护</button>　···</td>
+                    </tr>
+                    <tr>
+                      <td><span class="badge red">暴恐</span></td>
+                      <td><b>暴恐风险知识包</b></td>
+                      <td>1,092</td>
+                      <td>1 个方案</td>
+                      <td>武器、爆炸、行动号召、仇恨、...</td>
+                      <td>2026-07-07</td>
+                      <td><button class="row-link" type="button">查看</button>　<button class="row-link" type="button">维护</button>　···</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="pagination">
+                <span>共 10 条</span>
+                <div class="pager-buttons">
+                  <button class="select-btn" type="button">10 条/页⌄</button>
+                  <button class="outline-btn btn-icon" type="button">‹</button>
+                  <span class="page-box">1</span>
+                  <button class="outline-btn btn-icon" type="button">›</button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="card drawer" id="policy-drawer"></aside>
+        </div>
+      </section>
+
+      <section class="page" id="page-risk" aria-label="风险研判">
+        <div class="page-head">
+          <div>
+            <h1>风险研判</h1>
+            <p>按风险等级、内容来源、任务方案聚合异常内容，支持固证和归并重点用户。</p>
+          </div>
+          <div class="actions">
+            <button class="outline-btn brand" type="button" data-toast="导出复核清单|review_list.csv 已模拟生成">导出复核清单</button>
+          </div>
+        </div>
+        <section class="stats-band">
+          <div class="stat-cell"><span>待复核</span><strong>42</strong><small>当前</small></div>
+          <div class="stat-cell"><span>高危</span><strong>6</strong><small>近 24 小时</small></div>
+          <div class="stat-cell"><span>中危</span><strong>28</strong><small>近 24 小时</small></div>
+          <div class="stat-cell"><span>已固证</span><strong>19</strong><small>累计</small></div>
+          <div class="stat-cell warning"><span>待归并</span><strong>8</strong><small>关联线索</small></div>
+        </section>
+        <section class="panel" style="margin: 0 18px;">
+          <h3 class="section-title">最新风险内容</h3>
+          <div class="data-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>风险等级</th>
+                  <th>内容摘要</th>
+                  <th>来源</th>
+                  <th>命中原因</th>
+                  <th>关联账号</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="badge yellow">待复核</span></td>
+                  <td><b>评论区出现多轮暗号互动</b></td>
+                  <td>重点用户监控</td>
+                  <td>多次评论互动 / 空评占位</td>
+                  <td>@@渔夫</td>
+                  <td><button class="row-link" type="button" data-nav-users>查看证据</button>　<button class="row-link" type="button" data-toast="已归并|@@渔夫 已加入重点用户监控">归并</button></td>
+                </tr>
+                <tr>
+                  <td><span class="badge red">高危</span></td>
+                  <td><b>直播弹幕出现引导跳转暗语</b></td>
+                  <td>直播接入</td>
+                  <td>ASR 语音转写 / 弹幕采集</td>
+                  <td>房间号 123456</td>
+                  <td><button class="row-link" type="button">查看证据</button>　<button class="row-link" type="button">固证</button></td>
+                </tr>
+                <tr>
+                  <td><span class="badge yellow">待复核</span></td>
+                  <td><b>本地视频 OCR 命中异常二维码区域</b></td>
+                  <td>本地视频</td>
+                  <td>视觉识别 / OCR</td>
+                  <td>A-07</td>
+                  <td><button class="row-link" type="button">查看证据</button>　<button class="row-link" type="button">排除</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">
+    <strong></strong>
+    <span></span>
+  </div>
+
+  <script>
+    const users = [
+      {
+        id: "u1",
+        name: "门老师",
+        handle: "menlaoshi_2024",
+        scope: "主页 · 发布 · 评论互动",
+        risk: 0,
+        related: 3,
+        sync: "07-09 17:06",
+        task: "主页分析",
+        status: "已暂停",
+        avatar: "",
+        itemStatus: "持续观察中",
+        relatedList: [
+          ["@@渔夫", "多次评论互动", "空评论疑似表情占位", "07-09", ""],
+          ["666666666", "同一风险评论区出现", "黑话命中相似", "07-09", "gray"],
+          ["真的好困", "同黑话命中", "引流方式相似", "07-09", "rose"]
+        ]
+      },
+      {
+        id: "u2",
+        name: "新疆石榴红绿",
+        handle: "xj_shiliu_7788",
+        scope: "主页 · 发布 · 评论互动",
+        risk: 2,
+        related: 1,
+        sync: "07-09 16:38",
+        task: "评论分析",
+        status: "观察中",
+        avatar: "teal",
+        itemStatus: "观察中",
+        relatedList: [
+          ["水晶葡萄", "连续评论互动", "相似话题标签", "07-09", "teal"],
+          ["甜瓜小铺", "同城评论出现", "账号资料相似", "07-08", "gray"]
+        ]
+      },
+      {
+        id: "u3",
+        name: "666666666",
+        handle: "qSJCwwx6U8",
+        scope: "主页 · 发布 · 评论互动",
+        risk: 0,
+        related: 0,
+        sync: "07-09 16:15",
+        task: "主页分析",
+        status: "已完成",
+        avatar: "gray",
+        itemStatus: "分析完成",
+        relatedList: []
+      },
+      {
+        id: "u4",
+        name: "真的好困",
+        handle: "htW7IHd6PC",
+        scope: "主页 · 发布 · 评论互动",
+        risk: 2,
+        related: 2,
+        sync: "07-09 15:53",
+        task: "主页分析",
+        status: "已完成",
+        avatar: "rose",
+        itemStatus: "分析完成",
+        relatedList: [
+          ["@@渔夫", "同黑话命中", "引流方式相似", "07-09", ""],
+          ["晚风", "评论链路相邻", "发布时间相近", "07-08", "gray"]
+        ]
+      }
+    ];
+
+    const policies = [
+      { id: "policy_gambling", name: "赌博博彩研判方案", tag: "赌博", tagClass: "blue", status: "已发布", statusClass: "green", libs: "1 个", caps: "5 项", refs: "4 个", updated: "2026-07-09 17:06" },
+      { id: "policy_general", name: "综合方案", tag: "综合", tagClass: "purple", status: "草稿", statusClass: "yellow", libs: "4 个", caps: "5 项", refs: "3 个", updated: "2026-07-09 16:30" },
+      { id: "policy_prohibited", name: "违禁引流研判方案", tag: "违禁引流", tagClass: "yellow", status: "已发布", statusClass: "green", libs: "1 个", caps: "5 项", refs: "0 个", updated: "2026-07-08 15:21" },
+      { id: "policy_fraud", name: "诈骗研判方案", tag: "诈骗", tagClass: "red", status: "已发布", statusClass: "green", libs: "1 个", caps: "5 项", refs: "0 个", updated: "2026-07-08 11:58" },
+      { id: "policy_soft", name: "软色情研判方案", tag: "软色情", tagClass: "purple", status: "已发布", statusClass: "green", libs: "1 个", caps: "4 项", refs: "0 个", updated: "2026-07-07 21:14" },
+      { id: "policy_terror", name: "暴恐研判方案", tag: "暴恐", tagClass: "red", status: "已发布", statusClass: "green", libs: "1 个", caps: "5 项", refs: "0 个", updated: "2026-07-07 20:05" },
+      { id: "policy_drug", name: "涉毒研判方案", tag: "涉毒", tagClass: "blue", status: "已发布", statusClass: "green", libs: "1 个", caps: "5 项", refs: "0 个", updated: "2026-07-07 19:42" },
+      { id: "policy_hate", name: "仇恨歧视研判方案", tag: "其他", tagClass: "gray", status: "草稿", statusClass: "yellow", libs: "1 个", caps: "5 项", refs: "0 个", updated: "2026-07-07 18:33" }
+    ];
+
+    let currentUser = users[0];
+    let currentPolicy = policies[0];
+
+    function icon(id) {
+      return `<svg class="mini-icon"><use href="#${id}"></use></svg>`;
+    }
+
+    function badge(text, cls = "gray") {
+      return `<span class="badge ${cls}">${text}</span>`;
+    }
+
+    function showToast(title, body) {
+      const toast = document.getElementById("toast");
+      toast.querySelector("strong").textContent = title;
+      toast.querySelector("span").textContent = body || "";
+      toast.classList.add("show");
+      window.clearTimeout(showToast.timer);
+      showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2300);
+    }
+
+    function setPage(page) {
+      document.querySelectorAll(".nav-tab").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.page === page);
+      });
+      document.querySelectorAll(".page").forEach((panel) => {
+        panel.classList.toggle("is-active", panel.id === `page-${page}`);
+      });
+    }
+
+    function renderUsers() {
+      const list = document.getElementById("monitor-list");
+      list.innerHTML = users.map((user) => `
+        <button class="monitor-item ${user.id === currentUser.id ? "is-active" : ""}" type="button" data-user="${user.id}">
+          <span class="avatar ${user.avatar}" aria-hidden="true"></span>
+          <span class="monitor-main">
+            <span class="monitor-name"><span>${user.name}</span>${badge("抖音", "blue")}</span>
+            <span class="monitor-scope">${user.scope}</span>
+          </span>
+          ${user.itemStatus.includes("完成") ? badge(user.itemStatus, "green") : user.itemStatus.includes("观察") ? badge(user.itemStatus, "yellow") : badge(user.itemStatus, "blue")}
+        </button>
+      `).join("");
+      list.querySelectorAll("[data-user]").forEach((button) => {
+        button.addEventListener("click", () => {
+          currentUser = users.find((user) => user.id === button.dataset.user) || users[0];
+          renderUsers();
+          renderUserDetail();
+        });
+      });
+    }
+
+    function renderUserDetail() {
+      document.getElementById("detail-name").textContent = currentUser.name;
+      document.getElementById("detail-id").textContent = currentUser.handle;
+      document.getElementById("detail-scope").textContent = currentUser.scope;
+      document.getElementById("detail-risk").innerHTML = `${currentUser.risk}<span style="font-size:14px;margin-left:4px">条</span>`;
+      document.getElementById("detail-related").innerHTML = `${currentUser.related}<span style="font-size:14px;margin-left:4px">个</span>`;
+      document.getElementById("detail-sync").textContent = currentUser.sync;
+      document.getElementById("detail-task").innerHTML = `${currentUser.task} ${badge(currentUser.status, currentUser.status === "已完成" ? "green" : "yellow")}`;
+      const avatar = document.getElementById("detail-avatar");
+      avatar.className = `avatar ${currentUser.avatar}`;
+
+      const related = document.getElementById("related-list");
+      if (!currentUser.relatedList.length) {
+        related.innerHTML = `<div class="empty-state" style="min-height:160px"><div><strong>暂无疑似关联账号</strong><p>当前账号未形成稳定关联线索</p></div></div>`;
+        return;
+      }
+      related.innerHTML = currentUser.relatedList.map((item) => `
+        <article class="related-item">
+          <span class="avatar ${item[4]}" aria-hidden="true"></span>
+          <div class="related-info">
+            <b>${item[0]}</b>
+            <p>关联原因： ${item[1]} <span class="badge gray">${item[2]}</span></p>
+            <p>最近出现： ${item[3]}</p>
+          </div>
+          <button class="outline-btn brand btn-sm" type="button" data-toast="分析任务已打开|${item[0]} 的评论用户分析">查看分析任务</button>
+          <button class="outline-btn btn-icon" type="button"><svg class="mini-icon"><use href="#i-more"></use></svg></button>
+        </article>
+      `).join("");
+    }
+
+    function renderPolicies() {
+      const tbody = document.getElementById("policy-table");
+      tbody.innerHTML = policies.map((policy) => `
+        <tr>
+          <td><b>${policy.name}</b> ${badge(policy.tag, policy.tagClass)}</td>
+          <td>${badge(policy.status, policy.statusClass)}</td>
+          <td>${policy.id}</td>
+          <td>${policy.libs}</td>
+          <td>${policy.caps}</td>
+          <td>${policy.refs}</td>
+          <td>${policy.updated}</td>
+          <td>
+            <button class="row-link" type="button" data-policy="${policy.id}">查看</button>
+            <span>　</span>
+            <button class="row-link" type="button" data-toast="编辑方案|${policy.name} 已进入编辑态">编辑</button>
+            <span>　···</span>
+          </td>
+        </tr>
+      `).join("");
+      tbody.querySelectorAll("[data-policy]").forEach((button) => {
+        button.addEventListener("click", () => {
+          currentPolicy = policies.find((policy) => policy.id === button.dataset.policy) || policies[0];
+          renderDrawer();
+        });
+      });
+      renderDrawer();
+    }
+
+    function renderDrawer() {
+      const drawer = document.getElementById("policy-drawer");
+      drawer.innerHTML = `
+        <div class="drawer-head">
+          <div>
+            <h2>${currentPolicy.name} ${badge(currentPolicy.status, currentPolicy.statusClass)}</h2>
+            <div class="drawer-meta"><span>方案 ID： ${currentPolicy.id}</span><span>被 ${currentPolicy.refs}任务引用</span></div>
+          </div>
+          <button class="icon-btn" type="button" data-toast="关闭抽屉|当前是固定展示的静态详情"><svg class="mini-icon"><use href="#i-x"></use></svg></button>
+        </div>
+
+        <section class="drawer-section">
+          <h3>检测范围</h3>
+          <div class="cap-grid">
+            ${badge("平台内容", "gray")}
+            ${badge("直播", "gray")}
+            ${badge("本地视频", "gray")}
+            ${badge("重点用户", "gray")}
+          </div>
+        </section>
+
+        <section class="drawer-section">
+          <h3>绑定知识库</h3>
+          <div class="knowledge-row"><span>${currentPolicy.tag === "综合" ? "综合风险知识库" : currentPolicy.tag + "黑话词库"}</span><strong>3,256 词条 ›</strong></div>
+        </section>
+
+        <section class="drawer-section">
+          <h3>检测能力</h3>
+          <div class="cap-grid">
+            <span class="token">${icon("i-file")}文本语义</span>
+            <span class="token">${icon("i-search")}OCR 识别</span>
+            <span class="token">ASR 语音转写</span>
+            <span class="token">视觉识别</span>
+            <span class="token">评论聚集</span>
+          </div>
+        </section>
+
+        <section class="drawer-section">
+          <h3>输出字段</h3>
+          <div class="field-grid">
+            <span class="token">✓ 风险内容</span>
+            <span class="token">✓ 标题 / 正文 / 评论</span>
+            <span class="token">✓ 图片 / 视频文字</span>
+            <span class="token">✓ 语音转写</span>
+            <span class="token">✓ 评论 / 弹幕</span>
+            <span class="token">✓ 词证材料</span>
+          </div>
+        </section>
+
+        <section class="drawer-section">
+          <h3>引用任务 (${currentPolicy.refs.replace(" 个", "")})</h3>
+          <div class="ref-row"><span>评论用户 · @@渔夫 分析</span>${badge("运行中", "green")}</div>
+          <div class="ref-row"><span>重点用户监控 · 用户尾号 BK47UjoOOA</span>${badge("已完成", "green")}</div>
+          <div class="ref-row"><span>直播间实时研判 · 房间号 123456</span>${badge("已暂停", "yellow")}</div>
+          <div class="ref-row"><span>本地视频巡查任务 A-07</span>${badge("运行中", "green")}</div>
+        </section>
+
+        <section class="drawer-section">
+          <h3>版本历史</h3>
+          <div class="version-row"><span><b>v1.1</b> ${badge("当前版本", "blue")}</span><span>2026-07-09 17:06　张警官 发布</span></div>
+          <div class="version-row"><span><b>v1.0</b></span><span>2026-07-07 11:22　张警官 发布</span></div>
+        </section>
+
+        <div class="drawer-actions">
+          <button class="primary-btn" type="button" data-toast="编辑方案|${currentPolicy.name} 已进入编辑态">编辑方案</button>
+          <button class="outline-btn" type="button" data-toast="方案已复制|已生成副本草稿">复制方案</button>
+          <button class="outline-btn" type="button">更多⌄</button>
+        </div>
+      `;
+    }
+
+    document.querySelectorAll(".nav-tab").forEach((button) => {
+      button.addEventListener("click", () => setPage(button.dataset.page));
+    });
+
+    document.addEventListener("click", (event) => {
+      const menuButton = event.target.closest("[data-menu-toggle]");
+      if (menuButton) {
+        const row = menuButton.closest(".task-row");
+        document.querySelectorAll(".task-row.menu-open").forEach((item) => {
+          if (item !== row) item.classList.remove("menu-open");
+        });
+        row.classList.toggle("menu-open");
+        return;
+      }
+
+      if (!event.target.closest(".task-row")) {
+        document.querySelectorAll(".task-row.menu-open").forEach((item) => item.classList.remove("menu-open"));
+      }
+
+      const navUsers = event.target.closest("[data-nav-users]");
+      if (navUsers) {
+        setPage("users");
+        return;
+      }
+
+      const navTasks = event.target.closest("[data-nav-tasks]");
+      if (navTasks) {
+        setPage("tasks");
+        return;
+      }
+
+      const toastTarget = event.target.closest("[data-toast]");
+      if (toastTarget) {
+        const [title, body] = toastTarget.dataset.toast.split("|");
+        showToast(title, body);
+      }
+    });
+
+    document.getElementById("user-search").addEventListener("input", (event) => {
+      const keyword = event.target.value.trim();
+      if (!keyword) {
+        renderUsers();
+        return;
+      }
+      const list = document.getElementById("monitor-list");
+      list.innerHTML = users.filter((user) => `${user.name} ${user.handle}`.includes(keyword)).map((user) => `
+        <button class="monitor-item ${user.id === currentUser.id ? "is-active" : ""}" type="button" data-user="${user.id}">
+          <span class="avatar ${user.avatar}" aria-hidden="true"></span>
+          <span class="monitor-main">
+            <span class="monitor-name"><span>${user.name}</span>${badge("抖音", "blue")}</span>
+            <span class="monitor-scope">${user.scope}</span>
+          </span>
+          ${badge(user.itemStatus, user.itemStatus.includes("完成") ? "green" : "yellow")}
+        </button>
+      `).join("") || `<div class="empty-state" style="min-height:120px"><div><strong>没有匹配账号</strong><p>换个关键词试试</p></div></div>`;
+      list.querySelectorAll("[data-user]").forEach((button) => {
+        button.addEventListener("click", () => {
+          currentUser = users.find((user) => user.id === button.dataset.user) || users[0];
+          renderUsers();
+          renderUserDetail();
+        });
+      });
+    });
+
+    renderUsers();
+    renderUserDetail();
+    renderPolicies();
+  </script>
+</body>
+</html>

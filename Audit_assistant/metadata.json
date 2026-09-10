@@ -1,0 +1,6 @@
+{
+  "name": "XHS Audit Agent Frontend V2",
+  "description": "Content inspection and risk judgement platform frontend",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

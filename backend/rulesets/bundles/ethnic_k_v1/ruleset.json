@@ -1,0 +1,271 @@
+{
+  "schema_version": 0,
+  "name": "民族内容审核 K：豁免与独立行为边界（未发布）",
+  "domain": "ethnic",
+  "audit_goal": "逐条审核民族身份关联攻击及民族身份转向倡议。先确认实际对象、评价谓词和发言立场，再检查具体规则所有必要条件。民族不等于国籍、宗教、文化或政治身份。上下文可解析已有指代、引用与反驳，不能补出民族动机或敌意。不得将一般比较改写为人格等级，不得将被反对的他人言论归责当前评论者。证据不足输出none；low不得用作疑似风险兜底。身份转向倡议按专门规则记录，不扩写为强制同化。",
+  "general_exemptions": [
+    {
+      "exemption_id": "ethnic.exemption.normal_expression",
+      "name": "正常描述、偏好及生活选择",
+      "condition": "仅描述差异、表达个人经验或偏好、讨论婚育机制与生活安排，没有独立的身份侮辱、群体价值等级贬低、歧视待遇、强迫或暴力。不因泛化或知识不严谨自动命中。 豁免只覆盖没有独立侮辱或文明等级贬低的部分，不能以生活建议的形式免除其另有的等级评价。",
+      "source_mappings": []
+    },
+    {
+      "exemption_id": "ethnic.exemption.specific_criticism",
+      "name": "具体行为及其他议题批评",
+      "condition": "批评具体行为、事件、政策、宗教教义或文化影响，未对有证据关联的民族群体实施攻击。不能把国籍、宗教对象直接改成民族对象；未命中本规则不等于其他范围下无问题。",
+      "source_mappings": []
+    },
+    {
+      "exemption_id": "ethnic.exemption.non_endorsing_quotation",
+      "name": "非赞同引用与反驳",
+      "condition": "引用、转述、否定或反对攻击表达而没有赞同该攻击。逐分句核对本人立场，本人另有的攻击独立判断。",
+      "source_mappings": []
+    },
+    {
+      "exemption_id": "ethnic.exemption.voluntary_identity_and_exchange",
+      "name": "个人家庭自愿认同与交流",
+      "condition": "一般通婚祝福、文化交流、亲属关系、具体家庭孩子的登记建议或个人自愿认同，本身不证明人群民族身份转向。明确倡导人群成为另一民族成员另按low关注规则；若含独立侮辱或文明等级，则按对应规则。",
+      "source_mappings": []
+    }
+  ],
+  "categories": [
+    {
+      "category_id": "ethnic.content_attack",
+      "name": "民族身份与民族关系关联攻击",
+      "description": "仅识别具体内容中的攻击行为，不以民族、语言或政治立场给人或账号分类。",
+      "order": 10,
+      "rules": [
+        {
+          "rule_id": "ethnic.identity_or_relation_role_targeted_abuse",
+          "name": "民族身份关联侮辱",
+          "hit_condition": "本人明确侮辱某人，且其民族身份或跨民族关系是被侮辱的理由。跨国婚姻不等于跨民族。",
+          "suggested_risk_level": "medium",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 10,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.group_stereotype_and_derogation",
+          "name": "民族群体贬损与等级比较",
+          "hit_condition": "以民族划分人格尊严、文明地位或社会身份高低，或将明确侮辱、污名赋予民族成员。相似度和程度差异不是人的等级。 把改变民族归属描写为获得文明地位、摆脱不文明或成为更高等的人的条件，属于本条medium；不能用个人家庭登记或生活建议豁免这一独立等级评价。仅适应某地文化或生活习惯不等于文明等级。",
+          "suggested_risk_level": "medium",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 20,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.inherent_supremacy_or_inferiority",
+          "name": "民族先天等级论",
+          "hit_condition": "断言某民族本身天生是高等或低等人种。婚育组合效果预测不属于此条。",
+          "suggested_risk_level": "medium",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 30,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.group_dehumanization",
+          "name": "民族身份非人化",
+          "hit_condition": "基于民族身份否认群体人类地位或将其描绘成应清除的害物。",
+          "suggested_risk_level": "high",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 40,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.identity_based_relationship_exclusion",
+          "name": "基于民族身份强迫限制交往",
+          "hit_condition": "因民族身份明确主张用威胁、惩罚、胁迫阻断他人自主交往；偏好建议不算。 没有具体威胁、惩罚或强迫措施的择偶劝告，即使语气绝对也不属于胁迫。不能由劝告者赞许的个人品质，倒推被不推荐民族缺乏该品质。",
+          "suggested_risk_level": "medium",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 50,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.discriminatory_exclusion_or_rights_denial",
+          "name": "民族身份歧视待遇与强制驱逐",
+          "hit_condition": "仅因民族身份主张剥夺平等教育、就业、住房、服务等资格或强制驱逐；针对具体行为者的口头回击不是强制驱逐。",
+          "suggested_risk_level": "high",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 60,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.blood_purity_narrative",
+          "name": "血统纯洁与婚育贬损",
+          "hit_condition": "因血统纯洁将跨族婚育或后代称为污染、退化、背叛。",
+          "suggested_risk_level": "high",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 70,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.malicious_collective_rumor",
+          "name": "民族群体严重泛化指控",
+          "hit_condition": "将严重有害行为断言为民族固有属性或全体罪责；不凭空声称已经证伪。",
+          "suggested_risk_level": "high",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 80,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.hostility_harassment_or_displacement",
+          "name": "民族关联骚扰动员",
+          "hit_condition": "基于民族身份号召围堵、持续骚扰、人肉、滥用举报或强制驱逐。",
+          "suggested_risk_level": "high",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 90,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.violence_or_extermination",
+          "name": "民族关联现实暴力",
+          "hit_condition": "基于民族身份支持、威胁或动员现实殴打、袭击、杀害。",
+          "suggested_risk_level": "high",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 100,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.extremist_or_hate_group_promotion",
+          "name": "民族迫害主张推广",
+          "hit_condition": "明确推广针对民族的迫害或暴力主张、招募或筹款。",
+          "suggested_risk_level": "high",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 110,
+          "source_mappings": []
+        },
+        {
+          "rule_id": "ethnic.contextual_or_coded_hostility",
+          "name": "已确认的轻度民族羞辱",
+          "hit_condition": "确有民族身份羞辱而程度较轻；不作为不确定、一般比较的兜底。",
+          "suggested_risk_level": "low",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 120,
+          "source_mappings": []
+        }
+      ]
+    },
+    {
+      "category_id": "ethnic.collective_identity_concern",
+      "name": "民族身份融合倡议关注",
+      "description": "记录倡导或期待人群转向另一民族身份的表达，不自动断言民族整体消失、强制同化或歧视。",
+      "order": 20,
+      "rules": [
+        {
+          "rule_id": "ethnic.collective_identity_replacement",
+          "name": "民族身份融合与转向倡议",
+          "hit_condition": "倡导或期待人群成为另一民族成员或改变民族归属；记录身份转向期待，不要求证明全民族范围，也不扩写为强制同化。仅通婚、文化融合、做某族媳妇等亲属关系不足以证明民族身份转向；具体家庭孩子登记或个人自愿认同建议不命中。伴有文明等级贬低优先medium。",
+          "suggested_risk_level": "low",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "只依据当前输入核实该规则的必要条件，不依据验收样例文本作白名单。",
+          "enabled": true,
+          "order": 10,
+          "source_mappings": []
+        }
+      ]
+    }
+  ]
+}

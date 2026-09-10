@@ -1,0 +1,274 @@
+{
+  "schema_version": "planner-shadow-eval-v1",
+  "frozen_prompt_version": "turn-planner-shadow-v1.1",
+  "suites": {
+    "smoke": [
+      {
+        "id": "smoke-001",
+        "message": "这份报告主要讲什么",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "report_presentation", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "smoke-002",
+        "message": "给我一个典型案例",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "report_presentation", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "smoke-003",
+        "message": "这个不典型，换一个",
+        "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "resolved", "resolved_referent_type": "case"},
+        "expected": {"requirement_kind": "report_presentation", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "smoke-004",
+        "message": "为什么这个案例有风险",
+        "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "resolved", "resolved_referent_type": "case"},
+        "expected": {"requirement_kind": "focused_claim_support", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "smoke-005",
+        "message": "为什么这么判断",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "unresolved", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "focused_claim_support", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "smoke-006",
+        "message": "有哪些证据",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": null, "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "smoke-007",
+        "message": "我只想看评论证据",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["comment"], "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "smoke-008",
+        "message": "不用全部，只看几条评论证据",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["comment"], "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "smoke-009",
+        "message": "把所有评论证据都列出来",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["comment"], "coverage": "complete", "reason": null}
+      },
+      {
+        "id": "smoke-010",
+        "message": "全部证据一条不要漏",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": null, "coverage": "complete", "reason": null}
+      },
+      {
+        "id": "smoke-011",
+        "message": "那条评论原文是什么",
+        "context": {"active_focus_exists": true, "active_focus_type": "evidence", "resolved_referent_status": "resolved", "resolved_referent_type": "evidence"},
+        "expected": {"requirement_kind": "evidence_detail", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "smoke-012",
+        "message": "你好",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "none", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "smoke-013",
+        "message": "谢谢",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "none", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "smoke-014",
+        "message": "概括报告并列出全部证据",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "unsupported", "evidence_types": null, "coverage": null, "reason": "multiple_source_requirements"}
+      }
+    ],
+    "blind": [
+      {
+        "id": "blind-001",
+        "message": "先用两三句话归纳一下报告的核心内容。",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "report_presentation", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-002",
+        "message": "从报告里挑一个最能说明问题的案例。",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "report_presentation", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-003",
+        "message": "刚才那个例子说服力不够，请另选一个。",
+        "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "resolved", "resolved_referent_type": "case"},
+        "expected": {"requirement_kind": "report_presentation", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-004",
+        "message": "报告最后得出的总体结论是什么？",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "report_presentation", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-005",
+        "message": "这个案例为何会被定成高风险？",
+        "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "resolved", "resolved_referent_type": "case"},
+        "expected": {"requirement_kind": "focused_claim_support", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-006",
+        "message": "这项结论是怎么推导出来的？",
+        "context": {"active_focus_exists": true, "active_focus_type": "claim", "resolved_referent_status": "resolved", "resolved_referent_type": "claim"},
+        "expected": {"requirement_kind": "focused_claim_support", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-007",
+        "message": "凭什么把它判成违规？",
+        "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "resolved", "resolved_referent_type": "case"},
+        "expected": {"requirement_kind": "focused_claim_support", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-008",
+        "message": "为何会得到这样的风险结论？",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "unresolved", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "focused_claim_support", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-009",
+        "message": "支撑这个发现的材料都有哪些类别？",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "resolved", "resolved_referent_type": "finding"},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": null, "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "blind-010",
+        "message": "把这个发现背后的材料给我看一些。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "resolved", "resolved_referent_type": "finding"},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": null, "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "blind-011",
+        "message": "先给几项能说明问题的材料就行。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": null, "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "blind-012",
+        "message": "先挑几条用户留言给我。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["comment"], "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "blind-013",
+        "message": "我想看看画面文字识别出来的片段。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["ocr"], "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "blind-014",
+        "message": "只列语音转写相关的材料。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["asr"], "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "blind-015",
+        "message": "这次先看视频画面本身的证据。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["visual"], "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "blind-016",
+        "message": "把帖子正文和关键帧方面的材料各举几条。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["text", "keyframe"], "coverage": "discovery", "reason": null}
+      },
+      {
+        "id": "blind-017",
+        "message": "把这个发现关联的材料完整列清楚。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "resolved", "resolved_referent_type": "finding"},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": null, "coverage": "complete", "reason": null}
+      },
+      {
+        "id": "blind-018",
+        "message": "用户留言相关的证据全部给我，别省略。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["comment"], "coverage": "complete", "reason": null}
+      },
+      {
+        "id": "blind-019",
+        "message": "OCR 识别内容要一份完整清单。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["ocr"], "coverage": "complete", "reason": null}
+      },
+      {
+        "id": "blind-020",
+        "message": "语音转写证据一个都别落下。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["asr"], "coverage": "complete", "reason": null}
+      },
+      {
+        "id": "blind-021",
+        "message": "帖子正文和关键帧证据都要全量。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "finding_evidence_collection", "evidence_types": ["text", "keyframe"], "coverage": "complete", "reason": null}
+      },
+      {
+        "id": "blind-022",
+        "message": "刚才引用的那句用户留言，请给出完整原话。",
+        "context": {"active_focus_exists": true, "active_focus_type": "evidence", "resolved_referent_status": "resolved", "resolved_referent_type": "evidence"},
+        "expected": {"requirement_kind": "evidence_detail", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-023",
+        "message": "这个 OCR 片段的逐字内容是什么？",
+        "context": {"active_focus_exists": true, "active_focus_type": "evidence", "resolved_referent_status": "resolved", "resolved_referent_type": "evidence"},
+        "expected": {"requirement_kind": "evidence_detail", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-024",
+        "message": "那段语音转写发生在视频什么时间？",
+        "context": {"active_focus_exists": true, "active_focus_type": "evidence", "resolved_referent_status": "resolved", "resolved_referent_type": "evidence"},
+        "expected": {"requirement_kind": "evidence_detail", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-025",
+        "message": "早上好。",
+        "context": {"active_focus_exists": false, "active_focus_type": "", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "none", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-026",
+        "message": "收到，辛苦了。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "none", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-027",
+        "message": "我晚点再看。",
+        "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "not_applicable", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "none", "evidence_types": null, "coverage": null, "reason": null}
+      },
+      {
+        "id": "blind-028",
+        "message": "先总结整份报告，再逐条给出这个发现的全部证据。",
+        "context": {"active_focus_exists": true, "active_focus_type": "finding", "resolved_referent_status": "resolved", "resolved_referent_type": "finding"},
+        "expected": {"requirement_kind": "unsupported", "evidence_types": null, "coverage": null, "reason": "multiple_source_requirements"}
+      },
+      {
+        "id": "blind-029",
+        "message": "解释这个案例为何有风险，并把某条评论的完整原文贴出来。",
+        "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "mixed", "resolved_referent_type": ""},
+        "expected": {"requirement_kind": "unsupported", "evidence_types": null, "coverage": null, "reason": "multiple_source_requirements"}
+      },
+      {
+        "id": "blind-030",
+        "message": "换一个案例，同时只列出该案例的评论证据。",
+        "context": {"active_focus_exists": true, "active_focus_type": "case", "resolved_referent_status": "resolved", "resolved_referent_type": "case"},
+        "expected": {"requirement_kind": "unsupported", "evidence_types": null, "coverage": null, "reason": "multiple_source_requirements"}
+      }
+    ]
+  }
+}

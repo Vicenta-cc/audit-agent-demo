@@ -1,0 +1,14 @@
+model:
+  provider: alibaba
+  default: qwen3.7-plus
+
+toolsets:
+  - investigation
+
+plugins:
+  enabled:
+    - investigation
+
+agent:
+  max_turns: 12
+  api_max_retries: 1

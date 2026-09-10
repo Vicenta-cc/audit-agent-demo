@@ -1,0 +1,14 @@
+fastapi==0.110.2
+uvicorn==0.29.0
+python-dotenv==1.2.2
+python-multipart>=0.0.9
+requests==2.33.0
+pydantic==2.13.4
+langgraph==1.2.10
+langgraph-checkpoint-sqlite==3.1.1
+cryptography==50.0.0
+opencv-python>=4.8.0
+numpy>=1.24.0,<2.0.0
+faster-whisper>=0.6.0
+Pillow>=10.0.0
+scenedetect>=0.6.6,<0.8

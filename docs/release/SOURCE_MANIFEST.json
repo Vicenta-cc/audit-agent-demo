@@ -1,0 +1,15 @@
+{
+  "upstream_application_commit": "f6d19f8e82a9cf0944c7b11ffbcbfe8c15cc5bd8",
+  "copied_from_committed_tree": true,
+  "excluded_paths": [
+    "docs/evidence/",
+    "audit_index_dump.sql",
+    "hermes_m0/fixtures/account_m22_corpus.json.gz",
+    "hermes_m0/fixtures/report_2272c3692807.json"
+  ],
+  "excluded_reason": "Historical SQL dump, real account corpus, report fixture and execution evidence are excluded pending a redistributable sanitized data package.",
+  "mediacrawler_commit": "5f428d1071522ce1e011ceedeceffaa858404949",
+  "delivery_status": "source_preview_not_clean_install_release",
+  "historical_report_data_included": false,
+  "production_accounts_included": false
+}

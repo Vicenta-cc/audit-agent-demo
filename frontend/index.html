@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>XHS Audit Agent Demo</title>
+  <link
+    rel="stylesheet"
+    href="./styles.css?v=20260703-prompt-full-2"
+    onerror="this.onerror=null;this.href='/static/styles.css?v=20260703-prompt-full-2';"
+  />
+</head>
+<body>
+  <main class="app">
+    <aside class="main-nav">
+      <div class="brand-block">
+        <h1>内容审核工作台</h1>
+        <span>Social Audit</span>
+      </div>
+      <nav>
+        <div class="nav-group-title">采集策略</div>
+        <button class="nav-item" type="button" data-view="lexicon">词库管理</button>
+        <button class="nav-item active" type="button" data-view="tasks">任务管理</button>
+        <div class="nav-group-title">审核研判</div>
+        <button class="nav-item" type="button" data-view="audit">审核研判</button>
+        <button class="nav-item" type="button" data-view="monitored">重点用户监控</button>
+      </nav>
+    </aside>
+
+    <section class="workspace">
+      <header class="workspace-head">
+        <div>
+          <h2 id="workspace-title">任务管理</h2>
+          <p id="workspace-subtitle">抓取任务、上传审核和任务运行状态</p>
+        </div>
+      </header>
+
+      <section class="workspace-view" id="view-lexicon" data-view="lexicon">
+        <div class="lexicon-layout">
+          <aside class="category-pane" id="category-pane">
+            <h3>风险分类</h3>
+            <button class="category-item active" type="button" data-category="soft">软色情</button>
+            <button class="category-item" type="button" data-category="gambling">赌博黑话</button>
+            <button class="category-item" type="button" data-category="fraud">涉诈话术</button>
+            <button class="category-item" type="button" data-category="minority">民族语言</button>
+          </aside>
+          <article class="lexicon-pane">
+            <div class="panel-head">
+              <h3 id="lexicon-title">软色情词库</h3>
+              <button class="small-button" type="button" id="add-keyword-button">新增关键词</button>
+            </div>
+            <div class="lexicon-tabs" id="lexicon-panel-tabs">
+              <button class="lexicon-tab active" type="button" data-lexicon-panel="keywords">关键词</button>
+              <button class="lexicon-tab" type="button" data-lexicon-panel="prompt">研判方案</button>
+            </div>
+            <section class="lexicon-section active" id="lexicon-keywords-panel">
+              <form id="keyword-form" class="keyword-form hidden">
+                <label class="keyword-field">
+                  关键词
+                  <input id="new-keyword" placeholder="输入关键词" />
+                </label>
+                <label>
+                  匹配方式
+                  <select id="new-keyword-match-type">
+                    <option value="模糊">模糊</option>
+                    <option value="精确">精确</option>
+                    <option value="正则">正则</option>
+                    <option value="tag">tag</option>
+                  </select>
+                </label>
+                <label>
+                  状态
+                  <span class="inline-checkbox">
+                    <input id="new-keyword-enabled" type="checkbox" checked />
+                    启用
+                  </span>
+                </label>
+                <div class="keyword-form-actions">
+                  <button class="secondary-button" type="button" id="cancel-keyword-button">取消</button>
+                  <button type="submit">保存</button>
+                </div>
+              </form>
+              <div class="keyword-chips" id="keyword-chips"></div>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>关键词</th>
+                    <th>匹配方式</th>
+                    <th>状态</th>
+                    <th>近 7 天命中</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="keyword-table-body"></tbody>
+              </table>
+            </section>
+            <section class="lexicon-section" id="lexicon-prompt-panel">
+              <form id="prompt-profile-form" class="prompt-profile-form">
+                <div class="prompt-editor-grid">
+                  <label>
+                    图片 Prompt
+                    <textarea id="prompt-image-prompt" rows="24"></textarea>
+                  </label>
+                  <label>
+                    关键帧 Prompt
+                    <textarea id="prompt-frame-prompt" rows="24"></textarea>
+                  </label>
+                  <label>
+                    融合 Prompt
+                    <textarea id="prompt-fusion-prompt" rows="24"></textarea>
+                  </label>
+                </div>
+                <div class="prompt-profile-actions">
+                  <span id="prompt-profile-dirty"></span>
+                  <button class="secondary-button" type="button" id="reset-prompt-profile-button">恢复默认</button>
+                  <button type="submit" id="save-prompt-profile-button">保存方案</button>
+                </div>
+              </form>
+            </section>
+          </article>
+        </div>
+      </section>
+
+      <section class="workspace-view active" id="view-tasks" data-view="tasks">
+        <section class="toolbar">
+          <div>
+            <h3>抓取任务</h3>
+          </div>
+
+          <form id="job-form">
+            <label>
+              平台
+              <select id="platform">
+                <option value="xhs">小红书</option>
+                <option value="dy">抖音</option>
+                <option value="ks">快手</option>
+              </select>
+            </label>
+            <label>
+              抓取模式
+              <select id="crawl-mode">
+                <option value="search">关键词搜索</option>
+                <option value="creator">博主主页</option>
+              </select>
+            </label>
+            <label id="task-lexicon-field">
+              <span id="task-lexicon-label">词库</span>
+              <select id="task-lexicon">
+                <option value="soft">软色情</option>
+                <option value="gambling">赌博黑话</option>
+                <option value="fraud">涉诈话术</option>
+                <option value="minority">民族语言</option>
+              </select>
+            </label>
+            <label class="wide-field" id="creator-field">
+              博主主页 URL
+              <input id="creator-url" placeholder="粘贴该平台的博主主页 URL" />
+            </label>
+            <label class="toggle-card">
+              <input id="get-sub-comment" type="checkbox" />
+              <span class="toggle-copy">
+                <strong>二级评论</strong>
+                <small>同步抓取评论回复</small>
+              </span>
+              <span class="toggle-switch" aria-hidden="true"></span>
+            </label>
+            <label class="toggle-card">
+              <input id="run-crawler" type="checkbox" checked />
+              <span class="toggle-copy">
+                <strong>重新爬取</strong>
+                <small>从平台拉取最新内容</small>
+              </span>
+              <span class="toggle-switch" aria-hidden="true"></span>
+            </label>
+            <label class="wide-field">
+              已有输出
+              <select id="source-output">
+                <option value="">正在读取 outputs...</option>
+              </select>
+            </label>
+            <button type="submit">开始审核</button>
+            <p class="job-status" id="job-status" role="status">就绪</p>
+          </form>
+
+          <form id="local-video-form" class="sub-form hidden">
+            <label class="file-field">
+              本地视频
+              <input id="local-video-file" type="file" accept="video/*" />
+            </label>
+            <label>
+              标题
+              <input id="local-video-title" value="本地测试视频" />
+            </label>
+            <label class="wide-field">
+              描述
+              <input id="local-video-desc" value="上传视频完整审核" />
+            </label>
+            <button type="submit">上传视频审核</button>
+          </form>
+        </section>
+
+        <section class="task-manager">
+          <aside class="task-list-panel">
+            <div class="panel-head">
+              <h3>任务列表</h3>
+              <button class="small-button secondary-button" type="button" id="refresh-jobs-button">刷新</button>
+            </div>
+            <div id="job-list" class="job-list"></div>
+          </aside>
+
+          <article class="status-panel task-detail-panel">
+            <div class="status-head">
+              <strong>任务详情</strong>
+              <button class="small-button secondary-button" type="button" id="open-audit-button">进入审核研判</button>
+            </div>
+            <div class="task-state-grid" id="task-state-grid">
+              <div><span>采集状态</span><strong>未开始</strong></div>
+              <div><span>分析状态</span><strong>未开始</strong></div>
+              <div><span>待分析</span><strong>0</strong></div>
+              <div><span>处理中</span><strong>0</strong></div>
+              <div><span>已完成</span><strong>0</strong></div>
+              <div><span>失败</span><strong>0</strong></div>
+            </div>
+            <div class="status-head">
+              <strong>任务日志</strong>
+              <div class="job-controls">
+                <button class="secondary-button" type="button" data-action="pause_crawl">停止采集</button>
+                <button class="secondary-button" type="button" data-action="stop_analysis">停止分析</button>
+                <button class="secondary-button" type="button" data-action="backfill_analysis">继续分析</button>
+                <button class="danger-button" type="button" data-action="delete_job">删除任务</button>
+              </div>
+            </div>
+            <pre id="logs"></pre>
+          </article>
+        </section>
+      </section>
+
+      <section class="workspace-view" id="view-audit" data-view="audit">
+        <div class="audit-snapshot-bar" id="audit-snapshot-bar">
+          <span id="audit-snapshot-text">实时更新中</span>
+          <div>
+            <button class="secondary-button" type="button" id="audit-apply-updates">加载新结果</button>
+            <button class="secondary-button" type="button" id="audit-live-mode">恢复实时更新</button>
+          </div>
+        </div>
+        <div class="audit-query-bar">
+          <label class="audit-search-field">
+            博主 ID 精确搜索
+            <input id="audit-blogger-id-keyword" placeholder="author_key / sec_uid / user_id" autocomplete="off" />
+          </label>
+          <label class="audit-search-field">
+            昵称模糊搜索
+            <input id="audit-blogger-nickname-keyword" placeholder="输入昵称关键词" autocomplete="off" />
+          </label>
+          <button class="secondary-button" type="button" id="audit-clear-search">清空</button>
+          <button class="secondary-button audit-toggle" type="button" id="audit-user-risk-sort">博主风险排序：关</button>
+          <button class="secondary-button audit-toggle" type="button" id="audit-item-risk-sort">帖子风险排序：关</button>
+        </div>
+        <section class="content">
+          <aside class="user-pane">
+            <h3>用户列表</h3>
+            <div id="user-list" class="user-list"></div>
+          </aside>
+          <aside class="item-pane">
+            <h3>帖子列表</h3>
+            <div id="item-list" class="item-list"></div>
+          </aside>
+          <article class="detail-pane">
+            <div id="detail" class="detail-empty">选择左侧内容查看详情</div>
+          </article>
+        </section>
+      </section>
+
+      <section class="workspace-view" id="view-monitored" data-view="monitored">
+        <section class="monitored-layout">
+          <div class="panel-head">
+            <div>
+              <h3>重点用户</h3>
+            </div>
+            <button class="small-button secondary-button" type="button" id="refresh-monitored-users-button">刷新</button>
+          </div>
+          <div id="monitored-users-list" class="monitored-users-list"></div>
+        </section>
+      </section>
+    </section>
+  </main>
+  <script>
+    const assetVersion = "20260703-prompt-full-2";
+
+    function loadScriptWithFallback(src, fallbackSrc) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = () => {
+          if (!fallbackSrc) {
+            reject(new Error(`Failed to load ${src}`));
+            return;
+          }
+          const fallback = document.createElement("script");
+          fallback.src = fallbackSrc;
+          fallback.onload = resolve;
+          fallback.onerror = () => reject(new Error(`Failed to load ${fallbackSrc}`));
+          document.body.appendChild(fallback);
+        };
+        document.body.appendChild(script);
+      });
+    }
+
+    loadScriptWithFallback("./config.js", "/static/config.js")
+      .then(() => loadScriptWithFallback(`./app.js?v=${assetVersion}`, `/static/app.js?v=${assetVersion}`))
+      .catch((error) => console.error(error));
+  </script>
+</body>
+</html>
