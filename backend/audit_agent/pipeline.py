@@ -912,6 +912,7 @@ class AuditPipeline:
                             )
                             self._begin_subject_audit()
                             result = self._analyze_subject(subject)
+                            self._assert_authoritative_provider_healthy()
                             result_path = self._write_result_json(subject.note_id, result)
                             persisted = self._persist_audit_result(
                                 platform=platform,

@@ -13,7 +13,7 @@ export function mapInvestigationRunState(
   run: InvestigationRunProjection
 ): InvestigationRunViewState {
   if (run.status === "AUDIT_COMPLETED") {
-    return { phase: "audit_completed", terminal: null, label: "审核完成", step: 3, activity: "completed" };
+    return { phase: "audit_completed", terminal: null, label: run.analysis_status === "partial" ? "处理结束，部分帖子审核失败" : "审核完成", step: 3, activity: "completed" };
   }
   if (run.status === "PUBLISHED") {
     return { phase: "completed", terminal: "published", label: "报告已发布", step: 4, activity: "completed" };

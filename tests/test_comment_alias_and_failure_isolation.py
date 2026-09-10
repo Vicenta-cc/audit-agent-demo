@@ -1,4 +1,5 @@
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -78,6 +79,13 @@ def test_collection_continues_while_analysis_skips_or_stops(tmp_path, monkeypatc
     p._persist_audit_result=lambda **kwargs: kwargs['result']
     p._build_subjects=lambda platform, items, *args: [subject(i['note_id']) for i in items]
     seen=[]; collected=[]
+    failure_recorded = threading.Event()
+    original_record = p._record_subject_failure
+    def record(*args):
+        original_record(*args)
+        if mode != 'provider_down' or len(seen) == 3:
+            failure_recorded.set()
+    p._record_subject_failure = record
     def audit(s):
         seen.append(s.note_id)
         if mode=='provider_down':
@@ -99,6 +107,12 @@ def test_collection_continues_while_analysis_skips_or_stops(tmp_path, monkeypatc
             assert not kwargs['stop_checker']()
             item={'note_id':str(i),'title':'post'};items.append(item);collected.append(str(i))
             kwargs['content_callback']([item], [])
+            boundary = {'authentication': 1, 'provider_down': 3, 'last_bad_post': 5}.get(mode, 2)
+            if i == boundary:
+                assert failure_recorded.wait(5), 'Analysis must fail before the crawler continues'
+                if mode in {'authentication', 'provider_down'}:
+                    assert jobs.control(p.job_id)['analysis_stop_requested']
+                    assert not kwargs['stop_checker']()
         return CrawlOutput(platform='xhs',contents=items,comments=[],output_dir=tmp_path/'crawler',command=[])
     p.crawler=SimpleNamespace(run_search=crawl)
     config=_configuration();config.update(analyze_limit=5, max_notes=5, _confirmed_analyze_limit=5)
@@ -120,3 +134,49 @@ def test_collection_continues_while_analysis_skips_or_stops(tmp_path, monkeypatc
         assert stats['failed_analysis_count']==attempts
         assert stats['queued_analysis_count']==5-attempts
     assert list((tmp_path/'outputs/isolation/post_failures').glob('*.json'))
+
+
+def test_partial_result_projection_does_not_promise_pending_report():
+    from backend.investigation_creation.adapters import InvestigationRunProjector
+    from backend.investigation_creation.contracts import RunStatus
+    p = InvestigationRunProjector.__new__(InvestigationRunProjector)
+    p.job_store = SimpleNamespace(get=lambda _: {'status': 'completed', 'run_crawler': True})
+    p.ingestion_store = SimpleNamespace(stats_for_task=lambda _: {'failed_analysis_count': 1})
+    p.audit_result_store = SimpleNamespace(list_results=lambda **_: {'items': []})
+    result = p.project(SimpleNamespace(job_id='job', status=RunStatus.AUDIT_COMPLETED, report_version_id=''))
+    assert result['crawl_status'] == 'completed'
+    assert result['analysis_status'] == 'partial'
+    assert result['report_status'] == 'blocked_by_failed_posts'
+
+
+def test_resumed_authoritative_audit_cannot_persist_provider_fallback(tmp_path, monkeypatch):
+    jobs = JobStore(tmp_path / 'audit.sqlite3')
+    ingestion = IngestionStore(tmp_path / 'audit.sqlite3')
+    monkeypatch.setattr(module, 'job_store', jobs)
+    monkeypatch.setattr(module.settings, 'outputs_dir', tmp_path / 'outputs')
+    jobs.create(job_id='resume-health', platform='xhs')
+    p = AuditPipeline.__new__(AuditPipeline)
+    p.job_id = 'resume-health'
+    p.authoritative_m3 = True
+    p.qwen = SimpleNamespace(provider_failure='')
+    p.ingestion = ingestion
+    p._verified_m3_snapshot = Mock(return_value=None)
+    p._resume_source_root = Mock(return_value=tmp_path)
+    p._rule_snapshot_from_source = Mock(return_value={})
+    p._set_prompt_context = Mock()
+    p._analysis_media_scope = Mock(return_value='all')
+    p._build_subjects = Mock(return_value=[subject()])
+    p._should_analyze_subject = Mock(return_value=True)
+    p._write_result_json = Mock(return_value=tmp_path / 'result.json')
+    p._persist_audit_result = Mock()
+    monkeypatch.setattr(ingestion, 'pending_for_task', lambda *a, **k: [
+        {'content_key': 'n', 'item': {'note_id': 'n'}, 'comments': []}])
+    monkeypatch.setattr(ingestion, 'mark_content_status', Mock())
+    def fallback(_):
+        p.qwen.provider_failure = 'provider failed'
+        return {'note_id': 'n', 'decision': 'pass', 'risk_level': 'none'}
+    p._analyze_subject = fallback
+    p.resume_pending_analysis()
+    p._write_result_json.assert_not_called()
+    p._persist_audit_result.assert_not_called()
+    assert any(c.args[2] == 'failed' for c in ingestion.mark_content_status.call_args_list)

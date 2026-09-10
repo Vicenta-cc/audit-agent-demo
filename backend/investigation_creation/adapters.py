@@ -706,6 +706,8 @@ class InvestigationRunProjector:
                 )
                 crawl_status, analysis_status = self._job_projection(job, task_stats)
         report_status = self._report_status(run)
+        if run.status == RunStatus.AUDIT_COMPLETED and int(task_stats.get("failed_analysis_count") or 0) > 0:
+            report_status = "blocked_by_failed_posts"
         return {
             "crawl_status": crawl_status,
             "analysis_status": analysis_status,
