@@ -5588,7 +5588,6 @@ class AuditPipeline:
             "evidence_items 只输出 evidence_risk_level 为 low、medium、high 的风险证据，"
             "安全或豁免上下文写入 summary，不得作为 none 证据输出；pass/none 时 evidence_items 和 rule_matches 必须为空数组。"
             "不要复制原文，不要创造新证据。只选择真正支撑风险结论的有限证据。summary 不超过80字，reason 不超过45字。\n"
-            + self._comment_id_instructions()
             + "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
@@ -6788,7 +6787,6 @@ class AuditPipeline:
             "约束：所有 ID 只能从输入 JSON 中选择；没有明确风险时对应数组为空。"
             "每条风险的 score 为 0-100，reason 最多 35 个汉字。"
             "必须区分宣扬、诱导、攻击、交易、组织和新闻、科普、批判、举报、反讽、正常生活等豁免语境；不要仅凭关键词判违规。\n"
-            + self._comment_id_instructions()
             + "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
@@ -7746,7 +7744,6 @@ class AuditPipeline:
             "  ],\n"
             f'  "global_translation_zh": "{global_translation_scope}"\n'
             "}\n\n"
-            + self._comment_id_instructions()
             + "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, indent=2)
         )
