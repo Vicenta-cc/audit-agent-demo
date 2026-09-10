@@ -49,10 +49,11 @@ cd audit-agent-demo
 
 - [完整安装、备份与排错说明](docs/release/INSTALLATION.md)
 - [A/B 演示数据包范围](demo/seed/README.md)
+- [民族长期试采集：导入 K、17 词及批量启动](docs/release/ETHNIC_TASK.md)
 - [单条与批量配置、K 规则的区别](docs/release/BATCH_EXTENSION.md)
 - [依赖版本与验证记录](docs/release/ACCEPTANCE.md)
 
-默认不携带民族 K RuleSet 到可编辑资源库。K 审核代码和提示词兼容能力保留，只有任务明确选用相应 RuleSet 才会生效；“抓 1 条/抓多条”不会自动选择 K。A/B 历史结果不随新任务规则变化。
+默认初始化不登记民族 K，但仓库包含完整 K 规则、Prompt 和思考配置。按民族任务说明运行 `init-ethnic` 即可导入自己的资源库，只有任务明确选用相应 RuleSet 才会生效；“抓 1 条/抓多条”不会自动选择 K。A/B 历史结果不随新任务规则变化。
 
 ASR 默认使用 CPU Whisper `base`，首次使用会下载模型；离线运行前应提前缓存。你也可以在本地配置中填写自己的远程 ASR 服务。平台验证码、登录过期、模型余额、限流和远程服务故障需要分别处理；本项目不会绕过验证，也不承诺平台服务始终可用。
 

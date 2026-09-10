@@ -236,7 +236,7 @@ def start(env, data, api, web):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('init', 'check', 'start', 'status'))
+    parser.add_argument('command', choices=('init', 'init-ethnic', 'check', 'start', 'status'))
     parser.add_argument('--config', type=Path, default=ROOT / '.env.demo.local')
     args = parser.parse_args()
     env, data, api, web = environment(args.config.resolve())
@@ -244,6 +244,11 @@ def main():
     os.environ.update(env)
     if args.command == 'init':
         initialize(data)
+    elif args.command == 'init-ethnic':
+        if not (data / 'demo-data.json').is_file():
+            raise RuntimeError('Run init with this config first.')
+        from scripts.ethnic_resources import install
+        print(json.dumps(install(data), ensure_ascii=False, indent=2))
     elif args.command == 'check':
         check(data)
     elif args.command == 'status':
