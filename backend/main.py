@@ -889,6 +889,8 @@ def enrich_job(job: dict) -> dict:
         analysis_status = "paused"
     elif status in {"running", "analysis_running", "crawl_pausing"}:
         analysis_status = "running"
+    elif status == "completed" and stats.get("failed_analysis_count", 0) > 0:
+        analysis_status = "partial"
     elif stats["pending_analysis_count"] > 0:
         analysis_status = "pending"
     elif stats["completed_analysis_count"] > 0 or status == "completed":

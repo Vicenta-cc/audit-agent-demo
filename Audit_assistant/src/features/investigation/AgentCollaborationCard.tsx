@@ -518,7 +518,7 @@ export function AgentCollaborationCard({
 }
 
 function statusLabel(status: string) {
-  return ({ completed: "完成", pending: "待处理", running: "进行中", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || "处理中";
+  return ({ completed: "完成", partial: "处理完成，部分帖子失败", pending: "待处理", running: "进行中", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || "处理中";
 }
 
 function reportStatusLabel(status: string) {

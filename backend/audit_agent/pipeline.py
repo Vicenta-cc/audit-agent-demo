@@ -31,7 +31,7 @@ from .knowledge_packages import get_default_knowledge_package
 from .models import AuditSubject
 from .ocr_processor import VideoOCRTracker
 from .prompts import get_prompt_set
-from .qwen_client import QwenClient, QwenTimeoutError
+from .qwen_client import QwenClient, QwenTimeoutError, QwenProviderError
 from .rule_compiler import DEFAULT_THRESHOLDS, compact_library_policy
 from .translation import TranslationProcessor
 from .video_processor import DemoAudioProcessor, DemoFrameExtractor
@@ -330,6 +330,7 @@ class AuditPipeline:
                                 "analyzing",
                                 task_id=self.job_id,
                             )
+                            self._begin_subject_audit()
                             result = self._analyze_subject(subject)
                             self._assert_authoritative_provider_healthy()
                             result_path = self._write_result_json(subject.note_id, result)
@@ -348,27 +349,12 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
+                            self._consecutive_provider_failures = 0
                             results.append(persisted or result)
-                        except FusionAuditTimeoutError as exc:
-                            self.ingestion.mark_content_status(
-                                request.platform,
-                                subject_key,
-                                "failed",
-                                task_id=self.job_id,
-                            )
-                            job_store.log(
-                                self.job_id,
-                                f"笔记 {subject.note_id}：融合审核连续超时，已标记失败并继续后续内容：{exc}",
-                            )
+                        except Exception as exc:
+                            self._record_subject_failure(request.platform, subject_key, subject, exc)
+                            analyzed_ids.add(subject.note_id)
                             continue
-                        except Exception:
-                            self.ingestion.mark_content_status(
-                                request.platform,
-                                subject_key,
-                                "failed",
-                                task_id=self.job_id,
-                            )
-                            raise
                         job_store.update(self.job_id, items=results)
                         job_store.log(self.job_id, f"边抓边分析完成：{subject.note_id}")
 
@@ -406,6 +392,7 @@ class AuditPipeline:
                                 "analyzing",
                                 task_id=self.job_id,
                             )
+                            self._begin_subject_audit()
                             result = self._analyze_subject(subject)
                             self._assert_authoritative_provider_healthy()
                             result_path = self._write_result_json(subject.note_id, result)
@@ -423,26 +410,11 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
-                        except FusionAuditTimeoutError as exc:
-                            self.ingestion.mark_content_status(
-                                request.platform,
-                                subject_key,
-                                "failed",
-                                task_id=self.job_id,
-                            )
-                            job_store.log(
-                                self.job_id,
-                                f"笔记 {subject.note_id}：融合审核连续超时，已标记失败并继续后续内容：{exc}",
-                            )
+                        except Exception as exc:
+                            self._record_subject_failure(request.platform, subject_key, subject, exc)
+                            analyzed_ids.add(subject.note_id)
                             continue
-                        except Exception:
-                            self.ingestion.mark_content_status(
-                                request.platform,
-                                subject_key,
-                                "failed",
-                                task_id=self.job_id,
-                            )
-                            raise
+                        self._consecutive_provider_failures = 0
                         results.append(persisted or result)
                         job_store.update(self.job_id, items=results)
                         job_store.log(self.job_id, f"边抓边分析完成：{subject.note_id}")
@@ -458,8 +430,10 @@ class AuditPipeline:
                                 analyze_stream_batch(contents, comments)
                             else:
                                 analyze_stream_ref(batch)
-                    except BaseException as exc:
+                    except Exception as exc:
                         analysis_errors.append(exc)
+                        job_store.update_control(self.job_id, analysis_stop_requested=True)
+                        job_store.log(self.job_id, f"审核线程异常：{type(exc).__name__}；仅停止审核，采集继续")
 
                 stream_analyzer = None
                 batch_flusher = None
@@ -592,7 +566,8 @@ class AuditPipeline:
                         stream_queue.put(None)
                         stream_analyzer.join()
                 if analysis_errors:
-                    raise analysis_errors[0]
+                    job_store.update_control(self.job_id, analysis_stop_requested=True)
+                    job_store.log(self.job_id, "审核线程已停止，采集已独立完成；待审核内容保留")
                 if output.command:
                     job_store.log(self.job_id, f"MediaCrawler command: {shlex.join(map(str, output.command))}")
                 if crawl_stop_requested():
@@ -741,6 +716,7 @@ class AuditPipeline:
                                 "analyzing",
                                 task_id=self.job_id,
                             )
+                        self._begin_subject_audit()
                         result = self._analyze_subject(subject)
                         self._assert_authoritative_provider_healthy()
                         result_path = self._write_result_json(subject.note_id, result)
@@ -760,29 +736,11 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
-                    except FusionAuditTimeoutError as exc:
-                        if subject_key:
-                            self.ingestion.mark_content_status(
-                                output.platform,
-                                subject_key,
-                                "failed",
-                                task_id=self.job_id,
-                            )
+                    except Exception as exc:
+                        self._record_subject_failure(output.platform, subject_key, subject, exc)
                         analyzed_ids.add(subject.note_id)
-                        job_store.log(
-                            self.job_id,
-                            f"笔记 {subject.note_id}：融合审核连续超时，已标记失败并继续后续内容：{exc}",
-                        )
                         continue
-                    except Exception:
-                        if subject_key:
-                            self.ingestion.mark_content_status(
-                                output.platform,
-                                subject_key,
-                                "failed",
-                                task_id=self.job_id,
-                            )
-                        raise
+                    self._consecutive_provider_failures = 0
                     results.append(persisted or result)
                     analyzed_ids.add(subject.note_id)
                     job_store.update(self.job_id, items=results)
@@ -830,6 +788,55 @@ class AuditPipeline:
         except Exception as exc:
             job_store.update(self.job_id, status="failed", error=str(exc))
             job_store.log(self.job_id, f"任务失败：{exc}")
+
+    def _begin_subject_audit(self) -> None:
+        # A previous post's error must not poison the next post's valid result.
+        if hasattr(getattr(self, "qwen", None), "provider_failure"):
+            self.qwen.provider_failure = ""
+
+    def _record_subject_failure(self, platform, content_key, subject, exc) -> None:
+        if content_key:
+            self.ingestion.mark_content_status(platform, content_key, "failed", task_id=self.job_id)
+        chain = []
+        cause = exc
+        while cause is not None and id(cause) not in {id(e) for e in chain}:
+            chain.append(cause)
+            cause = cause.__cause__ or cause.__context__
+        provider_failure = bool(getattr(getattr(self, "qwen", None), "provider_failure", "")) or any(
+            isinstance(e, (QwenProviderError, AuditProviderUnavailableError)) for e in chain)
+        if isinstance(exc, AuditProviderCallError) and any(
+            isinstance(e, (requests.RequestException, TimeoutError)) for e in chain
+        ):
+            provider_failure = True
+        # Preserve error types/status only: raw network errors can contain credentials.
+        statuses = [e.response.status_code for e in chain
+                    if isinstance(e, requests.HTTPError) and e.response is not None]
+        fatal_provider = (provider_failure and any(code in {401, 402, 403} for code in statuses)) or any(
+            isinstance(e, AuditProviderUnavailableError) for e in chain)
+        count = getattr(self, "_consecutive_provider_failures", 0) + 1 if provider_failure else 0
+        self._consecutive_provider_failures = count
+        self._begin_subject_audit()
+        folder = settings.outputs_dir / self.job_id / "post_failures"
+        folder.mkdir(parents=True, exist_ok=True)
+        if statuses:
+            reason = f"审核接口返回 HTTP {statuses[-1]}"
+        elif any(isinstance(e, (QwenTimeoutError, requests.Timeout, TimeoutError)) for e in chain):
+            reason = "审核请求超时，当前请求补试已结束"
+        elif isinstance(exc, FusionAuditContractError):
+            reason = "审核输出不满足证据或格式合同；详见阶段诊断"
+        else:
+            reason = "审核步骤执行异常；详见阶段诊断"
+        record = {"note_id": subject.note_id, "content_key": content_key, "reason": reason,
+                  "stage": getattr(self, "_current_audit_stage", "post_audit"),
+                  "error_type": type(exc).__name__, "cause_types": [type(e).__name__ for e in chain],
+                  "http_statuses": statuses, "consecutive_provider_failures": count,
+                  "action": "stop_analysis_only" if fatal_provider or count >= 3 else "skip_post"}
+        (folder / f"{subject.note_id}-{time_ns()}.json").write_text(
+            json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+        job_store.log(self.job_id, f"笔记 {subject.note_id}：审核失败（{type(exc).__name__}），已记录并跳过")
+        if fatal_provider or count >= 3:
+            job_store.update_control(self.job_id, analysis_stop_requested=True)
+            job_store.log(self.job_id, "审核服务不可用或连续三帖调用失败，仅停止审核；采集继续，待审核内容保留")
 
     def _assert_authoritative_provider_healthy(self) -> None:
         if not getattr(self, "authoritative_m3", False):
@@ -903,6 +910,7 @@ class AuditPipeline:
                                 "analyzing",
                                 task_id=self.job_id,
                             )
+                            self._begin_subject_audit()
                             result = self._analyze_subject(subject)
                             result_path = self._write_result_json(subject.note_id, result)
                             persisted = self._persist_audit_result(
@@ -920,28 +928,13 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
+                            self._consecutive_provider_failures = 0
                             results.append(persisted or result)
                             job_store.update(self.job_id, items=results)
-                        except FusionAuditTimeoutError as exc:
-                            self.ingestion.mark_content_status(
-                                platform,
-                                subject_key,
-                                "failed",
-                                task_id=self.job_id,
-                            )
-                            job_store.log(
-                                self.job_id,
-                                f"笔记 {subject.note_id}：融合审核连续超时，已标记失败并继续后续内容：{exc}",
-                            )
+                        except Exception as exc:
+                            self._record_subject_failure(platform, subject_key, subject, exc)
+                            analyzed_ids.add(subject.note_id)
                             continue
-                        except Exception:
-                            self.ingestion.mark_content_status(
-                                platform,
-                                subject_key,
-                                "failed",
-                                task_id=self.job_id,
-                            )
-                            raise
             final_control = job_store.control(self.job_id)
             if final_control.get("stop_all_requested"):
                 job_store.update(self.job_id, status="stopped", items=results)
@@ -980,6 +973,7 @@ class AuditPipeline:
                 local_image_paths=[],
                 local_video_paths=[str(video_path)],
             )
+            self._begin_subject_audit()
             result = self._analyze_subject(subject)
             result_path = self._write_result_json(subject.note_id, result)
             persisted = self._persist_audit_result(
@@ -1564,10 +1558,12 @@ class AuditPipeline:
             f"本地视频 {len(subject.local_video_paths)}，远程图片 {len(subject.image_urls)}，远程视频 {len(subject.video_urls)}",
         )
 
+        self._current_audit_stage = "post_translation"
         self._translate_subject_texts(subject)
         self._validate_authoritative_subject_configuration(subject)
 
         job_store.log(self.job_id, f"笔记 {subject.note_id}：开始图片分析")
+        self._current_audit_stage = "image_audit"
         image_analyses = self._analyze_images(subject, note_dir / "images")
         if authoritative_m3 and (
             subject.local_image_paths or subject.image_urls
@@ -1578,6 +1574,7 @@ class AuditPipeline:
         job_store.log(self.job_id, f"笔记 {subject.note_id}：图片分析完成，共 {len(image_analyses)} 张")
 
         job_store.log(self.job_id, f"笔记 {subject.note_id}：开始视频分析")
+        self._current_audit_stage = "video_audit"
         video_results = self._analyze_videos(subject, note_dir / "videos")
         if authoritative_m3 and (
             subject.local_video_paths or subject.video_urls
@@ -1588,10 +1585,12 @@ class AuditPipeline:
         job_store.log(self.job_id, f"笔记 {subject.note_id}：视频分析完成，共 {len(video_results)} 个")
 
         media_summary = self._media_summary_for_comment_audit(image_analyses, video_results)
+        self._current_audit_stage = "comment_audit"
         audited_comments = self._audit_comments(subject, media_summary)
         evidence_index = self._build_evidence_index(subject, image_analyses, video_results, audited_comments)
         evidence_index_path = self._write_evidence_index(subject.note_id, evidence_index)
         prompt = self._render_compact_fusion_prompt(subject, evidence_index, audited_comments)
+        self._current_audit_stage = "fusion_audit"
         audit = self._run_fusion_audit(
             subject.note_id,
             prompt,
@@ -4520,6 +4519,7 @@ class AuditPipeline:
             for sub_batch_index, requested in enumerate(request_batches, start=1):
                 started_at = perf_counter()
                 response_diagnostic = ""
+                raw = {}
                 sub_batch_label = (
                     f"，子批次={sub_batch_index}/{len(request_batches)}"
                     if len(request_batches) > 1
@@ -4555,13 +4555,16 @@ class AuditPipeline:
                         )
                         response_diagnostic += f"，JSON解析失败，响应字符={len(raw_response)}"
                     else:
-                        current = self._normalize_comment_audit_results(raw, requested)
+                        decoded = self._decode_comment_ids(raw, requested)
+                        current = self._normalize_comment_audit_results(decoded, requested)
                         error = "model omitted comment result"
                 except QwenTimeoutError as exc:
                     # The client already used the one allowed timeout retry.
                     # Do not turn this into another split-batch compensation round.
                     job_store.log(self.job_id, "评论审核请求连续两次超时，停止重试")
                     raise AuditProviderCallError("text Provider request timed out after one retry") from exc
+                except QwenProviderError as exc:
+                    raise AuditProviderCallError("comment Provider request failed") from exc
                 except Exception as exc:
                     current = {}
                     error = str(exc)
@@ -4576,6 +4579,8 @@ class AuditPipeline:
                     str(comment.get("comment_id") or "") not in current
                     for comment in requested
                 )
+                if missing_count:
+                    self._write_comment_id_failure(subject, requested, raw, attempt, batch_label)
                 elapsed = perf_counter() - started_at
                 job_store.log(
                     self.job_id,
@@ -4621,6 +4626,47 @@ class AuditPipeline:
         return normalized
 
     @staticmethod
+    def _comment_id_instructions() -> str:
+        return ("\n评论编号约束：输入 comment_id 是本次请求内短编号 C01、C02 等。"
+                "输出 id 只能逐字选择本次给定编号，每个编号恰好一次；不得输出平台长 ID、"
+                "猜测编号或按输出顺序省略编号。补试请求的编号以该次输入为准。\n")
+
+    @staticmethod
+    def _decode_comment_ids(raw: dict, comments: list[dict]) -> dict:
+        mapping = {f"C{index:02d}": str(c["comment_id"]) for index, c in enumerate(comments, 1)}
+        rows = raw.get("comments") or raw.get("results") or raw.get("comment_results") or []
+        if not isinstance(rows, list):
+            return {"comments": []}
+        counts: dict[str, int] = {}
+        for row in rows:
+            if isinstance(row, dict):
+                alias = str(row.get("id") or row.get("comment_id") or "")
+                counts[alias] = counts.get(alias, 0) + 1
+        decoded = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            alias = str(row.get("id") or row.get("comment_id") or "")
+            if alias not in mapping or counts[alias] != 1:
+                continue
+            if row.get("id") and row.get("comment_id") and row["id"] != row["comment_id"]:
+                continue
+            restored = dict(row, id=mapping[alias])
+            if "comment_id" in restored:
+                restored["comment_id"] = mapping[alias]
+            decoded.append(restored)
+        return {"comments": decoded}
+
+    def _write_comment_id_failure(self, subject, comments, raw, attempt, batch_label):
+        folder = settings.outputs_dir / self.job_id / "comment_audit_failures"
+        folder.mkdir(parents=True, exist_ok=True)
+        record = {"note_id": subject.note_id, "batch": batch_label, "attempt": attempt,
+                  "mapping": {f"C{i:02d}": c["comment_id"] for i, c in enumerate(comments, 1)},
+                  "response": raw}
+        (folder / f"{subject.note_id}-{time_ns()}.json").write_text(
+            json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    @staticmethod
     def _empty_comment_audit_result() -> dict:
         return {
             "audit_status": "completed",
@@ -4658,7 +4704,7 @@ class AuditPipeline:
             "library_policies": self._active_library_policies(["comment"]),
             "comments": [
                 {
-                    "comment_id": comment.get("comment_id"),
+                    "comment_id": f"C{index:02d}",
                     "source_text": comment_text(comment.get("source_text", "")),
                     "translation_required": bool(comment.get("translation_required")),
                     **(
@@ -4667,7 +4713,7 @@ class AuditPipeline:
                         else {}
                     ),
                 }
-                for comment in comments
+                for index, comment in enumerate(comments, 1)
             ],
         }
         comment_template = str(
@@ -4678,7 +4724,7 @@ class AuditPipeline:
         )
         if self._is_ruleset_v2() and comment_template:
             return self._render_v2_json_prompt(
-                comment_template,
+                comment_template + self._comment_id_instructions(),
                 payload,
                 limit=settings.comment_audit_prompt_max_chars,
                 kind="comment",
@@ -4709,7 +4755,8 @@ class AuditPipeline:
             "rb 不超过18字，eb 不超过14字；q 只能摘自 source_text，禁止改写，并保持最短。"
             "translation_required=true 时必须输出准确、自然、完整的 zh；"
             "translation_required=false 时省略 zh。不要输出空字符串、空数组或占位依据。\n"
-            "输入 JSON：\n"
+            + self._comment_id_instructions()
+            + "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
 
@@ -5541,7 +5588,8 @@ class AuditPipeline:
             "evidence_items 只输出 evidence_risk_level 为 low、medium、high 的风险证据，"
             "安全或豁免上下文写入 summary，不得作为 none 证据输出；pass/none 时 evidence_items 和 rule_matches 必须为空数组。"
             "不要复制原文，不要创造新证据。只选择真正支撑风险结论的有限证据。summary 不超过80字，reason 不超过45字。\n"
-            "输入 JSON：\n"
+            + self._comment_id_instructions()
+            + "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
 
@@ -6740,7 +6788,8 @@ class AuditPipeline:
             "约束：所有 ID 只能从输入 JSON 中选择；没有明确风险时对应数组为空。"
             "每条风险的 score 为 0-100，reason 最多 35 个汉字。"
             "必须区分宣扬、诱导、攻击、交易、组织和新闻、科普、批判、举报、反讽、正常生活等豁免语境；不要仅凭关键词判违规。\n"
-            "输入 JSON：\n"
+            + self._comment_id_instructions()
+            + "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
 
@@ -7697,7 +7746,8 @@ class AuditPipeline:
             "  ],\n"
             f'  "global_translation_zh": "{global_translation_scope}"\n'
             "}\n\n"
-            "输入 JSON：\n"
+            + self._comment_id_instructions()
+            + "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, indent=2)
         )
 

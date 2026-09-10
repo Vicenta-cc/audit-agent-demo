@@ -1,0 +1,24 @@
+{
+  "ruleset_id": "ruleset.ethnic-content-review.k-trial.v2",
+  "files": {
+    "ruleset.json": "6ff38b2d25bb6b7c9fb7bc30d531f4b076eb99841b95bd25a31dc39eb8434e74",
+    "prompt-profile.json": "15181c8313a0ad904d703debac3931f48fcd60b98f8e9f16c6c108d441bdcd72",
+    "comment-template.txt": "d12fb43368a420e65871397fb2b8c55d72a49c97c7b712f2a3b9596e5d705760"
+  },
+  "inference_settings": {
+    "comment_audit": {
+      "model": "qwen3.7-plus",
+      "enable_thinking": true,
+      "max_tokens": 6000,
+      "request_timeout": 120
+    },
+    "fusion_audit": {
+      "model": "qwen3.7-plus",
+      "enable_thinking": true,
+      "max_tokens": 3000,
+      "request_timeout": 120
+    }
+  },
+  "status": "experimental_trial",
+  "source_prompt_version": "ethnic-k2-scope-boundaries-candidate"
+}

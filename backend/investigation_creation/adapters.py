@@ -747,12 +747,16 @@ class InvestigationRunProjector:
 
         if status == "failed":
             analysis_status = "failed"
+        elif control.get("analysis_stop_requested") or status == "analysis_stopped":
+            analysis_status = "stopped"
         elif control.get("analysis_paused") or status == "analysis_paused":
             analysis_status = "paused"
         elif status in {"running", "analysis_running", "crawl_pausing"}:
             analysis_status = "running"
         elif int(stats.get("analyzing_count") or 0) > 0:
             analysis_status = "running"
+        elif status == "completed" and int(stats.get("failed_analysis_count") or 0) > 0:
+            analysis_status = "partial"
         elif int(stats.get("pending_analysis_count") or 0) > 0:
             analysis_status = "pending"
         elif status == "completed":

@@ -586,7 +586,7 @@ class CommentAuditTests(unittest.TestCase):
                     "comments": [
                         {
                             "comment_id": item["comment_id"],
-                            "score": int(item["comment_id"][1:]),
+                            "score": int(item["source_text"].split()[-1]),
                             "risk_basis": "存在风险表达",
                             "exemption_basis": "结合上下文仍需复核",
                             "evidence_quote": item["source_text"],
@@ -776,7 +776,7 @@ class CommentAuditTests(unittest.TestCase):
         with patch("backend.audit_agent.pipeline.job_store.log"):
             comments = pipeline._audit_comments(subject, "媒体摘要")
 
-        self.assertEqual(pipeline.qwen.comment_ids, [["c3"]])
+        self.assertEqual(pipeline.qwen.comment_ids, [["C01"]])
         by_id = {comment["comment_id"]: comment for comment in comments}
         self.assertEqual(by_id["c1"]["audit_source"], "local_empty")
         self.assertEqual(by_id["c2"]["audit_source"], "local_empty")
@@ -830,7 +830,7 @@ class CommentAuditTests(unittest.TestCase):
         with patch("backend.audit_agent.pipeline.job_store.log"):
             comments = pipeline._audit_comments(self.subject(3), "媒体摘要")
 
-        self.assertEqual(pipeline.qwen.requested_ids, [["c1", "c2", "c3"], ["c2", "c3"]])
+        self.assertEqual(pipeline.qwen.requested_ids, [["C01", "C02", "C03"], ["C01", "C02"]])
         self.assertTrue(all(comment["audit_status"] == "completed" for comment in comments))
 
     def test_full_batch_retry_is_split_into_ten_comment_sub_batches(self) -> None:
