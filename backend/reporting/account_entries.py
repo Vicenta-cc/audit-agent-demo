@@ -23,8 +23,8 @@ REPORT_ACCOUNT_SCHEMA_VERSION = "report-account-entry-r3/v1"
 DEFAULT_ACTIVE_COMMENT_ACCOUNT_LIMIT = 5
 DEFAULT_ACCOUNT_FIXTURE_PATH = (
     Path(__file__).resolve().parents[2]
-    / "hermes_m0"
-    / "fixtures"
+    / "demo"
+    / "seed"
     / "account_m22_corpus.json.gz"
 )
 

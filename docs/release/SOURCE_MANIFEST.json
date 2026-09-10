@@ -7,9 +7,12 @@
     "hermes_m0/fixtures/account_m22_corpus.json.gz",
     "hermes_m0/fixtures/report_2272c3692807.json"
   ],
-  "excluded_reason": "Historical SQL dump, real account corpus, report fixture and execution evidence are excluded pending a redistributable sanitized data package.",
+  "excluded_reason": "Raw runtime SQL, unrelated fixtures and historical execution logs remain excluded. A/B published report tables and their public-evidence corpus are separately packaged under demo/seed; see its README and manifest.",
   "mediacrawler_commit": "5f428d1071522ce1e011ceedeceffaa858404949",
-  "delivery_status": "source_preview_not_clean_install_release",
-  "historical_report_data_included": false,
-  "production_accounts_included": false
+  "delivery_status": "standalone_single_post_demo_verified_macos",
+  "historical_report_data_included": true,
+  "production_accounts_included": false,
+  "hermes_commit": "e624e9fde561e1add9388384012b295fde669ade",
+  "hermes_install_mode": "editable pinned git submodule; no core source patch required",
+  "seed_manifest": "demo/seed/manifest.json"
 }

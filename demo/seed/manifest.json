@@ -1,0 +1,25 @@
+{
+  "format": 1,
+  "scope": "Published A/B report tables and their public-evidence account corpus; no crawler accounts, credentials or task queues.",
+  "reports": {
+    "a": {
+      "task_id": "3ad102e072f6",
+      "report_version_id": "report-version:8c355a5ba03f45619795813af83ac669",
+      "report_content_hash": "bfce4b1669d6f4b4684e66b5b076cd5cd97c2c2807f8f1b1dfdca9f12bec4f64",
+      "snapshot_hash": "bdb1ee04d2a3cf22997c57c5dc308807f0dd6abcce18094613a505d41f3f80f4",
+      "database_sha256": "c685059b0d3475abc859cee4d9199c6fabe44924c51753c7ae74022bc05aac69"
+    },
+    "b": {
+      "task_id": "8bc179209e1e",
+      "report_version_id": "report-version:4e3ebeccd2ed4f0c9c9a750332d22585",
+      "report_content_hash": "29bf76de4eb1468a51dfec43df9701419555bb67b9bef29fb8ef054bbb016c40",
+      "snapshot_hash": "a23e23ada3e54ebf7bec8a9666a6a7e090e783c1ec4cc1ef823c7b5c182d4630",
+      "database_sha256": "654f4b35f91011c62ced85299b78ee24a97e5a711f3afc9ddcdcffb8289ea12d"
+    }
+  },
+  "files": {
+    "report-a.sqlite3.gz": "9e78a5c7e2f932a7d7e3eaf7413b246e3722a1e87ac7d8bbef8f1370995f2839",
+    "report-b.sqlite3.gz": "a2f7534baf4306da90eaf8a0364163c26a96ab90421b342a9994633c14da6a0c",
+    "account_m22_corpus.json.gz": "e17a5ac81447a6c8000e8017ede9ca55542d07b36509fe815625440b923ab440"
+  }
+}

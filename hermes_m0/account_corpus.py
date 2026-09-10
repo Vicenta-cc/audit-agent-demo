@@ -846,7 +846,7 @@ class AccountCorpus:
     @classmethod
     def load(cls, path: Path | None = None) -> AccountCorpus:
         fixture_path = path or (
-            Path(__file__).with_name("fixtures") / "account_m22_corpus.json.gz"
+            Path(__file__).resolve().parents[1] / "demo" / "seed" / "account_m22_corpus.json.gz"
         )
         value = _read_fixture(fixture_path)
         corpus = cls(

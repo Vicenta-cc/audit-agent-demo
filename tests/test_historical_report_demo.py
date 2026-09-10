@@ -95,6 +95,8 @@ class _SynchronousExecutor:
 
 @pytest.fixture()
 def historical_stack():
+    from scripts.demo import restore_seed
+    restore_seed(HISTORICAL_REPORT_SPECS[0].source_database.parent.parent)
     missing = [item.source_database for item in HISTORICAL_REPORT_SPECS if not item.source_database.is_file()]
     assert not missing, f"Gate-frozen historical archives are missing: {missing}"
     _CapturingHermesAgent.histories = []

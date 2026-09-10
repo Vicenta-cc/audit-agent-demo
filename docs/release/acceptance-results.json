@@ -1,0 +1,104 @@
+{
+  "date": "2026-09-10",
+  "application_source_commit": "f6d19f8e82a9cf0944c7b11ffbcbfe8c15cc5bd8",
+  "environment": "macOS, Python 3.12.10; new app and crawler virtual environments; isolated data and ports",
+  "ab_real_questions": [
+    {
+      "workspace": "A",
+      "ordinal": 1,
+      "status": "completed",
+      "grounding_status": "passed",
+      "tool_calls": 1
+    },
+    {
+      "workspace": "A",
+      "ordinal": 2,
+      "status": "completed",
+      "grounding_status": "passed",
+      "tool_calls": 1
+    },
+    {
+      "workspace": "A",
+      "ordinal": 3,
+      "status": "completed",
+      "grounding_status": "passed",
+      "tool_calls": 2
+    },
+    {
+      "workspace": "A",
+      "ordinal": 4,
+      "status": "completed",
+      "grounding_status": "passed",
+      "tool_calls": 0
+    },
+    {
+      "workspace": "B",
+      "ordinal": 1,
+      "status": "completed",
+      "grounding_status": "passed",
+      "tool_calls": 5
+    },
+    {
+      "workspace": "B",
+      "ordinal": 2,
+      "status": "completed",
+      "grounding_status": "passed",
+      "tool_calls": 1
+    },
+    {
+      "workspace": "B",
+      "ordinal": 3,
+      "status": "completed",
+      "grounding_status": "passed",
+      "tool_calls": 0
+    },
+    {
+      "workspace": "B",
+      "ordinal": 4,
+      "status": "completed",
+      "grounding_status": "passed",
+      "tool_calls": 4
+    }
+  ],
+  "single_post": {
+    "source": "real Douyin search, separate unused account",
+    "creation": "real Hermes/Qwen natural-language temporary ruleset generation and adoption; confirmed through frontend",
+    "run_status": "PUBLISHED",
+    "stats": {
+      "ingested_count": 1,
+      "queued_analysis_count": 0,
+      "pending_analysis_count": 0,
+      "analyzing_count": 0,
+      "completed_analysis_count": 1,
+      "failed_analysis_count": 0,
+      "analysis_status_counts": {
+        "completed": 1
+      },
+      "batch_count": 1,
+      "batch_item_count": 1,
+      "batch_processed_count": 1
+    },
+    "decision": "pass",
+    "report_status": "published",
+    "report_question_status": "completed",
+    "comment_count": 0,
+    "comment_scope_note": "No comments returned for this sample; report Q&A correctly states missing coverage, not comment safety."
+  },
+  "tests": {
+    "passed": 140,
+    "subtests_passed": 23
+  },
+  "frontend_build": "passed",
+  "restart_persistence": "passed: same report version, creation conversation and new-report conversation after full stack stop/start",
+  "known_secret_scan": {
+    "indexed_files": 666,
+    "matches": 0
+  },
+  "limits": [
+    "Linux command path provided but not executed on a Linux host.",
+    "Browser login on a brand-new platform account was not revalidated; acceptance reused a separate already-authorized local test account.",
+    "No 24-hour batch or multiple-backend gateway deployment tested in this delivery.",
+    "Historical video files are not redistributed; frozen text and evidence are included."
+  ],
+  "installer_reexecution": "passed; configuration, account and existing task retained"
+}

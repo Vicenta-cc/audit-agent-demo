@@ -552,6 +552,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const [sendingMessageSessionId, setSendingMessageSessionId] = useState("");
   const [confirmingCreationSessionId, setConfirmingCreationSessionId] = useState("");
   const [historicalWorkspacesLoaded, setHistoricalWorkspacesLoaded] = useState(false);
+  const [historicalLoadError, setHistoricalLoadError] = useState("");
   const subViewScrollRef = useRef<HTMLDivElement>(null);
   const loadingPublishedReportsRef = useRef(new Set<string>());
   const pendingTurnControllersRef = useRef(new Map<string, AbortController>());
@@ -634,6 +635,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       }
     }).catch((error) => {
       console.error("Failed to load historical report workspaces", error);
+      setHistoricalLoadError("调查数据加载失败，请检查服务状态后重试。");
     }).finally(() => {
       setHistoricalWorkspacesLoaded(true);
     });
@@ -2189,6 +2191,17 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       ]
     }));
   };
+
+  // Initial mock state is retained for legacy demo helpers but must never be
+  // presented as real task data while the authoritative workspaces load.
+  if (!historicalWorkspacesLoaded || historicalLoadError) {
+    return (
+      <main className="inv-workspace-root" role={historicalLoadError ? "alert" : "status"}>
+        <p>{historicalLoadError || "正在加载调查与历史报告……"}</p>
+        {historicalLoadError && <button onClick={() => window.location.reload()}>重新加载</button>}
+      </main>
+    );
+  }
 
   return (
     <div className="inv-workspace-root">

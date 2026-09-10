@@ -21,7 +21,7 @@ from hermes_m0.real_report_repository import PublishedReportRepository
 
 
 DEFAULT_ACCOUNT_CORPUS_PATH = (
-    Path(__file__).with_name("fixtures") / "account_m22_corpus.json.gz"
+    Path(__file__).resolve().parents[1] / "demo" / "seed" / "account_m22_corpus.json.gz"
 )
 RISK_LEVELS = frozenset({"low", "medium", "high"})
 RISK_POST_DECISIONS = frozenset({"review", "reject"})

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
+import json
 
 from backend.audit_agent.config import settings
 
@@ -25,13 +26,9 @@ class HistoricalReportSpec:
 def _source_path(env_path: Path | None, artifact_dir: str) -> Path:
     if env_path is not None:
         return env_path.expanduser().resolve()
-    return (
-        settings.root_dir.parent
-        / "xhs-audit-agent-hermes-m2-2-valid-heldout"
-        / "artifacts"
-        / artifact_dir
-        / "report-generation.sqlite3"
-    ).resolve()
+    label = "a" if "zero_standalone" in artifact_dir else "b"
+    return (settings.data_dir / "demo-seed" / f"report-{label}.sqlite3").resolve()
+
 
 
 HISTORICAL_REPORT_SPECS = (
@@ -191,3 +188,16 @@ HISTORICAL_REPORT_SPECS = (
         ),
     ),
 )
+
+# A compact archive has a different file hash; report and snapshot hashes stay intact.
+_seed_manifest = settings.root_dir / "demo" / "seed" / "manifest.json"
+if _seed_manifest.is_file():
+    _seed = json.loads(_seed_manifest.read_text(encoding="utf-8"))
+    HISTORICAL_REPORT_SPECS = tuple(
+        replace(spec, source_database_sha256=_seed["reports"][label]["database_sha256"])
+        if override is None else spec
+        for spec, label, override in zip(
+            HISTORICAL_REPORT_SPECS, ("a", "b"),
+            (settings.historical_report_a_db, settings.historical_report_b_db),
+        )
+    )

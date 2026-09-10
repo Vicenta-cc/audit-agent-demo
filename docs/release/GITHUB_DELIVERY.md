@@ -1,3 +1,7 @@
+# 历史交付规划（归档）
+
+此文件保留最初发布规划，不作为当前安装指南。已完成的安装入口见 [INSTALLATION.md](INSTALLATION.md)，已验证范围见 [ACCEPTANCE.md](ACCEPTANCE.md)，默认范围见根 README。下面的“待补”“未上传”和旧绝对路径均是历史状态。
+
 > 仓库状态更新：本源码已整理到 Vicenta-cc/audit-agent-demo；主应用来源 f6d19f8，MediaCrawler 固定为子模块 5f428d1。默认范围与缺少的历史语料/A-B 数据包以根 README 为准。下文是此前的详细发布计划，不能将历史“未上传”状态或双环境拓扑当成当前默认安装要求。
 
 # GitHub 完整项目交付与两种运行配置

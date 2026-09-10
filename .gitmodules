@@ -1,3 +1,7 @@
 [submodule "external/MediaCrawler"]
 	path = external/MediaCrawler
 	url = https://github.com/Vicenta-cc/media-crawler.git
+
+[submodule "external/hermes-agent"]
+	path = external/hermes-agent
+	url = https://github.com/NousResearch/hermes-agent.git
