@@ -1781,8 +1781,9 @@ def test_single_creation_turn_create_and_confirm_restores_workspace_run_and_repo
     assert _run_count(stack["creation_store"]) == 1
 
 
-def test_creation_mode_has_exactly_ten_tools() -> None:
-    assert set(M3_TOOL_INPUTS) == {
+def test_creation_mode_keeps_legacy_tools_and_adds_resource_tools() -> None:
+    from backend.resource_management.tools import RESOURCE_TOOL_INPUTS
+    assert set(M3_TOOL_INPUTS) == set(RESOURCE_TOOL_INPUTS) | {
         "use_ruleset_proposal",
         "create_ruleset_proposal",
         "update_ruleset_proposal",

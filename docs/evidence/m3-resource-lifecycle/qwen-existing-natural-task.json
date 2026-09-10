@@ -1,0 +1,167 @@
+{
+  "model": "qwen3.7-plus",
+  "runtime": "Hermes 0.20.4",
+  "thinking": true,
+  "storage": "disposable",
+  "cases": [
+    {
+      "case": "existing-natural-task",
+      "input": "我想调查小红书上的赌博博彩推广风险，帮我准备抓取审核任务配置，先不要开始执行。",
+      "status": "completed",
+      "answer": "已经为你准备好了小红书赌博博彩推广风险的调查任务配置，当前处于草稿状态，尚未开始执行。\n\n**任务配置概览：**\n\n- **任务标题**：小红书赌博博彩推广风险调查\n- **调查目标**：调查小红书平台上赌博博彩相关的推广、代理带单、包赢稳赚承诺、站外导流、群入口与资金闭环等风险内容，覆盖图文、视频及评论区组织参与场景\n- **平台**：小红书\n- **调查模式**：搜索模式\n\n**使用的资源：**\n\n1. **审核规则**：赌博博彩风险规则集（v2）\n   - 包含7条规则，覆盖入口与资金闭环、推广承诺与站外导流、评论组织参与、证据强度与融合等场景\n   - 支持图文、视频、评论等多模态证据识别\n\n2. **黑话库**：赌博黑话词库\n   - 启用搜索词：上分、盘口\n   - 用于内容召回和关键词匹配\n\n**当前状态：**\n- 草案ID：`investigation-draft:4abbdb2cceda4759bef0e6f59311eab4`\n- 状态：草稿（DRAFT）\n- 可以确认执行：是\n\n任务已配置完成，等你确认后再开始执行。你可以随时查看或修改配置，准备好后告诉我即可启动调查。",
+      "tools": [
+        "query_investigation_options",
+        "query_investigation_options",
+        "create_investigation_draft"
+      ],
+      "artifact": {
+        "artifact_type": "investigation_draft",
+        "confirmation_preview": {
+          "blockers": [],
+          "can_confirm": true,
+          "creator_url": "",
+          "draft_id": "investigation-draft:4abbdb2cceda4759bef0e6f59311eab4",
+          "draft_revision": 1,
+          "get_sub_comment": false,
+          "max_comments_per_post": 300,
+          "max_notes": 1,
+          "max_posts_per_keyword": 1,
+          "mode": "search",
+          "objective": "调查小红书平台上赌博博彩相关的推广、代理带单、包赢稳赚承诺、站外导流、群入口与资金闭环等风险内容，覆盖图文、视频及评论区组织参与场景。",
+          "platform": "xhs",
+          "recall_plan": {
+            "enabled_main_term_count": 2,
+            "enabled_main_terms": [
+              "上分",
+              "盘口"
+            ],
+            "lexicon_id": "gambling",
+            "lexicon_title": "赌博黑话词库",
+            "runtime_content_hash": "3ef8792b1f996159dae5d16675fa03655e051b4e7c3b448af2aa124424967f5a",
+            "source_lexicon_ids": [],
+            "strategy": "existing_lexicon",
+            "temporary_terms": []
+          },
+          "resolved_search_terms": [
+            "上分",
+            "盘口"
+          ],
+          "ruleset_revision": {
+            "available": true,
+            "content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc",
+            "domain": "gambling",
+            "enabled_rule_count": 7,
+            "id": "ruleset-revision:gambling:v2",
+            "name": "赌博博彩风险规则集",
+            "ruleset_id": "ruleset.gambling",
+            "version": 2
+          },
+          "temporary_ruleset": null,
+          "title": "小红书赌博博彩推广风险调查"
+        },
+        "draft": {
+          "configuration": {
+            "investigation": {
+              "mode": "search",
+              "recall_plan": {
+                "enabled_main_terms": [
+                  "上分",
+                  "盘口"
+                ],
+                "expected_runtime_content_hash": "3ef8792b1f996159dae5d16675fa03655e051b4e7c3b448af2aa124424967f5a",
+                "lexicon_id": "gambling",
+                "strategy": "existing_lexicon"
+              }
+            },
+            "judgement": {
+              "expected_ruleset_content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc",
+              "expected_ruleset_version": 2,
+              "ruleset_revision_id": "ruleset-revision:gambling:v2",
+              "strategy": "existing_ruleset"
+            },
+            "platform": "xhs",
+            "schema_version": "investigation-draft-config-v4"
+          },
+          "confirmed_at": "",
+          "confirmed_revision": null,
+          "created_at": "2026-09-10T09:30:17.177168+00:00",
+          "current_revision": 1,
+          "id": "investigation-draft:4abbdb2cceda4759bef0e6f59311eab4",
+          "objective": "调查小红书平台上赌博博彩相关的推广、代理带单、包赢稳赚承诺、站外导流、群入口与资金闭环等风险内容，覆盖图文、视频及评论区组织参与场景。",
+          "status": "DRAFT",
+          "title": "小红书赌博博彩推广风险调查",
+          "updated_at": "2026-09-10T09:30:17.177168+00:00"
+        },
+        "draft_id": "investigation-draft:4abbdb2cceda4759bef0e6f59311eab4",
+        "draft_revision": 1,
+        "presentation_stage": "suggestion",
+        "proposal_presentations": [],
+        "suggestion": {
+          "creator_url": "",
+          "mode": "search",
+          "objective": "调查小红书平台上赌博博彩相关的推广、代理带单、包赢稳赚承诺、站外导流、群入口与资金闭环等风险内容，覆盖图文、视频及评论区组织参与场景。",
+          "platform_options": [
+            {
+              "available": true,
+              "id": "dy",
+              "name": "抖音"
+            },
+            {
+              "available": true,
+              "id": "xhs",
+              "name": "小红书"
+            },
+            {
+              "available": true,
+              "id": "ks",
+              "name": "快手"
+            }
+          ],
+          "recall_lexicons": [
+            {
+              "available": true,
+              "enabled_main_term_count": 2,
+              "enabled_main_terms": [],
+              "enabled_main_terms_returned": 0,
+              "id": "gambling",
+              "risk_label": "赌博博彩",
+              "runtime_content_hash": "3ef8792b1f996159dae5d16675fa03655e051b4e7c3b448af2aa124424967f5a",
+              "terms_included": false,
+              "terms_truncated": false,
+              "title": "赌博黑话词库"
+            }
+          ],
+          "ruleset_revision": {
+            "available": true,
+            "content_hash": "f33abf75bc81b6ad2754e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc",
+            "domain": "gambling",
+            "enabled_rule_count": 7,
+            "id": "ruleset-revision:gambling:v2",
+            "name": "赌博博彩风险规则集",
+            "ruleset_id": "ruleset.gambling",
+            "version": 2
+          },
+          "search_terms": [
+            "上分",
+            "盘口"
+          ],
+          "selected_platform": "xhs",
+          "temporary_ruleset": null,
+          "title": "小红书赌博博彩推广风险调查"
+        }
+      },
+      "edits": [],
+      "counts": {
+        "investigation_drafts": 1,
+        "investigation_runs": 0
+      }
+    }
+  ],
+  "provider_calls": 7,
+  "usage": {
+    "prompt_tokens": 75377,
+    "completion_tokens": 2036,
+    "total_tokens": 77413
+  },
+  "status": "PASS"
+}

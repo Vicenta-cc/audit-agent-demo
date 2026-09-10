@@ -118,7 +118,8 @@ class LexiconStore:
         self._seed_defaults()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        from backend.resource_management.lexicon_versions import VersionedLexiconConnection
+        conn = sqlite3.connect(self.db_path, factory=VersionedLexiconConnection)
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -181,6 +182,10 @@ class LexiconStore:
             category_columns = {row["name"] for row in conn.execute("PRAGMA table_info(lexicon_categories)").fetchall()}
             if "risk_label" not in category_columns:
                 conn.execute("ALTER TABLE lexicon_categories ADD COLUMN risk_label TEXT NOT NULL DEFAULT ''")
+
+        from backend.resource_management.lexicon_versions import initialize
+        with self._connect() as conn:
+            initialize(conn)
 
     def _seed_defaults(self) -> None:
         now = datetime.now().isoformat(timespec="seconds")
@@ -382,6 +387,7 @@ class LexiconStore:
             profile = profiles_by_category.get(row["id"]) or self._default_prompt_profile(row["id"])
             out.append({
                 "id": row["id"],
+                "version": connection.execute('SELECT MAX(version) FROM lexicon_content_versions WHERE category_id=?', (row['id'],)).fetchone()[0],
                 "title": row["title"],
                 "risk_label": row["risk_label"] or self._default_risk_label(row["id"], row["title"]),
                 "chips": [item["keyword"] for item in items[:12]],
@@ -760,17 +766,20 @@ class LexiconStore:
         seen: set[str] = set()
         terms: list[str] = []
         for row in rows:
-            match_type = str(row["match_type"] or "").strip().lower()
-            if match_type in {"平台标签", "tag"}:
+            if row["entry_kind"] in {"variant", "tag"} or row["parent_entry_id"]:
                 continue
-            note = str(row["note"] or "").strip()
-            if note:
-                try:
-                    metadata = json.loads(note)
-                except (TypeError, json.JSONDecodeError):
-                    metadata = {}
-                if isinstance(metadata, dict) and metadata.get("variant_of"):
+            if not row["entry_kind"]:
+                match_type = str(row["match_type"] or "").strip().lower()
+                if match_type in {"平台标签", "tag"}:
                     continue
+                note = str(row["note"] or "").strip()
+                if note:
+                    try:
+                        metadata = json.loads(note)
+                    except (TypeError, json.JSONDecodeError):
+                        metadata = {}
+                    if isinstance(metadata, dict) and metadata.get("variant_of"):
+                        continue
             term = str(row["keyword"] or "").strip()
             if term and term not in seen:
                 seen.add(term)
@@ -789,7 +798,7 @@ class LexiconStore:
             raise KeyError(category_id)
         return connection.execute(
             """
-            SELECT keyword, match_type, note
+            SELECT keyword, match_type, note, entry_kind, parent_entry_id
             FROM lexicon_keywords
             WHERE category_id = ? AND enabled = 1
             ORDER BY id ASC
@@ -886,11 +895,27 @@ class LexiconStore:
         values.append(datetime.now().isoformat(timespec="seconds"))
         values.append(keyword_id)
         with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 f"UPDATE lexicon_keywords SET {', '.join(updates)} WHERE id = ?",
                 values,
             )
             row = conn.execute("SELECT * FROM lexicon_keywords WHERE id = ?", (keyword_id,)).fetchone()
+            if row:
+                try:
+                    metadata = json.loads(kwargs.get('note') or '{}')
+                except (ValueError, TypeError):
+                    metadata = {}
+                parent_name = metadata.get('variant_of') if isinstance(metadata, dict) else None
+                if parent_name:
+                    parent = conn.execute('SELECT entry_id FROM lexicon_keywords WHERE category_id=? AND keyword=? AND id!=? AND entry_kind=?', (row['category_id'], parent_name, keyword_id, 'main')).fetchone()
+                    if not parent:
+                        raise ValueError('variant parent main term not found')
+                    conn.execute("UPDATE lexicon_keywords SET entry_kind='variant',parent_entry_id=? WHERE id=?", (parent[0], keyword_id))
+                elif 'match_type' in kwargs and row['entry_kind'] != 'variant':
+                    kind = 'tag' if str(kwargs['match_type']).lower() in ('tag', '平台标签') else 'main'
+                    conn.execute('UPDATE lexicon_keywords SET entry_kind=? WHERE id=?', (kind, keyword_id))
+                row = conn.execute('SELECT * FROM lexicon_keywords WHERE id=?', (keyword_id,)).fetchone()
         if not row:
             raise KeyError(str(keyword_id))
         return self._keyword_row(row)
@@ -964,6 +989,9 @@ class LexiconStore:
         return {
             "id": row["id"],
             "category_id": row["category_id"],
+            "entry_id": row['entry_id'],
+            "parent_entry_id": row['parent_entry_id'],
+            "entry_kind": row['entry_kind'],
             "keyword": row["keyword"],
             "match_type": row["match_type"],
             "platform": row["platform"],

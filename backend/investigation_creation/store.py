@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 import hashlib
 import json
 import sqlite3
@@ -210,7 +211,7 @@ class InvestigationCreationStore:
 
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_creation_turn_mutation_tool
                 ON investigation_creation_tool_receipts(session_id, turn_id, tool_name)
-                WHERE is_mutation = 1;
+                WHERE is_mutation = 1 AND tool_name NOT IN ('create_lexicon_edit','open_resource_edit','update_resource_edit','save_resource');
 
                 CREATE TABLE IF NOT EXISTS ruleset_proposal_conversation_bindings (
                     receipt_id TEXT PRIMARY KEY REFERENCES investigation_creation_tool_receipts(receipt_id),
@@ -218,6 +219,14 @@ class InvestigationCreationStore:
                 );
                 """
             )
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            index = connection.execute("SELECT sql FROM sqlite_master WHERE name='uq_creation_turn_mutation_tool'").fetchone()
+            if index and 'NOT IN' not in index[0]:
+                connection.execute('DROP INDEX uq_creation_turn_mutation_tool')
+                connection.execute("CREATE UNIQUE INDEX uq_creation_turn_mutation_tool ON investigation_creation_tool_receipts(session_id,turn_id,tool_name) WHERE is_mutation=1 AND tool_name NOT IN ('create_lexicon_edit','open_resource_edit','update_resource_edit','save_resource')")
+            connection.execute("CREATE TABLE IF NOT EXISTS resource_edit_history (edit_id TEXT NOT NULL,version INTEGER NOT NULL,content_json TEXT NOT NULL,PRIMARY KEY(edit_id,version))")
+            connection.execute("INSERT OR IGNORE INTO resource_edit_history SELECT proposal_id,version,content_json FROM ruleset_proposals")
         # Serialize additive upgrades so concurrent process initialization cannot
         # both observe and alter the same missing column.
         with self._connect() as connection:
@@ -444,7 +453,7 @@ class InvestigationCreationStore:
                 """,
                 (identity["session_id"], identity["turn_id"], identity["tool_call_id"]),
             ).fetchone()
-            if row is None and is_mutation:
+            if row is None and is_mutation and tool_name not in {"create_lexicon_edit", "open_resource_edit", "update_resource_edit", "save_resource"}:
                 row = connection.execute(
                     """
                     SELECT * FROM investigation_creation_tool_receipts
@@ -590,12 +599,17 @@ class InvestigationCreationStore:
                 """SELECT r.response_json FROM investigation_creation_tool_receipts r
                    JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id = r.receipt_id
                    WHERE r.session_id = ? AND b.application_turn_id = ? AND r.status = 'SUCCEEDED'
-                     AND r.tool_name IN ('create_ruleset_proposal', 'update_ruleset_proposal')
+                     AND r.tool_name IN ('create_ruleset_proposal', 'update_ruleset_proposal', 'open_resource_edit', 'update_resource_edit', 'get_resource_edit')
                    ORDER BY r.rowid""", (session_id, turn_id),
             ).fetchall()
             latest = {}
             for row in rows:
-                recorded = TemporaryRuleSetProposal.model_validate(json.loads(row["response_json"])["data"])
+                data = json.loads(row["response_json"])["data"]
+                if 'edit_id' in data:
+                    if data.get('kind') != 'ruleset':
+                        continue
+                    data = data['proposal_snapshot']
+                recorded = TemporaryRuleSetProposal.model_validate(data)
                 latest[recorded.proposal_id] = recorded
             snapshots = []
             for recorded in latest.values():
@@ -609,21 +623,23 @@ class InvestigationCreationStore:
             return snapshots
 
     def create_ruleset_proposal(
-        self, *, session_id: str, content: RuleSetContent, content_hash: str
+        self, *, session_id: str, content: RuleSetContent, content_hash: str,
+        connection: sqlite3.Connection | None = None,
     ) -> TemporaryRuleSetProposal:
         proposal_id = f"ruleset-proposal:{uuid4().hex}"
         now = self._now_text()
-        with self._connect() as connection:
+        with (nullcontext(connection) if connection is not None else self._connect()) as connection:
             connection.execute(
                 "INSERT INTO ruleset_proposals VALUES (?, ?, 1, ?, ?, ?, ?)",
                 (proposal_id, session_id, content_hash,
                  self._json(content.model_dump(mode="json")), now, now),
             )
+            row = connection.execute('SELECT version,content_json FROM ruleset_proposals WHERE proposal_id=? AND session_id=?', (proposal_id,session_id)).fetchone()
+            if row:
+                connection.execute('INSERT OR IGNORE INTO resource_edit_history VALUES (?,?,?)', (proposal_id,row['version'],row['content_json']))
             return self._owned_proposal(connection, proposal_id, session_id)
 
-    def get_ruleset_proposal(
-        self, proposal_id: str, *, session_id: str
-    ) -> TemporaryRuleSetProposal:
+    def get_ruleset_proposal(self, proposal_id: str, *, session_id: str) -> TemporaryRuleSetProposal:
         with self._connect() as connection:
             return self._owned_proposal(connection, proposal_id, session_id)
 
@@ -644,6 +660,9 @@ class InvestigationCreationStore:
                 (content_hash, self._json(content.model_dump(mode="json")), self._now_text(),
                  proposal_id, session_id, expected_version),
             )
+            row = connection.execute('SELECT version,content_json FROM ruleset_proposals WHERE proposal_id=? AND session_id=?', (proposal_id,session_id)).fetchone()
+            if row:
+                connection.execute('INSERT OR IGNORE INTO resource_edit_history VALUES (?,?,?)', (proposal_id,row['version'],row['content_json']))
             return self._owned_proposal(connection, proposal_id, session_id)
 
     @staticmethod

@@ -1,0 +1,157 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+__ test_authoritative_provider_failure_prevents_completed_result_persistence ___
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/pytest-of-ext.wanghongtao6/pytest-427/test_authoritative_provider_fa0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11262a6c0>
+
+    def test_authoritative_provider_failure_prevents_completed_result_persistence(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        audit_db = tmp_path / "provider-failure.sqlite3"
+        jobs = JobStore(audit_db)
+        ingestion = IngestionStore(audit_db)
+        configuration = _configuration(mode="search", analyze_limit=1)
+        configuration["_authoritative_m3_contract"] = True
+        job_id = "authoritative-provider-failure"
+        jobs.create(
+            job_id=job_id,
+            **{
+                key: value
+                for key, value in configuration.items()
+                if not key.startswith("_")
+            },
+        )
+        monkeypatch.setattr(pipeline_module, "job_store", jobs)
+        monkeypatch.setattr(pipeline_module.settings, "outputs_dir", tmp_path / "outputs")
+        monkeypatch.setattr(
+            pipeline_module.settings, "auto_analyze_crawled_content", True
+        )
+
+        pipeline = AuditPipeline.__new__(AuditPipeline)
+        pipeline.job_id = job_id
+        pipeline.crawler = CandidateCrawler([{"note_id": "provider-item", "title": "item"}])
+        pipeline.ingestion = ingestion
+        pipeline.audit_results = object()
+        pipeline.prompt_profile_snapshot = {}
+        pipeline.audit_config_revision_id = ""
+        pipeline.rule_snapshot = {}
+        pipeline.qwen = SimpleNamespace(provider_failure="")
+        persist_calls: list[str] = []
+
+        def fail_provider_after_analysis(subject):
+            pipeline.qwen.provider_failure = "text Provider request failed"
+            return {
+                "note_id": subject.note_id,
+                "decision": "review",
+                "risk_level": "medium",
+            }
+
+        pipeline._analyze_subject = fail_provider_after_analysis
+        pipeline._persist_audit_result = lambda **kwargs: persist_calls.append(
+            kwargs["content_key"]
+        )
+
+        pipeline.run(SimpleNamespace(**configuration))
+
+        job = jobs.get(job_id)
+>       assert job["status"] == "failed"
+E       AssertionError: assert 'completed' == 'failed'
+E
+E         - failed
+E         + completed
+
+tests/test_analyze_limit_ingestion.py:511: AssertionError
+___________ test_v3_snapshot_accepts_analyze_limit_greater_than_one ____________
+
+m3_stack = {'lexicons': <backend.audit_agent.lexicon_store.LexiconStore object at 0x1122b85f0>, 'policies': <backend.audit_agent....bb30>, 'resources': <backend.investigation_creation.resources.InvestigationResourceService object at 0x1122ba240>, ...}
+
+    def test_v3_snapshot_accepts_analyze_limit_greater_than_one(m3_stack: dict):
+        draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ["美食"]))
+        run = m3_stack["service"].confirm_and_queue(
+            ConfirmAndQueueCommand(
+                draft_id=draft.id,
+                expected_revision=1,
+                confirmed=True,
+                idempotency_key="analyze-limit:v3-two",
+            ),
+            principal=_principal(m3_stack),
+        )
+        snapshot = json.loads(json.dumps(run.confirmed_configuration))
+        snapshot["schema_version"] = "investigation-run-config-v3"
+        snapshot["audit_policy"] = {
+            "id": "policy_gambling",
+            "name": "赌博博彩研判方案",
+            "description": "legacy compatibility fixture",
+            "published_version": "v2.0",
+            "published_config_hash": "a" * 64,
+            "ruleset_revision_id": snapshot["ruleset_revision"]["id"],
+            "ruleset_version": snapshot["ruleset_revision"]["version"],
+            "ruleset_content_hash": snapshot["ruleset_revision"]["content_hash"],
+            "domain": snapshot["ruleset_revision"]["domain"],
+            "available": True,
+        }
+        snapshot["execution"]["analyze_limit"] = 2
+        snapshot["config_hash"] = confirmed_configuration_hash(
+            {
+                key: snapshot[key]
+                for key in (
+                    "mode",
+                    "platform",
+                    "resolved_search_terms",
+                    "creator_url",
+                    "recall_plan",
+                    "audit_policy",
+                    "ruleset_revision",
+                    "execution",
+                )
+            }
+        )
+
+        parsed = ConfirmedConfigurationSnapshotV3.model_validate(snapshot)
+
+        assert parsed.schema_version == "investigation-run-config-v3"
+        assert parsed.execution.analyze_limit == 2
+        assert parsed.execution.max_notes == 1
+        adapter = AuditPipelineExecutionAdapter(
+            job_store=JobStore(m3_stack["resources"].resource_db_path),
+            ingestion_store=IngestionStore(m3_stack["resources"].resource_db_path),
+            revision_store=TaskAuditConfigRevisionStore(
+                m3_stack["resources"].resource_db_path
+            ),
+            crawler_account_store=m3_stack["crawler_accounts"],
+            test_provider_validator=lambda _: None,
+        )
+        legacy_run = run.model_copy(update={"confirmed_configuration": snapshot})
+>       job_id = adapter.ensure_job(legacy_run)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_investigation_draft_configuration_m3.py:517:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+backend/investigation_creation/adapters.py:463: in ensure_job
+    self.validate_m3_configuration(configuration)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <backend.investigation_creation.adapters.AuditPipelineExecutionAdapter object at 0x1122bbc80>
+configuration = {'platform': 'xhs', 'display_name': 'Gambling investigation', 'crawl_mode': 'search', 'keyword': '美食', ...}
+
+    def validate_m3_configuration(
+        self, configuration: dict[str, Any]
+    ) -> None:
+        if not 1 <= int(configuration.get("max_notes") or 0) <= settings.m3_posts_per_keyword:
+            raise ValueError("M3 execution exceeds this backend's per-keyword limit")
+        if not 1 <= int(configuration.get("analyze_limit") or 0) <= settings.m3_analyze_limit:
+>           raise ValueError("M3 execution exceeds this backend's analysis limit")
+E           ValueError: M3 execution exceeds this backend's analysis limit
+
+backend/investigation_creation/adapters.py:647: ValueError
+=============================== warnings summary ===============================
+../../../../../../../../Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-product-baseline-r0-2-1/.venv-r0-2-1/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_analyze_limit_ingestion.py::test_authoritative_provider_failure_prevents_completed_result_persistence
+FAILED tests/test_investigation_draft_configuration_m3.py::test_v3_snapshot_accepts_analyze_limit_greater_than_one
+2 failed, 1 warning in 1.17s

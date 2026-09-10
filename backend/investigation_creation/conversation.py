@@ -49,6 +49,8 @@ from .tools import (
 )
 
 
+from backend.resource_management.tools import RESOURCE_PROMPT
+
 CREATION_SYSTEM_PROMPT = """You are the investigation configuration and resource assistant for a
 content-audit platform. Application appends the complete authoritative 审核规则 Proposal snapshot
 to the public assistant message after successful Proposal creation or update. Your natural-language
@@ -984,7 +986,9 @@ class InvestigationCreationConversationService:
                     except (ValueError, TypeError):
                         payload = {}
                     if isinstance(payload, dict) and payload.get("status") == "ok":
-                        records = [record for record in context if payload.get("data") == record["snapshot"]]
+                        data = payload.get('data')
+                        snapshot = data.get('proposal_snapshot') if isinstance(data, dict) and data.get('kind') == 'ruleset' else data
+                        records = [record for record in context if snapshot == record["snapshot"]]
                         if records:
                             payload["completed_public_presentations"] = [
                                 {key: record[key] for key in ("presentation_id", "proposal_id", "proposal_version", "assistant_message_id", "presented_at")}
@@ -999,7 +1003,7 @@ class InvestigationCreationConversationService:
                 agent = self._agent(session.id)
                 result = agent.run_conversation(
                     user_message,
-                    system_message=CREATION_SYSTEM_PROMPT,
+                    system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
                     conversation_history=history,
                     task_id=turn.id,
                 )
@@ -1011,7 +1015,7 @@ class InvestigationCreationConversationService:
                     agent = self._agent(session.id)
                     result = agent.run_conversation(
                         user_message,
-                        system_message=CREATION_SYSTEM_PROMPT,
+                        system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
                         conversation_history=history,
                         task_id=turn.id,
                     )

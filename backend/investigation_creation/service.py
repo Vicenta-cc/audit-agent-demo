@@ -59,6 +59,13 @@ class InvestigationCreationService:
         self.run_projector = run_projector or EmptyRunProjector()
         self.conversation_store = None
 
+    @property
+    def resource_management(self):
+        from backend.resource_management.service import ResourceManagementService
+        if not hasattr(self, '_resource_management'):
+            self._resource_management = ResourceManagementService(self)
+        return self._resource_management
+
     def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str, turn_id: str,
                             principal: Principal, tool_call_id: str = "", runtime_turn_id: str = "") -> InvestigationDraft:
         if self.conversation_store is None or not turn_id or not tool_call_id:

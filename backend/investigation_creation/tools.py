@@ -27,6 +27,7 @@ from .contracts import (
 from .errors import IdempotencyConflictError
 from .principal import Principal
 from .approval import UseRuleSetProposalInput
+from backend.resource_management.tools import RESOURCE_TOOL_INPUTS, RESOURCE_MUTATIONS, RESOURCE_DESCRIPTIONS, execute_resource
 
 
 @dataclass(frozen=True)
@@ -262,6 +263,10 @@ def _creation_tool_schema(schema: type[StrictModel]) -> dict[str, Any]:
     return parameters
 
 
+M3_TOOL_INPUTS.update(RESOURCE_TOOL_INPUTS)
+M3_MUTATION_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | RESOURCE_MUTATIONS
+M3_TOOL_DESCRIPTIONS.update(RESOURCE_DESCRIPTIONS)
+
 # Attach guidance before freezing the schemas used by deferred discovery.
 M3_PARAMETER_GUIDANCE = {
     'use_ruleset_proposal': (
@@ -377,6 +382,9 @@ class InvestigationCreationToolService:
         if schema is None:
             raise ValueError("Hermes M3 tool name is not allowed")
         parsed = schema.model_validate(arguments)
+        if tool_name in RESOURCE_TOOL_INPUTS:
+            return execute_resource(self.application_service.resource_management, tool_name, parsed,
+                                    session_id=session_id, principal=principal)
         if tool_name == "use_ruleset_proposal":
             with self._conversation_lock:
                 turn_id = self._conversation_turns.get(session_id, "")
@@ -499,11 +507,11 @@ class InvestigationCreationToolService:
                 }
         receipt: dict[str, Any] | None = None
         try:
-            if tool_name in M3_MUTATION_TOOL_NAMES:
+            if tool_name in M3_MUTATION_TOOL_NAMES or tool_name == "get_resource_edit":
                 with self._conversation_lock:
                     application_turn_id = (
                         self._conversation_turns.get(identity.session_id, "")
-                        if tool_name in {"create_ruleset_proposal", "update_ruleset_proposal", "use_ruleset_proposal"} else ""
+                        if tool_name in {"create_ruleset_proposal", "update_ruleset_proposal", "use_ruleset_proposal"} | RESOURCE_MUTATIONS | {"get_resource_edit"} else ""
                     )
                 receipt = self.application_service.store.begin_tool_execution(
                     session_id=identity.session_id,
@@ -512,7 +520,7 @@ class InvestigationCreationToolService:
                     principal=principal.id,
                     tool_name=tool_name,
                     arguments=raw_arguments,
-                    is_mutation=True,
+                    is_mutation=tool_name in M3_MUTATION_TOOL_NAMES,
                     application_turn_id=application_turn_id,
                 )
                 if receipt["replay"]:

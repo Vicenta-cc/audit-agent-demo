@@ -66,6 +66,7 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
   const isNewLexicon = lexiconId === "new";
   const lexicon = lexicons.find((item) => item.id === lexiconId);
   const [draft, setDraft] = useState<LexiconEditDraft | null>(null);
+  const [loadedVersion, setLoadedVersion] = useState<number | undefined>();
   const [loadedLexiconId, setLoadedLexiconId] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TermStatusFilter>("全部");
@@ -80,6 +81,7 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
       return;
     }
     setDraft(buildLexiconDraft(lexicon));
+    setLoadedVersion(lexicon?.version);
     setLoadedLexiconId(lexiconId);
   }, [isNewLexicon, loadedLexiconId, lexicon, lexiconId]);
 
@@ -181,7 +183,8 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
     }
     setSaving(true);
     try {
-      await saveLexicon({
+      const saved = await saveLexicon({
+        expectedVersion: loadedVersion,
         id: isNewLexicon ? undefined : lexiconId,
         name: draft.name,
         terms: draft.terms.map((term) => ({
@@ -192,6 +195,7 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
           enabled: term.status === "enabled"
         }))
       });
+      setLoadedVersion(saved.category.version);
       await onRefresh();
       showToast("黑话库配置已保存");
       if (isNewLexicon) {

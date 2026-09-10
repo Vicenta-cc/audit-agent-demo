@@ -1,0 +1,954 @@
+{
+  "model": "qwen3.7-plus",
+  "runtime": "Hermes 0.20.4",
+  "thinking": true,
+  "storage": "disposable",
+  "cases": [
+    {
+      "case": "generate-no-save",
+      "input": "请针对维汉民族关系讨论生成一套可实际审核的民族类 rule（4—6条）和一份 lexicon（3个主词，每个保留1个变体）。先完整展示，暂时不保存，也不创建或启动任务。",
+      "status": "completed",
+      "answer": "已为您生成维汉民族关系讨论的审核规则和配套黑话库。\n\n## 审核规则（6条）\n\n**规则1：群体负面泛化与先天优劣主张**（medium）\n- 命中条件：对维吾尔族、汉族或其他民族群体进行整体负面定性（如\"某族人都如何\"），或主张某民族在先天、文化、道德上优于或劣于另一民族\n- 应用阶段：图片证据、视频帧证据、评论审核、融合审核\n- 判定说明：需区分对具体个人的行为批评与对整体民族的负面泛化。对具体行为（如售假、欺诈）的批评不能仅因账号民族背景而命中本规则\n\n**规则2：非人化与严重集体犯罪污名**（high）\n- 命中条件：将民族群体比作动物、害虫、病毒等非人存在，或将整个民族定性为恐怖分子、罪犯、骗子等严重集体犯罪标签\n- 应用阶段：图片证据、视频帧证据、评论审核、融合审核\n- 判定说明：非人化比喻和严重集体犯罪污名通常构成高风险。需确认是针对整体民族的定性，而非对具体犯罪个案的描述\n\n**规则3：权利剥夺、驱逐或血统纯洁主张**（high）\n- 命中条件：主张某民族应被剥夺公民权利、被驱逐出某地，或以血统污染、血统纯洁为由反对民族通婚、要求强制阻止婚姻\n- 应用阶段：图片证据、视频帧证据、评论审核、融合审核\n- 判定说明：血统纯洁主张无需同时要求强制阻止婚姻即可命中。需区分反对通婚的个人偏好表达与主张强制阻止的政策性要求\n\n**规则4：明确暴力威胁**（high）\n- 命中条件：对民族群体或个人发出明确暴力威胁、煽动伤害、屠杀或身体攻击\n- 应用阶段：图片证据、视频帧证据、评论审核、融合审核\n- 判定说明：需确认是明确的暴力威胁或煽动，而非隐喻性表达或历史事件讨论\n\n**规则5：民族关系关联攻击**（medium）\n- 命中条件：对跨民族情侣、红娘、支持民族融合者的攻击、侮辱或诅咒，须与其民族相关身份、行为或立场有明显关联\n- 应用阶段：图片证据、视频帧证据、评论审核、融合审核\n- 判定说明：攻击须与民族相关身份、行为或立场有明显关联。普通售假等具体行为批评不能仅因账号民族背景而命中\n\n**规则6：维语恶意辱骂专项线索**（low）\n- 命中条件：可靠维语原文或译文中出现明确恶意辱骂词汇，不要求民族对象或民族动机，仅作低优先级敌意线索，不据此认定民族仇恨\n- 应用阶段：评论审核、融合审核\n- 判定说明：单纯使用维语不命中。本规则仅作低优先级敌意线索，需结合其他证据判断是否构成民族仇恨。有明确民族攻击规则可用时优先使用明确规则\n\n**通用豁免**：\n- 正常民族身份与文化表达：表达对自身或他民族文化的认同、保护、传承意愿，或讨论个人婚恋选择、跨民族交往等正常生活议题，不包含对任何民族的负面定性或攻击\n- 新闻学术与批判性引用：以新闻报道、学术研究或批判性讨论为目的，引用不支持风险表达的内容，且上下文明确表示不赞同该风险表达\n\n## 黑话库（3个主词 + 3个变体）\n\n**主词1**：维吾尔族民族认同\n- 变体：维吾尔族身份认同\n\n**主词2**：维汉恋爱\n- 变体：维汉通婚\n\n**主词3**：维汉家庭\n- 变体：维汉跨民族婚姻\n\n---\n\n以上规则和词库已生成为临时提案，仅用于本次会话，尚未正式保存或绑定到任何调查任务。如需采用这套规则创建调查任务，请告知。\n\n临时审核规则 · 完整规则快照\n名称：维汉民族关系讨论审核规则\n领域：民族关系\n版本：1\n方案标识：ruleset-proposal:1e4124f7727f41938d43bda06bd4c000\n内容指纹：b43f34d054265134cbeecc44f6226a4a754469d531e27041f3551034621ce01d\n研判目标：识别针对维吾尔族、汉族及其他民族群体的仇恨言论、歧视性攻击和暴力威胁，同时保护正常民族认同表达、文化保护讨论和个人婚恋选择\n分类数：1；规则数：6\n通用豁免：\n- 正常民族身份与文化表达（normal_identity_expression）\n  条件：表达对自身或他民族文化的认同、保护、传承意愿，或讨论个人婚恋选择、跨民族交往等正常生活议题，不包含对任何民族的负面定性或攻击\n- 新闻学术与批判性引用（critical_reference）\n  条件：以新闻报道、学术研究或批判性讨论为目的，引用不支持风险表达的内容，且上下文明确表示不赞同该风险表达\n\n分类：民族仇恨与歧视（ethnic_hate_speech，排序 1）\n说明：\n\n规则 1：群体负面泛化与先天优劣主张（group_negative_generalization）\n启用：是；排序：1\n命中条件：对维吾尔族、汉族或其他民族群体进行整体负面定性（如'某族人都如何'），或主张某民族在先天、文化、道德上优于或劣于另一民族\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：需区分对具体个人的行为批评与对整体民族的负面泛化。对具体行为（如售假、欺诈）的批评不能仅因账号民族背景而命中本规则\n规则豁免：无\n\n规则 2：非人化与严重集体犯罪污名（dehumanization_collective_stigma）\n启用：是；排序：2\n命中条件：将民族群体比作动物、害虫、病毒等非人存在，或将整个民族定性为恐怖分子、罪犯、骗子等严重集体犯罪标签\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：非人化比喻和严重集体犯罪污名通常构成高风险。需确认是针对整体民族的定性，而非对具体犯罪个案的描述\n规则豁免：无\n\n规则 3：权利剥夺、驱逐或血统纯洁主张（rights_deprivation_expulsion）\n启用：是；排序：3\n命中条件：主张某民族应被剥夺公民权利、被驱逐出某地，或以血统污染、血统纯洁为由反对民族通婚、要求强制阻止婚姻\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：血统纯洁主张无需同时要求强制阻止婚姻即可命中。需区分反对通婚的个人偏好表达与主张强制阻止的政策性要求\n规则豁免：无\n\n规则 4：明确暴力威胁（explicit_violence_threat）\n启用：是；排序：4\n命中条件：对民族群体或个人发出明确暴力威胁、煽动伤害、屠杀或身体攻击\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：需确认是明确的暴力威胁或煽动，而非隐喻性表达或历史事件讨论\n规则豁免：无\n\n规则 5：民族关系关联攻击（ethnic_relation_attack）\n启用：是；排序：5\n命中条件：对跨民族情侣、红娘、支持民族融合者的攻击、侮辱或诅咒，须与其民族相关身份、行为或立场有明显关联\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：攻击须与民族相关身份、行为或立场有明显关联。普通售假等具体行为批评不能仅因账号民族背景而命中\n规则豁免：无\n\n规则 6：维语恶意辱骂专项线索（uyghur_abuse_signal）\n启用：是；排序：6\n命中条件：可靠维语原文或译文中出现明确恶意辱骂词汇，不要求民族对象或民族动机，仅作低优先级敌意线索，不据此认定民族仇恨\n建议风险：low\n应用阶段：comment_audit, fusion_audit\n裁决说明：单纯使用维语不命中。本规则仅作低优先级敌意线索，需结合其他证据判断是否构成民族仇恨。有明确民族攻击规则可用时优先使用明确规则\n规则豁免：无",
+      "tools": [
+        "create_ruleset_proposal",
+        "create_lexicon_edit"
+      ],
+      "artifact": {
+        "artifact_type": "ruleset_proposal_presentation",
+        "proposal_presentations": [
+          {
+            "assistant_message_id": "investigation-message:3f17fae876ad5c4fc748ae4fb49c30cc",
+            "boundary": "durable_public_assistant_message",
+            "content_hash": "b43f34d054265134cbeecc44f6226a4a754469d531e27041f3551034621ce01d",
+            "presentation_format": "ruleset-proposal-text-v1",
+            "presentation_id": "ruleset-presentation:22dd3e725cd851821202cd60a991195c09e3b8b125df711654db8427cd17bdb6",
+            "presented_at": "2026-09-10T09:10:30.483231+00:00",
+            "proposal_id": "ruleset-proposal:1e4124f7727f41938d43bda06bd4c000",
+            "proposal_version": 1,
+            "session_id": "investigation-session:d6299e45872a40afb0e34910b8000e7b",
+            "snapshot": {
+              "content": {
+                "audit_goal": "识别针对维吾尔族、汉族及其他民族群体的仇恨言论、歧视性攻击和暴力威胁，同时保护正常民族认同表达、文化保护讨论和个人婚恋选择",
+                "categories": [
+                  {
+                    "category_id": "ethnic_hate_speech",
+                    "description": "",
+                    "name": "民族仇恨与歧视",
+                    "order": 1,
+                    "rules": [
+                      {
+                        "adjudication_notes": "需区分对具体个人的行为批评与对整体民族的负面泛化。对具体行为（如售假、欺诈）的批评不能仅因账号民族背景而命中本规则",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "对维吾尔族、汉族或其他民族群体进行整体负面定性（如'某族人都如何'），或主张某民族在先天、文化、道德上优于或劣于另一民族",
+                        "name": "群体负面泛化与先天优劣主张",
+                        "order": 1,
+                        "rule_exemptions": [],
+                        "rule_id": "group_negative_generalization",
+                        "source_mappings": [],
+                        "suggested_risk_level": "medium"
+                      },
+                      {
+                        "adjudication_notes": "非人化比喻和严重集体犯罪污名通常构成高风险。需确认是针对整体民族的定性，而非对具体犯罪个案的描述",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "将民族群体比作动物、害虫、病毒等非人存在，或将整个民族定性为恐怖分子、罪犯、骗子等严重集体犯罪标签",
+                        "name": "非人化与严重集体犯罪污名",
+                        "order": 2,
+                        "rule_exemptions": [],
+                        "rule_id": "dehumanization_collective_stigma",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      },
+                      {
+                        "adjudication_notes": "血统纯洁主张无需同时要求强制阻止婚姻即可命中。需区分反对通婚的个人偏好表达与主张强制阻止的政策性要求",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "主张某民族应被剥夺公民权利、被驱逐出某地，或以血统污染、血统纯洁为由反对民族通婚、要求强制阻止婚姻",
+                        "name": "权利剥夺、驱逐或血统纯洁主张",
+                        "order": 3,
+                        "rule_exemptions": [],
+                        "rule_id": "rights_deprivation_expulsion",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      },
+                      {
+                        "adjudication_notes": "需确认是明确的暴力威胁或煽动，而非隐喻性表达或历史事件讨论",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "对民族群体或个人发出明确暴力威胁、煽动伤害、屠杀或身体攻击",
+                        "name": "明确暴力威胁",
+                        "order": 4,
+                        "rule_exemptions": [],
+                        "rule_id": "explicit_violence_threat",
+                        "source_mappings": [],
+                        "suggested_risk_level": "high"
+                      },
+                      {
+                        "adjudication_notes": "攻击须与民族相关身份、行为或立场有明显关联。普通售假等具体行为批评不能仅因账号民族背景而命中",
+                        "application_stages": [
+                          "image_evidence",
+                          "video_frame_evidence",
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "对跨民族情侣、红娘、支持民族融合者的攻击、侮辱或诅咒，须与其民族相关身份、行为或立场有明显关联",
+                        "name": "民族关系关联攻击",
+                        "order": 5,
+                        "rule_exemptions": [],
+                        "rule_id": "ethnic_relation_attack",
+                        "source_mappings": [],
+                        "suggested_risk_level": "medium"
+                      },
+                      {
+                        "adjudication_notes": "单纯使用维语不命中。本规则仅作低优先级敌意线索，需结合其他证据判断是否构成民族仇恨。有明确民族攻击规则可用时优先使用明确规则",
+                        "application_stages": [
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "enabled": true,
+                        "hit_condition": "可靠维语原文或译文中出现明确恶意辱骂词汇，不要求民族对象或民族动机，仅作低优先级敌意线索，不据此认定民族仇恨",
+                        "name": "维语恶意辱骂专项线索",
+                        "order": 6,
+                        "rule_exemptions": [],
+                        "rule_id": "uyghur_abuse_signal",
+                        "source_mappings": [],
+                        "suggested_risk_level": "low"
+                      }
+                    ]
+                  }
+                ],
+                "domain": "民族关系",
+                "general_exemptions": [
+                  {
+                    "condition": "表达对自身或他民族文化的认同、保护、传承意愿，或讨论个人婚恋选择、跨民族交往等正常生活议题，不包含对任何民族的负面定性或攻击",
+                    "exemption_id": "normal_identity_expression",
+                    "name": "正常民族身份与文化表达",
+                    "source_mappings": []
+                  },
+                  {
+                    "condition": "以新闻报道、学术研究或批判性讨论为目的，引用不支持风险表达的内容，且上下文明确表示不赞同该风险表达",
+                    "exemption_id": "critical_reference",
+                    "name": "新闻学术与批判性引用",
+                    "source_mappings": []
+                  }
+                ],
+                "name": "维汉民族关系讨论审核规则",
+                "schema_version": 0
+              },
+              "content_hash": "b43f34d054265134cbeecc44f6226a4a754469d531e27041f3551034621ce01d",
+              "created_at": "2026-09-10T09:10:19.242254Z",
+              "proposal_id": "ruleset-proposal:1e4124f7727f41938d43bda06bd4c000",
+              "session_id": "investigation-session:d6299e45872a40afb0e34910b8000e7b",
+              "updated_at": "2026-09-10T09:10:19.242254Z",
+              "version": 1
+            },
+            "source_user_message_id": "investigation-message:585eb76d5d894affa5db03ddd1adc419",
+            "source_user_turn_id": "investigation-turn:54e527476a6a49778fa67a550c11f1ac",
+            "text": "临时审核规则 · 完整规则快照\n名称：维汉民族关系讨论审核规则\n领域：民族关系\n版本：1\n方案标识：ruleset-proposal:1e4124f7727f41938d43bda06bd4c000\n内容指纹：b43f34d054265134cbeecc44f6226a4a754469d531e27041f3551034621ce01d\n研判目标：识别针对维吾尔族、汉族及其他民族群体的仇恨言论、歧视性攻击和暴力威胁，同时保护正常民族认同表达、文化保护讨论和个人婚恋选择\n分类数：1；规则数：6\n通用豁免：\n- 正常民族身份与文化表达（normal_identity_expression）\n  条件：表达对自身或他民族文化的认同、保护、传承意愿，或讨论个人婚恋选择、跨民族交往等正常生活议题，不包含对任何民族的负面定性或攻击\n- 新闻学术与批判性引用（critical_reference）\n  条件：以新闻报道、学术研究或批判性讨论为目的，引用不支持风险表达的内容，且上下文明确表示不赞同该风险表达\n\n分类：民族仇恨与歧视（ethnic_hate_speech，排序 1）\n说明：\n\n规则 1：群体负面泛化与先天优劣主张（group_negative_generalization）\n启用：是；排序：1\n命中条件：对维吾尔族、汉族或其他民族群体进行整体负面定性（如'某族人都如何'），或主张某民族在先天、文化、道德上优于或劣于另一民族\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：需区分对具体个人的行为批评与对整体民族的负面泛化。对具体行为（如售假、欺诈）的批评不能仅因账号民族背景而命中本规则\n规则豁免：无\n\n规则 2：非人化与严重集体犯罪污名（dehumanization_collective_stigma）\n启用：是；排序：2\n命中条件：将民族群体比作动物、害虫、病毒等非人存在，或将整个民族定性为恐怖分子、罪犯、骗子等严重集体犯罪标签\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：非人化比喻和严重集体犯罪污名通常构成高风险。需确认是针对整体民族的定性，而非对具体犯罪个案的描述\n规则豁免：无\n\n规则 3：权利剥夺、驱逐或血统纯洁主张（rights_deprivation_expulsion）\n启用：是；排序：3\n命中条件：主张某民族应被剥夺公民权利、被驱逐出某地，或以血统污染、血统纯洁为由反对民族通婚、要求强制阻止婚姻\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：血统纯洁主张无需同时要求强制阻止婚姻即可命中。需区分反对通婚的个人偏好表达与主张强制阻止的政策性要求\n规则豁免：无\n\n规则 4：明确暴力威胁（explicit_violence_threat）\n启用：是；排序：4\n命中条件：对民族群体或个人发出明确暴力威胁、煽动伤害、屠杀或身体攻击\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：需确认是明确的暴力威胁或煽动，而非隐喻性表达或历史事件讨论\n规则豁免：无\n\n规则 5：民族关系关联攻击（ethnic_relation_attack）\n启用：是；排序：5\n命中条件：对跨民族情侣、红娘、支持民族融合者的攻击、侮辱或诅咒，须与其民族相关身份、行为或立场有明显关联\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：攻击须与民族相关身份、行为或立场有明显关联。普通售假等具体行为批评不能仅因账号民族背景而命中\n规则豁免：无\n\n规则 6：维语恶意辱骂专项线索（uyghur_abuse_signal）\n启用：是；排序：6\n命中条件：可靠维语原文或译文中出现明确恶意辱骂词汇，不要求民族对象或民族动机，仅作低优先级敌意线索，不据此认定民族仇恨\n建议风险：low\n应用阶段：comment_audit, fusion_audit\n裁决说明：单纯使用维语不命中。本规则仅作低优先级敌意线索，需结合其他证据判断是否构成民族仇恨。有明确民族攻击规则可用时优先使用明确规则\n规则豁免：无"
+          }
+        ]
+      },
+      "edits": [
+        {
+          "edit_id": "ruleset-proposal:1e4124f7727f41938d43bda06bd4c000",
+          "kind": "ruleset",
+          "version": 1,
+          "content_hash": "b43f34d054265134cbeecc44f6226a4a754469d531e27041f3551034621ce01d",
+          "content": {
+            "schema_version": 0,
+            "name": "维汉民族关系讨论审核规则",
+            "domain": "民族关系",
+            "audit_goal": "识别针对维吾尔族、汉族及其他民族群体的仇恨言论、歧视性攻击和暴力威胁，同时保护正常民族认同表达、文化保护讨论和个人婚恋选择",
+            "general_exemptions": [
+              {
+                "exemption_id": "normal_identity_expression",
+                "name": "正常民族身份与文化表达",
+                "condition": "表达对自身或他民族文化的认同、保护、传承意愿，或讨论个人婚恋选择、跨民族交往等正常生活议题，不包含对任何民族的负面定性或攻击",
+                "source_mappings": []
+              },
+              {
+                "exemption_id": "critical_reference",
+                "name": "新闻学术与批判性引用",
+                "condition": "以新闻报道、学术研究或批判性讨论为目的，引用不支持风险表达的内容，且上下文明确表示不赞同该风险表达",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "ethnic_hate_speech",
+                "name": "民族仇恨与歧视",
+                "description": "",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "group_negative_generalization",
+                    "name": "群体负面泛化与先天优劣主张",
+                    "hit_condition": "对维吾尔族、汉族或其他民族群体进行整体负面定性（如'某族人都如何'），或主张某民族在先天、文化、道德上优于或劣于另一民族",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "需区分对具体个人的行为批评与对整体民族的负面泛化。对具体行为（如售假、欺诈）的批评不能仅因账号民族背景而命中本规则",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "dehumanization_collective_stigma",
+                    "name": "非人化与严重集体犯罪污名",
+                    "hit_condition": "将民族群体比作动物、害虫、病毒等非人存在，或将整个民族定性为恐怖分子、罪犯、骗子等严重集体犯罪标签",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "非人化比喻和严重集体犯罪污名通常构成高风险。需确认是针对整体民族的定性，而非对具体犯罪个案的描述",
+                    "enabled": true,
+                    "order": 2,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "rights_deprivation_expulsion",
+                    "name": "权利剥夺、驱逐或血统纯洁主张",
+                    "hit_condition": "主张某民族应被剥夺公民权利、被驱逐出某地，或以血统污染、血统纯洁为由反对民族通婚、要求强制阻止婚姻",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "血统纯洁主张无需同时要求强制阻止婚姻即可命中。需区分反对通婚的个人偏好表达与主张强制阻止的政策性要求",
+                    "enabled": true,
+                    "order": 3,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "explicit_violence_threat",
+                    "name": "明确暴力威胁",
+                    "hit_condition": "对民族群体或个人发出明确暴力威胁、煽动伤害、屠杀或身体攻击",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "需确认是明确的暴力威胁或煽动，而非隐喻性表达或历史事件讨论",
+                    "enabled": true,
+                    "order": 4,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "ethnic_relation_attack",
+                    "name": "民族关系关联攻击",
+                    "hit_condition": "对跨民族情侣、红娘、支持民族融合者的攻击、侮辱或诅咒，须与其民族相关身份、行为或立场有明显关联",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "攻击须与民族相关身份、行为或立场有明显关联。普通售假等具体行为批评不能仅因账号民族背景而命中",
+                    "enabled": true,
+                    "order": 5,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "uyghur_abuse_signal",
+                    "name": "维语恶意辱骂专项线索",
+                    "hit_condition": "可靠维语原文或译文中出现明确恶意辱骂词汇，不要求民族对象或民族动机，仅作低优先级敌意线索，不据此认定民族仇恨",
+                    "suggested_risk_level": "low",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "单纯使用维语不命中。本规则仅作低优先级敌意线索，需结合其他证据判断是否构成民族仇恨。有明确民族攻击规则可用时优先使用明确规则",
+                    "enabled": true,
+                    "order": 6,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "source": {},
+          "proposal_snapshot": {
+            "proposal_id": "ruleset-proposal:1e4124f7727f41938d43bda06bd4c000",
+            "session_id": "investigation-session:d6299e45872a40afb0e34910b8000e7b",
+            "version": 1,
+            "content_hash": "b43f34d054265134cbeecc44f6226a4a754469d531e27041f3551034621ce01d",
+            "content": {
+              "schema_version": 0,
+              "name": "维汉民族关系讨论审核规则",
+              "domain": "民族关系",
+              "audit_goal": "识别针对维吾尔族、汉族及其他民族群体的仇恨言论、歧视性攻击和暴力威胁，同时保护正常民族认同表达、文化保护讨论和个人婚恋选择",
+              "general_exemptions": [
+                {
+                  "exemption_id": "normal_identity_expression",
+                  "name": "正常民族身份与文化表达",
+                  "condition": "表达对自身或他民族文化的认同、保护、传承意愿，或讨论个人婚恋选择、跨民族交往等正常生活议题，不包含对任何民族的负面定性或攻击",
+                  "source_mappings": []
+                },
+                {
+                  "exemption_id": "critical_reference",
+                  "name": "新闻学术与批判性引用",
+                  "condition": "以新闻报道、学术研究或批判性讨论为目的，引用不支持风险表达的内容，且上下文明确表示不赞同该风险表达",
+                  "source_mappings": []
+                }
+              ],
+              "categories": [
+                {
+                  "category_id": "ethnic_hate_speech",
+                  "name": "民族仇恨与歧视",
+                  "description": "",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "rule_id": "group_negative_generalization",
+                      "name": "群体负面泛化与先天优劣主张",
+                      "hit_condition": "对维吾尔族、汉族或其他民族群体进行整体负面定性（如'某族人都如何'），或主张某民族在先天、文化、道德上优于或劣于另一民族",
+                      "suggested_risk_level": "medium",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "需区分对具体个人的行为批评与对整体民族的负面泛化。对具体行为（如售假、欺诈）的批评不能仅因账号民族背景而命中本规则",
+                      "enabled": true,
+                      "order": 1,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "dehumanization_collective_stigma",
+                      "name": "非人化与严重集体犯罪污名",
+                      "hit_condition": "将民族群体比作动物、害虫、病毒等非人存在，或将整个民族定性为恐怖分子、罪犯、骗子等严重集体犯罪标签",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "非人化比喻和严重集体犯罪污名通常构成高风险。需确认是针对整体民族的定性，而非对具体犯罪个案的描述",
+                      "enabled": true,
+                      "order": 2,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "rights_deprivation_expulsion",
+                      "name": "权利剥夺、驱逐或血统纯洁主张",
+                      "hit_condition": "主张某民族应被剥夺公民权利、被驱逐出某地，或以血统污染、血统纯洁为由反对民族通婚、要求强制阻止婚姻",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "血统纯洁主张无需同时要求强制阻止婚姻即可命中。需区分反对通婚的个人偏好表达与主张强制阻止的政策性要求",
+                      "enabled": true,
+                      "order": 3,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "explicit_violence_threat",
+                      "name": "明确暴力威胁",
+                      "hit_condition": "对民族群体或个人发出明确暴力威胁、煽动伤害、屠杀或身体攻击",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "需确认是明确的暴力威胁或煽动，而非隐喻性表达或历史事件讨论",
+                      "enabled": true,
+                      "order": 4,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "ethnic_relation_attack",
+                      "name": "民族关系关联攻击",
+                      "hit_condition": "对跨民族情侣、红娘、支持民族融合者的攻击、侮辱或诅咒，须与其民族相关身份、行为或立场有明显关联",
+                      "suggested_risk_level": "medium",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "攻击须与民族相关身份、行为或立场有明显关联。普通售假等具体行为批评不能仅因账号民族背景而命中",
+                      "enabled": true,
+                      "order": 5,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "uyghur_abuse_signal",
+                      "name": "维语恶意辱骂专项线索",
+                      "hit_condition": "可靠维语原文或译文中出现明确恶意辱骂词汇，不要求民族对象或民族动机，仅作低优先级敌意线索，不据此认定民族仇恨",
+                      "suggested_risk_level": "low",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "单纯使用维语不命中。本规则仅作低优先级敌意线索，需结合其他证据判断是否构成民族仇恨。有明确民族攻击规则可用时优先使用明确规则",
+                      "enabled": true,
+                      "order": 6,
+                      "source_mappings": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "created_at": "2026-09-10T09:10:19.242254Z",
+            "updated_at": "2026-09-10T09:10:19.242254Z"
+          },
+          "origin_source": {},
+          "saves": [],
+          "saved": false
+        },
+        {
+          "edit_id": "lexicon-edit:8cf69b10ce4b45cf974b04aae956dd0c",
+          "kind": "lexicon",
+          "version": 1,
+          "content_hash": "af37c2528dbed895183b69306fa63ae25fe1bc793b4238aa0f66326de532802e",
+          "content": {
+            "entries": [
+              {
+                "enabled": true,
+                "id": "uyghur_identity_main",
+                "kind": "main",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维吾尔族民族认同"
+              },
+              {
+                "enabled": true,
+                "id": "uyghur_identity_variant",
+                "kind": "variant",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "uyghur_identity_main",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维吾尔族身份认同"
+              },
+              {
+                "enabled": true,
+                "id": "uyghur_han_romance_main",
+                "kind": "main",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维汉恋爱"
+              },
+              {
+                "enabled": true,
+                "id": "uyghur_han_romance_variant",
+                "kind": "variant",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "uyghur_han_romance_main",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维汉通婚"
+              },
+              {
+                "enabled": true,
+                "id": "uyghur_han_family_main",
+                "kind": "main",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维汉家庭"
+              },
+              {
+                "enabled": true,
+                "id": "uyghur_han_family_variant",
+                "kind": "variant",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "uyghur_han_family_main",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维汉跨民族婚姻"
+              }
+            ],
+            "risk_label": "民族关系",
+            "title": "维汉民族关系讨论黑话库"
+          },
+          "source": {},
+          "search_terms": [
+            "维吾尔族民族认同",
+            "维汉恋爱",
+            "维汉家庭"
+          ],
+          "origin_source": {},
+          "recall_plan": {
+            "strategy": "temporary_terms",
+            "terms": [
+              "维吾尔族民族认同",
+              "维汉恋爱",
+              "维汉家庭"
+            ],
+            "source_lexicon_ids": []
+          },
+          "saves": [],
+          "saved": false
+        }
+      ],
+      "counts": {
+        "investigation_drafts": 0,
+        "investigation_runs": 0
+      }
+    },
+    {
+      "case": "edit-and-save-both",
+      "input": "把词库主词“维吾尔族民族认同”改成“维汉日常交往”，保留它的变体。然后把这份词库和刚才生成的整套规则都保存到后台，仍然不要创建或启动任务。",
+      "status": "error",
+      "answer": "API call failed after 1 retries: Experiment token/call budget reached",
+      "tools": [
+        "update_resource_edit"
+      ],
+      "artifact": {},
+      "edits": [
+        {
+          "edit_id": "ruleset-proposal:1e4124f7727f41938d43bda06bd4c000",
+          "kind": "ruleset",
+          "version": 1,
+          "content_hash": "b43f34d054265134cbeecc44f6226a4a754469d531e27041f3551034621ce01d",
+          "content": {
+            "schema_version": 0,
+            "name": "维汉民族关系讨论审核规则",
+            "domain": "民族关系",
+            "audit_goal": "识别针对维吾尔族、汉族及其他民族群体的仇恨言论、歧视性攻击和暴力威胁，同时保护正常民族认同表达、文化保护讨论和个人婚恋选择",
+            "general_exemptions": [
+              {
+                "exemption_id": "normal_identity_expression",
+                "name": "正常民族身份与文化表达",
+                "condition": "表达对自身或他民族文化的认同、保护、传承意愿，或讨论个人婚恋选择、跨民族交往等正常生活议题，不包含对任何民族的负面定性或攻击",
+                "source_mappings": []
+              },
+              {
+                "exemption_id": "critical_reference",
+                "name": "新闻学术与批判性引用",
+                "condition": "以新闻报道、学术研究或批判性讨论为目的，引用不支持风险表达的内容，且上下文明确表示不赞同该风险表达",
+                "source_mappings": []
+              }
+            ],
+            "categories": [
+              {
+                "category_id": "ethnic_hate_speech",
+                "name": "民族仇恨与歧视",
+                "description": "",
+                "order": 1,
+                "rules": [
+                  {
+                    "rule_id": "group_negative_generalization",
+                    "name": "群体负面泛化与先天优劣主张",
+                    "hit_condition": "对维吾尔族、汉族或其他民族群体进行整体负面定性（如'某族人都如何'），或主张某民族在先天、文化、道德上优于或劣于另一民族",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "需区分对具体个人的行为批评与对整体民族的负面泛化。对具体行为（如售假、欺诈）的批评不能仅因账号民族背景而命中本规则",
+                    "enabled": true,
+                    "order": 1,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "dehumanization_collective_stigma",
+                    "name": "非人化与严重集体犯罪污名",
+                    "hit_condition": "将民族群体比作动物、害虫、病毒等非人存在，或将整个民族定性为恐怖分子、罪犯、骗子等严重集体犯罪标签",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "非人化比喻和严重集体犯罪污名通常构成高风险。需确认是针对整体民族的定性，而非对具体犯罪个案的描述",
+                    "enabled": true,
+                    "order": 2,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "rights_deprivation_expulsion",
+                    "name": "权利剥夺、驱逐或血统纯洁主张",
+                    "hit_condition": "主张某民族应被剥夺公民权利、被驱逐出某地，或以血统污染、血统纯洁为由反对民族通婚、要求强制阻止婚姻",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "血统纯洁主张无需同时要求强制阻止婚姻即可命中。需区分反对通婚的个人偏好表达与主张强制阻止的政策性要求",
+                    "enabled": true,
+                    "order": 3,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "explicit_violence_threat",
+                    "name": "明确暴力威胁",
+                    "hit_condition": "对民族群体或个人发出明确暴力威胁、煽动伤害、屠杀或身体攻击",
+                    "suggested_risk_level": "high",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "需确认是明确的暴力威胁或煽动，而非隐喻性表达或历史事件讨论",
+                    "enabled": true,
+                    "order": 4,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "ethnic_relation_attack",
+                    "name": "民族关系关联攻击",
+                    "hit_condition": "对跨民族情侣、红娘、支持民族融合者的攻击、侮辱或诅咒，须与其民族相关身份、行为或立场有明显关联",
+                    "suggested_risk_level": "medium",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "image_evidence",
+                      "video_frame_evidence",
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "攻击须与民族相关身份、行为或立场有明显关联。普通售假等具体行为批评不能仅因账号民族背景而命中",
+                    "enabled": true,
+                    "order": 5,
+                    "source_mappings": []
+                  },
+                  {
+                    "rule_id": "uyghur_abuse_signal",
+                    "name": "维语恶意辱骂专项线索",
+                    "hit_condition": "可靠维语原文或译文中出现明确恶意辱骂词汇，不要求民族对象或民族动机，仅作低优先级敌意线索，不据此认定民族仇恨",
+                    "suggested_risk_level": "low",
+                    "rule_exemptions": [],
+                    "application_stages": [
+                      "comment_audit",
+                      "fusion_audit"
+                    ],
+                    "adjudication_notes": "单纯使用维语不命中。本规则仅作低优先级敌意线索，需结合其他证据判断是否构成民族仇恨。有明确民族攻击规则可用时优先使用明确规则",
+                    "enabled": true,
+                    "order": 6,
+                    "source_mappings": []
+                  }
+                ]
+              }
+            ]
+          },
+          "source": {},
+          "proposal_snapshot": {
+            "proposal_id": "ruleset-proposal:1e4124f7727f41938d43bda06bd4c000",
+            "session_id": "investigation-session:d6299e45872a40afb0e34910b8000e7b",
+            "version": 1,
+            "content_hash": "b43f34d054265134cbeecc44f6226a4a754469d531e27041f3551034621ce01d",
+            "content": {
+              "schema_version": 0,
+              "name": "维汉民族关系讨论审核规则",
+              "domain": "民族关系",
+              "audit_goal": "识别针对维吾尔族、汉族及其他民族群体的仇恨言论、歧视性攻击和暴力威胁，同时保护正常民族认同表达、文化保护讨论和个人婚恋选择",
+              "general_exemptions": [
+                {
+                  "exemption_id": "normal_identity_expression",
+                  "name": "正常民族身份与文化表达",
+                  "condition": "表达对自身或他民族文化的认同、保护、传承意愿，或讨论个人婚恋选择、跨民族交往等正常生活议题，不包含对任何民族的负面定性或攻击",
+                  "source_mappings": []
+                },
+                {
+                  "exemption_id": "critical_reference",
+                  "name": "新闻学术与批判性引用",
+                  "condition": "以新闻报道、学术研究或批判性讨论为目的，引用不支持风险表达的内容，且上下文明确表示不赞同该风险表达",
+                  "source_mappings": []
+                }
+              ],
+              "categories": [
+                {
+                  "category_id": "ethnic_hate_speech",
+                  "name": "民族仇恨与歧视",
+                  "description": "",
+                  "order": 1,
+                  "rules": [
+                    {
+                      "rule_id": "group_negative_generalization",
+                      "name": "群体负面泛化与先天优劣主张",
+                      "hit_condition": "对维吾尔族、汉族或其他民族群体进行整体负面定性（如'某族人都如何'），或主张某民族在先天、文化、道德上优于或劣于另一民族",
+                      "suggested_risk_level": "medium",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "需区分对具体个人的行为批评与对整体民族的负面泛化。对具体行为（如售假、欺诈）的批评不能仅因账号民族背景而命中本规则",
+                      "enabled": true,
+                      "order": 1,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "dehumanization_collective_stigma",
+                      "name": "非人化与严重集体犯罪污名",
+                      "hit_condition": "将民族群体比作动物、害虫、病毒等非人存在，或将整个民族定性为恐怖分子、罪犯、骗子等严重集体犯罪标签",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "非人化比喻和严重集体犯罪污名通常构成高风险。需确认是针对整体民族的定性，而非对具体犯罪个案的描述",
+                      "enabled": true,
+                      "order": 2,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "rights_deprivation_expulsion",
+                      "name": "权利剥夺、驱逐或血统纯洁主张",
+                      "hit_condition": "主张某民族应被剥夺公民权利、被驱逐出某地，或以血统污染、血统纯洁为由反对民族通婚、要求强制阻止婚姻",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "血统纯洁主张无需同时要求强制阻止婚姻即可命中。需区分反对通婚的个人偏好表达与主张强制阻止的政策性要求",
+                      "enabled": true,
+                      "order": 3,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "explicit_violence_threat",
+                      "name": "明确暴力威胁",
+                      "hit_condition": "对民族群体或个人发出明确暴力威胁、煽动伤害、屠杀或身体攻击",
+                      "suggested_risk_level": "high",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "需确认是明确的暴力威胁或煽动，而非隐喻性表达或历史事件讨论",
+                      "enabled": true,
+                      "order": 4,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "ethnic_relation_attack",
+                      "name": "民族关系关联攻击",
+                      "hit_condition": "对跨民族情侣、红娘、支持民族融合者的攻击、侮辱或诅咒，须与其民族相关身份、行为或立场有明显关联",
+                      "suggested_risk_level": "medium",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "image_evidence",
+                        "video_frame_evidence",
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "攻击须与民族相关身份、行为或立场有明显关联。普通售假等具体行为批评不能仅因账号民族背景而命中",
+                      "enabled": true,
+                      "order": 5,
+                      "source_mappings": []
+                    },
+                    {
+                      "rule_id": "uyghur_abuse_signal",
+                      "name": "维语恶意辱骂专项线索",
+                      "hit_condition": "可靠维语原文或译文中出现明确恶意辱骂词汇，不要求民族对象或民族动机，仅作低优先级敌意线索，不据此认定民族仇恨",
+                      "suggested_risk_level": "low",
+                      "rule_exemptions": [],
+                      "application_stages": [
+                        "comment_audit",
+                        "fusion_audit"
+                      ],
+                      "adjudication_notes": "单纯使用维语不命中。本规则仅作低优先级敌意线索，需结合其他证据判断是否构成民族仇恨。有明确民族攻击规则可用时优先使用明确规则",
+                      "enabled": true,
+                      "order": 6,
+                      "source_mappings": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "created_at": "2026-09-10T09:10:19.242254Z",
+            "updated_at": "2026-09-10T09:10:19.242254Z"
+          },
+          "origin_source": {},
+          "saves": [],
+          "saved": false
+        },
+        {
+          "edit_id": "lexicon-edit:8cf69b10ce4b45cf974b04aae956dd0c",
+          "kind": "lexicon",
+          "version": 2,
+          "content_hash": "27841d75425856ef213872d0aa2aad0e2df81f764748ac6db3374c3aeb44b398",
+          "content": {
+            "entries": [
+              {
+                "enabled": true,
+                "id": "uyghur_identity_main",
+                "kind": "main",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维汉日常交往"
+              },
+              {
+                "enabled": true,
+                "id": "uyghur_identity_variant",
+                "kind": "variant",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "uyghur_identity_main",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维吾尔族身份认同"
+              },
+              {
+                "enabled": true,
+                "id": "uyghur_han_romance_main",
+                "kind": "main",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维汉恋爱"
+              },
+              {
+                "enabled": true,
+                "id": "uyghur_han_romance_variant",
+                "kind": "variant",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "uyghur_han_romance_main",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维汉通婚"
+              },
+              {
+                "enabled": true,
+                "id": "uyghur_han_family_main",
+                "kind": "main",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维汉家庭"
+              },
+              {
+                "enabled": true,
+                "id": "uyghur_han_family_variant",
+                "kind": "variant",
+                "match_type": "黑话词",
+                "note": "",
+                "parent_id": "uyghur_han_family_main",
+                "platform": "全平台",
+                "risk_level": "中",
+                "term": "维汉跨民族婚姻"
+              }
+            ],
+            "risk_label": "民族关系",
+            "title": "维汉民族关系讨论黑话库"
+          },
+          "source": {},
+          "search_terms": [
+            "维汉日常交往",
+            "维汉恋爱",
+            "维汉家庭"
+          ],
+          "origin_source": {},
+          "recall_plan": {
+            "strategy": "temporary_terms",
+            "terms": [
+              "维汉日常交往",
+              "维汉恋爱",
+              "维汉家庭"
+            ],
+            "source_lexicon_ids": []
+          },
+          "saves": [],
+          "saved": false
+        }
+      ],
+      "counts": {
+        "investigation_drafts": 0,
+        "investigation_runs": 0
+      }
+    }
+  ],
+  "provider_calls": 7,
+  "usage": {
+    "prompt_tokens": 82911,
+    "completion_tokens": 6329,
+    "total_tokens": 89240
+  },
+  "status": "INCOMPLETE",
+  "failure_type": "AssertionError",
+  "failure": "Conversation did not complete"
+}

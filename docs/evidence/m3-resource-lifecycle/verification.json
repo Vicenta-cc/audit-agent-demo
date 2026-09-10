@@ -1,0 +1,44 @@
+{
+  "suite": "python scripts/resource_experiment.py tests",
+  "passed": 1081,
+  "failed": 2,
+  "skipped": 24,
+  "subtests_passed": 67,
+  "seconds": 140.11,
+  "known_baseline_failures": [
+    "tests/test_analyze_limit_ingestion.py::test_authoritative_provider_failure_prevents_completed_result_persistence",
+    "tests/test_investigation_draft_configuration_m3.py::test_v3_snapshot_accepts_analyze_limit_greater_than_one"
+  ],
+  "baseline_reproduced": true,
+  "typescript": "passed",
+  "vite_build": "passed",
+  "live_qwen": {
+    "model": "qwen3.7-plus",
+    "thinking": true,
+    "four_turn_resource_workflow": "PASS; qwen-resource-paid-acceptance-v3.json",
+    "existing_natural_language_entry": "PASS; qwen-existing-natural-task.json",
+    "final_ethnic_generation": "PASS; qwen-ethnic-final-generation-v2.json",
+    "quality_review": "ethnic-quality-review.md"
+  },
+  "real_crawler": "not run",
+  "final_targeted": {
+    "passed": 81,
+    "seconds": 15.31,
+    "tests": [
+      "tests/test_resource_lifecycle.py",
+      "tests/test_investigation_creation_conversation.py"
+    ]
+  },
+  "browser": "passed after moving editor to test fixtures; zero Drafts/Runs",
+  "merged": false,
+  "deployed": false,
+  "paid_token_usage": 682580,
+  "free_token_usage": 89371,
+  "baseline_unchanged_files": [
+    "backend/rulesets/compiler.py",
+    "backend/hermes_runtime/adapter.py",
+    "backend/audit_agent/config.py",
+    "Audit_assistant/src/features/investigation/InvestigationCenterArea.tsx",
+    "Audit_assistant/src/features/investigation/InvestigationPage.tsx"
+  ]
+}

@@ -212,6 +212,8 @@ app.include_router(
     )
 )
 app.include_router(create_ruleset_router(ruleset_service, principal_provider=principal_provider))
+from .resource_management.api import create_resource_router
+app.include_router(create_resource_router(investigation_creation_service, investigation_creation_conversation_service, principal_provider))
 app.include_router(
     create_historical_report_router(
         historical_report_demo_service,
@@ -489,6 +491,7 @@ class LexiconKeywordRequest(BaseModel):
 
 
 class LexiconCategoryRequest(BaseModel):
+    expected_version: int | None = None
     id: str = ""
     title: str = ""
     risk_label: str = ""
@@ -1361,19 +1364,17 @@ def create_lexicon_category(request: LexiconCategoryRequest):
 @app.patch("/api/lexicons/{category_id}")
 def update_lexicon_category(category_id: str, request: LexiconCategoryRequest):
     try:
-        category = lexicon_store.upsert_category(
-            category_id=category_id,
-            title=request.title,
-            risk_label=request.risk_label,
-            terms=request.terms,
-            platform_keywords=request.platform_keywords,
-            platform_tags=request.platform_tags,
-            entries=request.entries,
-        )
+        from .resource_management.legacy_lexicon import save_editor
+        from .resource_management.contracts import ResourceError
+        if request.entries is None:
+            raise ResourceError('请通过完整词库编辑接口提交内容。', code='RESOURCE_VERSION_REQUIRED')
+        category = save_editor(lexicon_store, category_id, request.title, request.risk_label, request.entries, request.expected_version)
+
     except KeyError:
         raise HTTPException(status_code=404, detail="Lexicon category not found")
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        code = getattr(exc, 'code', '')
+        raise HTTPException(status_code=428 if code == 'RESOURCE_VERSION_REQUIRED' else 409 if 'CONFLICT' in code else 400, detail={'code':code,'message':str(exc)})
     return {"category": category, "categories": lexicon_store.list_categories()}
 
 

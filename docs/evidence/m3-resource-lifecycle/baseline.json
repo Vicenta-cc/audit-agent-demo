@@ -1,0 +1,17 @@
+{
+  "baseline": "cad3eabd583543fac27a45f211122e2ca924ed2b",
+  "sha256": {
+    "backend/investigation_creation/conversation.py": "8b9270fbe6968efefeb693308b53d0327ef126a9950e34bc2d3210aacbcca51a",
+    "backend/investigation_creation/tools.py": "17467caa3fa572989a9c3b0d9302ac8cdb1f1b6cbb2b1ce6a0e268cd211df583",
+    "backend/rulesets/compiler.py": "4a204b47c643edd6603db360e138f382e29b85e586a800bf49515ce13a07c2d6",
+    "backend/hermes_runtime/adapter.py": "f4aa852870d3e727db34ac54f4bf5e326556a6221c8f502c53431dab4f84166b",
+    "backend/audit_agent/config.py": "7b2c9992e6536dcd1d57e7ee0ed1ddf87b7a15e7aaab360d9b6bd2a4850e17e6"
+  },
+  "baseline_tests": {
+    "passed": 278,
+    "subtests": 23,
+    "seconds": 29.51
+  },
+  "real_qwen": "deferred while K2 uses shared provider capacity",
+  "real_crawler": "disabled; K2 must not be affected"
+}

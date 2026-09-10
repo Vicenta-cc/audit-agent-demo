@@ -1,0 +1,10 @@
+{
+  "exit_code": 0,
+  "task_counts": {
+    "investigation_drafts": 0,
+    "investigation_runs": 0
+  },
+  "storage": "disposable",
+  "provider_calls": 0,
+  "crawler_calls": 0
+}

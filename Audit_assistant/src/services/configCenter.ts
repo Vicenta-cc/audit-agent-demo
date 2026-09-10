@@ -32,6 +32,9 @@ interface RawAuditPolicy {
 }
 
 interface RawLexiconKeyword {
+  entry_id?: string;
+  parent_entry_id?: string;
+  entry_kind?: string;
   id?: number | string;
   keyword?: string;
   match_type?: string;
@@ -40,6 +43,7 @@ interface RawLexiconKeyword {
 }
 
 interface RawLexiconCategory {
+  version?: number;
   id?: string;
   title?: string;
   keywords?: RawLexiconKeyword[];
@@ -183,9 +187,11 @@ export async function saveLexicon(input: LexiconSaveInput) {
     method: input.id ? "PATCH" : "POST",
     body: JSON.stringify({
       title: input.name.trim(),
+      expected_version: input.expectedVersion,
       entries: input.terms
         .filter((term) => term.mainTerm.trim())
         .map((term) => ({
+          id: term.id,
           main_term: term.mainTerm.trim(),
           variants: term.variants.map((item) => item.trim()).filter(Boolean),
           query_type: term.queryType,
@@ -279,6 +285,7 @@ function rawLexiconsToRiskLexicons(rawLexicons: RawLexiconCategory[], policies: 
     return {
       id: String(lexicon.id || ""),
       name: String(lexicon.title || "未命名黑话库"),
+      version: lexicon.version,
       entryCount: terms.length,
       keywords: terms.map((item) => item.mainTerm),
       terms,
@@ -311,12 +318,12 @@ function groupLexiconTerms(keywords: RawLexiconKeyword[]): LexiconTerm[] {
   const mainRows: RawLexiconKeyword[] = [];
 
   keywords.forEach((row) => {
-    const variantOf = parseVariantOf(row.note);
+    const variantOf = row.parent_entry_id || (!row.entry_kind ? parseVariantOf(row.note) : "");
     const keyword = String(row.keyword || "").trim();
     if (!keyword) {
       return;
     }
-    if (variantOf) {
+    if (variantOf || row.entry_kind === "variant") {
       variantsByParent.set(variantOf, [...(variantsByParent.get(variantOf) || []), keyword]);
       return;
     }
@@ -326,8 +333,9 @@ function groupLexiconTerms(keywords: RawLexiconKeyword[]): LexiconTerm[] {
   const grouped = new Map<string, LexiconTerm>();
   mainRows.forEach((row, index) => {
     const mainTerm = String(row.keyword || "").trim();
-    const existing = grouped.get(mainTerm);
-    const queryType = isTagType(row.match_type) ? "tag" : "keyword";
+    const groupingKey = row.entry_id || mainTerm;
+    const existing = grouped.get(groupingKey);
+    const queryType = (row.entry_kind ? row.entry_kind === "tag" : isTagType(row.match_type)) ? "tag" : "keyword";
     if (existing) {
       if (queryType === "tag") {
         existing.queryType = "tag";
@@ -335,10 +343,10 @@ function groupLexiconTerms(keywords: RawLexiconKeyword[]): LexiconTerm[] {
       existing.enabled = existing.enabled || (row.enabled !== false && row.enabled !== 0);
       return;
     }
-    grouped.set(mainTerm, {
-      id: String(row.id ?? `term_${index}`),
+    grouped.set(groupingKey, {
+      id: row.entry_id || String(row.id ?? `term_${index}`),
       mainTerm,
-      variants: dedupeStrings(variantsByParent.get(mainTerm) || []),
+      variants: dedupeStrings(variantsByParent.get(row.entry_id || "") || variantsByParent.get(mainTerm) || []),
       queryType,
       enabled: row.enabled !== false && row.enabled !== 0
     });

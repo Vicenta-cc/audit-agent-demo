@@ -3105,6 +3105,7 @@ def test_hermes_creation_product_mode_registers_only_m3_application_tools():
         assert os.environ["HERMES_INVESTIGATION_REPORT_TASK_MODE"] == "0"
         assert os.environ["HERMES_INVESTIGATION_TASK_MODE"] == "0"
         register_hermes_plugin(context)
+    from backend.resource_management.tools import RESOURCE_TOOL_INPUTS
     assert context.names == [
         "use_ruleset_proposal",
         "query_investigation_options",
@@ -3116,7 +3117,7 @@ def test_hermes_creation_product_mode_registers_only_m3_application_tools():
         "create_ruleset_proposal",
         "update_ruleset_proposal",
         "get_ruleset_proposal",
-    ]
+    ] + list(RESOURCE_TOOL_INPUTS)
 
 
 def test_hermes_account_activity_product_mode_keeps_m22_catalog():

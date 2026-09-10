@@ -68,6 +68,7 @@ export interface LexiconTerm {
 }
 
 export interface RiskLexicon {
+  version?: number;
   id: string;
   name: string;
   entryCount: number;
@@ -94,6 +95,7 @@ export interface PolicySaveInput {
 }
 
 export interface LexiconSaveInput {
+  expectedVersion?: number;
   id?: string;
   name: string;
   terms: LexiconTerm[];

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M3 resource UI test</title>
+<body>
+<div id="root"></div>
+<script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {ResourceLibrary} from './fixtures/resource-workspace/ResourceWorkspace.tsx';
+createRoot(document.getElementById('root')).render(React.createElement(ResourceLibrary,{kind:'lexicon',onDiscuss:()=>{}}));
+</script>
+</body>
+</html>
