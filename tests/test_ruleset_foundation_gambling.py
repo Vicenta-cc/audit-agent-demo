@@ -2307,7 +2307,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                             "frame_ids": ["f0001"],
                             "score": 100,
                             "risk_level": "high",
-                            "rule_id": "gambling.betting_and_settlement",
+                            "rule_id": next(code for code, rule in pipeline._video_rule_code_mapping().items() if rule == "gambling.betting_and_settlement"),
                             "risk_type": "盘口操作",
                             "reason": "盘口和充值操作同屏",
                         },
@@ -2315,7 +2315,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                             "frame_ids": ["f0001"],
                             "score": 100,
                             "risk_level": "high",
-                            "rule_id": "gambling.agent_guaranteed_win_promotion",
+                            "rule_id": next(code for code, rule in pipeline._video_rule_code_mapping().items() if rule == "gambling.agent_guaranteed_win_promotion"),
                             "risk_type": "新闻中的代理话术",
                             "reason": "合法豁免不得贡献风险",
                             "matched_exemption_ids": [
@@ -2356,7 +2356,12 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
 
         self.assertEqual(len(pipeline.qwen.prompts), 1)
         prompt = pipeline.qwen.prompts[0]
-        self.assertTrue(prompt.startswith(pipeline.prompt_set.frame_prompt))
+        expected_prefix = pipeline.prompt_set.frame_prompt
+        for code, rule_id in pipeline._video_rule_code_mapping().items():
+            expected_prefix = expected_prefix.replace(rule_id, code)
+        expected_prefix = expected_prefix.replace("stable rule_id", "本次短编号，例如R01")
+        self.assertTrue(prompt.startswith(expected_prefix))
+        self.assertIn('allowed_rule_codes', prompt)
         self.assertEqual(prompt.count("输入 JSON："), 1)
         self.assertNotIn("source_mappings", prompt)
         self.assertNotIn(disabled_rule_id, prompt)

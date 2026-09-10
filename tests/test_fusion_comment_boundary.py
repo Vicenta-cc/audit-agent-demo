@@ -153,3 +153,85 @@ def test_second_invalid_response_stops(pipeline, tmp_path):
                                        contract_validator=lambda raw: pipeline._validate_v2_fusion_contract(raw, index([comment(1, 'medium')])))
     assert len(calls) == 2
     assert len(list(tmp_path.rglob('attempt-*.json'))) == 2
+
+
+@pytest.mark.parametrize('corrected', [True, False])
+def test_video_rule_contract_retains_failure_and_retries_only_once(pipeline, tmp_path, corrected):
+    pipeline.rule_snapshot['stage_routes']['video_frame_evidence'] = ['rule.a']
+    image = tmp_path / 'sheet.png'
+    image.write_bytes(b'original sheet input')
+    job = {'sheet_path': image, 'prompt': 'frozen K instructions',
+           'sheet': {'segment_id': 'video_1/segment_2'},
+           'frames': [{'frame_id': 'f0017'}], 'library_policy': {}}
+    calls = []
+    def analyze_image(path, prompt, **options):
+        calls.append((path, prompt, options))
+        return {'segment_summary': '画面', 'segment_score': 60,
+                'risk_library_id': 'test', 'risk_library_label': '测试',
+                'visual_risks': [{'frame_ids': ['f0017'], 'score': 60, 'risk_level': 'medium',
+                                  'rule_id': 'R01' if corrected and len(calls) == 2 else 'R99',
+                                  'risk_type': 'test', 'reason': '原审核依据'}], 'ocr_risks': [], 'asr_risks': []}
+    pipeline.qwen = SimpleNamespace(analyze_image=analyze_image, last_raw_response=lambda: {'original': 'video response'})
+    with patch.object(settings, 'outputs_dir', tmp_path), patch('backend.audit_agent.pipeline.job_store.log'):
+        if corrected:
+            result = pipeline._audit_review_sheet(job, authoritative_m3=True)
+            assert result['visual_risks'][0]['rule_id'] == 'rule.a'
+            assert result['visual_risks'][0]['reason'] == '原审核依据'
+            assert result['segment_score'] == 60
+        else:
+            with pytest.raises(FusionAuditContractError, match='unknown rule code'):
+                pipeline._audit_review_sheet(job, authoritative_m3=True)
+    assert len(calls) == 2
+    assert calls[0][1].startswith(job['prompt'])
+    assert calls[1][1].startswith(job['prompt'])
+    feedback = json.loads(calls[1][1].split('\n')[-1])
+    assert feedback['returned_rule_codes'] == ['R99']
+    assert feedback['allowed_ids']['rule_codes'] == ['R01']
+    assert feedback['allowed_ids']['frame_ids'] == ['f0017']
+    failures = list(tmp_path.rglob('failure.json'))
+    assert len(failures) == (1 if corrected else 2)
+    for record in failures:
+        saved = json.loads(record.read_text())
+        assert saved['parsed_response']['visual_risks'][0]['rule_id'] == 'R99'
+        assert saved['raw_provider_response'] == {'original': 'video response'}
+        assert (record.parent / 'sheet.png').read_bytes() == image.read_bytes()
+
+
+def test_video_codes_preserve_frozen_order_and_judgments(pipeline):
+    pipeline.rule_snapshot['stage_routes']['video_frame_evidence'] = ['rule.b', 'rule.a']
+    mapping = pipeline._video_rule_code_mapping()
+    assert mapping == {'R01': 'rule.b', 'R02': 'rule.a'}
+    raw = {'visual_risks': [{'rule_id': 'R02', 'risk_level': 'low', 'score': 40,
+                            'reason': '已判断依据', 'frame_ids': ['f0017']}],
+           'ocr_risks': [], 'asr_risks': [{'rule_id': 'R01', 'score': 60}]}
+    before = copy.deepcopy(raw)
+    decoded = pipeline._decode_video_rule_codes(raw, mapping)
+    assert raw == before
+    assert decoded['visual_risks'][0] == {**raw['visual_risks'][0], 'rule_id': 'rule.a'}
+    assert decoded['asr_risks'][0]['rule_id'] == 'rule.b'
+    for value in ['R99', 'r01', 'R1', 'rule.a', 'R01/R02']:
+        with pytest.raises(FusionAuditContractError):
+            pipeline._decode_video_rule_codes({'visual_risks': [{'rule_id': value}]}, mapping)
+
+
+def test_video_invalid_array_is_saved_and_stops_after_one_correction(pipeline, tmp_path):
+    from backend.audit_agent.pipeline import AuditProviderCallError
+    pipeline.rule_snapshot['stage_routes']['video_frame_evidence'] = ['rule.a']
+    image = tmp_path / 'sheet.png'
+    image.write_bytes(b'input image')
+    prompts = []
+    def analyze_image(path, prompt, **options):
+        prompts.append(prompt)
+        return {'segment_summary': 'test', 'segment_score': 0, 'risk_library_id': 'test',
+                'risk_library_label': 'test', 'visual_risks': 7, 'ocr_risks': [], 'asr_risks': []}
+    pipeline.qwen = SimpleNamespace(analyze_image=analyze_image)
+    job = {'sheet': {'segment_id': 'test'}, 'sheet_path': image, 'frames': [],
+           'prompt': 'rule.a｜说明。豁免ID rule.a.exemption；证据ID frame:rule.a'}
+    with patch.object(settings, 'outputs_dir', tmp_path), patch('backend.audit_agent.pipeline.job_store.log'):
+        with pytest.raises(AuditProviderCallError, match='invalid visual_risks'):
+            pipeline._audit_review_sheet(job, authoritative_m3=True)
+    assert len(prompts) == 2
+    assert prompts[0].startswith('R01｜说明。豁免ID rule.a.exemption；证据ID frame:rule.a')
+    records = list(tmp_path.rglob('failure.json'))
+    assert len(records) == 2
+    assert all(json.loads(path.read_text())['parsed_response']['visual_risks'] == 7 for path in records)

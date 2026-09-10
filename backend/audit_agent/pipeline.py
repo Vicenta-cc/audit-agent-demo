@@ -6315,22 +6315,7 @@ class AuditPipeline:
                 mode = "remote_vlm" if settings.use_remote_vlm else ("dashscope_api" if self.qwen.enabled else "mock")
                 job_store.log(self.job_id, f"{video_label}：Sheet {segment_idx} · {library_label} 审核开始，mode={mode}")
                 vlm_started = perf_counter()
-                raw_analysis = self.qwen.analyze_image(
-                    job["sheet_path"],
-                    job["prompt"],
-                    max_tokens=settings.fusion_max_tokens,
-                    model=settings.qwen_contact_sheet_model,
-                )
-                if authoritative_m3:
-                    raw_analysis = self._validated_authoritative_visual_response(
-                        raw_analysis, response_contract="video_segment"
-                    )
-                analysis = self._normalize_segment_review(
-                    raw_analysis,
-                    sheet,
-                    job["frames"],
-                    library_policy=library_policy,
-                )
+                analysis = self._audit_review_sheet(job, authoritative_m3=authoritative_m3)
                 job_store.log(
                     self.job_id,
                     f"{video_label}：Sheet {segment_idx} · {library_label} 审核完成，"
@@ -6758,6 +6743,111 @@ class AuditPipeline:
             "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
+
+    def _video_rule_code_mapping(self) -> dict[str, str]:
+        """Bind short codes to the ordered, frozen rules of this request."""
+        routes = self.rule_snapshot.get("stage_routes") or {}
+        rule_ids = list(dict.fromkeys(routes.get("video_frame_evidence") or []))
+        return {f"R{index:02d}": rule_id for index, rule_id in enumerate(rule_ids, start=1)}
+
+    @staticmethod
+    def _decode_video_rule_codes(raw: dict, mapping: dict[str, str]) -> dict:
+        decoded = dict(raw)
+        for field in ("visual_risks", "ocr_risks", "asr_risks"):
+            decoded[field] = []
+            for original in raw.get(field) or []:
+                item = dict(original)
+                code = str(item.get("rule_id") or item.get("id") or "").strip()
+                if code:
+                    if code not in mapping:
+                        raise FusionAuditContractError(f"video_frame_evidence has an unknown rule code: {code!r}")
+                    item["rule_id"] = mapping[code]
+                    if "id" in item:
+                        item["id"] = mapping[code]
+                # Missing codes on non-none items still fail native validation.
+                decoded[field].append(item)
+        return decoded
+
+    def _audit_review_sheet(self, job: dict, *, authoritative_m3: bool) -> dict:
+        """Select short rule codes, restore stable IDs, and correct at most once."""
+        sheet = job["sheet"]
+        is_v2 = self._is_ruleset_v2()
+        mapping = self._video_rule_code_mapping() if is_v2 else {}
+        base_prompt = job["prompt"]
+        if mapping:
+            reverse = {value: key for key, value in mapping.items()}
+            # One substitution pass prevents overlapping rule names or codes
+            # from changing the mapping. Business rule descriptions stay intact.
+            pattern = r"(?<![A-Za-z0-9_.:-])(?:" + "|".join(re.escape(value) for value in sorted(reverse, key=len, reverse=True)) + r")(?![A-Za-z0-9_.:-])"
+            base_prompt = re.sub(pattern, lambda match: reverse[match.group()], base_prompt)
+            base_prompt = base_prompt.replace("stable rule_id", "本次短编号，例如R01")
+        if is_v2:
+            base_prompt += "\n规则编号协议 video-rule-codes-v1：每个风险项的 rule_id 只能从下列短编号中准确选择，禁止自造、拼接、猜测或输出完整规则ID。必须满足该编号对应规则的必要条件；编号正确不代表风险成立，无明确风险时对应数组为空。frame_id、ocr_chunk_id、asr_chunk_id、豁免ID不是规则编号，保持原格式。\n" + json.dumps({"allowed_rule_codes": list(mapping)}, ensure_ascii=False)
+        prompt = base_prompt
+        attempts = 2 if is_v2 else 1
+        allowed = {
+            "rule_codes": list(mapping),
+            "frame_ids": [item["frame_id"] for item in job["frames"]],
+            "ocr_chunk_ids": [item["ocr_chunk_id"] for item in sheet.get("ocr_chunks") or []],
+            "asr_chunk_ids": [item["asr_chunk_id"] for item in sheet.get("asr_chunks") or []],
+        }
+        for attempt in range(1, attempts + 1):
+            trace = {
+                "protocol": "video-rule-codes-v1", "attempt": attempt,
+                "segment_id": sheet.get("segment_id"), "rule_code_mapping": mapping,
+                "request_prompt": prompt, "sheet": sheet, "frames": job["frames"],
+                "model": settings.qwen_contact_sheet_model, "max_tokens": settings.fusion_max_tokens,
+                "allowed_ids": allowed, "status": "requesting",
+            }
+            trace_path = None
+            if is_v2:
+                directory = settings.outputs_dir / self.job_id / "video_review_requests"
+                directory.mkdir(parents=True, exist_ok=True)
+                trace_path = directory / f"{time_ns()}-{attempt}.json"
+                trace_path.write_text(json.dumps(trace, ensure_ascii=False, indent=2), encoding="utf-8")
+            raw = self.qwen.analyze_image(
+                job["sheet_path"], prompt,
+                max_tokens=settings.fusion_max_tokens,
+                model=settings.qwen_contact_sheet_model,
+            )
+            capture = getattr(self.qwen, "last_raw_response", None)
+            trace.update(parsed_response=raw, raw_provider_response=capture() if callable(capture) else None)
+            try:
+                validated = self._validated_authoritative_visual_response(raw, response_contract="video_segment") if authoritative_m3 else raw
+                decoded = self._decode_video_rule_codes(validated, mapping) if is_v2 else validated
+                analysis = self._normalize_segment_review(
+                    decoded, sheet, job["frames"], library_policy=job.get("library_policy") or {},
+                )
+            except (FusionAuditContractError, AuditProviderCallError) as exc:
+                if not is_v2:
+                    raise
+                # Persist outside temporary video directories, including image.
+                directory = settings.outputs_dir / self.job_id / "video_review_failures" / f"{time_ns()}-{attempt}"
+                directory.mkdir(parents=True, exist_ok=False)
+                image_path = Path(job["sheet_path"])
+                shutil.copy2(image_path, directory / ("sheet" + image_path.suffix))
+                returned = [
+                    str(item.get("rule_id") or item.get("id") or "")
+                    for field in ("visual_risks", "ocr_risks", "asr_risks")
+                    for values in [raw.get(field)] if isinstance(values, list)
+                    for item in values if isinstance(item, dict)
+                ] if isinstance(raw, dict) else []
+                trace.update(status="contract_invalid", error=str(exc), returned_rule_codes=returned)
+                serialized = json.dumps(trace, ensure_ascii=False, indent=2)
+                (directory / "failure.json").write_text(serialized, encoding="utf-8")
+                trace_path.write_text(serialized, encoding="utf-8")
+                job_store.log(self.job_id, f"视频分段 {sheet.get('segment_id')}：结构校验失败 {attempt}/{attempts}，error={exc}，已保存失败输入与响应")
+                if attempt == attempts:
+                    raise
+                prompt = base_prompt + "\n上次输出未通过程序校验。请纠正规则或证据引用格式，沿用原审核标准，不能以删除已有风险项代替修正引用。只输出 JSON。\n" + json.dumps({
+                    "error": str(exc), "returned_rule_codes": returned, "allowed_ids": allowed,
+                }, ensure_ascii=False)
+                continue
+            if trace_path is not None:
+                trace.update(status="validated", normalized_analysis=analysis)
+                trace_path.write_text(json.dumps(trace, ensure_ascii=False, indent=2), encoding="utf-8")
+            return analysis
+        raise AssertionError("video review attempts exhausted without a result")
 
     def _normalize_segment_review(
         self,
