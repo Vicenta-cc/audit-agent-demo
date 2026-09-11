@@ -95,6 +95,52 @@ def test_tool_success_without_public_message_has_no_evidence(creation_stack, con
     assert stack["creation_store"].proposal_presentation_snapshots(session_id=session.id, turn_id="absent") == []
 
 
+def test_read_proposal_republishes_exact_snapshot_for_later_adoption(creation_stack, content):
+    first = run(creation_stack, content)
+    previous = evidence(first)
+    shown = _run_scripted_creation_turn(
+        creation_stack, content="重新完整展示这份规则", session_id=first["session_id"],
+        client_message_id="redisplay",
+        actions=[("get_ruleset_proposal", {"proposal_id": previous["proposal_id"]})],
+    )
+    current = evidence(shown)
+    assert current["snapshot"] == previous["snapshot"]
+    assert current["presentation_id"] != previous["presentation_id"]
+    assert current["text"] in shown["result"].answer
+    from test_ruleset_proposal_approval import creation
+    adopted = _run_scripted_creation_turn(
+        creation_stack, content="采用刚展示的规则创建调查", session_id=first["session_id"],
+        client_message_id="adopt-redisplay", actions=[("use_ruleset_proposal", {
+            "presentation_id": current["presentation_id"], "create_draft": creation(),
+        })],
+    )
+    assert adopted["turn"].public_artifact["artifact_type"] == "investigation_draft"
+
+
+@pytest.mark.parametrize("tool_name", ["get_ruleset_proposal", "get_resource_edit"])
+def test_real_hermes_read_path_records_display_receipt(creation_stack, content, monkeypatch, tool_name):
+    from hermes_m0.plugin import _idempotent_tool_execution
+    from backend.investigation_creation.tools import configure_hermes_investigation_creation_tools
+    first = run(creation_stack, content)
+    stack = creation_stack
+    principal = Principal("principal-a")
+    configure_hermes_investigation_creation_tools(stack["tool_service"], principal_provider=lambda _: principal)
+    turn, _ = stack["conversation"].accept_message(first["session_id"], content="重新展示", client_message_id="reread", principal=principal)
+    stack["tool_service"].begin_conversation_turn(first["session_id"], turn.id)
+    monkeypatch.setenv("HERMES_INVESTIGATION_CREATION_MODE", "1")
+    args = {"proposal_id" if tool_name == "get_ruleset_proposal" else "edit_id": evidence(first)["proposal_id"]}
+    try:
+        response = _idempotent_tool_execution(tool_name=tool_name, args=args,
+            session_id=first["session_id"], turn_id=turn.id, tool_call_id="read-display",
+            next_call=lambda _: pytest.fail("read bypassed durable receipt middleware"))
+        assert json.loads(response)["status"] == "ok", response
+        assert stack["creation_store"].proposal_presentation_snapshots(
+            session_id=first["session_id"], turn_id=turn.id) == [evidence(first)["snapshot"]]
+        assert not stack["conversation"].store.get_turn(turn.id).public_artifact
+    finally:
+        stack["tool_service"].end_conversation_turn(first["session_id"])
+
+
 def test_failed_message_transaction_rolls_back_presentation(creation_stack, content):
     store = creation_stack["conversation"].store
     with sqlite3.connect(store.db_path) as connection:

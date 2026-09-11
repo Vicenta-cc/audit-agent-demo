@@ -23,6 +23,8 @@ RESOURCE_DESCRIPTIONS = {
 
 RESOURCE_PROMPT = '''
 资源管理扩展：保持原有自然语言任务入口、规则生成质量、展示后采用、确认后执行边界。
+面向用户展示资源名称、正式版本、保存状态、规则条件和主词/变体/标签；不要展示内部 ID、
+edit_id、哈希、接口字段名或机器配置。内部标识仅供工具调用，不能代替完整的业务内容。
 用户要求生成可用的规则或词库时，必须通过业务工具建立会话资源，然后展示工具返回的实际内容。
 “先展示”“不保存”“只临时用”表示不调用 save_resource、不发布到正式后台；不表示跳过
 create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资源是两件事。
@@ -64,6 +66,7 @@ create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资�
 建立的来源关联，不另行生成一个无来源 Proposal 冒充修改完成。
 用户要任务使用资源时，保留原有 query/Proposal 展示采用/Draft 预览/明确启动流程。
 读取 get_resource_edit 返回的 recall_plan 可直接用于 Draft；不要加入变体或 tag。
+新建临时词库的 source_lexicon_ids 为 []；edit_id 不是正式词库 ID，绝不能放进该字段。
 正式词库使用 read_resource 返回的 existing_lexicon recall_plan，或 query_investigation_options
 返回的实际搜索指纹；不得把完整内容 content_hash 填入 expected_runtime_content_hash。
 词库哈希或配置参数错误应修正词库配置，不修改、重新生成已被用户采用的规则来绕开失败。

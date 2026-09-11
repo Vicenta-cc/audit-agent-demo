@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { AssistantMarkdown } from "./AssistantMarkdown";
 
 const STREAM_CHARACTER_INTERVAL_MS = 18;
 const MAX_STREAMED_CHARACTER_COUNT = 600;
@@ -61,7 +61,7 @@ export function StreamingAssistantText({
   return (
     <div className={className} aria-label={text} data-streaming={isStreaming ? "true" : "false"}>
       <div className={`inv-streaming-copy${isStreaming ? " is-streaming" : ""}`} aria-hidden="true">
-        <ReactMarkdown>{visibleText}</ReactMarkdown>
+        <AssistantMarkdown content={visibleText} />
       </div>
     </div>
   );

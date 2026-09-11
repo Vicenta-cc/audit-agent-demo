@@ -130,6 +130,13 @@ class TemporaryTermsRecallPlan(StrictModel):
     terms: list[StrictStr] = Field(default_factory=list, max_length=100)
     source_lexicon_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
 
+    @field_validator("source_lexicon_ids")
+    @classmethod
+    def reject_session_edit_references(cls, values: list[str]) -> list[str]:
+        if any(value.startswith("lexicon-edit:") for value in values):
+            raise ValueError("source_lexicon_ids accepts formal lexicon IDs only, never lexicon-edit IDs; use the edit's returned recall_plan (new temporary lexicons use [])")
+        return values
+
     @field_validator("terms")
     @classmethod
     def reject_transport_separator(cls, values: list[str]) -> list[str]:

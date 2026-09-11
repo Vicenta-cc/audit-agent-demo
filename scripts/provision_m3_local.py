@@ -41,6 +41,12 @@ def main():
     shutil.copytree(args.crawler_source, crawler, symlinks=True,
         ignore=shutil.ignore_patterns('.git', '.venv', '__pycache__', 'browser_data',
                                     'cache', 'data', 'logs', '*.lock', '.env', 'node_modules'))
+    # MediaCrawler's cache/ is a Python package, not disposable runtime state.
+    # Copy its source only; never import cached account/session data.
+    for source in (args.crawler_source / 'cache').rglob('*.py'):
+        target = crawler / source.relative_to(args.crawler_source)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
     (crawler / '.venv').symlink_to((args.crawler_source / '.venv').resolve(), target_is_directory=True)
     filtered = {k: str(v) for k, v in source_env.items() if not any(s in k for s in (
         'API_KEY', 'TOKEN', 'SECRET', 'AUTH_', 'PASSWORD', 'XHS_AUDIT_', 'HISTORICAL_REPORT_',

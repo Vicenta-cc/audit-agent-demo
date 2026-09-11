@@ -78,6 +78,9 @@ export function formatConfirmationBlockerMessage(code: string, message: string) 
 
 export function formatCreationErrorMessage(message: string) {
   const normalized = message.toUpperCase();
+  if (normalized.includes("DATA_INSPECTION_FAILED")) {
+    return "本轮未完成：模型服务的内容检查拒绝了请求。可以调整请求或使用已有资源。";
+  }
   if (normalized.includes("NO_PUBLISHED_RULESET")) {
     return formatConfirmationBlockerMessage("NO_PUBLISHED_RULESET", message);
   }

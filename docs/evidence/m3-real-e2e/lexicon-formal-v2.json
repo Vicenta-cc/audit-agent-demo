@@ -1,0 +1,42 @@
+{
+  "formal_version": 2,
+  "content": {
+    "entries": [
+      {
+        "enabled": true,
+        "id": "main_weihan_tonghun",
+        "kind": "main",
+        "match_type": "黑话词",
+        "note": "维汉跨民族通婚讨论",
+        "parent_id": "",
+        "platform": "全平台",
+        "risk_level": "中",
+        "term": "维汉夫妻"
+      },
+      {
+        "enabled": true,
+        "id": "var_weihan_hunlian",
+        "kind": "variant",
+        "match_type": "黑话词",
+        "note": "维汉婚恋讨论",
+        "parent_id": "main_weihan_tonghun",
+        "platform": "全平台",
+        "risk_level": "中",
+        "term": "维汉婚恋"
+      },
+      {
+        "enabled": true,
+        "id": "tag_hunlian_taolun",
+        "kind": "tag",
+        "match_type": "黑话词",
+        "note": "婚恋讨论场景标签",
+        "parent_id": "",
+        "platform": "全平台",
+        "risk_level": "中",
+        "term": "婚恋讨论"
+      }
+    ],
+    "risk_label": "民族关系",
+    "title": "维汉婚恋临时词库0911"
+  }
+}

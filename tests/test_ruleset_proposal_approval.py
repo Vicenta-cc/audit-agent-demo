@@ -90,6 +90,28 @@ def test_binding_snapshot_preview_confirm_audit_and_replay(creation_stack, conte
     assert len(rows(stack["creation_store"], "investigation_draft_revisions")) == 1
 
 
+def test_temporary_lexicon_edit_reference_can_be_corrected_before_receipt(creation_stack, content):
+    stack = creation_stack
+    first = run(stack, content)
+    valid = {"presentation_id": evidence(first)["presentation_id"], "create_draft": creation()}
+    invalid = deepcopy(valid)
+    invalid["create_draft"]["configuration"]["investigation"]["recall_plan"]["source_lexicon_ids"] = ["lexicon-edit:temporary"]
+    failure, identity, turn = approve(stack, first, arguments=invalid)
+    assert failure["status"] == "error"
+    assert failure["error"]["details"]["receipt_created"] is False
+    assert not rows(stack["creation_store"], "investigation_drafts")
+    service = stack["tool_service"]
+    service.begin_conversation_turn(first["session_id"], turn.id)
+    try:
+        result = service.execute_with_identity("use_ruleset_proposal", valid, principal=PRINCIPAL, identity=identity)
+        assert result["status"] == "ok", result
+        assert service.execute_with_identity("use_ruleset_proposal", valid, principal=PRINCIPAL, identity=identity) == result
+    finally:
+        service.end_conversation_turn(first["session_id"])
+    assert len(rows(stack["creation_store"], "investigation_drafts")) == 1
+    assert not rows(stack["creation_store"], "investigation_runs")
+
+
 @pytest.mark.parametrize("corruption", ["update", "hash", "presentation_session"])
 def test_stale_or_invalid_evidence(creation_stack, content, corruption):
     stack = creation_stack

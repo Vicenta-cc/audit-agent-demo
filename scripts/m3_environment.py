@@ -95,6 +95,12 @@ def check(config):
     HermesRuntimeBinding().product_system_prompt()
     if not os.environ.get('DASHSCOPE_API_KEY'):
         raise RuntimeError('实验模型密钥未配置。')
+    crawler = Path(config['crawler_dir'])
+    if not (crawler / 'cache/abs_cache.py').is_file():
+        raise RuntimeError('采集器 cache 源码包缺失，需补齐独立采集代码。')
+    subprocess.run([str(crawler / '.venv/bin/python'), '-c',
+                    'from media_platform.douyin import DouYinCrawler'],
+                   cwd=crawler, stdout=subprocess.DEVNULL, check=True)
     for spec in HISTORICAL_REPORT_SPECS:
         if hashlib.sha256(spec.source_database.read_bytes()).hexdigest() != spec.source_database_sha256:
             raise RuntimeError('A/B 归档校验失败。')

@@ -606,7 +606,7 @@ class InvestigationCreationStore:
                 """SELECT r.response_json FROM investigation_creation_tool_receipts r
                    JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id = r.receipt_id
                    WHERE r.session_id = ? AND b.application_turn_id = ? AND r.status = 'SUCCEEDED'
-                     AND r.tool_name IN ('create_ruleset_proposal', 'update_ruleset_proposal', 'open_resource_edit', 'update_resource_edit', 'get_resource_edit')
+                     AND r.tool_name IN ('create_ruleset_proposal', 'update_ruleset_proposal', 'get_ruleset_proposal', 'open_resource_edit', 'update_resource_edit', 'get_resource_edit')
                    ORDER BY r.rowid""", (session_id, turn_id),
             ).fetchall()
             latest = {}

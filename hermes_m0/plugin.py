@@ -8,7 +8,7 @@ import os
 
 from backend.investigation_creation.tools import (
     HERMES_M3_TOOL_SCHEMAS,
-    M3_MUTATION_TOOL_NAMES,
+    M3_RECORDED_TOOL_NAMES,
     HermesToolExecutionIdentity,
     dispatch_hermes_investigation_creation_tool,
     dispatch_hermes_investigation_creation_tool_with_identity,
@@ -91,7 +91,7 @@ def _idempotent_tool_execution(**kwargs: Any) -> Any:
     args = kwargs.get("args")
     next_call = kwargs["next_call"]
     if (
-        tool_name in M3_MUTATION_TOOL_NAMES
+        tool_name in M3_RECORDED_TOOL_NAMES
         and os.environ.get("HERMES_INVESTIGATION_CREATION_MODE") == "1"
     ):
         try:

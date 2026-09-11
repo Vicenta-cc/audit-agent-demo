@@ -1,0 +1,647 @@
+{
+  "date": "2026-09-11",
+  "environment": {
+    "environment_id": "m3-resource-lifecycle-experiment",
+    "worktree": "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-m3-resource-lifecycle-experiment",
+    "data_dir": "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-m3-resource-lifecycle-experiment/outputs/m3-environment/data",
+    "api_port": 8178,
+    "frontend_port": 3178,
+    "build_hash": "0a79834eaf77e80ed15aa9d10f3a8022024aedad0760e31ed59acea175dcf14e"
+  },
+  "runs": [
+    {
+      "scenario": "temporary_rule_temporary_lexicon",
+      "workspace_session_id": "investigation-session:608a55c8c5364a4c8d53218f74d78ae3",
+      "run": {
+        "run_id": "investigation-run:1c1a8f69d405405eb55c39ae739c9508",
+        "draft_id": "investigation-draft:d0529e24434349faab2a7f1b0c13d0c3",
+        "draft_revision": 1,
+        "status": "PUBLISHED",
+        "job_id": "m3-aa03372b0dcca6e6a855",
+        "crawl_status": "completed",
+        "analysis_status": "completed",
+        "task_stats": {
+          "ingested_count": 1,
+          "queued_analysis_count": 0,
+          "pending_analysis_count": 0,
+          "analyzing_count": 0,
+          "completed_analysis_count": 1,
+          "failed_analysis_count": 0,
+          "analysis_status_counts": {
+            "completed": 1
+          },
+          "batch_count": 1,
+          "batch_item_count": 1,
+          "batch_processed_count": 1
+        },
+        "audit_results": [
+          {
+            "audit_result_id": "1",
+            "content_key": "7592293303816719086",
+            "platform": "dy",
+            "content_title": "维汉夫妻自述遭辱骂",
+            "decision": "pass",
+            "risk_level": "none",
+            "summary": "博主分享跨民族婚恋经历，引用他人对其“下地狱”、“民族败类”的侮辱言论以进行反驳和澄清，属批判性引用。",
+            "analyzed_at": "2026-09-11T12:55:47",
+            "evidence": []
+          }
+        ],
+        "report_status": "published",
+        "report_version_id": "report-version:8918e75de0f24992ab178b8f14036551",
+        "error_code": "",
+        "error_message": "",
+        "created_at": "2026-09-11T04:53:30.019759+00:00",
+        "updated_at": "2026-09-11T04:55:47.941820+00:00",
+        "started_at": "2026-09-11T04:53:31.086758+00:00",
+        "completed_at": "2026-09-11T04:55:47.941820+00:00"
+      },
+      "confirmed_to_published_seconds": 137.922,
+      "execution_seconds": 136.855,
+      "search_terms": [
+        "维汉通婚"
+      ],
+      "rule_source": "temporary_ruleset",
+      "recall_strategy": "temporary_terms",
+      "limits": {
+        "max_notes": 1,
+        "max_comments": 3,
+        "analyze_limit": 1
+      },
+      "qa": {
+        "turn_id": "investigation-turn:01e2e3bd4ac048a8afba26a9650ea298",
+        "status": "completed",
+        "seconds": 30.237,
+        "llm_calls": 5
+      },
+      "resource_edits": [
+        {
+          "kind": "ruleset",
+          "version": 2,
+          "saved": true,
+          "search_terms": []
+        },
+        {
+          "kind": "lexicon",
+          "version": 1,
+          "saved": true,
+          "search_terms": [
+            "维汉通婚"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": "formal_rule_formal_lexicon",
+      "workspace_session_id": "investigation-session:a9c2326b6b4a4b2cb2d5c53bc3028379",
+      "run": {
+        "run_id": "investigation-run:9e26e52d18114d3483441982c7a916ac",
+        "draft_id": "investigation-draft:e71a7d1fb77341f69f612b408d8edb9b",
+        "draft_revision": 1,
+        "status": "PUBLISHED",
+        "job_id": "m3-ebd0d4dc1c22ff5ed352",
+        "crawl_status": "completed",
+        "analysis_status": "completed",
+        "task_stats": {
+          "ingested_count": 1,
+          "queued_analysis_count": 0,
+          "pending_analysis_count": 0,
+          "analyzing_count": 0,
+          "completed_analysis_count": 1,
+          "failed_analysis_count": 0,
+          "analysis_status_counts": {
+            "completed": 1
+          },
+          "batch_count": 1,
+          "batch_item_count": 1,
+          "batch_processed_count": 1
+        },
+        "audit_results": [
+          {
+            "audit_result_id": "2",
+            "content_key": "7683869313099760570",
+            "platform": "dy",
+            "content_title": "维汉夫妻日常温馨记录",
+            "decision": "pass",
+            "risk_level": "none",
+            "summary": "内容为维汉夫妻日常生活记录，表达情感与家庭愿景，属个人婚恋自主选择，无风险内容。",
+            "analyzed_at": "2026-09-11T13:01:47",
+            "evidence": []
+          }
+        ],
+        "report_status": "published",
+        "report_version_id": "report-version:0b877bbeb09f409babb87a7d255cdfe6",
+        "error_code": "",
+        "error_message": "",
+        "created_at": "2026-09-11T05:00:16.835958+00:00",
+        "updated_at": "2026-09-11T05:01:47.554433+00:00",
+        "started_at": "2026-09-11T05:00:17.494474+00:00",
+        "completed_at": "2026-09-11T05:01:47.554433+00:00"
+      },
+      "confirmed_to_published_seconds": 90.718,
+      "execution_seconds": 90.06,
+      "search_terms": [
+        "维汉夫妻"
+      ],
+      "rule_source": "ruleset_revision",
+      "recall_strategy": "existing_lexicon",
+      "limits": {
+        "max_notes": 1,
+        "max_comments": 3,
+        "analyze_limit": 1
+      },
+      "qa": {
+        "turn_id": "investigation-turn:d1b25bc2d77f4c2e85c0fe9ec457205c",
+        "status": "completed",
+        "seconds": 35.472,
+        "llm_calls": 5
+      },
+      "resource_edits": [
+        {
+          "kind": "ruleset",
+          "version": 2,
+          "saved": true,
+          "search_terms": []
+        },
+        {
+          "kind": "lexicon",
+          "version": 2,
+          "saved": true,
+          "search_terms": [
+            "维汉夫妻"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": "existing_k2_rule_temporary_lexicon",
+      "workspace_session_id": "investigation-session:5d67f9ed4617465db2493902e76d8985",
+      "run": {
+        "run_id": "investigation-run:32d91fd5752f4413a6b51ed49650e2e1",
+        "draft_id": "investigation-draft:3b661bce6a774ce3a777c6560e4cc767",
+        "draft_revision": 1,
+        "status": "PUBLISHED",
+        "job_id": "m3-2c3ade3b47ea1ce0c2c3",
+        "crawl_status": "completed",
+        "analysis_status": "completed",
+        "task_stats": {
+          "ingested_count": 1,
+          "queued_analysis_count": 0,
+          "pending_analysis_count": 0,
+          "analyzing_count": 0,
+          "completed_analysis_count": 1,
+          "failed_analysis_count": 0,
+          "analysis_status_counts": {
+            "completed": 1
+          },
+          "batch_count": 1,
+          "batch_item_count": 1,
+          "batch_processed_count": 1
+        },
+        "audit_results": [
+          {
+            "audit_result_id": "3",
+            "content_key": "7592293303816719086",
+            "platform": "dy",
+            "content_title": "博主分享维汉婚姻日常并反驳网暴",
+            "decision": "pass",
+            "risk_level": "none",
+            "summary": "博主分享维汉跨民族婚姻日常，回应并反驳因嫁给汉族男性遭受的网络暴力与辱骂，主张个人婚姻与信仰自由，无民族攻击或身份转向倡议。",
+            "analyzed_at": "2026-09-11T13:20:51",
+            "evidence": []
+          }
+        ],
+        "report_status": "published",
+        "report_version_id": "report-version:2e91357f5c88401b83852350c1c9d5fc",
+        "error_code": "",
+        "error_message": "",
+        "created_at": "2026-09-11T05:18:59.260501+00:00",
+        "updated_at": "2026-09-11T05:20:52.399127+00:00",
+        "started_at": "2026-09-11T05:19:00.109110+00:00",
+        "completed_at": "2026-09-11T05:20:52.399127+00:00"
+      },
+      "confirmed_to_published_seconds": 113.139,
+      "execution_seconds": 112.29,
+      "search_terms": [
+        "维汉通婚"
+      ],
+      "rule_source": "ruleset_revision",
+      "recall_strategy": "temporary_terms",
+      "limits": {
+        "max_notes": 1,
+        "max_comments": 3,
+        "analyze_limit": 1
+      },
+      "qa": {
+        "turn_id": "investigation-turn:9bfa93bc25f6411aa47d52e0d2f3f9ea",
+        "status": "completed",
+        "seconds": 33.263,
+        "llm_calls": 5
+      },
+      "resource_edits": [
+        {
+          "kind": "lexicon",
+          "version": 1,
+          "saved": false,
+          "search_terms": [
+            "维汉通婚"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": "temporary_rule_formal_lexicon",
+      "workspace_session_id": "investigation-session:da8bc2f9584d42918a063a92a66248e8",
+      "run": {
+        "run_id": "investigation-run:199c4647e7c443f99455c6cad67aca18",
+        "draft_id": "investigation-draft:d96f4ab2e4474462b9d2e116fdac77c0",
+        "draft_revision": 1,
+        "status": "PUBLISHED",
+        "job_id": "m3-ba22cb7a15631d15d911",
+        "crawl_status": "completed",
+        "analysis_status": "completed",
+        "task_stats": {
+          "ingested_count": 1,
+          "queued_analysis_count": 0,
+          "pending_analysis_count": 0,
+          "analyzing_count": 0,
+          "completed_analysis_count": 1,
+          "failed_analysis_count": 0,
+          "analysis_status_counts": {
+            "completed": 1
+          },
+          "batch_count": 1,
+          "batch_item_count": 1,
+          "batch_processed_count": 1
+        },
+        "audit_results": [
+          {
+            "audit_result_id": "4",
+            "content_key": "7684030670000583099",
+            "platform": "dy",
+            "content_title": "维汉夫妻分享跨族婚恋喜悦",
+            "decision": "pass",
+            "risk_level": "none",
+            "summary": "内容为维吾尔族与汉族夫妇分享婚礼及生活，表达爱意不分民族。属个人婚恋自主选择记录，符合豁免条件，无风险。",
+            "analyzed_at": "2026-09-11T13:22:31",
+            "evidence": []
+          }
+        ],
+        "report_status": "published",
+        "report_version_id": "report-version:8877c976fbf9483a9bdb48dbd03ffca7",
+        "error_code": "",
+        "error_message": "",
+        "created_at": "2026-09-11T05:21:51.719503+00:00",
+        "updated_at": "2026-09-11T05:22:32.125062+00:00",
+        "started_at": "2026-09-11T05:21:51.861778+00:00",
+        "completed_at": "2026-09-11T05:22:32.125062+00:00"
+      },
+      "confirmed_to_published_seconds": 40.406,
+      "execution_seconds": 40.263,
+      "search_terms": [
+        "维汉夫妻"
+      ],
+      "rule_source": "temporary_ruleset",
+      "recall_strategy": "existing_lexicon",
+      "limits": {
+        "max_notes": 1,
+        "max_comments": 3,
+        "analyze_limit": 1
+      },
+      "qa": {
+        "turn_id": "investigation-turn:10e6f2cb17924540b4fd362a3fc34ee1",
+        "status": "completed",
+        "seconds": 32.807,
+        "llm_calls": 5
+      },
+      "resource_edits": [
+        {
+          "kind": "ruleset",
+          "version": 1,
+          "saved": false,
+          "search_terms": []
+        }
+      ]
+    }
+  ],
+  "real_model_turns": [
+    {
+      "record": "01-natural-request.json",
+      "turn_id": "investigation-turn:b45e0fb3c0224b919af5134a4449a4f8",
+      "status": "completed",
+      "seconds": 45.327863,
+      "llm_call_count": 7,
+      "tools": [
+        "tool_search",
+        "tool_describe",
+        "query_investigation_options",
+        "query_investigation_options",
+        "tool_describe",
+        "create_investigation_draft"
+      ]
+    },
+    {
+      "record": "02-natural-request-retest.json",
+      "turn_id": "investigation-turn:00036e5fcf094f2eb68bc364eb1002d1",
+      "status": "completed",
+      "seconds": 23.99736,
+      "llm_call_count": 4,
+      "tools": [
+        "tool_search",
+        "query_investigation_options",
+        "query_investigation_options"
+      ]
+    },
+    {
+      "record": "03-generate-temporary.json",
+      "turn_id": "investigation-turn:20b318cc6b774b17aaaf103c750093c7",
+      "status": "error",
+      "seconds": 50.898882,
+      "llm_call_count": 0,
+      "tools": []
+    },
+    {
+      "record": "04-existing-rule-create-lexicon.json",
+      "turn_id": "investigation-turn:53161f9cd0664b8e91ab62deb07d299a",
+      "status": "completed",
+      "seconds": 46.967529,
+      "llm_call_count": 5,
+      "tools": [
+        "tool_search",
+        "tool_search",
+        "tool_describe",
+        "tool_describe",
+        "read_resource",
+        "create_lexicon_edit",
+        "create_lexicon_edit",
+        "read_resource"
+      ]
+    },
+    {
+      "record": "05-mixed-draft.json",
+      "turn_id": "investigation-turn:b699c56263a648b9abae01cd210c8bbb",
+      "status": "completed",
+      "seconds": 32.575648,
+      "llm_call_count": 3,
+      "tools": [
+        "tool_describe",
+        "create_investigation_draft"
+      ]
+    },
+    {
+      "record": "07-generate-abstract-rules.json",
+      "turn_id": "investigation-turn:8b886fa10a744581a511559ede35edf2",
+      "status": "completed",
+      "seconds": 115.950408,
+      "llm_call_count": 3,
+      "tools": [
+        "tool_describe",
+        "create_ruleset_proposal"
+      ]
+    },
+    {
+      "record": "08-edit-temporary-and-create-lexicon.json",
+      "turn_id": "investigation-turn:159c0649914f41fdb067af4c3aec7f5b",
+      "status": "completed",
+      "seconds": 51.368262,
+      "llm_call_count": 4,
+      "tools": [
+        "tool_describe",
+        "tool_describe",
+        "update_ruleset_proposal",
+        "create_lexicon_edit",
+        "create_lexicon_edit"
+      ]
+    },
+    {
+      "record": "09-temporary-both-draft.json",
+      "turn_id": "investigation-turn:33f4b3823a39460fabec179b5cfda476",
+      "status": "completed",
+      "seconds": 53.358396,
+      "llm_call_count": 6,
+      "tools": [
+        "tool_describe",
+        "use_ruleset_proposal",
+        "use_ruleset_proposal",
+        "use_ruleset_proposal",
+        "use_ruleset_proposal"
+      ]
+    },
+    {
+      "record": "10-temporary-both-draft-retest.json",
+      "turn_id": "investigation-turn:88a92acad34b4f79b2b29777bea05be8",
+      "status": "completed",
+      "seconds": 36.767506,
+      "llm_call_count": 3,
+      "tools": [
+        "use_ruleset_proposal",
+        "get_ruleset_proposal"
+      ]
+    },
+    {
+      "record": "11-redisplay.json",
+      "turn_id": "investigation-turn:cfc0bbc4939845dd8cf619e31634dac0",
+      "status": "completed",
+      "seconds": 24.469884,
+      "llm_call_count": 3,
+      "tools": [
+        "tool_describe",
+        "get_ruleset_proposal",
+        "get_resource_edit"
+      ]
+    },
+    {
+      "record": "12-redisplay-retest.json",
+      "turn_id": "investigation-turn:8f16c74bf3d64dc2bc1a7ba57e2fee1c",
+      "status": "completed",
+      "seconds": 12.780083,
+      "llm_call_count": 2,
+      "tools": [
+        "get_ruleset_proposal"
+      ]
+    },
+    {
+      "record": "13-adopt-republished.json",
+      "turn_id": "investigation-turn:812ff6a234b249f79b34ca04f53252ea",
+      "status": "completed",
+      "seconds": 16.395349,
+      "llm_call_count": 2,
+      "tools": [
+        "use_ruleset_proposal"
+      ]
+    },
+    {
+      "record": "14-save-generated-both.json",
+      "turn_id": "investigation-turn:b741b0c4b4094beb820b88b99e31593c",
+      "status": "completed",
+      "seconds": 16.584893,
+      "llm_call_count": 3,
+      "tools": [
+        "tool_describe",
+        "save_resource",
+        "save_resource"
+      ]
+    },
+    {
+      "record": "16-read-formal-both.json",
+      "turn_id": "investigation-turn:8147dac03ae049f491ecf69dec6140b0",
+      "status": "completed",
+      "seconds": 33.05843,
+      "llm_call_count": 4,
+      "tools": [
+        "tool_describe",
+        "read_resource",
+        "read_resource",
+        "read_resource",
+        "read_resource"
+      ]
+    },
+    {
+      "record": "17-edit-formal-copies.json",
+      "turn_id": "investigation-turn:e828d11b9b4641528d8c17f3735e1ccd",
+      "status": "completed",
+      "seconds": 41.857016,
+      "llm_call_count": 4,
+      "tools": [
+        "tool_describe",
+        "tool_describe",
+        "open_resource_edit",
+        "open_resource_edit",
+        "update_resource_edit",
+        "update_resource_edit"
+      ]
+    },
+    {
+      "record": "19-resolve-lexicon-conflict.json",
+      "turn_id": "investigation-turn:ff5a89d5a95e4868a5dcfcdb66337d58",
+      "status": "completed",
+      "seconds": 14.787303,
+      "llm_call_count": 2,
+      "tools": [
+        "update_resource_edit"
+      ]
+    },
+    {
+      "record": "22-save-edited-formal.json",
+      "turn_id": "investigation-turn:f1d5e1f60ef64a2e85597f94734eca68",
+      "status": "completed",
+      "seconds": 23.214469,
+      "llm_call_count": 4,
+      "tools": [
+        "tool_describe",
+        "save_resource",
+        "save_resource",
+        "read_resource",
+        "read_resource"
+      ]
+    },
+    {
+      "record": "23-draft-formal-both.json",
+      "turn_id": "investigation-turn:f5a4e71a0a9247799d57dddd19b84b91",
+      "status": "completed",
+      "seconds": 33.945741,
+      "llm_call_count": 3,
+      "tools": [
+        "tool_describe",
+        "create_investigation_draft"
+      ]
+    },
+    {
+      "record": "24-natural-confirm-formal.json",
+      "turn_id": "investigation-turn:3b088421982b41c2848549dad1341ad5",
+      "status": "completed",
+      "seconds": 14.050901,
+      "llm_call_count": 3,
+      "tools": [
+        "tool_describe",
+        "confirm_and_queue_investigation"
+      ]
+    },
+    {
+      "record": "28-k2-mixed-draft.json",
+      "turn_id": "investigation-turn:1f57292423504671a9a3f562f40aba32",
+      "status": "completed",
+      "seconds": 46.444022,
+      "llm_call_count": 6,
+      "tools": [
+        "tool_search",
+        "tool_describe",
+        "tool_describe",
+        "tool_describe",
+        "tool_describe",
+        "read_resource",
+        "read_resource",
+        "create_lexicon_edit",
+        "create_investigation_draft"
+      ]
+    },
+    {
+      "record": "29-k2-mixed-confirm.json",
+      "turn_id": "investigation-turn:119a9c9772d24b1184c0eb146642aedc",
+      "status": "completed",
+      "seconds": 11.817949,
+      "llm_call_count": 3,
+      "tools": [
+        "tool_describe",
+        "confirm_and_queue_investigation"
+      ]
+    },
+    {
+      "record": "30-open-temporary-rule.json",
+      "turn_id": "investigation-turn:a373d061f3084cc28629b243fb28ba38",
+      "status": "completed",
+      "seconds": 36.673845,
+      "llm_call_count": 4,
+      "tools": [
+        "tool_describe",
+        "tool_describe",
+        "read_resource",
+        "read_resource",
+        "open_resource_edit",
+        "read_resource"
+      ]
+    },
+    {
+      "record": "31-temporary-formal-draft.json",
+      "turn_id": "investigation-turn:586184a472b44e16bd14f46e4cd5e5ec",
+      "status": "completed",
+      "seconds": 46.217388,
+      "llm_call_count": 3,
+      "tools": [
+        "tool_describe",
+        "tool_describe",
+        "use_ruleset_proposal"
+      ]
+    },
+    {
+      "record": "32-temporary-formal-confirm.json",
+      "turn_id": "investigation-turn:40ac32e7bd964905a08ad462dcd7eed0",
+      "status": "completed",
+      "seconds": 17.896852,
+      "llm_call_count": 3,
+      "tools": [
+        "tool_describe",
+        "confirm_and_queue_investigation",
+        "confirm_and_queue_investigation"
+      ]
+    }
+  ],
+  "original_k2_rule_unchanged": {
+    "version": 1,
+    "content_hash": "25ec65414796448e67f95f7de5ecbea75ae06ffb571e0750ce786d78e0e85269"
+  },
+  "limits": "Small functional samples, possibly repeated source posts; no production precision or recall claim. Model calls may overlap audit calls. All waiting is included.",
+  "verification": {
+    "backend_passed": 265,
+    "backend_subtests_passed": 12,
+    "frontend_logic_passed": 4,
+    "typescript": "passed",
+    "vite_build": "passed",
+    "active_runs": 0,
+    "duplicate_runs_per_draft": 0,
+    "historical_reports_checked": [
+      "A",
+      "B"
+    ]
+  }
+}

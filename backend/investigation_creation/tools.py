@@ -265,6 +265,7 @@ def _creation_tool_schema(schema: type[StrictModel]) -> dict[str, Any]:
 
 M3_TOOL_INPUTS.update(RESOURCE_TOOL_INPUTS)
 M3_MUTATION_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | RESOURCE_MUTATIONS
+M3_RECORDED_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | {"get_resource_edit", "get_ruleset_proposal"}
 M3_TOOL_DESCRIPTIONS.update(RESOURCE_DESCRIPTIONS)
 
 # Attach guidance before freezing the schemas used by deferred discovery.
@@ -507,12 +508,14 @@ class InvestigationCreationToolService:
                 }
         receipt: dict[str, Any] | None = None
         try:
-            if tool_name in M3_MUTATION_TOOL_NAMES or tool_name == "get_resource_edit":
-                with self._conversation_lock:
-                    application_turn_id = (
-                        self._conversation_turns.get(identity.session_id, "")
-                        if tool_name in {"create_ruleset_proposal", "update_ruleset_proposal", "use_ruleset_proposal"} | RESOURCE_MUTATIONS | {"get_resource_edit"} else ""
-                    )
+            with self._conversation_lock:
+                application_turn_id = (
+                    self._conversation_turns.get(identity.session_id, "")
+                    if tool_name in {"create_ruleset_proposal", "update_ruleset_proposal", "use_ruleset_proposal", "get_ruleset_proposal"} | RESOURCE_MUTATIONS | {"get_resource_edit"} else ""
+                )
+            # Reads only need a receipt when they can contribute to this turn's
+            # durable public display. Standalone reads retain their read-only API.
+            if tool_name in M3_MUTATION_TOOL_NAMES or (application_turn_id and tool_name in M3_RECORDED_TOOL_NAMES):
                 receipt = self.application_service.store.begin_tool_execution(
                     session_id=identity.session_id,
                     turn_id=identity.turn_id,
@@ -587,7 +590,7 @@ def dispatch_hermes_investigation_creation_tool(
     tool_call_id: str = "",
 ) -> str:
     identity: HermesToolExecutionIdentity | None = None
-    if tool_name in M3_MUTATION_TOOL_NAMES:
+    if tool_name in M3_MUTATION_TOOL_NAMES or (tool_name in M3_RECORDED_TOOL_NAMES and turn_id and tool_call_id):
         try:
             identity = HermesToolExecutionIdentity.require(
                 session_id=session_id,
