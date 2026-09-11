@@ -287,7 +287,7 @@ export interface RiskRule {
   content: string;
   suggestedLevel: RiskLevel;
   exemptionConditions: string;
-  applicationStages: ("图片证据提取" | "视频关键帧提取" | "融合研判")[];
+  applicationStages: ("图片证据提取" | "视频关键帧提取" | "评论审核" | "融合研判")[];
   notes?: string;
   enabled: boolean;
 }

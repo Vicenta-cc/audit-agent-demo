@@ -237,10 +237,10 @@ class RuleSetStore:
     def get(self, ruleset_id: str, *, actor_id: str) -> dict:
         with self._lock, self._connect() as connection:
             row = connection.execute(
-                "SELECT * FROM rule_sets WHERE id = ? AND (owner_id = ? OR owner_id = 'system')",
+                "SELECT * FROM rule_sets WHERE id = ? AND status != 'deleted' AND (owner_id = ? OR owner_id = 'system')",
                 (ruleset_id, actor_id),
             ).fetchone()
-            if row is None:
+            if row is None or row["status"] == "deleted":
                 raise RuleSetNotFoundError(ruleset_id)
             return self._row_to_ruleset(row)
 
@@ -249,7 +249,7 @@ class RuleSetStore:
             rows = connection.execute(
                 """
                 SELECT * FROM rule_sets
-                WHERE owner_id = ? OR owner_id = 'system'
+                WHERE status != 'deleted' AND (owner_id = ? OR owner_id = 'system')
                 ORDER BY updated_at DESC, id
                 """,
                 (actor_id,),
@@ -270,7 +270,7 @@ class RuleSetStore:
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT * FROM rule_sets WHERE id = ?", (ruleset_id,)).fetchone()
-            if row is None:
+            if row is None or row["status"] == "deleted":
                 raise RuleSetNotFoundError(ruleset_id)
             if row["owner_id"] == "system" or row["owner_id"] != actor_id:
                 raise RuleSetForbiddenError("RuleSet draft is not editable by this principal")
@@ -318,7 +318,7 @@ class RuleSetStore:
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT * FROM rule_sets WHERE id = ?", (ruleset_id,)).fetchone()
-            if row is None:
+            if row is None or row["status"] == "deleted":
                 raise RuleSetNotFoundError(ruleset_id)
             if row["owner_id"] == "system" or row["owner_id"] != actor_id:
                 raise RuleSetForbiddenError("RuleSet draft is not publishable by this principal")

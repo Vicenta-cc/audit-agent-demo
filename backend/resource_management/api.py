@@ -4,7 +4,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field, StrictInt
 from backend.investigation_creation.principal import LocalPrincipalProvider, Principal
 from backend.rulesets.contracts import StrictModel
+from backend.rulesets.errors import RuleSetNotFoundError, RuleSetForbiddenError, RuleSetRevisionConflictError
 from .contracts import CreateLexiconInput, OpenResourceInput, UpdateEditInput, EditChange
+
+
+class SaveLibraryBody(StrictModel):
+    expected_version: StrictInt = Field(ge=0)
+    operation_id: str = Field(min_length=1, max_length=200)
+    content: dict
+
+
+class DeleteLibraryBody(StrictModel):
+    expected_version: StrictInt = Field(ge=1)
 
 
 class SaveEditBody(StrictModel):
@@ -30,8 +41,19 @@ def create_resource_router(application, conversation, principal_provider=None):
             return getattr(application.resource_management, method)(principal=principal, **kwargs)
         except Exception as exc:
             code = getattr(exc, 'code', '').upper()
+            if isinstance(exc, RuleSetNotFoundError): code = 'RESOURCE_NOT_FOUND'
+            elif isinstance(exc, RuleSetForbiddenError): code = 'RESOURCE_FORBIDDEN'
+            elif isinstance(exc, RuleSetRevisionConflictError): code = 'RESOURCE_VERSION_CONFLICT'
             status = 409 if 'CONFLICT' in code or 'STALE' in code else 403 if 'FORBIDDEN' in code or 'ACCESS' in code else 404 if 'NOT_FOUND' in code or isinstance(exc, KeyError) else 422
             raise HTTPException(status, detail={'code': code or 'RESOURCE_INVALID', 'message': str(exc), 'details': getattr(exc, 'details', {})}) from exc
+
+    @router.put('/api/resource-library/{kind}/{resource_id}')
+    def save_library(kind: Literal['ruleset','lexicon'], resource_id: str, body: SaveLibraryBody, principal: Principal=Depends(provide)):
+        return invoke('save_library', kind=kind, resource_id=resource_id, principal=principal, **body.model_dump())
+
+    @router.delete('/api/resource-library/{kind}/{resource_id}')
+    def delete_library(kind: Literal['ruleset','lexicon'], resource_id: str, body: DeleteLibraryBody, principal: Principal=Depends(provide)):
+        return invoke('delete_library', kind=kind, resource_id=resource_id, principal=principal, **body.model_dump())
 
     @router.get('/api/resource-library/{kind}')
     def list_resources(kind: Literal['ruleset','lexicon'], query: str='', offset: int=0, limit: int=20, principal: Principal=Depends(provide)):

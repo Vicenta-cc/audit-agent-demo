@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -18,9 +18,8 @@ import {
   X,
   FileText
 } from "lucide-react";
-import {
-  mockAuditRuleSets
-} from "../mocks/investigationMocks";
+import { deleteResource, listResources, saveResource, ruleSetView, rulesContent, type Resource, type RulesContent } from '../services/resourceLibrary';
+import { ResourceDialog } from './ResourceDialog';
 import type {
   AuditRuleSet,
   RiskCategory,
@@ -28,7 +27,6 @@ import type {
 } from "../types/investigation";
 import type { RuleAssistantCandidateRuleSet } from "../features/rule-assistant/types";
 import type { RuleAssistantPreviewRuleChange } from "../features/rule-assistant/types";
-import { useRuleAssistantWorkspace } from "../features/rule-assistant/RuleAssistantWorkspaceContext";
 import { RecallLibraryManager } from "./RecallLibraryManager";
 
 interface KnowledgeCenterPageProps {
@@ -64,20 +62,71 @@ export function KnowledgeCenterPage({
   preview
 }: KnowledgeCenterPageProps = {}) {
   const navigate = useNavigate();
-  const { appliedRuleSets, upsertRuleSet } = useRuleAssistantWorkspace();
+
   const [activeTab, setActiveTab] = useState<"rulesets" | "recall">(initialTab);
   const [isRecallEditorOpen, setIsRecallEditorOpen] = useState(false);
 
-  const [ruleSets, setRuleSets] = useState<AuditRuleSet[]>(preview ? [preview.ruleSet] : [
-    ...mockAuditRuleSets.map((ruleSet) => appliedRuleSets[ruleSet.id] || ruleSet),
-    ...Object.entries(appliedRuleSets)
-      .filter(([ruleSetId]) => !mockAuditRuleSets.some((ruleSet) => ruleSet.id === ruleSetId))
-      .map(([, ruleSet]) => ruleSet)
-  ]);
+  const [ruleSets, setRuleSets] = useState<AuditRuleSet[]>(preview ? [preview.ruleSet] : []);
+  const [resources, setResources] = useState<Record<string, Resource<RulesContent>>>({});
+  const [loading, setLoading] = useState(!preview);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [nameDialog, setNameDialog] = useState<{ title: string; onConfirm: (name: string) => void } | null>(null);
+  const [saveAttempt, setSaveAttempt] = useState<{ signature: string; operation: string; id: string } | null>(null);
+  const reload = async () => {
+    setLoading(true); setError('');
+    try {
+      const rows = await listResources<RulesContent>('ruleset');
+      setResources(Object.fromEntries(rows.map(r => [r.id, r])));
+      setRuleSets(rows.map(ruleSetView));
+      setSelectedRuleSetId(current => rows.some(r => r.id === current) ? current : rows[0]?.id || '');
+    } catch (e) { setError(e instanceof Error ? e.message : '加载失败'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { if (!preview) void reload(); }, []);
   const [selectedRuleSetId, setSelectedRuleSetId] = useState<string>(preview?.ruleSet.id || initialRuleSetId);
   const isPreview = Boolean(preview);
 
-  const selectedRuleSet = ruleSets.find((r) => r.id === selectedRuleSetId) || ruleSets[0];
+  const selectedRuleSet = ruleSets.find((r) => r.id === selectedRuleSetId) || ruleSets[0] || { id: '', name: '', category: '', version: '', status: '草稿', updatedAt: '', referencedTaskCount: 0, generalExemptions: [], categories: [] } as AuditRuleSet;
+  const source = resources[selectedRuleSet.id];
+  const dirty = selectedRuleSet.id && (!source || JSON.stringify(ruleSetView(source)) !== JSON.stringify(selectedRuleSet));
+  const handlePublish = async () => {
+    if (busy) return;
+    setBusy(true); setError(''); setMessage('');
+    try {
+      const content = rulesContent(selectedRuleSet, source?.content);
+      const version = source?.editable ? source.version : 0;
+      const signature = JSON.stringify({ source: selectedRuleSet.id, content, version });
+      const attempt = saveAttempt?.signature === signature ? saveAttempt : {
+        signature, operation: crypto.randomUUID(), id: source && !source.editable ? `ruleset-${crypto.randomUUID()}` : selectedRuleSet.id
+      };
+      setSaveAttempt(attempt);
+      const saved = await saveResource('ruleset', attempt.id, content, version, attempt.operation);
+      setResources(current => ({ ...current, [saved.id]: saved }));
+      setRuleSets(current => [ruleSetView(saved), ...current.filter(r => r.id !== saved.id)]);
+      setSelectedRuleSetId(saved.id); setSaveAttempt(null);
+      setMessage('已保存发布，新任务可使用该版本。');
+    } catch (e) { setError(e instanceof Error ? e.message : '保存失败'); }
+    finally { setBusy(false); }
+  };
+  const handleDeleteSet = async () => {
+    if (busy) return;
+    setBusy(true); setDeleteError('');
+    try {
+      if (source) await deleteResource(source);
+      setRuleSets(current => current.filter(r => r.id !== selectedRuleSet.id));
+      setSelectedRuleSetId(ruleSets.find(r => r.id !== selectedRuleSet.id)?.id || '');
+      setDeleteOpen(false); setMessage('审核规则已删除。'); setError('');
+    } catch (e) { setDeleteError(e instanceof Error ? e.message : '删除失败'); }
+    finally { setBusy(false); }
+  };
+  const createRuleSet = (name: string) => {
+    const newSet: AuditRuleSet = { id: `ruleset-${crypto.randomUUID()}`, name, category: '通用性规约', version: 'v1', status: '草稿', updatedAt: '尚未保存', referencedTaskCount: 0, generalExemptions: [], categories: [] };
+    setRuleSets(current => [...current, newSet]); setSelectedRuleSetId(newSet.id); setMessage('');
+  };
 
   const handleOpenRuleAssistant = () => {
     if (onOpenRuleAssistant) {
@@ -98,7 +147,7 @@ export function KnowledgeCenterPage({
     content: string;
     suggestedLevel: "低风险" | "中风险" | "高风险";
     exemptionConditions: string;
-    applicationStages: ("图片证据提取" | "视频关键帧提取" | "融合研判")[];
+    applicationStages: ("图片证据提取" | "视频关键帧提取" | "评论审核" | "融合研判")[];
     notes: string;
     enabled: boolean;
   }>({
@@ -106,7 +155,7 @@ export function KnowledgeCenterPage({
     content: "",
     suggestedLevel: "中风险",
     exemptionConditions: "",
-    applicationStages: ["图片证据提取", "视频关键帧提取", "融合研判"],
+    applicationStages: ["图片证据提取", "视频关键帧提取", "评论审核", "融合研判"],
     notes: "",
     enabled: true
   });
@@ -205,7 +254,7 @@ export function KnowledgeCenterPage({
       content: "",
       suggestedLevel: "中风险",
       exemptionConditions: "",
-      applicationStages: ["图片证据提取", "视频关键帧提取", "融合研判"],
+      applicationStages: ["图片证据提取", "视频关键帧提取", "评论审核", "融合研判"],
       notes: "",
       enabled: true
     });
@@ -222,7 +271,7 @@ export function KnowledgeCenterPage({
       content: rule.content,
       suggestedLevel: rule.suggestedLevel,
       exemptionConditions: rule.exemptionConditions || "",
-      applicationStages: rule.applicationStages || ["图片证据提取", "视频关键帧提取", "融合研判"],
+      applicationStages: rule.applicationStages || ["图片证据提取", "视频关键帧提取", "评论审核", "融合研判"],
       notes: rule.notes || "",
       enabled: rule.enabled
     });
@@ -275,7 +324,6 @@ export function KnowledgeCenterPage({
 
   // Delete rule
   const handleDeleteRule = (catId: string, ruleId: string) => {
-    if (!window.confirm("确定要删除这条规则吗？")) return;
     setRuleSets((prev) =>
       prev.map((rs) => {
         if (rs.id !== selectedRuleSetId) return rs;
@@ -359,9 +407,7 @@ export function KnowledgeCenterPage({
 
   // Add new risk category
   const handleAddCategory = () => {
-    const name = window.prompt("请输入新风险类型名称：");
-    if (!name || !name.trim()) return;
-    setRuleSets((prev) =>
+    setNameDialog({ title: '新建风险类型', onConfirm: (name) => setRuleSets((prev) =>
       prev.map((rs) => {
         if (rs.id !== selectedRuleSetId) return rs;
         const newCat: RiskCategory = {
@@ -371,15 +417,12 @@ export function KnowledgeCenterPage({
         };
         return { ...rs, categories: [...rs.categories, newCat] };
       })
-    );
+    ) });
   };
 
   // Add General Exemption
   const handleAddGeneralExemption = () => {
-    const title = window.prompt("通用豁免场景（如：新闻报道、警方通报）：");
-    if (!title || !title.trim()) return;
-
-    setRuleSets((prev) =>
+    setNameDialog({ title: '添加通用豁免场景', onConfirm: (title) => setRuleSets((prev) =>
       prev.map((rs) => {
         if (rs.id !== selectedRuleSetId) return rs;
         return {
@@ -390,7 +433,7 @@ export function KnowledgeCenterPage({
           ]
         };
       })
-    );
+    ) });
   };
 
   // Delete General Exemption
@@ -407,7 +450,7 @@ export function KnowledgeCenterPage({
   };
 
   // Toggle stage selection in drawer form
-  const handleToggleStage = (stage: "图片证据提取" | "视频关键帧提取" | "融合研判") => {
+  const handleToggleStage = (stage: "图片证据提取" | "视频关键帧提取" | "评论审核" | "融合研判") => {
     setRuleForm((prev) => {
       const exists = prev.applicationStages.includes(stage);
       if (exists) {
@@ -426,6 +469,8 @@ export function KnowledgeCenterPage({
 
   return (
     <div className="kc-page-root" style={{ background: "#f8fafc", minHeight: embedded ? "100%" : "100vh", display: "flex", flexDirection: "column" }}>
+      {nameDialog ? <ResourceDialog title={nameDialog.title} inputLabel="名称" confirmText="确认" onCancel={() => setNameDialog(null)} onConfirm={value => { nameDialog.onConfirm(value); setNameDialog(null); }} /> : null}
+      {deleteOpen ? <ResourceDialog title={`删除审核规则“${selectedRuleSet.name}”`} description="删除后不能再用于新任务。已有报告的历史快照保留。" busy={busy} error={deleteError} onCancel={() => setDeleteOpen(false)} onConfirm={handleDeleteSet} /> : null}
       {/* Top Header Bar */}
       {!embedded && !isRecallEditorOpen ? <header
         style={{
@@ -514,7 +559,14 @@ export function KnowledgeCenterPage({
       </header> : null}
 
       {/* Main Body Area */}
-      <main style={{ flex: 1, padding: "20px 24px", overflowY: "auto" }}>
+      <main aria-busy={busy} style={{ pointerEvents: busy ? "none" : undefined, flex: 1, padding: "20px 24px", overflowY: "auto" }}>
+        {activeTab === 'rulesets' && !preview ? <div style={{ marginBottom: 12, fontSize: 13 }}>
+          {loading ? <p role="status">正在加载审核规则…</p> : null}
+          {error ? <p role="alert" style={{ color: '#dc2626' }}>{error} <button type="button" onClick={() => void reload()}>重新加载</button></p> : null}
+          {message ? <p role="status">{message}</p> : null}
+          {dirty ? <span>有未发布的修改，请完成编辑后点击保存发布。</span> : null}
+          {source && !source.editable ? <p>固定模板的修改会另存为新规则，使用通用审核编译；原版固定配置保留。</p> : null}
+        </div> : null}
         {/* TAB 1: 审核规则编辑器 */}
         {activeTab === "rulesets" ? (
           <div style={{ display: "grid", gridTemplateColumns: isPreview ? "minmax(0, 1fr)" : "240px minmax(0, 1fr)", gap: "20px", maxWidth: "1400px", margin: "0 auto" }}>
@@ -539,7 +591,7 @@ export function KnowledgeCenterPage({
                         border: isSelected ? "1px solid #3b82f6" : "1px solid #f1f5f9",
                         transition: "all 0.15s ease"
                       }}
-                      onClick={() => setSelectedRuleSetId(rs.id)}
+                      onClick={() => { if (!busy) { setSelectedRuleSetId(rs.id); setMessage(''); setError(''); } }}
                     >
                       <div style={{ fontSize: "13px", fontWeight: "700", color: isSelected ? "#1d4ed8" : "#1e293b" }}>
                         {rs.name}
@@ -569,24 +621,7 @@ export function KnowledgeCenterPage({
                   justifyContent: "center",
                   gap: "6px"
                 }}
-                onClick={() => {
-                  const name = window.prompt("请输入新审核规则名称：");
-                  if (!name || !name.trim()) return;
-                  const newSet: AuditRuleSet = {
-                    id: `ruleset-${Date.now()}`,
-                    name: name.trim(),
-                    category: "通用性规约",
-                    version: "v1.0",
-                    status: "已发布",
-                    updatedAt: "刚刚",
-                    referencedTaskCount: 0,
-                    generalExemptions: [],
-                    categories: []
-                  };
-                  setRuleSets((prev) => [...prev, newSet]);
-                  upsertRuleSet(newSet);
-                  setSelectedRuleSetId(newSet.id);
-                }}
+                onClick={() => setNameDialog({ title: '新建审核规则', onConfirm: createRuleSet })}
               >
                 <Plus size={14} />
                 <span>新建审核规则</span>
@@ -594,7 +629,7 @@ export function KnowledgeCenterPage({
             </div> : null}
 
             {/* Right Main Editor Area */}
-            <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "20px", display: "flex", flexDirection: "column", gap: "20px" }}>
+            {selectedRuleSet.id ? <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "20px", display: "flex", flexDirection: "column", gap: "20px" }}>
               {/* Top Banner */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "20px", borderBottom: "1px solid #f1f5f9", paddingBottom: "14px" }}>
                 <div>
@@ -645,6 +680,7 @@ export function KnowledgeCenterPage({
                     <Sparkles size={14} />
                     <span>返回调查对话</span>
                   </button> : null}
+                  {!isPreview ? <button type="button" className="recall-delete-button" disabled={busy} onClick={() => { setDeleteError(''); setDeleteOpen(true); }}><Trash2 size={14} />删除审核规则</button> : null}
                   {!isPreview ? <button
                     type="button"
                     style={{
@@ -660,10 +696,10 @@ export function KnowledgeCenterPage({
                       alignItems: "center",
                       gap: "6px"
                     }}
-                    onClick={() => alert(`审核规则《${selectedRuleSet.name}》修改已发布生效！`)}
+                    disabled={busy} onClick={handlePublish}
                   >
                     <Save size={14} />
-                    <span>保存发布</span>
+                    <span>{busy ? "正在保存…" : source && !source.editable ? "另存并发布" : "保存发布"}</span>
                   </button> : null}
                 </div>
               </div>
@@ -1033,7 +1069,7 @@ export function KnowledgeCenterPage({
                   ))
                 )}
               </div>
-            </div>
+            </div> : <p>暂无审核规则，请点击“新建审核规则”。</p>}
           </div>
         ) : null}
 
@@ -1218,7 +1254,7 @@ export function KnowledgeCenterPage({
                   应用阶段
                 </label>
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                  {(["图片证据提取", "视频关键帧提取", "融合研判"] as const).map((st) => {
+                  {(["图片证据提取", "视频关键帧提取", "评论审核", "融合研判"] as const).map((st) => {
                     const isChecked = ruleForm.applicationStages.includes(st);
                     return (
                       <label

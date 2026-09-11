@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ListPlus, Plus, Save, Search, Trash2 } from "lucide-react";
-import { mockRecallLibraries } from "../mocks/investigationMocks";
-import { gamblingLexiconTerms } from "../features/rule-assistant/mockData";
-import { useRuleAssistantWorkspace } from "../features/rule-assistant/RuleAssistantWorkspaceContext";
-import type { RuleAssistantLexicon } from "../features/rule-assistant/types";
+import { deleteResource, listResources, saveResource, type Resource, type LexiconContent, type LexiconEntry } from '../services/resourceLibrary';
+import { ResourceDialog } from './ResourceDialog';
 import type { RuleAssistantCandidateLexicon } from "../features/rule-assistant/types";
 import type { RecallLibraryItem } from "../types/investigation";
 
@@ -35,77 +33,8 @@ interface RecallLibraryManagerProps {
   };
 }
 
-const termSeeds: Record<string, RecallTerm[]> = {
-  "recall-gambling": [
-    ...gamblingLexiconTerms.map((term) => ({ ...term }))
-  ],
-  "recall-ethnicity": [
-    { id: "ethnicity-1", primary: "民族通婚", queryType: "关键词", variants: "跨民族联姻, 异族婚姻, 民族融合通婚", enabled: true },
-    { id: "ethnicity-2", primary: "维汉通婚", queryType: "关键词", variants: "维汉联姻, 维汉结亲", enabled: true },
-    { id: "ethnicity-3", primary: "清真饮食争议", queryType: "标签", variants: "清真泛化, 饮食习惯差异, 专用餐具争议", enabled: true },
-    { id: "ethnicity-4", primary: "地域偏见", queryType: "关键词", variants: "地域黑, 区域歧视, 地域标签化", enabled: false },
-    { id: "ethnicity-5", primary: "民族风俗冲突", queryType: "标签", variants: "礼仪习惯冲突, 宗教风俗差异", enabled: true }
-  ],
-  "recall-fraud": [
-    { id: "fraud-1", primary: "日赚百元兼职", queryType: "关键词", variants: "日赚数百, 在家兼职, 手机轻松日结", enabled: true },
-    { id: "fraud-2", primary: "高额返利刷单", queryType: "关键词", variants: "刷单返利, 垫付佣金, 任务连刷", enabled: true },
-    { id: "fraud-3", primary: "内幕炒股群", queryType: "标签", variants: "内幕消息, 导师带盘, 涨停妖股荐股", enabled: true },
-    { id: "fraud-4", primary: "代办高额信用卡", queryType: "关键词", variants: "黑户包过, 大额提额, 强开微粒贷", enabled: false },
-    { id: "fraud-5", primary: "零风险套利", queryType: "关键词", variants: "对冲套利, 平台漏洞提现, 稳赚不赔", enabled: true }
-  ]
-};
-
-const buildLibraryDrafts = (
-  workspaceLexicons: RuleAssistantLexicon[],
-  appliedLexicons: Record<string, RuleAssistantCandidateLexicon>
-): RecallLibraryDraft[] => {
-  const mockById = new Map(mockRecallLibraries.map((library) => [library.id, library]));
-  const isTransientDraft = (summary: RuleAssistantLexicon) => summary.isDraft === true || (
-    summary.isDraft === undefined
-    && (
-      summary.id.startsWith("lexicon-draft-")
-      || (summary.name === "新建黑话库" && summary.description === "正在通过对话创建")
-    )
-  );
-  return workspaceLexicons.filter((summary) => (
-    Boolean(appliedLexicons[summary.id]) || !isTransientDraft(summary)
-  )).map((summary) => {
-    const appliedLibrary = appliedLexicons[summary.id];
-    const library = mockById.get(summary.id) || {
-      id: summary.id,
-      name: summary.name,
-      category: "自定义黑话库",
-      usageDescription: summary.description || "",
-      words: [],
-      applicablePlatforms: ["抖音", "小红书", "微博", "快手"],
-      status: "启用" as const,
-      updatedAt: "刚刚",
-      wordCount: 0
-    };
-    const initialTerms = termSeeds[library.id] || library.words.map((word, index) => ({
-      id: `${library.id}-${index}`,
-      primary: word,
-      queryType: "关键词" as const,
-      variants: "",
-      enabled: true
-    }));
-    const terms = appliedLibrary?.terms || initialTerms;
-    const addedTermCount = appliedLibrary ? Math.max(0, terms.length - initialTerms.length) : 0;
-
-    return {
-      ...library,
-      name: appliedLibrary?.name || summary.name,
-      category: appliedLibrary?.category || library.category,
-      usageDescription: appliedLibrary?.description || summary.description || library.usageDescription,
-      words: terms.map((term) => term.primary),
-      wordCount: library.wordCount + addedTermCount,
-      terms: terms.map((term) => ({ ...term }))
-    };
-  });
-};
-
 const createEmptyLibrary = (): RecallLibraryDraft => ({
-  id: `recall-${Date.now()}`,
+  id: `lexicon-${crypto.randomUUID()}`,
   name: "",
   category: "自定义黑话库",
   usageDescription: "",
@@ -126,8 +55,41 @@ const createEmptyLibrary = (): RecallLibraryDraft => ({
 });
 
 export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLibraryManagerProps) {
-  const { appliedLexicons, lexicons: workspaceLexicons, upsertLexicon } = useRuleAssistantWorkspace();
-  const [libraries, setLibraries] = useState<RecallLibraryDraft[]>(() => buildLibraryDrafts(workspaceLexicons, appliedLexicons));
+  const [libraries, setLibraries] = useState<RecallLibraryDraft[]>([]);
+  const [resources, setResources] = useState<Record<string, Resource<LexiconContent>>>({});
+  const [loading, setLoading] = useState(!preview);
+  const [busy, setBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<RecallLibraryDraft | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [saveAttempt, setSaveAttempt] = useState<{ signature: string; id: string } | null>(null);
+  const libraryView = (r: Resource<LexiconContent>): RecallLibraryDraft => {
+    const entries = r.content.entries;
+    const terms = entries.filter(e => e.kind !== 'variant').map(e => ({ id: e.id, primary: e.term,
+      queryType: e.kind === 'tag' ? '标签' as const : '关键词' as const,
+      variants: entries.filter(v => v.kind === 'variant' && v.parent_id === e.id).map(v => v.term).join(', '), enabled: e.enabled }));
+    return { id: r.id, name: r.content.title, category: r.content.risk_label || '自定义黑话库', usageDescription: r.content.description || '',
+      words: terms.map(t => t.primary), terms, wordCount: terms.length, applicablePlatforms: ['小红书'], status: terms.some(t => t.enabled) ? '启用' : '停用', updatedAt: '已同步' };
+  };
+  const reload = async () => {
+    setLoading(true);
+    try {
+      const rows = await listResources<LexiconContent>('lexicon');
+      setResources(Object.fromEntries(rows.map(r => [r.id, r])));
+      setLibraries(rows.map(libraryView));
+      setValidationMessage('');
+    } catch (e) { setValidationMessage(e instanceof Error ? e.message : '加载失败，请重试。'); }
+    finally { setLoading(false); }
+  };
+  const confirmDelete = async () => {
+    if (!deleteTarget || busy) return;
+    setBusy(true); setDeleteError('');
+    try {
+      await deleteResource(resources[deleteTarget.id]);
+      setLibraries(current => current.filter(r => r.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (e) { setDeleteError(e instanceof Error ? e.message : '删除失败'); }
+    finally { setBusy(false); }
+  };
   const [librarySearch, setLibrarySearch] = useState("");
   const [draft, setDraft] = useState<RecallLibraryDraft | null>(() => preview ? {
     id: preview.library.id,
@@ -145,25 +107,7 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
   const [statusFilter, setStatusFilter] = useState<RecallStatusFilter>("all");
   const [validationMessage, setValidationMessage] = useState("");
 
-  useEffect(() => {
-    const nextLibraries = buildLibraryDrafts(workspaceLexicons, appliedLexicons);
-    setLibraries((current) => {
-      const currentById = new Map(current.map((library) => [library.id, library]));
-      return nextLibraries.map((nextLibrary) => {
-        if (appliedLexicons[nextLibrary.id]) return nextLibrary;
-        const summary = workspaceLexicons.find((item) => item.id === nextLibrary.id);
-        const existing = currentById.get(nextLibrary.id);
-        if (existing) {
-          return {
-            ...existing,
-            name: summary?.name || nextLibrary.name,
-            usageDescription: summary?.description || existing.usageDescription
-          };
-        }
-        return nextLibrary;
-      });
-    });
-  }, [appliedLexicons, workspaceLexicons]);
+  useEffect(() => { if (!preview) void reload(); }, []);
 
   useEffect(() => {
     if (!preview?.onChange || !draft) return;
@@ -251,7 +195,8 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
     } : current);
   };
 
-  const saveLibrary = () => {
+  const saveLibrary = async () => {
+    if (busy) return;
     if (!draft) return;
     const name = draft.name.trim();
     const usageDescription = draft.usageDescription.trim();
@@ -289,17 +234,42 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
       return;
     }
 
-    setLibraries((current) => current.some((library) => library.id === savedLibrary.id)
-      ? current.map((library) => library.id === savedLibrary.id ? savedLibrary : library)
-      : [savedLibrary, ...current]);
-    upsertLexicon({
-      id: savedLibrary.id,
-      name: savedLibrary.name,
-      category: savedLibrary.category,
-      description: savedLibrary.usageDescription,
-      terms: savedLibrary.terms.map((term) => ({ ...term }))
-    });
-    closeEditor();
+    setBusy(true);
+    try {
+      const source = resources[draft.id];
+      const previous = source?.content.entries || [];
+      const entries: LexiconEntry[] = [];
+      const usedEntryIds = new Set([...previous.map(e => e.id), ...terms.map(t => t.id)]);
+      for (const term of terms) {
+        const old = previous.find(e => e.id === term.id);
+        const entry: LexiconEntry = { id: term.id, term: term.primary, kind: term.queryType === '标签' ? 'tag' : 'main', parent_id: '',
+          enabled: term.enabled, platform: old?.platform || '全平台', match_type: old?.match_type || '黑话词', risk_level: old?.risk_level || '中', note: old?.note || '' };
+        if ((entry.kind === 'tag') !== ['tag', '平台标签'].includes(entry.match_type)) entry.match_type = entry.kind === 'tag' ? '平台标签' : '黑话词';
+        entries.push(entry);
+        const variants = [...new Set(term.variants.split(/[,，\n]/).map(v => v.trim()).filter(Boolean))];
+        if (entry.kind === 'tag' && variants.length) throw new Error(`标签“${term.primary}”不能带搜索词变体，请改为关键词或清空变体。`);
+        variants.forEach((variant, index) => {
+          const oldVariant = previous.find(e => e.kind === 'variant' && e.parent_id === term.id && e.term === variant);
+          let suffix = 0;
+          let newId = `variant-${term.id.slice(0, 100)}-${index}-${suffix}`;
+          while (usedEntryIds.has(newId)) newId = `variant-${term.id.slice(0, 100)}-${index}-${++suffix}`;
+          const id = oldVariant?.id || newId;
+          usedEntryIds.add(id);
+          entries.push({ ...entry, ...oldVariant, id, term: variant, kind: 'variant', parent_id: term.id,
+            enabled: term.enabled && (oldVariant?.enabled ?? true) });
+        });
+      }
+      const content: LexiconContent = { title: name, risk_label: source?.content.risk_label || draft.category, description: usageDescription, entries };
+      const signature = JSON.stringify({ id: draft.id, content, version: source?.version || 0 });
+      const operation = saveAttempt?.signature === signature ? saveAttempt.id : crypto.randomUUID();
+      setSaveAttempt({ signature, id: operation });
+      const saved = await saveResource('lexicon', draft.id, content, source?.version || 0, operation);
+      setResources(current => ({ ...current, [saved.id]: saved }));
+      setLibraries(current => [libraryView(saved), ...current.filter(r => r.id !== saved.id)]);
+      setSaveAttempt(null);
+      closeEditor();
+    } catch (e) { setValidationMessage(e instanceof Error ? e.message : '保存失败'); }
+    finally { setBusy(false); }
   };
 
   if (draft) {
@@ -311,7 +281,7 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
     return (
       <div className="recall-editor-view">
         <div className="recall-editor-header">
-          <button type="button" className="recall-back-button" onClick={closeEditor}>
+          <button type="button" className="recall-back-button" disabled={busy} onClick={closeEditor}>
             <ArrowLeft size={15} />
             <span>{preview ? "返回词库对话" : "返回黑话库"}</span>
           </button>
@@ -322,7 +292,7 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
           </div>
         </div>
 
-        <div className="recall-editor-content">
+        <fieldset disabled={busy} className="recall-editor-content" style={{ border: 0, margin: 0, minWidth: 0 }}>
           {isAppendPreview ? (
             <div className="recall-preview-notice" role="status">
               <ListPlus size={19} />
@@ -467,19 +437,22 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
 
           <div className="recall-editor-footer">
             {preview ? <button type="button" className="recall-secondary-button" onClick={preview.onAbort}>{isAppendPreview ? "取消本次新增" : "取消本次导入"}</button> : null}
-            <button type="button" className="recall-secondary-button" onClick={closeEditor}>{preview ? "返回词库对话" : "取消"}</button>
-            <button type="button" className="recall-primary-button recall-save-button" onClick={saveLibrary}>
+            <button type="button" className="recall-secondary-button" disabled={busy} onClick={closeEditor}>{preview ? "返回词库对话" : "取消"}</button>
+            <button type="button" className="recall-primary-button recall-save-button" disabled={busy} onClick={saveLibrary}>
               <Save size={15} />
-              <span>{isAppendPreview ? "确认添加到词库" : preview ? "创建黑话库" : "保存配置"}</span>
+              <span>{busy ? "正在保存…" : isAppendPreview ? "确认添加到词库" : preview ? "创建黑话库" : "保存配置"}</span>
             </button>
           </div>
-        </div>
+        </fieldset>
       </div>
     );
   }
 
   return (
     <div className="recall-library-view">
+      {deleteTarget ? <ResourceDialog title={`删除黑话库“${deleteTarget.name}”`} description="删除后不能再用于新任务。已有报告的历史快照保留。" busy={busy} error={deleteError} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDelete} /> : null}
+      {loading ? <p role="status">正在加载黑话库…</p> : null}
+      {validationMessage ? <div role="alert" className="recall-validation">{validationMessage}<button type="button" onClick={() => void reload()}>重新加载</button></div> : null}
       <div className="recall-library-toolbar">
         <label className="recall-search-box recall-library-search">
           <Search size={15} aria-hidden="true" />
@@ -516,6 +489,7 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
               </div>
               <div className="recall-library-card-footer">
                 <span>更新时间：{library.updatedAt}</span>
+                <button type="button" className="recall-delete-button" aria-label={`删除${library.name}`} onClick={() => { setDeleteError(''); setDeleteTarget(library); }}><Trash2 size={14} />删除</button>
                 <button
                   type="button"
                   aria-label={`管理${library.name}`}

@@ -6,8 +6,10 @@ import json
 import sqlite3
 from uuid import uuid4
 
+from backend.audit_agent.lexicon_store import LexiconCategoryReferenceConflictError
 from backend.rulesets.contracts import RuleSetContent
 from backend.rulesets.compiler import compile_ruleset_content, content_hash
+from backend.rulesets.trial_profiles import TRIAL_BUNDLES, apply_trial_profile
 from .contracts import LexiconContent, LexiconEntry, ResourceError
 from .lexicon_versions import canonical, digest, content as lexicon_content, synchronize
 
@@ -56,12 +58,12 @@ class ResourceManagementService:
                 title = value.get('name') or value.get('title') or ''
                 if query.casefold() not in (title + ' ' + value['id']).casefold():
                     continue
-                items.append({'id': value['id'], 'title': title, 'kind': kind, 'editable': value.get('owner_id', principal.id) == principal.id})
+                items.append({'id': value['id'], 'title': title, 'kind': kind, 'editable': value.get('owner_id', principal.id) == principal.id and value['id'] not in TRIAL_BUNDLES})
             return {'items': items[offset:offset + limit], 'has_more': len(items) > offset + limit}
         if kind == 'ruleset':
             item = self.rulesets.get(resource_id, principal=principal)
             body = {key: item[key] for key in RuleSetContent.model_fields}
-            return {'id': resource_id, 'kind': kind, 'content': body, 'version': item['draft_revision'], 'published_revision_id': item['published_revision_id'], 'published_version': item['published_version'], 'editable': item['owner_id'] == principal.id, 'content_hash': content_hash(body)}
+            return {'id': resource_id, 'kind': kind, 'content': body, 'version': item['draft_revision'], 'published_revision_id': item['published_revision_id'], 'published_version': item['published_version'], 'editable': item['owner_id'] == principal.id and resource_id not in TRIAL_BUNDLES, 'content_hash': content_hash(body)}
         with self.lexicons._connect() as conn:
             conn.execute('BEGIN')
             body = lexicon_content(conn, resource_id)
@@ -75,6 +77,79 @@ class ResourceManagementService:
                     'runtime_content_hash': runtime_hash,
                     'recall_plan': {'strategy': 'existing_lexicon', 'lexicon_id': resource_id,
                                     'expected_runtime_content_hash': runtime_hash, 'enabled_main_terms': terms}}
+
+    def save_library(self, kind, resource_id, content, expected_version, operation_id, *, principal):
+        """Publish a complete editor submission in one transaction, with retry receipts."""
+        parsed = RuleSetContent.model_validate(content) if kind == 'ruleset' else LexiconContent.model_validate(content)
+        if kind == 'ruleset':
+            self.rulesets._validate_operator_content(parsed)
+            compile_ruleset_content(parsed)
+        request_hash = digest({'kind': kind, 'id': resource_id, 'content': content, 'version': expected_version})
+        with self.lexicons._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            conn.execute('CREATE TABLE IF NOT EXISTS resource_library_writes (principal_id TEXT, operation_id TEXT, request_hash TEXT NOT NULL, result_json TEXT NOT NULL, PRIMARY KEY(principal_id, operation_id))')
+            previous = conn.execute('SELECT * FROM resource_library_writes WHERE principal_id=? AND operation_id=?', (principal.id, operation_id)).fetchone()
+            if previous:
+                if previous['request_hash'] != request_hash:
+                    raise ResourceError('保存操作已用于其他内容。', code='RESOURCE_IDEMPOTENCY_CONFLICT')
+                return json.loads(previous['result_json'])
+            table = 'rule_sets' if kind == 'ruleset' else 'lexicon_categories'
+            row = conn.execute(f'SELECT * FROM {table} WHERE id=?', (resource_id,)).fetchone()
+            if expected_version == 0:
+                tombstone = kind == 'lexicon' and conn.execute('SELECT 1 FROM lexicon_content_versions WHERE category_id=?', (resource_id,)).fetchone()
+                if row or tombstone:
+                    raise ResourceError('资源已存在或已删除，请重新打开资源。', code='RESOURCE_VERSION_CONFLICT')
+                source = None
+            else:
+                if not row or (kind == 'ruleset' and row['status'] == 'deleted'):
+                    raise ResourceError('资源已删除，请返回列表。', code='RESOURCE_NOT_FOUND')
+                source = {'version': expected_version}
+                if kind == 'ruleset':
+                    source['published_revision_id'] = row['published_revision_id']
+            formal = self._save_ruleset(conn, resource_id, parsed, source, principal) if kind == 'ruleset' else self._save_lexicon(conn, resource_id, parsed, source)
+            result = {'id': resource_id, 'kind': kind, 'content': parsed.model_dump(mode='json'), 'editable': True,
+                      **formal, 'version': formal['resource_version'],
+                      'published_revision_id': formal.get('revision_id'), 'published_version': formal['version']}
+            conn.execute('INSERT INTO resource_library_writes VALUES (?,?,?,?)', (principal.id, operation_id, request_hash, canonical(result)))
+            return result
+
+    def delete_library(self, kind, resource_id, expected_version, *, principal):
+        if kind == 'lexicon':
+            try:
+                self.lexicons.delete_category_atomically(resource_id, expected_version=expected_version)
+            except KeyError as exc:
+                raise ResourceError('词库已删除。', code='RESOURCE_NOT_FOUND') from exc
+            except LexiconCategoryReferenceConflictError as exc:
+                if getattr(exc, 'references', None):
+                    names = '、'.join(ref.get('policy_name', ref.get('name', ref.get('policy_id', ''))) for ref in exc.references)
+                    raise ResourceError('词库正被审核方案引用，请先解除引用：' + names, code='RESOURCE_REFERENCE_CONFLICT', details={'references': exc.references}) from exc
+                raise
+            return {'ok': True, 'id': resource_id}
+        with self.lexicons._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT * FROM rule_sets WHERE id=?', (resource_id,)).fetchone()
+            if not row or row['status'] == 'deleted':
+                raise ResourceError('规则已删除。', code='RESOURCE_NOT_FOUND')
+            # System templates are shared; the explicit local operator may remove
+            # them from this single-user installation, but never rewrite a snapshot.
+            if row['owner_id'] != principal.id and not (row['owner_id'] == 'system' and principal.id == 'local-user'):
+                raise ResourceError('无权删除这套规则。', code='RESOURCE_FORBIDDEN')
+            require_version(row['draft_revision'], expected_version)
+            revision_ids = {r[0] for r in conn.execute('SELECT id FROM rule_set_revisions WHERE ruleset_id=?', (resource_id,))}
+            targets = revision_ids | {resource_id}
+            def referenced(value):
+                if isinstance(value, dict):
+                    return any(referenced(v) for v in value.values())
+                if isinstance(value, list):
+                    return any(referenced(v) for v in value)
+                return isinstance(value, str) and value in targets
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='audit_policies'").fetchone():
+                names = [r['name'] for r in conn.execute('SELECT name,config_json,published_config_json FROM audit_policies')
+                         if any(referenced(json.loads(r[key] or '{}')) for key in ('config_json', 'published_config_json'))]
+                if names:
+                    raise ResourceError('规则正被审核方案引用，请先解除引用：' + '、'.join(names), code='RESOURCE_REFERENCE_CONFLICT')
+            conn.execute("UPDATE rule_sets SET status='deleted',draft_revision=draft_revision+1,updated_at=? WHERE id=?", (now(), resource_id))
+        return {'ok': True, 'id': resource_id}
 
     def _origin(self, conn, edit_id, session_id, principal, kind, source):
         conn.execute('INSERT INTO resource_edit_origins VALUES (?,?,?,?,?,?)', (edit_id, session_id, principal.id, kind, canonical(source), now()))
@@ -271,11 +346,13 @@ class ResourceManagementService:
         return result
 
     def _save_ruleset(self, conn, identifier, body, source, principal):
+        if identifier in TRIAL_BUNDLES:
+            apply_trial_profile({'ruleset_id': identifier, 'content_hash': content_hash(body)}, compile_ruleset_content(body))
         row = conn.execute('SELECT * FROM rule_sets WHERE id=?', (identifier,)).fetchone()
         hashed, encoded = content_hash(body), canonical(body.model_dump(mode='json'))
         stamp = now()
         if source:
-            if not row or row['owner_id'] != principal.id or row['owner_id'] == 'system':
+            if not row or row['status'] == 'deleted' or row['owner_id'] != principal.id or row['owner_id'] == 'system':
                 raise ResourceError('规则不可更新。', code='RESOURCE_FORBIDDEN')
             require_version(row['draft_revision'], source['version'])
             if row['published_revision_id'] != source.get('published_revision_id'):
@@ -300,6 +377,7 @@ class ResourceManagementService:
             require_version(last[0], source['version'])
         stamp = now()
         conn.execute('INSERT INTO lexicon_categories (id,title,risk_label,sort_order,created_at,updated_at) VALUES (?,?,?,0,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,risk_label=excluded.risk_label,updated_at=excluded.updated_at', (identifier, body.title, body.risk_label, stamp, stamp))
+        conn.execute('UPDATE lexicon_categories SET description=? WHERE id=?', (body.description, identifier))
         # Remove deleted entries only; retained rows keep statistics and stable identity.
         retained = {e.id for e in body.entries}
         old = conn.execute('SELECT id,entry_id FROM lexicon_keywords WHERE category_id=?', (identifier,)).fetchall()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, field_validator, model_validator, model_serializer
 
 ApplicationStage = Literal[
     "image_evidence",
@@ -29,6 +29,15 @@ class SourceMapping(StrictModel):
 
 
 class Exemption(StrictModel):
+    enabled: StrictBool = True
+
+    @model_serializer(mode='wrap')
+    def serialize_enabled(self, handler):
+        result = handler(self)
+        if self.enabled:
+            result.pop('enabled', None)
+        return result
+
     exemption_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]*$", max_length=100)
     name: str = Field(min_length=1, max_length=160)
     condition: str = Field(min_length=1, max_length=2_000)

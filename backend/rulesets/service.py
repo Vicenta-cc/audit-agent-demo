@@ -29,6 +29,10 @@ class RuleSetService:
         ruleset_id: str = "",
     ) -> dict:
         self._validate_operator_content(content)
+        from .trial_profiles import apply_trial_profile, TRIAL_BUNDLES
+        from .compiler import compile_ruleset_content, content_hash
+        if ruleset_id in TRIAL_BUNDLES:
+            apply_trial_profile({'ruleset_id': ruleset_id, 'content_hash': content_hash(content)}, compile_ruleset_content(content))
         return self.store.create_draft(
             content=content,
             actor_id=principal.id,
@@ -50,6 +54,10 @@ class RuleSetService:
         principal: Principal,
     ) -> dict:
         self._validate_operator_content(content)
+        from .trial_profiles import apply_trial_profile, TRIAL_BUNDLES
+        from .compiler import compile_ruleset_content, content_hash
+        if ruleset_id in TRIAL_BUNDLES:
+            apply_trial_profile({'ruleset_id': ruleset_id, 'content_hash': content_hash(content)}, compile_ruleset_content(content))
         return self.store.update_draft(
             ruleset_id,
             expected_revision=expected_revision,

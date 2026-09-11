@@ -35,6 +35,7 @@ class LexiconEntry(StrictModel):
 class LexiconContent(StrictModel):
     title: str = Field(min_length=1, max_length=200)
     risk_label: str = Field(default='', max_length=200)
+    description: str = Field(default='', max_length=2000)
     entries: list[LexiconEntry] = Field(default_factory=list, max_length=2000)
 
     @field_validator('title', mode='before')

@@ -180,6 +180,8 @@ class LexiconStore:
             if "fusion_prompt_template" not in columns:
                 conn.execute("ALTER TABLE lexicon_prompt_profiles ADD COLUMN fusion_prompt_template TEXT NOT NULL DEFAULT ''")
             category_columns = {row["name"] for row in conn.execute("PRAGMA table_info(lexicon_categories)").fetchall()}
+            if "description" not in category_columns:
+                conn.execute("ALTER TABLE lexicon_categories ADD COLUMN description TEXT NOT NULL DEFAULT ''")
             if "risk_label" not in category_columns:
                 conn.execute("ALTER TABLE lexicon_categories ADD COLUMN risk_label TEXT NOT NULL DEFAULT ''")
 
@@ -389,6 +391,7 @@ class LexiconStore:
                 "id": row["id"],
                 "version": connection.execute('SELECT MAX(version) FROM lexicon_content_versions WHERE category_id=?', (row['id'],)).fetchone()[0],
                 "title": row["title"],
+                "description": row["description"],
                 "risk_label": row["risk_label"] or self._default_risk_label(row["id"], row["title"]),
                 "chips": [item["keyword"] for item in items[:12]],
                 "keywords": items,
@@ -929,7 +932,7 @@ class LexiconStore:
     def delete_category(self, category_id: str) -> dict:
         return self.delete_category_atomically(category_id)
 
-    def delete_category_atomically(self, category_id: str) -> dict:
+    def delete_category_atomically(self, category_id: str, *, expected_version: int | None = None) -> dict:
         """Delete an unreferenced category and its dependent rows atomically."""
         cleaned_id = str(category_id or "").strip()
         if not cleaned_id:
@@ -942,6 +945,10 @@ class LexiconStore:
             ).fetchone()
             if not row:
                 raise KeyError(cleaned_id)
+            if expected_version is not None:
+                from backend.resource_management.service import require_version
+                version = conn.execute('SELECT MAX(version) FROM lexicon_content_versions WHERE category_id=?', (cleaned_id,)).fetchone()[0]
+                require_version(version, expected_version)
             try:
                 policy_rows = conn.execute(
                     "SELECT id, name, config_json, published_config_json FROM audit_policies"

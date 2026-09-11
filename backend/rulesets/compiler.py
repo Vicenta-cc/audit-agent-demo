@@ -137,7 +137,7 @@ def compile_ruleset_content(
         stage: [rule["rule_id"] for rule in rules if stage in rule["application_stages"]]
         for stage in _STAGES
     }
-    general_exemptions = [item.model_dump(mode="json") for item in content.general_exemptions]
+    general_exemptions = [item.model_dump(mode="json") for item in content.general_exemptions if item.enabled]
     stage_payloads = {
         stage: {
             "ruleset": {
@@ -243,6 +243,7 @@ def _enabled_rules(content: RuleSetContent) -> list[dict]:
             if not rule.enabled:
                 continue
             row = rule.model_dump(mode="json")
+            row["rule_exemptions"] = [e for e in row["rule_exemptions"] if e.get("enabled", True)]
             row["category_id"] = category.category_id
             row["category_name"] = category.name
             rules.append(row)
@@ -435,6 +436,8 @@ def _compiled_business_rules(
         seen_rule_ids.add(rule_id)
         lines.append(canonical_rule_line(rule))
         for exemption in rule.get("rule_exemptions") or []:
+            if not exemption.get("enabled", True):
+                continue
             exemption_id = str(exemption.get("exemption_id") or "").strip()
             condition = str(exemption.get("condition") or "").strip()
             if not exemption_id or not condition or exemption_id in seen_exemption_ids:
