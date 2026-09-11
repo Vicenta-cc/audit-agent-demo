@@ -13,7 +13,7 @@ import { buildConfirmationIdempotencyKey } from "./confirmationView";
 import { mapInvestigationRunState } from "./investigationRunState";
 import { formatCreationErrorMessage } from "./confirmationView";
 
-const technicalCreationContent = /(schema_version|draft[_\s-]?id|toolresult|\[object object\]|\/rule-assistant\/|https?:\/\/|\|\s*(?:项目|草稿|状态)\s*\||[A-Z]{3,}(?:_[A-Z0-9]+)+|```|\{\s*"|database|revision)/i;
+const technicalCreationContent = /(schema_version|draft[_\s-]?id|toolresult|\[object object\]|\/rule-assistant\/|https?:\/\/|[A-Z]{3,}(?:_[A-Z0-9]+)+|```|\{\s*"|database|revision)/i;
 
 export function presentCreationAssistantContent(content: string) {
   const trimmed = content.trim();
