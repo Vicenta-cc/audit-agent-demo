@@ -72,10 +72,27 @@ def snapshot(source, target):
     return receipt
 
 
+def copy_model_configuration(source, target):
+    from dotenv import dotenv_values, set_key
+    model = {**json.loads((source / 'environment.json').read_text()), **dotenv_values(source / 'secrets.env')}
+    if not model.get('DASHSCOPE_API_KEY') or not model.get('DASHSCOPE_BASE_URL'):
+        raise RuntimeError('Model source must provide a key and endpoint')
+    environment = json.loads((target / 'environment.json').read_text())
+    environment.pop('DASHSCOPE_API_KEY', None)
+    environment['DASHSCOPE_BASE_URL'] = model['DASHSCOPE_BASE_URL']
+    (target / 'environment.json').write_text(json.dumps(environment, indent=2))
+    set_key(str(target / 'secrets.env'), 'DASHSCOPE_API_KEY', model['DASHSCOPE_API_KEY'])
+    set_key(str(target / 'secrets.env'), 'DASHSCOPE_BASE_URL', model['DASHSCOPE_BASE_URL'])
+    (target / 'receipts/model-configuration.json').write_text(json.dumps({
+        'source_runtime': str(source), 'endpoint': model['DASHSCOPE_BASE_URL'],
+        'credentials': 'private secrets.env; values omitted'}, indent=2))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--runtime', type=Path, required=True)
+    parser.add_argument('--model-runtime', type=Path, help='Use the model credential and endpoint from this explicit runtime')
     parser.add_argument('--environment-id', default='xhs-audit-formal-baseline-20260911')
     parser.add_argument('--frontend-port', type=int, default=3198)
     parser.add_argument('--api-port', type=int, default=8198)
@@ -119,6 +136,8 @@ def main():
         path.write_text(json.dumps(content, ensure_ascii=False, indent=2))
     (target / 'logs').mkdir()
     (target / 'receipts').mkdir(exist_ok=True)
+    if args.model_runtime:
+        copy_model_configuration(args.model_runtime.expanduser().resolve(), target)
     (target / 'receipts/runtime-snapshot.json').write_text(json.dumps(receipt, indent=2))
     (target / 'initialized.json').write_text(json.dumps({'source': str(source), 'method': 'verified runtime snapshot'}))
     print(json.dumps({'runtime': str(target), 'frontend': args.frontend_port, 'api': args.api_port,
