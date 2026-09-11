@@ -9075,3 +9075,28 @@
     display: none !important;
   }
 }
+.inv-deletion-notice {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 90vw;
+  padding: 12px 18px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 4px 16px #0002;
+}
+.inv-deletion-notice button { border: 0; background: transparent; cursor: pointer; font-size: 20px; }
+.inv-empty-workspace { flex: 1; align-self: center; text-align: center; color: #475569; }
+.inv-delete-dialog { width: min(440px, calc(100vw - 40px)); padding: 24px; border: 1px solid #e2e8f0; border-radius: 14px; color: #334155; box-shadow: 0 18px 70px #0003; }
+.inv-delete-dialog::backdrop { background: #0f172a66; }
+.inv-delete-dialog h2 { margin: 0 0 16px; font-size: 20px; color: #0f172a; }
+.inv-delete-dialog p { line-height: 1.7; overflow-wrap: anywhere; }
+.inv-delete-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
+.inv-delete-confirm { background: #dc2626; color: white; border-color: #dc2626; }
+.inv-delete-error { color: #b91c1c; }

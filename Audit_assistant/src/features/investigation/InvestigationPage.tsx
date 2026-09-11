@@ -34,9 +34,11 @@ import {
   waitForInvestigationCreationTurn
 } from "../../services/investigationCreation";
 import { ApiError } from "../../services/apiClient";
+import { deleteInvestigationWorkspace } from "../../services/investigations";
 import { fetchPublishedReportVersion, fetchPublishedReportVersions } from "../../services/reports";
 import { InvestigationSidebar, type SubViewType } from "./InvestigationSidebar";
 import { InvestigationCenterArea } from "./InvestigationCenterArea";
+import { DeleteSessionDialog } from "./DeleteSessionDialog";
 import { InvestigationContextDrawer, type DrawerType } from "./InvestigationContextDrawer";
 import { FocusUsersPage } from "../focus-users/FocusUsersPage";
 import { KnowledgeCenterPage } from "../../pages/KnowledgeCenterPage";
@@ -550,6 +552,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     navigate({ pathname: location.pathname, search: params.toString() }, { state: location.state });
   };
   const [sendingMessageSessionId, setSendingMessageSessionId] = useState("");
+  const [deletingSessionId, setDeletingSessionId] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{id: string; title: string} | null>(null);
+  const [deletionNotice, setDeletionNotice] = useState("");
+  const deletedSessionIdsRef = useRef(new Set<string>());
   const [confirmingCreationSessionId, setConfirmingCreationSessionId] = useState("");
   const [historicalWorkspacesLoaded, setHistoricalWorkspacesLoaded] = useState(false);
   const subViewScrollRef = useRef<HTMLDivElement>(null);
@@ -565,7 +571,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     let active = true;
     void listInvestigationWorkspaces().then((items) => {
       if (!active) return;
-      const restored = items.map((item): InvestigationSession => ({
+      const restored = items.filter((item) => !deletedSessionIdsRef.current.has(item.workspace_session_id)).map((item): InvestigationSession => ({
         ...buildNewInvestigationWorkspaceSession(item.workspace_session_id),
         title: item.title,
         updatedAt: new Date(item.updated_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }),
@@ -615,7 +621,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         return buildHistoricalReportSession(workspace, report);
       }));
       setSessions((current) => [
-        ...historicalSessions,
+        ...historicalSessions.filter((session) => !deletedSessionIdsRef.current.has(session.id)),
         ...current.filter((session) => (
           Boolean(session.creationBinding)
           && !historicalSessions.some((historical) => historical.id === session.id)
@@ -646,6 +652,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     ) return;
     restoredWorkspaceIdsRef.current.add(investigationId);
     void getInvestigationWorkspaceState(investigationId).then((state) => {
+      if (deletedSessionIdsRef.current.has(investigationId)) return;
       const restored = restoreInvestigationWorkspace(state);
       setSessions((current) => [
         restored,
@@ -657,6 +664,12 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       setActiveSessionId(restored.id);
       setActiveDrawer(null);
     }).catch((error) => {
+      if (deletedSessionIdsRef.current.has(investigationId)) return;
+      if (error instanceof ApiError && error.status === 404) {
+        setDeletionNotice("会话不存在或已删除。");
+        navigate("/investigation", { replace: true });
+        return;
+      }
       const message = error instanceof Error ? error.message : "无法读取调查工作区";
       const failed = buildWorkspaceRecoveryErrorSession(investigationId, message);
       setSessions((current) => [
@@ -707,10 +720,12 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       investigationId.startsWith("historical-report-")
       && !historicalWorkspacesLoaded
     ) return;
-    navigate(`/investigation/${encodeURIComponent(activeSessionId)}${location.search}`, { replace: true });
+    const nextId = sessions.find((session) => session.id === activeSessionId)?.id || sessions[0]?.id;
+    navigate(`${nextId ? `/investigation/${encodeURIComponent(nextId)}` : "/investigation"}${location.search}`, { replace: true });
   }, [activeSessionId, historicalWorkspacesLoaded, investigationId, location.search, navigate, sessions]);
 
-  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0];
+  const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0]
+    || buildNewInvestigationWorkspaceSession("empty-workspace");
   const activeRuleSet = activeSession.creationBinding
     ? undefined
     : mockAuditRuleSets.find((ruleSet) => ruleSet.name === activeSession.draft.matchedRuleSet)
@@ -1053,16 +1068,44 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   };
 
   // Delete session
-  const handleDeleteSession = (id: string) => {
+  const handleDeleteSession = async (id: string) => {
+    if (deletingSessionId) return;
+    const session = sessions.find((item) => item.id === id);
+    if (!session) return;
+    const workspaceId = session.creationBinding?.workspaceSessionId || session.reportBinding?.workspaceId;
+    if (!workspaceId) {
+      setDeletionNotice("会话尚未加载完成，请稍后再试。");
+      return;
+    }
+    setDeletingSessionId(id);
+    setDeletionNotice("");
+    try {
+      await deleteInvestigationWorkspace(workspaceId, !session.creationBinding);
+    } catch (error) {
+      setDeletionNotice(`删除失败：${error instanceof Error ? error.message : "请稍后重试。"}`);
+      setDeletingSessionId("");
+      return;
+    }
+    deletedSessionIdsRef.current.add(id);
+    const pending = session.reportBinding?.pendingTurn?.turnId || session.creationBinding?.pendingTurnId;
+    if (pending) pendingTurnControllersRef.current.get(pending)?.abort();
+    window.clearTimeout(runPollTimersRef.current.get(id));
+    runPollTimersRef.current.delete(id);
+    if (session.reportBinding?.workspaceId) clearHistoricalPendingTurn(session.reportBinding.workspaceId);
     const filtered = sessions.filter((session) => session.id !== id);
-    setSessions(filtered);
+    setSessions((current) => current.filter((item) => item.id !== id));
+    setDeletingSessionId("");
+    setDeleteTarget(null);
+    setDeletionNotice("会话及关联报告已永久删除。");
 
     if (activeSessionId === id) {
+      setActiveDrawer(null);
       const nextSession = filtered[0];
       if (nextSession) {
         setActiveSessionId(nextSession.id);
         navigate(`/investigation/${encodeURIComponent(nextSession.id)}`);
       } else {
+        setActiveSessionId("");
         navigate("/investigation");
       }
     }
@@ -2208,14 +2251,33 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         onNewInvestigation={handleNewInvestigation}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
-        onDeleteSession={handleDeleteSession}
+        onDeleteSession={(id) => {
+          const session = sessions.find((item) => item.id === id);
+          if (session) { setDeletionNotice(""); setDeleteTarget({ id, title: session.title }); }
+        }}
+        deletingSessionId={deletingSessionId}
         onRenameSession={handleRenameSession}
         activeSubView={activeSubView}
         onSelectSubView={setActiveSubView}
       />
 
+      {deleteTarget ? <DeleteSessionDialog title={deleteTarget.title} busy={Boolean(deletingSessionId)}
+        error={deletionNotice} onCancel={() => { setDeleteTarget(null); setDeletionNotice(""); }}
+        onConfirm={() => { void handleDeleteSession(deleteTarget.id); }} /> : null}
+
+      {deletionNotice ? <div role="status" className="inv-deletion-notice">
+        <span>{deletionNotice}</span>
+        <button type="button" aria-label="关闭删除提示" onClick={() => setDeletionNotice("")}>×</button>
+      </div> : null}
+
       {/* Column 2: Center Content (Either Investigation Chat or Embedded SubView) */}
-      {activeSubView ? (
+      {!sessions.length && !activeSubView ? (
+        <main className="inv-empty-workspace">
+          <h2>暂无调查会话</h2>
+          <p>新建调查后，报告和会话历史会显示在这里。</p>
+          <button type="button" className="mt-button mt-button-primary" onClick={handleNewInvestigation}>新建调查</button>
+        </main>
+      ) : activeSubView ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "#f8fafc", minWidth: 0 }}>
           {/* SubView Top Header Bar */}
           <div style={{ height: "52px", background: "#ffffff", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", flexShrink: 0, zIndex: 10 }}>

@@ -22,6 +22,7 @@ interface InvestigationSidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onDeleteSession?: (id: string) => void;
+  deletingSessionId?: string;
   onRenameSession?: (id: string, newTitle: string) => void;
   activeSubView?: SubViewType;
   onSelectSubView?: (view: SubViewType) => void;
@@ -35,6 +36,7 @@ export function InvestigationSidebar({
   isCollapsed,
   onToggleCollapse,
   onDeleteSession,
+  deletingSessionId = "",
   onRenameSession,
   activeSubView = null,
   onSelectSubView
@@ -166,8 +168,9 @@ export function InvestigationSidebar({
                         type="button"
                         style={{ padding: "6px 10px", fontSize: "12px", border: "none", background: "transparent", textAlign: "left", cursor: "pointer", borderRadius: "4px", color: "#dc2626" }}
                         onClick={(e) => handleDelete(e, session.id)}
+                        disabled={Boolean(deletingSessionId)}
                       >
-                        删除会话
+                        {deletingSessionId === session.id ? "正在删除…" : "删除会话"}
                       </button>
                     </div>
                   ) : null}

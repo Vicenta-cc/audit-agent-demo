@@ -44,6 +44,12 @@ class HistoricalReportWorkspaceStore:
                     registered_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS deleted_workspaces (
+                    id TEXT PRIMARY KEY,
+                    principal_id TEXT NOT NULL,
+                    deleted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE TABLE IF NOT EXISTS historical_report_runs (
                     id TEXT PRIMARY KEY,
                     workspace_id TEXT NOT NULL UNIQUE,
@@ -71,6 +77,8 @@ class HistoricalReportWorkspaceStore:
         )
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("SELECT 1 FROM deleted_workspaces WHERE id=?", (spec.workspace_id,)).fetchone():
+                raise KeyError(spec.workspace_id)
             connection.execute(
                 """
                 INSERT OR IGNORE INTO historical_report_workspaces (
@@ -133,6 +141,10 @@ class HistoricalReportWorkspaceStore:
                 (principal_id,),
             ).fetchall()
         return tuple(self._decode(row) for row in rows)
+
+    def is_deleted(self, workspace_id: str) -> bool:
+        with self._connect() as connection:
+            return connection.execute("SELECT 1 FROM deleted_workspaces WHERE id=?", (workspace_id,)).fetchone() is not None
 
     def get(self, workspace_id: str, *, principal_id: str) -> dict[str, Any]:
         with self._connect() as connection:

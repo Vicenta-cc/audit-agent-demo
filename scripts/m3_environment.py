@@ -88,6 +88,16 @@ def get_json(url):
         return json.load(response)
 
 
+def deleted_historical_workspaces(config):
+    database = Path(config['data_dir']) / 'historical_report_demo.sqlite3'
+    if not database.exists():
+        return set()
+    with sqlite3.connect(database.as_uri() + '?mode=ro', uri=True) as conn:
+        if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='deleted_workspaces'").fetchone():
+            return set()
+        return {row[0] for row in conn.execute('SELECT id FROM deleted_workspaces')}
+
+
 def check(config):
     from backend.hermes_runtime.adapter import HermesRuntimeBinding
     from backend.historical_reports.catalog import HISTORICAL_REPORT_SPECS
@@ -111,8 +121,10 @@ def check(config):
     database = Path(config['data_dir']) / 'audit_index.sqlite3'
     with sqlite3.connect(database.as_uri() + '?mode=ro', uri=True) as conn:
         ids = {r[0] for r in conn.execute('SELECT task_id FROM historical_report_imports')}
-        if not {'3ad102e072f6', '8bc179209e1e'} <= ids:
-            raise RuntimeError('实验库未完整导入 A/B。')
+        deleted = deleted_historical_workspaces(config)
+        required = {spec.task_id for spec in HISTORICAL_REPORT_SPECS if spec.workspace_id not in deleted}
+        if not required <= ids:
+            raise RuntimeError('未删除的历史报告未完整导入。')
     for filename in ('investigation.sqlite3', 'investigation_creation.sqlite3', 'crawler_auth.key'):
         if not (Path(config['data_dir']) / filename).is_file():
             raise RuntimeError('运行文件缺失：' + filename)
@@ -130,6 +142,7 @@ def status(config, worker=True):
     required = {'historical-report-a', 'historical-report-b'}
     if str(config.get('environment_id', '')).startswith('xhs-audit-formal'):
         required.add('historical-report-c')
+    required -= deleted_historical_workspaces(config)
     if not required <= {r['workspace_id'] for r in reports}:
         raise RuntimeError('A/B 会话不可用。')
     for report in reports:

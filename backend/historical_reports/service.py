@@ -75,6 +75,8 @@ class HistoricalReportDemoService:
             if principal_id in self._registered_principals:
                 return
             for spec in self.specs:
+                if self.workspace_store.is_deleted(spec.workspace_id):
+                    continue
                 self.importer.import_report(spec)
                 self.workspace_store.register(spec, principal_id=principal_id)
             self._registered_principals.add(principal_id)

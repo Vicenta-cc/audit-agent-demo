@@ -189,6 +189,16 @@ historical_report_demo_service = HistoricalReportDemoService(
     report_service=investigation_agent_service,
     executor=investigation_turn_executor,
 )
+from .investigation.deletion import WorkspaceDeletionService, create_workspace_deletion_router
+
+workspace_deletion_service = WorkspaceDeletionService(
+    conversations=investigation_creation_conversation_service,
+    creation_store=investigation_creation_store,
+    reports=report_store,
+    historical=historical_report_demo_service,
+    report_service=investigation_agent_service,
+)
+app.include_router(create_workspace_deletion_router(workspace_deletion_service, principal_provider))
 investigation_creation_turn_executor = InvestigationTurnExecutor(
     investigation_creation_conversation_service,
     max_workers=settings.hermes_investigation_max_workers,

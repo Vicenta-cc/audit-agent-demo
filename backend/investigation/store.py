@@ -41,6 +41,7 @@ from backend.investigation.errors import (
     ClientMessageConflictError,
     InvestigationSessionNotFoundError,
     InvestigationTurnNotFoundError,
+    ReportNotFoundError,
 )
 from backend.investigation.protocol import validate_hermes_transcript_messages
 
@@ -89,6 +90,10 @@ class InvestigationStore:
                     last_answer_message_id TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS deleted_report_versions (
+                    report_version_id TEXT PRIMARY KEY
                 );
 
                 CREATE TABLE IF NOT EXISTS investigation_messages (
@@ -555,6 +560,8 @@ class InvestigationStore:
         normalized_anchor = str(anchor_key or "").strip()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("SELECT 1 FROM deleted_report_versions WHERE report_version_id=?", (context.report_version_id,)).fetchone():
+                raise ReportNotFoundError("report was deleted")
             existing = None
             if normalized_anchor:
                 existing = connection.execute(

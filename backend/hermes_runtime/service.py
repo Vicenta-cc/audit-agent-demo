@@ -340,6 +340,10 @@ class HermesInvestigationAgentService:
         for report_version_id in self.authorized_report_version_ids:
             if report_version_id == session.report_version_id:
                 continue
+            # Historical IDs remain in the configured catalog after explicit deletion.
+            with closing(sqlite3.connect(self.report_facade.db_path)) as connection:
+                if not connection.execute("SELECT 1 FROM report_versions WHERE id=? AND status='published'", (report_version_id,)).fetchone():
+                    continue
             context = self.report_facade.get_published_report_context(report_version_id)
             if context.task_id in seen_tasks:
                 raise InvestigationTurnNotFoundError(

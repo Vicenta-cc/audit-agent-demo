@@ -6,7 +6,6 @@ declare global { interface Window { M3_EXPECTED_ENVIRONMENT?: Environment } }
 export function EnvironmentBoundary({ children }: { children: ReactNode }) {
   const expected = window.M3_EXPECTED_ENVIRONMENT;
   const formal = expected?.environment_id.startsWith('xhs-audit-formal');
-  const reportNames = formal ? 'A/B/C' : 'A/B';
   const [state, setState] = useState(expected ? 'loading' : 'ready');
   useEffect(() => {
     if (!expected) return;
@@ -23,9 +22,9 @@ export function EnvironmentBoundary({ children }: { children: ReactNode }) {
         const reportsResponse = await fetch('/api/historical-report-workspaces', { signal: controller.signal, cache: 'no-store' });
         if (!reportsResponse.ok) throw new Error('reports unavailable');
         const reports = await reportsResponse.json() as { items: { workspace_id: string; report_version_id: string }[] };
-        if (!(formal ? ['historical-report-a', 'historical-report-b', 'historical-report-c'] : ['historical-report-a', 'historical-report-b']).every((id) => reports.items.some((item) => item.workspace_id === id))) {
-          throw new Error('A/B missing');
-        }
+        // Successful registration returns the remaining workspaces, including
+        // an empty list after explicit deletion of all historical reports.
+        if (!Array.isArray(reports.items)) throw new Error('invalid workspace list');
         await Promise.all(reports.items.map(async (item) => {
           const response = await fetch(`/api/report-versions/${encodeURIComponent(item.report_version_id)}`, { signal: controller.signal });
           if (!response.ok) throw new Error('report unavailable');
@@ -37,8 +36,8 @@ export function EnvironmentBoundary({ children }: { children: ReactNode }) {
   }, [expected, formal]);
   if (state !== 'ready') return <main style={{ padding: 40 }} role="status">
     <h1>{state === 'loading' ? '正在连接工作台' : '工作台连接失败'}</h1>
-    <p>{state === 'loading' ? `正在核对后台与 ${reportNames} 报告。` : `后台连接或 ${reportNames} 报告读取失败，请检查服务状态。`}</p>
+    <p>{state === 'loading' ? '正在核对后台与现有报告。' : '后台连接或报告读取失败，请检查服务状态。'}</p>
     {state === 'error' && <button onClick={() => window.location.reload()}>重新连接</button>}
   </main>;
-  return <>{expected && <div style={{ padding: '5px 16px', background: '#eef4ff', color: '#304d7b', fontSize: 12 }}>{formal ? `${expected.environment_id.endsWith('-candidate') ? '整合验收' : '正式工作台'} · A/B/C 报告 · 新任务默认单帖` : 'M3 独立实验环境 · A/B 报告 · 新任务默认单帖验证'}</div>}{children}</>;
+  return <>{expected && <div style={{ padding: '5px 16px', background: '#eef4ff', color: '#304d7b', fontSize: 12 }}>{formal ? `${expected.environment_id.endsWith('-candidate') ? '整合验收' : '正式工作台'} · 调查报告与会话 · 新任务默认单帖` : 'M3 独立实验环境 · 调查报告与会话 · 新任务默认单帖验证'}</div>}{children}</>;
 }

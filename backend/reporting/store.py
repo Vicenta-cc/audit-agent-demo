@@ -2133,7 +2133,8 @@ class ReportStore:
         )
         if report is None:
             raise ReportGenerationError("published ReportVersion metadata was not found")
-        sources = getattr(self, "account_report_sources", ())
+        sources = tuple(source for source in getattr(self, "account_report_sources", ())
+                        if self.get_version(source[1]) is not None)
         if any(source[1] == report_version_id for source in sources):
             from backend.reporting.archive_accounts import archive_account_repository
             return projection, archive_account_repository(sources), str(report["task_id"])

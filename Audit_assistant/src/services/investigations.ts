@@ -1,4 +1,9 @@
 import { API_BASE, apiRequest } from "./apiClient";
+
+export function deleteInvestigationWorkspace(workspaceId: string, historical: boolean) {
+  const resource = historical ? "historical-report-workspaces" : "investigation-workspaces";
+  return apiRequest<void>(`/api/${resource}/${encodeURIComponent(workspaceId)}`, { method: "DELETE" });
+}
 import type {
   InvestigationApiSession,
   InvestigationTurnAcceptedResponse,
