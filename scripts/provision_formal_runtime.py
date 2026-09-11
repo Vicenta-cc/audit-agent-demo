@@ -29,7 +29,7 @@ def assert_quiescent(data):
     checks = (
         ('audit_index.sqlite3', 'jobs', "status NOT IN ('completed','failed','cancelled','archived')"),
         ('investigation_creation.sqlite3', 'investigation_runs', "status NOT IN ('PUBLISHED','FAILED','CANCELLED')"),
-        ('investigation.sqlite3', 'investigation_turns', "status NOT IN ('completed','failed','cancelled')"),
+        ('investigation.sqlite3', 'investigation_turns', "status NOT IN ('completed','interrupted','error')"),
     )
     for filename, table, condition in checks:
         with sqlite3.connect((data / filename).as_uri() + '?mode=ro', uri=True) as db:

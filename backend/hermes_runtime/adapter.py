@@ -293,9 +293,17 @@ class HermesRuntimeBinding:
 
         self.activate_product_mode()
         report_path = database_path.expanduser().resolve(strict=True)
-        database_hash = sha256(report_path.read_bytes()).hexdigest()
-        runtime = import_module("hermes_m0.runtime")
         additional_report_contexts = tuple(additional_report_contexts)
+        from .report_snapshot import published_report_snapshot
+
+        report_path, database_hash = published_report_snapshot(
+            report_path, ledger_path=ledger_path, session_id=session_id,
+            identities=((report_version_id, content_hash, snapshot_hash), *(
+                (item.report_version_id, item.content_hash, item.snapshot_hash)
+                for item in additional_report_contexts
+            )),
+        )
+        runtime = import_module("hermes_m0.runtime")
         additional_sources = tuple(
             runtime.AuthorizedReportSource(
                 database_path=report_path,
@@ -324,13 +332,11 @@ class HermesRuntimeBinding:
                 report_version_id,
                 snapshot_hash,
                 content_hash,
-                database_hash,
             )
             actual_identity = (
                 existing.report_version_id,
                 existing.snapshot_hash,
                 existing.content_hash,
-                existing.database_sha256,
             )
             if actual_identity != expected_identity:
                 raise RuntimeError(

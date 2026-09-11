@@ -53,3 +53,29 @@ def test_active_source_is_rejected_before_copy(tmp_path):
     with pytest.raises(RuntimeError, match='busy'):
         module.snapshot(source, target)
     assert not list(target.iterdir())
+
+
+def test_failed_model_turn_is_preserved_as_terminal_history(tmp_path):
+    source = source_runtime(tmp_path)
+    with sqlite3.connect(source / 'data' / 'investigation.sqlite3') as db:
+        db.execute("UPDATE investigation_turns SET status='error'")
+    module.assert_quiescent(source / 'data')
+
+
+def test_explicit_model_source_preserves_data_configuration_and_keeps_key_private(tmp_path):
+    import json
+    from dotenv import dotenv_values
+    source, target = tmp_path / 'model', tmp_path / 'target'
+    source.mkdir(); target.mkdir(); (target / 'receipts').mkdir()
+    (source / 'environment.json').write_text(json.dumps({'DASHSCOPE_BASE_URL': 'https://model.test/v1', 'XHS_AUDIT_DATA_DIR': '/wrong'}))
+    (source / 'secrets.env').write_text("DASHSCOPE_API_KEY='fixture-model-key'\n")
+    (target / 'environment.json').write_text(json.dumps({'DASHSCOPE_API_KEY': 'obsolete', 'XHS_AUDIT_DATA_DIR': '/kept'}))
+    (target / 'secrets.env').write_text("UNRELATED_KEY='fixture-existing'\n")
+    module.copy_model_configuration(source, target)
+    environment = json.loads((target / 'environment.json').read_text())
+    private = dotenv_values(target / 'secrets.env')
+    assert environment['XHS_AUDIT_DATA_DIR'] == '/kept'
+    assert 'DASHSCOPE_API_KEY' not in environment
+    assert private['DASHSCOPE_API_KEY'] == 'fixture-model-key'
+    assert private['UNRELATED_KEY'] == 'fixture-existing'
+    assert 'fixture-model-key' not in (target / 'receipts/model-configuration.json').read_text()
