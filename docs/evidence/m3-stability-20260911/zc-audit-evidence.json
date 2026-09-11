@@ -1,0 +1,34 @@
+{
+  "run_id": "investigation-run:2ef5778cae35458a803434e0165af98b",
+  "summary": "主帖展示维汉夫妻正常生活，无风险。评论区存在针对民族群体的负面泛化归因，建议复核评论风险。",
+  "comments": [
+    {
+      "comment_id": "7683863254498919217",
+      "source_text": "500年前新疆都是信佛教的，那时候养猪，卖猪肉，吃猪肉的更多[鼓掌]",
+      "audit_status": "completed",
+      "risk_level": "medium",
+      "risk_basis": "群体负面泛化归因",
+      "evidence_quote": "那时候养猪，卖猪肉，吃猪肉的更多",
+      "rule_id": "group_negative_generalization"
+    },
+    {
+      "comment_id": "7683764973663388474",
+      "source_text": "宪法赋予你们的权利，任何人和势力都不得侵犯",
+      "audit_status": "completed",
+      "risk_level": "none",
+      "risk_basis": "",
+      "evidence_quote": "",
+      "rule_id": ""
+    },
+    {
+      "comment_id": "7683922436772889379",
+      "source_text": "我越来越佩服和敬重维族人了，维族人比回族人思想通透！",
+      "audit_status": "completed",
+      "risk_level": "none",
+      "risk_basis": "",
+      "evidence_quote": "",
+      "rule_id": ""
+    }
+  ],
+  "quality_note": "Not passed: suspected false positive on historical religion/diet comment; live result preserved"
+}

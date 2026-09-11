@@ -254,6 +254,7 @@ def _prompt_rule(rule: dict) -> dict:
         key: rule[key]
         for key in (
             "rule_id",
+            "category_id",
             "hit_condition",
             "suggested_risk_level",
             "rule_exemptions",
@@ -335,6 +336,15 @@ def _frame_prompt(payload: dict) -> str:
 
 
 def _comment_prompt_template(payload: dict) -> str:
+    # A RuleSet's library identity, categories and rule IDs are distinct namespaces.
+    # Name every wire field explicitly; an otherwise correct risk judgment with a
+    # category in `lib` is rejected by the comment-result contract.
+    identities = {
+        "lib": payload["ruleset"]["domain"],
+        "rule_id_to_t": {
+            rule["rule_id"]: rule["category_id"] for rule in payload.get("rules") or []
+        },
+    }
     return (
         "依据本次 RuleSet 逐条审核评论风险。结合帖子标题、正文和媒体摘要，独立判断每条评论；不得聚合多条评论，"
         "一条评论可独立触发召回。评论证据只归属于该评论，不得直接归责主帖作者。\n\n"
@@ -346,6 +356,10 @@ def _comment_prompt_template(payload: dict) -> str:
                 "none=0、low=40、medium=60、high=80 输出。"
             ),
         )
+        + "\n\n输出字段身份对应：" + json.dumps(identities, ensure_ascii=False, separators=(",", ":"))
+        + "\n命中风险时，lib 必须逐字使用上表 lib 的值；rule_id 选择实际命中的规则，"
+        "t 使用该 rule_id 对应的类别值。lib、t、rule_id 分别表示风险库、类别、规则，不能互换。"
+        "本次只有一个风险库，省略 sec。此表只约束输出字段，不改变命中条件、豁免或风险等级。"
         + "\n\n只依据当前评论原文或可靠译文判断，不补写原文没有的交易、因果或参与意图。疑问、转述、批判、"
         "否定、举报和正常讨论不自动违规，也不自动豁免；语义或翻译不确定时最多 low。q 必须逐字摘自 "
         "source_text 且保持最短，t/rb 必须受 q 和可靠译文支持。每条 source_text 保持现有最多300字，"

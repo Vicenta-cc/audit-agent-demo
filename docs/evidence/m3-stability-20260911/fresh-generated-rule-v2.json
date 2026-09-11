@@ -1,0 +1,184 @@
+{
+  "schema_version": 0,
+  "name": "维汉婚恋新建验收0911C",
+  "domain": "ethnic_relations",
+  "audit_goal": "识别抖音平台维汉婚恋讨论中的明确歧视、辱骂和暴力表达，覆盖群体负面泛化、民族身份关联侮辱、非人化与集体犯罪污名、通婚群体排斥、血统污染主张和明确现实暴力威胁六类风险",
+  "general_exemptions": [
+    {
+      "exemption_id": "normal_cultural_pride",
+      "name": "正常文化自豪与身份认同",
+      "condition": "表达对自身或他民族文化的正常自豪感、身份认同或文化保护意愿，且不构成对任何民族群体的攻击；若同一内容还包含任何独立的明确攻击或现实暴力表达，本豁免不适用",
+      "source_mappings": []
+    },
+    {
+      "exemption_id": "personal_marriage_choice",
+      "name": "个人婚恋选择与生活决定",
+      "condition": "陈述个人婚恋选择、生活决定或情感经历，且不构成对任何民族群体的攻击；若同一内容还包含任何独立的明确攻击或现实暴力表达，本豁免不适用",
+      "source_mappings": []
+    },
+    {
+      "exemption_id": "specific_behavior_criticism",
+      "name": "对具体行为的客观批评",
+      "condition": "对具体个人的具体行为（如违法、不道德行为）进行客观批评，且批评不基于或扩展到其民族身份；若同一内容还包含任何独立的明确攻击或现实暴力表达，本豁免不适用",
+      "source_mappings": []
+    },
+    {
+      "exemption_id": "critical_citation",
+      "name": "批判性引用与新闻学术讨论",
+      "condition": "新闻报道、学术研究或批判性引用中的相关内容，且引用本身不构成独立攻击；若同一内容还包含任何独立的明确攻击或现实暴力表达，本豁免不适用",
+      "source_mappings": []
+    }
+  ],
+  "categories": [
+    {
+      "category_id": "group_stereotype",
+      "name": "群体负面泛化与先天优劣",
+      "description": "对讨论涉及的民族群体作出整体负面评价或基于民族身份主张先天优劣",
+      "order": 1,
+      "rules": [
+        {
+          "rule_id": "group_negative_generalization",
+          "name": "群体负面泛化与先天优劣",
+          "hit_condition": "对讨论涉及的任一民族群体作出整体性负面评价，或将负面特征归因于民族身份本身，或基于民族身份主张先天优劣",
+          "suggested_risk_level": "medium",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "主体为讨论涉及的民族群体（如维吾尔族、汉族），不推断作者或对象的真实民族身份；不要求针对特定个人",
+          "enabled": true,
+          "order": 1,
+          "source_mappings": []
+        }
+      ]
+    },
+    {
+      "category_id": "identity_insult",
+      "name": "民族身份关联侮辱",
+      "description": "对与民族身份、跨民族婚恋行为或融合立场明显关联的个人实施侮辱或贬损",
+      "order": 2,
+      "rules": [
+        {
+          "rule_id": "ethnic_identity_linked_insult",
+          "name": "民族身份关联侮辱",
+          "hit_condition": "对与民族身份、跨民族婚恋行为或融合立场明显关联的个人（如跨民族情侣、红娘、支持融合者）实施侮辱、诅咒或贬损，且攻击内容与其民族关联身份、行为或立场有明显关联",
+          "suggested_risk_level": "medium",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "攻击须与民族关联身份或立场有明显关联；对具体行为（如售假）的普通批评不因账号背景而命中",
+          "enabled": true,
+          "order": 1,
+          "source_mappings": []
+        }
+      ]
+    },
+    {
+      "category_id": "dehumanization",
+      "name": "非人化与集体犯罪污名",
+      "description": "将讨论涉及的民族群体整体非人化或整体污名为严重犯罪群体",
+      "order": 3,
+      "rules": [
+        {
+          "rule_id": "dehumanization_and_collective_crime_stigma",
+          "name": "非人化与集体犯罪污名",
+          "hit_condition": "将讨论涉及的任一民族群体整体非人化（如比作动物、害虫、病菌等），或将该群体整体污名为严重犯罪群体（如整体定性为诈骗、暴力、恐怖等犯罪群体）",
+          "suggested_risk_level": "high",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "主体为讨论涉及的民族群体整体；不要求同时出现非人化与犯罪污名，任一即可命中",
+          "enabled": true,
+          "order": 1,
+          "source_mappings": []
+        }
+      ]
+    },
+    {
+      "category_id": "intermarriage_rejection",
+      "name": "通婚群体排斥",
+      "description": "普遍性排斥或贬低跨民族通婚行为及跨民族婚恋群体",
+      "order": 4,
+      "rules": [
+        {
+          "rule_id": "intermarriage_group_rejection",
+          "name": "通婚群体排斥",
+          "hit_condition": "普遍性地排斥、反对或贬低跨民族通婚行为，或贬低跨民族婚恋群体",
+          "suggested_risk_level": "medium",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "覆盖对跨民族通婚的普遍排斥立场；不要求主张强制干预或阻止婚姻",
+          "enabled": true,
+          "order": 1,
+          "source_mappings": []
+        }
+      ]
+    },
+    {
+      "category_id": "blood_purity",
+      "name": "血统污染主张",
+      "description": "主张跨民族婚恋污染血统或主张血统纯洁",
+      "order": 5,
+      "rules": [
+        {
+          "rule_id": "blood_contamination_claim",
+          "name": "血统污染主张",
+          "hit_condition": "主张跨民族婚恋会污染血统，或主张血统纯洁、反对跨民族通婚以维护血统纯洁",
+          "suggested_risk_level": "high",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "不要求同时主张强制干预婚姻；血统污染或血统纯洁主张任一即可独立命中",
+          "enabled": true,
+          "order": 1,
+          "source_mappings": []
+        }
+      ]
+    },
+    {
+      "category_id": "violence_threat",
+      "name": "明确现实暴力威胁",
+      "description": "对讨论涉及的民族群体或相关个人发出明确的现实暴力威胁或煽动暴力",
+      "order": 6,
+      "rules": [
+        {
+          "rule_id": "explicit_real_world_violence_threat",
+          "name": "明确现实暴力威胁",
+          "hit_condition": "对讨论涉及的民族群体或相关个人发出明确的现实暴力威胁、煽动暴力或号召实施暴力行为",
+          "suggested_risk_level": "high",
+          "rule_exemptions": [],
+          "application_stages": [
+            "image_evidence",
+            "video_frame_evidence",
+            "comment_audit",
+            "fusion_audit"
+          ],
+          "adjudication_notes": "须为明确的现实暴力威胁或煽动；不推断作者或对象的真实民族身份",
+          "enabled": true,
+          "order": 1,
+          "source_mappings": []
+        }
+      ]
+    }
+  ]
+}

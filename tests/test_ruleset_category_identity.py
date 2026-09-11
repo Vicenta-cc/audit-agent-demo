@@ -116,6 +116,32 @@ def test_identity_is_not_trimmed_or_case_normalized(value):
     assert pipeline._normalize_risk_type(value, 50) == value
 
 
+def test_comment_prompt_distinguishes_library_category_and_rule():
+    pipeline = make_pipeline(["recruitment.advance_fee"])
+    prompt = pipeline._render_comment_audit_prompt(
+        AuditSubject("dy", "test", "", "招聘讨论", "", {}, [], [], []), "",
+        [{"comment_id": "c1", "source_text": "pay deposit"}],
+    )
+    bindings = json.loads(prompt.split("输出字段身份对应：", 1)[1].split("\n", 1)[0])
+    assert bindings["lib"] == "recruitment_fraud"
+    assert bindings["rule_id_to_t"]["recruitment.fee_request"] == "recruitment.advance_fee"
+    assert "不能互换" in prompt
+
+
+def test_wrong_comment_library_is_not_guessed_from_a_valid_rule():
+    pipeline = make_pipeline(["recruitment.advance_fee"])
+    row = {"id": "c1", "s": 80, "risk_level": "high",
+           "lib": "recruitment.advance_fee", "t": "recruitment.advance_fee",
+           "rb": "要求缴纳押金", "q": "pay deposit", "rule_id": "recruitment.fee_request"}
+    comments = [{"comment_id": "c1", "source_text": "pay deposit"}]
+    assert pipeline._normalize_comment_audit_results({"comments": [row]}, comments) == {}
+    row["lib"] = "recruitment_fraud"
+    actual = pipeline._normalize_comment_audit_results({"comments": [row]}, comments)["c1"]
+    assert actual["audit_status"] == "completed"
+    assert actual["risk_level"] == "high"
+    assert actual["rule_id"] == "recruitment.fee_request"
+
+
 def test_all_identity_paths_reach_catalog_and_fusion():
     identity = "recruitment." + "a" * 88
     pipeline = make_pipeline([identity])

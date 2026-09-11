@@ -1,0 +1,225 @@
+{
+  "method": "Real three-comment text replay with original frozen generated and K2 profiles; simplified post context; no new crawl, no live report replacement. Not an exact media-context replay.",
+  "samples": [
+    {
+      "profile": "generated_v2",
+      "repeat": 1,
+      "seconds": 2.401,
+      "actual": {
+        "7683764973663388474": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        },
+        "7683863254498919217": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        },
+        "7683922436772889379": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        }
+      }
+    },
+    {
+      "profile": "original_k2",
+      "repeat": 1,
+      "seconds": 11.969,
+      "actual": {
+        "7683764973663388474": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        },
+        "7683863254498919217": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        },
+        "7683922436772889379": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        }
+      }
+    },
+    {
+      "profile": "generated_v2",
+      "repeat": 2,
+      "seconds": 3.172,
+      "actual": {
+        "7683764973663388474": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        },
+        "7683863254498919217": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        },
+        "7683922436772889379": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        }
+      }
+    },
+    {
+      "profile": "original_k2",
+      "repeat": 2,
+      "seconds": 13.625,
+      "actual": {
+        "7683764973663388474": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        },
+        "7683863254498919217": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        },
+        "7683922436772889379": {
+          "audit_status": "completed",
+          "risk_score": 0,
+          "risk_level": "none",
+          "risk_library_id": "",
+          "risk_library_label": "",
+          "secondary_library_ids": [],
+          "risk_type": "",
+          "risk_basis": "",
+          "exemption_basis": "",
+          "evidence_quote": "",
+          "translation_zh": "",
+          "translation_status": "not_needed",
+          "rule_id": "",
+          "matched_exemption_ids": []
+        }
+      }
+    }
+  ]
+}

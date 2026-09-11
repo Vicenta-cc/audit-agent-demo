@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from copy import deepcopy
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,7 +44,22 @@ def golden_case(content):
 def test_t2_5_golden_and_content_semantics(factory):
     content = factory()
     golden = json.loads((FIXTURES / "ruleset_compiler_t2_5_golden.json").read_text(encoding="utf-8"))
-    assert golden_case(content) == golden[content.domain]
+    actual, historical = golden_case(content), deepcopy(golden[content.domain])
+    # Keep the historical oracle intact. Only comment field bindings and their
+    # derived prompt/config hashes may differ from it.
+    for key in ("content_compile_result", "formal_compile_result"):
+        profile = actual[key]["prompt_profile_snapshot"]
+        old_profile = historical[key]["prompt_profile_snapshot"]
+        before, addition = profile["comment_prompt_template"].split("\n\n输出字段身份对应：", 1)
+        _, after = addition.split("\n\n只依据当前评论", 1)
+        assert before + "\n\n只依据当前评论" + after == old_profile["comment_prompt_template"]
+        assert profile["prompt_version"] != old_profile["prompt_version"]
+        for field in ("comment_prompt_template", "prompt_version"):
+            old_profile[field] = profile[field]
+        old_profile["fixed_prompt_chars"]["comment_audit"] = profile["fixed_prompt_chars"]["comment_audit"]
+    assert actual["formal_compile_result"]["config_hash"] != historical["formal_compile_result"]["config_hash"]
+    historical["formal_compile_result"]["config_hash"] = actual["formal_compile_result"]["config_hash"]
+    assert actual == historical
     assert golden_case(content) == golden_case(content.model_copy(deep=True))
     result = compiler.compile_ruleset_content(content)
     assert result.prompt_profile_snapshot["prompt_version"].startswith("ruleset-v1-")

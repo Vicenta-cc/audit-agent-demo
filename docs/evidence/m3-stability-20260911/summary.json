@@ -1,0 +1,214 @@
+{
+  "environment": "3178 / 8178 isolated experiment",
+  "code_fix": "Explicit comment result lib/category/rule identity mapping; no rule-condition changes",
+  "regression": {
+    "passed": 449,
+    "subtests_passed": 31,
+    "seconds": 33.04
+  },
+  "semantic": {
+    "semantic-before": {
+      "unique_cases": 14,
+      "counts": {
+        "generated_v2": {
+          "executions": 28,
+          "passed": 24,
+          "failed_cases": [
+            {
+              "repeat": 1,
+              "case_id": "group_stigma"
+            },
+            {
+              "repeat": 1,
+              "case_id": "identity_insult"
+            },
+            {
+              "repeat": 2,
+              "case_id": "group_stigma"
+            },
+            {
+              "repeat": 2,
+              "case_id": "identity_insult"
+            }
+          ]
+        },
+        "original_k2": {
+          "executions": 28,
+          "passed": 28,
+          "failed_cases": []
+        }
+      },
+      "method": "synthetic labelled comments; real production AuditPipeline comment path and Qwen; frozen profiles read-only from completed experiment runs; no crawler or live report writes"
+    },
+    "semantic-after": {
+      "unique_cases": 14,
+      "counts": {
+        "generated_v2": {
+          "executions": 28,
+          "passed": 28,
+          "failed_cases": []
+        },
+        "original_k2": {
+          "executions": 28,
+          "passed": 28,
+          "failed_cases": []
+        }
+      },
+      "method": "synthetic labelled comments; real production AuditPipeline comment path and Qwen; frozen profiles read-only from completed experiment runs; no crawler or live report writes; generated profile recompiled with field-identity fix; K2 frozen profile unchanged"
+    },
+    "semantic-fresh-generated": {
+      "unique_cases": 14,
+      "counts": {
+        "fresh_generated": {
+          "executions": 28,
+          "passed": 28,
+          "failed_cases": []
+        }
+      },
+      "method": "synthetic labelled comments; real production AuditPipeline comment path and Qwen; frozen profiles read-only from completed experiment runs; no crawler or live report writes; newly generated and naturally edited six-category rules; no live task"
+    }
+  },
+  "invariants": {
+    "original_rule_unchanged_this_round": true,
+    "original_lexicon_unchanged_this_round": true,
+    "five_prior_runs_unchanged": true,
+    "zc_actual_account_confirmed": true,
+    "zc_current_compiler_prompt": true,
+    "k2_import_content_unchanged": true
+  },
+  "restart": {
+    "existing_runs_unchanged": true,
+    "draft_unchanged": true,
+    "messages_unchanged": true,
+    "edits_unchanged": true
+  },
+  "zc_run": {
+    "run_id": "investigation-run:2ef5778cae35458a803434e0165af98b",
+    "status": "PUBLISHED",
+    "account_name": "zc抖音测试账号",
+    "actual_account_verified": true,
+    "keyword": "维汉婚恋",
+    "posts": 1,
+    "comment_audit_stats": {
+      "total": 3,
+      "completed": 3,
+      "failed": 0,
+      "translation_required": 0,
+      "translation_completed": 0,
+      "translation_failed": 0,
+      "review_count": 1,
+      "high_count": 0,
+      "max_score": 60,
+      "level_counts": {
+        "none": 2,
+        "low": 0,
+        "medium": 1,
+        "high": 0
+      },
+      "rule_counts": {
+        "group_negative_generalization": 1
+      }
+    },
+    "seconds_to_published": 90.844971,
+    "report_qa_seconds": 37.235266,
+    "quality_status": "Not passed: suspected false positive on historical religion/diet comment; live result preserved"
+  },
+  "unresolved": [
+    "Original account returned empty search data for three attempts; cause not proven.",
+    "Generated rule marked historical religion/diet comment medium without sufficient explicit ethnic attack evidence. Simplified text replays returned none; exact multimodal context not reproduced.",
+    "Reusing an already queued temporary proposal did not create a new draft and assistant conflated draft QUEUED with terminal Run FAILED.",
+    "Account selection is automatic ID ordering, not general natural-language account selection. This execution binding was explicitly verified."
+  ],
+  "response_timings": [
+    {
+      "case": "01-create-lexicon",
+      "seconds": 19.904693,
+      "llm_calls": 4
+    },
+    {
+      "case": "02-edit-save-lexicon",
+      "seconds": 19.076991,
+      "llm_calls": 4
+    },
+    {
+      "case": "03-open-second-session",
+      "seconds": 20.623989,
+      "llm_calls": 5
+    },
+    {
+      "case": "04-rule-copy",
+      "seconds": 35.688354,
+      "llm_calls": 8
+    },
+    {
+      "case": "05-save-newer-version",
+      "seconds": 15.965094,
+      "llm_calls": 3
+    },
+    {
+      "case": "06-copy-save",
+      "seconds": 11.822008,
+      "llm_calls": 3
+    },
+    {
+      "case": "07-stale-save",
+      "seconds": 34.270053,
+      "llm_calls": 5
+    },
+    {
+      "case": "08-create-formal-draft",
+      "seconds": 43.004427,
+      "llm_calls": 5
+    },
+    {
+      "case": "09-resolve-conflict",
+      "seconds": 20.310292,
+      "llm_calls": 4
+    },
+    {
+      "case": "10-missing-resource-consent",
+      "seconds": 11.527836,
+      "llm_calls": 3
+    },
+    {
+      "case": "13-generate-after-consent",
+      "seconds": 96.83765,
+      "llm_calls": 6
+    },
+    {
+      "case": "15-tighten-exemptions",
+      "seconds": 54.818086,
+      "llm_calls": 3
+    },
+    {
+      "case": "16-recover-empty-result",
+      "seconds": 15.784481,
+      "llm_calls": 2
+    },
+    {
+      "case": "17-confirm-recovery",
+      "seconds": 12.767901,
+      "llm_calls": 3
+    },
+    {
+      "case": "18-adopt-latest-temporary",
+      "seconds": 27.598054,
+      "llm_calls": 4
+    },
+    {
+      "case": "20-new-account-retry",
+      "seconds": 28.384946,
+      "llm_calls": 4
+    },
+    {
+      "case": "21-zc-draft",
+      "seconds": 45.805024,
+      "llm_calls": 7
+    },
+    {
+      "case": "22-zc-confirm",
+      "seconds": 15.93089,
+      "llm_calls": 4
+    }
+  ]
+}

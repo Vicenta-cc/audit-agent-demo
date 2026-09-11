@@ -423,7 +423,9 @@ class RuleSetCompilerTests(unittest.TestCase):
 
         self.assertLess(fixed["image_evidence"], 2500)
         self.assertLess(fixed["video_frame_evidence"], 3000)
-        self.assertLess(fixed["comment_audit"], 2600)
+        # Explicit library/category/rule bindings add 581 characters to this
+        # fixture. Dynamic input capacity and the other stage budgets are intact.
+        self.assertLess(fixed["comment_audit"], 2800)
         self.assertLess(fixed["fusion_audit"], 3200)
         for key in (
             "image_prompt",
@@ -2593,7 +2595,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
             {
                 "image_evidence": 1840,
                 "video_frame_evidence": 2251,
-                "comment_audit": 2152,
+                "comment_audit": 2733,
                 "fusion_audit": 2297,
             },
         )
@@ -2716,7 +2718,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                 "v2": {
                     "image_evidence": {"fixed": 1840, "dynamic": 0, "total": 1840},
                     "video_frame_evidence": {"fixed": 2251, "dynamic": 532, "total": 2783},
-                    "comment_audit": {"fixed": 2152, "dynamic": 422, "total": 2574},
+                    "comment_audit": {"fixed": 2733, "dynamic": 422, "total": 3155},
                     "fusion_audit": {"fixed": 2297, "dynamic": 943, "total": 3240},
                 },
             },
