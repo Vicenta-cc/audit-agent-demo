@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { BookOpen, ChevronRight, X } from "lucide-react";
 import type { RuleSetProposalPresentation } from "../../types/investigationCreation";
 import { AssistantMarkdown } from "./AssistantMarkdown";
+import { presentCreationAssistantContent } from "./creationContentPresentation";
 import "./generatedRules.css";
 
 const stageNames: Record<string, string> = {
@@ -39,8 +40,11 @@ export function GeneratedRulesMessage({ content, presentations }: {
     if (selected && dialog.current && !dialog.current.open) dialog.current.showModal();
   }, [selected]);
   const snapshots = presentations.filter(item => item.snapshot);
-  if (!snapshots.length) return <div className="inv-assistant-text" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{content}</div>;
-  const narrative = presentations.reduce((text, item) => item.text ? text.replace(item.text, "") : text, content).trim();
+  // Legacy receipts may have only the authoritative text. Do not discard rule
+  // lines when there is no structured snapshot from which to recover them.
+  if (!snapshots.length) return <AssistantMarkdown content={content} />;
+  const rawNarrative = presentations.reduce((text, item) => item.snapshot && item.text ? text.replace(item.text, "") : text, content).trim();
+  const narrative = rawNarrative ? presentCreationAssistantContent(rawNarrative) : "";
   const excerpt = searchExcerpt(narrative);
   const fencedTerms = excerpt.match(/```[^\n]*\n([\s\S]*?)```/);
   const terms = fencedTerms?.[1].split("\n").map(term => term.trim()).filter(Boolean) || [];

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
-  test(`Proposal exact text renders at ${viewport.width}px`, async ({ page }) => {
+  test(`Legacy proposal renders readable Markdown at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto("/");
     const text = "模型说明：只有一条规则。\n\n临时研判规则 · 完整规则快照\n名称：招聘诈骗\n版本：2\n分类数：1；规则数：2\n规则 1：入职前收费\n命中条件：明确要求付款\n规则 2：培训贷\n应用阶段：image_evidence, comment_audit\n规则豁免：无\n裁决说明：保留 <tag> https://example.test ``` draft_id\n" + "a".repeat(64);
@@ -32,10 +32,11 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
         onOpenReportSupport: noop, onExamplePromptSelect: noop
       }));
     }, text);
-    const rendered = page.locator('.inv-assistant-text').filter({ hasText: "完整规则快照" });
+    const rendered = page.locator('.inv-assistant-markdown').filter({ hasText: "完整规则快照" });
     await expect(rendered).toBeVisible();
-    expect(await rendered.textContent()).toBe(text);
-    expect(await rendered.locator("tag, a, code").count()).toBe(0);
+    expect(await rendered.textContent()).toContain("规则 1：入职前收费");
+    expect(await rendered.textContent()).toContain("规则 2：培训贷");
+    expect(await rendered.locator("tag, script").count()).toBe(0);
     expect(await rendered.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.screenshot({ path: `/tmp/m3-t4a-proposal-${viewport.width}.png`, fullPage: true });
   });

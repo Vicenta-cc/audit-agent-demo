@@ -11,24 +11,8 @@ import type {
 } from "../../types/investigationCreation";
 import { buildConfirmationIdempotencyKey } from "./confirmationView";
 import { mapInvestigationRunState } from "./investigationRunState";
-import { formatCreationErrorMessage } from "./confirmationView";
-
-const technicalCreationContent = /(schema_version|draft[_\s-]?id|toolresult|\[object object\]|\/rule-assistant\/|https?:\/\/|[A-Z]{3,}(?:_[A-Z0-9]+)+|```|\{\s*"|database|revision|(?:规则|词库|修订|编辑)\s*ID|内容(?:哈希|指纹)|(?:ruleset-proposal|lexicon-edit|ruleset-presentation):)/i;
-
-export function presentCreationAssistantContent(content: string) {
-  const trimmed = content.trim();
-  if (!trimmed) return "正在整理本次调查建议。";
-  if (!technicalCreationContent.test(trimmed)) return trimmed;
-  // A successful resource answer can contain an incidental internal metadata row.
-  // Hide those rows without turning the whole completed operation into an error.
-  const publicLines = trimmed.replace(/```[\s\S]*?```/g, "").split("\n")
-    .filter((line) => !technicalCreationContent.test(line));
-  const hasExplanation = publicLines.some((line) =>
-    !/^\s*(?:\||#|[-*_]{3,})/.test(line) && (line.match(/[\u3400-\u9fff]/g)?.length || 0) >= 8
-  );
-  if (hasExplanation) return publicLines.join("\n").trim();
-  return formatCreationErrorMessage(trimmed);
-}
+import { presentCreationAssistantContent } from "./creationContentPresentation";
+export { presentCreationAssistantContent } from "./creationContentPresentation";
 
 function messageTime(createdAt: string) {
   const value = new Date(createdAt);
