@@ -117,6 +117,7 @@ investigation_agent_service = (
         bind_runtime=False,
         authorized_report_version_ids=tuple(
             item.report_version_id for item in HISTORICAL_REPORT_SPECS
+            if item.workspace_id in {"historical-report-a", "historical-report-b", "historical-report-c"}
         ),
         authorized_context_anchor_prefixes=("historical-report:",),
     )
@@ -124,6 +125,7 @@ investigation_agent_service = (
     else HermesInvestigationAgentService(
         authorized_report_version_ids=tuple(
             item.report_version_id for item in HISTORICAL_REPORT_SPECS
+            if item.workspace_id in {"historical-report-a", "historical-report-b", "historical-report-c"}
         ),
         authorized_context_anchor_prefixes=("historical-report:",),
     )

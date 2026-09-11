@@ -303,6 +303,10 @@ class HermesInvestigationAgentService:
     ) -> tuple[Any, ...]:
         if self.authorized_context_anchor_prefixes is not None:
             anchor = self.store.session_anchor(session.id)
+            if anchor.startswith("historical-report:") and session.report_version_id not in self.authorized_report_version_ids:
+                # Only explicitly authorized historical versions can use the
+                # cross-report context; unknown imports keep their own scope.
+                return ()
             allowed_anchor = any(
                 anchor.startswith(prefix)
                 for prefix in self.authorized_context_anchor_prefixes

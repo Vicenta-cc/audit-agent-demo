@@ -32,6 +32,11 @@ class HistoricalDisplayMessageResponse(PublicApiModel):
     content: str
 
 
+class HistoricalConfigurationDetail(PublicApiModel):
+    title: str
+    text: str
+
+
 class HistoricalDraftResponse(PublicApiModel):
     task_name: str
     subject: str
@@ -40,6 +45,9 @@ class HistoricalDraftResponse(PublicApiModel):
     analysis_plan: str
     analysis_description: str
     recall_lexicons: tuple[str, ...]
+    history_notice: str = ""
+    scope_description: str = ""
+    configuration_details: tuple[HistoricalConfigurationDetail, ...] = ()
 
 
 class HistoricalConversationMessageResponse(PublicApiModel):

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import json
+import os
 
 from backend.audit_agent.config import settings
 
@@ -191,3 +193,19 @@ HISTORICAL_REPORT_SPECS = (
         ),
     ),
 )
+
+# Optional immutable archive produced by the selected-report generation command.
+# A/B's fixed identities and hashes above remain unchanged.
+_c_manifest = os.getenv("HISTORICAL_REPORT_C_MANIFEST", "").strip()
+if _c_manifest:
+    _manifest = json.loads(Path(_c_manifest).read_text())
+    if _manifest["workspace_id"] != "historical-report-c":
+        raise ValueError("Report C manifest has an unexpected workspace identity")
+    HISTORICAL_REPORT_SPECS += (HistoricalReportSpec(
+        **{**_manifest, "source_database": Path(_manifest["source_database"]), "display_timeline": tuple(_manifest["display_timeline"])},
+    ),)
+_workspace_ids = {value for value in os.getenv("HISTORICAL_REPORT_WORKSPACE_IDS", "").split(",") if value}
+if _workspace_ids:
+    HISTORICAL_REPORT_SPECS = tuple(spec for spec in HISTORICAL_REPORT_SPECS if spec.workspace_id in _workspace_ids)
+    if {spec.workspace_id for spec in HISTORICAL_REPORT_SPECS} != _workspace_ids:
+        raise ValueError("requested historical report workspace is unavailable")

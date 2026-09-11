@@ -162,12 +162,12 @@ def configure_real_report_runtime(
     ]
     if len(account_report_task_ids) != len(set(account_report_task_ids)):
         raise ValueError("authorized Account report sources must have unique source tasks")
-    if repository.template_kind in {"all_pass", "single_risk_post"}:
+    if any(item.template_kind in {"all_pass", "single_risk_post", "selected_existing_audits"} for item in account_report_repositories):
         from .pass_support import PassReportToolService, SnapshotAccountData, SnapshotAccountRepository
         from .account_corpus import AccountCorpus
         legacy_corpus = (
             AccountCorpus.load(Path(account_corpus_path or DEFAULT_ACCOUNT_CORPUS_PATH))
-            if any(item.template_kind not in {"all_pass", "single_risk_post"} for item in account_report_repositories)
+            if any(item.template_kind not in {"all_pass", "single_risk_post", "selected_existing_audits"} for item in account_report_repositories)
             else None
         )
         account_repository = SnapshotAccountRepository(SnapshotAccountData(
@@ -181,7 +181,7 @@ def configure_real_report_runtime(
         return service_type(repository, ledger=ToolExecutionLedger(execution_ledger_path), account_activity=account_activity)
     account_activity = (
         None
-        if account_corpus_path is None
+        if account_corpus_path is None or not repository.report_account_entries()
         else AccountActivityToolService(
             repository,
             corpus_path=account_corpus_path or DEFAULT_ACCOUNT_CORPUS_PATH,

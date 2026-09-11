@@ -77,14 +77,14 @@ export function InvestigationContextDrawer({
     <div className={`inv-context-drawer ${isOpen ? "is-open" : ""}`} aria-label="上下文详情抽屉">
       <div className="inv-drawer-header">
         <span className="inv-drawer-title">{getTitle()}</span>
-        <button type="button" className="inv-drawer-close" onClick={onClose}>
+        <button type="button" className="inv-drawer-close" aria-label="关闭配置详情" onClick={onClose}>
           <X size={18} />
         </button>
       </div>
 
       <div className="inv-drawer-body">
         {/* TASK CONFIG VIEW */}
-        {type === "task_config" && draft ? (
+        {(type === "task_config" || (type === "ruleset" && draft?.historicalConfiguration?.length)) && draft ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <div style={{ background: "#f8fafc", padding: "14px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
               <div style={{ fontSize: "11px", color: "#64748b" }}>任务名称</div>
@@ -94,9 +94,17 @@ export function InvestigationContextDrawer({
             </div>
 
             <div>
-              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>本次搜索词</div>
+              <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>{draft.historicalConfiguration?.length ? "实际返回内容的来源词" : "本次搜索词"}</div>
               <div style={{ color: "#334155", fontSize: "13px", lineHeight: "1.65" }}>{draft.keywords.join("、")}</div>
             </div>
+
+            {draft.historyNotice ? <p style={{ fontSize: "12px", lineHeight: "1.7", color: "#64748b" }}>{draft.historyNotice}</p> : null}
+            {draft.historicalConfiguration?.map((detail) => (
+              <details key={detail.title} style={{ fontSize: "12px", lineHeight: "1.75", overflowWrap: "anywhere" }}>
+                <summary style={{ cursor: "pointer", fontWeight: 700 }}>{detail.title}</summary>
+                <div style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{detail.text}</div>
+              </details>
+            ))}
 
             <div>
               <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>推荐审核规则</div>
@@ -326,7 +334,7 @@ export function InvestigationContextDrawer({
         ) : null}
 
         {/* V1 / MOCK RULESET VIEW */}
-        {type === "ruleset" && !draftSuggestion && activeRuleSet ? (
+        {type === "ruleset" && !draftSuggestion && !draft?.historicalConfiguration?.length && activeRuleSet ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div style={{ padding: "12px 0 14px", borderBottom: "1px solid #e2e8f0" }}>
               <div style={{ fontSize: "15px", fontWeight: "700", color: "#0f172a" }}>

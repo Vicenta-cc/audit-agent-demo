@@ -106,6 +106,16 @@ def build_presentation_projection(
         comment_statistics=comment_statistics,
     )
     summary = _investigation_summary(statistics)
+    if document.get("source_coverage"):
+        coverage = document["source_coverage"].get("comments") or {}
+        statistics["independently_reviewed_comments"] = coverage.get("completed")
+        statistics["stored_comments"] = coverage.get("total")
+        statistics["incomplete_comments"] = coverage.get("failed")
+        if document.get("template_kind") == "selected_existing_audits":
+            statistics["comment_own_risk"] = sum(
+                int((post.payload.get("raw_content_payload", {}).get("comment_audit_stats") or {}).get("review_count") or 0)
+                for post in snapshot.posts
+            )
     if document.get("template_kind") in {"all_pass", "single_risk_post"}:
         accounts["snapshot_summary"] = document.get("snapshot_account_summary")
         coverage = document.get("comment_audit_coverage") or {}

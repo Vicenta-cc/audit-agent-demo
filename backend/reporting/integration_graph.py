@@ -87,7 +87,11 @@ class IntegrationReportGraph(ReportGenerationGraph):
     def _freeze_source_snapshot(self, state: dict[str, Any]) -> dict[str, Any]:
         snapshot = build_immutable_snapshot(self.report_source, state["task_id"])
         self._snapshots[state["report_version_id"]] = snapshot
-        task_status = self.query_service.get_task_snapshot(state["task_id"]).data.task_status
+        task_status = (
+            self.report_source.task_status(state["task_id"])
+            if hasattr(self.report_source, "task_status")
+            else self.query_service.get_task_snapshot(state["task_id"]).data.task_status
+        )
         finding_ids = [item.ref for item in snapshot.findings]
         evidence_ids = [item.ref for item in snapshot.evidence]
         statistic_inputs = [

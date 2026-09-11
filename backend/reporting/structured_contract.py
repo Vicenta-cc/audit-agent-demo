@@ -20,7 +20,7 @@ _ABSOLUTE_PATH = re.compile(r"(?:^|\s)(?:/Users/|/home/|file://|[A-Za-z]:\\)")
 
 
 def validate_structured_report_document(
-    document: dict[str, Any], *, account_model: dict[str, Any]
+    document: dict[str, Any], *, account_model: dict[str, Any] | None
 ) -> None:
     if document.get("schema_version") != STRUCTURED_REPORT_SCHEMA_VERSION:
         raise ReportGenerationError("unsupported structured Report schema_version")
@@ -29,6 +29,11 @@ def validate_structured_report_document(
     metadata = document.get("report_metadata")
     if not isinstance(metadata, dict):
         raise ReportGenerationError("structured Report metadata is missing")
+    if document.get("template_kind") == "selected_existing_audits":
+        if account_model is not None or not isinstance(document.get("source_coverage"), dict):
+            raise ReportGenerationError("selected evidence report has invalid coverage or account model")
+        _assert_public_value(document)
+        return
     required_account_fields = {
         "account_coverage_statistics",
         "default_active_comment_entries",

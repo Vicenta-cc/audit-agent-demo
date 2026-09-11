@@ -129,7 +129,27 @@ export function TaskSuggestionCard({
         />}
       </div>
 
-      {showSuggestionCard ? <section className={`task-suggestion-card${isReadOnly ? " is-read-only" : ""}`} aria-label="任务建议卡片">
+      {showSuggestionCard && draft.historicalConfiguration?.length ? (
+        <section className="task-suggestion-card is-read-only" aria-label="历史报告配置">
+          <div className="task-suggestion-header">
+            <h3>{draft.taskName}</h3>
+            <span className="task-suggestion-status is-ready">已有审核资料</span>
+          </div>
+          <div className="task-suggestion-sections">
+            <section className="task-suggestion-section">
+              <span className="task-suggestion-label">实际来源词</span>
+              <p>{draft.keywords.join("、")}</p>
+            </section>
+            <section className="task-suggestion-section">
+              <span className="task-suggestion-label">分析范围</span>
+              <p>{draft.scopeDescription || draft.ruleSetDescription}</p>
+            </section>
+            <button type="button" className="task-suggestion-text-action" onClick={onOpenAnalysisPlan}>
+              查看原始配置与规则
+            </button>
+          </div>
+        </section>
+      ) : showSuggestionCard ? <section className={`task-suggestion-card${isReadOnly ? " is-read-only" : ""}`} aria-label="任务建议卡片">
         <div className="task-suggestion-header">
           <h3>{draft.taskName}</h3>
           <span className={`task-suggestion-status${isReadOnly ? " is-ready" : ""}`}>

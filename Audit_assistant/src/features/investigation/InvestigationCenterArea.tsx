@@ -286,6 +286,7 @@ export function InvestigationCenterArea({
       {/* Timeline Scroll Container */}
       <div ref={timelineRef} className="inv-timeline-container">
         <div className="inv-timeline-inner">
+          {session.draft.historyNotice ? <p style={{ fontSize: 12, lineHeight: 1.65, color: "#64748b", margin: "0 0 18px" }}>{session.draft.historyNotice}</p> : null}
           {/* WELCOME BLANK STATE */}
           {session.messages.length === 0 ? (
             <div className="inv-welcome-box">

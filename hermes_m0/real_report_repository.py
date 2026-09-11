@@ -586,6 +586,9 @@ def _load_report_graph(
         "evidence": [str(row["payload_hash"]) for row in evidence_rows],
         "relations": relation_hash,
     }
+    frozen_statistics = _json_object(manifest["statistics_json"], "Snapshot statistics")
+    if frozen_statistics.get("source_configuration"):
+        snapshot_body["source_configuration_hash"] = _stable_hash(frozen_statistics["source_configuration"])
     snapshot_hash = _stable_hash(snapshot_body)
     if snapshot_hash != str(manifest["snapshot_hash"]):
         raise PublishedReportLoadError("Snapshot hash does not match frozen payloads")
@@ -639,6 +642,13 @@ def _load_report_graph(
         body_sections=sections,
         all_pass=snapshot_template,
     )
+    if (body_json.get("report_document") or {}).get("source_coverage"):
+        # Keep the published coverage disclosures in the real overview tool.
+        # Every section above has already passed its persisted hash check.
+        report_overview += "\n\n" + "\n\n".join(
+            str(section.get("body") or "") for section in sections
+            if section.get("section_id") in {"content-comment-scale", "coverage-boundaries"}
+        )
     report_account_entries, report_account_projection_hash = _load_report_accounts(
         connection,
         report_version_id=report_version_id,

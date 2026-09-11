@@ -25,6 +25,9 @@ export interface HistoricalReportDraft {
   analysis_plan: string;
   analysis_description: string;
   recall_lexicons: string[];
+  history_notice?: string;
+  scope_description?: string;
+  configuration_details?: { title: string; text: string }[];
 }
 
 export interface HistoricalConversationMessage {

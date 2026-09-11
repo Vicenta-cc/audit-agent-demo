@@ -392,6 +392,8 @@ def build_immutable_snapshot(
             "raw_content_payload": result,
             "comments": comments,
         }
+        if hasattr(source, "provenance_for_row"):
+            post_payload["source_provenance"] = source.provenance_for_row(row)
         posts.append(
             SnapshotPost(post_ref, canonical_key, post_payload["revision"], post_payload, stable_hash(post_payload))
         )
@@ -418,6 +420,8 @@ def build_immutable_snapshot(
             "author": author.get("nickname") or result.get("author", {}).get("nickname", ""),
             "raw_effective_result": result,
         }
+        if hasattr(source, "provenance_for_row"):
+            finding_payload["source_provenance"] = source.provenance_for_row(row)
         findings.append(
             SnapshotFinding(finding_ref, audit_result_id, post_ref, finding_payload, stable_hash(finding_payload))
         )
@@ -481,6 +485,9 @@ def build_immutable_snapshot(
         "risk_level": dict(sorted(risk_levels.items())),
         "manual_corrections": manual_matches,
     }
+    if hasattr(source, "coverage"):
+        statistics["source_coverage"] = source.coverage
+        statistics["source_configuration"] = config
     relations = [
         {"post_ref": item.post_ref, "finding_ref": item.finding_ref, "evidence_ref": item.ref}
         for item in evidences
@@ -497,6 +504,8 @@ def build_immutable_snapshot(
         "evidence": [item.payload_hash for item in evidences],
         "relations": relation_hash,
     }
+    if hasattr(source, "coverage"):
+        snapshot_body["source_configuration_hash"] = stable_hash(config)
     snapshot_hash = stable_hash(snapshot_body)
     return ImmutableReportSnapshot(
         snapshot_ref=f"snapshot-{snapshot_hash[:16]}",

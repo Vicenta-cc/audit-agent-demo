@@ -73,6 +73,8 @@ export interface TaskDraft {
   recommendedRecallLexicons?: string[];
   scopeDescription?: string;
   reportSourceTaskId?: string;
+  historicalConfiguration?: { title: string; text: string }[];
+  historyNotice?: string;
   status: TaskSessionStatus;
   confirmed: boolean;
 }

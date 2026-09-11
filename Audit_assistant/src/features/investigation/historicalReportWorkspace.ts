@@ -30,6 +30,9 @@ function draftFromWorkspace(workspace: HistoricalReportWorkspace): TaskDraft {
     analysisPlanName: workspace.draft.analysis_plan,
     ruleSetDescription: workspace.draft.analysis_description,
     recommendedRecallLexicons: workspace.draft.recall_lexicons,
+    scopeDescription: workspace.draft.scope_description,
+    historicalConfiguration: workspace.draft.configuration_details,
+    historyNotice: workspace.draft.history_notice,
     status: "报告已生成",
     confirmed: true
   };

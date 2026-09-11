@@ -980,6 +980,8 @@ class ReportStore:
             "evidence": [item.payload_hash for item in evidence],
             "relations": relation_hash,
         }
+        if statistics.get("source_configuration"):
+            snapshot_body["source_configuration_hash"] = stable_hash(statistics["source_configuration"])
         snapshot_hash = stable_hash(snapshot_body)
         if manifest.get("snapshot_hash") and manifest["snapshot_hash"] != snapshot_hash:
             raise ReportGenerationError("frozen Snapshot hash does not match payloads")
@@ -2014,11 +2016,22 @@ class ReportStore:
                 "ReportVersion has no structured frontend report document"
             )
         account_model = body.get("account_model")
-        if not isinstance(account_model, dict):
+        if not isinstance(account_model, dict) and document.get("template_kind") != "selected_existing_audits":
             raise ReportGenerationError(
                 "ReportVersion has no structured Account model"
             )
         output = json.loads(self._json(document))
+        if output.get("template_kind") == "selected_existing_audits":
+            # Source config and full membership receipts stay in the immutable
+            # snapshot. The public projection exposes coverage without paths.
+            output.get("statistics", {}).pop("source_configuration", None)
+            coverage = output.get("source_coverage") or {}
+            coverage["excluded_failed_posts"] = [
+                {"post_id": item.get("note_id"), "status": item.get("analyze_status")}
+                for item in coverage.get("excluded_failed_posts", [])
+            ]
+            output["source_coverage"] = coverage
+            output.get("statistics", {})["source_coverage"] = coverage
         metadata = dict(output.get("report_metadata") or {})
         metadata["content_hash"] = version["content_hash"]
         metadata["published_at"] = version["published_at"]
@@ -2120,7 +2133,7 @@ class ReportStore:
         )
         if report is None:
             raise ReportGenerationError("published ReportVersion metadata was not found")
-        if ((version.get("body") or {}).get("report_document") or {}).get("template_kind") in {"all_pass", "single_risk_post"}:
+        if ((version.get("body") or {}).get("report_document") or {}).get("template_kind") in {"all_pass", "single_risk_post", "selected_existing_audits"}:
             return projection, None, str(report["task_id"])
         try:
             account_repository = AccountActivityRepository.load(

@@ -2190,6 +2190,14 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     }));
   };
 
+  if (investigationId?.startsWith("historical-report-") && (
+    !historicalWorkspacesLoaded || !sessions.some((session) => session.id === investigationId)
+  )) {
+    return <main className="inv-workspace-root" role="status">
+      <p>{historicalWorkspacesLoaded ? "历史报告暂时无法加载，请刷新重试。" : "正在加载历史报告与会话……"}</p>
+    </main>;
+  }
+
   return (
     <div className="inv-workspace-root">
       {/* Column 1: Left Investigation Sidebar */}

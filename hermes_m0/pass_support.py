@@ -78,7 +78,7 @@ class SnapshotAccountData:
             if task in self._tasks:
                 raise ValueError("duplicate authorized task")
             self._tasks[task] = {"task_display_name": repo.report.title}
-            if repo.template_kind not in {"all_pass", "single_risk_post"}:
+            if repo.template_kind not in {"all_pass", "single_risk_post", "selected_existing_audits"}:
                 if (
                     legacy_corpus is None
                     or task not in legacy_corpus.authorized_task_ids
@@ -145,6 +145,11 @@ class SnapshotAccountData:
                         "risk_level": risk,
                         "parent_post_author_account_ref": author,
                         "comment": comment,
+                        "source_locator": {
+                            "task_id": task,
+                            "content_key": post["content_key"],
+                            **({"comment_id": key} if kind == "comment_author" else {}),
+                        },
                     }
                     item["occurrence_ref"] = (
                         "snapshot-activity:"
