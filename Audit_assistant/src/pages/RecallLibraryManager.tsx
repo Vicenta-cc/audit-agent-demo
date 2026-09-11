@@ -489,14 +489,16 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
               </div>
               <div className="recall-library-card-footer">
                 <span>更新时间：{library.updatedAt}</span>
-                <button type="button" className="recall-delete-button" aria-label={`删除${library.name}`} onClick={() => { setDeleteError(''); setDeleteTarget(library); }}><Trash2 size={14} />删除</button>
-                <button
-                  type="button"
-                  aria-label={`管理${library.name}`}
-                  onClick={() => openEditor(library)}
-                >
-                  管理
-                </button>
+                <div className="recall-library-card-actions">
+                  <button type="button" className="recall-delete-button" aria-label={`删除${library.name}`} onClick={() => { setDeleteError(''); setDeleteTarget(library); }}><Trash2 size={14} />删除</button>
+                  <button
+                    type="button"
+                    aria-label={`管理${library.name}`}
+                    onClick={() => openEditor(library)}
+                  >
+                    管理
+                  </button>
+                </div>
               </div>
             </article>
           ))}

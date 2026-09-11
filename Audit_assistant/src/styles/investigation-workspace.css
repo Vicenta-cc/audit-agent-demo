@@ -3905,6 +3905,12 @@
   font-size: 11.5px;
 }
 
+.recall-library-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .recall-library-card-footer button {
   padding: 2px 0;
   color: #2563eb;
