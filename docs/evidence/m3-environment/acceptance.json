@@ -1,0 +1,69 @@
+{
+  "turns": [
+    {
+      "id": "investigation-turn:0ad14014bbde433b9f39bda33f762df2",
+      "session_id": "investigation-session:5be79f3e8f484bb4bb260bb94683dcc0",
+      "status": "completed",
+      "started_at": "2026-09-11T03:57:43.710060+00:00",
+      "completed_at": "2026-09-11T03:58:18.369416+00:00",
+      "total_tokens": 30236,
+      "llm_call_count": 4,
+      "seconds": 34.659356,
+      "answer": "## 报告分析内容概况\n\n**分析规模**：报告共纳入 **201篇** 已完成审核的抖音内容，冻结了 **33条** 直接证据（direct Evidence），形成 **13条** 帖子级审核发现。\n\n**风险分布**：\n- 无风险（none）：188篇\n- 低风险（low）：6篇\n- 中风险（medium）：5篇\n- 高风险（high）：2篇\n- 审核决定为\"需复核\"（review）：13篇\n\n## 主要风险概括（报告归纳）\n\n报告归纳出 **5项主要调查发现**：\n\n1. **针对女性主播的年龄、外貌及婚史羞辱**（5篇帖子）\n   - 报告写道：评论区出现针对主播年龄（如\"老太婆\"）、外貌（如\"丑\"\"秃子\"）及婚育史（如\"嫁过几个男人\"\"没生孩子\"）的羞辱性言论，构成对具体人物的人格贬损。\n\n2. **针对特定人物的极度粗俗辱骂、性羞辱与非人化攻击**（2篇帖子）\n   - 报告写道：部分评论区出现包含明确性器官指涉、性行为描述及非人化比喻（如\"猪\"\"畜生\"）的极端粗俗言论。\n\n3. **基于民族、地域或语言身份的低风险引战与对立言论**（5篇帖子）\n   - 报告写道：涉及民族婚配、语言使用、地域出身等话题的引战式评论，存在煽动对立或身份歧视的风险。\n\n4. **针对性别气质与性取向的粗鄙辱骂**（1篇帖子）\n   - 报告写道：在相亲话题相关视频评论区，出现针对男性性别气质（如\"娘炮\"）和性取向的粗鄙辱骂。\n\n5. **针对具体人物的一般性人身攻击与侮辱**（2篇帖子）\n   - 报告写道：部分评论区出现针对具体人物的一般性侮辱性比喻或谩骂。\n\n## 可核对的证据\n\n**证据来源**：第1项调查发现\"针对女性主播的年龄、外貌及婚史羞辱\"的代表帖子（帖子作者：我好累心好累，平台：抖音）\n\n**证据类型**：评论证据\n\n**评论原文**：\n> \"嘿，别出来了，老太婆。看到你，我们都觉得丢脸。\"\n\n**归类依据**：以\"老太婆\"和\"丢脸\"攻击具体主播\n\n**帖子级审核发现**：中风险，审核决定为\"需复核\"，风险基础为\"评论区风险证据命中\"\n\n**整帖审核摘要**：视频为女子个人生活记录；评论区出现一条针对主播年龄和人格的羞辱性评论。\n\n---\n\n以上信息均来自当前调查报告的冻结资料，未作扩大推断。如需查看其他证据或深入某项调查发现，请告知。"
+    },
+    {
+      "id": "investigation-turn:7ac9d9fec8c542c1875bf6dbf20089b5",
+      "session_id": "investigation-session:7995f16d514449cca80976651eb352d5",
+      "status": "completed",
+      "started_at": "2026-09-11T04:00:23.970931+00:00",
+      "completed_at": "2026-09-11T04:00:57.358980+00:00",
+      "total_tokens": 28227,
+      "llm_call_count": 4,
+      "seconds": 33.388049,
+      "answer": "根据当前报告资料，民族与地域身份相关的风险**主要出现在评论区**，而非帖子正文。\n\n报告归纳的第二个主要调查发现写道：\"评论区出现将特定民族身份与负面特质（如不孕、贪婪）关联的刻板印象言论，以及针对特定地域外来者的排斥和攻击性言论，构成民族刻板印象、地域攻击及群体贬损。\"\n\n该发现关联的3篇成员帖中，用于支持本项发现的归类证据子集均为评论证据，且每篇帖子的整帖审核摘要都明确记录\"主帖内容合规\"或\"主帖无违规\"，风险均来自评论区单条或少量评论。3个其他独立风险事项同样记录为\"评论区存在单条低风险民族婚恋排斥言论\"等。\n\n---\n\n**一个已记录的例子**（代表帖）：\n\n- **作者**：麦热依姆古丽（抖音）\n- **整帖审核等级**：中风险，类别为\"地域攻击\"\n- **整帖审核摘要**：女子在和田介绍婚介登记和对象匹配服务，并说明女方免费、男方支付介绍费的规则。\n- **归类依据**：评论中以外来者身份贬损当事人\"污染/搞得乌烟瘴气\"，构成地域攻击\n- **评论原文**：\"你来和田干嘛？是来把这座城市搞得乌烟瘴气的吗？\"\n\n---\n\n**不能据此推断的内容**：\n\n1. **不能推断账号本人发表、认可、引导或认同这些评论**。评论区证据只能证明审核记录收录了相应评论，不能证明账号本人发表、认可、引导或认同这些言论。\n2. **不能推断帖子正文本身存在风险**。多篇帖子的整帖审核摘要都明确记录主帖内容合规，风险仅来自评论区。\n3. **不能推断存在\"持续性\"\"规模化\"或\"作者引导\"等行为模式**。当前材料仅记录单条评论被审核收录的事实，不得扩写为协同行为或引导行为判断。\n4. **不能推断账号本人的民族身份或身份归属**。显示名只用于展示，不能据此合并身份或猜测现实身份。"
+    }
+  ],
+  "initial_task_counts": {
+    "investigation_drafts": 0,
+    "investigation_runs": 0
+  },
+  "managed_restart_verification": {
+    "checked_at": "2026-09-11T04:12:56.884615+00:00",
+    "reports": [
+      {
+        "workspace_id": "historical-report-a",
+        "report_version_id": "report-version:8c355a5ba03f45619795813af83ac669",
+        "turn_id": "investigation-turn:0ad14014bbde433b9f39bda33f762df2",
+        "answer_sha256": "79eb08bdf2691fe73b3ddf637be456c7177c64e5c937bb7dd760ac9b96287064",
+        "conversation_messages": 2,
+        "unchanged": true
+      },
+      {
+        "workspace_id": "historical-report-b",
+        "report_version_id": "report-version:4e3ebeccd2ed4f0c9c9a750332d22585",
+        "turn_id": "investigation-turn:7ac9d9fec8c542c1875bf6dbf20089b5",
+        "answer_sha256": "b2e073f8716cbbf578ec035fa37d271b4f2678c547c8abd336aaadd1762940e2",
+        "conversation_messages": 2,
+        "unchanged": true
+      }
+    ],
+    "runtime_identity": {
+      "environment_id": "m3-resource-lifecycle-experiment",
+      "worktree": "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-m3-resource-lifecycle-experiment",
+      "data_dir": "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-m3-resource-lifecycle-experiment/outputs/m3-environment/data",
+      "api_port": 8178,
+      "frontend_port": 3178,
+      "build_hash": "bc8f2cba6d93d97eb6ff76d47a0db6646dac4abed5fc190f5b40c45f1f0846f9"
+    },
+    "worker": {
+      "environment_id": "m3-resource-lifecycle-experiment",
+      "pid": 28365,
+      "time": 1789099976.0568168
+    },
+    "browser_console_errors": [],
+    "screenshots": [
+      "report-a.jpg",
+      "report-b.jpg"
+    ]
+  }
+}
