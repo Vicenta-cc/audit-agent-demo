@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -23,6 +24,8 @@ def main():
     parser.add_argument('--output',default='qwen-resource-acceptance.json')
     parser.add_argument('--generation-only',action='store_true')
     parser.add_argument('--existing-task-only',action='store_true')
+    parser.add_argument('--flow-matrix',action='store_true')
+    parser.add_argument('--scenario',action='append',default=[])
     args=parser.parse_args()
     key=getpass.getpass('Experiment API key (hidden): ').replace('\\_','_').strip()
     evidence={'model':'qwen3.7-plus','runtime':'Hermes 0.20.4','thinking':True,'storage':'disposable','cases':[],'provider_calls':0,'usage':{'prompt_tokens':0,'completion_tokens':0,'total_tokens':0}}
@@ -66,23 +69,49 @@ def main():
         principal=Principal('principal-a');manager=stack['app_service'].resource_management
         configure_hermes_investigation_creation_tools(stack['tool_service'],principal_provider=conversation.principal_for_session)
         session=conversation.create_session(principal=principal,workspace_key='resource-qwen-acceptance')
-        def turn(label,message):
+        def start_session(label):
+            nonlocal session
+            session=conversation.create_session(principal=principal,workspace_key='resource-flow-'+label)
+            return session
+        def counts():
+            with stack['creation_store']._connect() as conn:
+                return {t:conn.execute('SELECT count(*) FROM '+t).fetchone()[0] for t in ('investigation_drafts','investigation_runs')}
+        def turn(label,message,*,run_delta=0):
+            before=counts()
+            started=time.perf_counter()
+            calls_before=evidence['provider_calls']
+            usage_before=dict(evidence['usage'])
+            tool_times=[]
+            original_execute=stack['tool_service'].execute
+            def measured_execute(*a,**kw):
+                tick=time.perf_counter()
+                try:
+                    return original_execute(*a,**kw)
+                finally:
+                    tool_times.append({'tool':a[0], 'seconds':round(time.perf_counter()-tick,4)})
             accepted,_=conversation.accept_message(session.id,client_message_id=label,content=message,principal=principal)
             log=io.StringIO()
-            with patch.object(stack['tool_service'],'execute',wraps=stack['tool_service'].execute) as dispatch,redirect_stdout(log),redirect_stderr(log):
+            with patch.object(stack['tool_service'],'execute',side_effect=measured_execute) as dispatch,redirect_stdout(log),redirect_stderr(log):
                 result=conversation.execute_turn(accepted.id)
             saved=conversation.store.get_turn(accepted.id)
             edits=manager.list_edits(session_id=session.id,principal=principal)['items']
-            with stack['creation_store']._connect() as conn:
-                counts={t:conn.execute('SELECT count(*) FROM '+t).fetchone()[0] for t in ('investigation_drafts','investigation_runs')}
-            record={'case':label,'input':message,'status':saved.status,'answer':result.answer,'tools':[c.args[0] for c in dispatch.call_args_list],'artifact':saved.public_artifact,'edits':edits,'counts':counts}
+            after=counts()
+            record={'case':label,'input':message,'status':saved.status,'answer':result.answer,'tools':[c.args[0] for c in dispatch.call_args_list],'artifact':saved.public_artifact,'edits':edits,'counts':after,'before_counts':before}
+            record['timing']={'wall_seconds':round(time.perf_counter()-started,3),'provider_calls':evidence['provider_calls']-calls_before,
+                              'usage':{k:evidence['usage'][k]-usage_before[k] for k in usage_before},'tools':tool_times}
             evidence['cases'].append(record);persist()
-            print(json.dumps({'case':label,'status':saved.status,'tools':record['tools'],'usage':evidence['usage'],'counts':counts},ensure_ascii=False),flush=True)
-            assert counts['investigation_runs']==0,'Unexpected task start'
+            print(json.dumps({'case':label,'status':saved.status,'tools':record['tools'],'usage':evidence['usage'],'counts':after},ensure_ascii=False),flush=True)
+            assert after['investigation_runs']==before['investigation_runs']+run_delta,'Unexpected number of task starts'
             assert saved.status=='completed','Conversation did not complete'
             return record
         try:
             with patch.object(Completions,'create',completion):
+                if args.flow_matrix:
+                    from resource_flow_matrix import run_matrix
+                    run_matrix(stack,manager,principal,start_session,turn,evidence,persist,args.scenario)
+                    if evidence['status'] != 'PASS':
+                        raise SystemExit(1)
+                    return
                 if args.existing_task_only:
                     current=turn('existing-natural-task','我想调查小红书上的赌博博彩推广风险，帮我准备抓取审核任务配置，先不要开始执行。')
                     assert current['counts']['investigation_drafts']==1
@@ -128,5 +157,7 @@ def main():
         finally:
             persist();next(fixture,None)
     print(json.dumps({'status':evidence['status'],'provider_calls':evidence['provider_calls'],'usage':evidence['usage']},ensure_ascii=False))
+    if evidence['status'] != 'PASS':
+        raise SystemExit(1)
 
 if __name__=='__main__':main()

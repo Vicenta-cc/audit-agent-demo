@@ -203,6 +203,44 @@ def test_save_then_edit_and_save_again_updates_same_resource(service):
 from test_investigation_creation_conversation import creation_stack
 
 
+def test_formal_read_distinguishes_edit_version_from_search_binding(service):
+    edit=service.create_lexicon(lexicon(), **CTX)
+    saved=save(service,edit)
+    before=service.read('lexicon',saved['resource_id'],principal=P)
+    assert before['content_hash'] != before['runtime_content_hash']
+    assert before['recall_plan']['enabled_main_terms'] == ['维吾尔族文化']
+    opened=service.open('lexicon',saved['resource_id'],**CTX)
+    changed=service.update(opened['edit_id'],1,[{'operation':'upsert_entry','target_id':'variant-1','values':{'term':'维吾尔文化'}}],**CTX)
+    save(service,changed,key='variant-only',mode='update')
+    after=service.read('lexicon',saved['resource_id'],principal=P)
+    assert after['version'] == before['version']+1
+    assert after['content_hash'] != before['content_hash']
+    assert after['recall_plan'] == before['recall_plan']
+
+
+def test_formal_read_plan_can_bind_a_presented_temporary_rule(creation_stack):
+    from test_investigation_creation_conversation import _run_scripted_creation_turn, _t1_temporary_arguments
+    from test_ruleset_proposal_approval import approve
+    stack=creation_stack;principal=Principal('principal-a')
+    body=json.loads((Path(__file__).parent/'fixtures/recruitment_fraud_ruleset.json').read_text())
+    shown=_run_scripted_creation_turn(stack,content='生成规则并展示，不保存',actions=[('create_ruleset_proposal',{'content':body})])
+    manager=stack['app_service'].resource_management
+    ctx=dict(session_id=shown['session_id'],principal=principal)
+    edit=manager.create_lexicon(lexicon(),**ctx)
+    saved=manager.save(edit['edit_id'],1,'new','read-plan',**ctx)
+    resource=manager.read('lexicon',saved['resource_id'],principal=principal)
+    args=_t1_temporary_arguments(stack)
+    args['configuration']['investigation']['recall_plan']=resource['recall_plan']
+    args['configuration'].pop('judgement',None)
+    args['configuration'].pop('schema_version',None)
+    result,_,_=approve(stack,shown,arguments={'create_draft':args})
+    assert result['status']=='ok',result
+    draft=result['data']['draft']
+    assert draft['configuration']['judgement']['strategy']=='temporary_ruleset'
+    assert draft['configuration']['investigation']['recall_plan']==resource['recall_plan']
+    assert stack['app_service'].get_confirmation_preview(draft['id'],principal=principal).can_confirm
+
+
 @pytest.mark.parametrize('formal_rule',[True,False])
 @pytest.mark.parametrize('formal_lexicon',[True,False])
 def test_four_resource_combinations_freeze_precise_configuration(creation_stack,formal_rule,formal_lexicon):

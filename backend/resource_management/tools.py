@@ -12,7 +12,7 @@ RESOURCE_TOOL_INPUTS = {
 }
 RESOURCE_MUTATIONS = frozenset({'create_lexicon_edit', 'open_resource_edit', 'update_resource_edit', 'save_resource'})
 RESOURCE_DESCRIPTIONS = {
-    'read_resource': '查询或读取后台正式规则 ruleset 或词库 lexicon。resource_id 为空时按 query 分页检索；指定真实 ID 时返回完整内容和版本。只读，不创建编辑副本、任务或保存。任务资源选择仍可用 query_investigation_options。',
+    'read_resource': '查询或读取后台正式规则 ruleset 或词库 lexicon。resource_id 为空时按 query 分页检索；指定真实 ID 时返回完整内容和版本。正式词库返回可直接用于 Draft 的 recall_plan；其中 runtime_content_hash 是实际搜索指纹，content_hash 是完整编辑内容指纹，两者不可混用。只读，不创建编辑副本、任务或保存。任务资源选择仍可用 query_investigation_options。',
     'create_lexicon_edit': '用户授权生成词库时，将完整词库持久化为当前会话编辑内容，不正式保存。content.entries 每项含稳定 id、term、kind(main/variant/tag)、parent_id、enabled。变体 parent_id 指向本词库的主词 id。仅启用 main 进入 search_terms；不自动生成变体或标签，只按需求生成。与临时规则一起生成时保持原有规则生成、展示、后续采用流程。',
     'open_resource_edit': '用户要求编辑已存在后台资源时，按真实 kind/resource_id 读取完整内容并建立当前会话副本，返回 edit_id、精确版本和来源。不会修改正式资源、采用资源或启动任务。系统规则仅可另存。规则副本仍为原 M3 Proposal，后续采用必须使用其已展示版本。',
     'get_resource_edit': '读取当前会话完整编辑内容、版本、来源、保存回执和实际 search_terms。规则 edit_id 就是已有 proposal_id。只读；不能把已保存旧版本误说成当前修改已保存。',
@@ -57,8 +57,16 @@ create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资�
 沿用原路径，不强制增加资源工具。新增词库也可以完全不正式保存，直接用于本次任务。
 编辑后台已有资源先 read_resource/open_resource_edit；只说修改时留在会话副本，明确要求
 修改并保存时可同轮完成，不机械多问。保存不是规则采用，更不是任务启动。
+“修改后先展示、不保存”也必须实际 open_resource_edit 并 update_resource_edit，然后展示工具
+返回的会话副本；不得仅描述修改方案，或把用户已经要求的副本修改再次推迟到确认之后。
+只有用户明确要求“讨论修改方案、不要执行修改”时，才仅说明方案。不保存指不写回正式库，
+不禁止建立与编辑会话副本。规则与词库都按此处理；修改现有规则应保留 open_resource_edit
+建立的来源关联，不另行生成一个无来源 Proposal 冒充修改完成。
 用户要任务使用资源时，保留原有 query/Proposal 展示采用/Draft 预览/明确启动流程。
 读取 get_resource_edit 返回的 recall_plan 可直接用于 Draft；不要加入变体或 tag。
+正式词库使用 read_resource 返回的 existing_lexicon recall_plan，或 query_investigation_options
+返回的实际搜索指纹；不得把完整内容 content_hash 填入 expected_runtime_content_hash。
+词库哈希或配置参数错误应修正词库配置，不修改、重新生成已被用户采用的规则来绕开失败。
 一次用户回合可以分别处理多个资源；每个保存有独立 operation_id 和真实回执。
 已确认 Draft 不可编辑；用户确认后要求修改时，读取原配置作为新 Draft 的参考，重新展示和确认，不修改原任务。
 若当前会话已进入执行或报告阶段，沿用现有“新建调查”入口在新会话准备新 Draft，不替换原会话的已启动任务。

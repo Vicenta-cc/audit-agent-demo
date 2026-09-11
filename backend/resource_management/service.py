@@ -63,11 +63,18 @@ class ResourceManagementService:
             body = {key: item[key] for key in RuleSetContent.model_fields}
             return {'id': resource_id, 'kind': kind, 'content': body, 'version': item['draft_revision'], 'published_revision_id': item['published_revision_id'], 'published_version': item['published_version'], 'editable': item['owner_id'] == principal.id, 'content_hash': content_hash(body)}
         with self.lexicons._connect() as conn:
+            conn.execute('BEGIN')
             body = lexicon_content(conn, resource_id)
             if body.get('deleted'):
                 raise ResourceError('词库不存在。', code='RESOURCE_NOT_FOUND')
             revision = conn.execute('SELECT version,content_hash FROM lexicon_content_versions WHERE category_id=? ORDER BY version DESC LIMIT 1', (resource_id,)).fetchone()
-            return {'id': resource_id, 'kind': kind, 'content': body, 'version': revision['version'], 'content_hash': revision['content_hash'], 'editable': True, 'search_terms': self.lexicons.enabled_main_terms(resource_id, connection=conn)}
+            terms = self.lexicons.enabled_main_terms(resource_id, connection=conn)
+            runtime_hash = self.lexicons.runtime_content_hash(resource_id, connection=conn)
+            return {'id': resource_id, 'kind': kind, 'content': body, 'version': revision['version'],
+                    'content_hash': revision['content_hash'], 'editable': True, 'search_terms': terms,
+                    'runtime_content_hash': runtime_hash,
+                    'recall_plan': {'strategy': 'existing_lexicon', 'lexicon_id': resource_id,
+                                    'expected_runtime_content_hash': runtime_hash, 'enabled_main_terms': terms}}
 
     def _origin(self, conn, edit_id, session_id, principal, kind, source):
         conn.execute('INSERT INTO resource_edit_origins VALUES (?,?,?,?,?,?)', (edit_id, session_id, principal.id, kind, canonical(source), now()))

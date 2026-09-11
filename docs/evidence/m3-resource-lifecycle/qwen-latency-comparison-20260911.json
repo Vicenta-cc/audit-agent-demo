@@ -1,0 +1,855 @@
+{
+  "baseline": "cad3eabd583543fac27a45f211122e2ca924ed2b",
+  "new_commit": "fcdd5bccf2c55fbe7f2a42c931fe22f7de0b47eb",
+  "new_has_uncommitted_changes": true,
+  "model": "qwen3.7-plus",
+  "thinking": true,
+  "pairs": 3,
+  "samples": [
+    {
+      "variant": "baseline",
+      "case": "existing_task",
+      "pair": 1,
+      "tool_schema_count": 10,
+      "provider": [
+        {
+          "prompt_tokens": 5788,
+          "completion_tokens": 190,
+          "total_tokens": 5978,
+          "cached_tokens": 0,
+          "first_delta_seconds": 1.036,
+          "seconds": 3.999
+        },
+        {
+          "prompt_tokens": 6488,
+          "completion_tokens": 63,
+          "total_tokens": 6551,
+          "cached_tokens": 5782,
+          "first_delta_seconds": 0.776,
+          "seconds": 1.657
+        },
+        {
+          "prompt_tokens": 7105,
+          "completion_tokens": 83,
+          "total_tokens": 7188,
+          "cached_tokens": 6482,
+          "first_delta_seconds": 0.87,
+          "seconds": 1.913
+        },
+        {
+          "prompt_tokens": 8431,
+          "completion_tokens": 189,
+          "total_tokens": 8620,
+          "cached_tokens": 7099,
+          "first_delta_seconds": 0.568,
+          "seconds": 3.097
+        },
+        {
+          "prompt_tokens": 9776,
+          "completion_tokens": 302,
+          "total_tokens": 10078,
+          "cached_tokens": 8425,
+          "first_delta_seconds": 0.69,
+          "seconds": 5.051
+        },
+        {
+          "prompt_tokens": 12589,
+          "completion_tokens": 601,
+          "total_tokens": 13190,
+          "cached_tokens": 9770,
+          "first_delta_seconds": 0.977,
+          "seconds": 8.673
+        },
+        {
+          "prompt_tokens": 13790,
+          "completion_tokens": 363,
+          "total_tokens": 14153,
+          "cached_tokens": 12583,
+          "first_delta_seconds": 1.159,
+          "seconds": 6.568
+        }
+      ],
+      "tools": [
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0201
+        },
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.02
+        },
+        {
+          "name": "create_investigation_draft",
+          "seconds": 0.0172
+        }
+      ],
+      "status": "PASS",
+      "wall_seconds": 32.161,
+      "answer": "调查草案已创建完成。以下是当前配置概览：\n\n---\n\n## 📋 调查草案配置\n\n**标题**：小红书赌博博彩推广风险调查\n\n**目标**：调查小红书平台上赌博博彩推广相关风险内容，识别引流、招揽、话术引导等违规行为\n\n**平台**：小红书（xhs）\n\n**调查模式**：搜索模式（search）\n\n---\n\n### 🔍 召回配置（搜索词）\n\n使用现成黑话库：**赌博黑话词库**（gambling）\n\n已启用搜索词（2 条）：\n- 上分\n- 盘口\n\n---\n\n### ⚖️ 判定规则\n\n使用已发布审核规则：**赌博博彩风险规则集 v2**（ruleset-revision:gambling:v2）\n- 包含 7 条启用规则\n- 覆盖赌博博彩领域风险识别\n\n---\n\n### 📌 状态\n\n- 草案 ID：`investigation-draft:3fdc0bce90794e76b887ff19d47f3046`\n- 当前状态：**DRAFT**（未确认）\n- 可以确认执行：**✅ 无阻塞项**\n\n---\n\n当前配置已就绪但**未开始执行**。你可以：\n\n1. **确认并启动调查**：告诉我\"确认执行\"即可开始抓取任务\n2. **调整搜索词**：如果觉得\"上分\"\"盘口\"覆盖不足，可以修改或补充搜索词\n3. **调整规则集**：如需更换或自定义审核规则，也可以告诉我\n\n需要调整什么吗？",
+      "drafts": 1,
+      "runs": 0
+    },
+    {
+      "variant": "new",
+      "case": "existing_task",
+      "pair": 1,
+      "tool_schema_count": 17,
+      "provider": [
+        {
+          "prompt_tokens": 7217,
+          "completion_tokens": 229,
+          "total_tokens": 7446,
+          "cached_tokens": 0,
+          "first_delta_seconds": 0.853,
+          "seconds": 4.053
+        },
+        {
+          "prompt_tokens": 7677,
+          "completion_tokens": 129,
+          "total_tokens": 7806,
+          "cached_tokens": 7211,
+          "first_delta_seconds": 0.504,
+          "seconds": 2.224
+        },
+        {
+          "prompt_tokens": 8294,
+          "completion_tokens": 105,
+          "total_tokens": 8399,
+          "cached_tokens": 7671,
+          "first_delta_seconds": 0.804,
+          "seconds": 2.326
+        },
+        {
+          "prompt_tokens": 9620,
+          "completion_tokens": 181,
+          "total_tokens": 9801,
+          "cached_tokens": 8288,
+          "first_delta_seconds": 0.937,
+          "seconds": 3.478
+        },
+        {
+          "prompt_tokens": 10950,
+          "completion_tokens": 273,
+          "total_tokens": 11223,
+          "cached_tokens": 9614,
+          "first_delta_seconds": 1.031,
+          "seconds": 4.601
+        },
+        {
+          "prompt_tokens": 13753,
+          "completion_tokens": 644,
+          "total_tokens": 14397,
+          "cached_tokens": 10944,
+          "first_delta_seconds": 1.07,
+          "seconds": 9.658
+        },
+        {
+          "prompt_tokens": 15044,
+          "completion_tokens": 670,
+          "total_tokens": 15714,
+          "cached_tokens": 13747,
+          "first_delta_seconds": 1.003,
+          "seconds": 10.46
+        }
+      ],
+      "tools": [
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0167
+        },
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0098
+        },
+        {
+          "name": "create_investigation_draft",
+          "seconds": 0.0132
+        }
+      ],
+      "status": "PASS",
+      "wall_seconds": 37.721,
+      "answer": "已为您准备好小红书赌博博彩推广风险调查的草案配置，尚未启动执行。以下是当前配置概览：\n\n## 调查草案配置\n\n| 配置项 | 内容 |\n|--------|------|\n| **草案标题** | 小红书赌博博彩推广风险调查 |\n| **调查目标** | 调查小红书平台上存在的赌博博彩推广内容，识别以隐蔽话术、引流方式推广线上赌博平台、博彩网站、赌球赌马等非法赌博服务的笔记与账号，评估其传播规模与风险等级 |\n| **目标平台** | 小红书 (xhs) |\n| **调查模式** | 搜索模式 (search) |\n\n### 审核规则（判定依据）\n- **规则集**：赌博博彩风险规则集 v2\n- **规则数**：7 条启用规则\n- **来源**：已发布正式规则\n\n### 召回配置（搜索词来源）\n- **黑话库**：赌博黑话词库\n- **启用主词**：`上分`、`盘口`（共 2 个搜索词）\n- **策略**：使用现成词库\n\n---\n\n**当前状态**：草案已创建，可随时编辑或确认启动。\n\n您可以：\n1. **修改搜索词** — 如果认为当前词库的 2 个主词不够覆盖，可以替换为临时搜索词\n2. **调整调查目标或标题**\n3. **确认并启动执行** — 准备好后告诉我\"确认启动\"即可\n\n需要调整哪些内容？",
+      "drafts": 1,
+      "runs": 0
+    },
+    {
+      "variant": "new",
+      "case": "existing_task",
+      "pair": 2,
+      "tool_schema_count": 17,
+      "provider": [
+        {
+          "prompt_tokens": 7215,
+          "completion_tokens": 254,
+          "total_tokens": 7469,
+          "cached_tokens": 0,
+          "first_delta_seconds": 0.709,
+          "seconds": 4.518
+        },
+        {
+          "prompt_tokens": 7967,
+          "completion_tokens": 65,
+          "total_tokens": 8032,
+          "cached_tokens": 7209,
+          "first_delta_seconds": 0.832,
+          "seconds": 1.63
+        },
+        {
+          "prompt_tokens": 8584,
+          "completion_tokens": 124,
+          "total_tokens": 8708,
+          "cached_tokens": 7961,
+          "first_delta_seconds": 0.756,
+          "seconds": 2.634
+        },
+        {
+          "prompt_tokens": 9918,
+          "completion_tokens": 334,
+          "total_tokens": 10252,
+          "cached_tokens": 8578,
+          "first_delta_seconds": 0.918,
+          "seconds": 5.774
+        },
+        {
+          "prompt_tokens": 11340,
+          "completion_tokens": 224,
+          "total_tokens": 11564,
+          "cached_tokens": 9912,
+          "first_delta_seconds": 0.92,
+          "seconds": 4.071
+        },
+        {
+          "prompt_tokens": 14143,
+          "completion_tokens": 622,
+          "total_tokens": 14765,
+          "cached_tokens": 11334,
+          "first_delta_seconds": 0.777,
+          "seconds": 8.678
+        },
+        {
+          "prompt_tokens": 15337,
+          "completion_tokens": 567,
+          "total_tokens": 15904,
+          "cached_tokens": 14137,
+          "first_delta_seconds": 1.081,
+          "seconds": 8.995
+        }
+      ],
+      "tools": [
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0119
+        },
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0214
+        },
+        {
+          "name": "create_investigation_draft",
+          "seconds": 0.0134
+        }
+      ],
+      "status": "PASS",
+      "wall_seconds": 37.232,
+      "answer": "调查草案已创建完成，以下是当前配置概览：\n\n---\n\n## 📋 调查草案配置\n\n| 配置项 | 内容 |\n|--------|------|\n| **草案 ID** | `investigation-draft:3ea4fa7379f24e55a5ccee5a336a0687` |\n| **标题** | 小红书赌博博彩推广风险调查 |\n| **目标** | 调查小红书平台上涉及赌博、博彩推广的违规内容，识别相关推广行为和引流信息 |\n| **状态** | DRAFT（草稿，未执行） |\n\n### 🔍 调查配置\n\n| 项目 | 值 |\n|------|-----|\n| **平台** | 小红书 (xhs) |\n| **调查模式** | search（搜索召回） |\n| **审核规则** | 赌博博彩风险规则集 v2（7 条规则） |\n| **黑话库** | 赌博黑话词库 |\n| **召回搜索词** | `上分`、`盘口`（2 个启用主词） |\n\n---\n\n### ⏸️ 当前状态\n\n任务目前处于**草稿状态**，尚未开始执行。你可以：\n\n1. **查看/修改** — 如需调整搜索词、更换黑话库或修改目标描述，随时告诉我\n2. **预览确认** — 准备好后说\"确认启动\"，我会生成最终预览供你检查\n3. **继续等待** — 保持当前配置不变，等你进一步指示\n\n需要调整什么吗？",
+      "drafts": 1,
+      "runs": 0
+    },
+    {
+      "variant": "baseline",
+      "case": "existing_task",
+      "pair": 2,
+      "tool_schema_count": 10,
+      "provider": [
+        {
+          "prompt_tokens": 5790,
+          "completion_tokens": 178,
+          "total_tokens": 5968,
+          "cached_tokens": 0,
+          "first_delta_seconds": 0.687,
+          "seconds": 3.345
+        },
+        {
+          "prompt_tokens": 5960,
+          "completion_tokens": 123,
+          "total_tokens": 6083,
+          "cached_tokens": 5784,
+          "first_delta_seconds": 0.805,
+          "seconds": 2.477
+        },
+        {
+          "prompt_tokens": 7277,
+          "completion_tokens": 241,
+          "total_tokens": 7518,
+          "cached_tokens": 5954,
+          "first_delta_seconds": 0.928,
+          "seconds": 4.3
+        },
+        {
+          "prompt_tokens": 7894,
+          "completion_tokens": 104,
+          "total_tokens": 7998,
+          "cached_tokens": 7271,
+          "first_delta_seconds": 2.177,
+          "seconds": 2.588
+        },
+        {
+          "prompt_tokens": 8339,
+          "completion_tokens": 210,
+          "total_tokens": 8549,
+          "cached_tokens": 7888,
+          "first_delta_seconds": 0.901,
+          "seconds": 3.75
+        },
+        {
+          "prompt_tokens": 11142,
+          "completion_tokens": 557,
+          "total_tokens": 11699,
+          "cached_tokens": 8333,
+          "first_delta_seconds": 1.201,
+          "seconds": 8.26
+        },
+        {
+          "prompt_tokens": 12438,
+          "completion_tokens": 785,
+          "total_tokens": 13223,
+          "cached_tokens": 11136,
+          "first_delta_seconds": 1.061,
+          "seconds": 12.007
+        }
+      ],
+      "tools": [
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0001
+        },
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0191
+        },
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0067
+        },
+        {
+          "name": "create_investigation_draft",
+          "seconds": 0.0178
+        }
+      ],
+      "status": "PASS",
+      "wall_seconds": 37.749,
+      "answer": "调查草稿已创建，配置如下：\n\n**草稿 ID**：`investigation-draft:a353f87825974a598d3b60258e66c398`（当前版本 1，状态 DRAFT）\n\n**目标**：在小红书平台搜索并识别赌博博彩推广相关内容，包括盘口引流、上分服务、赌球赌马、彩票预测、棋牌游戏推广等黑话变体，评估其违规风险等级与传播形态。\n\n**平台**：小红书（xhs）\n\n**模式**：搜索模式（search）\n\n**召回配置**：\n- 使用现成黑话库「赌博黑话词库」（id: gambling）\n- 启用主词：`上分`、`盘口`\n- 运行时内容哈希已锁定\n\n**判定配置**：\n- 使用已发布审核规则「赌博博彩风险规则集」v2（ruleset-revision:gambling:v2）\n- 包含 7 条启用规则，覆盖赌博博彩领域\n\n**当前状态**：草稿已保存，**未开始执行**。你可以随时查看、编辑草稿内容（如调整目标、更换词库或规则集），确认无误后再启动调查任务。\n\n如需修改配置或确认执行，告诉我即可。",
+      "drafts": 1,
+      "runs": 0
+    },
+    {
+      "variant": "baseline",
+      "case": "existing_task",
+      "pair": 3,
+      "tool_schema_count": 10,
+      "provider": [
+        {
+          "prompt_tokens": 5790,
+          "completion_tokens": 132,
+          "total_tokens": 5922,
+          "cached_tokens": 0,
+          "first_delta_seconds": 1.172,
+          "seconds": 3.159
+        },
+        {
+          "prompt_tokens": 6556,
+          "completion_tokens": 124,
+          "total_tokens": 6680,
+          "cached_tokens": 5784,
+          "first_delta_seconds": 0.78,
+          "seconds": 2.478
+        },
+        {
+          "prompt_tokens": 7173,
+          "completion_tokens": 115,
+          "total_tokens": 7288,
+          "cached_tokens": 6550,
+          "first_delta_seconds": 0.835,
+          "seconds": 2.226
+        },
+        {
+          "prompt_tokens": 8517,
+          "completion_tokens": 338,
+          "total_tokens": 8855,
+          "cached_tokens": 7167,
+          "first_delta_seconds": 1.005,
+          "seconds": 5.565
+        },
+        {
+          "prompt_tokens": 8966,
+          "completion_tokens": 372,
+          "total_tokens": 9338,
+          "cached_tokens": 8511,
+          "first_delta_seconds": 1.297,
+          "seconds": 6.826
+        }
+      ],
+      "tools": [
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0185
+        },
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0056
+        }
+      ],
+      "status": "INCOMPLETE",
+      "wall_seconds": 21.195,
+      "answer": "已为你准备好小红书赌博博彩推广风险调查的配置草案，资源匹配如下：\n\n**平台**：小红书（xhs）  \n**模式**：搜索模式（search）  \n**审核规则**：《赌博博彩风险规则集》v2（已发布版本，包含 7 条规则）  \n**黑话库**：赌博黑话词库（启用主词条：上分、盘口）\n\n**任务目标**：调查小红书平台上以隐语、变体或引流方式推广赌博博彩的风险内容，包括盘口、上分、代理招募、教学等形态。\n\n当前仅为草案配置，尚未开始执行。你可以：\n- 修改任务标题或目标描述\n- 调整搜索词条（例如增加临时搜索词）\n- 确认后进入执行流程\n\n需要我调整哪些配置，还是直接以当前配置创建草案？",
+      "drafts": 0,
+      "runs": 0,
+      "failure_type": "AssertionError",
+      "failure": ""
+    },
+    {
+      "variant": "new",
+      "case": "existing_task",
+      "pair": 3,
+      "tool_schema_count": 17,
+      "provider": [
+        {
+          "prompt_tokens": 7212,
+          "completion_tokens": 186,
+          "total_tokens": 7398,
+          "cached_tokens": 0,
+          "first_delta_seconds": 0.97,
+          "seconds": 3.92
+        },
+        {
+          "prompt_tokens": 7951,
+          "completion_tokens": 78,
+          "total_tokens": 8029,
+          "cached_tokens": 7206,
+          "first_delta_seconds": 0.546,
+          "seconds": 1.687
+        },
+        {
+          "prompt_tokens": 9268,
+          "completion_tokens": 284,
+          "total_tokens": 9552,
+          "cached_tokens": 7945,
+          "first_delta_seconds": 1.021,
+          "seconds": 4.95
+        },
+        {
+          "prompt_tokens": 10604,
+          "completion_tokens": 537,
+          "total_tokens": 11141,
+          "cached_tokens": 9262,
+          "first_delta_seconds": 0.715,
+          "seconds": 8.084
+        },
+        {
+          "prompt_tokens": 11314,
+          "completion_tokens": 428,
+          "total_tokens": 11742,
+          "cached_tokens": 10598,
+          "first_delta_seconds": 0.974,
+          "seconds": 6.074
+        },
+        {
+          "prompt_tokens": 11985,
+          "completion_tokens": 429,
+          "total_tokens": 12414,
+          "cached_tokens": 11308,
+          "first_delta_seconds": 0.803,
+          "seconds": 6.376
+        },
+        {
+          "prompt_tokens": 14788,
+          "completion_tokens": 587,
+          "total_tokens": 15375,
+          "cached_tokens": 11979,
+          "first_delta_seconds": 0.848,
+          "seconds": 7.76
+        },
+        {
+          "prompt_tokens": 15968,
+          "completion_tokens": 225,
+          "total_tokens": 16193,
+          "cached_tokens": 14782,
+          "first_delta_seconds": 1.022,
+          "seconds": 4.357
+        }
+      ],
+      "tools": [
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0099
+        },
+        {
+          "name": "query_investigation_options",
+          "seconds": 0.0186
+        },
+        {
+          "name": "create_investigation_draft",
+          "seconds": 0.0183
+        }
+      ],
+      "status": "PASS",
+      "wall_seconds": 44.107,
+      "answer": "调查任务草案已创建完成，以下是配置概览：\n\n---\n\n**任务名称：** 小红书赌博博彩推广风险调查\n\n**任务目标：** 调查小红书平台上的赌博博彩推广风险，识别相关违规内容与引流行为\n\n**平台：** 小红书 (xhs)\n\n**调查模式：** 搜索模式（search）\n\n**审核规则（判定依据）：**\n- 赌博博彩风险规则集 v2（共 7 条启用规则）\n\n**黑话库（召回配置）：**\n- 赌博黑话词库，启用主词 2 个：**上分、盘口**\n\n**实际搜索词：** 上分、盘口\n\n---\n\n当前状态为 **草案（DRAFT）**，尚未开始执行。你可以：\n1. **修改配置** — 比如调整搜索词、更换审核规则版本等\n2. **预览确认后启动** — 确认无误后我再帮你提交执行\n\n需要调整什么，还是直接确认启动？",
+      "drafts": 1,
+      "runs": 0
+    },
+    {
+      "variant": "baseline",
+      "case": "generate_rule",
+      "pair": 1,
+      "tool_schema_count": 10,
+      "provider": [
+        {
+          "prompt_tokens": 5800,
+          "completion_tokens": 3269,
+          "total_tokens": 9069,
+          "cached_tokens": 0,
+          "first_delta_seconds": 0.933,
+          "seconds": 47.677
+        }
+      ],
+      "tools": [],
+      "status": "INCOMPLETE",
+      "wall_seconds": 48.514,
+      "answer": "以下是为\"招聘押金诈骗推广\"场景生成的3条临时审核规则，仅用于本次展示，未保存到系统，也未创建任何调查任务。\n\n---\n\n## 审核规则提案（临时展示）\n\n**审核目标**：识别以招聘为名收取押金、培训费等费用的诈骗推广行为，同时保护正常招聘和揭露诈骗的讨论。\n\n---\n\n### 规则 1：招聘收费诈骗\n\n- **规则 ID**：rule_001\n- **应用阶段**：image_evidence、video_frame_evidence、comment_audit、fusion_audit\n- **命中条件**：招聘内容中明确要求求职者缴纳押金、保证金、培训费、服装费、体检费、建档费等任何费用，或以\"先交费后入职\"为前提条件。\n- **风险等级**：high\n- **规则豁免**：\n  - 正常招聘流程中不收取任何费用\n  - 揭露招聘收费诈骗的讨论、曝光、提醒\n\n---\n\n### 规则 2：以招聘为名推广付费培训\n\n- **规则 ID**：rule_002\n- **应用阶段**：image_evidence、video_frame_evidence、comment_audit、fusion_audit\n- **命中条件**：以招聘为名义，实际推广付费培训课程、考证服务、技能培训班、学历提升等收费项目。\n- **风险等级**：medium\n- **规则豁免**：\n  - 正常招聘不收费\n  - 揭露招聘培训诈骗的讨论\n\n---\n\n### 规则 3：虚假招聘推销产品或服务\n\n- **规则 ID**：rule_003\n- **应用阶段**：image_evidence、video_frame_evidence、comment_audit、fusion_audit\n- **命中条件**：以招聘为名义，实际推销产品、代理服务、加盟项目、投资理财等。\n- **风险等级**：medium\n- **规则豁免**：\n  - 正常招聘不收费\n  - 揭露虚假招聘的讨论\n\n---\n\n### 通用豁免（适用于所有规则）\n\n- 正常招聘流程中不收取任何费用\n- 揭露招聘诈骗的讨论、曝光、提醒他人\n- 新闻报道、学术研究、政策讨论中对招聘诈骗的引用和分析\n\n---\n\n**说明**：\n- 规则1（收费诈骗）设为 high，因为直接要求交钱是诈骗的核心特征，风险最高。\n- 规则2和规则3设为 medium，因为它们以招聘为幌子推广其他收费项目，风险次之。\n- 所有规则均包含4个应用阶段，因为招聘收费要求可能出现在图片（招聘海报）、视频（招聘宣传）、评论（求职者曝光）中，需要跨模态综合判断。\n- 豁免条件明确保护正常招聘和揭露诈骗的讨论，避免误伤。\n\n如需调整规则内容、风险等级或豁免条件，请告知。如需将此提案保存为临时审核规则提案以供后续采用，也请告知。",
+      "drafts": 0,
+      "runs": 0,
+      "failure_type": "KeyError",
+      "failure": "'proposal_presentations'"
+    },
+    {
+      "variant": "new",
+      "case": "generate_rule",
+      "pair": 1,
+      "tool_schema_count": 17,
+      "provider": [
+        {
+          "prompt_tokens": 7228,
+          "completion_tokens": 2449,
+          "total_tokens": 9677,
+          "cached_tokens": 0,
+          "first_delta_seconds": 1.302,
+          "seconds": 37.754
+        },
+        {
+          "prompt_tokens": 8826,
+          "completion_tokens": 1938,
+          "total_tokens": 10764,
+          "cached_tokens": 7222,
+          "first_delta_seconds": 1.246,
+          "seconds": 31.175
+        },
+        {
+          "prompt_tokens": 11183,
+          "completion_tokens": 1053,
+          "total_tokens": 12236,
+          "cached_tokens": 8820,
+          "first_delta_seconds": 1.187,
+          "seconds": 14.232
+        }
+      ],
+      "tools": [
+        {
+          "name": "create_ruleset_proposal",
+          "seconds": 0.002
+        }
+      ],
+      "status": "PASS",
+      "wall_seconds": 83.898,
+      "answer": "已为您生成**招聘押金诈骗推广审核规则**（3条），完整展示如下：\n\n---\n\n## 规则概览\n\n**规则名称**：招聘押金诈骗推广审核规则  \n**适用领域**：招聘押金诈骗推广  \n**审核目标**：识别以招聘为名要求求职者入职前缴纳押金、保证金、培训费、服装费等各类费用的诈骗推广内容，保护正常招聘信息发布和揭露招聘诈骗的讨论不被误伤。\n\n---\n\n## 规则详情\n\n### 规则1：入职前直接收费要求\n\n**命中条件**：  \n内容明确要求求职者在签订劳动合同或正式上岗前缴纳任何费用，包括但不限于押金、保证金、培训费、服装费、工牌费、设备费、材料费，无论是否承诺入职后退还或从工资中扣除。\n\n**风险等级**：medium  \n**适用阶段**：图片证据、视频帧证据、评论审核、融合审核\n\n**裁决说明**：  \n关键判断点是是否在入职前设置了缴费门槛。即使承诺\"入职后返还\"或\"从首月工资扣除\"，只要实际要求先付款即命中。正常招聘中由用人单位承担的培训、体检等费用不在此列，需区分费用承担方向。\n\n**专属豁免**：  \n- 用人单位承担的费用：内容明确说明培训费、体检费、服装费等由用人单位承担或报销，求职者无需自掏腰包或先行垫付。\n\n---\n\n### 规则2：保证金/押金话术引导\n\n**命中条件**：  \n内容使用保证金、押金、诚信金、岗位锁定金等话术要求求职者付款，常见表述包括\"缴纳保证金锁定名额\"、\"交押金优先安排\"、\"诚信金确保到岗\"等，以各种名目将费用与岗位机会绑定。\n\n**风险等级**：medium  \n**适用阶段**：图片证据、视频帧证据、评论审核、融合审核\n\n**裁决说明**：  \n重点关注以\"锁定名额\"、\"优先安排\"、\"确保到岗\"等话术将缴费与就业机会绑定的模式。无论金额大小、名目如何包装（保证金、诚信金、岗位预留金等），只要实质是以缴费换取面试或入职机会即命中。\n\n**专属豁免**：  \n- 政府公益培训项目：内容明确标注为政府人社部门主办的免费职业技能培训项目，且注明不收取任何费用或费用由财政补贴。\n\n---\n\n### 规则3：虚假招聘引流至收费\n\n**命中条件**：  \n内容以招聘为幌子但缺乏真实岗位信息（无具体岗位职责、薪资范围、工作地点等），核心目的是引导求职者进入缴费流程，表现为：大量强调\"高薪轻松\"但无实质工作内容、引导添加私人联系方式后要求缴费、或将求职者引流至第三方付费平台。\n\n**风险等级**：high  \n**适用阶段**：图片证据、视频帧证据、评论审核、融合审核\n\n**裁决说明**：  \n此类诈骗的核心特征是\"招聘是壳、收费是核\"。判断要点：(1)岗位信息模糊或过于笼统；(2)薪资承诺异常优厚与岗位不匹配；(3)引导路径指向缴费而非面试流程。与正常招聘的区别在于是否提供可验证的真实岗位信息。\n\n**专属豁免**：无\n\n---\n\n## 通用豁免条款\n\n以下情况即使涉及费用讨论也不视为招聘押金诈骗：\n\n1. **正常招聘信息**：内容包含具体岗位职责、薪资范围、工作地点、任职要求等真实招聘信息，且全文未要求求职者在签订劳动合同或正式入职前缴纳任何费用（包括押金、保证金、培训费、服装费、体检指定医院费等）。\n\n2. **揭露招聘诈骗的讨论**：内容属于新闻报道、学术研究、政府政策宣传、用户曝光经历或批判性评论，其主要目的是揭露招聘押金诈骗行为、提醒求职者防范或讨论劳动权益保护，而非实施或推广收费行为。\n\n3. **官方劳动权益指导**：内容来自人力资源和社会保障部门、工会、法律援助机构等官方或公益组织，旨在普及劳动法知识或告知求职者合法维权途径。\n\n---\n\n**规则提案ID**：`ruleset-proposal:db7389b9c54842779680b7097a4cdb6b`\n\n这套规则已生成但未保存，未创建任何调查任务。如需修改或后续采用，请告诉我。\n\n临时审核规则 · 完整规则快照\n名称：招聘押金诈骗推广审核规则\n领域：招聘押金诈骗推广\n版本：1\n方案标识：ruleset-proposal:db7389b9c54842779680b7097a4cdb6b\n内容指纹：2b6d077e42a427787f7e1cd671668efa06f06a87a47323c16b281b8eceaa38bf\n研判目标：识别以招聘为名要求求职者入职前缴纳押金、保证金、培训费、服装费等各类费用的诈骗推广内容，保护正常招聘信息发布和揭露招聘诈骗的讨论不被误伤。\n分类数：1；规则数：3\n通用豁免：\n- 正常招聘信息（normal_recruitment）\n  条件：内容包含具体岗位职责、薪资范围、工作地点、任职要求等真实招聘信息，且全文未要求求职者在签订劳动合同或正式入职前缴纳任何费用（包括押金、保证金、培训费、服装费、体检指定医院费等）\n- 揭露招聘诈骗的讨论（fraud_exposure_discussion）\n  条件：内容属于新闻报道、学术研究、政府政策宣传、用户曝光经历或批判性评论，其主要目的是揭露招聘押金诈骗行为、提醒求职者防范或讨论劳动权益保护，而非实施或推广收费行为\n- 官方劳动权益指导（official_labor_guidance）\n  条件：内容来自人力资源和社会保障部门、工会、法律援助机构等官方或公益组织，旨在普及劳动法知识或告知求职者合法维权途径\n\n分类：招聘押金诈骗推广（recruitment_deposit_fraud，排序 1）\n说明：以招聘为名要求求职者入职前缴纳各类费用的诈骗推广行为\n\n规则 1：入职前直接收费要求（pre_employment_payment_demand）\n启用：是；排序：1\n命中条件：内容明确要求求职者在签订劳动合同或正式上岗前缴纳任何费用，包括但不限于押金、保证金、培训费、服装费、工牌费、设备费、材料费，无论是否承诺入职后退还或从工资中扣除\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：关键判断点是是否在入职前设置了缴费门槛。即使承诺'入职后返还'或'从首月工资扣除'，只要实际要求先付款即命中。正常招聘中由用人单位承担的培训、体检等费用不在此列，需区分费用承担方向。\n规则豁免：\n- 用人单位承担的费用（employer_borne_costs）\n  条件：内容明确说明培训费、体检费、服装费等由用人单位承担或报销，求职者无需自掏腰包或先行垫付\n\n规则 2：保证金/押金话术引导（deposit_guarantee_rhetoric）\n启用：是；排序：2\n命中条件：内容使用保证金、押金、诚信金、岗位锁定金等话术要求求职者付款，常见表述包括'缴纳保证金锁定名额'、'交押金优先安排'、'诚信金确保到岗'等，以各种名目将费用与岗位机会绑定\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：重点关注以'锁定名额'、'优先安排'、'确保到岗'等话术将缴费与就业机会绑定的模式。无论金额大小、名目如何包装（保证金、诚信金、岗位预留金等），只要实质是以缴费换取面试或入职机会即命中。\n规则豁免：\n- 政府公益培训项目（legitimate_government_program）\n  条件：内容明确标注为政府人社部门主办的免费职业技能培训项目，且注明不收取任何费用或费用由财政补贴\n\n规则 3：虚假招聘引流至收费（fake_recruitment_payment_funnel）\n启用：是；排序：3\n命中条件：内容以招聘为幌子但缺乏真实岗位信息（无具体岗位职责、薪资范围、工作地点等），核心目的是引导求职者进入缴费流程，表现为：大量强调'高薪轻松'但无实质工作内容、引导添加私人联系方式后要求缴费、或将求职者引流至第三方付费平台\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：此类诈骗的核心特征是'招聘是壳、收费是核'。判断要点：(1)岗位信息模糊或过于笼统；(2)薪资承诺异常优厚与岗位不匹配；(3)引导路径指向缴费而非面试流程。与正常招聘的区别在于是否提供可验证的真实岗位信息。\n规则豁免：无",
+      "drafts": 0,
+      "runs": 0
+    },
+    {
+      "variant": "new",
+      "case": "generate_rule",
+      "pair": 2,
+      "tool_schema_count": 17,
+      "provider": [
+        {
+          "prompt_tokens": 7225,
+          "completion_tokens": 496,
+          "total_tokens": 7721,
+          "cached_tokens": 0,
+          "first_delta_seconds": 0.879,
+          "seconds": 9.605
+        },
+        {
+          "prompt_tokens": 8803,
+          "completion_tokens": 1605,
+          "total_tokens": 10408,
+          "cached_tokens": 7219,
+          "first_delta_seconds": 0.949,
+          "seconds": 28.183
+        },
+        {
+          "prompt_tokens": 9946,
+          "completion_tokens": 1047,
+          "total_tokens": 10993,
+          "cached_tokens": 8797,
+          "first_delta_seconds": 0.762,
+          "seconds": 13.563
+        },
+        {
+          "prompt_tokens": 12177,
+          "completion_tokens": 866,
+          "total_tokens": 13043,
+          "cached_tokens": 9940,
+          "first_delta_seconds": 0.874,
+          "seconds": 12.823
+        }
+      ],
+      "tools": [
+        {
+          "name": "create_ruleset_proposal",
+          "seconds": 0.0012
+        }
+      ],
+      "status": "PASS",
+      "wall_seconds": 64.926,
+      "answer": "已生成临时审核规则草案，完整展示如下（未保存、未绑定任何任务）：\n\n---\n\n## 审核规则：招聘押金诈骗推广审核规则（临时草案）\n\n**领域**：招聘诈骗-押金收费类\n\n**审核目标**：识别以招聘为名要求求职者缴纳押金、培训费、服装费等费用的诈骗推广行为，同时保护正常合法招聘流程与揭露诈骗的讨论内容不被误伤。\n\n---\n\n### 通用豁免（general_exemptions）\n\n| 豁免名 | 条件 |\n|---|---|\n| 揭露诈骗与防骗科普 | 内容的主要目的是揭露招聘诈骗套路、进行防骗科普教育、新闻报道、学术研究或受害者维权曝光，即使其中引用了诈骗话术原文作为证据展示，也不视为风险。 |\n\n---\n\n### 分类：招聘押金诈骗推广\n\n#### 规则 1 · 入职前收费要求（high）\n\n- **命中条件**：招聘内容中明确要求求职者在入职前向招聘方或其指定方缴纳押金、保证金、服装费、工牌费、建档费、设备押金、住宿押金等任何名目的费用，无论是否承诺入职后退还。\n- **适用阶段**：image_evidence · video_frame_evidence · comment_audit · fusion_audit\n- **规则豁免**：招聘内容仅要求求职者自行前往正规公立医院进行入职体检，费用由求职者直接支付给医院而非招聘方，且未指定具体非医疗机构。\n- **判定要点**：核心特征是\"先交钱后入职\"，费用名目不限，承诺退还也不改变风险性质。正规企业合法招聘不得向求职者收取押金（《劳动合同法》第九条）。\n\n#### 规则 2 · 以招聘名义推广培训贷或付费课程（high）\n\n- **命中条件**：以招聘岗位为诱饵，在招聘流程中引导求职者参加付费培训、办理培训贷款、购买课程或证书，或将录用条件与完成付费培训绑定，实质为培训机构或贷款平台获客推广。\n- **适用阶段**：image_evidence · video_frame_evidence · comment_audit · fusion_audit\n- **规则豁免**：培训内容面向已正式入职的员工，培训费用由企业承担或从员工在职期间工资中分期扣除（非入职前一次性缴纳），且不涉及第三方培训贷款。\n- **判定要点**：典型套路为\"高薪吸引 → 面试称能力不足 → 推荐岗前培训 → 引导办理分期贷款\"。判断要点是录用与付费培训是否绑定、培训费是否由求职者承担、是否涉及贷款分期。\n\n#### 规则 3 · 招聘过程中引导私域转账或非平台付费（medium）\n\n- **命中条件**：招聘过程中引导求职者通过微信/支付宝个人账户转账、扫个人收款码付款、点击跳转至非招聘平台的第三方付费链接，或以\"名额预留费\"\"面试加急费\"等名义要求私下转账。\n- **适用阶段**：image_evidence · video_frame_evidence · comment_audit · fusion_audit\n- **规则豁免**：费用通过招聘方企业实名认证的对公账户收取，且该收费项目有明确法律法规依据（如特定行业资格证考试报名费由官方机构收取）。\n- **判定要点**：核心特征是脱离正规招聘平台的支付链路，将资金引向个人账户或不明第三方。即使金额较小，只要存在私域转账引导即命中。\n\n---\n\n以上为本次生成的临时审核规则草案，仅存在于当前会话，未正式保存。如后续希望采用这套规则用于某项调查任务，可直接告诉我目标平台与调查意图，我再继续推进。\n\n临时审核规则 · 完整规则快照\n名称：招聘押金诈骗推广审核规则（临时草案）\n领域：招聘诈骗-押金收费类\n版本：1\n方案标识：ruleset-proposal:826ee9db4e4844fab723289a47be652c\n内容指纹：e1f4f882f97ce35651819f6fcb1f053e1d94c66698a2b886fed7e1b3f98ae39d\n研判目标：识别以招聘为名要求求职者缴纳押金、培训费、服装费等费用的诈骗推广行为，同时保护正常合法招聘流程与揭露诈骗的讨论内容不被误伤。\n分类数：1；规则数：3\n通用豁免：\n- 揭露诈骗与防骗科普（fraud_exposure_and_education）\n  条件：内容的主要目的是揭露招聘诈骗套路、进行防骗科普教育、新闻报道、学术研究或受害者维权曝光，即使其中引用了诈骗话术原文作为证据展示，也不视为风险。\n\n分类：招聘押金诈骗推广（recruitment_deposit_fraud，排序 1）\n说明：以招聘为名要求求职者提前缴费或引导至付费陷阱的推广行为\n\n规则 1：入职前收费要求（pre_employment_fee_demand）\n启用：是；排序：1\n命中条件：招聘内容中明确要求求职者在入职前向招聘方或其指定方缴纳押金、保证金、服装费、工牌费、建档费、设备押金、住宿押金等任何名目的费用，无论是否承诺入职后退还。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：核心特征是\"先交钱后入职\"，费用名目不限，承诺退还也不改变风险性质。正规企业合法招聘不得向求职者收取押金（《劳动合同法》第九条）。注意区分：由求职者自行前往公立医院体检产生的体检费属于rule_exemption范围。\n规则豁免：\n- 自行前往公立医院体检（self_paid_medical_check）\n  条件：招聘内容仅要求求职者自行前往正规公立医院进行入职体检，费用由求职者直接支付给医院而非招聘方，且未指定具体非医疗机构。\n\n规则 2：以招聘名义推广培训贷或付费课程（recruitment_disguised_training_sales）\n启用：是；排序：2\n命中条件：以招聘岗位为诱饵，在招聘流程中引导求职者参加付费培训、办理培训贷款、购买课程或证书，或将录用条件与完成付费培训绑定，实质为培训机构或贷款平台获客推广。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：典型套路：先以高薪岗位吸引→面试时告知能力不足→推荐\"岗前培训\"→引导办理分期贷款。判断要点是录用与付费培训是否绑定、培训费是否由求职者承担、是否涉及贷款分期。企业为在职员工提供的带薪内部培训不在此列。\n规则豁免：\n- 企业付费的在职培训（employer_paid_training）\n  条件：培训内容面向已正式入职的员工，培训费用由企业承担或从员工在职期间工资中分期扣除（非入职前一次性缴纳），且不涉及第三方培训贷款。\n\n规则 3：招聘过程中引导私域转账或非平台付费（recruitment_to_private_payment_redirect）\n启用：是；排序：3\n命中条件：招聘过程中引导求职者通过微信/支付宝个人账户转账、扫个人收款码付款、点击跳转至非招聘平台的第三方付费链接，或以\"名额预留费\"\"面试加急费\"等名义要求私下转账。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：核心特征是脱离正规招聘平台的支付链路，将资金引向个人账户或不明第三方。即使金额较小（如几十元\"报名费\"），只要存在私域转账引导即命中。注意：正规企业通过官方对公账户收取的合法费用不在此列，但需结合其他证据判断对公账户真实性。\n规则豁免：\n- 企业对公账户合法收费（official_corporate_payment）\n  条件：费用通过招聘方企业实名认证的对公账户收取，且该收费项目有明确法律法规依据（如特定行业资格证考试报名费由官方机构收取）。",
+      "drafts": 0,
+      "runs": 0
+    },
+    {
+      "variant": "baseline",
+      "case": "generate_rule",
+      "pair": 2,
+      "tool_schema_count": 10,
+      "provider": [
+        {
+          "prompt_tokens": 5796,
+          "completion_tokens": 334,
+          "total_tokens": 6130,
+          "cached_tokens": 0,
+          "first_delta_seconds": 1.221,
+          "seconds": 6.347
+        },
+        {
+          "prompt_tokens": 7374,
+          "completion_tokens": 1490,
+          "total_tokens": 8864,
+          "cached_tokens": 5790,
+          "first_delta_seconds": 1.167,
+          "seconds": 26.906
+        },
+        {
+          "prompt_tokens": 9541,
+          "completion_tokens": 950,
+          "total_tokens": 10491,
+          "cached_tokens": 7368,
+          "first_delta_seconds": 0.873,
+          "seconds": 12.357
+        }
+      ],
+      "tools": [
+        {
+          "name": "create_ruleset_proposal",
+          "seconds": 0.0023
+        }
+      ],
+      "status": "PASS",
+      "wall_seconds": 46.542,
+      "answer": "已生成临时审核规则提案，完整展示如下：\n\n---\n\n## 招聘押金诈骗推广识别\n\n**领域**：recruitment_deposit_fraud\n\n**审计目标**：识别以招聘为名推广收取押金、保证金、培训费等诈骗行为，同时保护正常招聘讨论、求职经验分享、揭露诈骗的批判性内容，避免误伤合法用工信息发布与反诈科普。\n\n### 通用豁免\n\n- **反诈讨论与新闻学术引用**：内容以揭露招聘诈骗、求职避坑、新闻报道、学术研究或政策科普为主要目的，明确提示风险或引用案例进行批判性分析，而非实际推广收费行为。\n- **不涉及收费的正常招聘**：招聘信息仅描述岗位职责、任职要求、薪资福利与应聘流程，未要求求职者在入职前缴纳任何费用或提供贷款、分期支付。\n- **求职者经验分享与警示**：内容以第一人称或他人经历分享求职过程，重点在于经验总结或风险警示，未主动推广收费招聘。\n\n### 规则分类：押金及类押金收费\n\n#### 1. 明确收取押金或保证金（medium风险）\n- **命中条件**：招聘内容中明确要求求职者在入职前缴纳押金、保证金、履约保证金、服装费、工牌费、材料费、设备押金等任何形式的 upfront 费用，无论是否承诺可退还。\n- **规则豁免**：内容明确以揭露、批评或警示该押金要求为目的，而非实际推广该收费招聘。\n- **适用阶段**：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n\n#### 2. 以培训或考证名义变相收费（medium风险）\n- **命中条件**：招聘内容以入职前必须参加付费培训、考取指定证书、到指定机构体检、购买指定教材或工具等名义，要求求职者支付费用，且该费用与入职直接挂钩。\n- **规则豁免**：内容以揭露或批评该变相收费模式为目的，而非实际推广。\n- **适用阶段**：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n\n#### 3. 扣押证件或诱导贷款支付（high风险）\n- **命中条件**：招聘内容要求扣押求职者身份证、学生证、资格证等原件，或诱导求职者通过贷款、分期付款、信用卡套现等方式支付培训费、押金或其他入职前费用。\n- **规则豁免**：内容以揭露、批评或警示该贷款诱导行为为目的，而非实际推广。\n- **适用阶段**：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n\n---\n\n**本轮未保存为正式审核规则，未创建或启动任何调查任务。**\n\n临时审核规则 · 完整规则快照\n名称：招聘押金诈骗推广识别\n领域：recruitment_deposit_fraud\n版本：1\n方案标识：ruleset-proposal:e8eb6ee2dcde4a489a7bc986f90490eb\n内容指纹：a8a7ac2637bb83d461b9f085eb78aa9772e352e2684c1be4f0a51be1e30b8037\n研判目标：识别以招聘为名推广收取押金、保证金、培训费等诈骗行为，同时保护正常招聘讨论、求职经验分享、揭露诈骗的批判性内容，避免误伤合法用工信息发布与反诈科普。\n分类数：1；规则数：3\n通用豁免：\n- 反诈讨论与新闻学术引用（anti_fraud_discussion）\n  条件：内容以揭露招聘诈骗、求职避坑、新闻报道、学术研究或政策科普为主要目的，明确提示风险或引用案例进行批判性分析，而非实际推广收费行为。\n- 不涉及收费的正常招聘（normal_recruitment_no_fee）\n  条件：招聘信息仅描述岗位职责、任职要求、薪资福利与应聘流程，未要求求职者在入职前缴纳任何费用或提供贷款、分期支付。\n- 求职者经验分享与警示（experience_sharing）\n  条件：内容以第一人称或他人经历分享求职过程，重点在于经验总结或风险警示，未主动推广收费招聘。\n\n分类：押金及类押金收费（deposit_and_deposit_like_fees，排序 1）\n说明：识别以押金、保证金、服装费、工牌费、材料费等名义在入职前向求职者收取费用的行为。\n\n规则 1：明确收取押金或保证金（explicit_deposit_or_guarantee）\n启用：是；排序：1\n命中条件：招聘内容中明确要求求职者在入职前缴纳押金、保证金、履约保证金、服装费、工牌费、材料费、设备押金等任何形式的 upfront 费用，无论是否承诺可退还。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：重点关注是否要求入职前缴费；承诺可退还不改变风险性质。企业认证、蓝V、实名等身份标识不豁免明确收费行为。\n规则豁免：\n- 揭露或警示押金要求（explicit_deposit_disclosure）\n  条件：内容明确以揭露、批评或警示该押金要求为目的，而非实际推广该收费招聘。\n\n规则 2：以培训或考证名义变相收费（disguised_fee_via_training_or_cert）\n启用：是；排序：2\n命中条件：招聘内容以入职前必须参加付费培训、考取指定证书、到指定机构体检、购买指定教材或工具等名义，要求求职者支付费用，且该费用与入职直接挂钩。\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：区分真实企业内部免费培训与以培训为名的变相收费；关键在于是否要求求职者自付费用且与入职挂钩。\n规则豁免：\n- 揭露变相培训收费（genuine_employer_training_disclosure）\n  条件：内容以揭露或批评该变相收费模式为目的，而非实际推广。\n\n规则 3：扣押证件或诱导贷款支付（document_retention_or_loan_inducement）\n启用：是；排序：3\n命中条件：招聘内容要求扣押求职者身份证、学生证、资格证等原件，或诱导求职者通过贷款、分期付款、信用卡套现等方式支付培训费、押金或其他入职前费用。\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：扣押证件或诱导贷款属于更高风险行为，常与培训贷、招工贷等诈骗模式关联。身份标识或企业认证不豁免。\n规则豁免：\n- 揭露贷款诱导行为（loan_inducement_exposure）\n  条件：内容以揭露、批评或警示该贷款诱导行为为目的，而非实际推广。",
+      "drafts": 0,
+      "runs": 0
+    },
+    {
+      "variant": "baseline",
+      "case": "generate_rule",
+      "pair": 3,
+      "tool_schema_count": 10,
+      "provider": [
+        {
+          "prompt_tokens": 5797,
+          "completion_tokens": 487,
+          "total_tokens": 6284,
+          "cached_tokens": 0,
+          "first_delta_seconds": 0.892,
+          "seconds": 9.782
+        },
+        {
+          "prompt_tokens": 7375,
+          "completion_tokens": 3599,
+          "total_tokens": 10974,
+          "cached_tokens": 5791,
+          "first_delta_seconds": 1.464,
+          "seconds": 55.546
+        },
+        {
+          "prompt_tokens": 9132,
+          "completion_tokens": 1016,
+          "total_tokens": 10148,
+          "cached_tokens": 7369,
+          "first_delta_seconds": 0.837,
+          "seconds": 14.749
+        }
+      ],
+      "tools": [
+        {
+          "name": "create_ruleset_proposal",
+          "seconds": 0.0021
+        }
+      ],
+      "status": "PASS",
+      "wall_seconds": 81.029,
+      "answer": "已生成招聘押金诈骗推广识别的临时审核规则提案，完整展示如下。这是临时候选，未保存为正式审核规则，也未创建或启动任何调查任务。\n\n---\n\n## 审核规则：招聘押金诈骗推广识别\n\n**领域**：recruitment_deposit_fraud  \n**审核目标**：识别以招聘为名推广押金诈骗、培训诈骗、收费诈骗的内容，保护正常招聘信息与揭露诈骗的讨论不被误伤。重点关注招聘前收费、以招聘名义推销付费培训、诱导求职者贷款付费等典型诈骗模式。\n\n### 通用豁免（命中即移除风险）\n\n1. **反诈讨论与揭露**：内容以揭露、讨论、警示招聘诈骗为目的，包括受害者经历分享、反诈科普、新闻报道、学术研究、维权求助等批判性或信息性表达。\n2. **正常招聘信息**：企业或平台发布的正常招聘信息，不涉及要求求职者向招聘方或其关联方预先缴纳任何费用。\n\n---\n\n### 规则 1：招聘前收取押金或费用（高风险）\n\n**命中条件**：招聘内容中明示或暗示求职者需在上岗、入职、面试或录用前向招聘方或其指定方缴纳押金、保证金、服装费、培训费、建档费、材料费等任何名目的费用，无论是否承诺后续退还。\n\n**适用阶段**：图片证据、视频帧证据、评论审核、融合审核\n\n**说明**：典型招聘诈骗特征。正规企业不得在录用前向求职者收取任何费用。即使承诺退还，预先收费本身即为高风险信号。\n\n---\n\n### 规则 2：以招聘名义推销付费培训或课程（中风险）\n\n**命中条件**：以招聘、入职、上岗为幌子，要求或诱导求职者参加付费培训、购买课程、考取付费证书、购买设备或工具，或将付费培训、购课、考证作为上岗、录用、面试的前提条件。\n\n**适用阶段**：图片证据、视频帧证据、评论审核、融合审核\n\n**说明**：招聘培训贷、招转培的典型模式。以招聘吸引求职者，再以能力不足等理由推销付费培训。需区分企业合法的内部带薪培训（不向员工收费）与以招聘为名的付费培训推销。\n\n---\n\n### 规则 3：招聘诱导贷款或分期支付费用（高风险）\n\n**命中条件**：招聘内容中以入职、上岗、培训为由，引导、诱导或要求求职者通过贷款、分期付款、信用卡、花呗、白条等方式支付培训费、课程费、设备费或其他费用。\n\n**适用阶段**：图片证据、视频帧证据、评论审核、融合审核\n\n**说明**：培训贷、招聘贷的典型模式。诱导求职者背负债务，往往伴随虚假就业承诺。即使形式上为\"自愿\"贷款，招聘场景下的贷款引导本身即为高风险。\n\n---\n\n### 设计说明\n\n- **阶段选择**：招聘诈骗的收费要求可出现在招聘海报图片、视频字幕/口播、评论区引导话术中，因此三条规则均覆盖四种证据模态。\n- **豁免设计**：通用豁免保护反诈讨论（受害者分享、新闻报道、科普）和正常招聘信息（不预先收费的招聘），避免误伤揭露诈骗的内容。\n- **风险分级**：直接收费和贷款引导为高风险（明确诈骗特征），推销付费培训为中风险（存在合法培训与诈骗培训的边界，需结合上下文判断）。\n- **未使用身份豁免**：企业认证、蓝V、官方账号等身份标识不构成豁免，因为即使是认证企业，要求求职者预先缴费仍属高风险。\n\n如需调整规则内容、风险等级或豁免条件，请告知。确认采用后，可用于创建调查草案。\n\n临时审核规则 · 完整规则快照\n名称：招聘押金诈骗推广识别\n领域：recruitment_deposit_fraud\n版本：1\n方案标识：ruleset-proposal:ea3e0b970d0c4f77958eeb84de9fdab9\n内容指纹：fe028b23576362e3b54ed1dae1bafc28772e59bd14a2afc4ac09caee8e2d553c\n研判目标：识别以招聘为名推广押金诈骗、培训诈骗、收费诈骗的内容，保护正常招聘信息与揭露诈骗的讨论不被误伤。重点关注招聘前收费、以招聘名义推销付费培训、诱导求职者贷款付费等典型诈骗模式。\n分类数：1；规则数：3\n通用豁免：\n- 反诈讨论与揭露（anti_fraud_discussion）\n  条件：内容以揭露、讨论、警示招聘诈骗为目的，包括受害者经历分享、反诈科普、新闻报道、学术研究、维权求助等批判性或信息性表达\n- 正常招聘信息（normal_recruitment_info）\n  条件：内容为企业或平台发布的正常招聘信息，不涉及要求求职者向招聘方或其关联方预先缴纳任何费用\n\n分类：招聘押金诈骗推广（recruitment_deposit_fraud，排序 0）\n说明：\n\n规则 1：招聘前收取押金或费用（deposit_fee_before_work）\n启用：是；排序：0\n命中条件：招聘内容中明示或暗示求职者需在上岗、入职、面试或录用前向招聘方或其指定方缴纳押金、保证金、服装费、培训费、建档费、材料费等任何名目的费用，无论是否承诺后续退还\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：典型招聘诈骗特征。正规企业不得在录用前向求职者收取任何费用。即使承诺退还，预先收费本身即为高风险信号。\n规则豁免：无\n\n规则 2：以招聘名义推销付费培训或课程（recruitment_disguised_training_sales）\n启用：是；排序：1\n命中条件：以招聘、入职、上岗为幌子，要求或诱导求职者参加付费培训、购买课程、考取付费证书、购买设备或工具，或将付费培训、购课、考证作为上岗、录用、面试的前提条件\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：招聘培训贷、招转培的典型模式。以招聘吸引求职者，再以能力不足等理由推销付费培训。需区分企业合法的内部带薪培训（不向员工收费）与以招聘为名的付费培训推销。\n规则豁免：无\n\n规则 3：招聘诱导贷款或分期支付费用（recruitment_loan_scheme）\n启用：是；排序：2\n命中条件：招聘内容中以入职、上岗、培训为由，引导、诱导或要求求职者通过贷款、分期付款、信用卡、花呗、白条等方式支付培训费、课程费、设备费或其他费用\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：培训贷、招聘贷的典型模式。诱导求职者背负债务，往往伴随虚假就业承诺。即使形式上为'自愿'贷款，招聘场景下的贷款引导本身即为高风险。\n规则豁免：无",
+      "drafts": 0,
+      "runs": 0
+    },
+    {
+      "variant": "new",
+      "case": "generate_rule",
+      "pair": 3,
+      "tool_schema_count": 17,
+      "provider": [
+        {
+          "prompt_tokens": 7225,
+          "completion_tokens": 1221,
+          "total_tokens": 8446,
+          "cached_tokens": 0,
+          "first_delta_seconds": 0.949,
+          "seconds": 20.938
+        },
+        {
+          "prompt_tokens": 8827,
+          "completion_tokens": 2970,
+          "total_tokens": 11797,
+          "cached_tokens": 7219,
+          "first_delta_seconds": 1.069,
+          "seconds": 42.932
+        },
+        {
+          "prompt_tokens": 10747,
+          "completion_tokens": 1189,
+          "total_tokens": 11936,
+          "cached_tokens": 8821,
+          "first_delta_seconds": 0.866,
+          "seconds": 16.268
+        }
+      ],
+      "tools": [
+        {
+          "name": "create_ruleset_proposal",
+          "seconds": 0.0018
+        }
+      ],
+      "status": "PASS",
+      "wall_seconds": 80.864,
+      "answer": "已生成本轮临时审核规则提案，完整展示如下：\n\n---\n\n## 审核规则：招聘押金诈骗推广识别\n\n**领域**：recruitment_deposit_fraud  \n**审核目标**：识别以招聘为名要求求职者入职前缴纳押金、培训费、服装费等各类费用的诈骗推广行为，保护正常招聘信息发布和揭露诈骗的讨论不被误伤。\n\n---\n\n### 通用豁免（命中即移除风险）\n\n| # | 名称 | 条件 |\n|---|------|------|\n| 1 | 揭露招聘诈骗的讨论 | 内容本身是揭露、曝光、举报招聘诈骗行为，或为受害者经验分享、媒体警示、法律科普、学术讨论等批判性报道，而非实施招聘收费推广 |\n| 2 | 正常招聘与求职讨论 | 内容为合法企业的正常招聘信息（不要求入职前缴费）、求职者之间的面试经验分享、求职技巧讨论、薪资待遇讨论，不涉及要求他人先行付费 |\n\n---\n\n### 分类：招聘押金诈骗推广\n\n#### 规则 1 · 入职前收费要求 `high`\n- **命中条件**：招聘内容中要求求职者在入职、上岗或开始工作前缴纳押金、培训费、服装费、体检费、建档费、工牌费、保证金、材料费或任何名目的费用，无论是否承诺入职后退还\n- **应用阶段**：image_evidence · video_frame_evidence · comment_audit · fusion_audit\n- **说明**：招聘押金诈骗的核心特征。无论费用名目如何包装、无论是否承诺入职后退还，只要要求求职者先付费即构成风险。正常合法招聘不应要求求职者入职前向招聘方缴纳任何费用。\n\n#### 规则 2 · 高薪诱饵结合先付费培训 `high`\n- **命中条件**：以高薪、保底收入、轻松赚钱、月入过万等为诱饵进行招聘推广，同时要求求职者先完成付费培训、购买课程、缴纳入门费或先购买指定产品/设备才能上岗\n- **应用阶段**：image_evidence · video_frame_evidence · comment_audit · fusion_audit\n- **说明**：典型\"培训贷\"\"入会费\"诈骗模式。高薪承诺与先付费要求同时出现即构成风险，无论培训机构是否声称有资质或证书。\n\n#### 规则 3 · 兼职副业先购模式 `medium`\n- **命中条件**：以兼职、副业、在家工作、手工活、打字员、数据录入等名义招募，要求求职者先购买设备、材料、套餐或缴纳开通费、激活费才能开始接单或工作\n- **应用阶段**：image_evidence · video_frame_evidence · comment_audit · fusion_audit\n- **说明**：常见兼职诈骗手法。求职者付费后往往无法获得承诺的工作机会或收入，或所购材料价格远高于市场价。因部分场景可能存在真实但低质量的兼职机会，定为 medium。\n\n---\n\n**说明**：\n- 本规则为**会话临时候选**，本轮未保存为正式规则，也未创建或启动任何调查任务。\n- 如后续需要采用，可直接说\"用这套创建调查\"或\"采用这套规则\"，我会将其绑定到具体调查草案中。\n- 如需调整规则条数、风险等级、命中条件或豁免范围，也可以直接提出修改。\n\n临时审核规则 · 完整规则快照\n名称：招聘押金诈骗推广识别\n领域：recruitment_deposit_fraud\n版本：1\n方案标识：ruleset-proposal:469c6f6409854eedbad0fa0830cf8d0d\n内容指纹：a91a69af6f3b350a7c66a26a819bfb966a17e3421ad28516855315351283b011\n研判目标：识别以招聘为名要求求职者入职前缴纳押金、培训费、服装费等各类费用的诈骗推广行为，保护正常招聘信息发布和揭露诈骗的讨论不被误伤。\n分类数：1；规则数：3\n通用豁免：\n- 揭露招聘诈骗的讨论（fraud_exposure）\n  条件：内容本身是揭露、曝光、举报招聘诈骗行为，或为受害者经验分享、媒体警示、法律科普、学术讨论等批判性报道，而非实施招聘收费推广\n- 正常招聘与求职讨论（normal_recruitment）\n  条件：内容为合法企业的正常招聘信息（不要求入职前缴费）、求职者之间的面试经验分享、求职技巧讨论、薪资待遇讨论，不涉及要求他人先行付费\n\n分类：招聘押金诈骗推广（recruitment_deposit_fraud，排序 1）\n说明：以招聘为名要求求职者入职前缴纳各类费用的诈骗推广行为\n\n规则 1：入职前收费要求（pre_employment_fee）\n启用：是；排序：1\n命中条件：招聘内容中要求求职者在入职、上岗或开始工作前缴纳押金、培训费、服装费、体检费、建档费、工牌费、保证金、材料费或任何名目的费用，无论是否承诺入职后退还\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：招聘方以任何名义要求求职者在入职前先行付费，是招聘押金诈骗的核心特征。无论费用名目如何包装（培训、服装、体检、建档、保证金等），无论是否承诺入职后退还，均构成风险。正常合法招聘不应要求求职者入职前向招聘方缴纳任何费用。\n规则豁免：无\n\n规则 2：高薪诱饵结合先付费培训（high_salary_prepay_training）\n启用：是；排序：2\n命中条件：以高薪、保底收入、轻松赚钱、月入过万等为诱饵进行招聘推广，同时要求求职者先完成付费培训、购买课程、缴纳入门费或先购买指定产品/设备才能上岗\n建议风险：high\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：以高收益承诺吸引求职者，再要求先付费培训或购买课程，是典型的'培训贷''入会费'诈骗模式。高薪承诺与先付费要求同时出现即构成风险，无论培训机构是否声称有资质或证书。\n规则豁免：无\n\n规则 3：兼职副业先购模式（side_job_prepurchase）\n启用：是；排序：3\n命中条件：以兼职、副业、在家工作、手工活、打字员、数据录入等名义招募，要求求职者先购买设备、材料、套餐或缴纳开通费、激活费才能开始接单或工作\n建议风险：medium\n应用阶段：image_evidence, video_frame_evidence, comment_audit, fusion_audit\n裁决说明：兼职/副业场景中要求先购买材料设备或缴纳开通费是常见诈骗手法。求职者付费后往往无法获得承诺的工作机会或收入，或所购材料价格远高于市场价。风险等级为中，因部分场景可能存在真实但低质量的兼职机会。\n规则豁免：无",
+      "drafts": 0,
+      "runs": 0
+    }
+  ],
+  "method": "serial alternating baseline/new; fresh process/session/database each sample; identical request and provider settings; cache not forced",
+  "limits": "small sample; first delta includes model thinking/tool output, not guaranteed user-visible text; no p95 claim",
+  "summary": {
+    "existing_task": {
+      "baseline": {
+        "attempted_samples": 3,
+        "successful_samples": 2,
+        "wall_seconds": [
+          32.161,
+          37.749
+        ],
+        "median_seconds": 34.955,
+        "provider_calls": [
+          7,
+          7
+        ],
+        "tool_seconds": [
+          0.0573,
+          0.0437
+        ]
+      },
+      "new": {
+        "attempted_samples": 3,
+        "successful_samples": 3,
+        "wall_seconds": [
+          37.721,
+          37.232,
+          44.107
+        ],
+        "median_seconds": 37.721,
+        "provider_calls": [
+          7,
+          7,
+          8
+        ],
+        "tool_seconds": [
+          0.0397,
+          0.0467,
+          0.0468
+        ]
+      },
+      "matched_successful_pairs": {
+        "pair_ids": [
+          1,
+          2
+        ],
+        "count": 2,
+        "baseline_median_seconds": 34.955,
+        "new_median_seconds": 37.4765,
+        "median_change_seconds": 2.522,
+        "median_change_percent": 7.2
+      }
+    },
+    "generate_rule": {
+      "baseline": {
+        "attempted_samples": 3,
+        "successful_samples": 2,
+        "wall_seconds": [
+          46.542,
+          81.029
+        ],
+        "median_seconds": 63.7855,
+        "provider_calls": [
+          3,
+          3
+        ],
+        "tool_seconds": [
+          0.0023,
+          0.0021
+        ]
+      },
+      "new": {
+        "attempted_samples": 3,
+        "successful_samples": 3,
+        "wall_seconds": [
+          83.898,
+          64.926,
+          80.864
+        ],
+        "median_seconds": 80.864,
+        "provider_calls": [
+          3,
+          4,
+          3
+        ],
+        "tool_seconds": [
+          0.002,
+          0.0012,
+          0.0018
+        ]
+      },
+      "matched_successful_pairs": {
+        "pair_ids": [
+          2,
+          3
+        ],
+        "count": 2,
+        "baseline_median_seconds": 63.7855,
+        "new_median_seconds": 72.89500000000001,
+        "median_change_seconds": 9.11,
+        "median_change_percent": 14.3
+      }
+    }
+  },
+  "status": "INCOMPLETE",
+  "analysis_note": "Comparative percentages use only matched successful pairs; all incomplete samples and all successful-sample medians remain available."
+}

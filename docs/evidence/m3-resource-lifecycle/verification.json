@@ -40,5 +40,15 @@
     "backend/audit_agent/config.py",
     "Audit_assistant/src/features/investigation/InvestigationCenterArea.tsx",
     "Audit_assistant/src/features/investigation/InvestigationPage.tsx"
-  ]
+  ],
+  "followup_20260911": {
+    "functional_summary": "flow-matrix-summary-20260911.json",
+    "successful_scenarios": 8,
+    "verified_turns": 22,
+    "isolated_run_jobs": 5,
+    "regression_passed": 132,
+    "regression_seconds": 12.77,
+    "latency_evidence": "qwen-latency-comparison-20260911.json",
+    "real_crawler_calls": 0
+  }
 }

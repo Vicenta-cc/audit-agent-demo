@@ -1,0 +1,348 @@
+{
+  "model": "qwen3.7-plus",
+  "runtime": "Hermes 0.20.4",
+  "thinking": true,
+  "storage": "disposable",
+  "cases": [
+    {
+      "case": "read-rule",
+      "input": "请读取后台“招聘押金诈骗验收规则”的完整规则条件和豁免，只查看，不修改、不创建任务。",
+      "status": "completed",
+      "answer": "已读取后台正式发布的「招聘押金诈骗验收规则」（已发布版本 v1），完整内容如下：\n\n## 审核目标\n识别以招聘为名要求求职者先缴押金的诈骗推广，保护正常招聘讨论。\n\n## 领域\n`recruitment_fraud`（招聘诈骗）\n\n## 规则分类：招聘诈骗（招聘前置收费）\n\n### 规则 1：入职押金招揽（`deposit`）\n- **启用状态**：已启用\n- **风险等级**：high\n- **应用阶段**：`image_evidence`、`video_frame_evidence`、`comment_audit`、`fusion_audit`（四阶段全覆盖）\n- **命中条件（hit_condition）**：以招聘入职为名要求求职者预先缴纳押金，并提供收费或联系引导。\n- **规则级豁免（rule_exemptions）**：无\n- **审核说明（adjudication_notes）**：正常招聘不命中。\n\n## 通用豁免（general_exemptions）\n\n### 非赞同引用（`critical`）\n- **条件**：仅揭露或反对诈骗，不支持或招揽该行为。\n\n---\n\n**整体结构小结**：该规则目前只有一条启用规则 `deposit`，覆盖图片、视频帧、评论和融合四阶段证据，命中核心是\"招聘入职 + 预先押金 + 收费/联系引导\"三要素；通用豁免仅保留\"非赞同引用\"（即揭露、反对诈骗的内容不命中）。如需进一步了解或基于此规则创建调查任务，请告知。",
+      "tools": [
+        "read_resource",
+        "read_resource"
+      ],
+      "artifact": {},
+      "edits": [],
+      "counts": {
+        "investigation_drafts": 0,
+        "investigation_runs": 0
+      },
+      "before_counts": {
+        "investigation_drafts": 0,
+        "investigation_runs": 0
+      },
+      "timing": {
+        "wall_seconds": 14.294,
+        "provider_calls": 4,
+        "usage": {
+          "prompt_tokens": 29707,
+          "completion_tokens": 720,
+          "total_tokens": 30427
+        },
+        "tools": [
+          {
+            "tool": "read_resource",
+            "seconds": 0.0016
+          },
+          {
+            "tool": "read_resource",
+            "seconds": 0.002
+          }
+        ]
+      }
+    },
+    {
+      "case": "read-lexicon",
+      "input": "再读取后台“招聘押金诈骗验收词库”，告诉我主词、变体、标签和启用状态，以及实际会搜索哪些词。仍然只查看。",
+      "status": "completed",
+      "answer": "已读取后台正式发布的「招聘押金诈骗验收词库」（版本 1），完整结构如下：\n\n## 词库条目\n\n### 主词（kind=main）\n| ID | 词条 | 启用状态 |\n|----|------|---------|\n| matrix-main | 招聘押金 | ✅ 启用 |\n| matrix-disabled | 招聘服装费 | ❌ 禁用 |\n\n### 变体（kind=variant）\n| ID | 词条 | 父词条 | 启用状态 |\n|----|------|--------|---------|\n| matrix-variant | 入职保证金 | matrix-main | ✅ 启用 |\n\n### 标签（kind=tag）\n| ID | 词条 | 启用状态 |\n|----|------|---------|\n| matrix-tag | 求职避坑 | ✅ 启用 |\n\n## 实际搜索词（search_terms）\n```json\n[\"招聘押金\"]\n```\n\n**关键说明**：\n- 实际用于平台搜索的词条只有 `search_terms` 字段中的内容\n- 当前只有 **1 个启用主词**：\"招聘押金\"\n- 变体\"入职保证金\"虽然启用，但**不会自动展开为搜索词**\n- 标签\"求职避坑\"虽然启用，但**不会自动展开为搜索词**\n- 禁用主词\"招聘服装费\"不参与搜索\n\n词库设计原则：变体和标签用于管理和分类，不自动参与搜索召回；只有启用状态的主词才会进入实际搜索。",
+      "tools": [
+        "read_resource",
+        "read_resource"
+      ],
+      "artifact": {},
+      "edits": [],
+      "counts": {
+        "investigation_drafts": 0,
+        "investigation_runs": 0
+      },
+      "before_counts": {
+        "investigation_drafts": 0,
+        "investigation_runs": 0
+      },
+      "timing": {
+        "wall_seconds": 13.507,
+        "provider_calls": 3,
+        "usage": {
+          "prompt_tokens": 25583,
+          "completion_tokens": 824,
+          "total_tokens": 26407
+        },
+        "tools": [
+          {
+            "tool": "read_resource",
+            "seconds": 0.0019
+          },
+          {
+            "tool": "read_resource",
+            "seconds": 0.0018
+          }
+        ]
+      }
+    },
+    {
+      "case": "edit-without-save",
+      "input": "修改后台“招聘押金诈骗验收词库”：把主词“招聘押金”改成“求职押金”，保留变体、标签和其他词的启用状态。再修改“招聘押金诈骗验收规则”的“入职押金招揽”：命中条件中的收费类型扩展到押金或培训费，其他条件不变。先展示修改，不保存、不创建任务。",
+      "status": "completed",
+      "answer": "已读取两份后台资源。按你的要求，下面只展示修改方案，不保存、不创建任务。\n\n---\n\n## 一、黑话库修改：招聘押金诈骗验收词库\n\n**资源 ID**：`custom_45147cd17f804e04`（当前版本 1）\n\n| 条目 ID | 类型 | 修改前 term | 修改后 term | enabled | 备注 |\n|---|---|---|---|---|---|\n| matrix-main | main | 招聘押金 | **求职押金** | true | 仅改主词文本 |\n| matrix-variant | variant（父=matrix-main） | 入职保证金 | 入职保证金 | true | 不变 |\n| matrix-disabled | main | 招聘服装费 | 招聘服装费 | **false** | 保持禁用 |\n| matrix-tag | tag | 求职避坑 | 求职避坑 | true | 不变 |\n\n**search_terms 联动变化**：`[\"招聘押金\"]` → `[\"求职押金\"]`（search_terms 跟随启用主词，变体/标签不进入搜索词）。\n\n---\n\n## 二、审核规则修改：招聘押金诈骗验收规则\n\n**资源 ID**：`ruleset.863404f127504024`（已发布版本 1）\n\n仅修改 `categories[0].rules[0]`（\"入职押金招揽\"，rule_id=deposit）的 `hit_condition`，其他字段（application_stages、suggested_risk_level、rule_exemptions、adjudication_notes、general_exemptions 等）保持不变。\n\n| 字段 | 修改前 | 修改后 |\n|---|---|---|\n| hit_condition | 以招聘入职为名要求求职者预先缴纳**押金**，并提供收费或联系引导。 | 以招聘入职为名要求求职者预先缴纳**押金或培训费**，并提供收费或联系引导。 |\n\n未改动项：\n- `application_stages`: `[\"image_evidence\", \"video_frame_evidence\", \"comment_audit\", \"fusion_audit\"]`\n- `suggested_risk_level`: `high`\n- `rule_exemptions`: `[]`\n- `adjudication_notes`: `正常招聘不命中。`\n- `general_exemptions`（非赞同引用）：不变\n- 规则名 \"入职押金招揽\" 与 rule_id \"deposit\"：不变\n\n---\n\n## 三、语义自查\n\n- 词库：仅主词文本替换，变体/标签/禁用状态、父子关系均保留，符合\"保留变体、标签和其他词的启用状态\"。\n- 规则：hit_condition 由\"押金\"扩展为\"押金或培训费\"，是并列扩展（任一即可），与\"其他条件不变\"一致；adjudication_notes 无需联动修改（\"正常招聘不命中\"对押金与培训费同样适用）。\n\n如确认方案无误，下一步可以分别调用 `open_resource_edit` + `update_resource_edit`（词库）和 `create_ruleset_proposal`（规则）建立会话副本并应用修改；当前未执行任何写操作。",
+      "tools": [
+        "read_resource",
+        "read_resource",
+        "read_resource",
+        "read_resource"
+      ],
+      "artifact": {},
+      "edits": [],
+      "counts": {
+        "investigation_drafts": 0,
+        "investigation_runs": 0
+      },
+      "before_counts": {
+        "investigation_drafts": 0,
+        "investigation_runs": 0
+      },
+      "timing": {
+        "wall_seconds": 24.204,
+        "provider_calls": 4,
+        "usage": {
+          "prompt_tokens": 30608,
+          "completion_tokens": 1452,
+          "total_tokens": 32060
+        },
+        "tools": [
+          {
+            "tool": "read_resource",
+            "seconds": 0.0021
+          },
+          {
+            "tool": "read_resource",
+            "seconds": 0.0011
+          },
+          {
+            "tool": "read_resource",
+            "seconds": 0.0015
+          },
+          {
+            "tool": "read_resource",
+            "seconds": 0.0016
+          }
+        ]
+      }
+    },
+    {
+      "case": "existing-draft",
+      "input": "用后台已有的“招聘押金诈骗验收规则”和“招聘押金诈骗验收词库”准备小红书关键词抓取审核任务，只搜索启用主词。先展示草案，不要开始。",
+      "status": "completed",
+      "answer": "草案已创建完成，以下是配置概览：\n\n---\n\n## 📋 调查草案：小红书招聘押金诈骗关键词抓取审核\n\n| 配置项 | 内容 |\n|--------|------|\n| **草案 ID** | `investigation-draft:2dc9158503cf4faf9997ffeedb002277` |\n| **状态** | DRAFT（草案，未启动） |\n| **平台** | 小红书 (xhs) |\n| **调查模式** | search（关键词搜索抓取） |\n| **目标** | 在小红书平台使用词库启用主词进行关键词搜索抓取，召回涉嫌招聘押金/保证金诈骗的帖子，并使用验收规则进行风险判定 |\n\n### 🔍 召回配置（Recall）\n\n| 项目 | 内容 |\n|------|------|\n| **策略** | existing_lexicon（使用现成词库） |\n| **词库** | 招聘押金诈骗验收词库 (`custom_45147cd17f804e04`) |\n| **启用主词** | `招聘押金`（共 1 个） |\n\n> 说明：词库中「入职保证金」为变体词条、「求职避坑」为标签词条、「招聘服装费」为已禁用主词，按你要求\"只搜索启用主词\"，实际搜索词仅包含 **招聘押金**。\n\n### ⚖️ 判定规则（Judgement）\n\n| 项目 | 内容 |\n|------|------|\n| **策略** | existing_ruleset（使用已发布规则） |\n| **规则集** | 招聘押金诈骗验收规则 v1 |\n| **规则域** | recruitment_fraud |\n| **启用规则数** | 1 条 |\n\n### 📊 抓取参数（系统默认）\n\n| 参数 | 值 |\n|------|-----|\n| 每个关键词最多抓取帖子数 | 1 |\n| 每个帖子最多抓取笔记数 | 1 |\n| 每个帖子最多抓取评论数 | 300 |\n\n---\n\n**当前状态：草案已就绪，未启动执行。** 无阻断项，可随时确认启动。如需调整搜索词、规则或其他配置，请告知；如确认启动，请告诉我即可。",
+      "tools": [
+        "query_investigation_options",
+        "read_resource",
+        "read_resource",
+        "read_resource",
+        "create_investigation_draft"
+      ],
+      "artifact": {
+        "artifact_type": "investigation_draft",
+        "confirmation_preview": {
+          "blockers": [],
+          "can_confirm": true,
+          "creator_url": "",
+          "draft_id": "investigation-draft:2dc9158503cf4faf9997ffeedb002277",
+          "draft_revision": 1,
+          "get_sub_comment": false,
+          "max_comments_per_post": 300,
+          "max_notes": 1,
+          "max_posts_per_keyword": 1,
+          "mode": "search",
+          "objective": "在小红书平台使用「招聘押金诈骗验收词库」的启用主词进行关键词搜索抓取，召回涉嫌招聘押金/保证金诈骗的帖子，并使用「招聘押金诈骗验收规则」进行风险判定。",
+          "platform": "xhs",
+          "recall_plan": {
+            "enabled_main_term_count": 1,
+            "enabled_main_terms": [
+              "招聘押金"
+            ],
+            "lexicon_id": "custom_45147cd17f804e04",
+            "lexicon_title": "招聘押金诈骗验收词库",
+            "runtime_content_hash": "0c57f9e15dc6c23c6c4accf8a47f5a7da4d7094ecefc766c105a43e2ccb70b5f",
+            "source_lexicon_ids": [],
+            "strategy": "existing_lexicon",
+            "temporary_terms": []
+          },
+          "resolved_search_terms": [
+            "招聘押金"
+          ],
+          "ruleset_revision": {
+            "available": true,
+            "content_hash": "280a7cc625ae28679a62868cdbe69fcb02b01c3e7a28ef16d4be2fbaaa233c1d",
+            "domain": "recruitment_fraud",
+            "enabled_rule_count": 1,
+            "id": "ruleset-revision:ruleset.863404f127504024:v1",
+            "name": "招聘押金诈骗验收规则",
+            "ruleset_id": "ruleset.863404f127504024",
+            "version": 1
+          },
+          "temporary_ruleset": null,
+          "title": "小红书招聘押金诈骗关键词抓取审核"
+        },
+        "draft": {
+          "configuration": {
+            "investigation": {
+              "mode": "search",
+              "recall_plan": {
+                "enabled_main_terms": [
+                  "招聘押金"
+                ],
+                "expected_runtime_content_hash": "0c57f9e15dc6c23c6c4accf8a47f5a7da4d7094ecefc766c105a43e2ccb70b5f",
+                "lexicon_id": "custom_45147cd17f804e04",
+                "strategy": "existing_lexicon"
+              }
+            },
+            "judgement": {
+              "expected_ruleset_content_hash": "280a7cc625ae28679a62868cdbe69fcb02b01c3e7a28ef16d4be2fbaaa233c1d",
+              "expected_ruleset_version": 1,
+              "ruleset_revision_id": "ruleset-revision:ruleset.863404f127504024:v1",
+              "strategy": "existing_ruleset"
+            },
+            "platform": "xhs",
+            "schema_version": "investigation-draft-config-v4"
+          },
+          "confirmed_at": "",
+          "confirmed_revision": null,
+          "created_at": "2026-09-11T02:45:48.436529+00:00",
+          "current_revision": 1,
+          "id": "investigation-draft:2dc9158503cf4faf9997ffeedb002277",
+          "objective": "在小红书平台使用「招聘押金诈骗验收词库」的启用主词进行关键词搜索抓取，召回涉嫌招聘押金/保证金诈骗的帖子，并使用「招聘押金诈骗验收规则」进行风险判定。",
+          "status": "DRAFT",
+          "title": "小红书招聘押金诈骗关键词抓取审核",
+          "updated_at": "2026-09-11T02:45:48.436529+00:00"
+        },
+        "draft_id": "investigation-draft:2dc9158503cf4faf9997ffeedb002277",
+        "draft_revision": 1,
+        "presentation_stage": "suggestion",
+        "proposal_presentations": [],
+        "suggestion": {
+          "creator_url": "",
+          "mode": "search",
+          "objective": "在小红书平台使用「招聘押金诈骗验收词库」的启用主词进行关键词搜索抓取，召回涉嫌招聘押金/保证金诈骗的帖子，并使用「招聘押金诈骗验收规则」进行风险判定。",
+          "platform_options": [
+            {
+              "available": true,
+              "id": "dy",
+              "name": "抖音"
+            },
+            {
+              "available": true,
+              "id": "xhs",
+              "name": "小红书"
+            },
+            {
+              "available": true,
+              "id": "ks",
+              "name": "快手"
+            }
+          ],
+          "recall_lexicons": [
+            {
+              "available": true,
+              "enabled_main_term_count": 1,
+              "enabled_main_terms": [],
+              "enabled_main_terms_returned": 0,
+              "id": "custom_45147cd17f804e04",
+              "risk_label": "招聘诈骗",
+              "runtime_content_hash": "0c57f9e15dc6c23c6c4accf8a47f5a7da4d7094ecefc766c105a43e2ccb70b5f",
+              "terms_included": false,
+              "terms_truncated": false,
+              "title": "招聘押金诈骗验收词库"
+            }
+          ],
+          "ruleset_revision": {
+            "available": true,
+            "content_hash": "280a7cc625ae28679a62868cdbe69fcb02b01c3e7a28ef16d4be2fbaaa233c1d",
+            "domain": "recruitment_fraud",
+            "enabled_rule_count": 1,
+            "id": "ruleset-revision:ruleset.863404f127504024:v1",
+            "name": "招聘押金诈骗验收规则",
+            "ruleset_id": "ruleset.863404f127504024",
+            "version": 1
+          },
+          "search_terms": [
+            "招聘押金"
+          ],
+          "selected_platform": "xhs",
+          "temporary_ruleset": null,
+          "title": "小红书招聘押金诈骗关键词抓取审核"
+        }
+      },
+      "edits": [],
+      "counts": {
+        "investigation_drafts": 1,
+        "investigation_runs": 0
+      },
+      "before_counts": {
+        "investigation_drafts": 0,
+        "investigation_runs": 0
+      },
+      "timing": {
+        "wall_seconds": 47.977,
+        "provider_calls": 7,
+        "usage": {
+          "prompt_tokens": 70413,
+          "completion_tokens": 3203,
+          "total_tokens": 73616
+        },
+        "tools": [
+          {
+            "tool": "query_investigation_options",
+            "seconds": 0.0236
+          },
+          {
+            "tool": "read_resource",
+            "seconds": 0.0008
+          },
+          {
+            "tool": "read_resource",
+            "seconds": 0.0015
+          },
+          {
+            "tool": "read_resource",
+            "seconds": 0.0016
+          },
+          {
+            "tool": "create_investigation_draft",
+            "seconds": 0.0173
+          }
+        ]
+      }
+    }
+  ],
+  "provider_calls": 19,
+  "usage": {
+    "prompt_tokens": 156311,
+    "completion_tokens": 6199,
+    "total_tokens": 162510
+  },
+  "scenarios": [
+    {
+      "scenario": "read_existing",
+      "status": "PASS",
+      "cases": [
+        "read-rule",
+        "read-lexicon"
+      ]
+    },
+    {
+      "scenario": "modify_existing",
+      "status": "FAIL",
+      "failure_type": "AssertionError",
+      "failure": "",
+      "cases": [
+        "edit-without-save"
+      ]
+    }
+  ],
+  "execution_boundary": "real confirm_and_queue + ensure_job; no worker/crawler",
+  "status": "INTERRUPTED_FOR_FIX",
+  "interruption_reason": "Real edit-without-save returned prose only; harness Run/Job adapter projection corrected before continuing."
+}
