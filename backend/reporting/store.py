@@ -2133,6 +2133,14 @@ class ReportStore:
         )
         if report is None:
             raise ReportGenerationError("published ReportVersion metadata was not found")
+        sources = getattr(self, "account_report_sources", ())
+        if any(source[1] == report_version_id for source in sources):
+            from backend.reporting.archive_accounts import archive_account_repository
+            return projection, archive_account_repository(sources), str(report["task_id"])
+        if ((version.get("body") or {}).get("report_document") or {}).get("account_source") == "report_snapshot":
+            from hermes_m0.pass_support import SnapshotAccountData, SnapshotAccountRepository
+            data = SnapshotAccountData.from_snapshot(self.load_immutable_snapshot(report_version_id))
+            return projection, SnapshotAccountRepository(data), str(report["task_id"])
         if ((version.get("body") or {}).get("report_document") or {}).get("template_kind") in {"all_pass", "single_risk_post", "selected_existing_audits"}:
             return projection, None, str(report["task_id"])
         try:
@@ -2163,8 +2171,41 @@ class ReportStore:
                            if post_refs.get(finding.post_ref) == post_ref
                            and finding_refs.get(finding.ref) == detail["audit_finding_ref"]), None)
             if source:
-                detail["audit_source"] = {"task_id": snapshot.task_id, "output_id": str(source.audit_result_id)}
+                detail["audit_source"] = {"task_id": (source.payload.get("source_provenance") or {}).get("source_job_id") or snapshot.task_id, "output_id": str(source.audit_result_id)}
         return detail
+
+    def get_snapshot_audit_detail(self, report_version_id: str, *, post_ref: str) -> dict[str, Any]:
+        """Render the normal audit detail from the exact published snapshot."""
+        from backend.audit_agent.evidence_groups import build_evidence_groups
+        from backend.reporting.public_references import public_post_and_finding_refs
+
+        self.get_frontend_report(report_version_id)  # Require a valid published report.
+        snapshot = self.load_immutable_snapshot(report_version_id)
+        post_refs, _ = public_post_and_finding_refs(snapshot)
+        post = next((item for item in snapshot.posts if post_refs.get(item.ref) == post_ref), None)
+        finding = next((item for item in snapshot.findings if post and item.post_ref == post.ref), None)
+        if post is None or finding is None:
+            raise ReportGenerationError("Post not found in published report")
+        payload = post.payload.get("raw_content_payload") or finding.payload.get("raw_effective_result")
+        if not isinstance(payload, dict) or not payload:
+            raise ReportGenerationError("Saved audit detail not found in published report")
+        item = json.loads(self._json(payload))
+        provenance = finding.payload.get("source_provenance") or post.payload.get("source_provenance") or {}
+        item.update({
+            "id": finding.audit_result_id, "audit_result_id": finding.audit_result_id,
+            "job_id": provenance.get("source_job_id") or snapshot.task_id,
+            "content_id": finding.payload.get("content_id"),
+            "content_key": finding.payload.get("content_key"),
+            "platform": finding.payload.get("source_platform") or post.payload.get("platform"),
+            "analyzed_at": finding.payload.get("completed_at") or post.payload.get("analyzed_at"),
+            "published_at": post.payload.get("published_at") or "",
+            "report_snapshot_source": True,
+            "review_status": finding.payload.get("review_status", ""),
+            "review_note": finding.payload.get("review_note", ""),
+        })
+        return {"audit_result": item, "audit_config_revision": {},
+                "evidence_groups": build_evidence_groups(item), "is_historical_config": True,
+                "report_snapshot": {"report_version_id": report_version_id, "post_ref": post_ref}}
 
     def get_presentation_finding_evidence(
         self, report_version_id: str, *, investigation_finding_ref: str

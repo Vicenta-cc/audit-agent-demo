@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +30,7 @@ class AccountOverviewReportGraph(AccountEntryReportGraph):
         max_input_chars: int | None = None,
         account_fixture_path: Path = DEFAULT_ACCOUNT_FIXTURE_PATH,
     ) -> None:
-        self.account_projector = ReportAccountOverviewProjector.load(
+        self.account_projector = None if getattr(source, "account_source", "") == "report_snapshot" else ReportAccountOverviewProjector.load(
             account_fixture_path
         )
         RiskFindingReportGraph.__init__(
@@ -43,11 +44,13 @@ class AccountOverviewReportGraph(AccountEntryReportGraph):
 
     def _build_report_account_entries(self, state) -> dict[str, Any]:
         snapshot = self._snapshot(state["report_version_id"])
-        projection = self.account_projector.build(
+        projector = self.account_projector or ReportAccountOverviewProjector.from_snapshot(snapshot)
+        projection = projector.build(
             snapshot,
             target_account_identity=self.report_source.creator_account_identity(
                 snapshot.task_id
             ),
+            require_target=self.report_source.has_explicit_creator_target(snapshot.task_id),
         )
         self.store.record_run_event(
             state["run_id"],
@@ -116,6 +119,20 @@ class AccountOverviewReportGraph(AccountEntryReportGraph):
             "full_account_index"
         ]
         document["account_scope_boundary"] = public_projection["scope_boundary"]
+        if projection.get("account_corpus_schema_version") == "report-snapshot-accounts/v1":
+            document["account_source"] = "report_snapshot"
+        if "source_coverage" in self._snapshot(state["report_version_id"]).statistics:
+            coverage = deepcopy(self._snapshot(state["report_version_id"]).statistics["source_coverage"])
+            coverage["excluded_failed_posts"] = [
+                {"post_id": item.get("note_id"), "status": item.get("analyze_status")}
+                for item in coverage.get("excluded_failed_posts", [])
+            ]
+            document["statistics"] = deepcopy(document["statistics"])
+            document["statistics"].pop("source_configuration", None)
+            document["statistics"]["source_coverage"] = coverage
+            document["source_coverage"] = coverage
+        from backend.reporting.structured_contract import validate_structured_report_document
+        validate_structured_report_document(document, account_model=public_projection)
 
         body_json["report_document"] = document
         assembled["body_json"] = body_json
@@ -137,6 +154,7 @@ class AccountOverviewReportGraph(AccountEntryReportGraph):
                 item
                 for item in source_sections.values()
                 if str(item.get("section_id") or "").startswith("investigation-")
+                and item["section_id"] != "investigation-findings"
             ),
             key=lambda item: str(item["section_id"]),
         )
@@ -309,6 +327,19 @@ class AccountOverviewReportGraph(AccountEntryReportGraph):
                 {"text": account_projection["scope_boundary"], "claim_ids": []},
             ],
         )
+        # Reassembly retains the archived coverage prose alongside standard accounts.
+        retained = state.get("retained_data_sections") or {}
+        for section in sections:
+            original = retained.get(section["section_id"])
+            if original:
+                for field in ("paragraphs", "body", "claims", "case_blocks"):
+                    section[field] = original.get(field, [] if field != "body" else "")
+        if "coverage-boundaries" in retained:
+            add(
+                section_id="coverage-boundaries", section_number="2.4",
+                title=retained["coverage-boundaries"]["title"], section_type="data_quality",
+                parent_section_ref=data["section_ref"], source=retained["coverage-boundaries"],
+            )
         findings_parent = add(
             section_id="investigation-findings",
             section_number="3",
@@ -324,6 +355,9 @@ class AccountOverviewReportGraph(AccountEntryReportGraph):
                 }
             ],
         )
+        if "investigation-findings" in retained:
+            findings_parent["paragraphs"] = retained["investigation-findings"]["paragraphs"]
+            findings_parent["body"] = retained["investigation-findings"]["body"]
         for index, source in enumerate(finding_sections, 1):
             add(
                 section_id=source["section_id"],
@@ -376,8 +410,10 @@ class AccountOverviewReportGraph(AccountEntryReportGraph):
                 if text:
                     lines.extend([text, ""])
             if section["section_id"] == "account-activity-overview":
-                lines.extend(["#### 调查目标账号", ""])
-                for entry in account_projection["target_account_entries"]:
+                targets = account_projection["target_account_entries"]
+                if targets:
+                    lines.extend(["#### 调查目标账号", ""])
+                for entry in targets:
                     lines.append(f"- {entry['display_name']}")
                     lines.extend(
                         f"  - {text}" for text in entry["presentation_lines"]

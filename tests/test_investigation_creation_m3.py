@@ -941,6 +941,19 @@ class OwnershipAndConfigurationTest(M3TestCase):
 
 
 class WorkerRecoveryAndFencingTest(M3TestCase):
+    def test_migration_hold_preserves_source_state_and_prevents_duplicate_claim(self):
+        _, run = self.queue_run()
+        with self.store._connect() as connection:
+            connection.execute("INSERT INTO investigation_run_execution_holds(run_id,source_name,reason) VALUES (?,?,?)", (run.id, "legacy", "Still owned by source worker"))
+        self.assertIsNone(self.store.claim_next("candidate"))
+        self.assertEqual(self.store.get_run_for_worker(run.id).status, RunStatus.QUEUED)
+        with self.store._connect() as connection:
+            connection.execute("UPDATE investigation_runs SET status='RUNNING',heartbeat_at='' WHERE id=?", (run.id,))
+        self.assertIsNone(self.store.claim_next("candidate"))
+        with self.store._connect() as connection:
+            connection.execute("DELETE FROM investigation_run_execution_holds WHERE run_id=?", (run.id,))
+        self.assertEqual(self.store.claim_next("formal").id, run.id)
+
     def test_two_workers_only_one_claims(self):
         self.queue_run()
         barrier = Barrier(2)

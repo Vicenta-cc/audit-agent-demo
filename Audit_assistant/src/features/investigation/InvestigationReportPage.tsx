@@ -95,14 +95,28 @@ function AccountMetricGrid({ statistics, includesPublishing, className = "" }: {
   includesPublishing: boolean;
   className?: string;
 }) {
+  const publishing = [
+    { key: "published_post_count", label: "发布帖子", risk: false },
+    { key: "risk_published_post_count", label: "风险帖子", risk: true }
+  ] as const;
+  const commenting = [
+    { key: "comment_count", label: "评论", risk: false },
+    { key: "risk_comment_count", label: "风险评论", risk: true }
+  ] as const;
+  const metrics = [
+    ...(includesPublishing && Number(statistics.published_post_count || 0) > 0
+      ? [...publishing, ...commenting]
+      : [...commenting, ...(includesPublishing ? publishing : [])]),
+    { key: "commented_post_count", label: "评论涉及帖子", risk: false } as const,
+    { key: "commented_post_author_count", label: "评论对象", risk: false } as const
+  ];
   return (
     <span className={`r31-account-metrics ${includesPublishing ? "is-six" : "is-four"} ${className}`.trim()}>
-      <span><small>评论</small><b>{displayNumber(statistics.comment_count)}</b></span>
-      <span className={`is-risk ${statistics.risk_comment_count === 0 ? "is-none" : ""}`.trim()}><small>风险评论</small><b>{displayNumber(statistics.risk_comment_count)}</b></span>
-      {includesPublishing ? <span><small>发布</small><b>{displayNumber(statistics.published_post_count)}</b></span> : null}
-      {includesPublishing ? <span className={`is-risk ${statistics.risk_published_post_count === 0 ? "is-none" : ""}`.trim()}><small>风险帖子</small><b>{displayNumber(statistics.risk_published_post_count)}</b></span> : null}
-      <span><small>涉及帖子</small><b>{displayNumber(statistics.commented_post_count)}</b></span>
-      <span><small>评论对象</small><b>{displayNumber(statistics.commented_post_author_count)}</b></span>
+      {metrics.map(({ key, label, risk }) => (
+        <span key={key} className={risk ? `is-risk ${statistics[key] === 0 ? "is-none" : ""}`.trim() : undefined}>
+          <small>{label}</small><b>{displayNumber(statistics[key])}</b>
+        </span>
+      ))}
     </span>
   );
 }
@@ -110,7 +124,7 @@ function AccountMetricGrid({ statistics, includesPublishing, className = "" }: {
 type AccountTableMode = "publishing" | "cross" | "risk";
 
 const accountTableHeaders: Record<AccountTableMode, string[]> = {
-  publishing: ["账号", "评论", "风险评论", "发布", "风险帖子", "涉及帖子", "详情"],
+  publishing: ["账号", "发布帖子", "风险帖子", "评论", "风险评论", "评论涉及帖子", "详情"],
   cross: ["账号", "出现调查", "本次评论", "本次风险评论", "本次涉及帖子", "详情"],
   risk: ["账号", "风险评论", "评论", "涉及帖子", "评论对象", "详情"]
 };
@@ -147,10 +161,10 @@ function AccountTable({
               </span>
               {mode === "publishing" ? (
                 <>
-                  <span role="cell">{displayNumber(statistics.comment_count)}</span>
-                  <span role="cell" className={Number(statistics.risk_comment_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_comment_count)}</span>
                   <span role="cell">{displayNumber(statistics.published_post_count)}</span>
                   <span role="cell" className={Number(statistics.risk_published_post_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_published_post_count)}</span>
+                  <span role="cell">{displayNumber(statistics.comment_count)}</span>
+                  <span role="cell" className={Number(statistics.risk_comment_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_comment_count)}</span>
                   <span role="cell">{displayNumber(statistics.commented_post_count)}</span>
                 </>
               ) : null}
@@ -338,23 +352,28 @@ function ReportSection({
       <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
         <SectionHeading section={section} />
         <dl className="r31-account-coverage">
-          <StatBandItem label="调查目标" value={accounts.coverage?.target_account_count} />
+          <StatBandItem label={accounts.target_entries?.length ? "调查目标" : "发布帖子"} value={accounts.target_entries?.length ? accounts.coverage?.target_account_count : accounts.post_author_entries?.reduce((sum, entry) => sum + Number(entry.statistics.published_post_count || 0), 0)} />
           <StatBandItem label="发布账号" value={accounts.coverage?.post_author_account_count} />
           <StatBandItem label="评论账号" value={accounts.coverage?.comment_author_account_count} />
           <StatBandItem label="去重账号" value={accounts.coverage?.distinct_account_count} />
         </dl>
         <div className="r31-publishing-account-groups">
-          <div className="r31-account-group is-first">
+          {accounts.target_entries?.length ? <div className="r31-account-group is-first">
             <h3>调查目标</h3>
             {accounts.target_entries?.length
               ? <AccountTable entries={accounts.target_entries} mode="publishing" onOpen={onOpenAccount} />
               : <p className="r31-empty-line">本次调查没有结构化调查目标账号。</p>}
-          </div>
-          <div className="r31-account-group">
-            <h3>其他发布账号</h3>
+          </div> : null}
+          <div className={`r31-account-group ${accounts.target_entries?.length ? "" : "is-first"}`}>
+            <h3>{accounts.target_entries?.length ? "其他发布账号" : "本次发布账号"}</h3>
             {accounts.post_author_entries?.length
-              ? <AccountTable entries={accounts.post_author_entries} mode="publishing" onOpen={onOpenAccount} />
-              : <p className="r31-empty-line">本次调查没有其他发布账号。</p>}
+              ? <AccountTable entries={accounts.post_author_entries.slice(0, 5)} mode="publishing" onOpen={onOpenAccount} />
+              : <p className="r31-empty-line">本次调查没有可展示的发布账号。</p>}
+            {accounts.post_author_entries?.length ? (
+              <button type="button" className="r31-text-action" onClick={() => onOpenAccountIndex("post_author")}>
+                查看全部发布账号（{displayNumber(accounts.coverage?.post_author_account_count)}） <ChevronRight size={15} />
+              </button>
+            ) : null}
           </div>
         </div>
         <div className="r31-account-group r31-comment-account-panel r31-dynamic-commenters">
@@ -593,15 +612,16 @@ function DistributionMetrics({ statistics }: { statistics: ReportAccountMetricSt
   return (
     <div className="r31-distribution-metrics">
       <p><span>评论 <b>{displayNumber(statistics.comment_count)}</b></span><i>·</i><span>风险评论 <b className={Number(statistics.risk_comment_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_comment_count)}</b></span><i>·</i><span>发布 <b>{displayNumber(statistics.published_post_count)}</b></span></p>
-      <p><span>风险帖子 <b className={Number(statistics.risk_published_post_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_published_post_count)}</b></span><i>·</i><span>涉及帖子 <b>{displayNumber(statistics.commented_post_count)}</b></span><i>·</i><span>评论对象 <b>{displayNumber(statistics.commented_post_author_count)}</b></span></p>
+      <p><span>风险帖子 <b className={Number(statistics.risk_published_post_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_published_post_count)}</b></span><i>·</i><span>评论涉及帖子 <b>{displayNumber(statistics.commented_post_count)}</b></span><i>·</i><span>评论对象 <b>{displayNumber(statistics.commented_post_author_count)}</b></span></p>
     </div>
   );
 }
 
-function AccountOverviewContent({ reportVersionId, entryRef, onBack }: {
+function AccountOverviewContent({ reportVersionId, entryRef, onBack, backLabel = "返回评论账号索引" }: {
   reportVersionId: string;
   entryRef: string;
   onBack?: () => void;
+  backLabel?: string;
 }) {
   const [detail, setDetail] = useState<ReportAccountDetail | null>(null);
   const [error, setError] = useState("");
@@ -618,7 +638,7 @@ function AccountOverviewContent({ reportVersionId, entryRef, onBack }: {
     <>
       {onBack ? (
         <button type="button" className="r31-drawer-back" onClick={onBack}>
-          <ArrowLeft size={15} /> 返回评论账号索引
+          <ArrowLeft size={15} /> {backLabel}
         </button>
       ) : null}
       <AsyncState loading={!detail && !error} error={error} />
@@ -700,6 +720,11 @@ function AccountDetailDrawer({ reportVersionId, entryRef, onClose }: { reportVer
 }
 
 const accountSortOptions: Record<ReportAccountFilter, Array<{ value: ReportAccountSort; label: string }>> = {
+  post_author: [
+    { value: "published_post_count", label: "发布帖子数量优先" },
+    { value: "risk_published_post_count", label: "风险帖子数量优先" },
+    { value: "latest_activity", label: "最近活动优先" }
+  ],
   cross_investigation_commenter: [
     { value: "investigation_count", label: "调查数量优先" },
     { value: "comment_count", label: "本次评论数量优先" },
@@ -807,7 +832,7 @@ function AccountIndexDrawer({ reportVersionId, filter, onClose }: {
     setPageIndex((current) => current + 1);
   };
   const previousPage = () => setPageIndex((current) => Math.max(0, current - 1));
-  const tableMode: AccountTableMode = mode === "risk_commenter" ? "risk" : "cross";
+  const tableMode: AccountTableMode = mode === "post_author" ? "publishing" : mode === "risk_commenter" ? "risk" : "cross";
   const modeCount = (value: ReportAccountFilter) => {
     const count = filterCounts?.[value];
     return count?.status === "available" ? ` ${displayNumber(count.total_count)}` : "";
@@ -815,7 +840,7 @@ function AccountIndexDrawer({ reportVersionId, filter, onClose }: {
 
   return (
     <DrawerShell
-      title={selectedEntryRef ? "账号活动概览" : "评论账号索引"}
+      title={selectedEntryRef ? "账号活动概览" : mode === "post_author" ? "发布账号索引" : "评论账号索引"}
       onClose={onClose}
       className={`r31-account-index-drawer ${selectedEntryRef ? "is-overview" : ""}`}
     >
@@ -824,14 +849,15 @@ function AccountIndexDrawer({ reportVersionId, filter, onClose }: {
           reportVersionId={reportVersionId}
           entryRef={selectedEntryRef}
           onBack={returnToIndex}
+          backLabel={mode === "post_author" ? "返回发布账号索引" : "返回评论账号索引"}
         />
       ) : (
         <div className="r31-account-index-shell">
           <div className="r31-account-index-controls">
-            <div className="r31-account-segments" role="group" aria-label="评论账号筛选">
+            {mode !== "post_author" ? <div className="r31-account-segments" role="group" aria-label="评论账号筛选">
               <button type="button" className={mode === "cross_investigation_commenter" ? "is-active" : ""} onClick={() => changeMode("cross_investigation_commenter")}>跨调查评论账号{modeCount("cross_investigation_commenter")}</button>
               <button type="button" className={mode === "risk_commenter" ? "is-active" : ""} onClick={() => changeMode("risk_commenter")}>风险评论账号{modeCount("risk_commenter")}</button>
-            </div>
+            </div> : null}
             <p className="r31-account-index-basis">{mode === "cross_investigation_commenter" ? "基于当前可访问调查" : "基于本次发布报告"}</p>
             <div className="r31-account-index-toolbar">
               <label className="r31-account-search">
@@ -917,7 +943,7 @@ function PostDetailDrawer({ reportVersionId, postRef, onClose }: { reportVersion
       {detail ? (
         <>
           <div className="r31-post-detail-head"><div><h3>{detail.title}</h3>{detail.author_display_name ? <span>作者：{detail.author_display_name}</span> : null}</div><RiskTag risk={detail.risk_level} /></div>
-          <ReportPostSourceDetails detail={detail} />
+          <ReportPostSourceDetails detail={detail} reportVersionId={reportVersionId} />
           {detail.content_summary ? <section className="r31-drawer-section"><h3>内容摘要</h3><p>{detail.content_summary}</p></section> : null}
           <section className="r31-drawer-section"><h3>审核结论</h3><p>{decisionLabels[detail.decision] ? `${decisionLabels[detail.decision]} · ` : ""}{riskLabels[detail.risk_level] || "未分级"}</p><p>{detail.audit_summary || "原审核结果未提供文字说明。"}</p></section>
           {detail.direct_evidence.length ? <section className="r31-drawer-section"><h3>直接研判依据</h3><EvidenceList items={detail.direct_evidence} /></section> : null}

@@ -688,6 +688,17 @@ class InvestigationStore:
             ).fetchone()
         return self._session(row) if row is not None else None
 
+    def list_report_version_sessions(self, anchor: str) -> tuple[InvestigationSession, ...]:
+        """Read the original session and immutable version sessions for one workspace."""
+        prefix = anchor + ":version:"
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM investigation_sessions WHERE anchor_key = ? "
+                "OR substr(anchor_key, 1, ?) = ? ORDER BY created_at, id",
+                (anchor, len(prefix), prefix),
+            ).fetchall()
+        return tuple(self._session(row) for row in rows)
+
     def session_anchor(self, session_id: str) -> str:
         with self._connect() as connection:
             row = connection.execute(

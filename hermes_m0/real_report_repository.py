@@ -130,10 +130,12 @@ class PublishedReportRepository(InvestigationRepository):
         report_comments: tuple[FrozenReportComment, ...] = (),
         evidence_relations: tuple[FrozenEvidenceRelation, ...] = (),
         template_kind: str = "",
+        account_source: str = "",
         snapshot_payloads: Mapping[str, dict[str, Any]] | None = None,
     ) -> None:
         super().__init__(fixture)
         self.template_kind = template_kind
+        self.account_source = account_source
         self.snapshot_payloads = MappingProxyType(dict(snapshot_payloads or {}))
         self.database_path = database_path
         self.database_sha256 = database_sha256
@@ -239,6 +241,7 @@ class PublishedReportRepository(InvestigationRepository):
             report_comments=loaded["report_comments"],
             evidence_relations=loaded["evidence_relations"],
             template_kind=loaded["template_kind"],
+            account_source=loaded["account_source"],
             snapshot_payloads=loaded["snapshot_payloads"],
         )
 
@@ -834,7 +837,12 @@ def _load_report_graph(
     )
     return {
         "template_kind": template_kind,
-        "snapshot_payloads": post_payloads if snapshot_template else {},
+        "account_source": (body_json.get("report_document") or {}).get("account_source", ""),
+        # Selected historical audits also carry frozen account identities. Keep
+        # their full risk graph above, while exposing payloads to account lookup.
+        "snapshot_payloads": post_payloads
+        if snapshot_template or template_kind == "selected_existing_audits" or (body_json.get("report_document") or {}).get("account_source") == "report_snapshot"
+        else {},
         "fixture": fixture,
         "content_hash": content_hash,
         "snapshot_hash": snapshot_hash,

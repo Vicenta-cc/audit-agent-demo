@@ -1,13 +1,18 @@
 import type { ReportPostDetail } from "../../types/reports";
 import { useLocation, useNavigate } from "react-router-dom";
 import { FileSearch } from "lucide-react";
-import { auditDetailPath } from "./m3AnalysisRecords";
+import { reportAuditDetailPath } from "./m3AnalysisRecords";
 
 /** Frozen source fields shared by the report and appendix detail drawers. */
-export function ReportPostSourceDetails({ detail }: { detail: ReportPostDetail }) {
+export function ReportPostSourceDetails({ detail, reportVersionId }: { detail: ReportPostDetail; reportVersionId: string }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const auditPath = auditDetailPath(detail.audit_source);
+  const auditPath = reportAuditDetailPath({
+    taskId: detail.audit_source?.task_id,
+    outputId: detail.audit_source?.output_id,
+    reportVersionId,
+    postRef: detail.post_ref
+  });
   const published = detail.published_at ? new Date(detail.published_at) : null;
   const publishedLabel = published && !Number.isNaN(published.getTime())
     ? new Intl.DateTimeFormat("zh-CN", {

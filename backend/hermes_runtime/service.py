@@ -152,13 +152,28 @@ class HermesInvestigationAgentService:
                     if session.id not in tool_service.restored_reference_sessions:
                         restore_legacy_transcript(tool_service, session.id, history)
                 user_message = self.store.get_user_message_for_turn(turn.id).content
+                system_message = (
+                    self.runtime_binding.product_system_prompt("pass-report")
+                    if self._product_mode(session.id) == "pass-report"
+                    else self.runtime_binding.product_system_prompt()
+                )
+                if self.bind_runtime:
+                    from hermes_m0.runtime import report_task_runtime_for_session
+                    activity = report_task_runtime_for_session(session.id).account_activity
+                    if activity is not None:
+                        titles = [repo.report.title for repo in activity.authorized_report_repositories]
+                        system_message += (
+                            "\n服务器确认本会话账号活动查询已授权以下报告："
+                            + json.dumps(titles, ensure_ascii=False)
+                            + "。当前报告绑定只限制报告发现与证据导航，不限制上述账号活动查询。"
+                            "不得因为用户本轮没有重述授权，就声称只能查询当前报告。"
+                            "这个名单不是账号出现记录；具体数量与评论必须读取账号工具。"
+                            "查询跨报告账号活动时，须在本轮重新读取证据或账号工具；"
+                            "不得仅据历史回答中的空账号字段，判定当前工具仍无法识别该账号。"
+                        )
                 result = agent.run_conversation(
                     user_message,
-                    system_message=(
-                        self.runtime_binding.product_system_prompt("pass-report")
-                        if self._product_mode(session.id) == "pass-report"
-                        else self.runtime_binding.product_system_prompt()
-                    ),
+                    system_message=system_message,
                     conversation_history=history,
                     task_id=turn.id,
                 )

@@ -138,7 +138,7 @@ function AppendixPostDrawer({ reportVersionId, postRef, onClose }: { reportVersi
             <div><h3>{detail.title}</h3>{detail.author_display_name ? <span>作者：{detail.author_display_name}</span> : null}</div>
             <RiskTag risk={detail.risk_level} />
           </div>
-          <ReportPostSourceDetails detail={detail} />
+          <ReportPostSourceDetails detail={detail} reportVersionId={reportVersionId} />
           {detail.content_summary ? <section className="r31-drawer-section"><h3>内容摘要</h3><p>{detail.content_summary}</p></section> : null}
           <section className="r31-drawer-section">
             <h3>审核结论</h3>

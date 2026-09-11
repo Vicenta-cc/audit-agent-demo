@@ -17,12 +17,15 @@ import time
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNTIME = ROOT / 'outputs' / 'm3-environment'
+RUNTIME = Path(os.environ.get('XHS_MANAGED_RUNTIME') or ROOT / 'outputs' / 'm3-environment').expanduser().resolve()
 CONFIG = RUNTIME / 'config.json'
 
 
 def configure():
     config = json.loads(CONFIG.read_text())
+    formal = str(config.get('environment_id', '')).startswith('xhs-audit-formal')
+    if formal and (RUNTIME == ROOT or ROOT in RUNTIME.parents):
+        raise RuntimeError('正式数据目录必须独立于代码目录。')
     if Path(config['worktree']).resolve() != ROOT:
         raise RuntimeError('配置属于另一 worktree，拒绝启动。')
     data = Path(config['data_dir']).resolve()
@@ -32,7 +35,8 @@ def configure():
         raise RuntimeError('采集目录必须属于本实验。')
     if config['api_port'] == config['frontend_port']:
         raise RuntimeError('前后端端口不能相同。')
-    if any(int(config[k]) in {8000, 3128, 8127, 3148, 8147, 8148, 8149, 3168, 8168}
+    protected_ports = {8000, 3128, 8127, 3148, 8147, 8148, 8149, 3151, 8151, 3178, 8178} if formal else {8000, 3128, 8127, 3148, 8147, 8148, 8149, 3168, 8168}
+    if any(int(config[k]) in protected_ports
            for k in ('api_port', 'frontend_port')):
         raise RuntimeError('拒绝使用其他环境的保留端口。')
     from dotenv import dotenv_values
@@ -52,8 +56,11 @@ def configure():
         VITE_API_PROXY_TARGET=f"http://127.0.0.1:{config['api_port']}",
         PATH=os.pathsep.join([str(Path(config['node']).parent), str(Path(config['python']).parent),
                              '/usr/bin', '/bin', '/usr/sbin', '/sbin', '/opt/homebrew/bin']),
+        XHS_MANAGED_RUNTIME=str(RUNTIME),
         PYTHONDONTWRITEBYTECODE='1', M3_POSTS_PER_KEYWORD='1', M3_ANALYZE_LIMIT='1',
         CRAWLER_MAX_CONCURRENCY='1', COMMENT_AUDIT_CONCURRENCY='1', VIDEO_REVIEW_CONCURRENCY='1')
+    if formal:
+        environment['HISTORICAL_REPORT_C_MANIFEST'] = str(RUNTIME / 'archives/report-c-manifest.json')
     os.environ.clear()
     os.environ.update(environment)
     os.chdir(ROOT)
@@ -102,7 +109,7 @@ def check(config):
             raise RuntimeError('实验库未完整导入 A/B。')
     for filename in ('investigation.sqlite3', 'investigation_creation.sqlite3', 'crawler_auth.key'):
         if not (Path(config['data_dir']) / filename).is_file():
-            raise RuntimeError('实验运行文件缺失：' + filename)
+            raise RuntimeError('运行文件缺失：' + filename)
     print('代码、独立数据、Hermes、A/B、密钥存在性与前端构建检查通过。', flush=True)
 
 
@@ -114,7 +121,10 @@ def status(config, worker=True):
         if get_json(url) != expected:
             raise RuntimeError('前后端环境身份不一致。')
     reports = get_json(front + '/api/historical-report-workspaces')['items']
-    if not {'historical-report-a', 'historical-report-b'} <= {r['workspace_id'] for r in reports}:
+    required = {'historical-report-a', 'historical-report-b'}
+    if str(config.get('environment_id', '')).startswith('xhs-audit-formal'):
+        required.add('historical-report-c')
+    if not required <= {r['workspace_id'] for r in reports}:
         raise RuntimeError('A/B 会话不可用。')
     for report in reports:
         get_json(front + '/api/report-versions/' + report['report_version_id'])
@@ -181,7 +191,7 @@ def start(config):
             deadline = time.monotonic() + 90
             while True:
                 if any(p.poll() is not None for p in children):
-                    raise RuntimeError('服务退出，请查看实验日志。')
+                    raise RuntimeError('服务退出，请查看运行日志。')
                 try:
                     status(config, worker=False)
                     break
@@ -207,7 +217,7 @@ def start(config):
 
 
 def service_action(config, action):
-    label = 'com.xhs-audit.m3-resource-experiment'
+    label = 'com.xhs-audit.' + config['environment_id'].removeprefix('xhs-audit-') if str(config.get('environment_id', '')).startswith('xhs-audit-formal') else 'com.xhs-audit.m3-resource-experiment'
     domain = f'gui/{os.getuid()}'
     plist = Path.home() / 'Library/LaunchAgents' / (label + '.plist')
     arguments = [config['python'], str(ROOT / 'scripts/m3_environment.py'), 'start']
@@ -217,6 +227,7 @@ def service_action(config, action):
         check(config)
         (RUNTIME / 'logs').mkdir(exist_ok=True)
         payload = {'Label': label, 'ProgramArguments': arguments, 'WorkingDirectory': str(ROOT),
+                   'EnvironmentVariables': {'XHS_MANAGED_RUNTIME': str(RUNTIME)},
                    'RunAtLoad': True, 'KeepAlive': {'SuccessfulExit': False}, 'ThrottleInterval': 15,
                    'ExitTimeOut': 60, 'StandardOutPath': str(RUNTIME / 'logs/supervisor.log'),
                    'StandardErrorPath': str(RUNTIME / 'logs/supervisor.log')}

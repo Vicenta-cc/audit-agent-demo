@@ -22,7 +22,9 @@ import {
 } from "./analysisRecords";
 import { getInvestigationWorkspaceState } from "../../services/investigationCreation";
 import { AnalysisBasisDrawer } from "./AnalysisBasisDrawer";
-import { loadM3AnalysisRecords, reportPostDetailPath } from "./m3AnalysisRecords";
+import { loadM3AnalysisRecords, reportAuditDetailPath, reportPostDetailPath } from "./m3AnalysisRecords";
+
+import { loadHistoricalAnalysisRecords } from "./historicalAnalysisRecords";
 
 type RiskFilter = "all" | AnalysisRisk;
 type SortKey = "latest" | "risk";
@@ -47,7 +49,8 @@ export function AnalysisRecordsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const routeState = (location.state || {}) as AnalysisRecordsRouteState;
   const authoritativeRunId = searchParams.get("run") || "";
-  const authoritative = Boolean(authoritativeRunId);
+  const historical = investigationId.startsWith("historical-report-");
+  const authoritative = historical || Boolean(authoritativeRunId);
   const [records, setRecords] = useState<AnalysisRecord[]>(() => (
     authoritative
       ? normalizeAnalysisRecords(routeState.records || [])
@@ -83,8 +86,12 @@ export function AnalysisRecordsPage() {
     let current = true;
     setRecordsLoading(true);
     setRecordsError("");
-    void getInvestigationWorkspaceState(investigationId)
-      .then((state) => {
+    const request = historical
+      ? loadHistoricalAnalysisRecords(investigationId).then(result => {
+          if (current) setInvestigationTitle(result.title);
+          return result;
+        })
+      : getInvestigationWorkspaceState(investigationId).then((state) => {
         if (!state.run || state.run.run_id !== authoritativeRunId) {
           throw new Error("当前调查没有匹配的真实 Run");
         }
@@ -94,8 +101,8 @@ export function AnalysisRecordsPage() {
         }
         setInvestigationTitle(state.draft_artifact?.draft.title || "当前调查");
         return loadM3AnalysisRecords(state.run);
-      })
-      .then((result) => {
+      });
+    void request.then((result) => {
         if (!current) return;
         setRecords(result.records);
         setRecordsLoading(false);
@@ -109,7 +116,7 @@ export function AnalysisRecordsPage() {
     return () => {
       current = false;
     };
-  }, [authoritative, authoritativeRunId, investigationId, searchParams]);
+  }, [authoritative, authoritativeRunId, historical, investigationId, searchParams]);
 
   const riskCounts = useMemo(() => (
     records.reduce<Record<AnalysisRisk, number>>((counts, record) => {
@@ -164,6 +171,11 @@ export function AnalysisRecordsPage() {
   };
 
   const handleViewEvidence = (record: AnalysisRecord) => {
+    if (historical) {
+      const path = reportAuditDetailPath(record);
+      if (path) navigate(path, {state:{returnTo:`${location.pathname}${location.search}`, returnLabel:"全部分析记录", returnTitle:investigationTitle}});
+      return;
+    }
     if (authoritative && (!record.taskId || !record.outputId)) {
       setSelectedRecord(record);
       return;
@@ -216,9 +228,9 @@ export function AnalysisRecordsPage() {
       <section className="analysis-records-hero">
         <div className="analysis-records-hero-inner">
           <div className="analysis-records-title-block">
-            <span>本轮调查</span>
+            <span>{historical ? "历史调查" : "本轮调查"}</span>
             <h1>全部分析记录</h1>
-            <p>{records[0]?.analyzedAt.split(" ")[0] || "等待分析结果"} · 本轮 Agent 研判批次</p>
+            <p>{historical ? "已保存的审核结果 · 不代表历史执行顺序" : `${records[0]?.analyzedAt.split(" ")[0] || "等待分析结果"} · 本轮 Agent 研判批次`}</p>
           </div>
           <div className="analysis-records-total">
             <BarChart3 size={20} />
@@ -273,7 +285,7 @@ export function AnalysisRecordsPage() {
             <ArrowUpDown size={15} />
             <span>排序</span>
             <select value={sort} onChange={(event) => updateParam("sort", event.target.value, "latest")}>
-              <option value="latest">最新完成优先</option>
+              <option value="latest">{historical ? "记录编号倒序" : "最新完成优先"}</option>
               <option value="risk">风险等级优先</option>
             </select>
           </label>

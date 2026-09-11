@@ -6,6 +6,7 @@ import hashlib
 import json
 from collections import defaultdict
 from copy import deepcopy
+from types import SimpleNamespace
 
 from .account_corpus import account_ref, freeze
 from .account_activity_repository import AccountActivityRepository
@@ -69,7 +70,38 @@ class SnapshotAccountData:
     The caller supplies the authorized report set; there is no database discovery.
     """
 
-    def __init__(self, repositories, *, legacy_corpus=None):
+    @classmethod
+    def from_snapshot(cls, snapshot):
+        """Use the same activity adapter before and after report publication."""
+        findings = {f.post_ref: SimpleNamespace(**{
+            key: f.payload[key] for key in ("decision", "risk_level")
+        }) for f in snapshot.findings}
+        comments = {}
+        for post in snapshot.posts:
+            comments[post.ref] = tuple(SimpleNamespace(
+                id=str(c["comment_id"]), text=c["content"],
+                author_source_key=c["sec_uid"], author_display_name=c.get("nickname", ""),
+                identity_consistent=True, published_at=c["create_time"],
+                audit_status=c["audit_status"], risk_level=c["risk_level"],
+                risk_type=c["risk_type"],
+            ) for c in post.payload["comments"])
+        repo = SimpleNamespace(
+            fixture=SimpleNamespace(provenance=SimpleNamespace(source_task_id=snapshot.task_id)),
+            report=SimpleNamespace(title=snapshot.display_name),
+            template_kind="", account_source="report_snapshot",
+            snapshot_payloads={p.ref: p.payload for p in snapshot.posts},
+            finding_for_post=findings.__getitem__, _report_comments_by_post=comments,
+            snapshot_hash=snapshot.snapshot_hash, content_hash=snapshot.snapshot_hash,
+        )
+        data = cls((repo,), completed_only=True)
+        data.schema_version = "report-snapshot-accounts/v1"
+        data._tasks = freeze({snapshot.task_id: {
+            "task_display_name": snapshot.display_name,
+            "snapshot_ref": snapshot.snapshot_ref, "source_hash": snapshot.snapshot_hash,
+        }})
+        return data
+
+    def __init__(self, repositories, *, legacy_corpus=None, completed_only=False):
         repositories = tuple(repositories)
         self._accounts, self._aliases, self._tasks = {}, defaultdict(list), {}
         occurrences = []
@@ -78,7 +110,7 @@ class SnapshotAccountData:
             if task in self._tasks:
                 raise ValueError("duplicate authorized task")
             self._tasks[task] = {"task_display_name": repo.report.title}
-            if repo.template_kind not in {"all_pass", "single_risk_post", "selected_existing_audits"}:
+            if getattr(repo, "account_source", "") != "report_snapshot" and repo.template_kind not in {"all_pass", "single_risk_post", "selected_existing_audits"}:
                 if (
                     legacy_corpus is None
                     or task not in legacy_corpus.authorized_task_ids
@@ -169,6 +201,8 @@ class SnapshotAccountData:
                     finding.risk_level,
                 )
                 for c in repo._report_comments_by_post.get(post_id, ()):
+                    if completed_only and c.audit_status != "completed":
+                        continue
                     ident = (
                         identify(
                             {

@@ -184,9 +184,14 @@ def public_account_overview_projection(
 class ReportAccountOverviewProjector:
     """Compute R3.1 Account statistics from frozen Posts and Comments."""
 
-    def __init__(self, corpus: AccountCorpus, *, fixture_path: Path) -> None:
+    def __init__(self, corpus: AccountCorpus, *, fixture_path: Path | None) -> None:
         self.corpus = corpus
-        self.fixture_path = fixture_path.resolve()
+        self.fixture_path = fixture_path.resolve() if fixture_path is not None else None
+
+    @classmethod
+    def from_snapshot(cls, snapshot: ImmutableReportSnapshot) -> "ReportAccountOverviewProjector":
+        from hermes_m0.pass_support import SnapshotAccountData
+        return cls(SnapshotAccountData.from_snapshot(snapshot), fixture_path=None)
 
     @classmethod
     def load(
@@ -199,6 +204,7 @@ class ReportAccountOverviewProjector:
         snapshot: ImmutableReportSnapshot,
         *,
         target_account_identity: dict[str, str] | None,
+        require_target: bool = True,
     ) -> dict[str, Any]:
         task_id = snapshot.task_id
         try:
@@ -208,12 +214,12 @@ class ReportAccountOverviewProjector:
                 "build_report_account_overview",
                 ["the Report task is outside the authorized Account corpus"],
             ) from exc
-        if target_account_identity is None:
+        if target_account_identity is None and require_target:
             raise ReportValidationError(
                 "build_report_account_overview",
                 ["the Report task has no explicit target Account projection"],
             )
-        if set(target_account_identity) != {
+        if target_account_identity is not None and set(target_account_identity) != {
             "platform",
             "source_namespace",
             "source_account_key",
@@ -222,14 +228,15 @@ class ReportAccountOverviewProjector:
                 "build_report_account_overview",
                 ["the Report task creator Account identity is incomplete"],
             )
-        platform = _platform(target_account_identity["platform"])
+        target_account_identity = target_account_identity or {}
+        platform = _platform(target_account_identity.get("platform", ""))
         source_namespace = normalize_source_id(
-            target_account_identity["source_namespace"]
+            target_account_identity.get("source_namespace", "")
         )
         source_account_key = normalize_source_id(
-            target_account_identity["source_account_key"]
+            target_account_identity.get("source_account_key", "")
         )
-        if (
+        if target_account_identity and (
             platform != "douyin"
             or source_namespace != DOUYIN_ACCOUNT_NAMESPACE
             or not source_account_key
@@ -242,7 +249,7 @@ class ReportAccountOverviewProjector:
             platform=platform,
             source_namespace=source_namespace,
             source_account_key=source_account_key,
-        )
+        ) if target_account_identity else None
 
         snapshot_post_keys = {item.canonical_key for item in snapshot.posts}
         task_occurrences = [
@@ -307,17 +314,17 @@ class ReportAccountOverviewProjector:
             occurrences_by_account[account_id].append(item)
 
         target_occurrences = occurrences_by_account.get(configured_target_ref) or []
-        if not target_occurrences:
+        if configured_target_ref and not target_occurrences:
             raise ReportValidationError(
                 "build_report_account_overview",
                 ["the configured creator Account does not resolve in the frozen Report data"],
             )
-        if not any(item["kind"] == "post_author" for item in target_occurrences):
+        if configured_target_ref and not any(item["kind"] == "post_author" for item in target_occurrences):
             raise ReportValidationError(
                 "build_report_account_overview",
                 ["the configured creator Account is not a frozen Post author"],
             )
-        target_account_refs = {configured_target_ref}
+        target_account_refs = {configured_target_ref} if configured_target_ref else set()
 
         staged: list[dict[str, Any]] = []
         for account_id, occurrences in occurrences_by_account.items():
@@ -337,7 +344,7 @@ class ReportAccountOverviewProjector:
             display_name = (
                 display_observations[-1][1]
                 if display_observations
-                else _current_display_name(self.corpus, account_id, task_id)
+                else ("未记录昵称的账号" if self.fixture_path is None else _current_display_name(self.corpus, account_id, task_id))
             )
             statistics = {
                 "comment_count": len(comments),
@@ -426,7 +433,7 @@ class ReportAccountOverviewProjector:
             "report_snapshot_hash": snapshot.snapshot_hash,
             "account_corpus_schema_version": self.corpus.schema_version,
             "account_corpus_revision": self.corpus.corpus_revision,
-            "account_fixture_sha256": _file_sha256(self.fixture_path),
+            "account_fixture_sha256": _file_sha256(self.fixture_path) if self.fixture_path is not None else snapshot.snapshot_hash,
             "account_task_snapshot_ref": str(task_snapshot["snapshot_ref"]),
             "account_task_source_hash": str(task_snapshot["source_hash"]),
             "occurrence_set_hash": stable_hash(

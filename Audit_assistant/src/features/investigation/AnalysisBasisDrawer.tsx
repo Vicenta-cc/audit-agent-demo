@@ -335,7 +335,7 @@ export function AnalysisBasisDrawer({
               <FileSearch size={17} />
               <span>{record.source === "m3-report" && (!record.reportVersionId || !record.postRef)
                 ? "研判依据暂不可用"
-                : record.source === "m3-report" ? "查看报告帖子详情" : "查看完整证据"}</span>
+                : record.source === "m3-report" && (!record.taskId || !record.outputId) ? "查看报告帖子详情" : "查看完整证据"}</span>
               <ArrowRight size={16} />
             </button>
           )}

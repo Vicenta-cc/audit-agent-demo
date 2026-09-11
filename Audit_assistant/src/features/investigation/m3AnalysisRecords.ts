@@ -222,3 +222,9 @@ function formatAnalyzedAt(value: string) {
     hour12: false
   }).format(timestamp).replace(/\//g, "-");
 }
+
+export function reportAuditDetailPath(record: Pick<AnalysisRecord, "taskId" | "outputId" | "reportVersionId" | "postRef">) {
+  if (!record.taskId || !record.outputId || !record.reportVersionId || !record.postRef) return "";
+  const query = new URLSearchParams({ report_version: record.reportVersionId, post_ref: record.postRef });
+  return `${auditDetailPath({task_id: record.taskId, output_id: record.outputId})}?${query}`;
+}

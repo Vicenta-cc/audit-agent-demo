@@ -168,6 +168,16 @@ class HistoricalReportImporter:
             values = tuple(
                 (overrides or {}).get(item, row[item]) for item in source_columns
             )
+            if table == "reports":
+                existing = target.execute("SELECT * FROM reports WHERE id = ?", (row["id"],)).fetchone()
+                if existing is not None:
+                    if any(existing[key] != row[key] for key in ("id", "task_id", "created_at")):
+                        raise HistoricalReportImportError("historical report parent identity conflicts")
+                    target.execute(
+                        "UPDATE reports SET updated_at = MAX(updated_at, ?) WHERE id = ?",
+                        (row["updated_at"], row["id"]),
+                    )
+                    continue
             try:
                 target.execute(
                     f"INSERT INTO {_quoted(table)} ({columns}) VALUES ({placeholders})",

@@ -203,6 +203,7 @@ app.include_router(
         principal_provider=principal_provider,
         m3_run_store=investigation_creation_store,
         historical_report_service=historical_report_demo_service,
+        outputs_dir=settings.outputs_dir,
     )
 )
 app.include_router(

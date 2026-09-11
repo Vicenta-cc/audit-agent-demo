@@ -164,6 +164,13 @@ class InvestigationCreationStore:
                         REFERENCES investigation_draft_revisions(draft_id, revision)
                 );
 
+                CREATE TABLE IF NOT EXISTS investigation_run_execution_holds (
+                    run_id TEXT PRIMARY KEY REFERENCES investigation_runs(id),
+                    source_name TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
                 CREATE TABLE IF NOT EXISTS investigation_run_idempotency_keys (
                     idempotency_key TEXT PRIMARY KEY,
                     principal TEXT NOT NULL,
@@ -1410,11 +1417,12 @@ class InvestigationCreationStore:
             candidate = connection.execute(
                 """
                 SELECT * FROM investigation_runs
-                WHERE status = 'QUEUED'
+                WHERE id NOT IN (SELECT run_id FROM investigation_run_execution_holds)
+                  AND (status = 'QUEUED'
                    OR (
                        status IN ('RUNNING', 'REPORT_GENERATING')
                        AND (heartbeat_at = '' OR heartbeat_at <= ?)
-                   )
+                   ))
                 ORDER BY
                     CASE status
                         WHEN 'REPORT_GENERATING' THEN 0

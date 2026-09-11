@@ -82,3 +82,23 @@ export function fetchReportAppendix(
     query
   ));
 }
+
+export async function fetchReportAuditDetail(reportVersionId: string, postRef: string) {
+  const base = `/api/report-versions/${encodeURIComponent(reportVersionId)}/posts/${encodeURIComponent(postRef)}`;
+  const detail = await apiRequest<import("../types/jobs").AuditResultDetail>(`${base}/audit-detail`);
+  const marker = `/outputs/${detail.audit_result.job_id}/`;
+  // Resolve saved media through the same authorized report/post as the detail.
+  const resolveAssets = (value: unknown): void => {
+    if (Array.isArray(value)) { value.forEach(resolveAssets); return; }
+    if (!value || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      if (["asset_rel", "local_path", "original_path", "path"].includes(key) && typeof child === "string" && child && !/^https?:\/\//i.test(child)) {
+        const path = child.includes(marker) ? child.split(marker, 2)[1] : child;
+        (value as Record<string, unknown>)[key] = `${base}/assets?path=${encodeURIComponent(path)}`;
+      } else resolveAssets(child);
+    }
+  };
+  resolveAssets(detail.audit_result);
+  resolveAssets(detail.evidence_groups);
+  return detail;
+}

@@ -102,10 +102,13 @@ export interface ReportAccountEntry {
 }
 
 export type ReportAccountFilter =
+  | "post_author"
   | "cross_investigation_commenter"
   | "risk_commenter";
 
 export type ReportAccountSort =
+  | "published_post_count"
+  | "risk_published_post_count"
   | "investigation_count"
   | "risk_comment_count"
   | "comment_count"

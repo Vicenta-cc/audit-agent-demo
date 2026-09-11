@@ -85,7 +85,14 @@ class IntegrationReportGraph(ReportGenerationGraph):
         return self._snapshot(version_id)
 
     def _freeze_source_snapshot(self, state: dict[str, Any]) -> dict[str, Any]:
-        snapshot = build_immutable_snapshot(self.report_source, state["task_id"])
+        if hasattr(self.report_source, "frozen_snapshot"):
+            from dataclasses import replace
+            snapshot = replace(
+                self.report_source.frozen_snapshot(state["task_id"]),
+                snapshot_ref="report-source-snapshot:" + state["report_version_id"].split(":")[-1],
+            )
+        else:
+            snapshot = build_immutable_snapshot(self.report_source, state["task_id"])
         self._snapshots[state["report_version_id"]] = snapshot
         task_status = (
             self.report_source.task_status(state["task_id"])
@@ -253,6 +260,24 @@ class IntegrationReportGraph(ReportGenerationGraph):
                         group,
                         "finding_count",
                     )
+        # Archived reports can include verified candidate/exclusion counts.
+        # Keep their stable metric refs so saved numeric claims can be revalidated.
+        coverage = snapshot.statistics.get("source_coverage")
+        if coverage and getattr(self.report_source, "account_source", "") == "report_snapshot":
+            if coverage["selected_posts"] != len(posts) or coverage["candidate_posts"] < len(posts):
+                raise ReportValidationError("build_statistics", ["invalid source coverage counts"])
+            for name, label, value in (
+                ("candidate_posts", "原始候选帖子数", coverage["candidate_posts"]),
+                ("excluded_posts", "未完成帖子数", coverage["candidate_posts"] - len(posts)),
+            ):
+                metric = dict(metrics[0])
+                metric.update(
+                    metric_key="metric:" + stable_hash({"snapshot": snapshot.snapshot_hash, "coverage": name}),
+                    label=label, value=value, denominator=coverage["candidate_posts"],
+                    denominator_name="source_candidate_post_count", group={"source_coverage": name},
+                    source_hash=stable_hash({"coverage": coverage, "metric": name}),
+                )
+                metrics.append(metric)
         return {
             "task_overview": {
                 "task_id": task_id,

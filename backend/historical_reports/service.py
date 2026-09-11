@@ -25,6 +25,11 @@ class HistoricalReportDemoService:
         self.specs = specs
         self.workspace_store = workspace_store
         self.report_store = report_store
+        # Only these registered report archives participate in presentation activity.
+        self.report_store.account_report_sources = tuple(
+            (str(s.source_database), s.report_version_id, s.source_database_sha256,
+             s.report_content_hash, s.snapshot_hash) for s in specs
+        )
         self.report_service = report_service
         self.executor = executor
         self.importer = HistoricalReportImporter(report_store.db_path)
@@ -95,6 +100,36 @@ class HistoricalReportDemoService:
             ) from exc
         return self._workspace_state(workspace, principal_id=principal_id)
 
+    def analysis_records(self, workspace_id: str, *, principal_id: str) -> dict[str, Any]:
+        """Read all frozen post results, never replay or invent execution events."""
+        from backend.reporting.presentation_projection import build_post_detail
+
+        workspace = self.get_workspace(workspace_id, principal_id=principal_id)
+        version_id = str(workspace["report_version_id"])
+        document = self.report_store.get_frontend_report(version_id)
+        posts = document.get("posts") or []
+        coverage = document.get("source_coverage") or {}
+        failures = {str(item["post_id"]): item for item in self._specs_by_workspace[workspace_id].analysis_failures}
+        from backend.reporting.public_references import public_post_and_finding_refs
+        snapshot = self.report_store.load_immutable_snapshot(version_id)
+        post_refs, _ = public_post_and_finding_refs(snapshot)
+        sources = {post_refs[finding.post_ref]: {
+            "task_id": (finding.payload.get("source_provenance") or {}).get("source_job_id") or snapshot.task_id,
+            "output_id": str(finding.audit_result_id),
+        } for finding in snapshot.findings}
+
+        return {
+            "report_version_id": version_id,
+            "title": workspace["title"],
+            "record_count": len(posts),
+            "candidate_count": coverage.get("candidate_posts", len(posts)),
+            "notice": "以下为已保存的审核结果，不表示恢复了历史实时执行顺序或时间线。",
+            "excluded_posts": [{**item, "reason": failures.get(str(item["post_id"]), {}).get("reason", "未保存逐帖失败原因")}
+                               for item in coverage.get("excluded_failed_posts", [])],
+            "comment_coverage": coverage.get("comments", {}),
+            "records": [{**build_post_detail(document, post_ref=post["post_ref"]), "audit_source": sources.get(post["post_ref"])} for post in posts],
+        }
+
     def accept_turn(
         self,
         workspace_id: str,
@@ -107,7 +142,7 @@ class HistoricalReportDemoService:
         with self._turn_lock:
             session = self.report_service.create_session(
                 str(workspace["report_version_id"]),
-                anchor_key=self._anchor(workspace_id, principal_id),
+                anchor_key=self._current_anchor(workspace, principal_id),
             )
             return self.executor.accept_turn(
                 session.id,
@@ -119,13 +154,11 @@ class HistoricalReportDemoService:
         self, workspace_id: str, turn_id: str, *, principal_id: str
     ) -> Any:
         self.get_workspace(workspace_id, principal_id=principal_id)
-        session = self.report_service.store.find_session_by_anchor(
+        sessions = self.report_service.store.list_report_version_sessions(
             self._anchor(workspace_id, principal_id)
         )
-        if session is None:
-            raise InvestigationTurnNotFoundError(turn_id)
         turn = self.report_service.store.get_turn(turn_id)
-        if turn.session_id != session.id:
+        if turn.session_id not in {session.id for session in sessions}:
             raise InvestigationTurnNotFoundError(turn_id)
         return turn
 
@@ -136,20 +169,19 @@ class HistoricalReportDemoService:
         return self.executor.resume_turn(turn_id)
 
     def internal_session_count(self, workspace_id: str, *, principal_id: str) -> int:
-        session = self.report_service.store.find_session_by_anchor(
+        return len(self.report_service.store.list_report_version_sessions(
             self._anchor(workspace_id, principal_id)
-        )
-        return int(session is not None)
+        ))
 
     def _workspace_state(
         self, workspace: dict[str, Any], *, principal_id: str
     ) -> dict[str, Any]:
         conversation: list[dict[str, Any]] = []
         latest_turn = None
-        session = self.report_service.store.find_session_by_anchor(
+        sessions = self.report_service.store.list_report_version_sessions(
             self._anchor(str(workspace["id"]), principal_id)
         )
-        if session is not None:
+        for session in sessions:
             messages = self.report_service.get_messages(
                 session.id, include_tool_messages=False
             )
@@ -166,12 +198,21 @@ class HistoricalReportDemoService:
                     and turn.assistant_message_id == message.id
                 ):
                     conversation.append(self._message_projection(message))
-            latest_turn = turns[-1] if turns else None
+            if session.report_version_id == workspace["report_version_id"]:
+                latest_turn = turns[-1] if turns else None
         return {
             **workspace,
             "conversation": conversation,
             "latest_turn": latest_turn,
         }
+
+    def _current_anchor(self, workspace: dict[str, Any], principal_id: str) -> str:
+        anchor = self._anchor(str(workspace["id"]), principal_id)
+        original = self.report_service.store.find_session_by_anchor(anchor)
+        if original is None or original.report_version_id == workspace["report_version_id"]:
+            return anchor
+        # Preserve old session scope/history; future questions bind to the new version.
+        return anchor + ":version:" + str(workspace["report_version_id"])
 
     @staticmethod
     def _message_projection(message: Any) -> dict[str, Any]:

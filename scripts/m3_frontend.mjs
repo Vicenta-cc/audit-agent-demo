@@ -14,7 +14,7 @@ const server = http.createServer((req, res) => {
     });
     upstream.on('error', () => {
       if (!res.headersSent) res.writeHead(502, {'Content-Type':'application/json'});
-      res.end(JSON.stringify({detail:'实验后台未连接，请检查本环境启动状态。'}));
+      res.end(JSON.stringify({detail:'后台未连接，请检查工作台启动状态。'}));
     });
     res.on('close', () => upstream.destroy()); req.pipe(upstream); return;
   }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchReportAuditDetail } from "../../services/reports";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getReturnNavigationState } from "../../app/listNavigation";
 import {
@@ -102,6 +103,8 @@ export function TaskOutputDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const returnNavigation = getReturnNavigationState(location.state);
+  const reportVersion = new URLSearchParams(location.search).get("report_version") || "";
+  const postRef = new URLSearchParams(location.search).get("post_ref") || "";
   const commentsRef = useRef<HTMLDivElement>(null);
   const evidenceListRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -128,9 +131,13 @@ export function TaskOutputDetailPage() {
     setLoading(true);
     setError("");
     try {
+      if (Boolean(reportVersion) !== Boolean(postRef)) throw new Error("报告审核记录引用不完整");
       const routeJobPromise = taskId ? fetchJob(taskId).catch(() => null) : Promise.resolve(null);
-      const [nextDetail, routeJob] = await Promise.all([loadOutputDetail(taskId, outputId), routeJobPromise]);
+      const [nextDetail, routeJob] = await Promise.all([reportVersion && postRef ? fetchReportAuditDetail(reportVersion, postRef) : loadOutputDetail(taskId, outputId), routeJobPromise]);
       const resultJobId = String(nextDetail.audit_result.job_id || taskId || "");
+      if (reportVersion && (resultJobId !== taskId || String(nextDetail.audit_result.audit_result_id) !== outputId)) {
+        throw new Error("报告记录与当前审核页面不匹配");
+      }
       const matchedJob = routeJob?.id === resultJobId
         ? routeJob
         : resultJobId
@@ -144,7 +151,7 @@ export function TaskOutputDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [outputId, taskId]);
+  }, [outputId, taskId, reportVersion, postRef]);
 
   useEffect(() => {
     void loadData();
@@ -257,6 +264,10 @@ export function TaskOutputDetailPage() {
   };
 
   const handleLinkComment = async (comment: DetailComment) => {
+    if (detail.report_snapshot) {
+      setToast({ message: "历史报告中的账号可在报告问答中继续查询", tone: "info" });
+      return;
+    }
     try {
       await linkCommentUserRelation(buildCommentRelationContext(result, comment));
       setToast({ message: "已关联评论用户", tone: "success" });
@@ -1076,7 +1087,7 @@ function buildTranscript(result: AuditResult): DetailTranscript {
 function normalizeComments(comments: AuditComment[]): DetailComment[] {
   return comments
     .map((comment, index) => {
-      const content = firstText(comment.content, comment.text);
+      const content = firstText(comment.content, comment.text) || "该评论未保存文字内容";
       const name = firstText(comment.nickname, comment.user_name, comment.user_unique_id, comment.short_user_id, comment.user_id, "评论用户");
       const rawIdentity = firstText(comment.sec_uid, comment.user_id, comment.user_unique_id, comment.short_user_id, name);
       const riskScore = comment.audit_status === "completed" && Number.isFinite(Number(comment.risk_score))
@@ -1098,7 +1109,6 @@ function normalizeComments(comments: AuditComment[]): DetailComment[] {
         raw: comment
       };
     })
-    .filter((comment) => comment.content)
     .sort((left, right) => (right.riskScore ?? -1) - (left.riskScore ?? -1));
 }
 
@@ -1197,6 +1207,10 @@ function riskIcon(level: RiskLevel) {
 }
 
 function getPublishedAt(result: AuditResult) {
+  if (result.report_snapshot_source) {
+    const publishedAt = stringField(result, "published_at");
+    return publishedAt ? formatDateTime(publishedAt) : "--";
+  }
   const direct = firstText(
     stringField(result, "publish_time"),
     stringField(result, "published_at"),

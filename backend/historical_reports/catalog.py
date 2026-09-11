@@ -22,6 +22,7 @@ class HistoricalReportSpec:
     snapshot_hash: str
     draft: dict[str, Any]
     display_timeline: tuple[dict[str, Any], ...]
+    analysis_failures: tuple[dict[str, Any], ...] = ()
 
 
 def _source_path(env_path: Path | None, artifact_dir: str) -> Path:

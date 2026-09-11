@@ -25,6 +25,7 @@ import { InvestigationReportCard } from "./InvestigationReportCard";
 import { StreamingAssistantText } from "./StreamingAssistantText";
 import { GeneratedRulesMessage } from "./GeneratedRulesMessage";
 import { AssistantMarkdown } from "./AssistantMarkdown";
+import { HistoricalProgressCard } from "./HistoricalProgressCard";
 import { HistoricalReportPendingStatus } from "./HistoricalReportPendingStatus";
 import { shouldShowHistoricalPending } from "./historicalReportPresentation";
 import { platformOptionsList } from "../../mocks/investigationMocks";
@@ -436,17 +437,7 @@ export function InvestigationCenterArea({
 
               if (msg.type === "historical_progress") {
                 return (
-                  <div key={msg.id} className="inv-msg-asst-card inv-historical-progress">
-                    <div className="inv-asst-head">
-                      <Bot size={16} />
-                      <span>研判进度</span>
-                      <span className="inv-grounded-verified">
-                        <CheckCircle2 size={13} />
-                        已完成
-                      </span>
-                    </div>
-                    <p>{msg.content}</p>
-                  </div>
+                  <HistoricalProgressCard key={msg.id} workspaceId={session.id} />
                 );
               }
 

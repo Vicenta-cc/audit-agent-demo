@@ -171,6 +171,7 @@ export interface AuditEvidenceGroup {
 }
 
 export interface AuditResultDetail {
+  report_snapshot?: { report_version_id: string; post_ref: string };
   audit_result: AuditResult;
   audit_config_revision?: JobAuditConfigRevision;
   evidence_groups?: AuditEvidenceGroup[];
@@ -227,6 +228,8 @@ export interface RawJob {
 }
 
 export interface AuditResult {
+  report_snapshot_source?: boolean;
+  published_at?: string;
   id?: number;
   audit_result_id?: number;
   job_id?: string;

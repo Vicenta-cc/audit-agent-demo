@@ -130,6 +130,16 @@ def create_historical_report_router(
         except Exception as exc:
             _raise_public_error(exc)
 
+    @router.get("/api/historical-report-workspaces/{workspace_id}/analysis-records")
+    def get_analysis_records(
+        workspace_id: str,
+        principal: Principal = Depends(principal_provider),
+    ) -> dict[str, Any]:
+        try:
+            return service.analysis_records(workspace_id, principal_id=principal.id)
+        except Exception as exc:
+            _raise_public_error(exc)
+
     @router.post(
         "/api/historical-report-workspaces/{workspace_id}/turns",
         response_model=HistoricalTurnAcceptedResponse,

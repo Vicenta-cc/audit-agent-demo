@@ -132,6 +132,7 @@ def historical_stack():
                 report_store,
                 principal_provider=LocalPrincipalProvider("historical-demo-test"),
                 historical_report_service=service,
+                outputs_dir=root / "outputs",
             )
         )
         with TestClient(app) as client:
@@ -142,6 +143,7 @@ def historical_stack():
                 "report_db": report_db,
                 "agent_service": agent_service,
                 "executor": executor,
+                "outputs_dir": root / "outputs",
             }
         agent_service.close()
 
@@ -358,3 +360,130 @@ def test_frontend_pending_storage_has_the_only_allowed_fields() -> None:
         "question:",
     ):
         assert forbidden not in source
+
+
+def test_historical_analysis_records_include_every_frozen_post_and_preserve_report(historical_stack):
+    client = historical_stack['client']
+    for spec, count in zip(HISTORICAL_REPORT_SPECS, (201, 304)):
+        client.get('/api/historical-report-workspaces')
+        before = historical_stack['report_store'].get_frontend_report(spec.report_version_id)
+        response = client.get(f'/api/historical-report-workspaces/{spec.workspace_id}/analysis-records')
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload['record_count'] == count
+        assert len({post['post_ref'] for post in payload['records']}) == count
+        assert payload['excluded_posts'] == []
+        assert '不表示恢复' in payload['notice']
+        for post in (payload['records'][0], payload['records'][-1]):
+            expected = historical_stack['report_store'].get_presentation_post_detail(spec.report_version_id, post_ref=post['post_ref'])
+            assert post == expected
+        assert historical_stack['report_store'].get_frontend_report(spec.report_version_id) == before
+    assert client.get('/api/historical-report-workspaces/unknown/analysis-records').status_code == 404
+
+
+def test_frozen_audit_detail_uses_full_saved_comments_and_evidence(historical_stack):
+    client = historical_stack['client']
+    client.get('/api/historical-report-workspaces')
+    spec = HISTORICAL_REPORT_SPECS[0]
+    records = client.get(f'/api/historical-report-workspaces/{spec.workspace_id}/analysis-records').json()['records']
+    record = records[0]
+    before = historical_stack['report_store'].get_frontend_report(spec.report_version_id)
+    route = f"/api/report-versions/{spec.report_version_id}/posts/{record['post_ref']}/audit-detail"
+    response = client.get(route)
+    assert response.status_code == 200, response.text
+    detail = response.json()
+    assert detail['audit_result']['job_id'] == spec.task_id
+    assert str(detail['audit_result']['audit_result_id']) == record['audit_source']['output_id']
+    snapshot = historical_stack['report_store'].load_immutable_snapshot(spec.report_version_id)
+    original = next(post for post in snapshot.posts if post.payload['raw_content_payload'].get('note_id') == detail['audit_result'].get('note_id'))
+    assert detail['audit_result']['comments'] == original.payload['raw_content_payload']['comments']
+    assert detail['report_snapshot']['post_ref'] == record['post_ref']
+    assert historical_stack['report_store'].get_frontend_report(spec.report_version_id) == before
+    assert client.get(f'/api/report-versions/{spec.report_version_id}/posts/unknown/audit-detail').status_code == 404
+
+
+def test_report_media_requires_a_saved_asset_of_the_selected_post(historical_stack):
+    client = historical_stack["client"]
+    spec = HISTORICAL_REPORT_SPECS[0]
+    records = client.get(f"/api/historical-report-workspaces/{spec.workspace_id}/analysis-records").json()["records"]
+    base = f"/api/report-versions/{spec.report_version_id}/posts/{records[0]['post_ref']}"
+    item = client.get(base + "/audit-detail").json()["audit_result"]
+    def paths(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "asset_rel" and isinstance(child, str):
+                    yield child
+                else:
+                    yield from paths(child)
+        elif isinstance(value, list):
+            for child in value:
+                yield from paths(child)
+    asset = next(paths(item))
+    destination = historical_stack["outputs_dir"] / item["job_id"] / asset
+    destination.parent.mkdir(parents=True)
+    destination.write_bytes(b"saved media fixture")
+    assert client.get(base + "/assets", params={"path": asset}).content == b"saved media fixture"
+    assert client.get(base + "/assets", params={"path": "../reports.sqlite3"}).status_code == 404
+    unlisted = destination.parent / "unlisted.txt"
+    unlisted.write_text("not in the published post")
+    assert client.get(base + "/assets", params={"path": str(Path(asset).with_name('unlisted.txt'))}).status_code == 404
+
+
+def test_old_absolute_media_uses_archived_copy_and_supports_video_ranges(historical_stack, monkeypatch):
+    from backend.reporting.media import snapshot_asset_relative_path
+
+    client = historical_stack["client"]
+    spec = HISTORICAL_REPORT_SPECS[0]
+    records = client.get(f"/api/historical-report-workspaces/{spec.workspace_id}/analysis-records").json()["records"]
+    post_ref = records[0]["post_ref"]
+    base = f"/api/report-versions/{spec.report_version_id}/posts/{post_ref}/assets"
+    original = historical_stack["outputs_dir"].parent / "old-crawler" / "video.mp4"
+    original.parent.mkdir()
+    original.write_bytes(b"must not serve original filesystem file")
+    store = historical_stack["report_store"]
+    read_detail = store.get_snapshot_audit_detail
+
+    def detail(version, *, post_ref):
+        value = read_detail(version, post_ref=post_ref)
+        if post_ref == records[0]["post_ref"]:
+            value["audit_result"]["video_results"] = [{"local_path": str(original)}]
+        return value
+
+    monkeypatch.setattr(store, "get_snapshot_audit_detail", detail)
+    # Existing old files alone must never grant filesystem access.
+    assert client.get(base, params={"path": str(original)}).status_code == 404
+    target = historical_stack["outputs_dir"] / spec.task_id / snapshot_asset_relative_path(str(original))
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"archived video bytes")
+    response = client.get(base, params={"path": str(original)}, headers={"Range": "bytes=0-7"})
+    assert response.status_code == 206
+    assert response.content == b"archived"
+    assert response.headers["content-range"] == "bytes 0-7/20"
+    suffix = client.get(base, params={"path": str(original)}, headers={"Range": "bytes=-5"})
+    assert suffix.status_code == 206 and suffix.content == b"bytes"
+    beyond = client.get(base, params={"path": str(original)}, headers={"Range": "bytes=100-"})
+    assert beyond.status_code == 416 and beyond.headers["content-range"] == "bytes */20"
+    other = base.replace(post_ref, records[1]["post_ref"])
+    assert client.get(other, params={"path": str(original)}).status_code == 404
+    assert client.get(base, params={"path": str(target)}).status_code == 404
+
+
+def test_new_report_version_keeps_prior_conversation_and_session_scope(historical_stack):
+    service = historical_stack["service"]
+    agent = historical_stack["agent_service"]
+    principal = "historical-demo-test"
+    original, replacement = HISTORICAL_REPORT_SPECS[:2]
+    workspace = service.get_workspace(original.workspace_id, principal_id=principal)
+    service.accept_turn(original.workspace_id, principal_id=principal,
+                        client_message_id="version-old", content="旧版问题")
+    old_anchor = service._anchor(original.workspace_id, principal)
+    old_session = agent.store.find_session_by_anchor(old_anchor)
+    updated = {**workspace, "report_version_id": replacement.report_version_id}
+    new_anchor = service._current_anchor(updated, principal)
+    assert new_anchor != old_anchor
+    new_session = agent.create_session(replacement.report_version_id, anchor_key=new_anchor)
+    service.executor.accept_turn(new_session.id, client_message_id="version-new", content="新版问题")
+    view = service._workspace_state(updated, principal_id=principal)
+    assert [m["content"] for m in view["conversation"] if m["role"] == "user"] == ["旧版问题", "新版问题"]
+    assert agent.store.get_session(old_session.id).report_version_id == original.report_version_id
+    assert view["latest_turn"].session_id == new_session.id

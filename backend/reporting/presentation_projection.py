@@ -9,10 +9,17 @@ from backend.reporting.errors import ReportGenerationError
 
 
 PRESENTATION_SCHEMA_VERSION = "r31-report-presentation/v1"
+# Editorial omissions apply to display only; archived evidence remains intact.
+_OMITTED_BOUNDARY_NOTES = frozenset({
+    "仅覆盖输入中明确标记为review且包含相关direct evidence的帖子。",
+    "仅基于输入中已审核并标记为risk的评论证据。",
+    "仅基于输入中已标记为high risk的审核结果。",
+})
 APPENDIX_VIEWS = {"posts", "standalone", "evidence"}
 ACCOUNT_ROLES = {None, "post_author", "comment_author"}
-ACCOUNT_FILTERS = {"cross_investigation_commenter", "risk_commenter"}
+ACCOUNT_FILTERS = {"post_author", "cross_investigation_commenter", "risk_commenter"}
 ACCOUNT_FILTER_SORTS = {
+    "post_author": {"published_post_count", "risk_published_post_count", "latest_activity"},
     "cross_investigation_commenter": {
         "investigation_count",
         "comment_count",
@@ -27,6 +34,7 @@ ACCOUNT_FILTER_SORTS = {
     },
 }
 ACCOUNT_FILTER_DEFAULT_SORT = {
+    "post_author": "published_post_count",
     "cross_investigation_commenter": "investigation_count",
     "risk_commenter": "risk_comment_count",
 }
@@ -557,6 +565,14 @@ def _section_projection(
             if _membership_audit_refs(item) == audit_refs
             and set(_membership_evidence_refs(item)) == evidence_refs
         ]
+    if not matches and audit_refs and evidence_refs:
+        # A saved narrative may cite representative evidence rather than every
+        # member. Bind only a unique containing set; never infer from title/order.
+        matches = [
+            item for item in findings
+            if audit_refs.issubset(_membership_audit_refs(item))
+            and evidence_refs.issubset(set(_membership_evidence_refs(item)))
+        ]
     if len(matches) != 1:
         output["finding_binding"] = {"status": "unavailable"}
         return output
@@ -581,7 +597,10 @@ def _section_projection(
         "investigation_finding_ref": str(finding["investigation_finding_ref"]),
         "title": str(finding.get("title") or ""),
         "statement": str(finding.get("statement") or ""),
-        "boundary_notes": [str(item) for item in finding.get("boundary_notes") or []],
+        "boundary_notes": [
+            str(item) for item in finding.get("boundary_notes") or []
+            if str(item).strip() not in _OMITTED_BOUNDARY_NOTES
+        ],
         "related_post_count": len(finding.get("post_memberships") or []),
         "representative_post_count": len(
             finding.get("representative_post_refs") or []
@@ -716,6 +735,14 @@ def _account_collections(
         "entries": entries,
         "targets": targets,
         "other_post_authors": other_post_authors,
+        "post_author": {
+            "status": "available",
+            "all_entries": [item for item in entries if "post_author" in (item.get("roles") or [])],
+            "total_count": sum("post_author" in (item.get("roles") or []) for item in entries),
+            "action_label": "查看全部发布账号",
+            "drawer_title": "发布账号索引",
+            "basis_label": "基于本次发布报告",
+        },
         "cross_investigation_commenter": {
             "status": cross_status,
             "entries": body_cross,
@@ -790,6 +817,7 @@ def _sort_filtered_account_entries(
         ),
     }
     priorities = (
+        (sort_order,) if account_filter == "post_author" else
         cross_priorities[sort_order]
         if account_filter == "cross_investigation_commenter"
         else risk_priorities[sort_order]

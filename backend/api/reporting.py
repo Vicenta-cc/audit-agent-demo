@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi import Depends
+from pathlib import Path
 
 from backend.api.contracts import (
     PublishedReportDetailResponse,
@@ -16,6 +17,7 @@ from backend.api.contracts import (
 )
 from backend.reporting.contracts import HumanReportDTO
 from backend.reporting.errors import ReportGenerationError
+from backend.reporting.media import snapshot_asset_relative_path, snapshot_media_response
 from backend.reporting.runtime import R31ReportRuntime
 from backend.reporting.store import ReportStore
 from backend.investigation_creation.principal import (
@@ -32,6 +34,7 @@ def create_reporting_router(
     principal_provider: PrincipalProvider | None = None,
     m3_run_store: object | None = None,
     historical_report_service: object | None = None,
+    outputs_dir: Path | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["reports"])
     structured_runtime = runtime or R31ReportRuntime(store)
@@ -202,6 +205,48 @@ def create_reporting_router(
                 report_version_id, entry_ref=entry_ref
             )
         )
+
+    @router.get("/api/report-versions/{report_version_id}/posts/{post_ref}/audit-detail")
+    def get_snapshot_audit_detail(
+        report_version_id: str, post_ref: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> dict[str, object]:
+        require_published_access(report_version_id, principal)
+        return presentation_call(lambda: store.get_snapshot_audit_detail(report_version_id, post_ref=post_ref))
+
+    @router.get("/api/report-versions/{report_version_id}/posts/{post_ref}/assets")
+    def get_snapshot_asset(
+        report_version_id: str, post_ref: str, path: str, request: Request,
+        principal: Principal = Depends(provide_principal),
+    ):
+        require_published_access(report_version_id, principal)
+        detail = presentation_call(lambda: store.get_snapshot_audit_detail(report_version_id, post_ref=post_ref))
+        item = detail["audit_result"]
+        job_id = str(item["job_id"])
+        marker = f"/outputs/{job_id}/"
+        saved_paths = set()
+
+        def collect(value):
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    if key in {"asset_rel", "local_path", "original_path", "path"} and isinstance(child, str):
+                        saved_paths.add(child.split(marker, 1)[-1] if marker in child else child)
+                    elif isinstance(child, (dict, list)):
+                        collect(child)
+            elif isinstance(value, list):
+                for child in value:
+                    collect(child)
+
+        collect(item)
+        if outputs_dir is None or path not in saved_paths:
+            raise HTTPException(status_code=404, detail="Asset not found in report post")
+        root = (outputs_dir / job_id).resolve()
+        target = (root / snapshot_asset_relative_path(path)).resolve()
+        if not root.is_relative_to(outputs_dir.resolve()) or not target.is_relative_to(root):
+            raise HTTPException(status_code=400, detail="Invalid asset path")
+        if not target.is_file():
+            raise HTTPException(status_code=404, detail="Saved asset file not found")
+        return snapshot_media_response(target, request.headers.get("range"))
 
     @router.get("/api/report-versions/{report_version_id}/posts/{post_ref}")
     def get_presentation_post(
