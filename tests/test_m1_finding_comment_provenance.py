@@ -7,10 +7,10 @@ import sqlite3
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from hermes_m0.account_activity_repository import AccountActivityRepository
 from hermes_m0.account_activity_service import AccountActivityToolService
@@ -269,6 +269,26 @@ def _synthetic_repository(
 
 
 class M1FindingCommentProvenanceTest(unittest.TestCase):
+    def test_report_account_totals_use_full_index_not_five_preview_cards(self):
+        repo = _synthetic_repository(*_synthetic_comment_projection())
+        repo._report_account_entries = tuple(
+            [SimpleNamespace(roles=("post_author",)) for _ in range(7)]
+            + [SimpleNamespace(roles=("comment_author",)) for _ in range(8)]
+            + [SimpleNamespace(roles=("post_author", "comment_author"))]
+        )
+        activity = Mock()
+        activity.report_entries.return_value = [{"display_name": "commenter"}] * 5
+        service = ReportTaskInvestigationToolService(repo, account_activity=activity)
+        service.bind_session("account-totals")
+        response = json.loads(service.dispatch("read_report", {}, session_id="account-totals"))
+        self.assertTrue(response["ok"])
+        data = response["data"]
+        self.assertEqual(data["account_activity_entry_count"], 5)
+        self.assertEqual(data["account_activity_statistics"], {
+            "post_author_account_count": 8, "comment_author_account_count": 9,
+            "distinct_account_count": 16, "scope": "current_report_full_account_index",
+        })
+
     def test_snapshot_hash_lookup_is_immutable_read_only_and_query_only(self):
         with tempfile.TemporaryDirectory() as directory:
             database_path = Path(directory) / "published-report.sqlite3"

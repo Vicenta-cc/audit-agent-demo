@@ -11,6 +11,14 @@ import sqlite3
 import tempfile
 
 
+def _file_digest(path: Path) -> str:
+    digest = sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def published_report_snapshot(
     source: Path, *, ledger_path: Path, session_id: str, identities: tuple
 ) -> tuple[Path, str]:
@@ -32,7 +40,7 @@ def published_report_snapshot(
             if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
                 raise RuntimeError("invalid published report snapshot digest")
             snapshot = directory / f"{key}-{digest}.sqlite3"
-            if sha256(snapshot.read_bytes()).hexdigest() != digest:
+            if _file_digest(snapshot) != digest:
                 raise RuntimeError("published report snapshot SHA-256 mismatch")
             return snapshot, digest
         fd, temporary = tempfile.mkstemp(dir=directory, suffix=".sqlite3")
@@ -42,7 +50,7 @@ def published_report_snapshot(
             with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)) as live:
                 with closing(sqlite3.connect(temporary)) as frozen:
                     live.backup(frozen)
-            digest = sha256(temporary_path.read_bytes()).hexdigest()
+            digest = _file_digest(temporary_path)
             snapshot = directory / f"{key}-{digest}.sqlite3"
             temporary_path.chmod(0o400)
             os.replace(temporary_path, snapshot)

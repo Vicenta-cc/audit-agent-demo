@@ -494,6 +494,23 @@ class ReportTaskInvestigationToolService:
         if self.account_activity is not None:
             data["account_activity_entries"] = account_entries
             data["account_activity_entry_count"] = len(account_entries)
+            full_entries = repository.report_account_entries()
+            if full_entries:
+                data["account_activity_statistics"] = {
+                    "post_author_account_count": sum(
+                        "post_author" in item.roles for item in full_entries
+                    ),
+                    "comment_author_account_count": sum(
+                        "comment_author" in item.roles for item in full_entries
+                    ),
+                    "distinct_account_count": len(full_entries),
+                    "scope": "current_report_full_account_index",
+                }
+                limitations.append(
+                    "Account entry cards are a preview, not the full account population. "
+                    "Use account_activity_statistics for publisher/commenter totals. "
+                    "An account with both roles contributes to both role counts."
+                )
             not_loaded.append("cross-investigation Account Overview and occurrence detail")
             limitations.append(
                 "Account cards contain current-investigation counts only; Account Overview uses all currently authorized investigations."
