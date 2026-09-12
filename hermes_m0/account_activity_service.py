@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 from typing import Any, Callable
 
 from hermes_m0.account_activity_refs import AccountActivityReferenceRegistry
@@ -50,6 +51,7 @@ class AccountActivityToolService:
         )
         self.repository_load_count = 0
         self._handlers = {
+            "search_accounts": self._search_accounts,
             "get_account_overview": self._get_account_overview,
             "list_account_occurrences": self._list_account_occurrences,
             "read_account_occurrence": self._read_account_occurrence,
@@ -315,6 +317,55 @@ class AccountActivityToolService:
         except (ReferenceError, ToolInputError, AccountActivityLookupError) as exc:
             return error_result(tool=tool_name, code=exc.code, message=exc.message)
 
+    def _search_accounts(self, session_id: str, args: dict[str, Any]) -> str:
+        _require_exact_keys(args, {'nickname', 'match_mode', 'limit', 'offset'}, required={'nickname'})
+        nickname = _require_string(args['nickname'], 'nickname').strip()
+        if not nickname or len(nickname) > 200:
+            raise ToolInputError('invalid_arguments', 'nickname must contain 1 to 200 characters')
+        match_mode = args.get('match_mode', 'exact')
+        if match_mode not in ('exact', 'contains'):
+            raise ToolInputError('invalid_arguments', 'match_mode must be exact or contains')
+        limit = _require_int(args.get('limit', 20), 'limit', minimum=1, maximum=20)
+        offset = _require_int(args.get('offset', 0), 'offset', minimum=0, maximum=1_000_000)
+        repository = self._load_repository()
+        matches = repository.search_accounts(nickname, match_mode=match_mode)
+        selected = matches[offset:offset + limit]
+        candidates = []
+        overview = None
+        for position, match in enumerate(selected, offset + 1):
+            account_id = match['account_id']
+            token = self.expose_account(session_id, account_id, source_tool='search_accounts',
+                                        content_state='nickname_candidate', repository=repository)
+            occurrences = repository.corpus.occurrences_for(account_id)
+            source_names = sorted({repository.task_card(str(o['task_id']))['name'] for o in occurrences})
+            candidates.append({'position': position, 'account_ref': token,
+                               'display_name': match['display_name'],
+                               'matched_nicknames': match['matched_nicknames'],
+                               'source_investigations': source_names,
+                               'comment_count': sum(o['kind'] == 'comment_author' for o in occurrences),
+                               'published_post_count': sum(o['kind'] == 'post_author' for o in occurrences)})
+            if match_mode == 'exact' and len(matches) == 1:
+                record, token = self._resolve_account(session_id, token, repository)
+                overview = json.loads(self._account_overview_result(session_id, repository, record, token))['data']
+        total = len(matches)
+        return self._success(
+            tool='search_accounts', result_kind='authorized_account_search',
+            content_state='unique_account_overview' if overview else 'account_candidates',
+            data={'query': nickname, 'match_mode': match_mode, 'total_count': total,
+                  'returned_count': len(candidates), 'offset': offset,
+                  'next_offset': offset + len(candidates) if offset + len(candidates) < total else None,
+                  'match_status': 'not_found' if not total else 'unique' if overview else 'needs_selection',
+                  'candidates': candidates, 'overview': overview,
+                  'authorization_scope': {'mode': 'all_currently_authorized_investigations',
+                      'authorized_investigation_count': len(repository.corpus.authorized_task_ids)},
+                  'next_action': ('Use the returned overview directly; use its account ref for activity details.'
+                      if overview else 'Ask the user to select a candidate; do not merge names or choose the first.'
+                      if total else 'No matching nickname in authorized stored data; do not infer platform-wide absence.')},
+            not_loaded=['individual occurrence detail', 'historical AuditFinding or Evidence'],
+            limitations=['Nicknames select candidates only. Stable platform account identifiers define identity.',
+                         'All authorized accounts are searched; report preview cards do not limit this search.'],
+        )
+
     def _get_account_overview(
         self, session_id: str, args: dict[str, Any]
     ) -> str:
@@ -324,6 +375,9 @@ class AccountActivityToolService:
         account_record, session_account_ref = self._resolve_account(
             session_id, account_ref, repository
         )
+        return self._account_overview_result(session_id, repository, account_record, session_account_ref)
+
+    def _account_overview_result(self, session_id, repository, account_record, session_account_ref):
         overview = repository.overview(account_record.object_id)
         target_distribution = []
         for item in overview["comment_target_distribution"]:

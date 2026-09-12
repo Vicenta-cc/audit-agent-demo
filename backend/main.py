@@ -492,6 +492,7 @@ class LexiconKeywordRequest(BaseModel):
 
 
 class LexiconCategoryRequest(BaseModel):
+    description: str | None = Field(default=None, max_length=2000)
     expected_version: int | None = None
     id: str = ""
     title: str = ""
@@ -1352,6 +1353,7 @@ def create_lexicon_category(request: LexiconCategoryRequest):
             category_id=request.id,
             title=request.title,
             risk_label=request.risk_label,
+            description=request.description,
             terms=request.terms,
             platform_keywords=request.platform_keywords,
             platform_tags=request.platform_tags,
@@ -1369,7 +1371,7 @@ def update_lexicon_category(category_id: str, request: LexiconCategoryRequest):
         from .resource_management.contracts import ResourceError
         if request.entries is None:
             raise ResourceError('请通过完整词库编辑接口提交内容。', code='RESOURCE_VERSION_REQUIRED')
-        category = save_editor(lexicon_store, category_id, request.title, request.risk_label, request.entries, request.expected_version)
+        category = save_editor(lexicon_store, category_id, request.title, request.risk_label, request.entries, request.expected_version, description=request.description)
 
     except KeyError:
         raise HTTPException(status_code=404, detail="Lexicon category not found")

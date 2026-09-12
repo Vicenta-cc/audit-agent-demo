@@ -6,7 +6,7 @@ from .lexicon_versions import content as read_content
 from .service import ResourceManagementService
 
 
-def save_editor(store, category_id, title, risk_label, entries, expected_version):
+def save_editor(store, category_id, title, risk_label, entries, expected_version, *, description=None):
     with store._connect() as conn:
         conn.execute('BEGIN IMMEDIATE')
         current = read_content(conn, category_id) if category_id else {'deleted': True}
@@ -34,7 +34,7 @@ def save_editor(store, category_id, title, risk_label, entries, expected_version
                     raise ResourceError('标签不能拥有搜索词变体。')
                 old = [e for e in previous if e['kind']=='variant' and e['parent_id']==row['id'] and e['term']==term]
                 output.extend(deepcopy(old) if old else [LexiconEntry(term=term,kind='variant',parent_id=row['id']).model_dump(mode='json')])
-        body = LexiconContent(title=title, risk_label=risk_label or current.get('risk_label',''), entries=output)
+        body = LexiconContent(title=title, risk_label=risk_label or current.get('risk_label',''), description=current.get('description', '') if description is None else description, entries=output)
         identifier = category_id or 'custom_' + uuid4().hex[:16]
         ResourceManagementService._save_lexicon(conn, identifier, body, {'version':expected_version} if category_id else None)
     return store.get_category(identifier)

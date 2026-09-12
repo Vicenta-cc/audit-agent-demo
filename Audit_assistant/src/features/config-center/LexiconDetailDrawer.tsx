@@ -39,6 +39,10 @@ export function LexiconDetailDrawer({ lexicon, onClose, onEdit }: LexiconDetailD
 
         <div className="config-drawer-body">
           <section className="config-drawer-section">
+            <h3>词库说明</h3>
+            <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{lexicon.description || "暂无说明"}</p>
+          </section>
+          <section className="config-drawer-section">
             <h3>词条</h3>
             {lexicon.terms.length ? (
               <div className="drawer-term-list">

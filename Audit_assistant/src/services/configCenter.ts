@@ -43,6 +43,7 @@ interface RawLexiconKeyword {
 }
 
 interface RawLexiconCategory {
+  description?: string;
   version?: number;
   id?: string;
   title?: string;
@@ -188,6 +189,7 @@ export async function saveLexicon(input: LexiconSaveInput) {
     body: JSON.stringify({
       title: input.name.trim(),
       expected_version: input.expectedVersion,
+      description: input.description,
       entries: input.terms
         .filter((term) => term.mainTerm.trim())
         .map((term) => ({
@@ -285,6 +287,7 @@ function rawLexiconsToRiskLexicons(rawLexicons: RawLexiconCategory[], policies: 
     return {
       id: String(lexicon.id || ""),
       name: String(lexicon.title || "未命名黑话库"),
+      description: String(lexicon.description || ""),
       version: lexicon.version,
       entryCount: terms.length,
       keywords: terms.map((item) => item.mainTerm),

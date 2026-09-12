@@ -219,7 +219,9 @@ M3_TOOL_DESCRIPTIONS = {
         "variants or query_type. source_lexicon_ids are write-time checked provenance, not runtime "
         "dependencies. Temporary terms are not saved as a formal 黑话库. "
         "Creator Drafts must contain only a validated creator homepage URL and no "
-        "recall plan. This never confirms or starts a Run."
+        "recall plan. This never confirms or starts a Run. A creation Session that already has "
+        "a PUBLISHED Run is single-report scoped: do not create a second Draft there; direct the "
+        "user to start a new Session instead."
     ),
     "update_investigation_draft": (
         "Update an editable Investigation Draft at its expected revision. User changes "
@@ -228,7 +230,8 @@ M3_TOOL_DESCRIPTIONS = {
         "Recall supplies canonical terms directly, without variants, query_type, or formal save. "
         "Changed source_lexicon_ids must reference real 黑话库; unchanged provenance needs no "
         "resource refresh. Each temporary term must be comma-free. This command never confirms "
-        "or starts an investigation."
+        "or starts an investigation. A PUBLISHED Run cannot be replaced or supplemented in the "
+        "same creation Session; preserve it and direct a new investigation to a new Session."
     ),
     "get_investigation_draft": (
         "Read the current Draft and its dynamic confirmation preview. Show that preview "
@@ -236,7 +239,9 @@ M3_TOOL_DESCRIPTIONS = {
     ),
     "confirm_and_queue_investigation": (
         "Freeze and queue one Investigation Run only after the user explicitly asks to "
-        "confirm and start. Pass confirmed=true; never infer confirmation from a Draft edit."
+        "confirm and start. Pass confirmed=true; never infer confirmation from a Draft edit. "
+        "If this creation Session already has a PUBLISHED Run, do not confirm another Run; "
+        "preserve the published report and direct the user to a new Session."
     ),
     "get_investigation_run": (
         "Read the existing Investigation Run projection. This query is read-only and "

@@ -31,7 +31,10 @@ def content(conn, category_id):
     entries = []
     for r in conn.execute('SELECT * FROM lexicon_keywords WHERE category_id=? ORDER BY id', (category_id,)):
         entries.append(dict(id=r['entry_id'], term=r['keyword'], kind=r['entry_kind'], parent_id=r['parent_entry_id'], enabled=bool(r['enabled']), platform=r['platform'], match_type=r['match_type'], risk_level=r['risk_level'], note=r['note'] or ''))
-    return {'title': row['title'], 'risk_label': row['risk_label'], 'entries': entries}
+    body = {'title': row['title'], 'risk_label': row['risk_label'], 'entries': entries}
+    if row['description']:
+        body['description'] = row['description']
+    return body
 
 
 def synchronize(conn):

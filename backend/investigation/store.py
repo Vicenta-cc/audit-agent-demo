@@ -1633,6 +1633,43 @@ class InvestigationStore:
             ) from exc
         return [dict(item) for item in value]
 
+    def hermes_conversation_history(self, turn_id: str) -> list[dict[str, Any]] | None:
+        """Keep unanswered user intent without promoting a failed draft to evidence."""
+        turn = self.get_turn(turn_id)
+        history = self.latest_completed_hermes_transcript(turn.session_id) or []
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT m.content FROM investigation_messages m
+                JOIN investigation_turns t ON t.id = m.turn_id
+                WHERE m.session_id = ? AND m.role = 'user'
+                  AND t.status IN ('error', 'interrupted')
+                  AND m.sequence < (
+                    SELECT sequence FROM investigation_messages
+                    WHERE turn_id = ? AND role = 'user'
+                  )
+                  AND m.sequence > COALESCE((
+                    SELECT u.sequence FROM investigation_hermes_transcripts h
+                    JOIN investigation_turns done ON done.id = h.turn_id
+                    JOIN investigation_messages u ON u.turn_id = done.id AND u.role = 'user'
+                    WHERE h.session_id = ? AND done.status = 'completed'
+                    ORDER BY done.completed_at DESC, h.turn_id DESC LIMIT 1
+                  ), 0)
+                ORDER BY m.sequence
+                """,
+                (turn.session_id, turn_id, turn.session_id),
+            ).fetchall()
+        for row in rows:
+            history.extend([
+                {"role": "user", "content": str(row["content"])},
+                {"role": "assistant", "content": (
+                    "上次请求未完成，未形成可采信的查询结论。用户指定的账号、范围和修改要求仍然有效。"
+                    "后续追问应沿用最近明确指定的目标；需要重新查询，无法确定目标时先澄清，"
+                    "不要自动改成报告博主。"
+                )},
+            ])
+        return history or None
+
     @staticmethod
     def _hermes_transcript_json(messages: list[dict[str, Any]]) -> str:
         validate_hermes_transcript_messages(messages)

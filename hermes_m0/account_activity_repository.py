@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Any, Iterable
+import unicodedata
 
 from hermes_m0.account_corpus import AccountCorpus
 from hermes_m0.display_labels import (
@@ -163,6 +164,25 @@ class AccountActivityRepository:
             )
         entries.sort(key=lambda item: (item.display_name, item.account_id))
         return tuple(entries)
+
+    def search_accounts(self, nickname: str, *, match_mode: str = "exact") -> tuple[dict[str, Any], ...]:
+        """Match authorized nickname observations, never use a nickname as identity."""
+        normalize = lambda value: unicodedata.normalize('NFC', str(value)).strip().casefold()
+        needle = normalize(nickname)
+        matches = []
+        authorized = set(self.corpus.authorized_task_ids)
+        for account in self.corpus.accounts:
+            account_id = str(account['account_ref'])
+            aliases = [a for a in self.corpus.aliases_for(account_id)
+                       if a.get('task_id') is None or a['task_id'] in authorized]
+            names = list(dict.fromkeys(str(a.get('nickname') or '').strip() for a in aliases))
+            matched = [name for name in names if name and (
+                normalize(name) == needle if match_mode == 'exact' else needle in normalize(name))]
+            if matched:
+                matches.append({'account_id': account_id,
+                                'display_name': self.display_name(account_id),
+                                'matched_nicknames': matched})
+        return tuple(sorted(matches, key=lambda a: (normalize(a['display_name']), a['account_id'])))
 
     def overview(self, account_id: str) -> dict[str, Any]:
         self._require_account(account_id)
@@ -562,7 +582,8 @@ class AccountActivityRepository:
 
     def display_name(self, account_id: str) -> str:
         self._require_account(account_id)
-        aliases = self.corpus.aliases_for(account_id)
+        aliases = [a for a in self.corpus.aliases_for(account_id)
+                   if a.get('task_id') is None or a['task_id'] in self.corpus.authorized_task_ids]
         if not aliases:
             return "未记录昵称的账号"
         return str(aliases[-1]["nickname"] or "未记录昵称的账号")

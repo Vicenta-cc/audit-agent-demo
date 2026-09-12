@@ -6,11 +6,15 @@ current authorized report binding is checked before restoring any alias.
 from __future__ import annotations
 
 from dataclasses import asdict, replace
+from copy import deepcopy
+from .schemas import REPORT_COMMENT_STATISTICS_NOTICE
 from contextlib import contextmanager
 import hashlib
 import json
+import re
 import sqlite3
 from typing import Any
+from uuid import uuid4
 
 from .account_activity_refs import (
     AccountActivityScope, AccountActivityReferenceRecord, AccountActivityOrigin,
@@ -31,6 +35,13 @@ _ACCOUNT_TYPES = {
     "_scopes": AccountActivityScope, "_records": AccountActivityReferenceRecord,
     "_cursors": AccountActivityCursorRecord,
 }
+
+LEGACY_RESTORE_VERSION = 3
+_ACCOUNT_STATISTICS_NOTICE = (
+    "Account entry cards are a preview, not the full account population. "
+    "Use account_activity_statistics for publisher/commenter totals. "
+    "An account with both roles contributes to both role counts."
+)
 
 
 def _dump(registry: Any, session_id: str, types: dict) -> dict:
@@ -109,6 +120,7 @@ def save(service: Any, session_id: str) -> None:
 
 def _save(service: Any, session_id: str) -> None:
     state = {"version": 1, "identity": _identity(service, session_id),
+             "legacy_restore_version": service.legacy_reference_restore_versions.get(session_id, 0),
              "report": _dump(service.refs, session_id, _REPORT_TYPES),
              "account": (_dump(service.account_activity.refs, session_id, _ACCOUNT_TYPES)
                          if service.account_activity else None)}
@@ -133,11 +145,55 @@ def restore(service: Any, session_id: str) -> bool:
         raise ValueError("unsupported saved reference state version")
     if state["identity"] != _identity(service, session_id):
         # Changed authorization/snapshot: never resurrect the old references.
+        service.legacy_reference_restore_versions[session_id] = LEGACY_RESTORE_VERSION
         return False
     _load(service.refs, session_id, state["report"], _REPORT_TYPES)
     if service.account_activity and state["account"] is not None:
         _load(service.account_activity.refs, session_id, state["account"], _ACCOUNT_TYPES)
+    service.legacy_reference_restore_versions[session_id] = state.get("legacy_restore_version", 0)
     return True
+
+
+def needs_legacy_transcript_restore(service: Any, session_id: str) -> bool:
+    # A deliberate generation reset must not be undone by replaying old history.
+    return (service.refs.scope(session_id).generation == 1
+            and service.legacy_reference_restore_versions.get(session_id, 0) < LEGACY_RESTORE_VERSION)
+
+
+def _legacy_comparison_result(name: str, old: dict, fresh: dict) -> dict:
+    """Project only known additive fields out of fresh results for old aliases.
+
+    Previously present values, scope, object contents and unknown changes still
+    require an exact match. The model always receives the full current result.
+    """
+    if name != "read_report":
+        return fresh
+    fresh = deepcopy(fresh)
+    old_data, data = old.get("data", {}), fresh.get("data", {})
+    notices = []
+    if "account_activity_statistics" not in old_data and "account_activity_statistics" in data:
+        data.pop("account_activity_statistics")
+        notices.append(_ACCOUNT_STATISTICS_NOTICE)
+    for old_stats, stats in (
+        (old_data.get("report", {}).get("deterministic_statistics"), data.get("report", {}).get("deterministic_statistics")),
+        (old_data.get("statistics"), data.get("statistics")),
+    ):
+        if not isinstance(old_stats, dict) or not isinstance(stats, dict):
+            continue
+        for key in ("comment_audit_coverage", "independently_reviewed_comments", "comment_own_risk", "direct_comment_evidence_count"):
+            if key not in old_stats:
+                stats.pop(key, None)
+        old_coverage, coverage = old_stats.get("comment_audit_coverage"), stats.get("comment_audit_coverage")
+        if isinstance(old_coverage, dict) and isinstance(coverage, dict):
+            for key in ("available", "missing_post_count", "risk", "no_risk", "risk_unknown"):
+                if key not in old_coverage:
+                    coverage.pop(key, None)
+        notices.append(REPORT_COMMENT_STATISTICS_NOTICE)
+    authority = fresh.get("authority", {})
+    if "limitations" in authority:
+        authority["limitations"] = [item for item in authority["limitations"]
+            if item not in notices or item in old.get("authority", {}).get("limitations", [])]
+    return fresh
 
 
 def _tokens(service: Any) -> dict[str, tuple[Any, str, Any]]:
@@ -163,13 +219,84 @@ def _replace_tokens(value: Any, aliases: dict) -> Any:
     return value
 
 
+_NAVIGATION_TOKEN = re.compile(r"(?:[gfpcerq]|account|activity|target|post|page)[0-9]+_[0-9a-f]{6}\b")
+
+
+def prepare_conversation_history(service: Any, session_id: str, history: list[dict]) -> list[dict]:
+    """Recover aliases or rebuild context when a legacy result cannot be verified.
+
+    Unknown schema changes never weaken the exact result/authorization comparison.
+    If they leave any issued handle unavailable, remove the old tool protocol and
+    its dependent answers from model input. Keep the archive intact and preserve
+    user intent so the agent can query the current tool contract afresh.
+    """
+    restore_legacy_transcript(service, session_id, history)
+    tokens = _tokens(service)
+
+    def usable(token):
+        if token not in tokens:
+            return False
+        registry, _, record = tokens[token]
+        scope = registry._scopes.get(session_id)
+        return (scope is not None and record.session_id == session_id
+                and record.generation == scope.generation
+                and all(getattr(record, key, value) == value
+                        for key, value in asdict(scope).items()))
+
+    # Only inspect the opaque token vocabulary, not business IDs or nicknames.
+    # Include earlier assistant references and failed calls: these also guide retries.
+    stale = any(
+        not usable(token)
+        for message in history if message.get('role') in {'assistant', 'tool'}
+        for token in _NAVIGATION_TOKEN.findall(json.dumps(message, ensure_ascii=False))
+    )
+    if not stale:
+        return history
+    refreshed = []
+    for message in history:
+        if message.get('role') == 'user':
+            refreshed.extend([
+                {'role': 'user', 'content': _NAVIGATION_TOKEN.sub('[旧引用需重新定位]', message['content'])},
+                {'role': 'assistant', 'content': (
+                    '历史查询引用无法在当前授权范围内完整验证，旧工具结果及旧回答不作为本轮证据。'
+                    '请重新读取当前报告并使用最新工具说明，取得新的账号、帖子和证据引用。'
+                    '继续遵守用户最近明确指定的账号及范围；昵称有重名或代词、卡片目标无法定位时先澄清，'
+                    '不得自行改用报告博主或猜测旧引用对应的对象。'
+                )},
+            ])
+    # Reacquire the navigation root once on the server. Do not rely on the model
+    # deciding to read it, and do not let archived tool descriptions drive retries.
+    current_report = service.dispatch('read_report', {}, session_id=session_id)
+    call_id = 'reference-refresh:' + uuid4().hex
+    notice = refreshed.pop()['content'] if refreshed else ''
+    refreshed.extend([
+        {'role': 'assistant', 'content': notice, 'tool_calls': [{
+            'id': call_id, 'type': 'function', 'function': {
+                'name': 'tool_call',
+                'arguments': json.dumps({'name': 'read_report', 'arguments': {}}),
+            },
+        }]},
+        {'role': 'tool', 'tool_call_id': call_id, 'content': current_report},
+        {'role': 'assistant', 'content': (
+            '以上是本轮恢复时重新读取的当前报告结果，具体账号活动仍需继续查询。'
+            '用户最近明确指定的目标仍然有效，不要把报告预览账号当作全部账号；'
+            '若缺少可靠的定位信息，应澄清而非自动切换账号。'
+        )},
+    ])
+    save(service, session_id)
+    return refreshed
+
+
 def restore_legacy_transcript(service: Any, session_id: str, history: list[dict]) -> None:
     """Upgrade pre-checkpoint histories using verified read-only tool results.
 
     Re-read only the report service's own query handlers. An old token is accepted
-    only when the entire original ToolResult matches the freshly authorized read
-    after substituting opaque tokens. Never infer object identity from prose.
+    only when the original ToolResult matches the freshly authorized read after
+    the known additive schema migration and opaque-token substitution. Never
+    infer object identity from prose.
     """
+    if not needs_legacy_transcript_restore(service, session_id):
+        return
     calls, aliases = {}, {}
     turn_id = "reference-restore:0"
     for index, message in enumerate(history):
@@ -213,7 +340,7 @@ def restore_legacy_transcript(service: Any, session_id: str, history: list[dict]
                 return len(left) == len(right) and all(compare(a, b) for a, b in zip(left, right))
             return left == right
 
-        if not compare(old, fresh):
+        if not compare(old, _legacy_comparison_result(name, old, fresh)):
             continue
         for old_token, token in proposed.items():
             registry, field, record = tokens[token]
@@ -228,5 +355,6 @@ def restore_legacy_transcript(service: Any, session_id: str, history: list[dict]
                         raise ValueError("conflicting legacy reference identity")
                 getattr(registry, field)[old_token] = alias
             aliases[old_token] = token
+    service.legacy_reference_restore_versions[session_id] = LEGACY_RESTORE_VERSION
     save(service, session_id)
     service.restored_reference_sessions.add(session_id)

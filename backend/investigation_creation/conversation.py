@@ -51,15 +51,27 @@ from .tools import (
 
 from backend.resource_management.tools import RESOURCE_PROMPT
 
+PUBLISHED_SESSION_NOTICE = (
+    "当前会话已生成并发布报告，后续可继续围绕该报告进行提问。\n"
+    "如需基于当前配置发起新的调查，请新建会话。"
+)
+
 CREATION_SYSTEM_PROMPT = """You are the investigation configuration and resource assistant for a
 content-audit platform. Application appends the complete authoritative 审核规则 Proposal snapshot
 to the public assistant message after successful Proposal creation or update. Your natural-language
 response may explain the design or changes; it is not the authoritative rule presentation.
-用户界面与回复统一使用“审核规则”和“黑话库”两个资源名称；理解用户旧称，但回复、标题和生成说明只用新名称。黑话库仍包含用于平台搜索和内容召回的词条，不仅限于隐语；不因改名改变搜索词生成标准、临时资源边界或采用流程。
+用户界面与回复统一使用“审核规则”和“黑话库”两个资源名称；理解用户旧称，但回复、标题和生成说明只用新名称。黑话库仍包含用于平台搜索和内容召回的词条，不仅限于隐语；不因改名改变搜索词生成标准、临时资源边界或采用流程。用户明确“搜索主词 X”或“只用 X”时，若未要求扩展，X 就是本次临时词库唯一启用主词；不要自行扩展相关主词、变体或标签。临时词库保存到当前会话供草稿使用，不正式保存。
 
 Conversation is primary. Use only the investigation creation tools
 exposed in this mode, choosing and combining them according to the user's current intent. There is
 no requirement to run every tool or follow one fixed workflow in every turn.
+
+会话边界必须服从应用状态：一个创建会话最多对应一个已发布报告。若当前会话的真实 Run
+状态为 PUBLISHED 且已有 report_version_id，这个会话只保留该报告的后续问答；不要再创建、
+修改、采用或确认第二个 Draft/Run，也不要把已发布任务描述为“排队中”“执行中”或建议继续等待。
+用户要求“照当前配置再做一次”、新建独立草稿或第二份报告时，原样回复：
+“当前会话已生成并发布报告，后续可继续围绕该报告进行提问。\n如需基于当前配置发起新的调查，请新建会话。”
+该回复表示原报告和原任务均保留；新调查必须在新会话开始。
 
 The user may want to query, understand, explain, compare, or get recommendations about available
 platforms, recall 黑话库 and their terms, published 审核规则已发布版本, existing
@@ -976,8 +988,32 @@ class InvestigationCreationConversationService:
             raise InvestigationTurnNotFoundError("turn is not ready for execution")
         session = self.store.get_session(turn.session_id)
         principal = self.principal_for_session(session.id)
-        history = self.store.latest_completed_hermes_transcript(session.id)
+        history = self.store.hermes_conversation_history(turn.id)
         user_message = self.store.get_user_message_for_turn(turn.id).content
+        # A creation session is single-report scoped. Once its run is published,
+        # keep accidental creation-route turns deterministic and preserve the
+        # published report. The UI normally sends report questions through the
+        # report-turn endpoint; this guard protects retries and stale clients.
+        workspace_state = self.get_workspace_state(session.id, principal=principal)
+        if workspace_state.run is not None and workspace_state.run.status.value == "PUBLISHED":
+            transcript = list(history or [])
+            transcript.extend(
+                [
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": PUBLISHED_SESSION_NOTICE},
+                ]
+            )
+            return self._persist_result(
+                turn,
+                {
+                    "final_response": PUBLISHED_SESSION_NOTICE,
+                    "turn_exit_reason": "published_session_requires_new_session",
+                    "completed": True,
+                    "api_calls": 0,
+                },
+                transcript,
+                {},
+            )
         try:
             context = self._presentation_context_for_turn(turn)
         except ConfigurationValidationError as exc:
@@ -1273,7 +1309,7 @@ class InvestigationCreationConversationService:
         artifact: dict[str, Any],
     ) -> TurnResult:
         answer = str(result.get("final_response") or "").strip()
-        history_count = len(self.store.latest_completed_hermes_transcript(turn.session_id) or [])
+        history_count = len(self.store.hermes_conversation_history(turn.id) or [])
         trace_messages = [
             item
             for item in transcript[history_count:]

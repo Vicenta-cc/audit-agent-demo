@@ -35,6 +35,7 @@ class LexiconEntry(StrictModel):
 class LexiconContent(StrictModel):
     title: str = Field(min_length=1, max_length=200)
     risk_label: str = Field(default='', max_length=200)
+    description: str = Field(default='', max_length=2000, description='词库整体说明，不是词条备注或风险标签')
     entries: list[LexiconEntry] = Field(default_factory=list, max_length=2000)
 
     @field_validator('title', mode='before')
@@ -59,6 +60,14 @@ class LexiconContent(StrictModel):
                 raise ValueError('duplicate term/platform/match_type')
             seen.add(key)
         return self
+
+    def storage_dict(self) -> dict:
+        # Empty descriptions retain the canonical shape of pre-description edits
+        # and revisions, so upgrading does not invalidate hashes or save receipts.
+        body = self.model_dump(mode='json')
+        if not self.description:
+            body.pop('description')
+        return body
 
     def search_terms(self) -> list[str]:
         return list(dict.fromkeys(e.term for e in self.entries if e.kind == 'main' and e.enabled))

@@ -4,6 +4,7 @@ export interface LexiconCategory {
   id: string;
   title?: string;
   risk_label?: string;
+  description?: string;
   keywords?: Array<{ keyword: string; match_type?: string }>;
 }
 

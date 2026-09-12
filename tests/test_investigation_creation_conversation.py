@@ -563,6 +563,29 @@ def test_creation_session_has_no_report_anchor_and_report_contract_is_unchanged(
         )
 
 
+def test_failed_creation_requirements_survive_followup_without_failed_claims(creation_stack: dict):
+    conversation = creation_stack['conversation']
+    principal = Principal('principal-a')
+    session = conversation.create_session(principal=principal)
+    turn, _ = conversation.accept_message(
+        session.id, client_message_id='failed-resource-edit', principal=principal,
+        content='只临时使用这份词库，不保存；正常宗教和饮食描述不应判为风险',
+    )
+    conversation.store.fail_turn(turn.id, error_code='hermes_execution_failed',
+                                 safe_message='未核实草稿：已覆盖正式词库', retryable=False)
+    result = _run_scripted_creation_turn(
+        creation_stack, session_id=session.id, content='继续，保留我刚才的要求',
+        actions=[], client_message_id='recover-resource-edit', final_response='继续读取当前配置。',
+    )
+    transcript = conversation.store.latest_completed_hermes_transcript(session.id)
+    assert [m['content'] for m in transcript if m['role'] == 'user'] == [
+        '只临时使用这份词库，不保存；正常宗教和饮食描述不应判为风险', '继续，保留我刚才的要求',
+    ]
+    assert '已覆盖正式词库' not in json.dumps(transcript, ensure_ascii=False)
+    assert result['turn'].status == 'completed'
+    assert _draft_count(creation_stack['creation_store']) == 0
+
+
 def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
     creation_stack: dict,
 ) -> None:
@@ -1586,6 +1609,36 @@ def test_workspace_state_restores_confirmed_run_and_published_report_version(
     assert state["run"]["report_version_id"].startswith("report-version:")
     assert "report_session_id" not in response.text
     assert _run_count(stack["creation_store"]) == 1
+
+
+def test_published_creation_session_directs_new_investigation_to_new_session(
+    creation_stack: dict,
+) -> None:
+    result = _create_completed_turn(creation_stack, workspace_key="published-boundary")
+    _publish_fake_run(creation_stack, result, idempotency_key="published-boundary-confirm")
+    stack = creation_stack
+    before_runs = _run_count(stack["creation_store"])
+    accepted = stack["client"].post(
+        f"/api/investigation-workspaces/{result['workspace_id']}/turns",
+        json={
+            "client_message_id": "published-boundary-followup",
+            "content": "照当前配置再做一次，给我一个新的独立草稿，先不要启动",
+        },
+    )
+    assert accepted.status_code == 202
+    turn_id = accepted.json()["turn_id"]
+    with stack["client"].stream(
+        "GET", f"/api/investigation-workspace-turns/{turn_id}/events"
+    ) as response:
+        assert response.status_code == 200
+        events = [line for line in response.iter_lines() if line.startswith("data: ")]
+    terminal = json.loads(events[-1][6:])
+    assert terminal["stage"] == "completed"
+    assert terminal["answer"] == (
+        "当前会话已生成并发布报告，后续可继续围绕该报告进行提问。\n"
+        "如需基于当前配置发起新的调查，请新建会话。"
+    )
+    assert _run_count(stack["creation_store"]) == before_runs
 
 
 def test_fake_runtime_publishes_linked_structured_frontend_contract(

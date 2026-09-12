@@ -99,9 +99,19 @@ def test_translation_missing_retries_once_without_repeating_completed_comments(
             row = {"id": item["comment_id"], "s": 0, "risk_level": "none"}
             if item["translation_required"]:
                 if risk_level == "medium":
-                    row.update(s=60, risk_level="medium", lib="ethnic",
-                               t="ethnic.content_attack", rb="民族侮辱", q="汉族都是垃圾",
-                               rule_id="ethnic.group_stereotype_and_derogation")
+                    row.update(
+                        s=60,
+                        risk_level="medium",
+                        lib="ethnic",
+                        t="ethnic.content_attack",
+                        rb="民族侮辱",
+                        q="汉族都是垃圾",
+                        rule_id=next(
+                            code
+                            for code, rule_id in pipeline._comment_rule_code_mapping().items()
+                            if rule_id == "ethnic.group_stereotype_and_derogation"
+                        ),
+                    )
                 if attempt == translated_on_attempt:
                     row["zh"] = translated
             rows.append(row)

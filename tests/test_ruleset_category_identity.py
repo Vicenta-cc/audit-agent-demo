@@ -124,7 +124,7 @@ def test_comment_prompt_distinguishes_library_category_and_rule():
     )
     bindings = json.loads(prompt.split("输出字段身份对应：", 1)[1].split("\n", 1)[0])
     assert bindings["lib"] == "recruitment_fraud"
-    assert bindings["rule_id_to_t"]["recruitment.fee_request"] == "recruitment.advance_fee"
+    assert bindings["rule_id_to_t"]["CR01"] == "recruitment.advance_fee"
     assert "不能互换" in prompt
 
 
