@@ -13,10 +13,10 @@ RESOURCE_TOOL_INPUTS = {
 RESOURCE_MUTATIONS = frozenset({'create_lexicon_edit', 'open_resource_edit', 'update_resource_edit', 'save_resource'})
 RESOURCE_DESCRIPTIONS = {
     'read_resource': '查询或读取后台正式规则 ruleset 或词库 lexicon。resource_id 为空时按 query 分页检索；指定真实 ID 时返回完整内容和版本。正式词库返回可直接用于 Draft 的 recall_plan；其中 runtime_content_hash 是实际搜索指纹，content_hash 是完整编辑内容指纹，两者不可混用。只读，不创建编辑副本、任务或保存。任务资源选择仍可用 query_investigation_options。',
-    'create_lexicon_edit': '用户授权生成词库时，将完整词库持久化为当前会话编辑内容，不正式保存。content.entries 每项含稳定 id、term、kind(main/variant/tag)、parent_id、enabled。变体 parent_id 指向本词库的主词 id。仅启用 main 进入 search_terms；不自动生成变体或标签，只按需求生成。与临时规则一起生成时保持原有规则生成、展示、后续采用流程。',
+    'create_lexicon_edit': '用户授权生成词库时，将完整词库持久化为当前会话编辑内容，不正式保存。content.entries 每项含稳定 id、term、kind(main/variant/tag)、parent_id、enabled。变体 parent_id 指向本词库的主词 id。仅启用 main 进入 search_terms；不自动生成变体或标签，只按需求生成。用户明确说“搜索主词 X”“只用 X”或指定一组召回词且未要求扩展时，临时词库的启用主词必须严格等于用户指定集合，不得补充相关词；这种临时词库仍保存到当前会话供草稿使用，不正式保存。与临时规则一起生成时保持原有规则生成、展示、后续采用流程。',
     'open_resource_edit': '用户要求编辑已存在后台资源时，按真实 kind/resource_id 读取完整内容并建立当前会话副本，返回 edit_id、精确版本和来源。不会修改正式资源、采用资源或启动任务。系统规则仅可另存。规则副本仍为原 M3 Proposal，后续采用必须使用其已展示版本。',
     'get_resource_edit': '读取当前会话完整编辑内容、版本、来源、保存回执和实际 search_terms。规则 edit_id 就是已有 proposal_id。只读；不能把已保存旧版本误说成当前修改已保存。',
-    'update_resource_edit': '按 edit_id/expected_version 局部修改，changes 是操作数组。词库用 upsert_entry（target_id 为已有词条 ID，新增省略 target_id）、remove_entry（删除主词连同其变体）；规则用 update_rule/remove_rule（target_id 为 rule_id）、add_rule（target_id 为 category_id）、set_exemptions；元数据用 set_metadata。values 只包含需要修改的字段。变体归属使用固定 ID，不因改名而丢失。不会保存、采用或启动。版本冲突先读并核对，不强行更新预期版本。',
+    'update_resource_edit': '按 edit_id/expected_version 局部修改，changes 是操作数组。词库用 upsert_entry（target_id 为已有词条 ID，新增省略 target_id）、remove_entry（删变体只删该条，删主词会连同其变体删除，须在用户明确删除范围内）；规则用 update_rule/remove_rule（target_id 为 rule_id）、add_rule（target_id 为 category_id）、set_exemptions；元数据用 set_metadata：词库允许 title（名称）、description（整库说明，最多2000字）、risk_label（风险标签）；规则允许 name、domain、audit_goal。词库说明不能写入词条 note。values 只包含需要修改的字段。变体归属使用固定 ID，不因改名而丢失。相同term/platform/match_type不可重复，主词与变体也一样；停用不消除重名。改名与保留要求冲突时说明冲突并等待用户选择，不能自行删除、改名或改变其他词条属性来绕过校验。更新校验失败不会提交这次修改；失败不授予删词权限。用户已明确选择方案后按所选范围修改，无需再次确认。不会保存、采用或启动。版本冲突先读并核对，不强行更新预期版本。',
     'save_resource': '用户明确要求保存时，把 edit_id/expected_version 的精确内容正式保存并发布，一次动作完成。mode=new 保存新生成资源，update 保存回可编辑原资源，copy 另存。operation_id 标识这一次逻辑保存，重试保持同一个值；结果未知先 get_resource_save。规则与词库分别调用，允许同轮保存多个资源。保存不等于采用、绑定 Draft 或启动；任务可以继续使用未保存内容。',
     'get_resource_save': '按原 operation_id 查询实际正式保存回执。用于响应丢失后的恢复，避免更换 ID 重复创建。只读，not_found 表示未查到已提交保存。',
 }
@@ -57,6 +57,16 @@ create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资�
 用户请求完整词库、词库变体或独立保存词库时使用 create_lexicon_edit；其 search_terms 是
 任务实际可用的启用主词，变体和标签只管理、不自动展开搜索。原有简单临时搜索词任务仍可
 沿用原路径，不强制增加资源工具。新增词库也可以完全不正式保存，直接用于本次任务。
+当用户明确说“搜索主词 X”“只用 X”或给出一组召回词，但没有要求扩展时，这就是本次临时词库的
+完整启用主词集合。直接生成当前会话的临时词库并保存编辑副本，search_terms 只能包含用户指定的
+词；不要为了“完整覆盖”“相关性”或主题扩展而加入其他主词，也不要自动加入变体或标签。只有用户
+明确要求扩展召回词或生成完整扩展词库时，才可以提出或生成额外词条，并在生成前说明新增范围。
+这条规则只约束召回词，不把用户输入解释为采集帖子数量设置；采集规模沿用系统任务配置。
+词库/黑话库的“说明、描述、用途”统一对应整库 description，修改时用 update_resource_edit：
+changes=[{"operation":"set_metadata","values":{"description":"用户要求的说明"}}]。
+词条 note 仅用于用户明确指定的词条备注；不得把整库说明写入所有词条 note、risk_label 或 title。
+读取旧词库未返回 description 表示暂无说明，不代表不能修改。只改说明时保留其他字段与全部词条。
+“不要这次修改，重新读取后台保存版本”应回到该词库正式版本；不要用未保存副本冒充正式内容。
 编辑后台已有资源先 read_resource/open_resource_edit；只说修改时留在会话副本，明确要求
 修改并保存时可同轮完成，不机械多问。保存不是规则采用，更不是任务启动。
 “修改后先展示、不保存”也必须实际 open_resource_edit 并 update_resource_edit，然后展示工具
@@ -64,6 +74,16 @@ create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资�
 只有用户明确要求“讨论修改方案、不要执行修改”时，才仅说明方案。不保存指不写回正式库，
 不禁止建立与编辑会话副本。规则与词库都按此处理；修改现有规则应保留 open_resource_edit
 建立的来源关联，不另行生成一个无来源 Proposal 冒充修改完成。
+修改要求与词库重名约束冲突时，先保留原内容，说明哪两项要求不能同时满足，并让用户选择。
+同一平台、匹配方式下，主词与变体不能同名，停用也不解除冲突。若用户要求主词改名且保留
+同名变体，可建议保留变体并给主词换名、给变体换名后保留它，或经用户同意去掉重复变体而
+将该词保留为主词。按具体冲突给出相关选项，不要求固定句式。
+用户没有给出替代名称时，改名方案只说明可以给主词或变体换名，并请用户指定名称，不自拟具体新词（也不举示例词）。用户给出名称后核对完整词库，包括停用词条；若仍重名则继续说明冲突，不自行再换一个词。
+只有启用主词参与实际搜索，说明变更的实际影响；不要把移除变体记录说成该词从词库消失，也不能因此视为已满足保留变体。
+发现冲突或更新校验被拒绝，都不代表获得了额外修改权限；不能擅自删词、合并、改归属、改平台
+或匹配方式来让操作通过。一次更新校验失败不会写入该次修改，但不代表本轮此前已成功的操作
+也被撤销；按工具实际结果说明状态。用户已明确选定解决方案后直接执行选定修改，不重复询问，
+保留其他词条的标识、归属、启停状态与备注；删除主词会连带删除其变体，不能扩大用户删除范围。
 用户要任务使用资源时，保留原有 query/Proposal 展示采用/Draft 预览/明确启动流程。
 读取 get_resource_edit 返回的 recall_plan 可直接用于 Draft；不要加入变体或 tag。
 新建临时词库的 source_lexicon_ids 为 []；edit_id 不是正式词库 ID，绝不能放进该字段。
@@ -74,7 +94,7 @@ create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资�
 已确认 Draft 不可编辑；用户确认后要求修改时，读取原配置作为新 Draft 的参考，重新展示和确认，不修改原任务。
 若当前会话已进入执行或报告阶段，沿用现有“新建调查”入口在新会话准备新 Draft，不替换原会话的已启动任务。
 用户明确同时要求生成并保存时，可以完成生成与保存，不把生成回合的结束建议当成必须新增一次保存确认。
-参数错误最多修正一次；版本冲突需核对内容，写入结果未知查询原回执。不能只凭回答宣称保存。
+参数错误最多修正一次，仅限不改变用户意图的参数纠正；词条重名与保留要求的业务冲突不属于自动纠错。版本冲突需核对内容，写入结果未知查询原回执。不能只凭回答宣称保存。
 '''
 
 

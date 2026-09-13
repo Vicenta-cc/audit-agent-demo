@@ -27,6 +27,7 @@ from hermes_m0.domain import (
     ReportStatistics,
     ReportVersion,
 )
+from backend.reporting.comment_statistics import snapshot_comment_coverage
 from hermes_m0.repository import InvestigationRepository, RepositoryLookupError
 from hermes_m0.source_projection import normalize_source_id, utc_timestamp
 
@@ -36,6 +37,101 @@ READ_ONLY_ACCESS_CONTRACT = "sqlite-mode=ro;immutable=1;query_only=ON"
 
 class PublishedReportLoadError(ValueError):
     pass
+
+
+def _project_task_configuration(
+    source_configuration: Any,
+    *,
+    configuration_revision_id: str,
+) -> dict[str, Any]:
+    """Expose frozen provenance needed by report Q&A without internal details."""
+    if not isinstance(source_configuration, Mapping):
+        return {
+            "available": False,
+            "configuration_revision_id": configuration_revision_id,
+            "reason": "该发布快照没有保存可展示的任务配置。",
+        }
+    source = dict(source_configuration)
+    audit_config = source.get("audit_config")
+    audit_config = audit_config if isinstance(audit_config, Mapping) else {}
+    coverage = audit_config.get("coverage")
+    coverage = coverage if isinstance(coverage, Mapping) else {}
+    actual_terms = coverage.get("actual_source_terms")
+    actual_terms = actual_terms if isinstance(actual_terms, Mapping) else {}
+    jobs = source.get("source_jobs") or audit_config.get("source_jobs")
+    jobs = jobs if isinstance(jobs, list) else []
+    configured_terms: set[str] = set()
+    rule_revision_ids: set[str] = set()
+    rule_versions: set[str] = set()
+    job_summaries: list[dict[str, Any]] = []
+    for raw_job in jobs:
+        if not isinstance(raw_job, Mapping):
+            continue
+        configured_terms.update(
+            str(value).strip()
+            for value in raw_job.get("lexicon_keywords") or []
+            if str(value).strip()
+        )
+        configured_terms.update(
+            value.strip()
+            for value in str(raw_job.get("keyword") or "").split(",")
+            if value.strip()
+        )
+        revision_id = str(raw_job.get("current_audit_config_revision_id") or "").strip()
+        if revision_id:
+            rule_revision_ids.add(revision_id)
+        version = str(raw_job.get("audit_config_version") or "").strip()
+        if version:
+            rule_versions.add(version)
+        job_summaries.append(
+            {
+                key: raw_job[key]
+                for key in ("id", "display_name", "current_audit_config_revision_id")
+                if raw_job.get(key) not in (None, "")
+            }
+        )
+    resolved_terms = source.get("resolved_search_terms") or source.get("search_terms")
+    if not isinstance(resolved_terms, list):
+        resolved_terms = sorted(configured_terms)
+    resolved_terms = [str(item).strip() for item in resolved_terms if str(item).strip()]
+    rule_snapshot = source.get("rule_snapshot")
+    rule_snapshot = rule_snapshot if isinstance(rule_snapshot, Mapping) else {}
+    revision = (
+        source.get("ruleset_revision")
+        or audit_config.get("ruleset_revision")
+        or rule_snapshot.get("ruleset_ref")
+    )
+    revision = revision if isinstance(revision, Mapping) else {}
+    revision_id = str(revision.get("id") or revision.get("revision_id") or "").strip()
+    if revision_id:
+        rule_revision_ids.add(revision_id)
+    version = str(revision.get("version") or "").strip()
+    if version:
+        rule_versions.add(version)
+    source_kind = str(audit_config.get("source_kind") or "").strip()
+    if "temporary" in source_kind.lower():
+        ruleset_kind = "临时规则"
+    elif revision:
+        ruleset_kind = "正式规则"
+    else:
+        ruleset_kind = "未标明"
+    return {
+        "available": True,
+        "configuration_revision_id": configuration_revision_id,
+        "ruleset": {
+            "revision_ids": sorted(rule_revision_ids),
+            "versions": sorted(rule_versions),
+            "kind": ruleset_kind,
+            "source": "任务确认时冻结的审核配置",
+        },
+        "search_terms": resolved_terms,
+        "configured_recall_terms": resolved_terms,
+        "actual_matched_terms": sorted(
+            str(key).strip() for key in actual_terms if str(key).strip()
+        ),
+        "source_jobs": job_summaries,
+        "terms_source": "任务确认时冻结的召回配置",
+    }
 
 
 @dataclass(frozen=True)
@@ -132,11 +228,18 @@ class PublishedReportRepository(InvestigationRepository):
         template_kind: str = "",
         account_source: str = "",
         snapshot_payloads: Mapping[str, dict[str, Any]] | None = None,
+        comment_audit_coverage: Mapping[str, Any] | None = None,
+        task_configuration: Mapping[str, Any] | None = None,
     ) -> None:
         super().__init__(fixture)
         self.template_kind = template_kind
         self.account_source = account_source
         self.snapshot_payloads = MappingProxyType(dict(snapshot_payloads or {}))
+        self.comment_audit_coverage = MappingProxyType(dict(
+            comment_audit_coverage if comment_audit_coverage is not None else
+            snapshot_comment_coverage((snapshot_payloads or {p.id: {} for p in fixture.posts}).values())
+        ))
+        self.task_configuration = MappingProxyType(dict(task_configuration or {}))
         self.database_path = database_path
         self.database_sha256 = database_sha256
         self.content_hash = content_hash
@@ -243,7 +346,22 @@ class PublishedReportRepository(InvestigationRepository):
             template_kind=loaded["template_kind"],
             account_source=loaded["account_source"],
             snapshot_payloads=loaded["snapshot_payloads"],
+            comment_audit_coverage=loaded["comment_audit_coverage"],
+            task_configuration=loaded["task_configuration"],
         )
+
+    def report_comment_statistics(self) -> dict[str, Any]:
+        coverage = dict(self.comment_audit_coverage)
+        direct_comments = sum(
+            relation.support_type == "direct" and self.evidence(relation.evidence_id).type == "comment"
+            for relation in self._evidence_relations.values()
+        ) if self._has_evidence_relation_projection or not self.report.statistics.evidence_count else None
+        return {
+            "comment_audit_coverage": coverage,
+            "independently_reviewed_comments": coverage["completed"],
+            "comment_own_risk": coverage["risk"],
+            "direct_comment_evidence_count": direct_comments,
+        }
 
     def post_content(self, post_id: str) -> dict[str, Any]:
         self.post(post_id)
@@ -590,6 +708,10 @@ def _load_report_graph(
         "relations": relation_hash,
     }
     frozen_statistics = _json_object(manifest["statistics_json"], "Snapshot statistics")
+    task_configuration = _project_task_configuration(
+        frozen_statistics.get("source_configuration"),
+        configuration_revision_id=str(manifest["configuration_revision_id"] or ""),
+    )
     if frozen_statistics.get("source_configuration"):
         snapshot_body["source_configuration_hash"] = _stable_hash(frozen_statistics["source_configuration"])
     snapshot_hash = _stable_hash(snapshot_body)
@@ -685,7 +807,21 @@ def _load_report_graph(
             Post(
                 id=post_ref,
                 revision_id=revision_by_post[post_ref],
-                title=str(payload.get("display_title") or "标题不可用"),
+                # Historical snapshots use content_title/title when the
+                # presentation-only display_title is absent.  Keep the
+                # assistant's post cards aligned with the detail page.
+                title=str(
+                    payload.get("display_title")
+                    or payload.get("content_title")
+                    or payload.get("source_title")
+                    or payload.get("title")
+                    or (
+                        payload.get("source_content", {}).get("title")
+                        if isinstance(payload.get("source_content"), Mapping)
+                        else ""
+                    )
+                    or "标题不可用"
+                ),
                 body=_post_preview_text(projected_content),
                 author=AuthorDisplay(
                     display_name=str(payload.get("author") or "未知作者"),
@@ -729,6 +865,12 @@ def _load_report_graph(
             completed_at=completed_at,
         )
         findings.append(finding)
+        # Preserve the source audit output identity and task provenance for
+        # report Q&A detail links.  These are internal navigation metadata;
+        # the assistant only exposes the verified URL built from them.
+        raw_audit_result_id = payload.get("audit_result_id")
+        if raw_audit_result_id in (None, "") and "audit_result_id" in row.keys():
+            raw_audit_result_id = row["audit_result_id"]
         finding_details[finding_ref] = {
             "type": "audit_finding",
             "decision": finding.decision,
@@ -737,6 +879,14 @@ def _load_report_graph(
             "summary": finding.summary,
             "risk_basis": str(payload.get("risk_basis") or ""),
             "completed_at": completed_at.isoformat(),
+            "audit_result_id": raw_audit_result_id,
+            "source_provenance": {
+                "source_job_id": str(manifest["task_id"]),
+                # Historical fixture C uses a report-only synthetic task id;
+                # it has no corresponding /tasks/.../outputs/... record.
+                # Keep the verified report page as its detail target.
+                "task_output_available": not str(manifest["task_id"]).startswith("report-"),
+            },
         }
 
     evidence: list[Evidence] = []
@@ -836,6 +986,8 @@ def _load_report_graph(
         evidence=tuple(evidence),
     )
     return {
+        "comment_audit_coverage": snapshot_comment_coverage(post_payloads.values()),
+        "task_configuration": task_configuration,
         "template_kind": template_kind,
         "account_source": (body_json.get("report_document") or {}).get("account_source", ""),
         # Selected historical audits also carry frozen account identities. Keep
@@ -1422,6 +1574,7 @@ def _project_post_content(payload: Mapping[str, Any]) -> dict[str, Any]:
         )
     return {
         "author_caption": str(payload.get("caption") or ""),
+        "source_url": str(payload.get("url") or ""),
         "videos": videos,
     }
 

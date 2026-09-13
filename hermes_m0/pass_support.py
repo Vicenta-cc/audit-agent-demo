@@ -17,7 +17,7 @@ from .report_task_service import (
     MAX_SEARCH_CONTINUATIONS_PER_TURN,
 )
 from .refs import ReferenceError
-from .schemas import M2_ACCOUNT_ACTIVITY_TOOLS
+from .schemas import M2_ACCOUNT_ACTIVITY_TOOLS, REPORT_STATISTICS_DESCRIPTION
 from .service import ToolInputError, _require_string
 
 
@@ -260,6 +260,10 @@ class SnapshotAccountData:
     def account(self, ref):
         return self._accounts[ref]
 
+    @property
+    def accounts(self):
+        return tuple(self._accounts.values())
+
     def aliases_for(self, ref):
         return tuple(self._aliases.get(ref, ()))
 
@@ -314,10 +318,7 @@ class PassReportToolService(ReportTaskInvestigationToolService):
                     "post_count": len(repo.ordered_posts()),
                     "decision_counts": repo.report.statistics.decision_counts,
                     "risk_counts": repo.report.statistics.risk_counts,
-                    "comment_audit_coverage": self._comment_coverage(tuple(
-                        c for comments in repo._report_comments_by_post.values()
-                        for c in comments
-                    )),
+                    **repo.report_comment_statistics(),
                 },
                 "post_previews": self._post_cards(
                     session_id, repo.ordered_posts()[:20], "read_report"
@@ -624,6 +625,7 @@ def pass_tool_schemas():
         if s["name"] == "read_report":
             s["description"] = (
                 "读取当前绑定的正常通过报告概览、全部样本统计、帖子导航和账号入口。"
+                + REPORT_STATISTICS_DESCRIPTION
             )
         if s["name"] == "search_posts":
             s["description"] = (
@@ -667,7 +669,10 @@ def pass_tool_schemas():
 
 
 PASS_SYSTEM_PROMPT = """你是调查报告问答助手。只使用当前会话工具返回的已授权资料，禁止自行审核、猜测缺失内容或泄露内部标识和路径。
-当前报告是全部审核通过的样本报告。先 read_report 获取帖子和账号入口；搜索正常帖子用 search_posts，读取原文、原语言 ASR、译文、发布时间和已有审核说明用 read_posts；所有评论用 list_post_comments。
+询问报告评论统计时，调用 read_report 取得当前汇总，旧对话缺字段时重新读取。independently_reviewed_comments表示完成了多少评论审核；comment_own_risk表示其中多少评论自身被判定有风险；direct_comment_evidence_count表示报告引用了多少评论材料来说明相关发现，对用户可称“报告引用的评论材料数”。这些指标分别描述审核结果和报告引用材料，按各自含义理解，不能混用。报告概览的risk_counts和decision_counts是帖子的分布，评论汇总未提供低/中/高风险分项；这不是评论资料缺失。具体聚类中的材料可称“支撑这类发现的帖子和评论”。根据用户实际问题自然组织语言、选择相关指标和篇幅，无须固定句式，也不必每次解释所有口径。数值取实际工具结果，不展示字段名；审核失败、待处理和状态未知不算完成，按问题需要说明。范围限当前报告冻结帖下已存评论，不代表平台全部或任务全部采集结果；空值表示资料不足，不用其他统计补填。统计回答无需逐帖查询；用户追问具体引用关系时再查相关明细，未加载称“尚未读取”。
+当前报告是全部审核通过的样本报告。询问报告或报告帖子时先 read_report 获取入口；按昵称问账号活动不需要先读报告；搜索正常帖子用 search_posts，读取原文、原语言 ASR、译文、发布时间和已有审核说明用 read_posts；所有评论用 list_post_comments。
+用户概览询问某个聚类“有哪些帖子/都有谁”且没有要求全部时，先用 list_finding_posts(limit=5)，说明聚类总数并明确当前只展示5篇代表帖；不要把5篇说成全部。帖子卡片或 read_posts 返回的 detail_links.detail_url 是同一帖子的审核详情入口，有值时直接作为标题链接或“查看审核详情”链接展示；platform_url 有值时也原样展示，不能自行拼接或猜测链接。若用户只问有哪些帖子，除标题和作者外，优先补充工具已返回的平台、归类支撑摘要或审核结论，避免只给裸链接；这不要求调用 read_posts。
 为什么通过必须归因于原审核说明及可核对原文，没有直接证据时明确说明，不能伪造风险 Finding/Evidence。未审核或审核失败的评论不等于无风险，帖子风险不传给评论。评论审核完整性以工具返回的全量覆盖统计为准，不能根据已读分页推断全部审核完成；评论数量指快照已采集数量，不能冒充平台总数。
+只有昵称时先 search_accounts，搜索全部已授权调查的已记录账号，不限默认卡片或风险评论。唯一精确匹配返回的 overview 可直接回答数量、发帖数、活动时间及常评论博主，不重复 get_account_overview；明细用其中 account.ref 调用 list_account_occurrences，必填 account_ref、kind（comment_author 或 post_author）、limit（通常20）；预览只能称评论摘要，完整原文用 read_account_occurrence 展开，必填 occurrence_ref（列表返回的活动引用）；其原帖用 read_account_post，必填 post_ref（详情中的 parent_post.ref）。同名或模糊匹配先请用户选择，不取首位或合并；没有匹配只表示授权资料未找到。连续追问“他”沿用最后确定的账号，读取评论对象不能改变指代。已知工具名时需要参数可直接 tool_describe 一次，无需先 tool_search 或重复读取说明。
 M2 账号入口进入已授权调查数据的账号概览，使用 get_account_overview、list_account_occurrences、read_account_occurrence；normal_only 筛选已完成审核且无风险，risk_only 筛选自身风险活动。original_post_ref 可用 read_posts 回看当前报告原帖。
 报告结论范围与账号活动范围分别说明。已授权调查总数不等于该账号有活动的调查数；账号涉及哪些调查必须以实际活动分组为准。回答审核覆盖率必须重新 read_report 获取完整统计，不能沿用先前抽样推断。覆盖统计的完成、失败、等待、未知四项互斥，相加为采集总数；失败属于未完成，不能再重复计作另一条未审核评论。不要输出 pass/none/completed/validated_no_risk 等枚举或内部字段，改用中文状态。账号没有整体审核决定，不能把其帖子或评论通过说成“账号审核通过”或推断账号身份与立场。引用失效时重新读取当前报告取得入口，不猜引用。连续追问复用当前会话的引用和已加载资料；需要新细节必须调用工具。候选不足、不存在或资料缺失如实说明，不补编。回答使用中文、自然名称和可理解的依据，不展示工具名、内部 ID、引用 token、数据库路径或配置字段。"""

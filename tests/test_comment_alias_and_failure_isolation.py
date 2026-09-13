@@ -46,9 +46,13 @@ def test_compensation_remaps_only_missing_comment_and_preserves_judgement(tmp_pa
     p = AuditPipeline.__new__(AuditPipeline); p.job_id = 'alias-test'
     compiled = compiled_k2(); p.rule_snapshot = compiled['rule_snapshot']
     p._set_prompt_context('ethnic', compiled['prompt_profile_snapshot'])
+    comment_rule_code = next(
+        code for code, rule_id in p._comment_rule_code_mapping().items()
+        if rule_id == 'ethnic.group_stereotype_and_derogation'
+    )
     p.qwen = SimpleNamespace(audit_text=Mock(side_effect=[
         {'comments': [{'id':'C02','s':60,'risk_level':'medium','lib':'ethnic',
-          't':'ethnic.content_attack','rule_id':'ethnic.group_stereotype_and_derogation',
+          't':'ethnic.content_attack','rule_id':comment_rule_code,
           'rb':'民族侮辱','q':'汉族都是垃圾'}, {'id':'bad','s':0,'risk_level':'none'}]},
         {'comments':[{'id':'C01','s':0,'risk_level':'none'}]}]))
     comments = [{'comment_id':'7683403259888829241','source_text':'正常内容'},

@@ -38,6 +38,7 @@ interface LexiconTerm {
 
 interface LexiconEditDraft {
   name: string;
+  description: string;
   terms: LexiconTerm[];
 }
 
@@ -187,6 +188,7 @@ export function LexiconEditPage({ lexicons, policies, loading, error, onRefresh 
         expectedVersion: loadedVersion,
         id: isNewLexicon ? undefined : lexiconId,
         name: draft.name,
+        description: draft.description,
         terms: draft.terms.map((term) => ({
           id: term.id,
           mainTerm: term.mainTerm,
@@ -326,6 +328,10 @@ function StepBasicInfo({ draft, onChange }: StepBasicInfoProps) {
         <label className="lexicon-form-field">
           <span>词库名称</span>
           <input value={draft.name} maxLength={50} onChange={(event) => onChange({ name: event.target.value })} />
+        </label>
+        <label className="lexicon-form-field full">
+          <span>词库说明</span>
+          <textarea value={draft.description} maxLength={2000} rows={3} placeholder="说明这份词库的用途或适用范围" onChange={(event) => onChange({ description: event.target.value })} />
         </label>
       </div>
     </div>
@@ -544,6 +550,7 @@ function buildLexiconDraft(lexicon?: RiskLexicon): LexiconEditDraft {
 
   return {
     name: lexicon?.name || "",
+    description: lexicon?.description || "",
     terms
   };
 }

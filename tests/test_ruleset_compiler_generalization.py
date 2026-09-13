@@ -181,7 +181,11 @@ def test_v2_provider_prompts_have_no_heuristic_guidance_and_legacy_retains_it(do
         url="", author={}, image_urls=[], video_urls=[], comments=[],
     )
     prompt = pipeline._render_comment_audit_prompt(subject, "", [])
-    assert prompt.startswith(case["prompt_profile_snapshot"]["comment_prompt_template"])
+    fixed_prompt = case["prompt_profile_snapshot"]["comment_prompt_template"]
+    for code, rule_id in pipeline._comment_rule_code_mapping().items():
+        fixed_prompt = fixed_prompt.replace(rule_id, code)
+    fixed_prompt = fixed_prompt.replace("stable rule_id", "本次短编号，例如CR01")
+    assert prompt.startswith(fixed_prompt)
     assert "comment_extra" not in prompt
     assert "判中风险" not in prompt
     assert not any(word in prompt for word in LEAKS)

@@ -4557,6 +4557,11 @@ class AuditPipeline:
                         response_diagnostic += f"，JSON解析失败，响应字符={len(raw_response)}"
                     else:
                         decoded = self._decode_comment_ids(raw, requested)
+                        if self._is_ruleset_v2():
+                            decoded = self._decode_comment_rule_codes(
+                                decoded,
+                                self._comment_rule_code_mapping(),
+                            )
                         current = self._normalize_comment_audit_results(decoded, requested)
                         error = "model omitted comment result"
                 except QwenTimeoutError as exc:
@@ -4632,6 +4637,38 @@ class AuditPipeline:
                 "输出 id 只能逐字选择本次给定编号，每个编号恰好一次；不得输出平台长 ID、"
                 "猜测编号或按输出顺序省略编号。补试请求的编号以该次输入为准。\n")
 
+    def _comment_rule_code_mapping(self) -> dict[str, str]:
+        """Bind short model-facing codes to this request's frozen comment rules."""
+        routes = self.rule_snapshot.get("stage_routes") or {}
+        rule_ids = list(dict.fromkeys(routes.get("comment_audit") or []))
+        return {f"CR{index:02d}": rule_id for index, rule_id in enumerate(rule_ids, start=1)}
+
+    @staticmethod
+    def _decode_comment_rule_codes(raw: dict, mapping: dict[str, str]) -> dict:
+        """Restore stable rule IDs after validating model-facing comment codes."""
+        decoded = dict(raw)
+        rows = raw.get("comments") or raw.get("results") or raw.get("comment_results") or []
+        if not isinstance(rows, list):
+            decoded["comments"] = []
+            return decoded
+        restored_rows = []
+        for original in rows:
+            if not isinstance(original, dict):
+                continue
+            item = dict(original)
+            code = str(item.get("rule_id") or item.get("rid") or "").strip()
+            if code:
+                if code not in mapping:
+                    raise FusionAuditContractError(
+                        f"comment_audit has an unknown rule code: {code!r}"
+                    )
+                item["rule_id"] = mapping[code]
+                if "rid" in item:
+                    item["rid"] = mapping[code]
+            restored_rows.append(item)
+        decoded["comments"] = restored_rows
+        return decoded
+
     @staticmethod
     def _decode_comment_ids(raw: dict, comments: list[dict]) -> dict:
         mapping = {f"C{index:02d}": str(c["comment_id"]) for index, c in enumerate(comments, 1)}
@@ -4663,6 +4700,11 @@ class AuditPipeline:
         folder.mkdir(parents=True, exist_ok=True)
         record = {"note_id": subject.note_id, "batch": batch_label, "attempt": attempt,
                   "mapping": {f"C{i:02d}": c["comment_id"] for i, c in enumerate(comments, 1)},
+                  "rule_code_mapping": (
+                      self._comment_rule_code_mapping()
+                      if self._is_ruleset_v2()
+                      else {}
+                  ),
                   "response": raw}
         (folder / f"{subject.note_id}-{time_ns()}.json").write_text(
             json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -4724,8 +4766,30 @@ class AuditPipeline:
             or ""
         )
         if self._is_ruleset_v2() and comment_template:
+            mapping = self._comment_rule_code_mapping()
+            reverse = {value: key for key, value in mapping.items()}
+            fixed_prompt = comment_template + self._comment_id_instructions()
+            if reverse:
+                pattern = (
+                    r"(?<![A-Za-z0-9_.:-])(?:"
+                    + "|".join(re.escape(value) for value in sorted(reverse, key=len, reverse=True))
+                    + r")(?![A-Za-z0-9_.:-])"
+                )
+                fixed_prompt = re.sub(
+                    pattern,
+                    lambda match: reverse[match.group()],
+                    fixed_prompt,
+                )
+            fixed_prompt = fixed_prompt.replace("stable rule_id", "本次短编号，例如CR01")
+            fixed_prompt += (
+                "\n规则编号协议 comment-rule-codes-v1：每个风险项的 rule_id 只能从下列短编号中准确选择，"
+                "禁止自造、拼接、猜测或输出完整规则ID。必须满足该编号对应规则的必要条件；编号正确不代表风险成立，"
+                "无明确风险时对应评论的 risk_level 应为 none 且不要填写规则编号。"
+                "comment_id 使用 C01、C02 等评论编号，不能与规则编号混用。\n"
+                + json.dumps({"allowed_rule_codes": list(mapping)}, ensure_ascii=False)
+            )
             return self._render_v2_json_prompt(
-                comment_template + self._comment_id_instructions(),
+                fixed_prompt,
                 payload,
                 limit=settings.comment_audit_prompt_max_chars,
                 kind="comment",

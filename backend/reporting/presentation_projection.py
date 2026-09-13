@@ -6,6 +6,7 @@ from typing import Any, Iterable
 
 from backend.domain.identity import stable_hash
 from backend.reporting.errors import ReportGenerationError
+from backend.reporting.comment_statistics import snapshot_comment_coverage
 
 
 PRESENTATION_SCHEMA_VERSION = "r31-report-presentation/v1"
@@ -94,7 +95,8 @@ def build_presentation_projection(
         account_repository=account_repository,
         current_task_id=current_task_id,
     )
-    comment_statistics = _comment_statistics(account_projection)
+    coverage = snapshot_comment_coverage(post.payload for post in snapshot.posts)
+    comment_statistics = (coverage["completed"], coverage["risk"])
     sections = [
         _section_projection(
             section,
@@ -114,25 +116,21 @@ def build_presentation_projection(
         comment_statistics=comment_statistics,
     )
     summary = _investigation_summary(statistics)
-    if document.get("source_coverage"):
-        coverage = document["source_coverage"].get("comments") or {}
-        statistics["independently_reviewed_comments"] = coverage.get("completed")
-        statistics["stored_comments"] = coverage.get("total")
-        statistics["incomplete_comments"] = coverage.get("failed")
-        if document.get("template_kind") == "selected_existing_audits":
-            statistics["comment_own_risk"] = sum(
-                int((post.payload.get("raw_content_payload", {}).get("comment_audit_stats") or {}).get("review_count") or 0)
-                for post in snapshot.posts
-            )
     if document.get("template_kind") in {"all_pass", "single_risk_post"}:
         accounts["snapshot_summary"] = document.get("snapshot_account_summary")
-        coverage = document.get("comment_audit_coverage") or {}
-        statistics["independently_reviewed_comments"] = coverage.get("completed")
-        statistics["comment_own_risk"] = int(coverage.get("risk") or 0)
         overview = next(
             (section for section in sections if section["section_type"] == "overview"), {}
         )
         summary = {"status": "available", "paragraphs": overview.get("paragraphs") or []}
+    statistics["comment_audit_coverage"] = coverage
+    statistics["stored_comments"] = coverage["total"]
+    statistics["incomplete_comments"] = (
+        coverage["total"] - coverage["completed"] if coverage["available"] else None
+    )
+    statistics["direct_comment_evidence_count"] = sum(
+        item.get("support_type") == "direct" and item.get("evidence_type") == "comment"
+        for item in evidence
+    )
     return {
         "schema_version": PRESENTATION_SCHEMA_VERSION,
         "report_metadata": {
@@ -905,25 +903,6 @@ def _entry_statistics(item: dict[str, Any]) -> dict[str, Any]:
         "latest_activity_at",
     )
     return {key: source.get(key) for key in keys}
-
-
-def _comment_statistics(
-    account_projection: dict[str, Any] | None,
-) -> tuple[int | None, int | None]:
-    if account_projection is None:
-        return None, None
-    entries = (
-        account_projection.get("entries")
-        or account_projection.get("all_entries")
-        or []
-    )
-    return (
-        sum(int(_entry_statistics(item).get("comment_count") or 0) for item in entries),
-        sum(
-            int(_entry_statistics(item).get("risk_comment_count") or 0)
-            for item in entries
-        ),
-    )
 
 
 def _platform_projection(snapshot: Any) -> dict[str, Any]:

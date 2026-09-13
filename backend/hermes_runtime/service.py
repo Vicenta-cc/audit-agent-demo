@@ -144,13 +144,14 @@ class HermesInvestigationAgentService:
             with mode_scope:
                 self._bind_session(session)
                 agent = self._agent(session.id)
-                history = self._conversation_history(session.id)
+                history = self.store.hermes_conversation_history(turn.id)
                 if self.bind_runtime and history:
                     from hermes_m0.runtime import report_task_runtime_for_session
-                    from hermes_m0.reference_state import restore_legacy_transcript
+                    from hermes_m0.reference_state import (
+                        prepare_conversation_history,
+                    )
                     tool_service = report_task_runtime_for_session(session.id)
-                    if session.id not in tool_service.restored_reference_sessions:
-                        restore_legacy_transcript(tool_service, session.id, history)
+                    history = prepare_conversation_history(tool_service, session.id, history)
                 user_message = self.store.get_user_message_for_turn(turn.id).content
                 system_message = (
                     self.runtime_binding.product_system_prompt("pass-report")

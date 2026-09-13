@@ -131,6 +131,7 @@ class LexiconStore:
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
                     risk_label TEXT NOT NULL DEFAULT '',
+                    description TEXT NOT NULL DEFAULT '',
                     sort_order INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -391,8 +392,8 @@ class LexiconStore:
                 "id": row["id"],
                 "version": connection.execute('SELECT MAX(version) FROM lexicon_content_versions WHERE category_id=?', (row['id'],)).fetchone()[0],
                 "title": row["title"],
-                "description": row["description"],
                 "risk_label": row["risk_label"] or self._default_risk_label(row["id"], row["title"]),
+                "description": row["description"],
                 "chips": [item["keyword"] for item in items[:12]],
                 "keywords": items,
                 "prompt_profile": profile,
@@ -407,6 +408,7 @@ class LexiconStore:
         category_id: str = "",
         title: str,
         risk_label: str = "",
+        description: str | None = None,
         terms: list[str] | None = None,
         platform_keywords: list[str] | None = None,
         platform_tags: list[str] | None = None,
@@ -425,19 +427,19 @@ class LexiconStore:
                 conn.execute(
                     """
                     UPDATE lexicon_categories
-                    SET title = ?, risk_label = ?, updated_at = ?
+                    SET title = ?, risk_label = ?, description = COALESCE(?, description), updated_at = ?
                     WHERE id = ?
                     """,
-                    (cleaned_title, cleaned_risk_label, now, cleaned_id),
+                    (cleaned_title, cleaned_risk_label, description, now, cleaned_id),
                 )
             else:
                 max_order = conn.execute("SELECT COALESCE(MAX(sort_order), 0) AS sort_order FROM lexicon_categories").fetchone()
                 conn.execute(
                     """
-                    INSERT INTO lexicon_categories (id, title, risk_label, sort_order, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO lexicon_categories (id, title, risk_label, description, sort_order, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (cleaned_id, cleaned_title, cleaned_risk_label, int(max_order["sort_order"] or 0) + 1, now, now),
+                    (cleaned_id, cleaned_title, cleaned_risk_label, description or "", int(max_order["sort_order"] or 0) + 1, now, now),
                 )
             conn.execute(
                 """

@@ -30,16 +30,16 @@ from hermes_m0.runtime import (
     release_all_report_task_sessions,
     report_runtime_binding_for_session,
 )
-from hermes_m0.schemas import M2_ACCOUNT_ACTIVITY_TOOLS
+from hermes_m0.schemas import M2_ACCOUNT_ACTIVITY_TOOLS, SEARCH_ACCOUNTS
 from hermes_m0.tool_results import error_result
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_PROMPT_FILE_SHA256 = (
-    "3bd437c4bcd970fbb31737a4ad3059bb0f12395a03af10c50ddf42e696719cd3"
+    "2b2295bdc177e4d7213b95d6ac1655e6d59b55191bcc7d963e756be17331102a"
 )
 CANONICAL_INJECTED_PROMPT_SHA256 = (
-    "7faa88a1a771cc02343f29126d96a65f7a8fec60732dcb83253cf96d2000bdd9"
+    "9ad3857a36a41628aecaca036a5be6596b462375260809719eb5b5a2423ee7ab"
 )
 # M1 intentionally adapts user-facing descriptions. This fence covers only the
 # independently extracted canonical name + parameters projection.
@@ -423,7 +423,10 @@ class InvocationParityTest(unittest.TestCase):
         )
         self.assertIn("medium、high 分别写作无风险、低风险、中风险、高风险", injected_prompt)
         canonical_projection = _canonical_parameter_projection()
-        candidate_projection = _parameter_projection(M2_ACCOUNT_ACTIVITY_TOOLS)
+        candidate_projection = _parameter_projection(
+            [tool for tool in M2_ACCOUNT_ACTIVITY_TOOLS if tool["name"] != "search_accounts"]
+        )
+        self.assertEqual([tool for tool in M2_ACCOUNT_ACTIVITY_TOOLS if tool["name"] == "search_accounts"], [SEARCH_ACCOUNTS])
         canonical_names = tuple(item[0] for item in canonical_projection)
         candidate_names = tuple(item[0] for item in candidate_projection)
         self.assertEqual(set(candidate_names), set(canonical_names))
@@ -470,16 +473,17 @@ class InvocationParityTest(unittest.TestCase):
                 )
                 self.assertEqual(config["agent"]["api_max_retries"], 1)
                 agent.close()
-        self.assertEqual(len(definitions), 11)
+        self.assertEqual(len(definitions), 12)
         canonical_projection = _canonical_parameter_projection()
         expected_parameters = dict(canonical_projection)
+        expected_parameters["search_accounts"] = SEARCH_ACCOUNTS["parameters"]
         canonical_runtime_order = tuple(
             sorted(item[0] for item in canonical_projection)
         )
         self.assertEqual(canonical_runtime_order, CANONICAL_QWEN_TOOL_ORDER)
         self.assertEqual(
             tuple(item["function"]["name"] for item in definitions),
-            canonical_runtime_order,
+            tuple(sorted(expected_parameters)),
         )
         for definition in definitions:
             function = definition["function"]
@@ -587,6 +591,74 @@ class InvocationParityTest(unittest.TestCase):
             self.assertEqual(
                 service.store.latest_completed_hermes_transcript(session.id), before
             )
+
+
+class FailedIntentRecoveryTest(unittest.TestCase):
+    def test_failed_target_survives_restart_and_is_not_duplicated_after_success(self):
+        with tempfile.TemporaryDirectory() as directory:
+            seen = []
+
+            class Agent:
+                _api_max_retries = 1
+
+                def run_conversation(self, message, **kwargs):
+                    history = kwargs.get('conversation_history') or []
+                    seen.append((message, history))
+                    if message.startswith('指定'):
+                        return {'failed': True, 'completed': False,
+                                'final_response': '未核实的失败草稿：我好累心好累有999评论',
+                                'api_calls': 12, 'turn_exit_reason': 'max_iterations_reached'}
+                    return {'failed': False, 'completed': True, 'final_response': '查询已完成',
+                            'messages': [*history, {'role': 'user', 'content': message},
+                                         {'role': 'assistant', 'content': '查询已完成'}]}
+
+            def make():
+                return HermesInvestigationAgentService(
+                    report_facade=_MultiReportFacade(),
+                    store=InvestigationStore(Path(directory) / 'investigation.sqlite3'),
+                    agent_factory=lambda **kw: Agent(), bind_runtime=False,
+                )
+
+            service = make()
+            session = service.create_session(_context('a').report_version_id)
+
+            def run(content, client):
+                turn, _ = service.accept_message(session.id, client_message_id=client, content=content)
+                return service.execute_turn(turn.id)
+
+            run('报告是什么', 'first')
+            first = service.store.latest_completed_hermes_transcript(session.id)
+            run('指定账号刚满18岁，他始终指这个账号', 'target')
+            run('指定仅查询有权限的评论', 'scope')
+            self.assertEqual(service.store.latest_completed_hermes_transcript(session.id), first)
+            service.close()
+            service = make()
+            run('他还评论过什么', 'followup')
+            history = seen[-1][1]
+            self.assertEqual([m['content'] for m in history if m['role'] == 'user'],
+                             ['报告是什么', '指定账号刚满18岁，他始终指这个账号', '指定仅查询有权限的评论'])
+            self.assertNotIn('999', json.dumps(history, ensure_ascii=False))
+            validate_hermes_transcript_messages(history)
+            run('他发过什么帖子', 'followup2')
+            self.assertEqual(sum(m.get('content') == '指定账号刚满18岁，他始终指这个账号'
+                                 for m in seen[-1][1]), 1)
+            other = service.create_session(_context('b').report_version_id)
+            turn, _ = service.accept_message(other.id, client_message_id='other', content='他是谁')
+            service.execute_turn(turn.id)
+            self.assertEqual(seen[-1][1], [])
+            service.close()
+
+    def test_first_failed_turn_is_recovered_but_current_interrupted_resume_is_not_duplicated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = InvestigationStore(Path(directory) / 'investigation.sqlite3')
+            session = store.create_session(_context('a'))
+            first, _ = store.create_turn(session.id, client_message_id='first', user_input='只看初学者')
+            store.fail_turn(first.id, error_code='failed', safe_message='未完成', retryable=False)
+            current, _ = store.create_turn(session.id, client_message_id='next', user_input='他还评论过什么')
+            store.mark_interrupted(current.id, error_code='interrupted', safe_message='中断', retryable=True)
+            history = store.hermes_conversation_history(current.id)
+            self.assertEqual([m['content'] for m in history if m['role'] == 'user'], ['只看初学者'])
+            validate_hermes_transcript_messages(history)
 
 
 class TranscriptIntegrityTest(unittest.TestCase):

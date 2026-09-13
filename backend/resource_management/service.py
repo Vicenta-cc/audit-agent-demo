@@ -155,7 +155,7 @@ class ResourceManagementService:
         conn.execute('INSERT INTO resource_edit_origins VALUES (?,?,?,?,?,?)', (edit_id, session_id, principal.id, kind, canonical(source), now()))
 
     def create_lexicon(self, content, *, session_id, principal, source=None):
-        body = LexiconContent.model_validate(content).model_dump(mode='json')
+        body = LexiconContent.model_validate(content).storage_dict()
         identifier = 'lexicon-edit:' + uuid4().hex
         with self.app.store._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -229,9 +229,9 @@ class ResourceManagementService:
             change = raw.model_dump() if hasattr(raw, 'model_dump') else raw
             operation, target, values = change['operation'], change.get('target_id', ''), change.get('values', {})
             if operation == 'set_metadata':
-                allowed = {'title', 'risk_label'} if current['kind'] == 'lexicon' else {'name', 'domain', 'audit_goal'}
+                allowed = {'title', 'risk_label', 'description'} if current['kind'] == 'lexicon' else {'name', 'domain', 'audit_goal'}
                 if not values or not set(values) <= allowed:
-                    raise ResourceError('不支持的元数据字段。')
+                    raise ResourceError('不支持的元数据字段；允许字段：' + ', '.join(sorted(allowed)) + '。', details={'allowed_fields': sorted(allowed)})
                 body.update(values)
             elif current['kind'] == 'lexicon' and operation in {'upsert_entry', 'remove_entry'}:
                 entries = body['entries']
@@ -274,7 +274,7 @@ class ResourceManagementService:
             updated = self.app.update_ruleset_proposal(edit_id, session_id=session_id, expected_version=expected_version, content=body)
             version = updated.version
         else:
-            body = LexiconContent.model_validate(body).model_dump(mode='json')
+            body = LexiconContent.model_validate(body).storage_dict()
             with self.app.store._connect() as conn:
                 conn.execute('BEGIN IMMEDIATE')
                 row = conn.execute('SELECT version FROM lexicon_edits WHERE id=?', (edit_id,)).fetchone()
@@ -376,8 +376,7 @@ class ResourceManagementService:
                 raise ResourceError('词库已删除。', code='RESOURCE_NOT_FOUND')
             require_version(last[0], source['version'])
         stamp = now()
-        conn.execute('INSERT INTO lexicon_categories (id,title,risk_label,sort_order,created_at,updated_at) VALUES (?,?,?,0,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,risk_label=excluded.risk_label,updated_at=excluded.updated_at', (identifier, body.title, body.risk_label, stamp, stamp))
-        conn.execute('UPDATE lexicon_categories SET description=? WHERE id=?', (body.description, identifier))
+        conn.execute('INSERT INTO lexicon_categories (id,title,risk_label,description,sort_order,created_at,updated_at) VALUES (?,?,?,?,0,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,risk_label=excluded.risk_label,description=excluded.description,updated_at=excluded.updated_at', (identifier, body.title, body.risk_label, body.description, stamp, stamp))
         # Remove deleted entries only; retained rows keep statistics and stable identity.
         retained = {e.id for e in body.entries}
         old = conn.execute('SELECT id,entry_id FROM lexicon_keywords WHERE category_id=?', (identifier,)).fetchall()

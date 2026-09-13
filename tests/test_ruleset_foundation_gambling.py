@@ -1718,9 +1718,26 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
 
         self.assertIn("独立判断每条评论", prompt)
         self.assertNotIn("当前阶段：comment_audit", prompt)
-        self.assertIn("gambling.comment_organized_participation", prompt)
+        self.assertIn('"allowed_rule_codes": ["CR01"', prompt)
+        self.assertIn('rule_id":"本次短编号，例如CR01"', prompt)
+        self.assertNotIn("gambling.comment_organized_participation｜参考", prompt)
         self.assertIn('"comment_id":"C01"', prompt)
         self.assertEqual(normalized, {})
+
+    def test_comment_rule_codes_restore_stable_ids_and_reject_unknown_codes(self) -> None:
+        pipeline = bare_v2_pipeline(self.compiled)
+        mapping = pipeline._comment_rule_code_mapping()
+        self.assertEqual(mapping["CR01"], "gambling.platform_entry_and_funding")
+        decoded = pipeline._decode_comment_rule_codes(
+            {"comments": [{"id": "c1", "s": 60, "rule_id": "CR01"}]},
+            mapping,
+        )
+        self.assertEqual(decoded["comments"][0]["rule_id"], "gambling.platform_entry_and_funding")
+        with self.assertRaisesRegex(FusionAuditContractError, "unknown rule code"):
+            pipeline._decode_comment_rule_codes(
+                {"comments": [{"id": "c1", "s": 60, "rule_id": "vague_hostility_fallback"}]},
+                mapping,
+            )
 
     def test_v2_comment_batches_preserve_order_without_omission_and_cap_at_twenty(self) -> None:
         class NoTranslation:

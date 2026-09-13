@@ -12,6 +12,7 @@ provides_tools:
   - list_post_risk_comments
   - list_evidence
   - read_evidence
+  - search_accounts
   - get_account_overview
   - list_account_occurrences
   - read_account_occurrence

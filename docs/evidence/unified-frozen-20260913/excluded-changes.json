@@ -1,0 +1,20 @@
+{
+  "formal_worktree": "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-formal-baseline-20260911",
+  "formal_head": "876d58bfe592de7d898183494344b76fdb55ef28",
+  "excluded_uncommitted_files": [
+    "Audit_assistant/src/features/investigation/AgentCollaborationCard.tsx",
+    "Audit_assistant/src/features/investigation/InvestigationPage.tsx",
+    "Audit_assistant/src/mocks/investigationMocks.ts",
+    "Audit_assistant/src/styles/investigation-workspace.css",
+    "Audit_assistant/src/types/investigation.ts",
+    "backend/investigation_creation/adapters.py",
+    "backend/investigation_creation/contracts.py",
+    "backend/investigation_creation/resources.py",
+    "backend/main.py",
+    "scripts/formal-runtime.sh",
+    "scripts/m3_environment.py",
+    "scripts/m3_frontend.mjs"
+  ],
+  "excluded_patch_sha256": "98ae28350a0b952ff2de66a8821135afd8be216b08b32b1670fa8ffaa094003a",
+  "policy": "Merge committed parents only; no dirty source files copied."
+}

@@ -24,7 +24,7 @@ import yaml
 EXPECTED_HERMES_VERSION = "0.20.4"
 PRODUCT_PROMPT_RESOURCE = "account_activity_prompt.txt"
 PRODUCT_PROMPT_SHA256 = (
-    "3bd437c4bcd970fbb31737a4ad3059bb0f12395a03af10c50ddf42e696719cd3"
+    "2b2295bdc177e4d7213b95d6ac1655e6d59b55191bcc7d963e756be17331102a"
 )
 PRODUCT_TOOLSET = "investigation"
 PRODUCT_PLUGIN = "xhs-investigation"

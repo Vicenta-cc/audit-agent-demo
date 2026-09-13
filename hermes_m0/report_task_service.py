@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from .schemas import REPORT_COMMENT_STATISTICS_NOTICE
+
 from dataclasses import dataclass
 import hashlib
 import json
 import threading
 from typing import Any, Callable
+from urllib.parse import quote
 
 from hermes_m0.account_activity_service import AccountActivityToolService
 from hermes_m0.account_activity_repository import AccountActivityLookupError
@@ -32,6 +35,7 @@ from hermes_m0.repository import (
     is_deterministic_risk_finding,
 )
 from hermes_m0.real_report_repository import PublishedReportRepository
+from backend.reporting.public_references import public_post_and_finding_refs
 from hermes_m0.service import (
     EVIDENCE_TYPES,
     MAX_EVIDENCE_PER_LIST,
@@ -86,6 +90,7 @@ class ReportTaskInvestigationToolService:
         self.ledger = ledger
         self.account_activity = account_activity
         self.restored_reference_sessions: set[str] = set()
+        self.legacy_reference_restore_versions: dict[str, int] = {}
         self._reference_state_lock = threading.RLock()
         self._search_lock = threading.RLock()
         self._search_turn_usage: dict[tuple[str, int, str], SearchTurnUsage] = {}
@@ -103,6 +108,7 @@ class ReportTaskInvestigationToolService:
             )
             if self.account_activity is not None:
                 for tool_name in (
+                    "search_accounts",
                     "get_account_overview",
                     "list_account_occurrences",
                     "read_account_occurrence",
@@ -227,6 +233,7 @@ class ReportTaskInvestigationToolService:
             if tool_name == "search_posts":
                 return handler(session_id, args, turn_id=turn_id)
             if tool_name in {
+                "search_accounts",
                 "get_account_overview",
                 "list_account_occurrences",
                 "read_account_occurrence",
@@ -435,8 +442,9 @@ class ReportTaskInvestigationToolService:
                 "report_overview": repository.report_overview,
                 "overview_source": "published_report",
                 "published_at": report.published_at.isoformat(),
-                "deterministic_statistics": report.statistics.model_dump(mode="json"),
+                "deterministic_statistics": {**report.statistics.model_dump(mode="json"), **repository.report_comment_statistics()},
             },
+            "task_configuration": dict(repository.task_configuration),
             "investigation_finding_previews": finding_previews,
             "investigation_finding_preview_count": len(finding_previews),
             "standalone_risk_post_previews": standalone_previews,
@@ -466,31 +474,13 @@ class ReportTaskInvestigationToolService:
             "All returned items are previews; use the appropriate detail tool before presenting detail.",
         ]
         if repository.template_kind == "single_risk_post":
-            # Use the same verified compact snapshot as the published report's
-            # coverage section, rather than per-account participation counts.
-            comments = [
-                comment
-                for payload in repository.snapshot_payloads.values()
-                for comment in (payload.get("comments") or [])
-            ]
-            statuses = [comment.get("audit_status") for comment in comments]
-            data["report"]["deterministic_statistics"]["comment_audit_coverage"] = {
-                "total": len(comments),
-                "completed": statuses.count("completed"),
-                "failed": statuses.count("failed"),
-                "pending": sum(status in {"pending", "queued"} for status in statuses),
-                "unknown": sum(
-                    status not in {"completed", "failed", "pending", "queued"}
-                    for status in statuses
-                ),
-                "scope": "stored_snapshot_comments_not_platform_total",
-            }
             limitations.append(
                 "Report comment_audit_coverage counts all collected snapshot comments. "
                 "Account comment_count counts only comments authored by that account; "
                 "it is not the report's total or the number of comments under its posts. "
                 "Failed, pending and unknown comments have no completed audit conclusion."
             )
+        limitations.append(REPORT_COMMENT_STATISTICS_NOTICE)
         if self.account_activity is not None:
             data["account_activity_entries"] = account_entries
             data["account_activity_entry_count"] = len(account_entries)
@@ -535,6 +525,54 @@ class ReportTaskInvestigationToolService:
                 "Account Activity is not configured for this report session.",
             )
         return self.account_activity.dispatch(tool_name, args, session_id=session_id)
+
+    def _post_detail_links(
+        self, session_id: str, post: Post, audit_finding: dict[str, Any]
+    ) -> dict[str, str]:
+        """Build verified UI links for this exact frozen Post."""
+        # FrozenSnapshot stores immutable membership IDs; the ordered Post
+        # records carry the presentation order used by the public post-###
+        # aliases.  Build the alias from that verified fixture order instead
+        # of assuming the snapshot itself exposes Post objects.
+        public_post_ref = ""
+        ordered_posts = getattr(self.repository.fixture, "posts", None)
+        if ordered_posts is None:
+            ordered_posts = getattr(self.repository.fixture.snapshot, "posts", ())
+        for index, item in enumerate(ordered_posts, 1):
+            if item.id == post.id:
+                public_post_ref = f"post-{index:03d}"
+                break
+        report_version_id = str(self.repository.fixture.report_version.id or "")
+        report_detail_url = ""
+        if public_post_ref and report_version_id:
+            report_detail_url = (
+                "/investigation/"
+                + quote(str(session_id), safe="")
+                + "/report/evidence?"
+                + "report=" + quote(report_version_id, safe="")
+                + "&view=posts&post_ref=" + quote(public_post_ref, safe="")
+            )
+        source_provenance = audit_finding.get("source_provenance") or {}
+        task_id = str(
+            source_provenance.get("source_job_id")
+            or self.repository.fixture.provenance.source_task_id
+            or ""
+        )
+        output_id = str(audit_finding.get("audit_result_id") or "")
+        task_detail_url = ""
+        task_output_available = source_provenance.get("task_output_available", True)
+        if task_output_available and task_id and output_id and report_version_id and public_post_ref:
+            task_detail_url = (
+                "/tasks/" + quote(task_id, safe="")
+                + "/outputs/" + quote(output_id, safe="")
+                + "?report_version=" + quote(report_version_id, safe="")
+                + "&post_ref=" + quote(public_post_ref, safe="")
+            )
+        return {
+            "report_detail_url": report_detail_url,
+            "task_output_detail_url": task_detail_url,
+            "detail_url": task_detail_url or report_detail_url,
+        }
 
     def _list_finding_posts(self, session_id: str, args: dict[str, Any]) -> str:
         _require_exact_keys(args, {"finding_ref", "limit"}, required={"finding_ref"})
@@ -644,6 +682,9 @@ class ReportTaskInvestigationToolService:
                     "post_content_loaded": False,
                     "membership_evidence_subset_complete": True,
                     "membership_evidence_is_all_post_evidence": False,
+                    "detail_links": self._post_detail_links(
+                        session_id, post, audit_finding
+                    ),
                     "preview_only": True,
                 }
             )
@@ -1086,6 +1127,7 @@ class ReportTaskInvestigationToolService:
                         author["account_ref"] = author_account_ref
                 natural_source = {
                     "platform": post.source.platform,
+                    "platform_url": str(post_content.get("source_url") or getattr(post.source, "url", "") or ""),
                     "published_at": post.source.published_at,
                     "published_at_availability": (
                         "available" if post.source.published_at else "unavailable"
@@ -1146,6 +1188,9 @@ class ReportTaskInvestigationToolService:
             effective_finding["risk_level_label"] = enum_label(
                 RISK_LEVEL_LABELS, effective_finding.get("risk_level")
             )
+            detail_links = self._post_detail_links(
+                session_id, post, effective_finding
+            )
             author["platform_label"] = enum_label(
                 PLATFORM_LABELS, author.get("platform")
             )
@@ -1163,6 +1208,7 @@ class ReportTaskInvestigationToolService:
                     "post_content": post_content,
                     "author": author,
                     "natural_source": natural_source,
+                    "detail_links": detail_links,
                     "effective_finding": effective_finding,
                 }
             )
