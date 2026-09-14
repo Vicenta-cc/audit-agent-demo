@@ -382,6 +382,13 @@ class MediaCrawlerAdapter:
                 elif not kill_sent and stop_reason != "external_stop_requested" and returncode != 0:
                     raise_exit_failure(returncode)
 
+                # MediaCrawler may catch a platform response and exit cleanly;
+                # inspect its log marker even when the process return code is 0.
+                if stderr_path.exists() and "ACCOUNT_VERIFY" in stderr_path.read_text(
+                    encoding="utf-8", errors="replace"
+                ):
+                    raise CrawlerVerificationError("采集账号触发平台验证")
+
                 output = self.load_latest_output(save_root, platform)
                 output.command = command
                 return output
