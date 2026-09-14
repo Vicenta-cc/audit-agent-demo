@@ -12,6 +12,7 @@ from backend.audit_agent.crawler_adapter import (
     ACCOUNT_AUTH_STATE_ENV,
     CrawlOutput,
     CrawlerAuthenticationError,
+    CrawlerVerificationError,
     MediaCrawlerAdapter,
 )
 
@@ -116,6 +117,25 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
                         progress_callback=None,
                         content_callback=None,
                         auth_state={"cookies": [], "origins": []},
+                    )
+
+    def test_account_verify_marker_becomes_typed_verification_error(self):
+        class FailedProcess:
+            returncode = 1
+            def __init__(self, *args, stderr, **kwargs):
+                stderr.write("ACCOUNT_VERIFY: platform request requires verification")
+                stderr.flush()
+            def poll(self):
+                return self.returncode
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = MediaCrawlerAdapter(Path(temp_dir))
+            with patch("backend.audit_agent.crawler_adapter.subprocess.Popen", FailedProcess):
+                with self.assertRaises(CrawlerVerificationError):
+                    adapter._run_command(
+                        command=["python", "main.py"], save_root=Path(temp_dir) / "output",
+                        platform="dy", max_notes=1, progress_callback=None,
+                        content_callback=None, auth_state={"cookies": [], "origins": []},
                     )
 
 

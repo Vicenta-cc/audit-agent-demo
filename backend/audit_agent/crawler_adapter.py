@@ -30,6 +30,10 @@ class CrawlerAuthenticationError(RuntimeError):
     pass
 
 
+class CrawlerVerificationError(RuntimeError):
+    pass
+
+
 @dataclass
 class CrawlOutput:
     platform: str
@@ -323,6 +327,8 @@ class MediaCrawlerAdapter:
                 )
                 if ACCOUNT_AUTH_INVALID_MARKER in stdout or ACCOUNT_AUTH_INVALID_MARKER in stderr:
                     raise CrawlerAuthenticationError("所选采集账号登录态已失效，请重新登录")
+                if "ACCOUNT_VERIFY" in stdout or "ACCOUNT_VERIFY" in stderr:
+                    raise CrawlerVerificationError("采集账号触发平台验证")
                 raise RuntimeError(
                     f"MediaCrawler failed with exit code {returncode}\n"
                     f"STDOUT:\n{stdout[-4000:]}\n"
