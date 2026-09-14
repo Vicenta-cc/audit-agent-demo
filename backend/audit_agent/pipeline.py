@@ -22,8 +22,10 @@ from .crawler_adapter import (
     PLATFORM_DATA_DIRS,
     VIDEO_EXTENSIONS,
     CrawlerAuthenticationError,
+    CrawlerVerificationError,
     MediaCrawlerAdapter,
 )
+from .account_rotation import AccountRotationManager
 from .evidence_groups import build_evidence_groups
 from .ingestion import AuditResultStore, BatchWriter, IngestionStore, content_identity
 from .job_store import job_store
@@ -570,15 +572,84 @@ class AuditPipeline:
                                         self.ingestion.db_path if request.platform == "dy" else None
                                     ),
                                 )
-                        except CrawlerAuthenticationError as exc:
+                        except (CrawlerAuthenticationError, CrawlerVerificationError) as exc:
+                            rotated_successfully = False
                             if crawler_account_id:
-                                crawler_account_store.mark_expired(crawler_account_id, str(exc))
+                                if isinstance(exc, CrawlerVerificationError) and not self.authoritative_m3:
+                                    rotation = AccountRotationManager(crawler_account_store, auth_state_cipher)
+                                    rotated = rotation.rotate(
+                                        request.platform,
+                                        crawler_account_id,
+                                        reason="verify",
+                                        cooldown_seconds=300,
+                                    )
+                                    if rotated and request.crawl_mode != "creator":
+                                        account, account_auth_state = rotated
+                                        crawler_account_id = str(account["id"])
+                                        job_store.log(self.job_id, f"账号触发验证，切换到：{account.get('display_name') or crawler_account_id}")
+                                        rotated_root = crawl_dir / f"rotation-{crawler_account_id}"
+                                        output = self.crawler.run_search(
+                                            platform=request.platform,
+                                            keyword=request.keyword,
+                                            start_page=max(int(request.start_page or 0), int(job_snapshot.get("crawl_checkpoint_page") or request.start_page or 0)),
+                                            max_notes=request.max_notes,
+                                            max_comments=request.max_comments,
+                                            max_concurrency=crawler_concurrency,
+                                            max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                                            get_sub_comment=request.get_sub_comment,
+                                            save_root=rotated_root,
+                                            progress_callback=log_crawl_progress,
+                                            content_callback=enqueue_stream_batch if stream_callback_enabled else None,
+                                            stream_items=stream_callback_enabled,
+                                            stop_checker=crawl_stop_requested,
+                                            auth_state=account_auth_state,
+                                            started_callback=mark_crawler_started,
+                                            checkpoint_callback=persist_crawl_checkpoint,
+                                            reusable_content_db=self.ingestion.db_path if request.platform == "dy" else None,
+                                        )
+                                        rotated_successfully = True
+                                    elif not rotated:
+                                        crawler_account_store.mark_expired(crawler_account_id, str(exc))
+                                else:
+                                    crawler_account_store.mark_expired(crawler_account_id, str(exc))
                             if self.authoritative_m3:
                                 raise RuntimeError(
                                     "crawler_account_login_required: "
                                     "抖音采集服务当前不可用，请稍后重试。"
                                 ) from exc
-                            raise
+                            if not rotated_successfully:
+                                raise
+                        if (
+                            request.crawl_mode == "search"
+                            and not output.contents
+                            and crawler_account_id
+                            and not self.authoritative_m3
+                        ):
+                            rotation = AccountRotationManager(crawler_account_store, auth_state_cipher)
+                            rotated = rotation.rotate(request.platform, crawler_account_id, reason="empty_search", cooldown_seconds=300)
+                            if rotated:
+                                account, account_auth_state = rotated
+                                crawler_account_id = str(account["id"])
+                                job_store.log(self.job_id, f"搜索结果为空，切换账号复核：{account.get('display_name') or crawler_account_id}")
+                                output = self.crawler.run_search(
+                                    platform=request.platform,
+                                    keyword=request.keyword,
+                                    start_page=max(int(request.start_page or 0), int(job_snapshot.get("crawl_checkpoint_page") or request.start_page or 0)),
+                                    max_notes=request.max_notes,
+                                    max_comments=request.max_comments,
+                                    max_concurrency=crawler_concurrency,
+                                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                                    get_sub_comment=request.get_sub_comment,
+                                    save_root=crawl_dir / f"rotation-{crawler_account_id}",
+                                    progress_callback=log_crawl_progress,
+                                    content_callback=enqueue_stream_batch if stream_callback_enabled else None,
+                                    stream_items=stream_callback_enabled,
+                                    stop_checker=crawl_stop_requested,
+                                    auth_state=account_auth_state,
+                                    started_callback=mark_crawler_started,
+                                    checkpoint_callback=persist_crawl_checkpoint,
+                                    reusable_content_db=self.ingestion.db_path if request.platform == "dy" else None,
+                                )
                 finally:
                     if batch_flusher:
                         stop_flusher.set()
