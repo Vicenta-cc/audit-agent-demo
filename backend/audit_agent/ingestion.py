@@ -699,6 +699,66 @@ class IngestionStore:
         conn.row_factory = sqlite3.Row
         return conn
 
+    @staticmethod
+    def _valid_raw_payload(path: Path, platform: str, content_key: str) -> bool:
+        try:
+            if not path.is_file():
+                return False
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            item = payload.get("item") if isinstance(payload, dict) else None
+            return isinstance(item, dict) and content_identity(item, platform) == content_key
+        except (OSError, UnicodeError, json.JSONDecodeError, TypeError):
+            return False
+
+    def reusable_content_keys(self, platform: str, content_keys: list[str]) -> set[str]:
+        """Return only indexed, complete content whose payload still validates."""
+        keys = sorted({str(key).strip() for key in content_keys if str(key).strip()})
+        if not keys:
+            return set()
+        placeholders = ",".join("?" for _ in keys)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT content_key, raw_item_path FROM contents "
+                f"WHERE platform = ? AND content_key IN ({placeholders}) "
+                "AND collection_status = 'complete'",
+                [platform, *keys],
+            ).fetchall()
+        return {
+            str(row["content_key"])
+            for row in rows
+            if self._valid_raw_payload(Path(str(row["raw_item_path"] or "")), platform, str(row["content_key"]))
+        }
+
+    def mark_collection_status(
+        self,
+        platform: str,
+        content_key: str,
+        status: str,
+        *,
+        config: dict | None = None,
+        comments_count: int | None = None,
+        get_sub_comment: bool | None = None,
+    ) -> None:
+        now = utc_now()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE contents SET collection_status = ?, collection_config_json = ?, "
+                "collected_at = CASE WHEN ? = 'complete' THEN COALESCE(collected_at, ?) ELSE collected_at END, "
+                "comments_count = COALESCE(?, comments_count), get_sub_comment = COALESCE(?, get_sub_comment), last_seen_at = ? "
+                "WHERE platform = ? AND content_key = ?",
+                (
+                    status,
+                    json.dumps(config, ensure_ascii=False, sort_keys=True) if config is not None else None,
+                    status,
+                    now,
+                    comments_count,
+                    int(bool(get_sub_comment)) if get_sub_comment is not None else None,
+                    now,
+                    platform,
+                    content_key,
+                ),
+            )
+
     def _init_db(self) -> None:
         with self._connect() as conn:
             conn.executescript(
@@ -722,6 +782,11 @@ class IngestionStore:
                     url TEXT,
                     title TEXT,
                     raw_item_path TEXT,
+                    collection_status TEXT NOT NULL DEFAULT 'complete',
+                    collection_config_json TEXT,
+                    collected_at TEXT,
+                    comments_count INTEGER NOT NULL DEFAULT 0,
+                    get_sub_comment INTEGER,
                     analyze_status TEXT NOT NULL DEFAULT 'queued',
                     result_path TEXT,
                     first_seen_at TEXT NOT NULL,
@@ -757,6 +822,16 @@ class IngestionStore:
                 """
             )
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(task_contents)").fetchall()}
+            content_columns = {row["name"] for row in conn.execute("PRAGMA table_info(contents)").fetchall()}
+            for column, definition in {
+                "collection_status": "TEXT NOT NULL DEFAULT 'complete'",
+                "collection_config_json": "TEXT",
+                "collected_at": "TEXT",
+                "comments_count": "INTEGER NOT NULL DEFAULT 0",
+                "get_sub_comment": "INTEGER",
+            }.items():
+                if column not in content_columns:
+                    conn.execute(f"ALTER TABLE contents ADD COLUMN {column} {definition}")
             for column, definition in {
                 "raw_item_path": "TEXT",
                 "result_path": "TEXT",
@@ -846,7 +921,7 @@ class IngestionStore:
                         (platform, content_key, note_id, url, title, raw_item_path, analyze_status, first_seen_at, last_seen_at)
                     VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)
                     """,
-                    (platform, content_key, note_id, url, title, str(raw_path), now, now),
+                        (platform, content_key, note_id, url, title, str(raw_path), now, now),
                 )
                 inserted = cursor.rowcount == 1
                 row = conn.execute(
@@ -893,9 +968,25 @@ class IngestionStore:
                     (task_id, content_id),
                 ).fetchone()
                 task_status = str(task_row["analyze_status"] or "queued") if task_row else "queued"
-                task_raw_path = str(task_row["raw_item_path"] or row["raw_item_path"] or raw_path) if task_row else str(raw_path)
+                shared_raw_path = str(row["raw_item_path"] or "")
+                shared_complete = self._valid_raw_payload(Path(shared_raw_path), platform, content_key)
+                task_raw_path = str(task_row["raw_item_path"] or (shared_raw_path if shared_complete else raw_path)) if task_row else str(raw_path)
 
-                raw_path.write_text(json.dumps(raw_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                # A complete shared payload is immutable for this phase.  New tasks
+                # reference it and still get their own task/content match row.
+                if not shared_complete or inserted:
+                    raw_path.write_text(json.dumps(raw_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                    conn.execute(
+                        "UPDATE contents SET raw_item_path = ?, collection_status = 'complete', "
+                        "collected_at = COALESCE(collected_at, ?), comments_count = ?, get_sub_comment = ? WHERE id = ?",
+                        (str(raw_path), now, len(content_comments), int(bool(payload.get("get_sub_comment"))) if "get_sub_comment" in payload else None, content_id),
+                    )
+                    task_raw_path = str(raw_path)
+                elif shared_complete:
+                    conn.execute(
+                        "UPDATE task_contents SET raw_item_path = ? WHERE task_id = ? AND content_id = ?",
+                        (shared_raw_path, task_id, content_id),
+                    )
                 if task_status in {"queued", "failed"}:
                     queued.append({
                         "content_id": content_id,

@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import sleep
@@ -43,6 +44,7 @@ ProgressCallback = Callable[[int, int], None]
 ContentCallback = Callable[[list[dict], list[dict]], None]
 StopChecker = Callable[[], bool]
 StartedCallback = Callable[[], None]
+CheckpointCallback = Callable[[str, int], None]
 
 
 class MediaCrawlerAdapter:
@@ -66,6 +68,8 @@ class MediaCrawlerAdapter:
         stop_checker: StopChecker | None = None,
         auth_state: dict | None = None,
         started_callback: StartedCallback | None = None,
+        checkpoint_callback: CheckpointCallback | None = None,
+        skip_content_ids_file: Path | None = None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         command = [
@@ -103,6 +107,8 @@ class MediaCrawlerAdapter:
             "--save_data_path",
             str(save_root),
         ]
+        if skip_content_ids_file:
+            command.extend(["--skip_aweme_ids_file", str(skip_content_ids_file)])
         return self._run_command(
             command=command,
             save_root=save_root,
@@ -113,6 +119,7 @@ class MediaCrawlerAdapter:
             stop_checker=stop_checker,
             auth_state=auth_state,
             started_callback=started_callback,
+            checkpoint_callback=checkpoint_callback,
         )
 
     def run_creator(
@@ -131,6 +138,7 @@ class MediaCrawlerAdapter:
         stop_checker: StopChecker | None = None,
         auth_state: dict | None = None,
         started_callback: StartedCallback | None = None,
+        checkpoint_callback: CheckpointCallback | None = None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         command = [
@@ -176,6 +184,7 @@ class MediaCrawlerAdapter:
             stop_checker=stop_checker,
             auth_state=auth_state,
             started_callback=started_callback,
+            checkpoint_callback=checkpoint_callback,
         )
 
     def _run_command(
@@ -189,6 +198,7 @@ class MediaCrawlerAdapter:
         stop_checker: StopChecker | None = None,
         auth_state: dict | None = None,
         started_callback: StartedCallback | None = None,
+        checkpoint_callback: CheckpointCallback | None = None,
     ) -> CrawlOutput:
         # Both local backends use the same MediaCrawler browser profile. Serialize
         # across worker processes as well as the existing in-process pipeline lock.
@@ -204,7 +214,7 @@ class MediaCrawlerAdapter:
             try:
                 return self._run_command_locked(
                     command, save_root, platform, max_notes, progress_callback,
-                    content_callback, stop_checker, auth_state, started_callback,
+                    content_callback, stop_checker, auth_state, started_callback, checkpoint_callback,
                 )
             finally:
                 fcntl.flock(lock, fcntl.LOCK_UN)
@@ -214,6 +224,7 @@ class MediaCrawlerAdapter:
         progress_callback: ProgressCallback | None, content_callback: ContentCallback | None,
         stop_checker: StopChecker | None = None, auth_state: dict | None = None,
         started_callback: StartedCallback | None = None,
+        checkpoint_callback: CheckpointCallback | None = None,
     ) -> CrawlOutput:
         save_root.mkdir(parents=True, exist_ok=True)
 
@@ -329,6 +340,15 @@ class MediaCrawlerAdapter:
                             seen_content_ids,
                             content_callback,
                         )
+                    if checkpoint_callback and stderr_path.exists():
+                        try:
+                            log_text = stderr_path.read_text(encoding="utf-8", errors="replace")
+                            matches = re.findall(r"search douyin keyword: (.*?), page: (\d+)", log_text)
+                            if matches:
+                                keyword, page = matches[-1]
+                                checkpoint_callback(keyword.strip(), int(page))
+                        except OSError:
+                            pass
                     sleep(1)
 
                 final_count = self._latest_content_count(save_root, platform)

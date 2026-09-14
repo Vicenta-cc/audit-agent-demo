@@ -65,6 +65,8 @@ JOB_SUMMARY_COLUMNS = ", ".join((
     "creator_url",
     "creator_id",
     "start_page",
+    "crawl_checkpoint_page",
+    "crawl_checkpoint_keyword",
     "max_notes",
     "max_comments",
     "max_concurrency",
@@ -121,6 +123,8 @@ class JobStore:
                     creator_url TEXT,
                     creator_id TEXT,
                     start_page INTEGER,
+                    crawl_checkpoint_page INTEGER,
+                    crawl_checkpoint_keyword TEXT,
                     max_notes INTEGER,
                     max_comments INTEGER,
                     max_concurrency INTEGER,
@@ -218,6 +222,10 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN crawler_account_display_name TEXT")
             if "max_items_per_minute" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN max_items_per_minute INTEGER NOT NULL DEFAULT 5")
+            if "crawl_checkpoint_page" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN crawl_checkpoint_page INTEGER")
+            if "crawl_checkpoint_keyword" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN crawl_checkpoint_keyword TEXT")
 
             related_columns = {
                 row["name"]
@@ -252,13 +260,13 @@ class JobStore:
                     display_name, crawl_mode, keyword, keyword_source, lexicon_category,
                     library_ids, capabilities, scoring_template, rule_snapshot,
                     lexicon_keywords, prompt_profile_snapshot, current_audit_config_revision_id,
-                    creator_url, creator_id, start_page, max_notes,
+                    creator_url, creator_id, start_page, crawl_checkpoint_page, crawl_checkpoint_keyword, max_notes,
                     max_comments, max_concurrency, max_items_per_minute,
                     get_sub_comment, analyze_limit, run_crawler,
                     source_output_id, analysis_batch_size, input_type, input_filename, items, control,
                     error, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job["id"],
@@ -281,6 +289,8 @@ class JobStore:
                     job.get("creator_url"),
                     job.get("creator_id"),
                     job.get("start_page"),
+                    job.get("crawl_checkpoint_page"),
+                    job.get("crawl_checkpoint_keyword"),
                     job.get("max_notes"),
                     job.get("max_comments"),
                     job.get("max_concurrency"),
@@ -385,6 +395,8 @@ class JobStore:
             "creator_url",
             "creator_id",
             "start_page",
+            "crawl_checkpoint_page",
+            "crawl_checkpoint_keyword",
             "max_notes",
             "max_comments",
             "max_concurrency",

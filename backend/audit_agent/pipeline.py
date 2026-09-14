@@ -236,6 +236,16 @@ class AuditPipeline:
                     last_progress["done"] = done
                     job_store.log(self.job_id, f"已爬取 {done}/{total} 条")
 
+                def persist_crawl_checkpoint(keyword: str, page: int) -> None:
+                    # The crawler reports the page it is about to request. Persisting
+                    # that boundary lets the same task resume without changing the
+                    # frozen configuration or inheriting another task's cursor.
+                    job_store.update(
+                        self.job_id,
+                        crawl_checkpoint_keyword=keyword,
+                        crawl_checkpoint_page=page,
+                    )
+
                 def refresh_selected_contents() -> None:
                     (
                         refreshed_memberships,
@@ -529,10 +539,15 @@ class AuditPipeline:
                                         f"词库展开 {len(getattr(request, 'lexicon_keywords', []) or [])} 个关键词：{request.lexicon_category}",
                                     )
                                 job_store.log(self.job_id, f"启动 MediaCrawler 关键词爬取 {request.platform}: {request.keyword}")
+                                resume_page = int(
+                                    job_snapshot.get("crawl_checkpoint_page")
+                                    if job_snapshot.get("crawl_checkpoint_page") is not None
+                                    else request.start_page
+                                )
                                 output = self.crawler.run_search(
                                     platform=request.platform,
                                     keyword=request.keyword,
-                                    start_page=request.start_page,
+                                    start_page=max(int(request.start_page or 0), resume_page),
                                     max_notes=request.max_notes,
                                     max_comments=request.max_comments,
                                     max_concurrency=crawler_concurrency,
@@ -545,6 +560,12 @@ class AuditPipeline:
                                     stop_checker=crawl_stop_requested,
                                     auth_state=account_auth_state,
                                     started_callback=mark_crawler_started,
+                                    checkpoint_callback=persist_crawl_checkpoint,
+                                    skip_content_ids_file=(
+                                        Path(str(getattr(request, "skip_content_ids_file", "")))
+                                        if getattr(request, "skip_content_ids_file", "")
+                                        else None
+                                    ),
                                 )
                         except CrawlerAuthenticationError as exc:
                             if crawler_account_id:
