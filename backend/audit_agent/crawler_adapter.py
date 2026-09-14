@@ -112,6 +112,11 @@ class MediaCrawlerAdapter:
             command.extend(["--skip_aweme_ids_file", str(skip_content_ids_file)])
         if reusable_content_db:
             command.extend(["--reusable_content_db", str(reusable_content_db)])
+        command.extend([
+            "--request_scheduler_db", str(settings.data_dir / "request_scheduler.sqlite3"),
+            "--request_min_interval", str(max(0.0, float(getattr(settings, "request_min_interval", 2.0)))),
+            "--requests_per_minute", str(max(1, int(getattr(settings, "requests_per_minute", 30)))),
+        ])
         return self._run_command(
             command=command,
             save_root=save_root,
