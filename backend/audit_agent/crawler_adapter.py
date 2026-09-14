@@ -70,6 +70,7 @@ class MediaCrawlerAdapter:
         started_callback: StartedCallback | None = None,
         checkpoint_callback: CheckpointCallback | None = None,
         skip_content_ids_file: Path | None = None,
+        reusable_content_db: Path | None = None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         command = [
@@ -109,6 +110,8 @@ class MediaCrawlerAdapter:
         ]
         if skip_content_ids_file:
             command.extend(["--skip_aweme_ids_file", str(skip_content_ids_file)])
+        if reusable_content_db:
+            command.extend(["--reusable_content_db", str(reusable_content_db)])
         return self._run_command(
             command=command,
             save_root=save_root,

@@ -566,6 +566,9 @@ class AuditPipeline:
                                         if getattr(request, "skip_content_ids_file", "")
                                         else None
                                     ),
+                                    reusable_content_db=(
+                                        self.ingestion.db_path if request.platform == "dy" else None
+                                    ),
                                 )
                         except CrawlerAuthenticationError as exc:
                             if crawler_account_id:
