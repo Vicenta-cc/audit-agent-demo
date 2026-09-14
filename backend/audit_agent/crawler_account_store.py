@@ -38,6 +38,8 @@ class CrawlerAccountStore:
                     last_validated_at TEXT,
                     last_used_at TEXT,
                     last_error TEXT,
+                    cooldown_until TEXT,
+                    failure_kind TEXT,
                     auth_state_ciphertext TEXT,
                     auth_state_updated_at TEXT,
                     created_at TEXT NOT NULL,
@@ -59,6 +61,10 @@ class CrawlerAccountStore:
             conn.execute("ALTER TABLE crawler_accounts ADD COLUMN auth_state_ciphertext TEXT")
         if "auth_state_updated_at" not in columns:
             conn.execute("ALTER TABLE crawler_accounts ADD COLUMN auth_state_updated_at TEXT")
+        if "cooldown_until" not in columns:
+            conn.execute("ALTER TABLE crawler_accounts ADD COLUMN cooldown_until TEXT")
+        if "failure_kind" not in columns:
+            conn.execute("ALTER TABLE crawler_accounts ADD COLUMN failure_kind TEXT")
 
     def list(
         self,
@@ -307,6 +313,24 @@ class CrawlerAccountStore:
                 (str(message or "账号登录态已失效")[:500], now, account_id),
             )
 
+    def mark_cooldown(self, account_id: str, message: str, until: str, *, failure_kind: str = "rate_limit") -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE crawler_accounts SET status='active', last_error=?, failure_kind=?, cooldown_until=?, updated_at=? WHERE id=?",
+                (str(message or "账号进入冷却")[:500], str(failure_kind), str(until), datetime.now().isoformat(timespec="seconds"), account_id),
+            )
+
+    def next_available(self, platform: str, *, exclude_id: str = "") -> dict | None:
+        now = datetime.now().isoformat(timespec="seconds")
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM crawler_accounts WHERE platform=? AND status='active' "
+                "AND COALESCE(auth_state_ciphertext,'')<>'' AND id<>? "
+                "AND (cooldown_until IS NULL OR cooldown_until<=?) ORDER BY last_used_at IS NOT NULL, last_used_at, id",
+                (platform, exclude_id, now),
+            ).fetchall()
+            return self._row_to_account(rows[0]) if rows else None
+
     def _ensure_account_id_available(
         self,
         conn: sqlite3.Connection,
@@ -352,6 +376,8 @@ class CrawlerAccountStore:
             "last_validated_at": row["last_validated_at"] or "",
             "last_used_at": row["last_used_at"] or "",
             "last_error": row["last_error"] or "",
+            "cooldown_until": row["cooldown_until"] or "",
+            "failure_kind": row["failure_kind"] or "",
             "has_auth_state": bool(row["auth_state_ciphertext"]),
             "auth_state_updated_at": row["auth_state_updated_at"] or "",
             "created_at": row["created_at"],
