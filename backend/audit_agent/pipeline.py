@@ -364,7 +364,10 @@ class AuditPipeline:
                             self._consecutive_provider_failures = 0
                             results.append(persisted or result)
                         except Exception as exc:
+                            provider_failure = str(getattr(self.qwen, "provider_failure", "") or "")
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
+                            if self.authoritative_m3 and (provider_failure or isinstance(exc, AuditProviderCallError)):
+                                raise AuditProviderCallError(provider_failure or str(exc)) from exc
                             analyzed_ids.add(subject.note_id)
                             continue
                         job_store.update(self.job_id, items=results)
@@ -423,7 +426,10 @@ class AuditPipeline:
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
                         except Exception as exc:
+                            provider_failure = str(getattr(self.qwen, "provider_failure", "") or "")
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
+                            if self.authoritative_m3 and (provider_failure or isinstance(exc, AuditProviderCallError)):
+                                raise AuditProviderCallError(provider_failure or str(exc)) from exc
                             analyzed_ids.add(subject.note_id)
                             continue
                         self._consecutive_provider_failures = 0
@@ -661,6 +667,8 @@ class AuditPipeline:
                         stream_queue.put(None)
                         stream_analyzer.join()
                 if analysis_errors:
+                    if self.authoritative_m3:
+                        raise AuditProviderCallError(str(analysis_errors[0])) from analysis_errors[0]
                     job_store.update_control(self.job_id, analysis_stop_requested=True)
                     job_store.log(self.job_id, "审核线程已停止，采集已独立完成；待审核内容保留")
                 if output.command:
@@ -832,7 +840,10 @@ class AuditPipeline:
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
                     except Exception as exc:
+                        provider_failure = str(getattr(self.qwen, "provider_failure", "") or "")
                         self._record_subject_failure(output.platform, subject_key, subject, exc)
+                        if self.authoritative_m3 and (provider_failure or isinstance(exc, AuditProviderCallError)):
+                            raise AuditProviderCallError(provider_failure or str(exc)) from exc
                         analyzed_ids.add(subject.note_id)
                         continue
                     self._consecutive_provider_failures = 0
