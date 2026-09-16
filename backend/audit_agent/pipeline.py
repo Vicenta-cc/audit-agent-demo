@@ -92,19 +92,20 @@ def search_resume_parameters(
 ) -> tuple[int, str, int | None]:
     """Keep Douyin's saved page scoped to its checkpoint keyword."""
     initial_page = int(initial_start_page or 0)
-    saved_page = max(initial_page, int(checkpoint_page))
     saved_keyword = str(checkpoint_keyword or "").strip()
-    if platform == "dy" and saved_keyword:
-        return initial_page, saved_keyword, saved_page
+    if platform == "dy":
+        initial_index = initial_page - 1 if initial_page > 0 else 0
+        saved_page = max(initial_index, int(checkpoint_page))
+        if saved_keyword:
+            return initial_page, saved_keyword, saved_page
+        return initial_page, "", None
+    saved_page = max(initial_page, int(checkpoint_page))
     return saved_page, "", None
 
 
 def crawler_start_page(platform: str, configured_start_page: int) -> int:
-    """Translate the user-facing page number to the crawler's page index."""
-    page = max(0, int(configured_start_page or 0))
-    if platform == "dy" and page > 0:
-        return page - 1
-    return page
+    """Keep the user-facing page number intact for the crawler CLI."""
+    return max(0, int(configured_start_page or 0))
 
 
 def _severity_rank(severity) -> int:

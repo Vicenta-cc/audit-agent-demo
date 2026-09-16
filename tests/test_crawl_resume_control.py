@@ -42,13 +42,15 @@ def _job_payload():
 
 
 def test_douyin_checkpoint_page_is_scoped_to_checkpoint_keyword():
-    assert search_resume_parameters("dy", 0, "词一", 3) == (0, "词一", 3)
+    assert search_resume_parameters("dy", 1, "词一", 3) == (1, "词一", 3)
+    assert search_resume_parameters("dy", 2, "词一", 0) == (2, "词一", 1)
+    assert search_resume_parameters("dy", 2, "", 0) == (2, "", None)
 
 
-def test_douyin_user_page_is_translated_to_zero_based_crawler_page():
+def test_douyin_user_page_is_kept_for_crawler_cli():
     assert crawler_start_page("dy", 0) == 0
-    assert crawler_start_page("dy", 1) == 0
-    assert crawler_start_page("dy", 2) == 1
+    assert crawler_start_page("dy", 1) == 1
+    assert crawler_start_page("dy", 2) == 2
     assert crawler_start_page("xhs", 1) == 1
 
 
