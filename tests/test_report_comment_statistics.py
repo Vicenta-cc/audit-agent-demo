@@ -90,7 +90,7 @@ def test_published_page_and_read_report_share_coverage_without_changing_frozen_c
     reply = json.loads(service.dispatch('read_report', {}, session_id='stats'))
     assert reply['ok'], reply
     data = reply['data']
-    stats = data['statistics'] if risk == 'none' else data['report']['deterministic_statistics']
+    stats = data['statistics']
     for key in ('comment_audit_coverage', 'independently_reviewed_comments', 'comment_own_risk', 'direct_comment_evidence_count'):
         assert stats[key] == page['statistics'][key]
     assert stats['comment_audit_coverage']['total'] == 3

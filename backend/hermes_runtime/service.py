@@ -153,10 +153,8 @@ class HermesInvestigationAgentService:
                     tool_service = report_task_runtime_for_session(session.id)
                     history = prepare_conversation_history(tool_service, session.id, history)
                 user_message = self.store.get_user_message_for_turn(turn.id).content
-                system_message = (
-                    self.runtime_binding.product_system_prompt("pass-report")
-                    if self._product_mode(session.id) == "pass-report"
-                    else self.runtime_binding.product_system_prompt()
+                system_message = self.runtime_binding.product_system_prompt(
+                    self._product_mode(session.id)
                 )
                 if self.bind_runtime:
                     from hermes_m0.runtime import report_task_runtime_for_session
@@ -268,6 +266,8 @@ class HermesInvestigationAgentService:
         document = (json.loads(row[0]).get("report_document") or {}) if row else {}
         if document.get("template_kind") == "all_pass":
             return "pass-report"
+        if document.get("template_kind") == "unified_audit":
+            return "unified-report"
         return "account-activity"
 
     def _agent(self, session_id: str) -> Any:
@@ -327,13 +327,14 @@ class HermesInvestigationAgentService:
                 anchor.startswith(prefix)
                 for prefix in self.authorized_context_anchor_prefixes
             )
-            # Published M3 pass reports reuse the server's explicitly authorized
+            # Published M3 snapshot reports reuse the server's explicitly authorized
             # account sources. Report navigation remains bound to their own snapshot.
-            pass_report_anchor = (
+            snapshot_report_anchor = (
                 anchor.startswith("m3-run:")
-                and self._product_mode(session.id) == "pass-report"
+                and self._product_mode(session.id)
+                in {"pass-report", "unified-report"}
             )
-            if not allowed_anchor and not pass_report_anchor:
+            if not allowed_anchor and not snapshot_report_anchor:
                 return ()
 
         additional_contexts = []

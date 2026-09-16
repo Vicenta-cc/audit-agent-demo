@@ -13,7 +13,15 @@ seed = runpy.run_path(str(Path(__file__).with_name("test_pass_report.py")))
 def make_report(path, *, count=1, comments=None, decision="pass", risk="none"):
     path.mkdir(parents=True, exist_ok=True)
     source, store = seed["seed_audit"](path, count=count, comments=comments, decision=decision, risk=risk)
-    result = seed["R31ReportRuntime"](store).generate(
+    runtime = seed["R31ReportRuntime"](
+        store,
+        **(
+            {"graph_factory": seed["PassReportGraph"]}
+            if decision == "pass" and risk == "none"
+            else {}
+        ),
+    )
+    result = runtime.generate(
         "new-search-task", source=source, checkpoint_path=path / "checkpoints.db"
     )
 
@@ -302,6 +310,7 @@ def test_pass_catalog_selection_does_not_mutate_ab_schema(monkeypatch):
     from hermes_m0.plugin import register
     from hermes_m0.schemas import M2_ACCOUNT_ACTIVITY_TOOLS
     from hermes_m0.pass_support import pass_tool_schemas
+    from hermes_m0.unified_support import unified_tool_schemas
 
     class Context:
         def __init__(self):
@@ -314,6 +323,27 @@ def test_pass_catalog_selection_does_not_mutate_ab_schema(monkeypatch):
             self.schemas.append(kwargs["name"])
 
     before = json.dumps(M2_ACCOUNT_ACTIVITY_TOOLS, sort_keys=True)
+    legacy_search = next(
+        schema for schema in M2_ACCOUNT_ACTIVITY_TOOLS if schema["name"] == "search_posts"
+    )
+    pass_search = next(
+        schema for schema in pass_tool_schemas() if schema["name"] == "search_posts"
+    )
+    legacy_filters = legacy_search["parameters"]["properties"]["filters"]["properties"]
+    pass_filters = pass_search["parameters"]["properties"]["filters"]["properties"]
+    assert legacy_filters["decision"]["enum"] == ["review", "reject"]
+    assert legacy_filters["risk_level"]["enum"] == ["low", "medium", "high"]
+    assert pass_filters["decision"]["enum"] == ["pass", "review", "reject"]
+    assert pass_filters["risk_level"]["enum"] == [
+        "none",
+        "low",
+        "medium",
+        "high",
+    ]
+    unified_names = [schema["name"] for schema in unified_tool_schemas()]
+    assert "search_posts" not in unified_names
+    assert "list_post_risk_comments" not in unified_names
+    assert "list_post_comments" in unified_names
     for name in (
         "HERMES_INVESTIGATION_CREATION_MODE",
         "HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE",
@@ -321,11 +351,13 @@ def test_pass_catalog_selection_does_not_mutate_ab_schema(monkeypatch):
         "HERMES_INVESTIGATION_REPORT_TASK_MODE",
         "HERMES_INVESTIGATION_TASK_MODE",
         "HERMES_INVESTIGATION_PASS_REPORT",
+        "HERMES_INVESTIGATION_UNIFIED_REPORT",
     ):
         monkeypatch.setenv(name, "0")
     for mode, expected in [
         ("pass-report", pass_tool_schemas()),
         ("account-activity", M2_ACCOUNT_ACTIVITY_TOOLS),
+        ("unified-report", unified_tool_schemas()),
         ("pass-report", pass_tool_schemas()),
     ]:
         HermesRuntimeBinding.activate_product_mode(mode)
@@ -351,11 +383,21 @@ def test_published_pass_selects_its_runtime_mode(tmp_path):
 
 
 def test_pass_handoff_uses_explicit_server_authorization_only(tmp_path):
+    import sqlite3
     from types import SimpleNamespace
     from unittest.mock import Mock
     from backend.hermes_runtime.service import HermesInvestigationAgentService
 
     facade = Mock()
+    facade.db_path = tmp_path / "reports.sqlite3"
+    with sqlite3.connect(facade.db_path) as connection:
+        connection.execute(
+            "CREATE TABLE report_versions (id TEXT PRIMARY KEY, status TEXT NOT NULL)"
+        )
+        connection.executemany(
+            "INSERT INTO report_versions(id, status) VALUES (?, 'published')",
+            (("authorized-a",), ("authorized-b",)),
+        )
     facade.get_published_report_context.side_effect = lambda version: SimpleNamespace(
         task_id=version
     )
@@ -380,27 +422,30 @@ def test_pass_handoff_uses_explicit_server_authorization_only(tmp_path):
     assert service._authorized_report_contexts(session) == ()
 
 
-def test_single_risk_report_uses_existing_risk_tools(tmp_path):
-    from hermes_m0.report_task_service import ReportTaskInvestigationToolService
+def test_new_single_risk_report_uses_unified_all_post_tools(tmp_path):
+    from hermes_m0.unified_support import UnifiedAuditReportToolService
     factory, store = make_report(tmp_path, decision="review", risk="high", comments=[
         {"comment_id": "risk", "audit_status": "completed", "risk_level": "high", "content": "风险评论"},
         {"comment_id": "missing", "audit_status": "failed", "risk_level": None},
     ])
     before = hashlib.sha256(store.db_path.read_bytes()).hexdigest()
     svc = factory()
-    assert type(svc) is ReportTaskInvestigationToolService
-    assert svc.repository.template_kind == "single_risk_post"
+    assert type(svc) is UnifiedAuditReportToolService
+    assert svc.repository.template_kind == "unified_audit"
     report = call(svc, "read_report", {})
-    assert report["report"]["deterministic_statistics"]["comment_audit_coverage"] == {
+    coverage = report["statistics"]["comment_audit_coverage"]
+    assert {key: coverage[key] for key in (
+        "total", "completed", "failed", "pending", "unknown", "scope"
+    )} == {
         "total": 2, "completed": 1, "failed": 1, "pending": 0, "unknown": 0,
         "scope": "stored_snapshot_comments_not_platform_total",
     }
-    post = report["standalone_risk_post_previews"][0]["ref"]
+    post = report["post_previews"][0]["ref"]
     details = call(svc, "read_posts", {"post_refs": [post]})["post_groups"][0]
     assert details["effective_finding"]["decision"] == "review"
     assert details["effective_finding"]["risk_level"] == "high"
     assert "日常生活" in details["post_content"]["author_caption"]
-    comments = call(svc, "list_post_risk_comments", {"post_ref": post, "limit": 20})
+    comments = call(svc, "list_post_comments", {"post_ref": post, "limit": 20})
     assert "风险评论" in json.dumps(comments, ensure_ascii=False)
     overview = call(svc, "get_account_overview", {"account_ref": details["author"]["account_ref"]})
     assert overview["statistics"]["published_post_count"] == 1
@@ -416,10 +461,10 @@ def test_single_risk_report_comment_total_is_not_publisher_participation(tmp_pat
     before = hashlib.sha256(store.db_path.read_bytes()).hexdigest()
     svc = factory()
     report = call(svc, "read_report", {})
-    coverage = report["report"]["deterministic_statistics"]["comment_audit_coverage"]
+    coverage = report["statistics"]["comment_audit_coverage"]
     assert coverage["total"] == coverage["completed"] == 3
     assert sum(coverage[key] for key in ("completed", "failed", "pending", "unknown")) == 3
-    post = report["standalone_risk_post_previews"][0]["ref"]
+    post = report["post_previews"][0]["ref"]
     details = call(svc, "read_posts", {"post_refs": [post]})["post_groups"][0]
     author = call(svc, "get_account_overview", {"account_ref": details["author"]["account_ref"]})
     assert author["statistics"]["comment_count"] == 0

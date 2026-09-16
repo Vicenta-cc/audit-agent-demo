@@ -163,10 +163,11 @@ def configure_real_report_runtime(
     if len(account_report_task_ids) != len(set(account_report_task_ids)):
         raise ValueError("authorized Account report sources must have unique source tasks")
     def uses_snapshot_accounts(item):
-        return item.account_source == "report_snapshot" or item.template_kind in {"all_pass", "single_risk_post", "selected_existing_audits"}
+        return item.account_source == "report_snapshot" or item.template_kind in {"all_pass", "single_risk_post", "unified_audit", "selected_existing_audits"}
 
     if any(uses_snapshot_accounts(item) for item in account_report_repositories):
         from .pass_support import PassReportToolService, SnapshotAccountData, SnapshotAccountRepository
+        from .unified_support import UnifiedAuditReportToolService
         from .account_corpus import AccountCorpus
         legacy_corpus = (
             AccountCorpus.load(Path(account_corpus_path or DEFAULT_ACCOUNT_CORPUS_PATH))
@@ -180,7 +181,12 @@ def configure_real_report_runtime(
             repository, repository_loader=lambda: account_repository,
             authorized_report_repositories=tuple(account_report_repositories),
         )
-        service_type = PassReportToolService if repository.template_kind == "all_pass" else ReportTaskInvestigationToolService
+        if repository.template_kind == "all_pass":
+            service_type = PassReportToolService
+        elif repository.template_kind == "unified_audit":
+            service_type = UnifiedAuditReportToolService
+        else:
+            service_type = ReportTaskInvestigationToolService
         return service_type(repository, ledger=ToolExecutionLedger(execution_ledger_path), account_activity=account_activity)
     account_activity = (
         None
