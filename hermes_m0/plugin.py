@@ -180,9 +180,23 @@ def register(ctx: Any) -> None:
             + ", ".join(name for name, _ in active)
         )
     schemas = list(active[0][1]) if active else list(TOOLS)
-    if active and active[0][0] == "account-activity" and os.environ.get("HERMES_INVESTIGATION_PASS_REPORT") == "1":
-        from .pass_support import pass_tool_schemas
-        schemas = pass_tool_schemas()
+    if active and active[0][0] == "account-activity":
+        pass_report = os.environ.get("HERMES_INVESTIGATION_PASS_REPORT") == "1"
+        unified_report = (
+            os.environ.get("HERMES_INVESTIGATION_UNIFIED_REPORT") == "1"
+        )
+        if pass_report and unified_report:
+            raise RuntimeError(
+                "Hermes pass-report and unified-report modes are mutually exclusive"
+            )
+        if unified_report:
+            from .unified_support import unified_tool_schemas
+
+            schemas = unified_tool_schemas()
+        elif pass_report:
+            from .pass_support import pass_tool_schemas
+
+            schemas = pass_tool_schemas()
     for schema in schemas:
         ctx.register_tool(
             name=schema["name"],

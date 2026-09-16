@@ -39,6 +39,7 @@ _LEGACY_MODE_FLAGS = (
 )
 _ACCOUNT_ACTIVITY_MODE_FLAG = "HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE"
 _CREATION_MODE_FLAG = "HERMES_INVESTIGATION_CREATION_MODE"
+_UNIFIED_REPORT_MODE_FLAG = "HERMES_INVESTIGATION_UNIFIED_REPORT"
 _PRODUCT_MODE_EXECUTION_LOCK = RLock()
 
 
@@ -72,6 +73,9 @@ class HermesRuntimeBinding:
         if product_mode == "pass-report":
             from hermes_m0.pass_support import PASS_SYSTEM_PROMPT
             return PASS_SYSTEM_PROMPT
+        if product_mode == "unified-report":
+            from hermes_m0.unified_support import UNIFIED_REPORT_SYSTEM_PROMPT
+            return UNIFIED_REPORT_SYSTEM_PROMPT
         prompt = (
             files("hermes_m0")
             .joinpath(PRODUCT_PROMPT_RESOURCE)
@@ -88,7 +92,12 @@ class HermesRuntimeBinding:
     def activate_product_mode(mode: str = "account-activity") -> None:
         """Select the sole product catalog and reject historical optional modes."""
 
-        if mode not in {"account-activity", "creation", "pass-report"}:
+        if mode not in {
+            "account-activity",
+            "creation",
+            "pass-report",
+            "unified-report",
+        }:
             raise HermesRuntimeUnavailable(f"unsupported Hermes product mode: {mode}")
         enabled_legacy = [
             name for name in _LEGACY_MODE_FLAGS if os.environ.get(name) == "1"
@@ -102,6 +111,7 @@ class HermesRuntimeBinding:
             *_LEGACY_MODE_FLAGS,
             _ACCOUNT_ACTIVITY_MODE_FLAG,
             _CREATION_MODE_FLAG,
+            _UNIFIED_REPORT_MODE_FLAG,
         ):
             os.environ[name] = "0"
         selected_flag = (
@@ -111,6 +121,7 @@ class HermesRuntimeBinding:
         )
         os.environ[selected_flag] = "1"
         os.environ["HERMES_INVESTIGATION_PASS_REPORT"] = "1" if mode == "pass-report" else "0"
+        os.environ[_UNIFIED_REPORT_MODE_FLAG] = "1" if mode == "unified-report" else "0"
         os.environ["HERMES_ENABLE_PROJECT_PLUGINS"] = "1"
 
     def configure_product_home(self, home: Path) -> None:

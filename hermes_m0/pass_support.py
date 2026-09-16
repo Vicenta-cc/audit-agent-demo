@@ -110,7 +110,7 @@ class SnapshotAccountData:
             if task in self._tasks:
                 raise ValueError("duplicate authorized task")
             self._tasks[task] = {"task_display_name": repo.report.title}
-            if getattr(repo, "account_source", "") != "report_snapshot" and repo.template_kind not in {"all_pass", "single_risk_post", "selected_existing_audits"}:
+            if getattr(repo, "account_source", "") != "report_snapshot" and repo.template_kind not in {"all_pass", "single_risk_post", "unified_audit", "selected_existing_audits"}:
                 if (
                     legacy_corpus is None
                     or task not in legacy_corpus.authorized_task_ids

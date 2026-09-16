@@ -575,7 +575,8 @@ def _load_report_graph(
     template_kind = (body_json.get("report_document") or {}).get("template_kind", "")
     all_pass = template_kind == "all_pass"
     single_risk = template_kind == "single_risk_post"
-    snapshot_template = all_pass or single_risk
+    unified_audit = template_kind == "unified_audit"
+    snapshot_template = all_pass or single_risk or unified_audit
     audit_model = _require_object(body_json.get("audit_model"), "audit_model")
     human_report = _require_object(body_json.get("human_report"), "human_report")
     account_model_raw = body_json.get("account_model")
