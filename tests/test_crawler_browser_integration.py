@@ -113,6 +113,34 @@ class BrowserBindingTest(unittest.TestCase):
 
 @unittest.skipUnless(login is not None, 'run with CRAWLER_LOGIN_PYTHON')
 class LoginCompletionTest(unittest.IsolatedAsyncioTestCase):
+    def test_login_network_diagnostic_keeps_status_and_removes_secrets(self):
+        payload = {
+            "status_code": 0,
+            "message": "waiting confirmation",
+            "data": {
+                "scan_status": "scanned",
+                "confirm_required": True,
+                "token": "secret-token",
+                "redirect_url": "https://fixture.invalid/?ticket=secret",
+                "user_name": "private-name",
+            },
+        }
+
+        fields = login.safe_login_response_fields(payload)
+
+        self.assertEqual(fields["status_code"], 0)
+        self.assertEqual(fields["message"], "waiting confirmation")
+        self.assertEqual(fields["data.scan_status"], "scanned")
+        self.assertTrue(fields["data.confirm_required"])
+        serialized = json.dumps(fields)
+        self.assertNotIn("secret-token", serialized)
+        self.assertNotIn("private-name", serialized)
+        self.assertNotIn("fixture.invalid", serialized)
+        self.assertEqual(
+            login.diagnostic_url("https://fixture.invalid/login?token=secret#fragment"),
+            "https://fixture.invalid/login",
+        )
+
     def test_qr_image_validation_rejects_photo_and_accepts_qr(self):
         qr = cv2.QRCodeEncoder_create().encode("https://fixture.invalid/login")
         qr = cv2.resize(qr, (240, 240), interpolation=cv2.INTER_NEAREST)

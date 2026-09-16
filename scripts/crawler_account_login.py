@@ -11,6 +11,7 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import cv2
 import numpy as np
@@ -70,6 +71,15 @@ DY_AUTH_COOKIE_NAMES = (
 )
 LOGIN_SETTLE_SECONDS = 3
 QR_DISAPPEARANCE_CONFIRMATIONS = 2
+DY_LOGIN_NETWORK_MARKERS = ("login", "passport", "qrcode", "scan")
+DY_DIAGNOSTIC_SAFE_FIELDS = (
+    "status", "state", "code", "error", "message", "msg", "reason",
+    "description", "verify", "confirm", "result", "login",
+)
+DY_DIAGNOSTIC_SENSITIVE_FIELDS = (
+    "token", "cookie", "ticket", "sign", "session", "secret", "uid", "user",
+    "avatar", "nickname", "name", "url", "redirect",
+)
 
 # Identity lookup only reads links already rendered by the logged-in homepage. The
 # broad fallback selectors require an explicit personal-account label so feed
@@ -101,6 +111,69 @@ def emit(event_type: str, **payload) -> None:
     )
 
 
+def diagnostic_url(url: str) -> str:
+    """Keep only the request origin and path; login query strings contain secrets."""
+    parsed = urlsplit(url)
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+
+def safe_login_response_fields(payload, *, prefix: str = "", depth: int = 0) -> dict:
+    """Extract status-like fields while excluding identities and login credentials."""
+    if depth > 6:
+        return {}
+    safe: dict[str, object] = {}
+    if isinstance(payload, dict):
+        for raw_key, value in payload.items():
+            key = str(raw_key)
+            lowered = key.lower()
+            path = f"{prefix}.{key}" if prefix else key
+            if any(marker in lowered for marker in DY_DIAGNOSTIC_SENSITIVE_FIELDS):
+                continue
+            if isinstance(value, (dict, list)):
+                safe.update(safe_login_response_fields(value, prefix=path, depth=depth + 1))
+            elif value is None or isinstance(value, (bool, int, float, str)):
+                if any(marker in lowered for marker in DY_DIAGNOSTIC_SAFE_FIELDS):
+                    text = value if not isinstance(value, str) else value[:300]
+                    safe[path] = text
+    elif isinstance(payload, list):
+        for index, value in enumerate(payload[:10]):
+            safe.update(
+                safe_login_response_fields(value, prefix=f"{prefix}[{index}]", depth=depth + 1)
+            )
+    return safe
+
+
+async def capture_douyin_login_response(response, events: list[dict]) -> None:
+    """Record only endpoint paths and non-secret status fields from login traffic."""
+    raw_url = str(response.url)
+    if not any(marker in raw_url.lower() for marker in DY_LOGIN_NETWORK_MARKERS):
+        return
+    record = {
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "url": diagnostic_url(raw_url),
+        "http_status": response.status,
+        "method": response.request.method,
+        "resource_type": response.request.resource_type,
+    }
+    try:
+        text = await response.text()
+        payload = json.loads(text)
+        fields = safe_login_response_fields(payload)
+        if fields:
+            record["fields"] = fields
+        else:
+            # Preserve only coarse, non-secret response shape for unknown schemas.
+            record["body_shape"] = (
+                sorted(str(key) for key in payload)[:50]
+                if isinstance(payload, dict)
+                else type(payload).__name__
+            )
+    except Exception as exc:
+        record["body_error"] = type(exc).__name__
+    events.append(record)
+    del events[:-120]
+
+
 async def capture_douyin_login_diagnostic(
     page,
     context,
@@ -108,6 +181,7 @@ async def capture_douyin_login_diagnostic(
     baseline_cookies: dict[str, str],
     *,
     reason: str,
+    network_events: list[dict] | None = None,
 ) -> None:
     """Persist post-scan evidence without ever writing cookie values."""
     try:
@@ -153,6 +227,7 @@ async def capture_douyin_login_diagnostic(
                 if value and value != baseline_cookies.get(name, "")
             ),
             "login_status": cookie_map.get("LOGIN_STATUS", ""),
+            "login_network_events": list(network_events or []),
             **browser_state,
         }
         json_path = prefix.with_suffix(".json")
@@ -379,6 +454,17 @@ async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *
     async with login_context(platform, account_id, headless=headless) as context:
         page = await context.new_page()
         page.set_default_timeout(12_000)
+        login_network_events: list[dict] = []
+        login_network_tasks: set[asyncio.Task] = set()
+        if platform == "dy":
+            def enqueue_login_response(response) -> None:
+                task = asyncio.create_task(
+                    capture_douyin_login_response(response, login_network_events)
+                )
+                login_network_tasks.add(task)
+                task.add_done_callback(login_network_tasks.discard)
+
+            page.on("response", enqueue_login_response)
         try:
             try:
                 if platform == "dy":
@@ -455,24 +541,30 @@ async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *
                             emit("scanned")
                     next_qr_check = now + 2.5
                 if platform == "dy" and scanned_emitted and now >= next_scanned_diagnostic:
+                    if login_network_tasks:
+                        await asyncio.gather(*list(login_network_tasks), return_exceptions=True)
                     await capture_douyin_login_diagnostic(
                         page,
                         context,
                         account_id,
                         baseline_cookies,
                         reason="post_scan_wait",
+                        network_events=login_network_events,
                     )
                     next_scanned_diagnostic = now + 5
                 await asyncio.sleep(0.8)
 
             if success is None:
                 if platform == "dy" and scanned_emitted:
+                    if login_network_tasks:
+                        await asyncio.gather(*list(login_network_tasks), return_exceptions=True)
                     await capture_douyin_login_diagnostic(
                         page,
                         context,
                         account_id,
                         baseline_cookies,
                         reason="expired_after_scan",
+                        network_events=login_network_events,
                     )
                 emit("expired", message="二维码登录已超时，请重新获取二维码")
         except Exception:
