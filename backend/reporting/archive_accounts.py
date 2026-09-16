@@ -15,7 +15,7 @@ def archive_account_repository(sources):
         expected_content_hash=content_hash, expected_snapshot_hash=snapshot_hash,
     ) for path, version, database_hash, content_hash, snapshot_hash in sources)
     legacy = any(r.account_source != "report_snapshot" and r.template_kind not in {
-        "all_pass", "single_risk_post", "selected_existing_audits"
+        "all_pass", "single_risk_post", "unified_audit", "selected_existing_audits"
     } for r in repositories)
     return SnapshotAccountRepository(SnapshotAccountData(
         repositories,

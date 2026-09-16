@@ -1253,11 +1253,16 @@ def test_douyin_jsonl_to_durable_published_report_and_session(
         ).fetchone()[0] == 1
     view = report_store.get_presentation_projection(completed.report_version_id)
     assert jobs.get(completed.job_id)["display_name"] == draft.title
-    assert view["report_metadata"]["title"] == draft.title + "调查报告"
-    sample = next(s for s in view["ordered_sections"] if s["presentation_kind"] == "audit_samples")
-    assert sample["sample_posts"][0]["decision"] == decision
+    assert view["report_metadata"]["title"] == draft.title + "审核报告"
+    document = report_store.get_frontend_report(completed.report_version_id)
+    assert document["template_kind"] == "unified_audit"
+    appendix = report_store.get_presentation_appendix(
+        completed.report_version_id, view="posts", limit=5
+    )
+    assert appendix["matched_count"] == 1
+    assert appendix["items"][0]["decision"] == decision
     detail = report_store.get_presentation_post_detail(
-        completed.report_version_id, post_ref=sample["sample_posts"][0]["post_ref"]
+        completed.report_version_id, post_ref=appendix["items"][0]["post_ref"]
     )
     assert len(detail["direct_evidence"]) == expected_evidence_count
     assert report_store.get_version(completed.report_version_id)["model"] == "deterministic"

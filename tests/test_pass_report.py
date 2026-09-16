@@ -18,9 +18,26 @@ from backend.reporting.pass_graph import PASS_TEMPLATE_VERSION, PassReportGraph
 from backend.reporting.r31_graph import AccountOverviewReportGraph
 from backend.reporting.runtime import R31ReportRuntime
 from backend.reporting.store import ReportStore
+from backend.reporting.unified_graph import UnifiedAuditReportGraph
 
 
-def seed_audit(tmp_path: Path, *, count=1, decision="pass", risk="none", comments=None):
+def legacy_pass_runtime(store):
+    """Exercise the frozen v1 all-pass template independently of new routing."""
+    return R31ReportRuntime(store, graph_factory=PassReportGraph)
+
+
+def seed_audit(
+    tmp_path: Path,
+    *,
+    count=1,
+    decision="pass",
+    risk="none",
+    verdicts=None,
+    comments=None,
+):
+    if verdicts is not None:
+        verdicts = list(verdicts)
+        count = len(verdicts)
     db = tmp_path / "audit.sqlite3"
     jobs = JobStore(db)
     jobs.create(job_id="new-search-task", platform="dy", status="completed", display_name="单条帖子审核演示", crawl_mode="search", max_notes=count, analyze_limit=count)
@@ -33,12 +50,19 @@ def seed_audit(tmp_path: Path, *, count=1, decision="pass", risk="none", comment
     refs = ingestion.ingest_batch(batch, tmp_path / "raw")
     assert len(refs) == count
     for index, ref in enumerate(refs):
+        item_decision, item_risk = (
+            verdicts[index] if verdicts is not None else (decision, risk)
+        )
         result = results.upsert_result(job_id="new-search-task", platform="dy", content_key=str(10001 + index), content_id=ref["content_id"], audit_config_revision_id=revision["id"], result={
             "title": contents[index]["title"], "desc": "今天去公园散步，记录日常生活。",
             "url": f"https://www.douyin.com/video/{10001 + index}",
             "author": {"nickname": "生活记录者", "sec_uid": "stable-author"},
-            "decision": decision, "risk_level": risk,
-            "summary": "内容为日常生活分享，未检出本次规则覆盖的风险。",
+            "decision": item_decision, "risk_level": item_risk,
+            "summary": (
+                "内容为日常生活分享，未检出本次规则覆盖的风险。"
+                if item_decision == "pass" and item_risk == "none"
+                else f"该帖审核决定为 {item_decision}，风险等级为 {item_risk}。"
+            ),
             "comments": comments or [], "evidence_items": [],
             "video_results": [{"transcript": {
                 "text": "A walk in the park.", "text_zh": "在公园散步。",
@@ -54,7 +78,7 @@ def test_pass_report_publishes_without_provider_and_preserves_samples(tmp_path, 
     source, store = seed_audit(tmp_path, count=count)
     provider = Mock()
     provider.generate_structured.side_effect = AssertionError("pass report must not invoke Qwen")
-    runtime = R31ReportRuntime(store)
+    runtime = legacy_pass_runtime(store)
     result = runtime.generate("new-search-task", source=source, model_client=provider, checkpoint_path=tmp_path / "checkpoints.sqlite3")
     provider.generate_structured.assert_not_called()
     version = store.get_version(result.report_version_id)
@@ -106,14 +130,14 @@ def test_pass_report_publishes_without_provider_and_preserves_samples(tmp_path, 
 def test_pass_post_with_risk_comment_is_not_published_as_safe(tmp_path):
     source, store = seed_audit(tmp_path, comments=[{"comment_id": "comment-risk", "audit_status": "completed", "risk_level": "high", "content": "risky comment"}])
     with pytest.raises(ReportValidationError, match="risk comments"):
-        R31ReportRuntime(store).generate("new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3")
+        legacy_pass_runtime(store).generate("new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3")
     with store._connect() as connection:
         assert connection.execute("SELECT COUNT(*) FROM report_versions WHERE status = 'published'").fetchone()[0] == 0
 
 
 def test_pending_comments_are_reported_as_unreviewed(tmp_path):
     source, store = seed_audit(tmp_path, comments=[{"comment_id": "comment-pending", "audit_status": "pending", "risk_level": "none", "content": "not yet reviewed"}])
-    result = R31ReportRuntime(store).generate("new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3")
+    result = legacy_pass_runtime(store).generate("new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3")
     document = store.get_frontend_report(result.report_version_id)
     assert document["comment_audit_coverage"] == {"total": 1, "completed": 0, "unreviewed": 1}
     assert "不纳入无风险结论" in json.dumps(document, ensure_ascii=False)
@@ -127,7 +151,7 @@ def test_missing_comment_verdict_does_not_block_publication(tmp_path, status, ri
         {"comment_id": "missing", "audit_status": status, "risk_level": risk,
          "content": "保留这条评论", "audit_error": "comment result missing after retries"},
     ])
-    result = R31ReportRuntime(store).generate("new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3")
+    result = legacy_pass_runtime(store).generate("new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3")
     assert store.get_version(result.report_version_id)["status"] == "published"
     document = store.get_frontend_report(result.report_version_id)
     assert document["comment_audit_coverage"] == {"total": 2, "completed": 1, "unreviewed": 1}
@@ -147,14 +171,14 @@ def test_missing_comment_verdict_does_not_block_publication(tmp_path, status, ri
 def test_invalid_comment_verdict_still_blocks_publication(tmp_path, status, risk):
     source, store = seed_audit(tmp_path, comments=[{"comment_id": "invalid", "audit_status": status, "risk_level": risk}])
     with pytest.raises(ValueError, match="invalid risk level"):
-        R31ReportRuntime(store).generate("new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3")
+        legacy_pass_runtime(store).generate("new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3")
 
 
 def test_in_progress_task_cannot_publish_a_partial_all_pass_report(tmp_path):
     source, store = seed_audit(tmp_path)
     JobStore(store.db_path).update("new-search-task", status="analysis_running")
     with pytest.raises(ReportValidationError, match="completed audit task"):
-        R31ReportRuntime(store).generate(
+        legacy_pass_runtime(store).generate(
             "new-search-task", source=source, checkpoint_path=tmp_path / "checkpoints.sqlite3"
         )
     with store._connect() as connection:
@@ -169,22 +193,21 @@ def test_resume_uses_frozen_pass_template_without_provider_or_live_reclassificat
             raise RuntimeError("publication temporarily unavailable")
         patch.setattr(PassReportGraph, "_publish_report_version", unavailable)
         with pytest.raises(RuntimeError, match="temporarily unavailable"):
-            R31ReportRuntime(store).generate("new-search-task", source=source, checkpoint_path=checkpoint)
+            legacy_pass_runtime(store).generate("new-search-task", source=source, checkpoint_path=checkpoint)
     run = store.get_latest_run_for_task("new-search-task")
     monkeypatch.setattr(source, "canonical_rows", Mock(side_effect=AssertionError("must use frozen source")))
     provider = Mock()
-    resumed = R31ReportRuntime(store).resume(run["id"], source=source, model_client=provider, checkpoint_path=checkpoint)
+    resumed = legacy_pass_runtime(store).resume(run["id"], source=source, model_client=provider, checkpoint_path=checkpoint)
     assert resumed.report_version_id == run["report_version_id"]
     assert store.get_version(resumed.report_version_id)["status"] == "published"
     provider.generate_structured.assert_not_called()
 
 
 @pytest.mark.parametrize("decision,risk", [("review", "high"), ("reject", "high"), ("pass", "low")])
-def test_risk_results_keep_the_existing_risk_graph(tmp_path, decision, risk):
+def test_new_risk_results_use_the_unified_report_graph(tmp_path, decision, risk):
     source, store = seed_audit(tmp_path, count=2, decision=decision, risk=risk)
     graph = R31ReportRuntime(store).generation_graph(source=source, task_id="new-search-task", checkpoint_path=tmp_path / "checkpoints.sqlite3")
     try:
-        assert isinstance(graph, AccountOverviewReportGraph)
-        assert not isinstance(graph, PassReportGraph)
+        assert isinstance(graph, UnifiedAuditReportGraph)
     finally:
         graph.close()

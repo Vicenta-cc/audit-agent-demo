@@ -2142,7 +2142,7 @@ class ReportStore:
             from hermes_m0.pass_support import SnapshotAccountData, SnapshotAccountRepository
             data = SnapshotAccountData.from_snapshot(self.load_immutable_snapshot(report_version_id))
             return projection, SnapshotAccountRepository(data), str(report["task_id"])
-        if ((version.get("body") or {}).get("report_document") or {}).get("template_kind") in {"all_pass", "single_risk_post", "selected_existing_audits"}:
+        if ((version.get("body") or {}).get("report_document") or {}).get("template_kind") in {"all_pass", "single_risk_post", "unified_audit", "selected_existing_audits"}:
             return projection, None, str(report["task_id"])
         try:
             account_repository = AccountActivityRepository.load(
