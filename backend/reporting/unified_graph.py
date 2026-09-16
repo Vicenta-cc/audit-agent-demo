@@ -1,0 +1,398 @@
+"""Deterministic report template for every newly created 1..5 post task."""
+
+from __future__ import annotations
+
+from collections import Counter
+from typing import Any, Iterable
+
+from backend.reporting.comment_statistics import snapshot_comment_coverage
+from backend.reporting.errors import ReportValidationError
+from backend.reporting.pass_graph import PassReportGraph, SCOPE
+from backend.reporting.structured_contract import validate_structured_report_document
+
+
+UNIFIED_REPORT_TEMPLATE_VERSION = "report-unified-audit/v1"
+UNIFIED_REPORT_TEMPLATE_KIND = "unified_audit"
+DECISION_LABELS = {"pass": "通过", "review": "复审", "reject": "拒绝"}
+RISK_LABELS = {"none": "无风险", "low": "低风险", "medium": "中风险", "high": "高风险"}
+
+
+def _finding_value(finding: Any, key: str) -> str:
+    if isinstance(finding, dict):
+        if key in finding:
+            return str(finding.get(key) or "")
+        payload = finding.get("payload") or {}
+        return str(payload.get(key) or "")
+    payload = getattr(finding, "payload", None)
+    if isinstance(payload, dict) and key in payload:
+        return str(payload.get(key) or "")
+    return str(getattr(finding, key, "") or "")
+
+
+def classify_unified_findings(findings: Iterable[Any]) -> dict[str, list[str]]:
+    """Assign every finding to exactly one deterministic presentation group."""
+
+    groups: dict[str, list[str]] = {
+        "reject": [],
+        "review": [],
+        "safe": [],
+        "pending": [],
+    }
+    for finding in findings:
+        ref = _finding_value(finding, "ref")
+        decision = _finding_value(finding, "decision")
+        risk = _finding_value(finding, "risk_level")
+        if decision == "reject":
+            group = "reject"
+        elif decision == "review":
+            group = "review"
+        elif decision == "pass" and risk == "none":
+            group = "safe"
+        else:
+            # A pass verdict carrying a non-none risk level is internally
+            # inconsistent. Preserve it for review instead of calling it safe.
+            group = "pending"
+        groups[group].append(ref)
+    return groups
+
+
+class UnifiedAuditReportGraph(PassReportGraph):
+    """Publish one stable report shape without asking a model to format it."""
+
+    template_kind = UNIFIED_REPORT_TEMPLATE_KIND
+    template_version = UNIFIED_REPORT_TEMPLATE_VERSION
+
+    @staticmethod
+    def _validate_snapshot(snapshot):
+        if not 1 <= len(snapshot.posts) <= 5:
+            raise ReportValidationError(
+                "validate_unified_snapshot", ["1 to 5 audited posts are required"]
+            )
+        if len(snapshot.findings) != len(snapshot.posts):
+            raise ReportValidationError(
+                "validate_unified_snapshot",
+                ["every frozen post must have exactly one audit finding"],
+            )
+        post_refs = [post.ref for post in snapshot.posts]
+        finding_post_refs = [finding.post_ref for finding in snapshot.findings]
+        if len(set(finding_post_refs)) != len(finding_post_refs) or set(
+            finding_post_refs
+        ) != set(post_refs):
+            raise ReportValidationError(
+                "validate_unified_snapshot",
+                ["audit findings must cover every frozen post exactly once"],
+            )
+        invalid = [
+            finding.ref
+            for finding in snapshot.findings
+            if finding.payload.get("decision") not in DECISION_LABELS
+            or finding.payload.get("risk_level") not in RISK_LABELS
+        ]
+        if invalid:
+            raise ReportValidationError(
+                "validate_unified_snapshot",
+                ["every post must have a supported decision and risk level"],
+            )
+
+        findings = {finding.post_ref: finding for finding in snapshot.findings}
+        for post in snapshot.posts:
+            finding = findings[post.ref]
+            if not (
+                finding.payload.get("decision") == "pass"
+                and finding.payload.get("risk_level") == "none"
+            ):
+                continue
+            comments = post.payload.get("comments") or []
+            if any(
+                comment.get("audit_status") == "completed"
+                and comment.get("risk_level") in {"low", "medium", "high"}
+                for comment in comments
+            ):
+                raise ReportValidationError(
+                    "validate_unified_snapshot",
+                    ["a safe post cannot contain a completed risk comment"],
+                )
+        return snapshot_comment_coverage(post.payload for post in snapshot.posts)
+
+    @staticmethod
+    def _section(
+        sections: list[dict[str, Any]],
+        *,
+        number: str,
+        kind: str,
+        title: str,
+        paragraphs: list[str],
+        claims: list[dict[str, Any]] | None = None,
+    ) -> None:
+        sections.append(
+            {
+                "section_id": kind + "-" + number,
+                "section_ref": "section-" + number.replace(".", "-"),
+                "section_number": number,
+                "parent_section_ref": None,
+                "section_type": kind,
+                "section_kind": kind,
+                "title": title,
+                "purpose": "",
+                "display_ordinal": len(sections) + 1,
+                "sort_order": len(sections),
+                "paragraphs": [
+                    {"text": paragraph, "claim_ids": []}
+                    for paragraph in paragraphs
+                ],
+                "claims": claims or [],
+                "case_blocks": [],
+                "is_report_category": False,
+                "body": "\n\n".join(paragraphs),
+            }
+        )
+
+    @staticmethod
+    def _post_claim(snapshot, finding) -> tuple[str, dict[str, Any]]:
+        post = snapshot.post_by_ref[finding.post_ref]
+        decision = str(finding.payload.get("decision") or "")
+        risk = str(finding.payload.get("risk_level") or "")
+        summary = str(
+            finding.payload.get("summary") or "原审核结果未提供文字说明。"
+        )
+        related_evidence = [
+            evidence
+            for evidence in snapshot.evidence
+            if evidence.finding_ref == finding.ref
+        ]
+        evidence_notes = []
+        for evidence in related_evidence[:3]:
+            payload = evidence.payload
+            excerpt = str(
+                payload.get("summary")
+                or payload.get("reason")
+                or payload.get("translated_text")
+                or payload.get("original_text")
+                or ""
+            ).strip()
+            if excerpt:
+                evidence_notes.append(excerpt[:240])
+        basis = (
+            "证据依据：" + "；".join(evidence_notes) + "。"
+            if evidence_notes
+            else "当前冻结快照未提供独立证据条目，结论依据为原审核说明。"
+        )
+        text = (
+            f"{post.payload.get('title') or '未命名帖子'}："
+            f"{DECISION_LABELS[decision]}，{RISK_LABELS[risk]}。{summary}{basis}"
+        )
+        evidence_ids = [evidence.ref for evidence in related_evidence]
+        claim = {
+            "claim_id": "claim-" + finding.ref.rsplit(":", 1)[-1],
+            "claim_type": "domain_fact",
+            "text": text,
+            "support_type": "audit_result",
+            "finding_ids": [finding.ref],
+            "evidence_ids": evidence_ids,
+            "metric_refs": [],
+        }
+        return text, claim
+
+    def _draft_pass_report(self, state):
+        if state["source_snapshot"].get("task_status") != "completed":
+            raise ReportValidationError(
+                "validate_unified_snapshot",
+                ["unified reporting requires a completed audit task"],
+            )
+        snapshot = self._snapshot(state["report_version_id"])
+        comment_coverage = self._validate_snapshot(snapshot)
+        groups = classify_unified_findings(snapshot.findings)
+        findings = {finding.ref: finding for finding in snapshot.findings}
+        counts = Counter(
+            finding.payload.get("decision") for finding in snapshot.findings
+        )
+        safe_count = len(groups["safe"])
+        pending_count = len(groups["pending"])
+        sections: list[dict[str, Any]] = []
+
+        self._section(
+            sections,
+            number="1",
+            kind="overview",
+            title="报告概览",
+            paragraphs=[
+                f"任务：{snapshot.display_name}；平台："
+                f"{'抖音' if snapshot.posts[0].payload.get('platform') in {'dy', 'douyin'} else (snapshot.posts[0].payload.get('platform') or '未记录')}；"
+                f"冻结时间：{state['source_snapshot'].get('generated_at') or '未记录'}。",
+                f"本次共完成 {len(snapshot.posts)} 条帖子的审核。",
+                f"安全 {safe_count} 条、建议复审 {counts['review']} 条、"
+                f"建议拒绝 {counts['reject']} 条、待确认 {pending_count} 条。",
+            ],
+        )
+
+        risk_refs = groups["reject"] + groups["review"]
+        if risk_refs:
+            paragraphs = [
+                f"本次共有 {len(risk_refs)} 条风险帖子，以下按处置优先级展示。"
+            ]
+            claims = []
+            for label, key in (("建议拒绝", "reject"), ("建议复审", "review")):
+                if not groups[key]:
+                    continue
+                paragraphs.append(f"{label}（{len(groups[key])} 条）")
+                for ref in groups[key]:
+                    text, claim = self._post_claim(snapshot, findings[ref])
+                    paragraphs.append(text)
+                    claims.append(claim)
+            self._section(
+                sections,
+                number="2",
+                kind="risk_post_analysis",
+                title="风险帖子分析",
+                paragraphs=paragraphs,
+                claims=claims,
+            )
+
+        if groups["safe"]:
+            paragraphs = [
+                f"本次共有 {len(groups['safe'])} 条帖子审核通过。"
+            ]
+            claims = []
+            for ref in groups["safe"]:
+                text, claim = self._post_claim(snapshot, findings[ref])
+                paragraphs.append(text)
+                claims.append(claim)
+            self._section(
+                sections,
+                number="3",
+                kind="safe_post_analysis",
+                title="安全帖子分析",
+                paragraphs=paragraphs,
+                claims=claims,
+            )
+
+        if groups["pending"]:
+            paragraphs = [
+                "以下帖子存在审核决定与风险等级不一致的情况，不能直接归为安全。"
+            ]
+            claims = []
+            for ref in groups["pending"]:
+                text, claim = self._post_claim(snapshot, findings[ref])
+                paragraphs.append(text)
+                claims.append(claim)
+            self._section(
+                sections,
+                number="4",
+                kind="pending_post_analysis",
+                title="待确认帖子分析",
+                paragraphs=paragraphs,
+                claims=claims,
+            )
+
+        stable_authors = {
+            str(((post.payload.get("raw_content_payload") or {}).get("author") or {}).get("sec_uid") or "").strip()
+            for post in snapshot.posts
+        } - {""}
+        self._section(
+            sections,
+            number="5",
+            kind="account_activity_overview",
+            title="账号关联分析",
+            paragraphs=[
+                (
+                    f"本次冻结样本记录到 {len(stable_authors)} 个具有稳定标识的发布账号；"
+                    "本阶段仅陈述当前报告内活动，不进行跨报告扩展。"
+                    if stable_authors
+                    else "本次冻结样本没有足以稳定合并发布账号的标识；同昵称账号不会被强行合并。"
+                )
+            ],
+        )
+        recommendations = []
+        if counts["reject"]:
+            recommendations.append("优先复核并处置建议拒绝的帖子及其直接证据。")
+        if counts["review"]:
+            recommendations.append("对建议复审的帖子补充上下文后再作最终处置。")
+        if groups["pending"]:
+            recommendations.append("先解决审核决定与风险等级不一致的问题。")
+        if not recommendations:
+            recommendations.append("保留本次审核记录；扩大结论范围前应补充样本并重新审核。")
+        self._section(
+            sections,
+            number="6",
+            kind="conclusion",
+            title="审核建议",
+            paragraphs=recommendations,
+        )
+        self._section(
+            sections,
+            number="7",
+            kind="methodology",
+            title="方法、范围与限制",
+            paragraphs=[
+                SCOPE,
+                "报告数量、分组、审核结论、finding 与证据引用均来自发布前冻结快照；本版本未调用模型生成报告正文。",
+                (
+                    f"冻结资料包含 {comment_coverage.get('total') or 0} 条已存评论；"
+                    f"完成独立审核 {comment_coverage.get('completed') or 0} 条。"
+                    if comment_coverage.get("available")
+                    else "部分帖子的评论列表未完整冻结，不能把缺失评论解释为零评论。"
+                ),
+            ],
+        )
+        self._section(
+            sections,
+            number="8",
+            kind="appendix",
+            title="附录",
+            paragraphs=[
+                "附录保留全部帖子完整详情、原审核 finding 与证据引用，供详情页和报告问询核对。"
+            ],
+        )
+
+        standalone = [
+            {
+                "post_ref": findings[ref].post_ref,
+                "audit_finding_ref": ref,
+                "disposition_note": "该帖保留原审核结论与依据，不进行模型聚类。",
+            }
+            for ref in risk_refs
+        ]
+        return {
+            "section_drafts": sections,
+            "outline": {"report_title": snapshot.display_name + "审核报告"},
+            "investigation_findings": [],
+            "standalone_risk_posts": standalone,
+            "risk_post_coverage_complete": True,
+        }
+
+    def _assemble_pass_report(self, state):
+        result = super()._assemble_pass_report(state)
+        audit_model = result["assembled_report"]["body_json"]["audit_model"]
+        audit_model["investigation_findings"] = []
+        audit_model["standalone_risk_posts"] = list(
+            state.get("standalone_risk_posts") or []
+        )
+        audit_model["risk_post_coverage_complete"] = True
+        return result
+
+    def _publish_report_version(self, state):
+        self._validate_snapshot(self._snapshot(state["report_version_id"]))
+        assembled = state["assembled_report"]
+        body = assembled["body_json"]
+        validate_structured_report_document(
+            body["report_document"], account_model=body["account_model"]
+        )
+        version = self.store.publish_version(
+            report_version_id=state["report_version_id"],
+            title=assembled["title"],
+            body_markdown=assembled["body_markdown"],
+            body_json=body,
+            sections=state["section_drafts"],
+            citation_details=state.get("citation_details") or {},
+            categories=body["audit_model"].get("categories") or [],
+            investigation_findings=[],
+            standalone_risk_posts=state.get("standalone_risk_posts") or [],
+        )
+        self.store.update_run(
+            state["run_id"],
+            status="completed",
+            current_node="publish_report_version",
+            warnings=state.get("warnings") or [],
+        )
+        assembled["content_hash"] = version["content_hash"]
+        return {"assembled_report": assembled}

@@ -11,6 +11,10 @@ from backend.reporting.r31_graph import AccountOverviewReportGraph
 from backend.reporting.pass_graph import PASS_TEMPLATE_VERSION, PassReportGraph
 from backend.reporting.single_post_graph import SINGLE_POST_TEMPLATE_VERSION, SinglePostReportGraph
 from backend.reporting.store import ReportStore
+from backend.reporting.unified_graph import (
+    UNIFIED_REPORT_TEMPLATE_VERSION,
+    UnifiedAuditReportGraph,
+)
 
 
 class R31ReportRuntime:
@@ -45,12 +49,10 @@ class R31ReportRuntime:
                 factory = PassReportGraph
             elif template_version == SINGLE_POST_TEMPLATE_VERSION:
                 factory = SinglePostReportGraph
+            elif template_version == UNIFIED_REPORT_TEMPLATE_VERSION:
+                factory = UnifiedAuditReportGraph
             elif task_id is not None and template_version is None:
-                rows = canonical_source.canonical_rows(task_id)
-                if rows and all(row["decision"] == "pass" and row["risk_level"] == "none" for row in rows):
-                    factory = PassReportGraph
-                elif len(rows) == 1:
-                    factory = SinglePostReportGraph
+                factory = UnifiedAuditReportGraph
         return factory(
             source=canonical_source,
             store=self.store,

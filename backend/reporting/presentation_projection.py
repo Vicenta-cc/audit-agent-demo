@@ -116,7 +116,7 @@ def build_presentation_projection(
         comment_statistics=comment_statistics,
     )
     summary = _investigation_summary(statistics)
-    if document.get("template_kind") in {"all_pass", "single_risk_post"}:
+    if document.get("template_kind") in {"all_pass", "single_risk_post", "unified_audit"}:
         accounts["snapshot_summary"] = document.get("snapshot_account_summary")
         overview = next(
             (section for section in sections if section["section_type"] == "overview"), {}
