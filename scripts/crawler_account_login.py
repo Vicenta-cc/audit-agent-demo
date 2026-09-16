@@ -5,10 +5,12 @@ import asyncio
 import base64
 import hashlib
 import json
+import os
 import time
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -97,6 +99,70 @@ def emit(event_type: str, **payload) -> None:
         json.dumps({"type": event_type, **payload}, ensure_ascii=False, separators=(",", ":")),
         flush=True,
     )
+
+
+async def capture_douyin_login_diagnostic(
+    page,
+    context,
+    account_id: str,
+    baseline_cookies: dict[str, str],
+    *,
+    reason: str,
+) -> None:
+    """Persist post-scan evidence without ever writing cookie values."""
+    try:
+        diagnostic_dir = Path(
+            os.getenv(
+                "CRAWLER_LOGIN_DIAGNOSTICS_DIR",
+                str(settings.data_dir / "crawler-login-diagnostics"),
+            )
+        ).expanduser().resolve()
+        diagnostic_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(diagnostic_dir, 0o700)
+        safe_account_id = "".join(char for char in account_id if char.isalnum()) or "unknown"
+        prefix = diagnostic_dir / f"{safe_account_id}-latest"
+
+        cookies = await context.cookies()
+        cookie_names = sorted({str(item.get("name") or "") for item in cookies if item.get("name")})
+        cookie_map = {
+            str(item.get("name") or ""): str(item.get("value") or "")
+            for item in cookies
+            if item.get("name")
+        }
+        browser_state = await page.evaluate(
+            """
+            () => ({
+              localStorageKeys: Object.keys(window.localStorage).sort(),
+              sessionStorageKeys: Object.keys(window.sessionStorage).sort(),
+              hasUserLogin: window.localStorage.getItem('HasUserLogin') || '',
+              visibilityState: document.visibilityState,
+              bodyText: (document.body?.innerText || '').slice(0, 6000),
+            })
+            """
+        )
+        record = {
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "reason": reason,
+            "account_id": safe_account_id,
+            "url": page.url,
+            "title": await page.title(),
+            "cookie_names": cookie_names,
+            "changed_cookie_names": sorted(
+                name
+                for name, value in cookie_map.items()
+                if value and value != baseline_cookies.get(name, "")
+            ),
+            "login_status": cookie_map.get("LOGIN_STATUS", ""),
+            **browser_state,
+        }
+        json_path = prefix.with_suffix(".json")
+        json_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
+        os.chmod(json_path, 0o600)
+        screenshot_path = prefix.with_suffix(".png")
+        await page.screenshot(path=str(screenshot_path), full_page=True)
+        os.chmod(screenshot_path, 0o600)
+    except Exception as exc:
+        print(f"login diagnostic capture failed: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 async def first_visible(page, selectors: tuple[str, ...]) -> Locator | None:
@@ -335,6 +401,7 @@ async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *
             login_confirmed_at: float | None = None
             qr_missing_checks = 0
             scanned_emitted = False
+            next_scanned_diagnostic = 0.0
 
             while time.monotonic() < deadline:
                 now = time.monotonic()
@@ -387,9 +454,26 @@ async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *
                             scanned_emitted = True
                             emit("scanned")
                     next_qr_check = now + 2.5
+                if platform == "dy" and scanned_emitted and now >= next_scanned_diagnostic:
+                    await capture_douyin_login_diagnostic(
+                        page,
+                        context,
+                        account_id,
+                        baseline_cookies,
+                        reason="post_scan_wait",
+                    )
+                    next_scanned_diagnostic = now + 5
                 await asyncio.sleep(0.8)
 
             if success is None:
+                if platform == "dy" and scanned_emitted:
+                    await capture_douyin_login_diagnostic(
+                        page,
+                        context,
+                        account_id,
+                        baseline_cookies,
+                        reason="expired_after_scan",
+                    )
                 emit("expired", message="二维码登录已超时，请重新获取二维码")
         except Exception:
             # Never export a partially completed login as a successful backup.
