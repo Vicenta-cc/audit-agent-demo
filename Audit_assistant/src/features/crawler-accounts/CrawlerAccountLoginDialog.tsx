@@ -15,7 +15,7 @@ const platformNames = {
   ks: "快手"
 } as const;
 
-const activeLoginStatuses = ["starting", "waiting_scan", "finalizing"];
+const activeLoginStatuses = ["starting", "waiting_scan", "scanned", "finalizing"];
 const loginSessionStorageKey = (accountId: string) => `crawler-account-login-session:${accountId}`;
 
 interface CrawlerAccountLoginDialogProps {
@@ -137,6 +137,7 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
 
   const platformName = platformNames[account.platform];
   const isWaiting = session?.status === "waiting_scan";
+  const isScanned = session?.status === "scanned";
   const isFinalizing = session?.status === "finalizing";
   const isSuccess = session?.status === "success";
   const isTerminalError = Boolean(
@@ -206,6 +207,14 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
               <Loader2 className="spin" size={34} />
               <strong>等待二维码</strong>
               <span>正在等待登录服务返回二维码</span>
+            </div>
+          ) : null}
+
+          {!isTerminalError && isScanned ? (
+            <div className="crawler-login-state crawler-login-finalizing">
+              <Loader2 className="spin" size={34} />
+              <strong>已扫码，请在手机 {platformName} 确认登录</strong>
+              <span>确认后会自动保存登录状态，请不要关闭此窗口</span>
             </div>
           ) : null}
 

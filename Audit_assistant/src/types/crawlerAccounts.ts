@@ -3,6 +3,7 @@ export type CrawlerAccountStatus = "active" | "login_required" | "expired" | "di
 export type CrawlerAccountLoginStatus =
   | "starting"
   | "waiting_scan"
+  | "scanned"
   | "finalizing"
   | "success"
   | "failed"

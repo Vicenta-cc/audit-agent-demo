@@ -161,3 +161,43 @@ test("terminal login session in browser storage is never resumed", async ({ page
   await expect(page.getByRole("img", { name: "小红书登录二维码" })).toBeVisible();
   expect(startCalls).toBe(1);
 });
+
+test("scanned login session remains visible and continues polling", async ({ page }) => {
+  let sessionReads = 0;
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem(
+      "crawler-account-login-session:account-real-dy",
+      "session-scanned"
+    );
+  });
+  await page.route("**/api/crawler-accounts", (route) =>
+    route.fulfill({ json: { items: [account("account-real-dy", "真实抖音账号", "dy")] } })
+  );
+  await page.route("**/api/crawler-account-login-sessions/session-scanned", (route) => {
+    sessionReads += 1;
+    return route.fulfill({
+      json: {
+        item: {
+          id: "session-scanned",
+          account_id: "account-real-dy",
+          platform: "dy",
+          status: "scanned",
+          qr_image_data_url: "",
+          qr_expires_at: "",
+          finalizing_started_at: "",
+          finalizing_duration_seconds: 0,
+          platform_account_id: "",
+          error: "",
+          created_at: "2026-09-16T13:07:16Z",
+          updated_at: "2026-09-16T13:07:53Z",
+          expires_at: "2026-09-16T13:10:16Z"
+        }
+      }
+    });
+  });
+
+  await page.goto("/crawler-accounts");
+  await page.getByRole("button", { name: "重新登录真实抖音账号" }).click();
+  await expect(page.getByText(/已扫码，请在手机\s*抖音\s*确认登录/)).toBeVisible();
+  await expect.poll(() => sessionReads, { timeout: 4000 }).toBeGreaterThan(1);
+});
