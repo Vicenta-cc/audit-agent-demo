@@ -163,6 +163,17 @@ class Settings:
     media_crawler_dir = Path(
         os.getenv("MEDIACRAWLER_DIR", str(ROOT / "external" / "MediaCrawler"))
     ).expanduser()
+    request_scheduler_db = Path(os.getenv("REQUEST_SCHEDULER_DB", str(data_dir / "request_scheduler.sqlite3"))).expanduser().resolve()
+    crawler_content_pacing_enabled = os.getenv("CRAWLER_CONTENT_PACING_ENABLED", "true").lower() != "false"
+    request_min_interval = float(os.getenv("REQUEST_MIN_INTERVAL", "2"))
+    requests_per_minute = int(os.getenv("REQUESTS_PER_MINUTE", "30"))
+    request_concurrency = int(os.getenv("REQUEST_CONCURRENCY", "1"))
+    media_request_interval = float(os.getenv("MEDIA_REQUEST_INTERVAL", "5"))
+    request_cooldown_seconds = float(os.getenv("REQUEST_COOLDOWN_SECONDS", "300"))
+    # Login and crawling must resolve exactly the same persistent account root.
+    crawler_browser_profile_root = Path(os.getenv(
+        "CRAWLER_BROWSER_PROFILE_ROOT", str(data_dir / "crawler_browser_profiles")
+    )).expanduser().resolve()
     _media_crawler_python_default = (
         media_crawler_dir / ".venv" / "Scripts" / "python.exe"
         if os.name == "nt"

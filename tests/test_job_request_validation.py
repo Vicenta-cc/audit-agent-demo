@@ -67,6 +67,22 @@ class JobRequestValidationTest(unittest.TestCase):
         selected = main.validate_crawler_account_for_job(account["id"], "ks")
         self.assertEqual(selected["id"], account["id"])
 
+    def test_rejects_account_during_verify_cooldown(self):
+        account = self.store.create(platform="dy", display_name="抖音冷却账号")
+        self.store.save_auth_state(account["id"], "encrypted-state")
+        self.store.mark_cooldown(
+            account["id"],
+            "ACCOUNT_VERIFY",
+            "9999-12-31T00:00:00",
+            failure_kind="verify",
+        )
+
+        with self.assertRaises(HTTPException) as raised:
+            main.validate_crawler_account_for_job(account["id"], "dy")
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("平台验证", str(raised.exception.detail))
+
     def test_frequency_defaults_to_five_and_rejects_out_of_range(self):
         self.assertEqual(main.CrawlRequest().max_items_per_minute, 5)
         self.assertEqual(main.CrawlRequest().analyze_limit, 10000)

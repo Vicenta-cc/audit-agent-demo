@@ -95,6 +95,23 @@ class CrawlerAccountStoreTest(unittest.TestCase):
         )
         self.assertTrue(updated["has_auth_state"])
 
+    def test_successful_login_clears_previous_cooldown(self):
+        account = self.store.create(platform="dy", display_name="验证冷却账号")
+        self.store.save_auth_state(account["id"], "first-encrypted-state")
+        self.store.mark_cooldown(
+            account["id"],
+            "ACCOUNT_VERIFY",
+            "9999-12-31T00:00:00",
+            failure_kind="verify",
+        )
+
+        updated = self.store.save_auth_state(account["id"], "refreshed-encrypted-state")
+
+        self.assertEqual(updated["status"], "active")
+        self.assertEqual(updated["cooldown_until"], "")
+        self.assertEqual(updated["failure_kind"], "")
+        self.assertEqual(updated["last_error"], "")
+
     def test_duplicate_recognized_id_does_not_save_login_state(self):
         self.store.create(
             platform="xhs",

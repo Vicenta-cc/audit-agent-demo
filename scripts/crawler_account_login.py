@@ -6,14 +6,20 @@ import base64
 import hashlib
 import json
 import time
+import sys
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
+import cv2
+import numpy as np
 from playwright.async_api import Locator, TimeoutError as PlaywrightTimeoutError, async_playwright
 
 from backend.audit_agent.crawler_account_identity import (
     candidate_is_personal_link,
     extract_platform_account_id,
 )
+from backend.audit_agent.config import settings
+from backend.audit_agent.crawler_browser import load_account_browser, load_request_scheduler
 
 
 PLATFORMS = {
@@ -61,6 +67,7 @@ DY_AUTH_COOKIE_NAMES = (
     "uid_tt_ss",
 )
 LOGIN_SETTLE_SECONDS = 3
+QR_DISAPPEARANCE_CONFIRMATIONS = 2
 
 # Identity lookup only reads links already rendered by the logged-in homepage. The
 # broad fallback selectors require an explicit personal-account label so feed
@@ -103,13 +110,66 @@ async def first_visible(page, selectors: tuple[str, ...]) -> Locator | None:
     return None
 
 
-async def wait_for_qr(page, config: dict, timeout_seconds: float = 35) -> Locator:
+def qr_image_shape(png: bytes) -> tuple[np.ndarray, bool]:
+    encoded = np.frombuffer(png, dtype=np.uint8)
+    image = cv2.imdecode(encoded, cv2.IMREAD_GRAYSCALE)
+    if image is None or image.ndim != 2:
+        return image, False
+    height, width = image.shape
+    if min(height, width) < 80 or max(height, width) / min(height, width) > 1.35:
+        return image, False
+    return image, True
+
+
+def is_qr_png(png: bytes) -> bool:
+    """Verify screenshot contents so ordinary login artwork is never exposed as a QR."""
+    image, valid_shape = qr_image_shape(png)
+    if not valid_shape:
+        return False
+    detector = cv2.QRCodeDetector()
+    for candidate in (image, cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]):
+        try:
+            detected, points = detector.detect(candidate)
+        except cv2.error:
+            continue
+        if detected and points is not None:
+            return True
+    return False
+
+
+async def first_valid_qr(page, config: dict) -> tuple[Locator, bytes] | None:
+    checked = set()
+    for selector in config["qr_selectors"]:
+        matches = page.locator(selector)
+        try:
+            count = min(await matches.count(), 8)
+        except Exception:
+            continue
+        for index in range(count):
+            locator = matches.nth(index)
+            try:
+                if not await locator.is_visible(timeout=400):
+                    continue
+                png = await locator.screenshot(type="png")
+                digest = hashlib.sha256(png).digest()
+                if digest in checked:
+                    continue
+                checked.add(digest)
+                _, valid_shape = qr_image_shape(png)
+                if is_qr_png(png) or (config.get("trust_qr_selector") and valid_shape):
+                    return locator, png
+            except Exception:
+                continue
+    return None
+
+
+async def wait_for_qr(page, config: dict, timeout_seconds: float = 35) -> tuple[Locator, bytes]:
     deadline = time.monotonic() + timeout_seconds
     triggered = False
     while time.monotonic() < deadline:
-        locator = await first_visible(page, config["qr_selectors"])
-        if locator:
-            return locator
+        qr = await first_valid_qr(page, config)
+        if qr:
+            return qr
         if not triggered:
             for selector in config["login_triggers"]:
                 trigger = page.locator(selector).first
@@ -121,7 +181,7 @@ async def wait_for_qr(page, config: dict, timeout_seconds: float = 35) -> Locato
                 except Exception:
                     continue
         await asyncio.sleep(0.6)
-    raise RuntimeError("未能加载登录二维码，平台页面可能已改版或要求额外验证")
+    raise RuntimeError("未识别到有效登录二维码，平台页面可能已改版或要求滑块等额外验证")
 
 
 async def is_logged_in(platform: str, page, context, baseline_cookies: dict[str, str]) -> bool:
@@ -197,12 +257,24 @@ async def identify_logged_in_account(platform: str, context) -> str:
     return ""
 
 
-async def run_login(platform: str, timeout_seconds: int) -> None:
-    config = PLATFORMS[platform]
-    login_started_at = time.monotonic()
+@asynccontextmanager
+async def login_context(platform: str, account_id: str = "", *, headless: bool = True):
+    if platform == "dy":
+        adapter = load_account_browser()
+        context, profile = await adapter.launch_account_context(
+            account_id, settings.crawler_browser_profile_root, headless=headless,
+        )
+        try:
+            await request_login_reset()
+            await adapter.prepare_account_login(context, profile)
+            yield context
+        finally:
+            await context.close()
+        return
+
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(
-            headless=True,
+            headless=headless,
             args=["--disable-blink-features=AutomationControlled"],
         )
         context = await browser.new_context(
@@ -218,15 +290,41 @@ async def run_login(platform: str, timeout_seconds: int) -> None:
         await context.add_init_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
         )
+        try:
+            yield context
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def request_login_reset():
+    """The manager records login_required before this process clears credentials."""
+    emit("reauth_started")
+    reply = await asyncio.wait_for(asyncio.to_thread(sys.stdin.readline), timeout=10)
+    if reply.strip() != "reauth_ready":
+        raise RuntimeError("登录管理器未确认状态更新，原浏览器登录态保留")
+
+
+async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *,
+                    headless: bool = True, expected_platform_account_id: str = "") -> None:
+    config = PLATFORMS[platform]
+    login_started_at = time.monotonic()
+    success = None
+    async with login_context(platform, account_id, headless=headless) as context:
         page = await context.new_page()
         page.set_default_timeout(12_000)
         try:
             try:
-                await page.goto(config["url"], wait_until="domcontentloaded", timeout=60_000)
+                if platform == "dy":
+                    gate = load_request_scheduler().configured_gate()
+                    async with gate.slot('login_navigation', timeout=60):
+                        await page.goto(config["url"], wait_until="domcontentloaded", timeout=60_000)
+                else:
+                    await page.goto(config["url"], wait_until="domcontentloaded", timeout=60_000)
             except PlaywrightTimeoutError:
                 pass
 
-            qr_locator = await wait_for_qr(page, config)
+            await wait_for_qr(page, config)
             baseline_cookies = {
                 item["name"]: item["value"]
                 for item in await context.cookies()
@@ -235,6 +333,8 @@ async def run_login(platform: str, timeout_seconds: int) -> None:
             last_qr_hash = ""
             next_qr_check = 0.0
             login_confirmed_at: float | None = None
+            qr_missing_checks = 0
+            scanned_emitted = False
 
             while time.monotonic() < deadline:
                 now = time.monotonic()
@@ -246,25 +346,28 @@ async def run_login(platform: str, timeout_seconds: int) -> None:
                     # redirect a moment to settle before serializing the browser state.
                     if now - login_confirmed_at >= LOGIN_SETTLE_SECONDS:
                         platform_account_id = await identify_logged_in_account(platform, context)
-                        emit(
-                            "success",
-                            auth_state=await context.storage_state(),
-                            platform_account_id=platform_account_id,
-                        )
-                        return
+                        if (expected_platform_account_id and platform_account_id
+                                and platform_account_id != expected_platform_account_id):
+                            await context.clear_cookies()
+                            await page.evaluate("localStorage.clear(); sessionStorage.clear()")
+                            raise RuntimeError("登录的抖音账号与所选账号不一致，请使用原账号重新登录")
+                        success = dict(auth_state=await context.storage_state(),
+                                       platform_account_id=platform_account_id)
+                        break
                 else:
                     if login_confirmed_at is not None:
                         emit("waiting_scan")
                     login_confirmed_at = None
 
                 if login_confirmed_at is None and now >= next_qr_check:
-                    visible_qr = await first_visible(page, config["qr_selectors"])
-                    if visible_qr:
-                        qr_locator = visible_qr
-                    try:
-                        png = await qr_locator.screenshot(type="png")
+                    valid_qr = await first_valid_qr(page, config)
+                    if valid_qr:
+                        _, png = valid_qr
+                        was_scanned = scanned_emitted
+                        qr_missing_checks = 0
+                        scanned_emitted = False
                         digest = hashlib.sha256(png).hexdigest()
-                        if digest != last_qr_hash:
+                        if digest != last_qr_hash or was_scanned:
                             last_qr_hash = digest
                             remaining = max(1, int(deadline - now))
                             expires_at = datetime.now(timezone.utc) + timedelta(seconds=min(90, remaining))
@@ -275,28 +378,43 @@ async def run_login(platform: str, timeout_seconds: int) -> None:
                                 ),
                                 expires_at=expires_at.isoformat(),
                             )
-                    except Exception:
-                        pass
+                    elif last_qr_hash:
+                        qr_missing_checks += 1
+                        if (
+                            qr_missing_checks >= QR_DISAPPEARANCE_CONFIRMATIONS
+                            and not scanned_emitted
+                        ):
+                            scanned_emitted = True
+                            emit("scanned")
                     next_qr_check = now + 2.5
                 await asyncio.sleep(0.8)
 
-            emit("expired", message="二维码登录已超时，请重新获取二维码")
-        finally:
-            await context.close()
-            await browser.close()
+            if success is None:
+                emit("expired", message="二维码登录已超时，请重新获取二维码")
+        except Exception:
+            # Never export a partially completed login as a successful backup.
+            success = None
+            raise
+    if success is not None:
+        emit("success", **success)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Headless crawler account QR login")
     parser.add_argument("--platform", required=True, choices=sorted(PLATFORMS))
     parser.add_argument("--timeout", type=int, default=180)
+    parser.add_argument("--account-id", default="")
+    parser.add_argument("--expected-platform-account-id", default="")
+    parser.add_argument("--headed", action="store_true")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
     try:
-        asyncio.run(run_login(args.platform, max(60, args.timeout)))
+        asyncio.run(run_login(args.platform, max(60, args.timeout), args.account_id,
+                             headless=not args.headed,
+                             expected_platform_account_id=args.expected_platform_account_id))
     except KeyboardInterrupt:
         emit("error", message="登录进程被中断，请重新获取二维码")
     except Exception as exc:

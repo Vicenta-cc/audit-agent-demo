@@ -214,6 +214,7 @@ export interface RawJob {
   analysis_status?: string;
   available_actions?: {
     pause_crawl?: boolean;
+    resume_crawl?: boolean;
     stop_analysis?: boolean;
     backfill_analysis?: boolean;
     delete_job?: boolean;

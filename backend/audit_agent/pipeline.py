@@ -16,7 +16,7 @@ import requests
 from .auth_state_cipher import auth_state_cipher
 from .asset_utils import download_url_with_error, safe_filename_from_url, split_csv_urls
 from .config import settings
-from .crawler_account_store import crawler_account_store
+from .crawler_account_store import account_is_cooling_down, crawler_account_store
 from .crawler_adapter import (
     IMAGE_EXTENSIONS,
     PLATFORM_DATA_DIRS,
@@ -72,6 +72,21 @@ class AuditProviderCallError(RuntimeError):
 
 class AuditProviderUnavailableError(RuntimeError):
     pass
+
+
+def search_resume_parameters(
+    platform: str,
+    initial_start_page: int,
+    checkpoint_keyword: str,
+    checkpoint_page: int,
+) -> tuple[int, str, int | None]:
+    """Keep Douyin's saved page scoped to its checkpoint keyword."""
+    initial_page = int(initial_start_page or 0)
+    saved_page = max(initial_page, int(checkpoint_page))
+    saved_keyword = str(checkpoint_keyword or "").strip()
+    if platform == "dy" and saved_keyword:
+        return initial_page, saved_keyword, saved_page
+    return saved_page, "", None
 
 
 def _severity_rank(severity) -> int:
@@ -497,6 +512,14 @@ class AuditPipeline:
                                         "抖音采集服务当前不可用，请稍后重试。"
                                     )
                                 raise RuntimeError("所选采集账号当前不可用，请重新登录")
+                            if account_is_cooling_down(account):
+                                if self.authoritative_m3:
+                                    raise RuntimeError(
+                                        "crawler_account_login_required: "
+                                        "抖音采集服务当前不可用，请稍后重试。"
+                                    )
+                                reason = "平台验证" if account.get("failure_kind") == "verify" else "平台限流"
+                                raise RuntimeError(f"所选采集账号因{reason}正在冷却，请稍后重试或选择其他账号")
                             ciphertext = crawler_account_store.get_auth_state_ciphertext(crawler_account_id)
                             try:
                                 account_auth_state = auth_state_cipher.decrypt(ciphertext)
@@ -538,6 +561,7 @@ class AuditPipeline:
                                     stream_items=stream_callback_enabled,
                                     stop_checker=crawl_stop_requested,
                                     auth_state=account_auth_state,
+                                    account_id=crawler_account_id,
                                     started_callback=mark_crawler_started,
                                 )
                             else:
@@ -552,10 +576,23 @@ class AuditPipeline:
                                     if job_snapshot.get("crawl_checkpoint_page") is not None
                                     else request.start_page
                                 )
+                                resume_keyword = str(
+                                    job_snapshot.get("crawl_checkpoint_keyword") or ""
+                                ).strip()
+                                (
+                                    crawler_start_page,
+                                    crawler_resume_keyword,
+                                    crawler_resume_page,
+                                ) = search_resume_parameters(
+                                    request.platform,
+                                    int(request.start_page or 0),
+                                    resume_keyword,
+                                    resume_page,
+                                )
                                 output = self.crawler.run_search(
                                     platform=request.platform,
                                     keyword=request.keyword,
-                                    start_page=max(int(request.start_page or 0), resume_page),
+                                    start_page=crawler_start_page,
                                     max_notes=request.max_notes,
                                     max_comments=request.max_comments,
                                     max_concurrency=crawler_concurrency,
@@ -567,6 +604,7 @@ class AuditPipeline:
                                     stream_items=stream_callback_enabled,
                                     stop_checker=crawl_stop_requested,
                                     auth_state=account_auth_state,
+                                    account_id=crawler_account_id,
                                     started_callback=mark_crawler_started,
                                     checkpoint_callback=persist_crawl_checkpoint,
                                     skip_content_ids_file=(
@@ -577,6 +615,9 @@ class AuditPipeline:
                                     reusable_content_db=(
                                         self.ingestion.db_path if request.platform == "dy" else None
                                     ),
+                                    current_task_id=self.job_id,
+                                    resume_keyword=crawler_resume_keyword,
+                                    resume_page=crawler_resume_page,
                                 )
                         except (CrawlerAuthenticationError, CrawlerVerificationError) as exc:
                             rotated_successfully = False
@@ -592,30 +633,63 @@ class AuditPipeline:
                                     if rotated and request.crawl_mode != "creator":
                                         account, account_auth_state = rotated
                                         crawler_account_id = str(account["id"])
+                                        job_store.update(
+                                            self.job_id,
+                                            crawler_account_id=crawler_account_id,
+                                            crawler_account_display_name=str(
+                                                account.get("display_name") or crawler_account_id
+                                            ),
+                                        )
                                         job_store.log(self.job_id, f"账号触发验证，切换到：{account.get('display_name') or crawler_account_id}")
                                         rotated_root = crawl_dir / f"rotation-{crawler_account_id}"
-                                        output = self.crawler.run_search(
-                                            platform=request.platform,
-                                            keyword=request.keyword,
-                                            start_page=max(int(request.start_page or 0), int(job_snapshot.get("crawl_checkpoint_page") or request.start_page or 0)),
-                                            max_notes=request.max_notes,
-                                            max_comments=request.max_comments,
-                                            max_concurrency=crawler_concurrency,
-                                            max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                                            get_sub_comment=request.get_sub_comment,
-                                            save_root=rotated_root,
-                                            progress_callback=log_crawl_progress,
-                                            content_callback=enqueue_stream_batch if stream_callback_enabled else None,
-                                            stream_items=stream_callback_enabled,
-                                            stop_checker=crawl_stop_requested,
-                                            auth_state=account_auth_state,
-                                            started_callback=mark_crawler_started,
-                                            checkpoint_callback=persist_crawl_checkpoint,
-                                            reusable_content_db=self.ingestion.db_path if request.platform == "dy" else None,
-                                        )
+                                        try:
+                                            output = self.crawler.run_search(
+                                                platform=request.platform,
+                                                keyword=request.keyword,
+                                                start_page=crawler_start_page,
+                                                max_notes=request.max_notes,
+                                                max_comments=request.max_comments,
+                                                max_concurrency=crawler_concurrency,
+                                                max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                                                get_sub_comment=request.get_sub_comment,
+                                                save_root=rotated_root,
+                                                progress_callback=log_crawl_progress,
+                                                content_callback=enqueue_stream_batch if stream_callback_enabled else None,
+                                                stream_items=stream_callback_enabled,
+                                                stop_checker=crawl_stop_requested,
+                                                auth_state=account_auth_state,
+                                                started_callback=mark_crawler_started,
+                                                checkpoint_callback=persist_crawl_checkpoint,
+                                                reusable_content_db=self.ingestion.db_path if request.platform == "dy" else None,
+                                                current_task_id=self.job_id,
+                                                resume_keyword=crawler_resume_keyword,
+                                                resume_page=crawler_resume_page,
+                                                account_id=crawler_account_id,
+                                            )
+                                        except CrawlerVerificationError:
+                                            rotation.cool_down(
+                                                crawler_account_id,
+                                                reason="verify",
+                                                cooldown_seconds=300,
+                                            )
+                                            job_store.log(
+                                                self.job_id,
+                                                "备用账号也触发平台验证，登录态未判定失效；账号进入冷却，本轮不再切换",
+                                            )
+                                            raise
+                                        except CrawlerAuthenticationError as rotated_exc:
+                                            crawler_account_store.mark_expired(crawler_account_id, str(rotated_exc))
+                                            job_store.log(
+                                                self.job_id,
+                                                "备用账号登录态已失效，本轮不再切换",
+                                            )
+                                            raise
                                         rotated_successfully = True
                                     elif not rotated:
-                                        crawler_account_store.mark_expired(crawler_account_id, str(exc))
+                                        job_store.log(
+                                            self.job_id,
+                                            "账号触发平台验证，登录态未判定失效；当前无可用备用账号，账号进入冷却",
+                                        )
                                 else:
                                     crawler_account_store.mark_expired(crawler_account_id, str(exc))
                             if self.authoritative_m3:
@@ -636,11 +710,18 @@ class AuditPipeline:
                             if rotated:
                                 account, account_auth_state = rotated
                                 crawler_account_id = str(account["id"])
+                                job_store.update(
+                                    self.job_id,
+                                    crawler_account_id=crawler_account_id,
+                                    crawler_account_display_name=str(
+                                        account.get("display_name") or crawler_account_id
+                                    ),
+                                )
                                 job_store.log(self.job_id, f"搜索结果为空，切换账号复核：{account.get('display_name') or crawler_account_id}")
                                 output = self.crawler.run_search(
                                     platform=request.platform,
                                     keyword=request.keyword,
-                                    start_page=max(int(request.start_page or 0), int(job_snapshot.get("crawl_checkpoint_page") or request.start_page or 0)),
+                                    start_page=crawler_start_page,
                                     max_notes=request.max_notes,
                                     max_comments=request.max_comments,
                                     max_concurrency=crawler_concurrency,
@@ -655,6 +736,10 @@ class AuditPipeline:
                                     started_callback=mark_crawler_started,
                                     checkpoint_callback=persist_crawl_checkpoint,
                                     reusable_content_db=self.ingestion.db_path if request.platform == "dy" else None,
+                                    current_task_id=self.job_id,
+                                    resume_keyword=crawler_resume_keyword,
+                                    resume_page=crawler_resume_page,
+                                    account_id=crawler_account_id,
                                 )
                 finally:
                     if batch_flusher:

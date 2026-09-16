@@ -11,6 +11,32 @@ from backend.audit_agent.crawler_login_manager import CrawlerAccountLoginManager
 
 
 class CrawlerAccountLoginManagerTest(unittest.TestCase):
+    def test_scanned_state_clears_qr_and_remains_active(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            store = CrawlerAccountStore(root / "audit.sqlite3")
+            manager = CrawlerAccountLoginManager(
+                store=store,
+                cipher=AuthStateCipher(key_file=root / "auth.key"),
+                python_path=Path(sys.executable),
+                helper_path=root / "unused-login.py",
+            )
+            account = store.create(platform="dy", display_name="测试账号")
+            now = datetime.now(timezone.utc).isoformat()
+            manager._sessions["scan-session"] = LoginSession(
+                id="scan-session", account_id=account["id"], platform="dy",
+                status="waiting_scan", created_at=now, updated_at=now,
+                expires_at=(datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat(),
+                qr_image_data_url="data:image/png;base64,SYNTHETIC",
+            )
+
+            manager._handle_event("scan-session", {"type": "scanned"})
+
+            session = manager.get("scan-session")
+            self.assertEqual(session["status"], "scanned")
+            self.assertEqual(session["qr_image_data_url"], "")
+            manager.cancel("scan-session")
+
     def test_expired_server_session_is_terminal_and_qr_is_cleared(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

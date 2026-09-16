@@ -294,6 +294,12 @@
   border-color: #fed7aa;
 }
 
+.crawler-account-status.is-cooldown {
+  color: #b45309;
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
 .crawler-account-status.is-expired {
   color: #b91c1c;
   background: #fef2f2;

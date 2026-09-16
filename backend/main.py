@@ -28,7 +28,7 @@ from .audit_agent.audit_policy_store import (
     TaskAuditConfigRevisionStore,
 )
 from .audit_agent.config import settings
-from .audit_agent.crawler_account_store import crawler_account_store
+from .audit_agent.crawler_account_store import account_is_cooling_down, crawler_account_store
 from .audit_agent.creator_url import (
     CreatorUrlValidationError,
     validate_creator_url as validate_creator_url_contract,
@@ -448,6 +448,19 @@ class CrawlRequest(BaseModel):
 class JobControlRequest(BaseModel):
     action: str
     analyze_limit: int = 0
+
+
+def crawl_request_from_job(job: dict) -> CrawlRequest:
+    """Rebuild the frozen crawl inputs when the same task is resumed."""
+    model_fields = getattr(CrawlRequest, "model_fields", None) or getattr(
+        CrawlRequest, "__fields__", {}
+    )
+    payload = {
+        name: job[name]
+        for name in model_fields
+        if name in job and job[name] is not None
+    }
+    return CrawlRequest(**payload)
 
 
 class AuditPolicyRequest(BaseModel):
@@ -889,6 +902,8 @@ def enrich_job(job: dict) -> dict:
         crawl_status = "stopped"
     elif status in {"completed", "analysis_paused", "analysis_stopped"}:
         crawl_status = "completed"
+    elif status == "failed":
+        crawl_status = "failed"
     elif status in {"running", "crawl_pausing", "queued", "analysis_stopping"}:
         crawl_status = "running"
     else:
@@ -973,6 +988,12 @@ def validate_crawler_account_for_job(account_id: str | None, platform: str) -> d
         raise HTTPException(status_code=409, detail="采集账号当前不可用，请重新登录或启用账号")
     if not account["has_auth_state"]:
         raise HTTPException(status_code=409, detail="采集账号尚未登录")
+    if account_is_cooling_down(account):
+        reason = "平台验证" if account.get("failure_kind") == "verify" else "平台限流"
+        raise HTTPException(
+            status_code=409,
+            detail=f"采集账号因{reason}正在冷却，请在冷却结束后重试或选择其他账号",
+        )
     return account
 
 
@@ -1005,6 +1026,9 @@ def available_job_actions(job: dict, stats: dict) -> dict:
 
     return {
         "pause_crawl": crawl_active and not deleting_or_stopping_all,
+        "resume_crawl": bool(job.get("run_crawler"))
+        and status in {"crawl_paused", "interrupted", "failed"}
+        and not deleting_or_stopping_all,
         "stop_analysis": analysis_active,
         "backfill_analysis": can_backfill,
         "delete_job": bool(job.get("id")),
@@ -1859,6 +1883,25 @@ def control_job(job_id: str, request: JobControlRequest, background_tasks: Backg
         job_store.update_control(job_id, crawl_stop_requested=True)
         job_store.update(job_id, status="crawl_pausing")
         job_store.log(job_id, "收到控制指令：停止采集")
+    elif request.action == "resume_crawl":
+        if not available_job_actions(job, ingestion_store.stats_for_task(job_id))["resume_crawl"]:
+            raise HTTPException(status_code=409, detail="当前任务状态不允许继续采集")
+        crawl_request = crawl_request_from_job(job)
+        validate_crawler_account_for_job(
+            crawl_request.crawler_account_id,
+            crawl_request.platform,
+        )
+        job_store.update_control(
+            job_id,
+            crawl_stop_requested=False,
+            analysis_paused=False,
+            analysis_stop_requested=False,
+            stop_all_requested=False,
+        )
+        job_store.update(job_id, status="queued", error="")
+        job_store.log(job_id, "收到控制指令：从采集检查点继续")
+        pipeline = AuditPipeline(job_id=job_id)
+        background_tasks.add_task(pipeline.run, crawl_request)
     elif request.action in {"pause_analysis", "stop_analysis"}:
         job_store.update_control(job_id, analysis_paused=False, analysis_stop_requested=True)
         job_store.update(job_id, status="analysis_stopping")

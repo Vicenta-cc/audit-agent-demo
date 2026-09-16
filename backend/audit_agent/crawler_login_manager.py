@@ -15,9 +15,10 @@ from uuid import uuid4
 from .auth_state_cipher import AuthStateCipher, auth_state_cipher
 from .config import settings
 from .crawler_account_store import CrawlerAccountStore, crawler_account_store
+from .crawler_browser import account_browser_env, scheduler_env
 
 
-ACTIVE_LOGIN_STATUSES = {"starting", "waiting_scan", "finalizing"}
+ACTIVE_LOGIN_STATUSES = {"starting", "waiting_scan", "scanned", "finalizing"}
 TERMINAL_LOGIN_STATUSES = {"success", "failed", "expired", "cancelled"}
 
 
@@ -124,6 +125,16 @@ class CrawlerAccountLoginManager:
             str(self.timeout_seconds),
         ]
         env = os.environ.copy()
+        if session.platform == "dy":
+            browser_env = account_browser_env(session.account_id)
+            env.update(browser_env)
+            env.update(scheduler_env())
+            command.extend(["--account-id", session.account_id])
+            if account.get("platform_account_id"):
+                command.extend(["--expected-platform-account-id", account["platform_account_id"]])
+            # The helper and crawler load the same adapter implementation.
+            env["MEDIACRAWLER_DIR"] = str(settings.media_crawler_dir.expanduser().resolve())
+            env["CRAWLER_BROWSER_PROFILE_ROOT"] = browser_env["MEDIACRAWLER_CLOAK_PROFILE_ROOT"]
         env["PYTHONUNBUFFERED"] = "1"
         root_path = str(settings.root_dir)
         current_python_path = env.get("PYTHONPATH", "")
@@ -137,6 +148,7 @@ class CrawlerAccountLoginManager:
                 cwd=str(settings.root_dir),
                 env=env,
                 stdout=subprocess.PIPE,
+                stdin=subprocess.PIPE if session.platform == "dy" else None,
                 # stdout is an NDJSON protocol channel. Browser diagnostics on stderr
                 # must not be merged into it or they can corrupt the final event.
                 stderr=diagnostic_file,
@@ -250,6 +262,8 @@ class CrawlerAccountLoginManager:
 
         process.stdout.close()
         return_code = process.wait()
+        if process.stdin:
+            process.stdin.close()
         diagnostic = self._read_process_diagnostic(session_id)
         with self._lock:
             current = self._sessions.get(session_id)
@@ -289,6 +303,20 @@ class CrawlerAccountLoginManager:
 
     def _handle_event(self, session_id: str, event: dict) -> None:
         event_type = str(event.get("type") or "")
+        if event_type == "reauth_started":
+            with self._lock:
+                session = self._sessions.get(session_id)
+                if session and session.platform == "dy" and session.status in ACTIVE_LOGIN_STATUSES:
+                    # The helper holds the same profile lock as the crawler.
+                    # Cancellation must leave this account awaiting login.
+                    self.store.update(session.account_id, status="login_required")
+                    if session.process and session.process.stdin:
+                        try:
+                            session.process.stdin.write("reauth_ready\n")
+                            session.process.stdin.flush()
+                        except (BrokenPipeError, OSError):
+                            pass  # Cancellation leaves the account awaiting login.
+            return
         if event_type == "qr":
             image_data_url = str(event.get("image_data_url") or "")
             if not image_data_url.startswith("data:image/"):
@@ -319,6 +347,19 @@ class CrawlerAccountLoginManager:
                     min(15, int(event.get("duration_seconds") or 3)),
                 )
                 session.updated_at = _iso(now)
+            return
+
+        if event_type == "scanned":
+            with self._lock:
+                session = self._sessions.get(session_id)
+                if not session or session.status not in ACTIVE_LOGIN_STATUSES:
+                    return
+                session.status = "scanned"
+                session.qr_image_data_url = ""
+                session.qr_expires_at = ""
+                session.finalizing_started_at = ""
+                session.finalizing_duration_seconds = 0
+                session.updated_at = _iso(_utc_now())
             return
 
         if event_type == "waiting_scan":

@@ -16,7 +16,7 @@ interface TaskRowProps {
 type PipelineTone = "success" | "warning" | "danger" | "neutral";
 
 interface PipelineStatusMeta {
-  label: "进行中" | "已暂停" | "已完成" | "未开始" | "失败";
+  label: "进行中" | "已暂停" | "已完成" | "未开始" | "失败" | "未知";
   tone: PipelineTone;
 }
 
@@ -175,7 +175,7 @@ function getPipelineStatus(value = ""): PipelineStatusMeta {
     return { label: "进行中", tone: "success" };
   }
 
-  return { label: "进行中", tone: "success" };
+  return { label: "未知", tone: "warning" };
 }
 
 function getUpdatedAtParts(task: MonitorTask) {

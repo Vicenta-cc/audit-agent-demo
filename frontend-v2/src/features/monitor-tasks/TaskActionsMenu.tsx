@@ -21,8 +21,6 @@ export function TaskActionsMenu({
   onDelete
 }: TaskActionsMenuProps) {
   const actions = task.raw.available_actions || {};
-  const isPaused = task.status === "已暂停" || task.status === "已停止" || task.status === "已中断";
-
   return (
     <DropdownMenu
       open={open}
@@ -51,11 +49,11 @@ export function TaskActionsMenu({
       </button>
       <button
         type="button"
-        disabled={!actions.backfill_analysis || isPaused}
-        onClick={() => void onControl(task, "backfill_analysis", "补抓")}
+        disabled={!actions.resume_crawl}
+        onClick={() => void onControl(task, "resume_crawl", "继续抓取")}
       >
         <RotateCw size={15} />
-        补抓
+        继续抓取
       </button>
       <button
         type="button"

@@ -116,6 +116,14 @@ export function TaskDetailDrawer({ task, mode, onClose, onControl }: TaskDetailD
               <Button
                 type="button"
                 variant="secondary"
+                disabled={!task.raw.available_actions?.resume_crawl}
+                onClick={() => void onControl(task, "resume_crawl", "继续抓取")}
+              >
+                继续抓取
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
                 disabled={!task.raw.available_actions?.stop_analysis}
                 onClick={() => void onControl(task, "pause_analysis", "暂停分析")}
               >

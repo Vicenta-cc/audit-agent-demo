@@ -18,6 +18,13 @@ class VerifyThenSuccessCrawler:
         if kwargs.get('content_callback'): kwargs['content_callback']([item],[])
         return CrawlOutput(kwargs['platform'],[item],[],Path(kwargs['save_root']),command=['fake'])
 
+
+class AlwaysVerifyCrawler:
+    def __init__(self): self.calls=[]
+    def run_search(self, **kwargs):
+        self.calls.append(kwargs)
+        raise CrawlerVerificationError('simulated verify')
+
 def test_pipeline_verify_rotates_account_and_keeps_ingested_content(tmp_path, monkeypatch):
     jobs=JobStore(tmp_path/'jobs.sqlite3'); accounts=CrawlerAccountStore(tmp_path/'accounts.sqlite3')
     ingestion=IngestionStore(tmp_path/'ingestion.sqlite3'); results=AuditResultStore(tmp_path/'ingestion.sqlite3')
@@ -34,4 +41,60 @@ def test_pipeline_verify_rotates_account_and_keeps_ingested_content(tmp_path, mo
     assert len(pipeline.crawler.calls)==2
     assert pipeline.crawler.calls[0]['auth_state']=={'account':'first'}; assert pipeline.crawler.calls[1]['auth_state']=={'account':'second'}
     assert accounts.get(first['id'])['failure_kind']=='verify'; assert accounts.get(first['id'])['cooldown_until']; assert accounts.get(second['id'])['status']=='active'
+    switched_job = jobs.get(job_id)
+    assert switched_job['crawler_account_id'] == second['id']
+    assert switched_job['crawler_account_display_name'] == 'second'
     assert ingestion.stats_for_task(job_id)['ingested_count']==1
+
+
+def test_pipeline_verify_without_alternate_cools_but_does_not_expire_account(tmp_path, monkeypatch):
+    jobs=JobStore(tmp_path/'jobs.sqlite3'); accounts=CrawlerAccountStore(tmp_path/'accounts.sqlite3')
+    ingestion=IngestionStore(tmp_path/'ingestion.sqlite3'); results=AuditResultStore(tmp_path/'ingestion.sqlite3')
+    cipher=AuthStateCipher(Fernet.generate_key())
+    account=accounts.create(platform='dy',display_name='only')
+    accounts.save_auth_state(account['id'],cipher.encrypt({'account':'only'}))
+    job_id='verify-no-alternate'
+    config={'platform':'dy','display_name':'verify no alternate','crawl_mode':'search','keyword':'盘口','keyword_source':'keyword','lexicon_category':'soft','library_ids':[],'capabilities':['text'],'scoring_template':'balanced','rule_snapshot':{},'lexicon_keywords':[],'creator_url':'','creator_id':'','start_page':0,'max_notes':1,'max_comments':0,'max_concurrency':1,'max_items_per_minute':1,'crawler_account_id':account['id'],'get_sub_comment':False,'analyze_limit':0,'run_crawler':True,'source_output_id':None,'analysis_batch_size':1,'prompt_profile_snapshot':{},'policy_id':''}
+    jobs.create(job_id=job_id,**config)
+    monkeypatch.setattr(pipeline_module,'job_store',jobs); monkeypatch.setattr(pipeline_module,'crawler_account_store',accounts); monkeypatch.setattr(pipeline_module,'auth_state_cipher',cipher)
+    monkeypatch.setattr(pipeline_module.settings,'outputs_dir',tmp_path/'outputs'); monkeypatch.setattr(pipeline_module.settings,'auto_analyze_crawled_content',False)
+    crawler=VerifyThenSuccessCrawler()
+    pipeline=AuditPipeline.__new__(AuditPipeline); pipeline.job_id=job_id; pipeline.crawler=crawler; pipeline.ingestion=ingestion; pipeline.audit_results=results; pipeline.qwen=SimpleNamespace(provider_failure=''); pipeline.prompt_profile_snapshot={}; pipeline.audit_config_revision_id=''; pipeline.rule_snapshot={}; pipeline.authoritative_m3=False
+    pipeline.run(SimpleNamespace(**config))
+    stored_account = accounts.get(account['id'])
+    assert stored_account['status'] == 'active'
+    assert stored_account['failure_kind'] == 'verify'
+    assert stored_account['cooldown_until']
+    assert stored_account['has_auth_state'] is True
+    stored_job = jobs.get(job_id)
+    assert stored_job['status'] == 'failed'
+    assert any('登录态未判定失效' in log['message'] for log in stored_job['logs'])
+
+
+def test_pipeline_verify_on_alternate_cools_both_accounts_without_looping(tmp_path, monkeypatch):
+    jobs=JobStore(tmp_path/'jobs.sqlite3'); accounts=CrawlerAccountStore(tmp_path/'accounts.sqlite3')
+    ingestion=IngestionStore(tmp_path/'ingestion.sqlite3'); results=AuditResultStore(tmp_path/'ingestion.sqlite3')
+    cipher=AuthStateCipher(Fernet.generate_key())
+    first=accounts.create(platform='dy',display_name='first'); second=accounts.create(platform='dy',display_name='second')
+    accounts.save_auth_state(first['id'],cipher.encrypt({'account':'first'})); accounts.save_auth_state(second['id'],cipher.encrypt({'account':'second'}))
+    job_id='verify-on-alternate'
+    config={'platform':'dy','display_name':'verify on alternate','crawl_mode':'search','keyword':'盘口','keyword_source':'keyword','lexicon_category':'soft','library_ids':[],'capabilities':['text'],'scoring_template':'balanced','rule_snapshot':{},'lexicon_keywords':[],'creator_url':'','creator_id':'','start_page':0,'max_notes':100,'max_comments':1,'max_concurrency':1,'max_items_per_minute':5,'crawler_account_id':first['id'],'get_sub_comment':False,'analyze_limit':0,'run_crawler':True,'source_output_id':None,'analysis_batch_size':1,'prompt_profile_snapshot':{},'policy_id':''}
+    jobs.create(job_id=job_id,**config)
+    monkeypatch.setattr(pipeline_module,'job_store',jobs); monkeypatch.setattr(pipeline_module,'crawler_account_store',accounts); monkeypatch.setattr(pipeline_module,'auth_state_cipher',cipher)
+    monkeypatch.setattr(pipeline_module.settings,'outputs_dir',tmp_path/'outputs'); monkeypatch.setattr(pipeline_module.settings,'auto_analyze_crawled_content',False)
+    crawler=AlwaysVerifyCrawler()
+    pipeline=AuditPipeline.__new__(AuditPipeline); pipeline.job_id=job_id; pipeline.crawler=crawler; pipeline.ingestion=ingestion; pipeline.audit_results=results; pipeline.qwen=SimpleNamespace(provider_failure=''); pipeline.prompt_profile_snapshot={}; pipeline.audit_config_revision_id=''; pipeline.rule_snapshot={}; pipeline.authoritative_m3=False
+    pipeline.run(SimpleNamespace(**config))
+    assert len(crawler.calls) == 2
+    assert crawler.calls[0]['auth_state'] == {'account':'first'}
+    assert crawler.calls[1]['auth_state'] == {'account':'second'}
+    for account_id in (first['id'], second['id']):
+        stored_account = accounts.get(account_id)
+        assert stored_account['status'] == 'active'
+        assert stored_account['failure_kind'] == 'verify'
+        assert stored_account['cooldown_until']
+        assert stored_account['has_auth_state'] is True
+    stored_job = jobs.get(job_id)
+    assert stored_job['status'] == 'failed'
+    assert stored_job['crawler_account_id'] == second['id']
+    assert any('本轮不再切换' in log['message'] for log in stored_job['logs'])

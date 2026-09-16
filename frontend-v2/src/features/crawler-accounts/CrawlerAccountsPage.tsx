@@ -34,7 +34,7 @@ import { CrawlerAccountDrawer } from "./CrawlerAccountDrawer";
 import { CrawlerAccountLoginDialog } from "./CrawlerAccountLoginDialog";
 
 type PlatformFilter = "all" | CrawlerAccountPlatform;
-type StatusFilter = "all" | CrawlerAccountStatus;
+type StatusFilter = "all" | CrawlerAccountStatus | "cooldown";
 
 const platformMeta: Record<CrawlerAccountPlatform, { label: string; icon: string }> = {
   xhs: {
@@ -57,6 +57,20 @@ const statusMeta: Record<CrawlerAccountStatus, { label: string; className: strin
   expired: { label: "已失效", className: "is-expired" },
   disabled: { label: "已停用", className: "is-disabled" }
 };
+
+function isCoolingDown(account: CrawlerAccount): boolean {
+  if (account.status !== "active" || !account.cooldownUntil) return false;
+  const until = Date.parse(account.cooldownUntil);
+  return Number.isFinite(until) && until > Date.now();
+}
+
+function accountStatusMeta(account: CrawlerAccount) {
+  if (!isCoolingDown(account)) return statusMeta[account.status];
+  return {
+    label: account.failureKind === "verify" ? "验证冷却" : account.failureKind === "rate_limit" ? "限流冷却" : "冷却中",
+    className: "is-cooldown"
+  };
+}
 
 export function CrawlerAccountsPage() {
   const [accounts, setAccounts] = useState<CrawlerAccount[]>([]);
@@ -108,7 +122,10 @@ export function CrawlerAccountsPage() {
           .toLowerCase()
           .includes(keyword);
       const matchesPlatform = platformFilter === "all" || account.platform === platformFilter;
-      const matchesStatus = statusFilter === "all" || account.status === statusFilter;
+      const cooling = isCoolingDown(account);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "cooldown" ? cooling : account.status === statusFilter && !cooling);
       return matchesQuery && matchesPlatform && matchesStatus;
     });
   }, [accounts, platformFilter, query, statusFilter]);
@@ -116,8 +133,10 @@ export function CrawlerAccountsPage() {
   const stats = useMemo(
     () => ({
       total: accounts.length,
-      active: accounts.filter((account) => account.status === "active").length,
-      attention: accounts.filter((account) => ["login_required", "expired"].includes(account.status)).length,
+      active: accounts.filter((account) => account.status === "active" && !isCoolingDown(account)).length,
+      attention: accounts.filter(
+        (account) => isCoolingDown(account) || ["login_required", "expired"].includes(account.status)
+      ).length,
       disabled: accounts.filter((account) => account.status === "disabled").length
     }),
     [accounts]
@@ -236,6 +255,7 @@ export function CrawlerAccountsPage() {
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
               <option value="all">全部状态</option>
               <option value="active">可用</option>
+              <option value="cooldown">冷却中</option>
               <option value="login_required">待登录</option>
               <option value="expired">已失效</option>
               <option value="disabled">已停用</option>
@@ -270,7 +290,7 @@ export function CrawlerAccountsPage() {
             </div>
             {filteredAccounts.map((account) => {
               const platform = platformMeta[account.platform];
-              const status = statusMeta[account.status];
+              const status = accountStatusMeta(account);
               const isActing = actionId === account.id;
               return (
                 <div className="crawler-account-table-row" role="row" key={account.id}>
@@ -285,7 +305,12 @@ export function CrawlerAccountsPage() {
                     {account.platformAccountId || "待登录后识别"}
                   </span>
                   <span className="crawler-account-cell" data-label="登录状态">
-                    <span className={`crawler-account-status ${status.className}`}>{status.label}</span>
+                    <span
+                      className={`crawler-account-status ${status.className}`}
+                      title={isCoolingDown(account) ? `冷却至 ${formatDateTime(account.cooldownUntil)}` : undefined}
+                    >
+                      {status.label}
+                    </span>
                   </span>
                   <span className="crawler-account-cell" data-label="最近校验">
                     {formatDateTime(account.lastValidatedAt)}

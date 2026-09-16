@@ -284,11 +284,9 @@ export function getPlatformLabel(platform = "", inputType = "") {
 }
 
 function buildRunMetrics(stats: JobTaskStats, outputs: AuditResult[]): TaskRunMetrics {
-  const crawled = Math.max(
-    toNumber(stats.ingested_count),
-    toNumber(stats.batch_processed_count),
-    toNumber(stats.batch_item_count)
-  );
+  const crawled = stats.ingested_count == null
+    ? Math.max(toNumber(stats.batch_processed_count), toNumber(stats.batch_item_count))
+    : toNumber(stats.ingested_count);
   return {
     crawled,
     analyzed: toNumber(stats.completed_analysis_count),

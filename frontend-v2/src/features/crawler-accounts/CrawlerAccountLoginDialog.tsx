@@ -15,7 +15,7 @@ const platformNames = {
   ks: "快手"
 } as const;
 
-const activeLoginStatuses = ["starting", "waiting_scan", "finalizing"];
+const activeLoginStatuses = ["starting", "waiting_scan", "scanned", "finalizing"];
 
 interface CrawlerAccountLoginDialogProps {
   account: CrawlerAccount | null;
@@ -83,7 +83,7 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
   }, [session?.id, session?.status]);
 
   useEffect(() => {
-    if (!session?.expiresAt || !["starting", "waiting_scan"].includes(session.status)) {
+    if (!session?.expiresAt || !["starting", "waiting_scan", "scanned"].includes(session.status)) {
       setSecondsLeft(0);
       return;
     }
@@ -106,6 +106,7 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
 
   const platformName = platformNames[account.platform];
   const isWaiting = session?.status === "waiting_scan";
+  const isScanned = session?.status === "scanned";
   const isFinalizing = session?.status === "finalizing";
   const isSuccess = session?.status === "success";
   const isTerminalError = Boolean(
@@ -172,6 +173,14 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
               <LoginFinalizingProgress session={session} />
               <strong>登录已确认，正在保存</strong>
               <span>正在等待登录凭证写入完整并加密保存</span>
+            </div>
+          ) : null}
+
+          {!isTerminalError && isScanned ? (
+            <div className="crawler-login-state crawler-login-finalizing">
+              <Loader2 className="spin" size={34} />
+              <strong>已扫码，请在 {platformName} 确认</strong>
+              <span>确认完成后会自动保存登录状态</span>
             </div>
           ) : null}
 

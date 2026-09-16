@@ -3,6 +3,7 @@ export type CrawlerAccountStatus = "active" | "login_required" | "expired" | "di
 export type CrawlerAccountLoginStatus =
   | "starting"
   | "waiting_scan"
+  | "scanned"
   | "finalizing"
   | "success"
   | "failed"
@@ -18,6 +19,8 @@ export interface CrawlerAccount {
   lastValidatedAt: string;
   lastUsedAt: string;
   lastError: string;
+  cooldownUntil: string;
+  failureKind: string;
   hasAuthState: boolean;
   authStateUpdatedAt: string;
   createdAt: string;

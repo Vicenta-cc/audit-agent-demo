@@ -14,6 +14,7 @@ from backend.audit_agent.crawler_adapter import (
     CrawlerAuthenticationError,
     CrawlerVerificationError,
     MediaCrawlerAdapter,
+    latest_search_checkpoint,
 )
 
 
@@ -58,6 +59,21 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
             self.assertEqual(result.command[result.command.index('--crawler_max_notes_count') + 1], '20')
             self.assertEqual(adapter.recorded['max_notes'], 40)
 
+    def test_multi_keyword_resume_keeps_initial_page_separate_from_checkpoint(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = RecordingAdapter(Path(temp_dir))
+            result = adapter.run_search(
+                platform="dy", keyword="词一,词二", start_page=0, max_notes=2,
+                max_comments=0, max_concurrency=1, max_items_per_minute=1,
+                get_sub_comment=False, save_root=Path(temp_dir) / "output",
+                current_task_id="task-a", resume_keyword="词一", resume_page=3,
+            )
+
+            self.assertEqual(result.command[result.command.index("--start") + 1], "0")
+            self.assertEqual(result.command[result.command.index("--resume_keyword") + 1], "词一")
+            self.assertEqual(result.command[result.command.index("--resume_page") + 1], "3")
+            self.assertEqual(adapter.recorded["max_notes"], 4)
+
     def test_command_contains_rate_and_concurrency_but_not_login_state(self):
         auth_state = {
             "cookies": [{"name": "session", "value": "plain-cookie-secret"}],
@@ -83,6 +99,14 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
         self.assertEqual(command[command.index("--crawler_max_items_per_minute") + 1], "4")
         self.assertEqual(command[command.index("--lt") + 1], "cookie")
         self.assertNotIn("plain-cookie-secret", " ".join(command))
+
+    def test_checkpoint_parser_supports_douyin(self):
+        self.assertEqual(
+            latest_search_checkpoint(
+                "search douyin keyword: 美食, page: 4\n", "dy"
+            ),
+            ("美食", 4),
+        )
 
     def test_login_state_is_encoded_only_in_subprocess_environment(self):
         adapter = MediaCrawlerAdapter(Path("/tmp/mediacrawler"))
@@ -134,7 +158,7 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
                 with self.assertRaises(CrawlerVerificationError):
                     adapter._run_command(
                         command=["python", "main.py"], save_root=Path(temp_dir) / "output",
-                        platform="dy", max_notes=1, progress_callback=None,
+                        platform="dy", account_id="fixture-a", max_notes=1, progress_callback=None,
                         content_callback=None, auth_state={"cookies": [], "origins": []},
                     )
 

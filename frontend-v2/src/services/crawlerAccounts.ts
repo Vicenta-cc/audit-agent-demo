@@ -17,6 +17,8 @@ interface ApiCrawlerAccount {
   last_validated_at: string;
   last_used_at: string;
   last_error: string;
+  cooldown_until: string;
+  failure_kind: string;
   has_auth_state: boolean;
   auth_state_updated_at: string;
   created_at: string;
@@ -115,6 +117,8 @@ function mapCrawlerAccount(item: ApiCrawlerAccount): CrawlerAccount {
     lastValidatedAt: item.last_validated_at || "",
     lastUsedAt: item.last_used_at || "",
     lastError: item.last_error || "",
+    cooldownUntil: item.cooldown_until || "",
+    failureKind: item.failure_kind || "",
     hasAuthState: Boolean(item.has_auth_state),
     authStateUpdatedAt: item.auth_state_updated_at || "",
     createdAt: item.created_at,

@@ -5,6 +5,7 @@ import fcntl
 import json
 import os
 import shutil
+import signal
 import subprocess
 import re
 from dataclasses import dataclass, field
@@ -13,6 +14,7 @@ from time import sleep
 from typing import Callable
 
 from .config import settings
+from .crawler_browser import account_browser_env, scheduler_env
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}
@@ -34,6 +36,11 @@ class CrawlerVerificationError(RuntimeError):
     pass
 
 
+class CrawlerCollectionIncompleteError(RuntimeError):
+    """A required content stage failed; retain outputs without rotating accounts."""
+
+
+
 @dataclass
 class CrawlOutput:
     platform: str
@@ -49,6 +56,25 @@ ContentCallback = Callable[[list[dict], list[dict]], None]
 StopChecker = Callable[[], bool]
 StartedCallback = Callable[[], None]
 CheckpointCallback = Callable[[str, int], None]
+
+CHECKPOINT_PATTERNS = {
+    "dy": r"search douyin keyword: (.*?), page: (\d+)",
+}
+
+
+def latest_search_checkpoint(log_text: str, platform: str) -> tuple[str, int] | None:
+    pattern = CHECKPOINT_PATTERNS.get(platform)
+    if not pattern:
+        return None
+    matches = re.findall(pattern, log_text)
+    if not matches:
+        return None
+    keyword, page = matches[-1]
+    return keyword.strip(), int(page)
+
+
+class CrawlerRateLimitError(RuntimeError):
+    """Shared platform cooldown; do not mark an account expired or rotate it."""
 
 
 class MediaCrawlerAdapter:
@@ -75,6 +101,10 @@ class MediaCrawlerAdapter:
         checkpoint_callback: CheckpointCallback | None = None,
         skip_content_ids_file: Path | None = None,
         reusable_content_db: Path | None = None,
+        current_task_id: str = "",
+        resume_keyword: str = "",
+        resume_page: int | None = None,
+        account_id: str = "",
     ) -> CrawlOutput:
         self._validate_platform(platform)
         command = [
@@ -116,11 +146,10 @@ class MediaCrawlerAdapter:
             command.extend(["--skip_aweme_ids_file", str(skip_content_ids_file)])
         if reusable_content_db:
             command.extend(["--reusable_content_db", str(reusable_content_db)])
-        command.extend([
-            "--request_scheduler_db", str(settings.data_dir / "request_scheduler.sqlite3"),
-            "--request_min_interval", str(max(0.0, float(getattr(settings, "request_min_interval", 2.0)))),
-            "--requests_per_minute", str(max(1, int(getattr(settings, "requests_per_minute", 30)))),
-        ])
+        if current_task_id:
+            command.extend(["--current_task_id", current_task_id])
+        if resume_keyword and resume_page is not None:
+            command.extend(["--resume_keyword", resume_keyword, "--resume_page", str(resume_page)])
         return self._run_command(
             command=command,
             save_root=save_root,
@@ -132,6 +161,7 @@ class MediaCrawlerAdapter:
             auth_state=auth_state,
             started_callback=started_callback,
             checkpoint_callback=checkpoint_callback,
+            account_id=account_id,
         )
 
     def run_creator(
@@ -151,6 +181,7 @@ class MediaCrawlerAdapter:
         auth_state: dict | None = None,
         started_callback: StartedCallback | None = None,
         checkpoint_callback: CheckpointCallback | None = None,
+        account_id: str = "",
     ) -> CrawlOutput:
         self._validate_platform(platform)
         command = [
@@ -197,6 +228,7 @@ class MediaCrawlerAdapter:
             auth_state=auth_state,
             started_callback=started_callback,
             checkpoint_callback=checkpoint_callback,
+            account_id=account_id,
         )
 
     def _run_command(
@@ -211,6 +243,7 @@ class MediaCrawlerAdapter:
         auth_state: dict | None = None,
         started_callback: StartedCallback | None = None,
         checkpoint_callback: CheckpointCallback | None = None,
+        account_id: str = "",
     ) -> CrawlOutput:
         # Both local backends use the same MediaCrawler browser profile. Serialize
         # across worker processes as well as the existing in-process pipeline lock.
@@ -226,7 +259,7 @@ class MediaCrawlerAdapter:
             try:
                 return self._run_command_locked(
                     command, save_root, platform, max_notes, progress_callback,
-                    content_callback, stop_checker, auth_state, started_callback, checkpoint_callback,
+                    content_callback, stop_checker, auth_state, started_callback, checkpoint_callback, account_id,
                 )
             finally:
                 fcntl.flock(lock, fcntl.LOCK_UN)
@@ -237,7 +270,18 @@ class MediaCrawlerAdapter:
         stop_checker: StopChecker | None = None, auth_state: dict | None = None,
         started_callback: StartedCallback | None = None,
         checkpoint_callback: CheckpointCallback | None = None,
+        account_id: str = "",
     ) -> CrawlOutput:
+        env = self._subprocess_env(auth_state, platform=platform, account_id=account_id)
+        if platform == "dy":
+            command = [*command,
+                "--request_scheduler_db", str(settings.request_scheduler_db),
+                "--request_min_interval", str(settings.request_min_interval),
+                "--requests_per_minute", str(settings.requests_per_minute),
+                "--request_concurrency", str(settings.request_concurrency),
+                "--media_request_interval", str(settings.media_request_interval),
+                "--request_cooldown_seconds", str(settings.request_cooldown_seconds),
+                "--headless", "true"]
         save_root.mkdir(parents=True, exist_ok=True)
 
         stdout_path = save_root / "mediacrawler_stdout.log"
@@ -248,12 +292,13 @@ class MediaCrawlerAdapter:
             completed = subprocess.Popen(
                 command,
                 cwd=self.media_crawler_dir,
-                env=self._subprocess_env(auth_state),
+                env=env,
                 stdout=stdout_file,
                 stderr=stderr_file,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                start_new_session=os.name != "nt",
             )
             last_count = -1
             seen_content_ids: set[str] = set()
@@ -282,7 +327,10 @@ class MediaCrawlerAdapter:
                 if not terminate_sent:
                     terminate_sent = True
                     try:
-                        completed.terminate()
+                        if os.name != 'nt' and isinstance(getattr(completed, 'pid', None), int):
+                            os.killpg(completed.pid, signal.SIGTERM)
+                        else:
+                            completed.terminate()
                         terminate_just_sent = True
                     except Exception as exc:
                         append_stop_error(f"terminate failed: {exc}")
@@ -299,7 +347,10 @@ class MediaCrawlerAdapter:
                 if completed.returncode is None and not kill_sent:
                     kill_sent = True
                     try:
-                        completed.kill()
+                        if os.name != 'nt' and isinstance(getattr(completed, 'pid', None), int):
+                            os.killpg(completed.pid, signal.SIGKILL)
+                        else:
+                            completed.kill()
                     except Exception as exc:
                         append_stop_error(f"kill failed: {exc}")
                         cleanup_failed = True
@@ -311,6 +362,17 @@ class MediaCrawlerAdapter:
                             cleanup_failed = True
                 elif completed.returncode is None:
                     cleanup_failed = True
+
+                # Launcher exit alone does not prove its worker exited. This is
+                # the private group created by Popen, never another task's group.
+                if os.name != 'nt' and isinstance(getattr(completed, 'pid', None), int):
+                    try:
+                        os.killpg(completed.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    except OSError as exc:
+                        append_stop_error(f"process group cleanup failed: {exc}")
+                        cleanup_failed = True
 
             def raise_exit_failure(returncode: int | None) -> None:
                 stdout_file.flush()
@@ -325,10 +387,17 @@ class MediaCrawlerAdapter:
                     if stderr_path.exists()
                     else ""
                 )
+                if "PLATFORM_RATE_LIMITED" in stdout or "PLATFORM_RATE_LIMITED" in stderr:
+                    raise CrawlerRateLimitError("平台请求被限流，共享冷却已记录；保留已采集内容，冷却结束后再继续")
+                if "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stdout or "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stderr:
+                    raise CrawlerRateLimitError("等待共享请求额度或冷却超时；未启动后续请求，请稍后继续")
                 if ACCOUNT_AUTH_INVALID_MARKER in stdout or ACCOUNT_AUTH_INVALID_MARKER in stderr:
                     raise CrawlerAuthenticationError("所选采集账号登录态已失效，请重新登录")
                 if "ACCOUNT_VERIFY" in stdout or "ACCOUNT_VERIFY" in stderr:
                     raise CrawlerVerificationError("采集账号触发平台验证")
+                if "COLLECTION_INCOMPLETE" in stdout or "COLLECTION_INCOMPLETE" in stderr:
+                    raise CrawlerCollectionIncompleteError(
+                        "采集未完成：详情、媒体或分页处理失败；已成功内容保留，失败记录在采集目录 douyin/collection_status 中，可修复后继续采集")
                 raise RuntimeError(
                     f"MediaCrawler failed with exit code {returncode}\n"
                     f"STDOUT:\n{stdout[-4000:]}\n"
@@ -357,10 +426,9 @@ class MediaCrawlerAdapter:
                     if checkpoint_callback and stderr_path.exists():
                         try:
                             log_text = stderr_path.read_text(encoding="utf-8", errors="replace")
-                            matches = re.findall(r"search douyin keyword: (.*?), page: (\d+)", log_text)
-                            if matches:
-                                keyword, page = matches[-1]
-                                checkpoint_callback(keyword.strip(), int(page))
+                            checkpoint = latest_search_checkpoint(log_text, platform)
+                            if checkpoint:
+                                checkpoint_callback(*checkpoint)
                         except OSError:
                             pass
                     sleep(1)
@@ -382,12 +450,21 @@ class MediaCrawlerAdapter:
                 elif not kill_sent and stop_reason != "external_stop_requested" and returncode != 0:
                     raise_exit_failure(returncode)
 
+                # A caught platform limit must never look like successful completion.
+                terminal_log = stderr_path.read_text(encoding='utf-8', errors='replace') + stdout_path.read_text(encoding='utf-8', errors='replace')
+                if 'PLATFORM_RATE_LIMITED' in terminal_log or 'REQUEST_SCHEDULER_WAIT_EXCEEDED' in terminal_log:
+                    raise CrawlerRateLimitError("平台请求额度或冷却限制已生效；保留已采集内容，请稍后继续")
+
                 # MediaCrawler may catch a platform response and exit cleanly;
                 # inspect its log marker even when the process return code is 0.
                 if stderr_path.exists() and "ACCOUNT_VERIFY" in stderr_path.read_text(
                     encoding="utf-8", errors="replace"
                 ):
                     raise CrawlerVerificationError("采集账号触发平台验证")
+
+                if 'COLLECTION_INCOMPLETE' in terminal_log:
+                    raise CrawlerCollectionIncompleteError(
+                        "采集未完成：详情、媒体或分页处理失败；已成功内容保留，请查看采集目录 douyin/collection_status 中的失败记录")
 
                 output = self.load_latest_output(save_root, platform)
                 output.command = command
@@ -415,8 +492,13 @@ class MediaCrawlerAdapter:
     def _base_command(self, platform: str) -> list[str]:
         return self._build_runner()
 
-    def _subprocess_env(self, auth_state: dict | None = None) -> dict[str, str]:
+    def _subprocess_env(self, auth_state: dict | None = None, *, platform: str = "", account_id: str = "") -> dict[str, str]:
         env = os.environ.copy()
+        for name in ("MEDIACRAWLER_ACCOUNT_ID", "MEDIACRAWLER_CLOAK_PROFILE_ROOT", "MEDIACRAWLER_DY_BROWSER_ENGINE", *scheduler_env()):
+            env.pop(name, None)
+        if platform == "dy":
+            env.update(account_browser_env(account_id))
+            env.update(scheduler_env())
         path_parts = [
             str(settings.root_dir / "tools" / "node" / "bin"),
             env.get("PATH", ""),

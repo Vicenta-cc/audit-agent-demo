@@ -13,6 +13,16 @@ SUPPORTED_CRAWLER_ACCOUNT_PLATFORMS = {"xhs", "dy", "ks"}
 CRAWLER_ACCOUNT_STATUSES = {"active", "login_required", "expired", "disabled"}
 
 
+def account_is_cooling_down(account: dict, *, now: datetime | None = None) -> bool:
+    cooldown_until = str(account.get("cooldown_until") or "").strip()
+    if not cooldown_until:
+        return False
+    try:
+        return datetime.fromisoformat(cooldown_until) > (now or datetime.now())
+    except ValueError:
+        return False
+
+
 class CrawlerAccountStore:
     def __init__(self, db_path: Path | None = None):
         self.db_path = db_path or (settings.data_dir / "audit_index.sqlite3")
@@ -253,7 +263,8 @@ class CrawlerAccountStore:
                 """
                 UPDATE crawler_accounts
                 SET auth_state_ciphertext = ?, auth_state_updated_at = ?,
-                    status = 'active', last_validated_at = ?, last_error = '', updated_at = ?
+                    status = 'active', last_validated_at = ?, last_error = '',
+                    cooldown_until = NULL, failure_kind = NULL, updated_at = ?
                 WHERE id = ?
                 """,
                 (normalized_ciphertext, now, now, now, account_id),
@@ -307,7 +318,8 @@ class CrawlerAccountStore:
             conn.execute(
                 """
                 UPDATE crawler_accounts
-                SET status = 'expired', last_error = ?, updated_at = ?
+                SET status = 'expired', last_error = ?, failure_kind = 'auth',
+                    cooldown_until = NULL, updated_at = ?
                 WHERE id = ?
                 """,
                 (str(message or "账号登录态已失效")[:500], now, account_id),
