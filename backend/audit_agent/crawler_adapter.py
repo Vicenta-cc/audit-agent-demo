@@ -14,7 +14,7 @@ from time import sleep
 from typing import Callable
 
 from .config import settings
-from .crawler_browser import account_browser_env, scheduler_env
+from .crawler_browser import account_browser_env, account_profile_owns_auth, scheduler_env
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}
@@ -511,7 +511,17 @@ class MediaCrawlerAdapter:
         ]
         env["PATH"] = os.pathsep.join(part for part in path_parts if part)
         env.setdefault("EXECJS_RUNTIME", "Node")
-        if auth_state is not None:
+        # A Douyin CloakBrowser profile marked ``auth-imported`` owns the live
+        # credentials. MediaCrawler intentionally refuses to replay the older
+        # database snapshot into that profile, so passing the snapshot is both
+        # redundant and unsafe: a storage_state larger than Linux MAX_ARG_STRLEN
+        # makes execve fail with E2BIG before Python starts.
+        profile_owns_auth = (
+            platform == "dy"
+            and bool(account_id)
+            and account_profile_owns_auth(account_id)
+        )
+        if auth_state is not None and not profile_owns_auth:
             payload = json.dumps(
                 auth_state,
                 ensure_ascii=False,
@@ -523,6 +533,13 @@ class MediaCrawlerAdapter:
         return env
 
     def _build_runner(self) -> list[str]:
+        configured_python = settings.crawler_login_python
+        if configured_python.is_file():
+            # Keep the venv launcher path itself. Resolving its ``python``
+            # symlink to /usr/bin/python discards pyvenv.cfg and therefore the
+            # crawler-only dependencies installed in that environment.
+            return [str(configured_python.expanduser().absolute()), "main.py"]
+
         uv_path = shutil.which("uv")
         if uv_path:
             return [uv_path, "run", "main.py"]

@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_adapter import (
     ACCOUNT_AUTH_INVALID_MARKER,
     ACCOUNT_AUTH_STATE_ENV,
@@ -143,6 +144,18 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
         self.assertIn(ACCOUNT_AUTH_STATE_ENV, env)
         decoded = json.loads(base64.b64decode(env[ACCOUNT_AUTH_STATE_ENV]).decode("utf-8"))
         self.assertEqual(decoded, auth_state)
+
+    def test_configured_crawler_python_is_preferred(self):
+        adapter = MediaCrawlerAdapter(Path("/tmp/mediacrawler"))
+        with tempfile.TemporaryDirectory() as directory:
+            crawler_python = Path(directory) / "crawler-python"
+            crawler_python.symlink_to(sys.executable)
+            with patch.object(settings, "crawler_login_python", crawler_python), \
+                 patch("backend.audit_agent.crawler_adapter.shutil.which", return_value="/usr/bin/uv"):
+                self.assertEqual(
+                    adapter._build_runner(),
+                    [str(crawler_python.absolute()), "main.py"],
+                )
 
     def test_account_invalid_marker_becomes_typed_authentication_error(self):
         class FailedProcess:

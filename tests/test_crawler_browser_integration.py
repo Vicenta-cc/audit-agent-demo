@@ -15,7 +15,12 @@ from unittest.mock import AsyncMock, patch
 
 from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_adapter import MediaCrawlerAdapter
-from backend.audit_agent.crawler_browser import account_browser_env, load_account_browser
+from backend.audit_agent.crawler_browser import (
+    account_browser_env,
+    account_profile_directory,
+    account_profile_owns_auth,
+    load_account_browser,
+)
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.auth_state_cipher import AuthStateCipher
 from backend.audit_agent.crawler_login_manager import CrawlerAccountLoginManager
@@ -67,6 +72,44 @@ class BrowserBindingTest(unittest.TestCase):
             self.assertNotIn('MEDIACRAWLER_ACCOUNT_ID', adapter._subprocess_env(platform='xhs'))
             with self.assertRaisesRegex(ValueError, '选择'):
                 adapter._subprocess_env(platform='dy')
+
+    def test_persistent_douyin_profile_owns_auth_state(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(settings, 'crawler_browser_profile_root', Path(directory)):
+            account_id = 'account-a'
+            profile = account_profile_directory(account_id)
+            self.assertFalse(account_profile_owns_auth(account_id))
+            profile.mkdir(parents=True)
+            (profile / 'auth-imported').touch()
+            self.assertTrue(account_profile_owns_auth(account_id))
+
+            adapter = MediaCrawlerAdapter(Path('/fixture/crawler'))
+            oversized = {'cookies': [], 'origins': [
+                {'origin': 'https://www.douyin.com', 'localStorage': [
+                    {'name': 'cache', 'value': 'x' * 200_000},
+                ]},
+            ]}
+            env = adapter._subprocess_env(
+                oversized,
+                platform='dy',
+                account_id=account_id,
+            )
+            self.assertNotIn('MEDIACRAWLER_ACCOUNT_AUTH_STATE_B64', env)
+
+    def test_uninitialized_douyin_profile_still_receives_auth_state(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(settings, 'crawler_browser_profile_root', Path(directory)):
+            adapter = MediaCrawlerAdapter(Path('/fixture/crawler'))
+            auth_state = {'cookies': [], 'origins': []}
+            env = adapter._subprocess_env(
+                auth_state,
+                platform='dy',
+                account_id='account-a',
+            )
+            decoded = json.loads(base64.b64decode(
+                env['MEDIACRAWLER_ACCOUNT_AUTH_STATE_B64']
+            ).decode('utf-8'))
+            self.assertEqual(decoded, auth_state)
 
     def test_login_process_receives_same_binding_and_cancel_requires_login(self):
         with tempfile.TemporaryDirectory() as directory:

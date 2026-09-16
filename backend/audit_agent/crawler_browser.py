@@ -1,10 +1,24 @@
 """Share MediaCrawler's account browser implementation with account login."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 from pathlib import Path
 
 from .config import settings
+
+
+def account_profile_directory(account_id: str, profile_root: Path | None = None) -> Path:
+    """Return the persistent Douyin profile directory without creating it."""
+    if not account_id.strip():
+        raise ValueError("抖音采集必须选择已保存的账号")
+    key = hashlib.sha256(("dy:" + account_id).encode()).hexdigest()
+    return (profile_root or settings.crawler_browser_profile_root).expanduser().resolve() / key
+
+
+def account_profile_owns_auth(account_id: str, profile_root: Path | None = None) -> bool:
+    """Whether the persistent profile has taken ownership of login state."""
+    return (account_profile_directory(account_id, profile_root) / "auth-imported").is_file()
 
 
 def account_browser_env(account_id: str, profile_root: Path | None = None) -> dict[str, str]:
