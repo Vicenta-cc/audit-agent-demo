@@ -26,17 +26,30 @@ class AccountRotationManager:
         auth = self.cipher.decrypt(self.store.get_auth_state_ciphertext(account["id"]))
         return account, auth
 
-    def run_with_rotation(self, platform: str, account_id: str, auth_state: dict, runner, *, max_switches: int = 1):
-        """Run a bounded operation, retrying once with a rotated account on verify."""
+    def run_with_rotation(self, platform: str, account_id: str, auth_state: dict, runner, *, max_switches: int | None = None):
+        """Try each currently eligible account at most once on verification.
+
+        ``max_switches`` remains available for narrow callers, while the normal
+        path consumes the whole eligible pool without ever looping an account.
+        """
         current_id, current_auth = account_id, auth_state
-        for attempt in range(max(0, int(max_switches)) + 1):
+        attempted: set[str] = set()
+        switches = 0
+        while current_id and current_id not in attempted:
+            attempted.add(current_id)
             try:
                 return runner(current_id, current_auth)
             except CrawlerVerificationError:
-                if attempt >= max_switches:
+                self.cool_down(current_id, reason="verify")
+                if max_switches is not None and switches >= max(0, int(max_switches)):
                     raise
-                rotated = self.rotate(platform, current_id, reason="verify")
-                if not rotated:
+                accounts = self.store.available_accounts(platform, exclude_ids=attempted)
+                if not accounts:
                     raise
-                current_id, current_auth = rotated[0]["id"], rotated[1]
+                account = accounts[0]
+                current_id = account["id"]
+                current_auth = self.cipher.decrypt(
+                    self.store.get_auth_state_ciphertext(current_id)
+                )
+                switches += 1
         raise RuntimeError("account rotation exhausted")

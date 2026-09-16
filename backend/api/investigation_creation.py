@@ -68,6 +68,7 @@ class UpdateDraftRequest(RequestModel):
 
 
 class ConfirmAndQueueRequest(RequestModel):
+    expected_task_settings_revision: int | None = Field(default=None, ge=0)
     expected_revision: int = Field(ge=1)
     confirmed: StrictBool
 

@@ -12,9 +12,11 @@ from .config import settings
 
 DEFAULT_CONTROL = {
     "crawl_stop_requested": False,
+    "crawl_epoch": 0,
     "analysis_paused": False,
     "analysis_stop_requested": False,
     "stop_all_requested": False,
+    "failure": {},
 }
 
 RECOVERABLE_STATUSES = {
@@ -23,6 +25,7 @@ RECOVERABLE_STATUSES = {
     "crawl_pausing",
     "stopping",
     "analysis_running",
+    "analysis_pausing",
     "analysis_stopping",
     "analysis_paused",
 }
@@ -36,17 +39,23 @@ JSON_FIELDS = {
     "lexicon_keywords",
     "rule_snapshot",
     "prompt_profile_snapshot",
+    "requested_config",
+    "effective_config",
 }
 
 JSON_OBJECT_FIELDS = {
     "control",
     "rule_snapshot",
     "prompt_profile_snapshot",
+    "requested_config",
+    "effective_config",
 }
 
 JOB_SUMMARY_COLUMNS = ", ".join((
     "id",
     "status",
+    "crawl_status",
+    "analysis_status",
     "platform",
     "crawler_account_id",
     "crawler_account_display_name",
@@ -73,11 +82,14 @@ JOB_SUMMARY_COLUMNS = ", ".join((
     "max_items_per_minute",
     "get_sub_comment",
     "analyze_limit",
+    "auto_analyze",
     "run_crawler",
     "source_output_id",
     "analysis_batch_size",
     "input_type",
     "input_filename",
+    "requested_config",
+    "effective_config",
     "control",
     "error",
     "archived",
@@ -105,6 +117,8 @@ class JobStore:
                 CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
                     status TEXT NOT NULL,
+                    crawl_status TEXT NOT NULL DEFAULT 'pending',
+                    analysis_status TEXT NOT NULL DEFAULT 'pending',
                     platform TEXT,
                     crawler_account_id TEXT,
                     crawler_account_display_name TEXT,
@@ -131,11 +145,14 @@ class JobStore:
                     max_items_per_minute INTEGER NOT NULL DEFAULT 5,
                     get_sub_comment INTEGER,
                     analyze_limit INTEGER,
+                    auto_analyze INTEGER NOT NULL DEFAULT 1,
                     run_crawler INTEGER,
                     source_output_id TEXT,
                     analysis_batch_size INTEGER,
                     input_type TEXT,
                     input_filename TEXT,
+                    requested_config TEXT NOT NULL DEFAULT '{}',
+                    effective_config TEXT NOT NULL DEFAULT '{}',
                     items TEXT NOT NULL DEFAULT '[]',
                     control TEXT NOT NULL,
                     error TEXT,
@@ -148,6 +165,8 @@ class JobStore:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     job_id TEXT NOT NULL,
                     time TEXT NOT NULL,
+                    stage TEXT NOT NULL DEFAULT 'pipeline',
+                    level TEXT NOT NULL DEFAULT 'info',
                     message TEXT NOT NULL
                 );
 
@@ -226,6 +245,22 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN crawl_checkpoint_page INTEGER")
             if "crawl_checkpoint_keyword" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN crawl_checkpoint_keyword TEXT")
+            if "crawl_status" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN crawl_status TEXT NOT NULL DEFAULT 'pending'")
+            if "analysis_status" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN analysis_status TEXT NOT NULL DEFAULT 'pending'")
+            if "requested_config" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN requested_config TEXT NOT NULL DEFAULT '{}'")
+            if "effective_config" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN effective_config TEXT NOT NULL DEFAULT '{}'")
+            if "auto_analyze" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN auto_analyze INTEGER NOT NULL DEFAULT 1")
+
+            log_columns = {row["name"] for row in conn.execute("PRAGMA table_info(job_logs)").fetchall()}
+            if "stage" not in log_columns:
+                conn.execute("ALTER TABLE job_logs ADD COLUMN stage TEXT NOT NULL DEFAULT 'pipeline'")
+            if "level" not in log_columns:
+                conn.execute("ALTER TABLE job_logs ADD COLUMN level TEXT NOT NULL DEFAULT 'info'")
 
             related_columns = {
                 row["name"]
@@ -246,6 +281,12 @@ class JobStore:
             job = {
                 "id": resolved_job_id,
                 "status": "queued",
+                "crawl_status": "queued" if kwargs.get("run_crawler") else "skipped",
+                "analysis_status": (
+                    "queued"
+                    if kwargs.get("auto_analyze", True) and int(kwargs.get("analyze_limit") or 0) > 0
+                    else "pending"
+                ),
                 "created_at": now,
                 "updated_at": now,
                 "logs": [],
@@ -256,21 +297,24 @@ class JobStore:
             conn.execute(
                 """
                 INSERT INTO jobs (
-                    id, status, platform, crawler_account_id, crawler_account_display_name,
+                    id, status, crawl_status, analysis_status, platform, crawler_account_id, crawler_account_display_name,
                     display_name, crawl_mode, keyword, keyword_source, lexicon_category,
                     library_ids, capabilities, scoring_template, rule_snapshot,
                     lexicon_keywords, prompt_profile_snapshot, current_audit_config_revision_id,
                     creator_url, creator_id, start_page, crawl_checkpoint_page, crawl_checkpoint_keyword, max_notes,
                     max_comments, max_concurrency, max_items_per_minute,
-                    get_sub_comment, analyze_limit, run_crawler,
-                    source_output_id, analysis_batch_size, input_type, input_filename, items, control,
+                    get_sub_comment, analyze_limit, auto_analyze, run_crawler,
+                    source_output_id, analysis_batch_size, input_type, input_filename,
+                    requested_config, effective_config, items, control,
                     error, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job["id"],
                     job["status"],
+                    job["crawl_status"],
+                    job["analysis_status"],
                     job.get("platform"),
                     job.get("crawler_account_id"),
                     job.get("crawler_account_display_name"),
@@ -297,11 +341,14 @@ class JobStore:
                     job.get("max_items_per_minute", 5),
                     1 if job.get("get_sub_comment") else 0,
                     job.get("analyze_limit"),
+                    1 if job.get("auto_analyze", True) else 0,
                     1 if job.get("run_crawler") else 0,
                     job.get("source_output_id"),
                     job.get("analysis_batch_size"),
                     job.get("input_type"),
                     job.get("input_filename"),
+                    json.dumps(job.get("requested_config") or {}, ensure_ascii=False),
+                    json.dumps(job.get("effective_config") or {}, ensure_ascii=False),
                     json.dumps(job.get("items") or [], ensure_ascii=False),
                     json.dumps(job.get("control") or DEFAULT_CONTROL, ensure_ascii=False),
                     job.get("error"),
@@ -373,8 +420,26 @@ class JobStore:
     def update(self, job_id: str, **kwargs) -> None:
         if not kwargs:
             return
+        status = str(kwargs.get("status") or "")
+        if status == "failed":
+            kwargs.setdefault("crawl_status", "failed")
+            kwargs.setdefault("analysis_status", "failed")
+        elif status == "crawl_paused":
+            kwargs.setdefault("crawl_status", "stopped")
+        elif status == "analysis_stopped":
+            kwargs.setdefault("analysis_status", "stopped")
+        elif status == "analysis_paused":
+            kwargs.setdefault("analysis_status", "paused")
+        elif status == "completed":
+            # Compatibility for callers that report only an overall terminal
+            # state. Phase-aware resume paths always pass their preserved crawl
+            # phase explicitly, so a paused crawl is not rewritten here.
+            kwargs.setdefault("crawl_status", "completed")
+            kwargs.setdefault("analysis_status", "completed")
         allowed = {
             "status",
+            "crawl_status",
+            "analysis_status",
             "items",
             "error",
             "platform",
@@ -403,11 +468,14 @@ class JobStore:
             "max_items_per_minute",
             "get_sub_comment",
             "analyze_limit",
+            "auto_analyze",
             "run_crawler",
             "source_output_id",
             "analysis_batch_size",
             "input_type",
             "input_filename",
+            "requested_config",
+            "effective_config",
         }
         now = datetime.now().isoformat(timespec="seconds")
         fields = []
@@ -443,12 +511,13 @@ class JobStore:
             )
             return dict(control)
 
-    def log(self, job_id: str, message: str) -> None:
+    def log(self, job_id: str, message: str, *, stage: str = "", level: str = "") -> None:
         now = datetime.now().isoformat(timespec="seconds")
+        inferred_stage, inferred_level = self._classify_log(message)
         with self._lock, self._connect() as conn:
             conn.execute(
-                "INSERT INTO job_logs (job_id, time, message) VALUES (?, ?, ?)",
-                (job_id, now, message),
+                "INSERT INTO job_logs (job_id, time, stage, level, message) VALUES (?, ?, ?, ?, ?)",
+                (job_id, now, stage or inferred_stage, level or inferred_level, message),
             )
             conn.execute("UPDATE jobs SET updated_at = ? WHERE id = ?", (now, job_id))
 
@@ -465,24 +534,34 @@ class JobStore:
         placeholders = ",".join("?" for _ in RECOVERABLE_STATUSES)
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                f"SELECT id, status FROM jobs WHERE archived = 0 AND status IN ({placeholders})",
+                f"SELECT id, status, crawl_status, analysis_status FROM jobs "
+                f"WHERE archived = 0 AND status IN ({placeholders})",
                 tuple(RECOVERABLE_STATUSES),
             ).fetchall()
             for row in rows:
                 control = json.dumps(dict(DEFAULT_CONTROL), ensure_ascii=False)
+                crawl_status = str(row["crawl_status"] or "pending")
+                analysis_status = str(row["analysis_status"] or "pending")
+                if crawl_status in {"queued", "running", "pausing", "stopping"}:
+                    crawl_status = "interrupted"
+                if analysis_status in {"queued", "running", "pausing", "stopping"}:
+                    analysis_status = "pending"
                 conn.execute(
                     """
                     UPDATE jobs
-                    SET status = 'interrupted', control = ?, updated_at = ?
+                    SET status = 'interrupted', crawl_status = ?, analysis_status = ?,
+                        control = ?, updated_at = ?
                     WHERE id = ?
                     """,
-                    (control, now, row["id"]),
+                    (crawl_status, analysis_status, control, now, row["id"]),
                 )
                 conn.execute(
-                    "INSERT INTO job_logs (job_id, time, message) VALUES (?, ?, ?)",
+                    "INSERT INTO job_logs (job_id, time, stage, level, message) VALUES (?, ?, ?, ?, ?)",
                     (
                         row["id"],
                         now,
+                        "recovery",
+                        "warning",
                         f"服务启动恢复：任务从 {row['status']} 标记为已中断，可执行补分析。",
                     ),
                 )
@@ -993,22 +1072,28 @@ class JobStore:
         job["rule_snapshot"] = self._loads_json(job.get("rule_snapshot"), {})
         job["lexicon_keywords"] = self._loads_json(job.get("lexicon_keywords"), [])
         job["prompt_profile_snapshot"] = self._loads_json(job.get("prompt_profile_snapshot"), {})
+        job["requested_config"] = self._loads_json(job.get("requested_config"), {})
+        job["effective_config"] = self._loads_json(job.get("effective_config"), {})
+        for key in ("collect_comments", "collect_media"):
+            if key in job["effective_config"]:
+                job[key] = bool(job["effective_config"][key])
         job["items"] = self._loads_json(job.get("items"), [])
         job["control"] = self._normalize_control(job.get("control"))
         job["get_sub_comment"] = bool(job.get("get_sub_comment"))
+        job["auto_analyze"] = bool(job.get("auto_analyze"))
         job["run_crawler"] = bool(job.get("run_crawler"))
         job["archived"] = bool(job.get("archived"))
         if log_limit is None:
             logs = conn.execute(
-                "SELECT time, message FROM job_logs WHERE job_id = ? ORDER BY id ASC",
+                "SELECT time, stage, level, message FROM job_logs WHERE job_id = ? ORDER BY id ASC",
                 (job["id"],),
             ).fetchall()
         elif log_limit > 0:
             logs = conn.execute(
                 """
-                SELECT time, message
+                SELECT time, stage, level, message
                 FROM (
-                    SELECT id, time, message
+                    SELECT id, time, stage, level, message
                     FROM job_logs
                     WHERE job_id = ?
                     ORDER BY id DESC
@@ -1020,8 +1105,42 @@ class JobStore:
             ).fetchall()
         else:
             logs = []
-        job["logs"] = [{"time": log["time"], "message": log["message"]} for log in logs]
+        job["logs"] = [
+            {
+                "time": log["time"],
+                "stage": log["stage"],
+                "level": log["level"],
+                "message": log["message"],
+            }
+            for log in logs
+        ]
         return job
+
+    @staticmethod
+    def _classify_log(message: str) -> tuple[str, str]:
+        text = str(message or "")
+        level = "error" if any(token in text for token in ("失败", "异常", "不可用")) else (
+            "warning" if any(token in text for token in ("暂停", "停止", "跳过", "冷却")) else "info"
+        )
+        if any(token in text for token in ("参数", "limit", "配置")):
+            stage = "configuration"
+        elif any(token in text for token in ("账号", "登录", "验证")):
+            stage = "account"
+        elif any(token in text for token in ("控制指令", "暂停", "恢复", "停止")):
+            stage = "control"
+        elif any(token in text for token in ("评论", "媒体", "图片", "视频", "OCR", "ASR", "音频")):
+            stage = "media"
+        elif any(token in text for token in ("ingestion", "入库", "batch")):
+            stage = "ingestion"
+        elif any(token in text for token in ("爬取", "采集", "MediaCrawler", "分页")):
+            stage = "crawl"
+        elif any(token in text for token in ("分析", "审核", "研判", "队列")):
+            stage = "analysis"
+        elif any(token in text for token in ("恢复", "中断")):
+            stage = "recovery"
+        else:
+            stage = "pipeline"
+        return stage, level
 
     def _to_db_value(self, key: str, value):
         if key in JSON_FIELDS:
@@ -1030,7 +1149,7 @@ class JobStore:
             if key in JSON_OBJECT_FIELDS:
                 return json.dumps(value or {}, ensure_ascii=False)
             return json.dumps(value or [], ensure_ascii=False)
-        if key in {"get_sub_comment", "run_crawler"}:
+        if key in {"get_sub_comment", "auto_analyze", "run_crawler"}:
             return 1 if value else 0
         return value
 

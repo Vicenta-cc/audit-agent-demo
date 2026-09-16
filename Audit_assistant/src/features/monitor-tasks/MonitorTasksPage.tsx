@@ -120,6 +120,17 @@ export function MonitorTasksPage() {
   }, [initialCache, loadData]);
 
   useEffect(() => {
+    let cancelled = false;
+    let timer: number;
+    const poll = async () => {
+      await loadData("refresh");
+      if (!cancelled) timer = window.setTimeout(poll, 3000);
+    };
+    timer = window.setTimeout(poll, 3000);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [loadData]);
+
+  useEffect(() => {
     if (!toast) {
       return;
     }
@@ -273,7 +284,7 @@ export function MonitorTasksPage() {
       </section>
 
       <TaskDetailDrawer
-        task={selectedTask}
+        task={selectedTask ? snapshot.tasks.find((task) => task.id === selectedTask.id) ?? null : null}
         mode={drawerMode}
         onClose={() => setSelectedTask(null)}
         onControl={handleControl}

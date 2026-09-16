@@ -171,7 +171,7 @@ export function updateInvestigationDraft(
 
 export function confirmAndQueueInvestigation(
   draftId: string,
-  request: { expectedRevision: number; idempotencyKey: string }
+  request: { expectedRevision: number; idempotencyKey: string; taskSettingsRevision?: number }
 ) {
   return apiRequest<InvestigationRunProjection>(
     `/api/investigation-drafts/${encodeURIComponent(draftId)}/confirm-and-queue`,
@@ -180,6 +180,7 @@ export function confirmAndQueueInvestigation(
       headers: { "Idempotency-Key": request.idempotencyKey },
       body: JSON.stringify({
         expected_revision: request.expectedRevision,
+        expected_task_settings_revision: request.taskSettingsRevision,
         confirmed: true
       })
     }

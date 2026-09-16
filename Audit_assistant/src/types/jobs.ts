@@ -35,6 +35,8 @@ export interface JobTaskStats {
 export interface JobLog {
   id?: number;
   time?: string;
+  stage?: string;
+  level?: "info" | "warning" | "error" | string;
   message?: string;
 }
 
@@ -202,7 +204,10 @@ export interface RawJob {
   max_concurrency?: number;
   max_items_per_minute?: number;
   get_sub_comment?: boolean;
+  auto_analyze?: boolean;
   analyze_limit?: number;
+  requested_config?: Record<string, unknown>;
+  effective_config?: Record<string, unknown>;
   analysis_batch_size?: number;
   input_type?: string;
   input_filename?: string;
@@ -215,6 +220,9 @@ export interface RawJob {
   analysis_status?: string;
   available_actions?: {
     pause_crawl?: boolean;
+    resume_crawl?: boolean;
+    pause_analysis?: boolean;
+    resume_analysis?: boolean;
     stop_analysis?: boolean;
     backfill_analysis?: boolean;
     delete_job?: boolean;

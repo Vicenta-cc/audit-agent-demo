@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from types import SimpleNamespace
 from typing import Any, Callable
@@ -15,6 +16,7 @@ from backend.audit_agent.config import settings
 from backend.audit_agent.creator_url import validate_creator_url
 from backend.audit_agent.ingestion import AuditResultStore, IngestionStore
 from backend.audit_agent.job_store import JobStore
+from backend.audit_agent.job_state import available_job_actions
 from backend.audit_agent.lexicon_store import LexiconStore
 from backend.audit_agent.pipeline import AuditPipeline
 from backend.audit_agent.rule_compiler import (
@@ -460,15 +462,53 @@ class AuditPipelineExecutionAdapter:
             "investigation-run-config-v3",
             "investigation-run-config-v4",
         }:
-            self.validate_m3_configuration(configuration)
+            self.validate_m3_configuration(
+                configuration,
+                schema_version=snapshot.schema_version,
+                job_id=self.job_id_for_run(run.id),
+            )
             from .frozen import validate_execution_payload
             validate_execution_payload(configuration)
         job_id = self.job_id_for_run(run.id)
         existing = self.job_store.get(job_id)
         if existing is None:
+            frozen_task_config = {
+                key: configuration.get(key)
+                for key in (
+                    "platform",
+                    "crawl_mode",
+                    "keyword",
+                    "keyword_source",
+                    "creator_url",
+                    "start_page",
+                    "max_notes",
+                    "max_comments",
+                    "max_concurrency",
+                    "max_items_per_minute",
+                    "get_sub_comment",
+                    "analyze_limit",
+                    "run_crawler",
+                    "source_output_id",
+                    "analysis_batch_size",
+                )
+            }
+            frozen_task_config["auto_analyze"] = bool(
+                int(configuration.get("analyze_limit") or 0) > 0
+            )
+            for key in ("collect_comments", "collect_media"):
+                if key in configuration:
+                    frozen_task_config[key] = configuration[key]
+            requested_config = dict(frozen_task_config)
+            requested = run.confirmed_configuration.get("requested_parameters")
+            if requested:
+                requested_config.update(requested)
             try:
                 self.job_store.create(
                     job_id=job_id,
+                    auto_analyze=frozen_task_config["auto_analyze"],
+                    requested_config=requested_config,
+                    effective_config=frozen_task_config,
+                    **{key: configuration[key] for key in ("collect_comments", "collect_media") if key in configuration},
                     **{
                         key: configuration.get(key)
                         for key in (
@@ -565,14 +605,18 @@ class AuditPipelineExecutionAdapter:
         return verified_job_configuration(configuration, job, revision)
 
     def validate_execution_configuration(
-        self, configuration: dict[str, Any], *, schema_version: str
+        self, configuration: dict[str, Any], *, schema_version: str, job_id: str = ""
     ) -> None:
         """Re-check the authoritative account immediately before execution."""
         if schema_version in {
             "investigation-run-config-v3",
             "investigation-run-config-v4",
         }:
-            self.validate_m3_configuration(configuration)
+            self.validate_m3_configuration(
+                configuration,
+                schema_version=schema_version,
+                job_id=job_id,
+            )
 
     def invalidate_job_for_account(self, job_id: str, message: str) -> None:
         """Make a previously-created Job non-executable after account invalidation."""
@@ -639,29 +683,43 @@ class AuditPipelineExecutionAdapter:
                 raise RuntimeError(f"stable Job {key} does not match confirmed Run")
 
     def validate_m3_configuration(
-        self, configuration: dict[str, Any]
+        self,
+        configuration: dict[str, Any],
+        *,
+        schema_version: str = "",
+        job_id: str = "",
     ) -> None:
-        if not 1 <= int(configuration.get("max_notes") or 0) <= settings.m3_posts_per_keyword:
+        if not 1 <= int(configuration.get("max_notes") or 0) <= min(
+            5, settings.m3_posts_per_keyword
+        ):
             raise ValueError("M3 execution exceeds this backend's per-keyword limit")
-        if not 1 <= int(configuration.get("analyze_limit") or 0) <= settings.m3_analyze_limit:
+        analyze_limit = int(configuration.get("analyze_limit") or 0)
+        # v3 snapshots are immutable historical contracts. A deployment may
+        # lower its current default later, but must still be able to resume the
+        # exact limit that was confirmed and frozen into an existing v3 run.
+        valid_analysis_limit = (
+            analyze_limit >= 1
+            if schema_version == "investigation-run-config-v3"
+            else 0 <= analyze_limit <= settings.m3_analyze_limit
+        )
+        if not valid_analysis_limit:
             raise ValueError("M3 execution exceeds this backend's analysis limit")
-        if int(configuration.get("max_concurrency") or 0) != 1:
-            raise ValueError("M3 execution requires max_concurrency=1")
+        if not 1 <= int(configuration.get("max_concurrency") or 0) <= max(1, settings.crawler_max_concurrency):
+            raise ValueError("M3 execution exceeds the concurrency limit")
         account_id = str(configuration.get("crawler_account_id") or "").strip()
+        if job_id:
+            job = self.job_store.get(job_id) or {}
+            runtime_account = (job.get("control") or {}).get("execution_account") or {}
+            account_id = str(runtime_account.get("id") or account_id).strip()
         if not account_id:
             raise CrawlerAccountAuthenticationRequiredError(
                 "抖音采集服务当前不可用，请稍后重试。"
             )
-        account = self.crawler_account_store.get(account_id)
-        if account is None:
-            raise CrawlerAccountAuthenticationRequiredError(
-                "抖音采集服务当前不可用，请稍后重试。"
-            )
-        if account["platform"] != configuration.get("platform"):
-            raise CrawlerAccountAuthenticationRequiredError(
-                "抖音采集服务当前不可用，请稍后重试。"
-            )
-        if account["status"] != "active" or not account["has_auth_state"]:
+        # The frozen account is provenance, not an execution capability flag.
+        # M3 and ordinary Jobs both enter the same current eligible pool.
+        if not self.crawler_account_store.available_accounts(
+            str(configuration.get("platform") or "")
+        ):
             raise CrawlerAccountAuthenticationRequiredError(
                 "抖音采集服务当前不可用，请稍后重试。"
             )
@@ -681,9 +739,13 @@ class InvestigationRunProjector:
         ingestion_store: IngestionStore | None = None,
         audit_result_store: AuditResultStore | None = None,
         report_store: ReportStore | None = None,
+        crawler_account_store: CrawlerAccountStore | None = None,
     ) -> None:
         self.job_store = job_store or JobStore()
         self.ingestion_store = ingestion_store or IngestionStore()
+        self.crawler_account_store = crawler_account_store or CrawlerAccountStore(
+            self.job_store.db_path
+        )
         self.audit_result_store = audit_result_store or AuditResultStore(
             self.ingestion_store.db_path
         )
@@ -692,6 +754,8 @@ class InvestigationRunProjector:
     def project(self, run: InvestigationRun) -> dict[str, Any]:
         task_stats: dict[str, Any] = {}
         audit_results: list[dict[str, Any]] = []
+        logs: list[dict[str, Any]] = []
+        actions: dict[str, bool] = {}
         crawl_status = "pending"
         analysis_status = "pending"
         if run.job_id:
@@ -705,6 +769,24 @@ class InvestigationRunProjector:
                     self.audit_result_store, run.job_id
                 )
                 crawl_status, analysis_status = self._job_projection(job, task_stats)
+                logs = _public_job_logs(job.get("logs") or [])
+                actions = available_job_actions(
+                    {**job, "crawl_status": crawl_status, "analysis_status": analysis_status},
+                    task_stats,
+                )
+                preferred_account_id = str(
+                    (((job.get("control") or {}).get("execution_account") or {}).get("id"))
+                    or job.get("crawler_account_id")
+                    or ""
+                ).strip()
+                if (
+                    actions.get("resume_crawl")
+                    and preferred_account_id
+                    and not self.crawler_account_store.available_accounts(
+                        str(job.get("platform") or "")
+                    )
+                ):
+                    actions["resume_crawl"] = False
         report_status = self._report_status(run)
         if run.status == RunStatus.AUDIT_COMPLETED and int(task_stats.get("failed_analysis_count") or 0) > 0:
             report_status = "blocked_by_failed_posts"
@@ -713,6 +795,8 @@ class InvestigationRunProjector:
             "analysis_status": analysis_status,
             "task_stats": task_stats,
             "audit_results": audit_results,
+            "logs": logs,
+            "available_actions": actions,
             "report_status": report_status,
         }
 
@@ -734,8 +818,12 @@ class InvestigationRunProjector:
     ) -> tuple[str, str]:
         status = str(job.get("status") or "")
         control = dict(job.get("control") or {})
+        persisted_crawl_status = str(job.get("crawl_status") or "")
+        persisted_analysis_status = str(job.get("analysis_status") or "")
         if not job.get("run_crawler"):
             crawl_status = "skipped"
+        elif persisted_crawl_status and persisted_crawl_status != "pending":
+            crawl_status = persisted_crawl_status
         elif status in {"completed", "analysis_paused", "analysis_stopped"}:
             crawl_status = "completed"
         elif status in {"interrupted", "crawl_paused", "stopped"}:
@@ -747,7 +835,9 @@ class InvestigationRunProjector:
         else:
             crawl_status = "unknown"
 
-        if status == "failed":
+        if persisted_analysis_status and persisted_analysis_status != "pending":
+            analysis_status = persisted_analysis_status
+        elif status == "failed":
             analysis_status = "failed"
         elif control.get("analysis_stop_requested") or status == "analysis_stopped":
             analysis_status = "stopped"
@@ -775,6 +865,37 @@ def _public_audit_results(
 ) -> list[dict[str, Any]]:
     page = store.list_results(job_id=job_id, limit=1_000, sort="id")
     return [_public_audit_result(item) for item in page.get("items") or []]
+
+
+def _public_job_logs(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    logs: list[dict[str, Any]] = []
+    for raw_log in values[-200:]:
+        item = dict(raw_log)
+        message = str(item.get("message") or "")
+        if "crawler_account_verification_required" in message:
+            item.update(stage="account", message="采集账号需要平台验证，已进入冷却；登录态未判定失效。")
+        elif "crawler_account_login_required" in message:
+            item.update(stage="account", message="采集账号登录态失效或不可用，请检查登录状态。")
+        elif "crawler_rate_limited" in message:
+            item.update(stage="account", message="采集受到平台限流，请等待冷却结束后再继续。")
+        elif any(marker in message for marker in ("执行账号", "采集账号")):
+            item.update(
+                stage="account",
+                message="采集账号校验未通过" if item.get("level") == "error" else "已完成采集账号可用性校验",
+            )
+        elif "MediaCrawler command:" in message:
+            item.update(
+                stage="crawl",
+                message="采集执行器命令已完成",
+            )
+        else:
+            item["message"] = re.sub(
+                r"/(?:Users|private|tmp|var)/[^\s，,;]+",
+                "[本地路径]",
+                message,
+            )
+        logs.append(item)
+    return logs
 
 
 def _public_audit_result(item: dict[str, Any]) -> dict[str, Any]:

@@ -43,6 +43,8 @@ class PublicInvestigationRunProjection(StrictModel):
     analysis_status: str
     task_stats: dict[str, Any]
     audit_results: list[dict[str, Any]] = Field(default_factory=list)
+    logs: list[dict[str, Any]] = Field(default_factory=list)
+    available_actions: dict[str, bool] = Field(default_factory=dict)
     report_status: str
     report_version_id: str = ""
     error_code: str = ""
@@ -165,6 +167,8 @@ def public_run(run: Any) -> PublicInvestigationRunProjection:
         analysis_status=value("analysis_status"),
         task_stats=value("task_stats", {}),
         audit_results=value("audit_results", []),
+        logs=value("logs", []),
+        available_actions=value("available_actions", {}),
         report_status=value("report_status"),
         report_version_id=value("report_version_id", ""),
         error_code=value("error_code", ""),

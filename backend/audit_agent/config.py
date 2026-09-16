@@ -136,15 +136,22 @@ class Settings:
     analysis_media_scope = os.getenv("ANALYSIS_MEDIA_SCOPE", "all").strip().lower()
     stream_crawl_analysis = os.getenv("STREAM_CRAWL_ANALYSIS", "true").lower() == "true"
     # Separate deployments retain the one-post demo unless explicitly configured.
-    m3_posts_per_keyword = max(1, int(os.getenv("M3_POSTS_PER_KEYWORD", "1")))
+    m3_posts_per_keyword = min(
+        5,
+        max(1, int(os.getenv("M3_POSTS_PER_KEYWORD", "1"))),
+    )
     m3_analyze_limit = max(1, int(os.getenv("M3_ANALYZE_LIMIT", "1")))
-    m3_comments_per_post = max(0, int(os.getenv("M3_COMMENTS_PER_POST", "300")))
+    m3_comments_per_post = min(
+        1000,
+        max(0, int(os.getenv("M3_COMMENTS_PER_POST", "300"))),
+    )
     crawler_max_concurrency = int(os.getenv("CRAWLER_MAX_CONCURRENCY", "3"))
     crawler_sleep_seconds = float(os.getenv("CRAWLER_SLEEP_SECONDS", "6"))
     crawler_login_timeout_seconds = max(
         60,
         int(os.getenv("CRAWLER_LOGIN_TIMEOUT_SECONDS", "180")),
     )
+    crawler_login_headed = os.getenv("CRAWLER_LOGIN_HEADED", "false").lower() == "true"
     crawler_auth_encryption_key = os.getenv("CRAWLER_AUTH_ENCRYPTION_KEY", "").strip()
     crawler_auth_key_file = Path(
         os.getenv("CRAWLER_AUTH_KEY_FILE", str(data_dir / "crawler_auth.key"))

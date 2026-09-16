@@ -29,12 +29,16 @@ export function TaskConfirmationCard({
   error = ""
 }: TaskConfirmationCardProps) {
   const [searchTerms, setSearchTerms] = useState("");
+  const [savedSearchTerms, setSavedSearchTerms] = useState("");
   const [isSavingTerms, setIsSavingTerms] = useState(false);
   const view = buildConfirmationCardView(draft, preview);
   const parsedSearchTerms = parseInvestigationSearchTerms(searchTerms);
+  const normalizedSearchTerms = parsedSearchTerms.join("、");
 
   useEffect(() => {
-    setSearchTerms((preview?.resolved_search_terms || draft.keywords).join("、"));
+    const resolvedSearchTerms = (preview?.resolved_search_terms || draft.keywords).join("、");
+    setSearchTerms(resolvedSearchTerms);
+    setSavedSearchTerms(resolvedSearchTerms);
   }, [draft.keywords, preview]);
 
   const saveTerms = async () => {
@@ -43,6 +47,7 @@ export function TaskConfirmationCard({
     setIsSavingTerms(true);
     try {
       await onUpdateSearchTerms(terms);
+      setSavedSearchTerms(terms.join("、"));
     } finally {
       setIsSavingTerms(false);
     }
@@ -108,7 +113,7 @@ export function TaskConfirmationCard({
             </div>
             <div className="task-final-field">
               <span>采集数量</span>
-              <strong>本次最多选择 {preview.max_notes} 条进入研判</strong>
+              <strong>预计最多采集 {preview.estimated_max_contents ?? preview.max_notes} 条；自动分析最多 {preview.max_notes} 条</strong>
             </div>
             {preview.max_posts_per_keyword !== undefined ? (
               <div className="task-final-field">
@@ -119,6 +124,13 @@ export function TaskConfirmationCard({
           </>
         ) : null}
       </div>
+
+      {preview?.effective_parameters ? <p aria-label="本次使用的统一设置">
+        本次使用统一采集与分析设置：{preview.effective_parameters.max_items_per_minute} 条/分钟，
+        并发 {preview.effective_parameters.max_concurrency}，分析批次 {preview.effective_parameters.analysis_batch_size}；
+        {preview.effective_parameters.auto_analyze ? "边采集边分析" : "仅采集，分析手动启动"}。
+        如需修改，请到左侧业务入口“采集与分析设置”；启动后本任务参数保持不变。
+      </p> : null}
 
       {preview?.blockers.length ? (
         <div className="task-final-blockers" role="alert">
@@ -146,7 +158,7 @@ export function TaskConfirmationCard({
           type="button"
           className="mt-button mt-button-primary"
           onClick={onStartExecution}
-          disabled={!view.canConfirm || isConfirming}
+          disabled={!view.canConfirm || isConfirming || isSavingTerms || (preview?.mode === "search" && normalizedSearchTerms !== savedSearchTerms)}
         >
           <Play size={14} aria-hidden="true" />
           {isConfirming ? "确认中" : "确认并开始调查"}

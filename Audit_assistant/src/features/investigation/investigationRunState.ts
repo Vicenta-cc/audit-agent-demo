@@ -12,6 +12,8 @@ export interface InvestigationRunViewState {
 export function mapInvestigationRunState(
   run: InvestigationRunProjection
 ): InvestigationRunViewState {
+  const crawlActive = ["queued", "running", "pausing"].includes(run.crawl_status);
+  const analysisActive = ["queued", "running", "pausing"].includes(run.analysis_status);
   if (run.status === "AUDIT_COMPLETED") {
     return { phase: "audit_completed", terminal: null, label: run.analysis_status === "partial" ? "处理结束，部分帖子审核失败" : "审核完成", step: 3, activity: "completed" };
   }
@@ -21,11 +23,20 @@ export function mapInvestigationRunState(
   if (run.status === "FAILED") {
     return { phase: "audit_working", terminal: "failed", label: "调查失败", step: inferStoppedStep(run), activity: "stopped" };
   }
+  if (run.status === "INTERRUPTED" && (crawlActive || analysisActive)) {
+    return { phase: "audit_resumed", terminal: null, label: "正在从检查点恢复", step: inferStoppedStep(run), activity: "running" };
+  }
   if (run.status === "INTERRUPTED") {
     return { phase: "audit_working", terminal: "interrupted", label: "调查已中断，可恢复", step: inferStoppedStep(run), activity: "stopped" };
   }
-  if (run.analysis_status === "paused" || run.crawl_status === "paused") {
-    return { phase: "audit_working", terminal: "paused", label: "调查已暂停，可恢复", step: inferStoppedStep(run), activity: "stopped" };
+  if (["paused", "stopped"].includes(run.analysis_status) && crawlActive) {
+    return { phase: "collection_working", terminal: null, label: "分析已暂停，采集继续", step: 1, activity: "running" };
+  }
+  if (["paused", "stopped", "interrupted"].includes(run.crawl_status) && analysisActive) {
+    return { phase: "evidence_working", terminal: null, label: "采集已暂停，分析继续", step: 2, activity: "running" };
+  }
+  if (["paused", "stopped"].includes(run.analysis_status) || ["paused", "stopped"].includes(run.crawl_status)) {
+    return { phase: "audit_working", terminal: "paused", label: "当前执行阶段已暂停，可恢复", step: inferStoppedStep(run), activity: "stopped" };
   }
   if (run.status === "REPORT_GENERATING") {
     return { phase: "report_generating", terminal: null, label: "正在归纳报告", step: 4, activity: "running" };

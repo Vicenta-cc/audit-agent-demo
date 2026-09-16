@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, FileSearch, ListFilter, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, FileSearch, ListFilter, Loader2, Pause, Play, ScrollText, Square } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { AgentExecutionPhase } from "../../types/investigation";
 import type { InvestigationRunProjection } from "../../types/investigationCreation";
@@ -15,6 +15,7 @@ import {
 } from "./analysisRecords";
 import { loadM3AnalysisRecords, readRunAnalysisCounts, reportPostDetailPath } from "./m3AnalysisRecords";
 import { buildRunProgressItems, formatRunFailureMessage } from "./runPresentation";
+import { controlJob } from "../../services/jobs";
 
 export { buildRunProgressItems, formatRunFailureMessage } from "./runPresentation";
 
@@ -33,6 +34,7 @@ interface AgentCollaborationCardProps {
   investigationTitle: string;
   authoritative?: boolean;
   run?: InvestigationRunProjection;
+  onControlAccepted?: () => void;
 }
 
 export function EvidenceRelayPipeline({
@@ -152,7 +154,8 @@ export function AgentCollaborationCard({
   investigationId,
   investigationTitle,
   authoritative = false,
-  run
+  run,
+  onControlAccepted
 }: AgentCollaborationCardProps) {
   const navigate = useNavigate();
   const scenario: AnalysisScenario = investigationTitle.includes("维汉民族关系")
@@ -179,6 +182,9 @@ export function AgentCollaborationCard({
   ));
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [recordsError, setRecordsError] = useState("");
+  const [controlAction, setControlAction] = useState("");
+  const [controlError, setControlError] = useState("");
+  const [logsExpanded, setLogsExpanded] = useState(false);
 
   phaseRef.current = phase;
 
@@ -329,6 +335,26 @@ export function AgentCollaborationCard({
     ? ETHNIC_RELATIONS_TOTAL
     : analysisRecords.length;
   const runStats = run ? buildRunProgressItems(run) : [];
+  const isHistoricalRun = run?.status === "AUDIT_COMPLETED" || run?.status === "PUBLISHED";
+  const availableActions = run?.available_actions || {};
+  const hasRuntimeControls = Boolean(
+    run?.job_id
+    && !isHistoricalRun
+  );
+
+  const submitControl = async (action: string) => {
+    if (!run?.job_id || controlAction) return;
+    setControlAction(action);
+    setControlError("");
+    try {
+      await controlJob(run.job_id, action);
+      onControlAccepted?.();
+    } catch (error) {
+      setControlError(controlErrorMessage(error));
+    } finally {
+      setControlAction("");
+    }
+  };
 
   const handleOpenAllRecords = () => {
     if (authoritative && run) {
@@ -420,7 +446,59 @@ export function AgentCollaborationCard({
             </dl>
           ) : null}
           {run.error_message ? <p role="alert">{formatRunFailureMessage(run)}</p> : null}
+          {hasRuntimeControls ? (
+            <div className="investigation-run-controls" aria-label="流水线实时控制">
+              <div>
+                <span>采集控制</span>
+                <button type="button" disabled={!availableActions.pause_crawl || Boolean(controlAction)} onClick={() => void submitControl("pause_crawl")}>
+                  {controlAction === "pause_crawl" ? <Loader2 size={13} className="spin" /> : <Pause size={13} />}
+                  停止采集
+                </button>
+                <button type="button" disabled={!availableActions.resume_crawl || Boolean(controlAction)} onClick={() => void submitControl("resume_crawl")}>
+                  {controlAction === "resume_crawl" ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
+                  继续采集
+                </button>
+              </div>
+              <div>
+                <span>分析控制</span>
+                <button type="button" disabled={!availableActions.pause_analysis || Boolean(controlAction)} onClick={() => void submitControl("pause_analysis")}>
+                  {controlAction === "pause_analysis" ? <Loader2 size={13} className="spin" /> : <Pause size={13} />}
+                  暂停分析
+                </button>
+                <button type="button" disabled={!availableActions.stop_analysis || Boolean(controlAction)} onClick={() => void submitControl("stop_analysis")}>
+                  {controlAction === "stop_analysis" ? <Loader2 size={13} className="spin" /> : <Square size={12} />}
+                  停止分析
+                </button>
+                <button type="button" disabled={!availableActions.resume_analysis || Boolean(controlAction)} onClick={() => void submitControl("resume_analysis")}>
+                  {controlAction === "resume_analysis" ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
+                  继续分析
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {controlError ? <p className="investigation-control-error" role="alert">{controlError}</p> : null}
         </div>
+      ) : null}
+
+      {run ? (
+        <section className="investigation-runtime-logs" aria-label="流水线运行日志">
+          <button type="button" className="investigation-runtime-logs-trigger" aria-expanded={logsExpanded} onClick={() => setLogsExpanded((value) => !value)}>
+            <span><ScrollText size={15} />流水线运行日志 <small>{run.logs?.length || 0} 条</small></span>
+            <ChevronDown size={15} className={logsExpanded ? "is-expanded" : ""} />
+          </button>
+          {logsExpanded ? (
+            <div className="investigation-runtime-log-list">
+              {run.logs?.length ? run.logs.slice(-100).map((entry, index) => (
+                <div className={`investigation-runtime-log is-${entry.level || "info"}`} key={`${entry.time || "log"}-${index}`}>
+                  <time>{formatLogTime(entry.time)}</time>
+                  <span>{logStageLabel(entry.stage)}</span>
+                  <em>{logLevelLabel(entry.level)}</em>
+                  <p>{entry.message || "无日志内容"}</p>
+                </div>
+              )) : <div className="investigation-runtime-log-empty" role="status">暂无运行日志，任务开始后将在此显示。</div>}
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       <EvidenceRelayPipeline
@@ -518,9 +596,45 @@ export function AgentCollaborationCard({
 }
 
 function statusLabel(status: string) {
-  return ({ completed: "完成", partial: "处理完成，部分帖子失败", pending: "待处理", running: "进行中", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || "处理中";
+  return ({ completed: "完成", partial: "处理完成，部分帖子失败", pending: "待处理", queued: "排队中", running: "进行中", pausing: "正在暂停", stopping: "正在停止", interrupted: "已中断", idle: "未启动", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || "处理中";
 }
 
 function reportStatusLabel(status: string) {
   return ({ blocked_by_failed_posts: "部分帖子失败，未生成完整报告", pending: "待生成", generating: "生成中", published: "已生成", failed: "失败", interrupted: "已中断" } as Record<string, string>)[status] || "待处理";
+}
+
+function controlErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) return "操作失败，请稍后重试。";
+  try {
+    const payload = JSON.parse(error.message) as { detail?: string };
+    return payload.detail || error.message;
+  } catch {
+    return error.message || "操作失败，请稍后重试。";
+  }
+}
+
+function formatLogTime(value?: string) {
+  if (!value) return "--:--:--";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? value
+    : parsed.toLocaleTimeString("zh-CN", { hour12: false });
+}
+
+function logStageLabel(stage?: string) {
+  return ({
+    configuration: "参数解析",
+    account: "账号选择",
+    crawl: "内容采集",
+    ingestion: "内容入库",
+    analysis: "内容分析",
+    media: "评论/媒体",
+    control: "暂停/恢复",
+    recovery: "恢复处理",
+    pipeline: "流水线"
+  } as Record<string, string>)[stage || ""] || stage || "流水线";
+}
+
+function logLevelLabel(level?: string) {
+  return ({ info: "信息", warning: "警告", error: "错误" } as Record<string, string>)[level || ""] || "信息";
 }

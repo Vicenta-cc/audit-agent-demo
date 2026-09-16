@@ -16,19 +16,22 @@ import requests
 from .auth_state_cipher import auth_state_cipher
 from .asset_utils import download_url_with_error, safe_filename_from_url, split_csv_urls
 from .config import settings
-from .crawler_account_store import account_is_cooling_down, crawler_account_store
+from .crawler_account_store import crawler_account_store
 from .crawler_adapter import (
     IMAGE_EXTENSIONS,
     PLATFORM_DATA_DIRS,
     VIDEO_EXTENSIONS,
     CrawlerAuthenticationError,
+    CrawlOutput,
     CrawlerVerificationError,
+    CrawlerRateLimitError,
     MediaCrawlerAdapter,
 )
 from .account_rotation import AccountRotationManager
 from .evidence_groups import build_evidence_groups
 from .ingestion import AuditResultStore, BatchWriter, IngestionStore, content_identity
 from .job_store import job_store
+from .job_state import failure_metadata
 from .knowledge_packages import get_default_knowledge_package
 from .models import AuditSubject
 from .ocr_processor import VideoOCRTracker
@@ -40,6 +43,13 @@ from .video_processor import DemoAudioProcessor, DemoFrameExtractor
 
 
 _crawler_lock = threading.Lock()
+_analysis_locks_guard = threading.Lock()
+_analysis_locks: dict[str, threading.RLock] = {}
+
+
+def _analysis_lock_for(job_id: str) -> threading.RLock:
+    with _analysis_locks_guard:
+        return _analysis_locks.setdefault(job_id, threading.RLock())
 
 AUDIO_URL_EXTENSIONS = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
 AUDIO_FILE_SIGNATURES = (
@@ -89,6 +99,14 @@ def search_resume_parameters(
     return saved_page, "", None
 
 
+def crawler_start_page(platform: str, configured_start_page: int) -> int:
+    """Translate the user-facing page number to the crawler's page index."""
+    page = max(0, int(configured_start_page or 0))
+    if platform == "dy" and page > 0:
+        return page - 1
+    return page
+
+
 def _severity_rank(severity) -> int:
     return {"high": 3, "medium": 2, "low": 1}.get(str(severity).lower(), 0)
 
@@ -130,14 +148,50 @@ class AuditPipeline:
             return None
         adapter = AuditPipelineExecutionAdapter()
         configuration = adapter.verify_run_job(run)
-        adapter.validate_m3_configuration(configuration)
+        adapter.validate_m3_configuration(
+            configuration,
+            schema_version=str(run.confirmed_configuration.get("schema_version") or ""),
+            job_id=self.job_id,
+        )
         return configuration
 
-    def run(self, request) -> None:
+    def run(self, request, crawl_epoch: int | None = None) -> None:
+        crawl_epoch_is_current = lambda: True
+        crawler_account_id = ""
         try:
-            job_store.update(self.job_id, status="running")
-            job_store.log(self.job_id, "开始任务")
             job_snapshot = job_store.get(self.job_id) or {}
+            initial_control = dict(job_snapshot.get("control") or {})
+            active_crawl_epoch = int(
+                initial_control.get("crawl_epoch") or 0
+                if crawl_epoch is None
+                else crawl_epoch
+            )
+
+            def control() -> dict:
+                return job_store.control(self.job_id)
+
+            def crawl_epoch_is_current() -> bool:
+                return int(control().get("crawl_epoch") or 0) == active_crawl_epoch
+
+            analysis_suspended = bool(
+                initial_control.get("analysis_paused")
+                or initial_control.get("analysis_stop_requested")
+                or str(job_snapshot.get("analysis_status") or "") in {"paused", "stopped"}
+            )
+            job_store.update(
+                self.job_id,
+                status="running",
+                crawl_status="running" if request.run_crawler else "skipped",
+                analysis_status=(
+                    str(job_snapshot.get("analysis_status") or "pending")
+                    if analysis_suspended
+                    or str(job_snapshot.get("analysis_status") or "")
+                    in {"running", "pausing"}
+                    else "pending"
+                ),
+            )
+            job_store.update_control(self.job_id, failure={})
+            job_store.log(self.job_id, "开始任务")
             verified = self._verified_m3_snapshot()
             if verified is not None:
                 from types import SimpleNamespace
@@ -151,15 +205,40 @@ class AuditPipeline:
                 self.rule_snapshot = self._rule_snapshot_from_source(job_snapshot or request)
                 self._set_prompt_context(self._prompt_category_from_source(request), self._prompt_profile_from_source(request))
 
-            def control() -> dict:
-                return job_store.control(self.job_id)
-
             def analysis_stop_requested() -> bool:
                 current = control()
                 return bool(current.get("stop_all_requested") or current.get("analysis_stop_requested"))
 
+            crawl_finished = threading.Event()
+
             def wait_if_analysis_paused() -> bool:
-                return not analysis_stop_requested()
+                pause_announced = False
+                while True:
+                    current = control()
+                    if current.get("stop_all_requested") or current.get(
+                        "analysis_stop_requested"
+                    ):
+                        job_store.update(self.job_id, analysis_status="stopped")
+                        return False
+                    if not current.get("analysis_paused"):
+                        return True
+                    if not pause_announced:
+                        job_store.update(
+                            self.job_id,
+                            status="analysis_paused",
+                            analysis_status="paused",
+                        )
+                        job_store.log(
+                            self.job_id,
+                            "分析已在安全边界暂停，采集与入库继续",
+                            stage="control",
+                        )
+                        pause_announced = True
+                    # Do not keep an ended crawl alive solely to wait for a
+                    # paused analyzer. Persisted queued contents can be resumed.
+                    if crawl_finished.is_set():
+                        return False
+                    threading.Event().wait(0.2)
 
             confirmed_limit_value = getattr(request, "_confirmed_analyze_limit", None)
             self.authoritative_m3 = (
@@ -167,7 +246,7 @@ class AuditPipeline:
             )
             selection_limit = (
                 max(0, int(confirmed_limit_value))
-                if confirmed_limit_value is not None
+                if confirmed_limit_value is not None and getattr(request, "auto_analyze", None) is None
                 else None
             )
             selected_memberships: list[dict] = []
@@ -178,11 +257,10 @@ class AuditPipeline:
                 crawl_dir = source_root / "crawler"
                 job_store.log(self.job_id, f"等待 MediaCrawler 爬取锁：{request.platform}")
                 last_progress = {"done": -1}
-                results: list[dict] = (
-                    list(job_snapshot.get("items") or [])
-                    if selection_limit is not None
-                    else []
-                )
+                # A resumed task keeps every already-persisted result, regardless
+                # of whether it came from an authoritative M3 run or an ordinary
+                # Job. This is the durable idempotency boundary for analysis.
+                results: list[dict] = list(job_snapshot.get("items") or [])
                 analyzed_ids: set[str] = {
                     str(item.get("content_key") or item.get("note_id") or "")
                     for item in results
@@ -201,10 +279,15 @@ class AuditPipeline:
                 )
                 raw_items_dir = source_root / "raw_items"
                 stop_flusher = threading.Event()
-                auto_analyze_crawled_content = settings.auto_analyze_crawled_content
+                auto_analyze_crawled_content = bool(
+                    settings.auto_analyze_crawled_content
+                    and getattr(request, "auto_analyze", True)
+                    and analyze_limit > 0
+                )
                 if not auto_analyze_crawled_content:
                     analyze_limit = 0
                     selection_limit = None
+                    job_store.update(self.job_id, analysis_status="pending")
                     job_store.log(
                         self.job_id,
                         "当前为采集入库模式：内容会入库，审核分析暂不自动执行，可稍后点击继续分析",
@@ -218,7 +301,12 @@ class AuditPipeline:
                 use_batch_ingestion = selection_limit is not None or (
                     stream_items_enabled and settings.batch_ingestion_enabled
                 )
-                stream_analysis = stream_items_enabled and auto_analyze_crawled_content
+                stream_analysis = (
+                    stream_items_enabled
+                    and auto_analyze_crawled_content
+                )
+                if stream_analysis and analyze_limit > 0 and not analysis_suspended:
+                    job_store.update(self.job_id, analysis_status="running")
                 skip_final_supplement = use_batch_ingestion and auto_analyze_crawled_content
                 stream_callback_enabled = use_batch_ingestion or stream_analysis
                 if selection_limit is not None:
@@ -348,15 +436,18 @@ class AuditPipeline:
                             return
                         if not wait_if_analysis_paused():
                             return
+                        claim = self.ingestion.claim_content_for_analysis(
+                            self.job_id,
+                            request.platform,
+                            subject_key,
+                            analyze_limit=analyze_limit,
+                        )
+                        if claim is False:
+                            analyzed_ids.add(subject_key)
+                            continue
                         analyzed_ids.add(subject_key)
                         job_store.log(self.job_id, f"边抓边分析：{subject.note_id}")
                         try:
-                            self.ingestion.mark_content_status(
-                                request.platform,
-                                subject_key,
-                                "analyzing",
-                                task_id=self.job_id,
-                            )
                             self._begin_subject_audit()
                             result = self._analyze_subject(subject)
                             self._assert_authoritative_provider_healthy()
@@ -379,10 +470,7 @@ class AuditPipeline:
                             self._consecutive_provider_failures = 0
                             results.append(persisted or result)
                         except Exception as exc:
-                            provider_failure = str(getattr(self.qwen, "provider_failure", "") or "")
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
-                            if self.authoritative_m3 and (provider_failure or isinstance(exc, AuditProviderCallError)):
-                                raise AuditProviderCallError(provider_failure or str(exc)) from exc
                             analyzed_ids.add(subject.note_id)
                             continue
                         job_store.update(self.job_id, items=results)
@@ -404,6 +492,7 @@ class AuditPipeline:
                     for subject in subjects:
                         if not subject.note_id or subject.note_id in analyzed_ids:
                             continue
+                        subject_key = subject.note_id
                         if not self._should_analyze_subject(subject):
                             analyzed_ids.add(subject.note_id)
                             self._mark_subject_skipped(request.platform, subject.note_id, subject)
@@ -412,16 +501,18 @@ class AuditPipeline:
                             return
                         if not wait_if_analysis_paused():
                             return
+                        claim = self.ingestion.claim_content_for_analysis(
+                            self.job_id,
+                            request.platform,
+                            subject_key,
+                            analyze_limit=analyze_limit,
+                        )
+                        if claim is False:
+                            analyzed_ids.add(subject.note_id)
+                            continue
                         analyzed_ids.add(subject.note_id)
-                        subject_key = subject.note_id
                         job_store.log(self.job_id, f"边抓边分析：{subject.note_id}")
                         try:
-                            self.ingestion.mark_content_status(
-                                request.platform,
-                                subject_key,
-                                "analyzing",
-                                task_id=self.job_id,
-                            )
                             self._begin_subject_audit()
                             result = self._analyze_subject(subject)
                             self._assert_authoritative_provider_healthy()
@@ -441,10 +532,7 @@ class AuditPipeline:
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
                         except Exception as exc:
-                            provider_failure = str(getattr(self.qwen, "provider_failure", "") or "")
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
-                            if self.authoritative_m3 and (provider_failure or isinstance(exc, AuditProviderCallError)):
-                                raise AuditProviderCallError(provider_failure or str(exc)) from exc
                             analyzed_ids.add(subject.note_id)
                             continue
                         self._consecutive_provider_failures = 0
@@ -454,15 +542,35 @@ class AuditPipeline:
 
                 def consume_stream_queue() -> None:
                     try:
-                        while True:
-                            batch = stream_queue.get()
-                            if batch is None:
-                                return
-                            if isinstance(batch, tuple):
-                                contents, comments = batch
-                                analyze_stream_batch(contents, comments)
-                            else:
-                                analyze_stream_ref(batch)
+                        with _analysis_lock_for(self.job_id):
+                            latest_items = (job_store.get(self.job_id) or {}).get("items") or []
+                            results[:] = list(latest_items)
+                            analyzed_ids.update(
+                                str(item.get("content_key") or item.get("note_id") or "")
+                                for item in results
+                            )
+                            while True:
+                                current = control()
+                                if current.get("analysis_stop_requested") or current.get("analysis_paused") or current.get("stop_all_requested"):
+                                    job_store.update(self.job_id, analysis_status=(
+                                        "paused" if current.get("analysis_paused") else "stopped"
+                                    ))
+                                    if crawl_finished.wait(0.1):
+                                        return
+                                    continue
+                                try:
+                                    batch = stream_queue.get(timeout=0.1)
+                                except queue.Empty:
+                                    if crawl_finished.is_set():
+                                        return
+                                    continue
+                                if batch is None:
+                                    return
+                                if isinstance(batch, tuple):
+                                    contents, comments = batch
+                                    analyze_stream_batch(contents, comments)
+                                else:
+                                    analyze_stream_ref(batch)
                     except Exception as exc:
                         analysis_errors.append(exc)
                         job_store.update_control(self.job_id, analysis_stop_requested=True)
@@ -485,69 +593,84 @@ class AuditPipeline:
                     )
                     batch_flusher.start()
 
+                crawl_returned = False
                 try:
                     with _crawler_lock:
-                        crawler_account_id = str(getattr(request, "crawler_account_id", "") or "").strip()
-                        account_auth_state = None
-                        if crawler_account_id:
-                            account = crawler_account_store.get(crawler_account_id)
-                            if not account:
-                                if self.authoritative_m3:
-                                    raise RuntimeError(
-                                        "crawler_account_login_required: "
-                                        "抖音采集服务当前不可用，请稍后重试。"
-                                    )
-                                raise RuntimeError("所选采集账号不存在")
-                            if account["platform"] != request.platform:
-                                if self.authoritative_m3:
-                                    raise RuntimeError(
-                                        "crawler_account_login_required: "
-                                        "抖音采集服务当前不可用，请稍后重试。"
-                                    )
+                        execution_account = control().get("execution_account") or {}
+                        preferred_account_id = str(
+                            execution_account.get("id")
+                            or getattr(request, "crawler_account_id", "")
+                            or ""
+                        ).strip()
+                        candidates = crawler_account_store.available_accounts(request.platform)
+                        candidates.sort(
+                            key=lambda item: 0 if str(item.get("id")) == preferred_account_id else 1
+                        )
+                        if preferred_account_id:
+                            configured = crawler_account_store.get(preferred_account_id)
+                            if configured and configured["platform"] != request.platform:
                                 raise RuntimeError("所选采集账号与任务平台不匹配")
-                            if account["status"] != "active" or not account["has_auth_state"]:
-                                if self.authoritative_m3:
-                                    raise RuntimeError(
-                                        "crawler_account_login_required: "
-                                        "抖音采集服务当前不可用，请稍后重试。"
-                                    )
-                                raise RuntimeError("所选采集账号当前不可用，请重新登录")
-                            if account_is_cooling_down(account):
-                                if self.authoritative_m3:
-                                    raise RuntimeError(
-                                        "crawler_account_login_required: "
-                                        "抖音采集服务当前不可用，请稍后重试。"
-                                    )
-                                reason = "平台验证" if account.get("failure_kind") == "verify" else "平台限流"
-                                raise RuntimeError(f"所选采集账号因{reason}正在冷却，请稍后重试或选择其他账号")
-                            ciphertext = crawler_account_store.get_auth_state_ciphertext(crawler_account_id)
-                            try:
-                                account_auth_state = auth_state_cipher.decrypt(ciphertext)
-                            except Exception as exc:
-                                if self.authoritative_m3:
-                                    crawler_account_store.mark_expired(
-                                        crawler_account_id, "auth state is unreadable"
-                                    )
-                                    raise RuntimeError(
-                                        "crawler_account_login_required: "
-                                        "抖音采集服务当前不可用，请稍后重试。"
-                                    ) from exc
-                                raise
-                            if not self.authoritative_m3:
-                                job_store.log(
-                                    self.job_id,
-                                    f"执行账号：{account.get('display_name') or crawler_account_id}",
+                        # Historical non-account Jobs remain readable. Account-backed
+                        # Jobs must use the current eligible pool, not a stale identity.
+                        if not candidates and preferred_account_id:
+                            configured = crawler_account_store.get(preferred_account_id)
+                            if configured and configured.get("failure_kind") == "verify":
+                                raise RuntimeError(
+                                    "crawler_account_verification_required: 当前没有结束冷却的可用账号。"
                                 )
+                            raise CrawlerAuthenticationError("当前没有可用采集账号，请重新登录")
+                        if not candidates:
+                            candidates = [None]
+
+                        crawler_account_id = ""
+                        account = None
+                        account_auth_state = None
+                        last_account_error: Exception | None = None
+                        empty_recheck_used = False
 
                         def mark_crawler_started() -> None:
                             if crawler_account_id:
                                 crawler_account_store.mark_used(crawler_account_id)
 
-                        try:
+                        def record_execution_account() -> None:
+                            # Runtime identity is separate from the confirmed M3
+                            # payload. Keep legacy Job fields for existing callers.
+                            if not crawler_account_id or not account:
+                                return
+                            identity = {"id": crawler_account_id,
+                                        "display_name": str(account.get("display_name") or crawler_account_id)}
+                            job_store.update_control(self.job_id, execution_account=identity)
+                            if not self.authoritative_m3:
+                                job_store.update(self.job_id, crawler_account_id=identity["id"],
+                                                 crawler_account_display_name=identity["display_name"])
+
+                        def latest_resume_parameters():
+                            latest = job_store.get(self.job_id) or {}
+                            initial_page = crawler_start_page(
+                                request.platform, int(request.start_page or 0)
+                            )
+                            checkpoint_keyword = str(
+                                latest.get("crawl_checkpoint_keyword") or ""
+                            )
+                            checkpoint_page = latest.get("crawl_checkpoint_page")
+                            if not checkpoint_keyword or checkpoint_page is None:
+                                checkpoint_page = initial_page
+                            return search_resume_parameters(
+                                request.platform,
+                                initial_page,
+                                checkpoint_keyword,
+                                int(checkpoint_page),
+                            )
+
+                        skip_content_ids_file = (
+                            Path(str(request.skip_content_ids_file))
+                            if getattr(request, "skip_content_ids_file", "") else None
+                        )
+                        def run_with_current_account(save_root: Path):
                             if request.crawl_mode == "creator":
                                 creator_ref = request.creator_url or request.creator_id
                                 job_store.log(self.job_id, f"启动 MediaCrawler 博主主页爬取 {request.platform}: {creator_ref}")
-                                output = self.crawler.run_creator(
+                                return self.crawler.run_creator(
                                     platform=request.platform,
                                     creator_id=creator_ref,
                                     max_notes=request.max_notes,
@@ -555,7 +678,9 @@ class AuditPipeline:
                                     max_concurrency=crawler_concurrency,
                                     max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
                                     get_sub_comment=request.get_sub_comment,
-                                    save_root=crawl_dir,
+                                    collect_comments=bool(getattr(request, "collect_comments", True)),
+                                    collect_media=bool(getattr(request, "collect_media", True)),
+                                    save_root=save_root,
                                     progress_callback=log_crawl_progress,
                                     content_callback=enqueue_stream_batch if stream_callback_enabled else None,
                                     stream_items=stream_callback_enabled,
@@ -564,183 +689,131 @@ class AuditPipeline:
                                     account_id=crawler_account_id,
                                     started_callback=mark_crawler_started,
                                 )
-                            else:
-                                if getattr(request, "keyword_source", "keyword") == "lexicon":
+                            if getattr(request, "keyword_source", "keyword") == "lexicon":
+                                job_store.log(
+                                    self.job_id,
+                                    f"词库展开 {len(getattr(request, 'lexicon_keywords', []) or [])} 个关键词：{request.lexicon_category}",
+                                )
+                            job_store.log(self.job_id, f"启动 MediaCrawler 关键词爬取 {request.platform}: {request.keyword}")
+                            crawler_start_page, crawler_resume_keyword, crawler_resume_page = latest_resume_parameters()
+                            return self.crawler.run_search(
+                                platform=request.platform,
+                                keyword=request.keyword,
+                                start_page=crawler_start_page,
+                                max_notes=request.max_notes,
+                                max_comments=request.max_comments,
+                                max_concurrency=crawler_concurrency,
+                                max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                                get_sub_comment=request.get_sub_comment,
+                                collect_comments=bool(getattr(request, "collect_comments", True)),
+                                collect_media=bool(getattr(request, "collect_media", True)),
+                                save_root=save_root,
+                                progress_callback=log_crawl_progress,
+                                content_callback=enqueue_stream_batch if stream_callback_enabled else None,
+                                stream_items=stream_callback_enabled,
+                                stop_checker=crawl_stop_requested,
+                                auth_state=account_auth_state,
+                                account_id=crawler_account_id,
+                                started_callback=mark_crawler_started,
+                                checkpoint_callback=persist_crawl_checkpoint,
+                                skip_content_ids_file=skip_content_ids_file,
+                                reusable_content_db=self.ingestion.db_path if request.platform == "dy" else None,
+                                current_task_id=self.job_id,
+                                resume_keyword=crawler_resume_keyword,
+                                resume_page=crawler_resume_page,
+                            )
+
+                        output = None
+                        for candidate_index, candidate in enumerate(candidates):
+                            if crawl_stop_requested():
+                                break
+                            account = candidate
+                            crawler_account_id = str((candidate or {}).get("id") or "")
+                            if crawler_account_id:
+                                try:
+                                    account_auth_state = auth_state_cipher.decrypt(
+                                        crawler_account_store.get_auth_state_ciphertext(crawler_account_id)
+                                    )
+                                except Exception as exc:
+                                    crawler_account_store.mark_expired(crawler_account_id, str(exc))
+                                    last_account_error = CrawlerAuthenticationError("登录态无法读取，请重新登录")
+                                    job_store.log(self.job_id, "采集账号登录态无法读取，继续尝试账号池中的下一账号")
+                                    continue
+                                record_execution_account()
+                                if not self.authoritative_m3:
                                     job_store.log(
                                         self.job_id,
-                                        f"词库展开 {len(getattr(request, 'lexicon_keywords', []) or [])} 个关键词：{request.lexicon_category}",
+                                        f"执行账号：{account.get('display_name') or crawler_account_id}",
                                     )
-                                job_store.log(self.job_id, f"启动 MediaCrawler 关键词爬取 {request.platform}: {request.keyword}")
-                                resume_page = int(
-                                    job_snapshot.get("crawl_checkpoint_page")
-                                    if job_snapshot.get("crawl_checkpoint_page") is not None
-                                    else request.start_page
-                                )
-                                resume_keyword = str(
-                                    job_snapshot.get("crawl_checkpoint_keyword") or ""
-                                ).strip()
-                                (
-                                    crawler_start_page,
-                                    crawler_resume_keyword,
-                                    crawler_resume_page,
-                                ) = search_resume_parameters(
-                                    request.platform,
-                                    int(request.start_page or 0),
-                                    resume_keyword,
-                                    resume_page,
-                                )
-                                output = self.crawler.run_search(
-                                    platform=request.platform,
-                                    keyword=request.keyword,
-                                    start_page=crawler_start_page,
-                                    max_notes=request.max_notes,
-                                    max_comments=request.max_comments,
-                                    max_concurrency=crawler_concurrency,
-                                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                                    get_sub_comment=request.get_sub_comment,
-                                    save_root=crawl_dir,
-                                    progress_callback=log_crawl_progress,
-                                    content_callback=enqueue_stream_batch if stream_callback_enabled else None,
-                                    stream_items=stream_callback_enabled,
-                                    stop_checker=crawl_stop_requested,
-                                    auth_state=account_auth_state,
-                                    account_id=crawler_account_id,
-                                    started_callback=mark_crawler_started,
-                                    checkpoint_callback=persist_crawl_checkpoint,
-                                    skip_content_ids_file=(
-                                        Path(str(getattr(request, "skip_content_ids_file", "")))
-                                        if getattr(request, "skip_content_ids_file", "")
-                                        else None
-                                    ),
-                                    reusable_content_db=(
-                                        self.ingestion.db_path if request.platform == "dy" else None
-                                    ),
-                                    current_task_id=self.job_id,
-                                    resume_keyword=crawler_resume_keyword,
-                                    resume_page=crawler_resume_page,
-                                )
-                        except (CrawlerAuthenticationError, CrawlerVerificationError) as exc:
-                            rotated_successfully = False
-                            if crawler_account_id:
-                                if isinstance(exc, CrawlerVerificationError) and not self.authoritative_m3:
-                                    rotation = AccountRotationManager(crawler_account_store, auth_state_cipher)
-                                    rotated = rotation.rotate(
-                                        request.platform,
-                                        crawler_account_id,
-                                        reason="verify",
-                                        cooldown_seconds=300,
+                            else:
+                                account_auth_state = None
+
+                            save_root = (
+                                crawl_dir
+                                if candidate_index == 0
+                                else crawl_dir / f"rotation-{crawler_account_id or candidate_index}"
+                            )
+                            try:
+                                candidate_output = run_with_current_account(save_root)
+                            except CrawlerVerificationError as exc:
+                                last_account_error = exc
+                                if crawler_account_id:
+                                    AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down(
+                                        crawler_account_id, reason="verify", cooldown_seconds=300
                                     )
-                                    if rotated and request.crawl_mode != "creator":
-                                        account, account_auth_state = rotated
-                                        crawler_account_id = str(account["id"])
-                                        job_store.update(
-                                            self.job_id,
-                                            crawler_account_id=crawler_account_id,
-                                            crawler_account_display_name=str(
-                                                account.get("display_name") or crawler_account_id
-                                            ),
-                                        )
-                                        job_store.log(self.job_id, f"账号触发验证，切换到：{account.get('display_name') or crawler_account_id}")
-                                        rotated_root = crawl_dir / f"rotation-{crawler_account_id}"
-                                        try:
-                                            output = self.crawler.run_search(
-                                                platform=request.platform,
-                                                keyword=request.keyword,
-                                                start_page=crawler_start_page,
-                                                max_notes=request.max_notes,
-                                                max_comments=request.max_comments,
-                                                max_concurrency=crawler_concurrency,
-                                                max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                                                get_sub_comment=request.get_sub_comment,
-                                                save_root=rotated_root,
-                                                progress_callback=log_crawl_progress,
-                                                content_callback=enqueue_stream_batch if stream_callback_enabled else None,
-                                                stream_items=stream_callback_enabled,
-                                                stop_checker=crawl_stop_requested,
-                                                auth_state=account_auth_state,
-                                                started_callback=mark_crawler_started,
-                                                checkpoint_callback=persist_crawl_checkpoint,
-                                                reusable_content_db=self.ingestion.db_path if request.platform == "dy" else None,
-                                                current_task_id=self.job_id,
-                                                resume_keyword=crawler_resume_keyword,
-                                                resume_page=crawler_resume_page,
-                                                account_id=crawler_account_id,
-                                            )
-                                        except CrawlerVerificationError:
-                                            rotation.cool_down(
-                                                crawler_account_id,
-                                                reason="verify",
-                                                cooldown_seconds=300,
-                                            )
-                                            job_store.log(
-                                                self.job_id,
-                                                "备用账号也触发平台验证，登录态未判定失效；账号进入冷却，本轮不再切换",
-                                            )
-                                            raise
-                                        except CrawlerAuthenticationError as rotated_exc:
-                                            crawler_account_store.mark_expired(crawler_account_id, str(rotated_exc))
-                                            job_store.log(
-                                                self.job_id,
-                                                "备用账号登录态已失效，本轮不再切换",
-                                            )
-                                            raise
-                                        rotated_successfully = True
-                                    elif not rotated:
-                                        job_store.log(
-                                            self.job_id,
-                                            "账号触发平台验证，登录态未判定失效；当前无可用备用账号，账号进入冷却",
-                                        )
-                                else:
-                                    crawler_account_store.mark_expired(crawler_account_id, str(exc))
-                            if self.authoritative_m3:
-                                raise RuntimeError(
-                                    "crawler_account_login_required: "
-                                    "抖音采集服务当前不可用，请稍后重试。"
-                                ) from exc
-                            if not rotated_successfully:
-                                raise
-                        if (
-                            request.crawl_mode == "search"
-                            and not output.contents
-                            and crawler_account_id
-                            and not self.authoritative_m3
-                        ):
-                            rotation = AccountRotationManager(crawler_account_store, auth_state_cipher)
-                            rotated = rotation.rotate(request.platform, crawler_account_id, reason="empty_search", cooldown_seconds=300)
-                            if rotated:
-                                account, account_auth_state = rotated
-                                crawler_account_id = str(account["id"])
-                                job_store.update(
+                                remaining = len(candidates) - candidate_index - 1
+                                job_store.log(
                                     self.job_id,
-                                    crawler_account_id=crawler_account_id,
-                                    crawler_account_display_name=str(
-                                        account.get("display_name") or crawler_account_id
-                                    ),
+                                    "账号触发平台验证，已进入冷却；"
+                                    + (f"继续尝试剩余 {remaining} 个可用账号" if remaining else "本轮账号池已耗尽"),
                                 )
-                                job_store.log(self.job_id, f"搜索结果为空，切换账号复核：{account.get('display_name') or crawler_account_id}")
-                                output = self.crawler.run_search(
+                                continue
+                            except CrawlerAuthenticationError as exc:
+                                last_account_error = exc
+                                if crawler_account_id:
+                                    crawler_account_store.mark_expired(crawler_account_id, str(exc))
+                                remaining = len(candidates) - candidate_index - 1
+                                job_store.log(
+                                    self.job_id,
+                                    "账号登录态已失效；"
+                                    + (f"继续尝试剩余 {remaining} 个可用账号" if remaining else "本轮账号池已耗尽"),
+                                )
+                                continue
+
+                            if (
+                                request.crawl_mode == "search"
+                                and not candidate_output.contents
+                                and crawler_account_id
+                                and not crawl_stop_requested()
+                                and not empty_recheck_used
+                                and candidate_index + 1 < len(candidates)
+                            ):
+                                empty_recheck_used = True
+                                AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down(
+                                    crawler_account_id, reason="empty_search", cooldown_seconds=300
+                                )
+                                job_store.log(self.job_id, "搜索结果为空，使用账号池中的下一账号复核")
+                                continue
+                            output = candidate_output
+                            break
+
+                        if output is None:
+                            if crawl_stop_requested():
+                                # A user stop wins a race with an account error. The
+                                # same Job/checkpoint remains resumable and must not
+                                # be rewritten as FAILED merely because no adapter
+                                # result was returned before the safe stop boundary.
+                                output = CrawlOutput(
                                     platform=request.platform,
-                                    keyword=request.keyword,
-                                    start_page=crawler_start_page,
-                                    max_notes=request.max_notes,
-                                    max_comments=request.max_comments,
-                                    max_concurrency=crawler_concurrency,
-                                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                                    get_sub_comment=request.get_sub_comment,
-                                    save_root=crawl_dir / f"rotation-{crawler_account_id}",
-                                    progress_callback=log_crawl_progress,
-                                    content_callback=enqueue_stream_batch if stream_callback_enabled else None,
-                                    stream_items=stream_callback_enabled,
-                                    stop_checker=crawl_stop_requested,
-                                    auth_state=account_auth_state,
-                                    started_callback=mark_crawler_started,
-                                    checkpoint_callback=persist_crawl_checkpoint,
-                                    reusable_content_db=self.ingestion.db_path if request.platform == "dy" else None,
-                                    current_task_id=self.job_id,
-                                    resume_keyword=crawler_resume_keyword,
-                                    resume_page=crawler_resume_page,
-                                    account_id=crawler_account_id,
+                                    contents=[],
+                                    comments=[],
+                                    output_dir=crawl_dir,
                                 )
+                            elif last_account_error is not None:
+                                raise last_account_error
+                            else:
+                                raise RuntimeError("crawler_account_login_required: 当前没有可用采集账号。")
+                    crawl_returned = True
                 finally:
                     if batch_flusher:
                         stop_flusher.set()
@@ -748,12 +821,25 @@ class AuditPipeline:
                     if use_batch_ingestion:
                         for batch_path in batch_writer.flush_due(force=True):
                             ingest_completed_batch(batch_path)
+                    if crawl_returned and crawl_epoch_is_current():
+                        crawl_was_stopped = crawl_stop_requested()
+                        job_store.update(
+                            self.job_id,
+                            status="crawl_paused" if crawl_was_stopped else "analysis_running",
+                            crawl_status="stopped" if crawl_was_stopped else "completed",
+                        )
+                        job_store.log(
+                            self.job_id,
+                            "采集已停止，后台继续处理已入库内容"
+                            if crawl_was_stopped
+                            else "采集已完成，后台继续处理已入库内容",
+                            stage="control",
+                        )
                     if stream_analyzer:
+                        crawl_finished.set()
                         stream_queue.put(None)
                         stream_analyzer.join()
                 if analysis_errors:
-                    if self.authoritative_m3:
-                        raise AuditProviderCallError(str(analysis_errors[0])) from analysis_errors[0]
                     job_store.update_control(self.job_id, analysis_stop_requested=True)
                     job_store.log(self.job_id, "审核线程已停止，采集已独立完成；待审核内容保留")
                 if output.command:
@@ -898,37 +984,38 @@ class AuditPipeline:
                     job_store.log(self.job_id, f"分析第 {idx}/{total} 条：{subject.note_id}")
                     try:
                         if subject_key:
-                            self.ingestion.mark_content_status(
+                            claim = self.ingestion.claim_content_for_analysis(
+                                self.job_id,
                                 output.platform,
                                 subject_key,
-                                "analyzing",
-                                task_id=self.job_id,
+                                analyze_limit=analyze_limit,
                             )
-                        self._begin_subject_audit()
-                        result = self._analyze_subject(subject)
-                        self._assert_authoritative_provider_healthy()
-                        result_path = self._write_result_json(subject.note_id, result)
-                        persisted = self._persist_audit_result(
-                            platform=output.platform,
-                            content_key=subject_key or subject.note_id,
-                            result=result,
-                            result_path=result_path,
-                            content_id=subject_ref.get("content_id"),
-                        )
-                        if subject_key:
-                            self.ingestion.mark_content_status(
-                                output.platform,
-                                subject_key,
-                                "completed",
-                                str(result_path),
-                                task_id=self.job_id,
-                                audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
+                            if claim is False:
+                                analyzed_ids.add(subject.note_id)
+                                continue
+                        with _analysis_lock_for(self.job_id):
+                            self._begin_subject_audit()
+                            result = self._analyze_subject(subject)
+                            self._assert_authoritative_provider_healthy()
+                            result_path = self._write_result_json(subject.note_id, result)
+                            persisted = self._persist_audit_result(
+                                platform=output.platform,
+                                content_key=subject_key or subject.note_id,
+                                result=result,
+                                result_path=result_path,
+                                content_id=subject_ref.get("content_id"),
                             )
+                            if subject_key:
+                                self.ingestion.mark_content_status(
+                                    output.platform,
+                                    subject_key,
+                                    "completed",
+                                    str(result_path),
+                                    task_id=self.job_id,
+                                    audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
+                                )
                     except Exception as exc:
-                        provider_failure = str(getattr(self.qwen, "provider_failure", "") or "")
                         self._record_subject_failure(output.platform, subject_key, subject, exc)
-                        if self.authoritative_m3 and (provider_failure or isinstance(exc, AuditProviderCallError)):
-                            raise AuditProviderCallError(provider_failure or str(exc)) from exc
                         analyzed_ids.add(subject.note_id)
                         continue
                     self._consecutive_provider_failures = 0
@@ -940,44 +1027,133 @@ class AuditPipeline:
                     break
 
             final_control = job_store.control(self.job_id)
-            if final_control.get("stop_all_requested"):
-                job_store.update(self.job_id, status="stopped", items=results)
+            stats = self.ingestion.stats_for_task(self.job_id)
+            completed_analysis_status = (
+                "partial"
+                if stats.get("failed_analysis_count", 0) > 0
+                else "pending"
+                if stats.get("queued_analysis_count", 0) > 0 or stats.get("analyzing_count", 0) > 0
+                else "completed"
+                if stats.get("completed_analysis_count", 0) > 0
+                else "idle"
+            )
+            if getattr(request, "run_crawler", False) and not crawl_epoch_is_current():
+                job_store.log(
+                    self.job_id,
+                    "旧采集轮次已结束，忽略其终态回写",
+                    stage="control",
+                )
+            elif final_control.get("stop_all_requested"):
+                job_store.update(
+                    self.job_id,
+                    status="stopped",
+                    crawl_status="stopped",
+                    analysis_status="stopped",
+                    items=results,
+                )
                 job_store.log(self.job_id, "任务已停止")
             elif final_control.get("analysis_stop_requested"):
                 reset_count = self.ingestion.reset_analyzing_for_task(self.job_id)
-                job_store.update(self.job_id, status="analysis_stopped", items=results)
-                job_store.update_control(self.job_id, analysis_stop_requested=False)
+                job_store.update(
+                    self.job_id,
+                    status="analysis_stopped",
+                    analysis_status="stopped",
+                    items=results,
+                )
                 suffix = f"，{reset_count} 条处理中内容已回到待分析" if reset_count else ""
                 job_store.log(self.job_id, f"分析已停止，可点击继续分析{suffix}")
             elif final_control.get("analysis_paused"):
-                job_store.update(self.job_id, status="analysis_paused", items=results)
+                reset_count = self.ingestion.reset_analyzing_for_task(self.job_id)
+                job_store.update(
+                    self.job_id,
+                    status="analysis_paused",
+                    analysis_status="paused",
+                    items=results,
+                )
                 job_store.log(self.job_id, "任务采集结束，分析保持暂停")
             elif final_control.get("crawl_stop_requested"):
-                job_store.update(self.job_id, status="crawl_paused", items=results)
+                job_store.update(
+                    self.job_id,
+                    status="crawl_paused",
+                    crawl_status="stopped",
+                    analysis_status=completed_analysis_status,
+                    items=results,
+                )
                 job_store.log(self.job_id, "任务采集已暂停，已处理当前可分析内容")
             else:
-                self._assert_authoritative_provider_healthy()
-                job_store.update(self.job_id, status="completed", items=results)
+                job_store.update(
+                    self.job_id,
+                    status="completed",
+                    crawl_status="completed" if request.run_crawler else "skipped",
+                    analysis_status=completed_analysis_status,
+                    items=results,
+                )
                 job_store.log(self.job_id, "任务完成")
         except AuditProviderUnavailableError as exc:
+            if getattr(request, "run_crawler", False) and not crawl_epoch_is_current():
+                job_store.log(self.job_id, "旧采集轮次审核服务不可用，未覆盖当前轮次状态")
+                return
             job_store.update(
                 self.job_id,
                 status="failed",
+                analysis_status="failed",
                 error="audit_provider_unavailable: 审核服务当前不可用",
+            )
+            job_store.update_control(
+                self.job_id,
+                failure=failure_metadata(
+                    "audit_provider_unavailable", "审核服务当前不可用"
+                ),
             )
             job_store.log(
                 self.job_id,
                 f"任务失败：audit_provider_unavailable: {exc}",
             )
         except AuditProviderCallError as exc:
+            if getattr(request, "run_crawler", False) and not crawl_epoch_is_current():
+                job_store.log(self.job_id, "旧采集轮次审核调用失败，未覆盖当前轮次状态")
+                return
             job_store.update(
                 self.job_id,
                 status="failed",
+                analysis_status="failed",
                 error="audit_provider_failed: 审核服务调用失败",
+            )
+            job_store.update_control(
+                self.job_id,
+                failure=failure_metadata("audit_provider_failed", "审核服务调用失败"),
             )
             job_store.log(self.job_id, f"任务失败：audit_provider_failed: {exc}")
         except Exception as exc:
-            job_store.update(self.job_id, status="failed", error=str(exc))
+            if getattr(request, "run_crawler", False) and not crawl_epoch_is_current():
+                job_store.log(self.job_id, f"旧采集轮次异常结束，未覆盖当前轮次状态：{exc}")
+                return
+            if isinstance(exc, CrawlerVerificationError):
+                if crawler_account_id:
+                    AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down(
+                        crawler_account_id, reason="verify", cooldown_seconds=300)
+                exc = RuntimeError("crawler_account_verification_required: 采集账号需要平台验证，请完成验证后再继续；登录态未判定失效。")
+            elif isinstance(exc, CrawlerAuthenticationError):
+                if crawler_account_id:
+                    crawler_account_store.mark_expired(crawler_account_id, "登录态已失效")
+                exc = RuntimeError("crawler_account_login_required: 采集账号登录态已失效，请重新登录。")
+            elif isinstance(exc, CrawlerRateLimitError):
+                exc = RuntimeError("crawler_rate_limited: 平台请求限流，请等待冷却结束后再继续。")
+            error_text = str(exc)
+            error_code = error_text.split(":", 1)[0].strip()
+            current = job_store.get(self.job_id) or {}
+            crawl_status = str(current.get("crawl_status") or "")
+            job_store.update(
+                self.job_id,
+                status="failed",
+                crawl_status=(crawl_status if crawl_status in {"completed", "stopped", "skipped"} else "failed"),
+                analysis_status="failed",
+                error=str(exc),
+            )
+            job_store.update_control(
+                self.job_id,
+                failure=failure_metadata(error_code, error_text),
+            )
             job_store.log(self.job_id, f"任务失败：{exc}")
 
     def _begin_subject_audit(self) -> None:
@@ -1038,6 +1214,10 @@ class AuditPipeline:
             raise AuditProviderCallError(provider_failure)
 
     def resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5) -> None:
+        with _analysis_lock_for(self.job_id):
+            self._resume_pending_analysis(analyze_limit, analysis_batch_size)
+
+    def _resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5) -> None:
         try:
             job = job_store.get(self.job_id)
             if not job:
@@ -1054,7 +1234,7 @@ class AuditPipeline:
             existing_items = job.get("items") or []
             results = list(existing_items)
             analyzed_ids = {str(item.get("note_id") or "") for item in results if item.get("note_id")}
-            job_store.update(self.job_id, status="analysis_running")
+            job_store.update(self.job_id, status="analysis_running", analysis_status="running")
             self.audit_config_revision_id = str(job.get("current_audit_config_revision_id") or "")
             self.rule_snapshot = self._rule_snapshot_from_source(job)
             self._set_prompt_context(
@@ -1075,12 +1255,12 @@ class AuditPipeline:
             batch_size = max(1, analysis_batch_size)
             for batch_start in range(0, len(refs), batch_size):
                 current_control = job_store.control(self.job_id)
-                if current_control.get("stop_all_requested") or current_control.get("analysis_stop_requested"):
+                if current_control.get("stop_all_requested") or current_control.get("analysis_stop_requested") or current_control.get("analysis_paused"):
                     break
                 batch = refs[batch_start:batch_start + batch_size]
                 for ref in batch:
                     current_control = job_store.control(self.job_id)
-                    if current_control.get("stop_all_requested") or current_control.get("analysis_stop_requested"):
+                    if current_control.get("stop_all_requested") or current_control.get("analysis_stop_requested") or current_control.get("analysis_paused"):
                         break
                     content_key = str(ref.get("content_key") or "")
                     subjects = self._build_subjects(platform, [ref["item"]], ref.get("comments", []), source_root)
@@ -1095,12 +1275,14 @@ class AuditPipeline:
                         analyzed_ids.add(subject.note_id)
                         job_store.log(self.job_id, f"继续分析：{subject.note_id}")
                         try:
-                            self.ingestion.mark_content_status(
+                            claim = self.ingestion.claim_content_for_analysis(
+                                self.job_id,
                                 platform,
                                 subject_key,
-                                "analyzing",
-                                task_id=self.job_id,
+                                analyze_limit=max(0, analyze_limit),
                             )
+                            if claim is False:
+                                continue
                             self._begin_subject_audit()
                             result = self._analyze_subject(subject)
                             self._assert_authoritative_provider_healthy()
@@ -1129,19 +1311,44 @@ class AuditPipeline:
                             continue
             final_control = job_store.control(self.job_id)
             if final_control.get("stop_all_requested"):
-                job_store.update(self.job_id, status="stopped", items=results)
+                job_store.update(self.job_id, status="stopped", analysis_status="stopped", items=results)
                 job_store.log(self.job_id, "继续分析已停止")
+            elif final_control.get("analysis_paused"):
+                job_store.update(self.job_id, status="analysis_paused", analysis_status="paused", items=results)
             elif final_control.get("analysis_stop_requested"):
                 reset_count = self.ingestion.reset_analyzing_for_task(self.job_id)
-                job_store.update(self.job_id, status="analysis_stopped", items=results)
-                job_store.update_control(self.job_id, analysis_stop_requested=False)
+                job_store.update(self.job_id, status="analysis_stopped", analysis_status="stopped", items=results)
                 suffix = f"，{reset_count} 条处理中内容已回到待分析" if reset_count else ""
                 job_store.log(self.job_id, f"继续分析已停止，可再次继续分析{suffix}")
             else:
-                job_store.update(self.job_id, status="completed", items=results)
+                stats = self.ingestion.stats_for_task(self.job_id)
+                analysis_status = (
+                    "partial"
+                    if stats.get("failed_analysis_count", 0) > 0
+                    else "pending"
+                    if stats.get("queued_analysis_count", 0) > 0 or stats.get("analyzing_count", 0) > 0
+                    else "completed"
+                )
+                crawl_status = str((job_store.get(self.job_id) or job).get("crawl_status") or "pending")
+                overall_status = (
+                    "completed"
+                    if crawl_status in {"completed", "skipped"}
+                    else "crawl_paused"
+                    if crawl_status in {"paused", "stopped"}
+                    else "interrupted"
+                    if crawl_status == "interrupted"
+                    else "running"
+                )
+                job_store.update(
+                    self.job_id,
+                    status=overall_status,
+                    crawl_status=crawl_status,
+                    analysis_status=analysis_status,
+                    items=results,
+                )
                 job_store.log(self.job_id, "继续分析完成")
         except Exception as exc:
-            job_store.update(self.job_id, status="failed", error=str(exc))
+            job_store.update(self.job_id, status="failed", analysis_status="failed", error=str(exc))
             job_store.log(self.job_id, f"继续分析失败：{exc}")
 
     def run_local_video(self, video_path: Path, title: str = "", desc: str = "") -> None:
@@ -1174,7 +1381,13 @@ class AuditPipeline:
                 result=result,
                 result_path=result_path,
             )
-            job_store.update(self.job_id, status="completed", items=[persisted or result])
+            job_store.update(
+                self.job_id,
+                status="completed",
+                crawl_status="skipped",
+                analysis_status="completed",
+                items=[persisted or result],
+            )
             job_store.log(self.job_id, "本地视频审核任务完成")
         except Exception as exc:
             job_store.update(self.job_id, status="failed", error=str(exc))

@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import type { InvestigationSession } from "../../types/investigation";
 
-export type SubViewType = "users" | "crawler-accounts" | "audit-rules" | "slang-library" | null;
+export type SubViewType = "users" | "crawler-accounts" | "audit-rules" | "slang-library" | "task-settings" | null;
 
 interface InvestigationSidebarProps {
   sessions: InvestigationSession[];
@@ -184,6 +184,8 @@ export function InvestigationSidebar({
         <div className="inv-sidebar-section">
           <div className="inv-section-label">业务入口</div>
           <div className="inv-business-nav">
+            <button type="button" className={`inv-nav-item ${activeSubView === "task-settings" ? "is-active" : ""}`}
+              onClick={() => onSelectSubView?.("task-settings")}><Radio size={15} /><span>采集与分析设置</span></button>
             <button
               type="button"
               className={`inv-nav-item ${activeSubView === "users" ? "is-active" : ""}`}

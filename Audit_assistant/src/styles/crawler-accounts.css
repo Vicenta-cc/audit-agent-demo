@@ -325,6 +325,11 @@
   background: #fff7ed;
 }
 
+.crawler-account-status.is-cooling {
+  color: #9a6700;
+  background: #fff8c5;
+}
+
 .crawler-account-status.is-expired {
   color: #b91c1c;
   background: #fef2f2;

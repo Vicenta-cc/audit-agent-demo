@@ -130,6 +130,8 @@ class CrawlerAccountLoginManager:
             env.update(browser_env)
             env.update(scheduler_env())
             command.extend(["--account-id", session.account_id])
+            if settings.crawler_login_headed:
+                command.append("--headed")
             if account.get("platform_account_id"):
                 command.extend(["--expected-platform-account-id", account["platform_account_id"]])
             # The helper and crawler load the same adapter implementation.

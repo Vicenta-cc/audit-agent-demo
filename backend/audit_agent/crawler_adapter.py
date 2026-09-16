@@ -105,8 +105,11 @@ class MediaCrawlerAdapter:
         resume_keyword: str = "",
         resume_page: int | None = None,
         account_id: str = "",
+        collect_comments: bool = True,
+        collect_media: bool = True,
     ) -> CrawlOutput:
         self._validate_platform(platform)
+        effective_max_comments = max_comments if collect_comments else 0
         command = [
             *self._base_command(platform),
             "--platform",
@@ -122,7 +125,7 @@ class MediaCrawlerAdapter:
             "--crawler_max_notes_count",
             str(max_notes),
             "--max_comments_count_singlenotes",
-            str(max_comments),
+            str(effective_max_comments),
             "--max_concurrency_num",
             str(max_concurrency),
             "--crawler_max_items_per_minute",
@@ -130,11 +133,11 @@ class MediaCrawlerAdapter:
             "--crawler_sleep_sec",
             str(settings.crawler_sleep_seconds),
             "--get_comment",
-            "true",
+            "true" if collect_comments else "false",
             "--get_sub_comment",
-            "true" if get_sub_comment else "false",
+            "true" if collect_comments and get_sub_comment else "false",
             "--get_media",
-            "true",
+            "true" if collect_media else "false",
             "--stream_items",
             "true" if stream_items else "false",
             "--save_data_option",
@@ -182,8 +185,11 @@ class MediaCrawlerAdapter:
         started_callback: StartedCallback | None = None,
         checkpoint_callback: CheckpointCallback | None = None,
         account_id: str = "",
+        collect_comments: bool = True,
+        collect_media: bool = True,
     ) -> CrawlOutput:
         self._validate_platform(platform)
+        effective_max_comments = max_comments if collect_comments else 0
         command = [
             *self._base_command(platform),
             "--platform",
@@ -197,7 +203,7 @@ class MediaCrawlerAdapter:
             "--crawler_max_notes_count",
             str(max_notes),
             "--max_comments_count_singlenotes",
-            str(max_comments),
+            str(effective_max_comments),
             "--max_concurrency_num",
             str(max_concurrency),
             "--crawler_max_items_per_minute",
@@ -205,11 +211,11 @@ class MediaCrawlerAdapter:
             "--crawler_sleep_sec",
             str(settings.crawler_sleep_seconds),
             "--get_comment",
-            "true",
+            "true" if collect_comments else "false",
             "--get_sub_comment",
-            "true" if get_sub_comment else "false",
+            "true" if collect_comments and get_sub_comment else "false",
             "--get_media",
-            "true",
+            "true" if collect_media else "false",
             "--stream_items",
             "true" if stream_items else "false",
             "--save_data_option",

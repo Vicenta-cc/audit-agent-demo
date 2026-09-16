@@ -1034,6 +1034,7 @@ class InvestigationCreationStore:
                             "objective": str(draft["objective"]),
                             **resolution.model_dump(mode="json"),
                             "max_notes": resolution.execution.max_notes,
+                            "requested_parameters": resolution.requested_parameters or self._draft(draft).configuration.task_parameters,
                             "confirmed_by": principal,
                             "confirmed_at": now,
                         }
@@ -1390,6 +1391,70 @@ class InvestigationCreationStore:
         with self._connect() as connection:
             row = connection.execute("SELECT * FROM investigation_runs WHERE job_id=?", (job_id,)).fetchone()
         return self._run(row) if row is not None else None
+
+    def requeue_interrupted_run_for_job(self, job_id: str) -> bool:
+        """Re-open a paused/stopped Run after its durable Job finishes resuming.
+
+        The Job remains the source of truth for crawl and analysis checkpoints.
+        This transition only re-enables the Investigation worker so it can
+        classify the completed Job and continue report generation.
+        """
+        now = self._now_text()
+        with self._connect() as connection:
+            updated = connection.execute(
+                """
+                UPDATE investigation_runs
+                SET status = 'RUNNING', recovery_required = 1,
+                    claimed_by = '', claim_token = '', claimed_at = '', heartbeat_at = '',
+                    error_code = '', error_message = '', completed_at = '', updated_at = ?
+                WHERE job_id = ? AND status = 'INTERRUPTED'
+                """,
+                (now, job_id),
+            ).rowcount
+        return updated == 1
+
+    def begin_recoverable_crawl_for_job(
+        self,
+        job_id: str,
+        *,
+        failure_code: str,
+        allowed_error_codes: frozenset[str],
+    ) -> bool:
+        """Move only an explicitly recoverable failed Run into recovery."""
+        normalized_failure_code = str(failure_code or "").strip()
+        if not allowed_error_codes or normalized_failure_code not in allowed_error_codes:
+            return False
+        now = self._now_text()
+        with self._connect() as connection:
+            updated = connection.execute(
+                """
+                UPDATE investigation_runs
+                SET status = 'INTERRUPTED', recovery_required = 1,
+                    claimed_by = '', claim_token = '', claimed_at = '', heartbeat_at = '',
+                    error_code = '', error_message = '', completed_at = '', updated_at = ?
+                WHERE job_id = ? AND status = 'FAILED'
+                """,
+                (now, job_id),
+            ).rowcount
+        return updated == 1
+
+    def fail_recovery_for_job(
+        self, job_id: str, *, error_code: str, error_message: str
+    ) -> bool:
+        """Return an in-progress recovery to FAILED with its latest cause."""
+        now = self._now_text()
+        with self._connect() as connection:
+            updated = connection.execute(
+                """
+                UPDATE investigation_runs
+                SET status = 'FAILED', recovery_required = 0,
+                    claimed_by = '', claim_token = '', claimed_at = '', heartbeat_at = '',
+                    error_code = ?, error_message = ?, completed_at = ?, updated_at = ?
+                WHERE job_id = ? AND status = 'INTERRUPTED' AND recovery_required = 1
+                """,
+                (str(error_code)[:200], str(error_message)[:4_000], now, now, job_id),
+            ).rowcount
+        return updated == 1
 
     def get_run_for_worker(self, run_id: str) -> InvestigationRun:
         with self._connect() as connection:

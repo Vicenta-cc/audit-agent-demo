@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pause, Play, RotateCw, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pause, Play, RotateCw, Square, Trash2 } from "lucide-react";
 import { DropdownMenu } from "../../components/common/DropdownMenu";
 import { Button } from "../../components/common/Button";
 import type { MonitorTask } from "../../types/jobs";
@@ -21,8 +21,6 @@ export function TaskActionsMenu({
   onDelete
 }: TaskActionsMenuProps) {
   const actions = task.raw.available_actions || {};
-  const isPaused = task.status === "已暂停" || task.status === "已停止" || task.status === "已中断";
-
   return (
     <DropdownMenu
       open={open}
@@ -51,15 +49,15 @@ export function TaskActionsMenu({
       </button>
       <button
         type="button"
-        disabled={!actions.backfill_analysis || isPaused}
-        onClick={() => void onControl(task, "backfill_analysis", "补抓")}
+        disabled={!actions.resume_crawl}
+        onClick={() => void onControl(task, "resume_crawl", "继续采集")}
       >
         <RotateCw size={15} />
-        补抓
+        继续采集
       </button>
       <button
         type="button"
-        disabled={!actions.stop_analysis}
+        disabled={!actions.pause_analysis}
         onClick={() => void onControl(task, "pause_analysis", "暂停分析")}
       >
         <Pause size={15} />
@@ -67,8 +65,16 @@ export function TaskActionsMenu({
       </button>
       <button
         type="button"
-        disabled={!actions.backfill_analysis}
-        onClick={() => void onControl(task, "backfill_analysis", "继续分析")}
+        disabled={!actions.stop_analysis}
+        onClick={() => void onControl(task, "stop_analysis", "停止分析")}
+      >
+        <Square size={14} />
+        停止分析
+      </button>
+      <button
+        type="button"
+        disabled={!actions.resume_analysis}
+        onClick={() => void onControl(task, "resume_analysis", "继续分析")}
       >
         <Play size={15} />
         继续分析

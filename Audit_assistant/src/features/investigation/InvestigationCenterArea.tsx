@@ -38,6 +38,7 @@ interface InvestigationCenterAreaProps {
   onToggleSidebar: () => void;
   onUpdateDraftKeywords: (keywords: string[]) => void;
   onUpdateCreationSearchTerms: (keywords: string[]) => Promise<void>;
+  onRunControlAccepted: () => void;
   onUpdateDraftPlatforms: (platforms: PlatformCode[]) => void;
   onGenerateTaskConfig: (proposalMessageId: string) => void;
   onStartAgentExecution: () => void;
@@ -121,6 +122,7 @@ export function InvestigationCenterArea({
   onToggleSidebar,
   onUpdateDraftKeywords,
   onUpdateCreationSearchTerms,
+  onRunControlAccepted,
   onUpdateDraftPlatforms,
   onGenerateTaskConfig,
   onStartAgentExecution,
@@ -457,6 +459,7 @@ export function InvestigationCenterArea({
                     ruleSetName={session.draft.matchedRuleSet}
                     run={session.creationBinding?.run}
                     authoritative={Boolean(session.creationBinding)}
+                    onControlAccepted={onRunControlAccepted}
                   />
                 );
               }

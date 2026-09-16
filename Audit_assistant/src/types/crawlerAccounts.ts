@@ -18,6 +18,8 @@ export interface CrawlerAccount {
   lastValidatedAt: string;
   lastUsedAt: string;
   lastError: string;
+  cooldownUntil: string;
+  failureKind: string;
   hasAuthState: boolean;
   authStateUpdatedAt: string;
   createdAt: string;

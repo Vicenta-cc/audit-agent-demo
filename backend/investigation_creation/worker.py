@@ -15,6 +15,7 @@ from backend.audit_agent.ingestion import (
     SELECTED_CONTENT_PAYLOAD_UNAVAILABLE,
     SelectedContentPayloadUnavailableError,
 )
+from backend.audit_agent.job_state import failure_from_job
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 
 from .adapters import (
@@ -220,19 +221,28 @@ class InvestigationWorker:
         status = str(state.get("status") or "")
         if status == "failed":
             error_message = str(state.get("error") or "AuditPipeline Job failed.")
-            error_code = (
-                SELECTED_CONTENT_PAYLOAD_UNAVAILABLE
-                if error_message.startswith(f"{SELECTED_CONTENT_PAYLOAD_UNAVAILABLE}:")
-                else "crawler_account_login_required"
-                if error_message.startswith("crawler_account_login_required:")
-                else "audit_provider_unavailable"
-                if error_message.startswith("audit_provider_unavailable:")
-                else "audit_provider_failed"
-                if error_message.startswith("audit_provider_failed:")
-                else "no_valid_content_selected"
-                if error_message.startswith("no_valid_content_selected:")
-                else "audit_job_failed"
-            )
+            structured_failure = failure_from_job(state)
+            error_code = str(structured_failure.get("code") or "")
+            if not error_code:
+                # Compatibility for Jobs created before structured failure
+                # metadata was persisted.
+                error_code = (
+                    SELECTED_CONTENT_PAYLOAD_UNAVAILABLE
+                    if error_message.startswith(f"{SELECTED_CONTENT_PAYLOAD_UNAVAILABLE}:")
+                    else "crawler_account_login_required"
+                    if error_message.startswith("crawler_account_login_required:")
+                    else "crawler_account_verification_required"
+                    if error_message.startswith("crawler_account_verification_required:")
+                    else "crawler_rate_limited"
+                    if error_message.startswith("crawler_rate_limited:")
+                    else "audit_provider_unavailable"
+                    if error_message.startswith("audit_provider_unavailable:")
+                    else "audit_provider_failed"
+                    if error_message.startswith("audit_provider_failed:")
+                    else "no_valid_content_selected"
+                    if error_message.startswith("no_valid_content_selected:")
+                    else "audit_job_failed"
+                )
             return self.store.mark_failed(
                 run.id,
                 run.claim_token,
@@ -260,6 +270,10 @@ class InvestigationWorker:
                 error_message=f"Job has non-final status: {status or 'unknown'}",
             )
         failed_posts = int((state.get("task_stats") or {}).get("failed_analysis_count") or 0)
+        snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
+        if snapshot.execution.auto_analyze is not None and int((state.get("task_stats") or {}).get("queued_analysis_count") or 0) > 0:
+            return self.store.mark_interrupted(run.id, run.claim_token,
+                error_code="analysis_pending", error_message="采集已完成，仍有待分析内容，可继续分析。")
         gate_failure = self._completion_gate_failure(run, state=state, allow_failed_posts=failed_posts > 0)
         if gate_failure is not None:
             error_code, error_message = gate_failure
@@ -461,7 +475,8 @@ class InvestigationWorker:
                     None,
                 )
                 if callable(validator):
-                    validator(configuration)
+                    validator(configuration, schema_version=snapshot.schema_version,
+                              job_id=self.execution_adapter.job_id_for_run(run.id))
             return configuration
         except CrawlerAccountAuthenticationRequiredError as exc:
             self._invalidate_job_for_account(run, exc)
@@ -503,7 +518,7 @@ class InvestigationWorker:
                 "investigation-run-config-v3",
                 "investigation-run-config-v4",
             }:
-                validator(configuration, schema_version=schema_version)
+                validator(configuration, schema_version=schema_version, job_id=job_id)
         except CrawlerAccountAuthenticationRequiredError:
             invalidator = getattr(
                 self.execution_adapter,
@@ -540,7 +555,7 @@ class InvestigationWorker:
         failed = int(stats.get("failed_analysis_count") or 0) if allow_failed_posts else 0
         if ingested < 1:
             return "no_valid_content_selected", "No valid content was selected for analysis."
-        if analyze_limit < 1 or ingested > analyze_limit:
+        if snapshot.execution.auto_analyze is None and (analyze_limit < 1 or ingested > analyze_limit):
             return (
                 "ingested_count_exceeds_analyze_limit",
                 f"Job selected {ingested} contents with analyze_limit={analyze_limit}.",

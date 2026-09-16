@@ -49,6 +49,7 @@ from backend.investigation_creation.contracts import (
     InvestigationDraftConfiguration,
     LegacyInvestigationDraftConfigurationV3,
     QueryInvestigationOptions,
+    RunStatus,
     UpdateDraftCommand,
     confirmed_configuration_hash,
 )
@@ -333,6 +334,54 @@ def test_unmarked_pipeline_preserves_legacy_multiple_item_behavior(
     assert "_confirmed_analyze_limit" not in configuration
 
 
+@pytest.mark.parametrize("value", [0, 6, -1, 1.5, "2", True])
+def test_main_workspace_rejects_invalid_per_keyword_limit(m3_stack, value):
+    configuration = _douyin_configuration(m3_stack)
+    configuration["task_parameters"] = {"max_notes": value}
+    with pytest.raises(ValidationError):
+        InvestigationDraftConfiguration.model_validate(configuration)
+
+
+@pytest.mark.parametrize("limit", [1, 5])
+def test_main_workspace_parameters_are_previewed_frozen_and_applied(m3_stack, monkeypatch, limit):
+    monkeypatch.setattr(audit_pipeline_module.settings, "m3_posts_per_keyword", 5)
+    monkeypatch.setattr(audit_pipeline_module.settings, "m3_analyze_limit", 10)
+    monkeypatch.setattr(audit_pipeline_module.settings, "crawler_max_concurrency", 1)
+    configuration = _douyin_configuration(m3_stack)
+    configuration["investigation"]["recall_plan"]["terms"] = ["上分", "盘口"]
+    configuration["task_parameters"] = {
+        "max_notes": limit, "max_comments": 2, "collect_comments": False,
+        "get_sub_comment": True, "collect_media": False, "max_concurrency": 3,
+        "auto_analyze": False, "analyze_limit": 5, "analysis_batch_size": 2,
+        "max_items_per_minute": 2, "start_page": 2,
+        "crawler_account_id": _account_for_platform(m3_stack, "dy")["id"],
+    }
+    draft = _create_draft(m3_stack, configuration)
+    preview = m3_stack["service"].get_draft_view(draft.id, principal=_principal(m3_stack)).confirmation_preview
+    assert preview.estimated_max_contents == limit * 2
+    assert preview.effective_parameters.max_concurrency == 1
+    assert preview.effective_parameters.max_comments == 0
+    assert preview.effective_parameters.get_sub_comment is False
+    assert preview.max_notes == 0
+    run = m3_stack["service"].confirm_and_queue(ConfirmAndQueueCommand(
+        draft_id=draft.id, expected_revision=draft.current_revision, confirmed=True,
+        idempotency_key=f"parameters-{limit}"), principal=_principal(m3_stack))
+    resource_db = m3_stack["resources"].resource_db_path
+    adapter = AuditPipelineExecutionAdapter(job_store=JobStore(resource_db),
+        ingestion_store=IngestionStore(resource_db), revision_store=TaskAuditConfigRevisionStore(resource_db),
+        crawler_account_store=m3_stack["crawler_accounts"], test_provider_validator=lambda _: None)
+    job_id = adapter.ensure_job(run)
+    job = adapter.job_store.get(job_id)
+    assert job["requested_config"]["max_concurrency"] == 3
+    assert job["effective_config"]["max_concurrency"] == 1
+    assert job["auto_analyze"] is False
+    assert job["collect_media"] is False
+    assert job["max_notes"] == limit
+    assert job["start_page"] == 2
+    assert job["analysis_batch_size"] == 2
+    assert adapter.ensure_job(run) == job_id
+
+
 def test_existing_draft_payload_without_account_remains_readable(m3_stack: dict):
     configuration = _temporary_configuration(m3_stack, ["美食"])
     assert "crawler_account_id" not in configuration
@@ -520,6 +569,112 @@ def test_v3_snapshot_accepts_analyze_limit_greater_than_one(m3_stack: dict):
     ] == 2
 
 
+def test_interrupted_run_can_be_requeued_after_same_job_resumes(m3_stack: dict):
+    draft = _create_draft(m3_stack, _douyin_configuration(m3_stack))
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=draft.current_revision,
+            confirmed=True,
+            idempotency_key="resume-same-job:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    claimed = m3_stack["store"].claim_next("first-worker")
+    assert claimed is not None
+    bound = m3_stack["store"].bind_job(
+        claimed.id,
+        claimed.claim_token,
+        "stable-resume-job",
+    )
+    interrupted = m3_stack["store"].mark_interrupted(
+        bound.id,
+        bound.claim_token,
+        error_code="audit_job_stopped",
+        error_message="paused at checkpoint",
+    )
+    assert interrupted.status == RunStatus.INTERRUPTED
+    assert interrupted.completed_at
+
+    assert m3_stack["store"].requeue_interrupted_run_for_job(
+        "stable-resume-job"
+    ) is True
+    reopened = m3_stack["store"].get_run_for_worker(run.id)
+    assert reopened.status == RunStatus.RUNNING
+    assert reopened.recovery_required is True
+    assert reopened.job_id == "stable-resume-job"
+    assert reopened.completed_at == ""
+    assert reopened.error_code == ""
+    assert reopened.claim_token == ""
+
+    reclaimed = m3_stack["store"].claim_next("recovery-worker")
+    assert reclaimed is not None
+    assert reclaimed.id == run.id
+    assert reclaimed.recovery_required is True
+
+
+def test_failed_run_recovery_uses_structured_job_failure_and_keeps_same_run(
+    m3_stack: dict,
+):
+    draft = _create_draft(m3_stack, _douyin_configuration(m3_stack))
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=draft.current_revision,
+            confirmed=True,
+            idempotency_key="recover-failed-same-run:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    claimed = m3_stack["store"].claim_next("first-worker")
+    assert claimed is not None
+    bound = m3_stack["store"].bind_job(
+        claimed.id, claimed.claim_token, "stable-failed-job"
+    )
+    failed = m3_stack["store"].mark_failed(
+        bound.id,
+        bound.claim_token,
+        error_code="legacy_generic_failure",
+        error_message="old projected failure",
+    )
+    assert failed.status == RunStatus.FAILED
+
+    allowed = frozenset(
+        {
+            "crawler_account_verification_required",
+            "crawler_account_login_required",
+            "crawler_rate_limited",
+        }
+    )
+    assert m3_stack["store"].begin_recoverable_crawl_for_job(
+        "stable-failed-job",
+        failure_code="crawler_account_verification_required",
+        allowed_error_codes=allowed,
+    ) is True
+    recovering = m3_stack["store"].get_run_for_worker(run.id)
+    assert recovering.id == run.id
+    assert recovering.job_id == "stable-failed-job"
+    assert recovering.status == RunStatus.INTERRUPTED
+    assert recovering.recovery_required is True
+
+    assert m3_stack["store"].fail_recovery_for_job(
+        "stable-failed-job",
+        error_code="crawler_account_login_required",
+        error_message="all current accounts were exhausted",
+    ) is True
+    failed_again = m3_stack["store"].get_run_for_worker(run.id)
+    assert failed_again.status == RunStatus.FAILED
+    assert failed_again.error_code == "crawler_account_login_required"
+    assert failed_again.error_message == "all current accounts were exhausted"
+    assert failed_again.recovery_required is False
+
+    assert m3_stack["store"].begin_recoverable_crawl_for_job(
+        "stable-failed-job",
+        failure_code="audit_provider_unavailable",
+        allowed_error_codes=allowed,
+    ) is False
+
+
 def test_m3_hides_auto_selected_account_and_freezes_it_into_job(
     m3_stack: dict,
 ):
@@ -645,6 +800,44 @@ def test_account_invalidated_after_job_creation_invalidates_job_before_worker(
     assert failed.error_code == "crawler_account_login_required"
     assert failed.pipeline_started_at == ""
     assert JobStore(resource_db).get(job_id)["status"] == "failed"
+
+
+def test_invalid_frozen_account_can_use_another_current_eligible_account(
+    m3_stack: dict,
+):
+    frozen_account = _account_for_platform(m3_stack, "dy")
+    draft = _create_draft(m3_stack, _douyin_configuration(m3_stack))
+    run = m3_stack["service"].confirm_and_queue(
+        ConfirmAndQueueCommand(
+            draft_id=draft.id,
+            expected_revision=draft.current_revision,
+            confirmed=True,
+            idempotency_key="alternate-after-freeze:1",
+        ),
+        principal=_principal(m3_stack),
+    )
+    resource_db = m3_stack["resources"].resource_db_path
+    adapter = AuditPipelineExecutionAdapter(
+        job_store=JobStore(resource_db),
+        ingestion_store=IngestionStore(resource_db),
+        revision_store=TaskAuditConfigRevisionStore(resource_db),
+        crawler_account_store=m3_stack["crawler_accounts"],
+        test_provider_validator=lambda _: None,
+    )
+    job_id = adapter.ensure_job(run)
+    alternate = m3_stack["crawler_accounts"].create(
+        platform="dy", display_name="dy alternate account"
+    )
+    m3_stack["crawler_accounts"].save_auth_state(
+        alternate["id"], "synthetic-alternate-ciphertext"
+    )
+    m3_stack["crawler_accounts"].update(frozen_account["id"], status="disabled")
+
+    adapter.validate_execution_configuration(
+        run.confirmed_configuration["execution"],
+        schema_version=str(run.confirmed_configuration["schema_version"]),
+        job_id=job_id,
+    )
 
 
 def test_m3_confirmation_without_account_is_blocked_without_side_effects(
@@ -3269,6 +3462,92 @@ def test_t1_changed_provenance_validates_all_new_refs_after_source_deletion(m3_s
         principal=_principal(m3_stack),
     )
     assert updated.current_revision == 2
+
+
+def test_global_parameters_override_draft_and_freeze_only_at_confirmation(m3_stack, monkeypatch):
+    from backend.audit_agent.config import settings
+    from backend.investigation_creation.errors import ResourceStaleError
+    monkeypatch.setattr(settings, 'm3_posts_per_keyword', 5)
+    monkeypatch.setattr(settings, 'm3_analyze_limit', 5)
+    service = m3_stack['service']
+    global_store = m3_stack['resources'].task_settings
+    draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ['维汉夫妻']))
+    global_store.save({'max_notes': 2, 'analysis_batch_size': 1}, 0)
+    preview = service.get_confirmation_preview(draft.id, principal=_principal(m3_stack))
+    assert preview.task_settings_revision == 1
+    assert preview.effective_parameters.max_notes == 2
+    global_store.save({'max_notes': 3, 'analysis_batch_size': 2}, 1)
+    command = ConfirmAndQueueCommand(draft_id=draft.id, expected_revision=1,
+        expected_task_settings_revision=1, confirmed=True, idempotency_key='global-settings-test')
+    with pytest.raises(ResourceStaleError):
+        service.confirm_and_queue(command, principal=_principal(m3_stack))
+    run = service.confirm_and_queue(command.model_copy(update={'expected_task_settings_revision': 2}), principal=_principal(m3_stack))
+    assert run.confirmed_configuration['execution']['max_notes'] == 3
+    assert run.confirmed_configuration['requested_parameters']['analysis_batch_size'] == 2
+    global_store.save({'max_notes': 1}, 2)
+    replay = service.confirm_and_queue(command, principal=_principal(m3_stack))
+    assert replay.id == run.id
+    assert replay.confirmed_configuration == run.confirmed_configuration
+
+
+def test_real_m3_frozen_job_survives_account_rotation_and_resumes_same_account(m3_stack, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from cryptography.fernet import Fernet
+    import backend.audit_agent.pipeline as pipeline_module
+    from backend.audit_agent.auth_state_cipher import AuthStateCipher
+    from backend.audit_agent.pipeline import AuditPipeline
+    from backend.audit_agent.job_store import JobStore
+    from backend.audit_agent.ingestion import IngestionStore, AuditResultStore
+    from backend.investigation_creation.adapters import AuditPipelineExecutionAdapter
+    from test_pipeline_verify_rotation import VerifyThenSuccessCrawler
+    accounts = m3_stack['crawler_accounts']
+    cipher = AuthStateCipher(Fernet.generate_key())
+    first = next(a for a in accounts.list() if a['platform'] == 'dy')
+    accounts.save_auth_state(first['id'], cipher.encrypt({'account': 'first'}))
+    second = accounts.create(platform='dy', display_name='backup')
+    accounts.save_auth_state(second['id'], cipher.encrypt({'account': 'second'}))
+    config = _temporary_configuration(m3_stack, ['维汉夫妻'])
+    config['platform'] = 'dy'
+    config['task_parameters'] = {'crawler_account_id': first['id'], 'auto_analyze': False, 'analyze_limit': 0}
+    draft = _create_draft(m3_stack, config)
+    run = m3_stack['service'].confirm_and_queue(ConfirmAndQueueCommand(draft_id=draft.id,
+        expected_revision=1, confirmed=True, idempotency_key='frozen-rotation'), principal=_principal(m3_stack))
+    original = run.confirmed_configuration
+    jobs = JobStore(accounts.db_path)
+    ingestion = IngestionStore(accounts.db_path)
+    results = AuditResultStore(accounts.db_path)
+    adapter = AuditPipelineExecutionAdapter(job_store=jobs, crawler_account_store=accounts,
+        test_provider_validator=lambda _: None)
+    job_id = adapter.ensure_job(run)
+    monkeypatch.setattr(pipeline_module, 'job_store', jobs)
+    monkeypatch.setattr(pipeline_module, 'crawler_account_store', accounts)
+    monkeypatch.setattr(pipeline_module, 'auth_state_cipher', cipher)
+    monkeypatch.setattr(pipeline_module.settings, 'outputs_dir', tmp_path / 'outputs')
+    monkeypatch.setattr(pipeline_module.settings, 'auto_analyze_crawled_content', False)
+    crawler = VerifyThenSuccessCrawler()
+    def execute():
+        pipeline = AuditPipeline.__new__(AuditPipeline)
+        pipeline.job_id = job_id
+        pipeline.crawler = crawler
+        pipeline.ingestion = ingestion
+        pipeline.audit_results = results
+        pipeline.qwen = SimpleNamespace(provider_failure='')
+        pipeline._m3_snapshot_validator = lambda: adapter.verify_run_job(run)
+        pipeline.run(SimpleNamespace(**original['execution']))
+    execute()
+    assert jobs.get(job_id)['control']['execution_account']['id'] == second['id']
+    assert jobs.get(job_id)['crawler_account_id'] == first['id']
+    accounts.mark_expired(first['id'], 'original account later expired')
+    assert adapter.ensure_job(run) == job_id
+    assert adapter.verify_run_job(run)['crawler_account_id'] == first['id']
+    adapter.validate_execution_configuration(original['execution'], schema_version='investigation-run-config-v4', job_id=job_id)
+    execute()
+    assert crawler.calls[-1]['auth_state'] == {'account': 'second'}
+    assert ingestion.stats_for_task(job_id)['ingested_count'] == 1
+    assert run.confirmed_configuration == original
+    jobs.update(job_id, keyword='tampered')
+    with pytest.raises(ValueError, match='differs from frozen'):
+        adapter.verify_run_job(run)
 
 
 def test_t1_typed_terms_keep_existing_count_and_strict_schema():

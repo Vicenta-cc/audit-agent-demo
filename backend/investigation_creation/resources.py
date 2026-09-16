@@ -8,7 +8,10 @@ from typing import Any, Iterator
 import unicodedata
 
 from backend.audit_agent.config import settings
-from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+from backend.audit_agent.crawler_account_store import (
+    CrawlerAccountStore,
+    account_is_cooling_down,
+)
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
 from backend.audit_agent.crawler_adapter import SUPPORTED_PLATFORMS
 from backend.audit_agent.lexicon_store import LexiconStore
@@ -25,6 +28,7 @@ from .contracts import (
     InvestigationBlocker,
     InvestigationDraft,
     InvestigationDraftConfiguration,
+    InvestigationTaskParameters,
     InvestigationConfiguration,
     InvestigationOptions,
     Platform,
@@ -47,6 +51,25 @@ from .principal import Principal
 _PLATFORM_NAMES = {"xhs": "小红书", "dy": "抖音", "ks": "快手"}
 _CREATION_PLATFORM_ORDER = ("dy", "xhs", "ks")
 _RULES_MANAGEMENT_PATH = "/rule-assistant/rulesets?return_to=/investigation"
+
+
+def _effective_m3_posts_per_keyword() -> int:
+    return min(5, max(1, int(settings.m3_posts_per_keyword)))
+
+
+def _effective_m3_comments_per_post() -> int:
+    return min(1000, max(0, int(settings.m3_comments_per_post)))
+
+
+def effective_task_parameters(configuration) -> InvestigationTaskParameters:
+    requested = configuration.task_parameters or InvestigationTaskParameters(
+        max_notes=_effective_m3_posts_per_keyword(),
+        max_comments=_effective_m3_comments_per_post(),
+        max_items_per_minute=5, analyze_limit=settings.m3_analyze_limit,
+        analysis_batch_size=5,
+    )
+    from backend.audit_agent.task_settings import effective_parameters
+    return effective_parameters(requested)
 
 
 class InvestigationResourceService:
@@ -80,6 +103,15 @@ class InvestigationResourceService:
                 "M3 confirmation resources must share one audit index database"
             )
         self.resource_db_path = resource_paths.pop()
+        from backend.audit_agent.task_settings import TaskSettingsStore
+        self.task_settings = TaskSettingsStore(self.resource_db_path)
+
+    def task_configuration(self, configuration, connection=None):
+        saved = self.task_settings.get(connection)
+        if saved["revision"]:
+            configuration = configuration.model_copy(update={
+                "task_parameters": InvestigationTaskParameters.model_validate(saved["parameters"])})
+        return configuration, saved["revision"]
 
     @contextmanager
     def confirmation_fence(self) -> Iterator[sqlite3.Connection]:
@@ -356,8 +388,16 @@ class InvestigationResourceService:
         else:
             creator_url = effective_configuration.investigation.creator_url
 
+        effective_configuration, settings_revision = self.task_configuration(effective_configuration, resource_connection)
+        parameters = effective_task_parameters(effective_configuration)
+        if parameters.crawler_account_id and not any(a["id"] == parameters.crawler_account_id for a in available_accounts):
+            blockers.append(self._blocker("collection_service_unavailable", "所选采集账号当前不可用，请重新选择。"))
         blockers = self._dedupe_blockers(blockers)
         return ConfirmationPreview(
+            task_settings_revision=settings_revision,
+            requested_parameters=effective_configuration.task_parameters,
+            effective_parameters=parameters,
+            estimated_max_contents=parameters.max_notes * max(1, len(resolved_terms)),
             draft_id=draft.id,
             draft_revision=draft.current_revision,
             title=draft.title,
@@ -367,11 +407,13 @@ class InvestigationResourceService:
             resolved_search_terms=resolved_terms,
             creator_url=creator_url,
             recall_plan=recall_preview,
-            max_notes=min(settings.m3_analyze_limit,
-                          settings.m3_posts_per_keyword * max(1, len(resolved_terms))),
-            max_posts_per_keyword=settings.m3_posts_per_keyword,
-            max_comments_per_post=settings.m3_comments_per_post,
-            get_sub_comment=False,
+            max_notes=min(
+                parameters.analyze_limit,
+                parameters.max_notes * max(1, len(resolved_terms)),
+            ),
+            max_posts_per_keyword=parameters.max_notes,
+            max_comments_per_post=parameters.max_comments,
+            get_sub_comment=parameters.get_sub_comment,
             ruleset_revision=(
                 resolution.ruleset_revision if resolution is not None else None
             ),
@@ -666,7 +708,11 @@ class InvestigationResourceService:
                 self._collection_unavailable_message(configuration.platform.value),
                 code="collection_service_unavailable",
             )
-        selected_account = available_accounts[0]
+        configuration, _ = self.task_configuration(configuration, resource_connection)
+        parameters = effective_task_parameters(configuration)
+        selected_account = next((a for a in available_accounts if a["id"] == parameters.crawler_account_id), None) if parameters.crawler_account_id else available_accounts[0]
+        if selected_account is None:
+            raise ConfigurationValidationError("所选采集账号当前不可用，请重新选择。", code="collection_service_unavailable")
         mode = configuration.investigation.mode
         collection: dict[str, Any]
         if mode == "search":
@@ -679,7 +725,7 @@ class InvestigationResourceService:
                     == "existing_lexicon"
                     else configuration.investigation.recall_plan.terms
                 ),
-                "max_notes": settings.m3_posts_per_keyword,
+                "max_notes": parameters.max_notes,
                 "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
             }
@@ -689,18 +735,21 @@ class InvestigationResourceService:
                 "keyword_source": "keyword",
                 "keywords": [],
                 "creator_url": configuration.investigation.creator_url,
-                "max_notes": settings.m3_posts_per_keyword,
+                "max_notes": parameters.max_notes,
                 "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
             }
-        collection.update(max_comments=settings.m3_comments_per_post,
-                          max_concurrency=1, get_sub_comment=False)
+        collection.update({key: getattr(parameters, key) for key in (
+            "start_page", "max_comments", "max_concurrency", "get_sub_comment",
+            "max_items_per_minute", "collect_comments", "collect_media",
+        )})
         collection["display_name"] = draft.title
         execution_input = {
             "platform": configuration.platform.value,
             "collection": collection,
             "analysis": {
-                "analyze_limit": settings.m3_analyze_limit,
+                "analyze_limit": parameters.analyze_limit,
+                "analysis_batch_size": parameters.analysis_batch_size,
             },
         }
         recall_library_ids = []
@@ -730,8 +779,8 @@ class InvestigationResourceService:
         )
         resolved.update(
             {
-                "max_notes": settings.m3_posts_per_keyword,
-                "analyze_limit": settings.m3_analyze_limit,
+                "max_notes": parameters.max_notes,
+                "analyze_limit": parameters.analyze_limit,
                 "crawler_account_id": selected_account["id"],
                 "crawler_account_display_name": selected_account["display_name"],
                 "crawler_account_confirmed_state": CrawlerAccountConfirmedState(
@@ -747,6 +796,10 @@ class InvestigationResourceService:
             }
         )
 
+        if configuration.task_parameters is not None:
+            resolved.update(auto_analyze=parameters.auto_analyze,
+                            collect_comments=parameters.collect_comments,
+                            collect_media=parameters.collect_media)
         recall_snapshot: ConfirmedRecallPlanSnapshot | None = None
         if mode == "search":
             plan = configuration.investigation.recall_plan
@@ -800,6 +853,7 @@ class InvestigationResourceService:
         }
         return ConfirmationResolution(
             **hash_payload,
+            requested_parameters=configuration.task_parameters,
             config_hash=confirmed_configuration_hash(hash_payload),
         )
 
@@ -1071,7 +1125,9 @@ class InvestigationResourceService:
                 platform=platform,
                 connection=connection,
             )
-            if account["status"] == "active" and account["has_auth_state"]
+            if account["status"] == "active"
+            and account["has_auth_state"]
+            and not account_is_cooling_down(account)
         ]
         return sorted(available, key=lambda account: str(account["id"]))
 

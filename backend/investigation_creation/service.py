@@ -352,6 +352,13 @@ class InvestigationCreationService:
                 if replay is not None:
                     run = replay
                 else:
+                    settings_revision = self.resource_service.task_settings.get(resource_connection)["revision"]
+                    if settings_revision and command.expected_task_settings_revision != settings_revision:
+                        from .errors import ResourceStaleError
+                        raise ResourceStaleError(
+                            "统一采集与分析设置已变化，请刷新配置预览后重新确认。",
+                            code="TASK_SETTINGS_CHANGED",
+                        )
                     resolution = self.resource_service.resolve_confirmation(
                         draft,
                         principal=principal,
@@ -436,6 +443,8 @@ class InvestigationCreationService:
             analysis_status=str(projected.get("analysis_status") or "unknown"),
             task_stats=dict(projected.get("task_stats") or {}),
             audit_results=list(projected.get("audit_results") or []),
+            logs=list(projected.get("logs") or []),
+            available_actions=dict(projected.get("available_actions") or {}),
             report_status=str(projected.get("report_status") or "pending"),
             report_version_id=str(
                 projected.get("report_version_id") or run.report_version_id

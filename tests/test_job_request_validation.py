@@ -45,6 +45,33 @@ class JobRequestValidationTest(unittest.TestCase):
     def test_legacy_request_without_account_remains_valid(self):
         self.assertIsNone(main.validate_crawler_account_for_job(None, "xhs"))
 
+    def test_saved_global_parameters_override_diagnostic_entry_and_freeze(self):
+        from fastapi import BackgroundTasks
+        from backend.audit_agent.job_store import JobStore
+        from backend.audit_agent.task_settings import TaskSettingsStore
+        jobs = JobStore(self.store.db_path)
+        settings_store = TaskSettingsStore(self.store.db_path)
+        settings_store.save({'max_notes': 2, 'max_comments': 1, 'analyze_limit': 2,
+                             'analysis_batch_size': 1, 'max_items_per_minute': 1}, 0)
+        account = self.store.create(platform='dy', display_name='available')
+        self.store.save_auth_state(account['id'], 'encrypted-state')
+        with patch.object(main, 'job_store', jobs), \
+             patch.object(main, 'AuditPipeline'), \
+             patch.object(main, 'enrich_job', side_effect=lambda job: job), \
+             patch.object(main, 'create_revision_from_payload', return_value={'version': 1}), \
+             patch.object(main.settings, 'm3_posts_per_keyword', 5), \
+             patch.object(main.settings, 'm3_comments_per_post', 3), \
+             patch.object(main.settings, 'm3_analyze_limit', 10):
+            background = BackgroundTasks()
+            job = main.create_job(main.CrawlRequest(platform='dy', keyword='维汉夫妻',
+                crawler_account_id='stale-per-task-account', max_notes=5), background)
+        self.assertEqual(job['max_notes'], 2)
+        self.assertEqual(job['crawler_account_id'], account['id'])
+        self.assertEqual(job['effective_config']['max_comments'], 1)
+        self.assertEqual(len(background.tasks), 1)
+        settings_store.save({'max_notes': 1}, 1)
+        self.assertEqual(jobs.get(job['id'])['max_notes'], 2)
+
     def test_rejects_missing_and_platform_mismatched_accounts(self):
         self.assert_http_error("missing", "xhs", 404)
         account = self.store.create(platform="dy", display_name="抖音账号")
@@ -85,10 +112,28 @@ class JobRequestValidationTest(unittest.TestCase):
 
     def test_frequency_defaults_to_five_and_rejects_out_of_range(self):
         self.assertEqual(main.CrawlRequest().max_items_per_minute, 5)
-        self.assertEqual(main.CrawlRequest().analyze_limit, 10000)
+        self.assertEqual(main.CrawlRequest().analyze_limit, 0)
         for value in (0, 6):
             with self.assertRaises(ValidationError):
                 main.CrawlRequest(max_items_per_minute=value)
+
+    def test_max_notes_accepts_only_strict_integers_from_one_to_five(self):
+        for value in (1, 5):
+            self.assertEqual(main.CrawlRequest(max_notes=value).max_notes, value)
+        for value in (0, 6, -1, 1.5, "5", True):
+            with self.assertRaises(ValidationError):
+                main.CrawlRequest(max_notes=value)
+
+    def test_collection_feature_switches_are_strict_booleans(self):
+        request = main.CrawlRequest(
+            collect_comments=False,
+            collect_media=False,
+        )
+        self.assertFalse(request.collect_comments)
+        self.assertFalse(request.collect_media)
+        for field in ("collect_comments", "collect_media"):
+            with self.assertRaises(ValidationError):
+                main.CrawlRequest(**{field: "false"})
 
     def test_authoritative_m3_public_job_redacts_internal_crawler_account(self):
         projected = main.redact_authoritative_m3_crawler_account(

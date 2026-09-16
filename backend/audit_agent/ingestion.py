@@ -1258,6 +1258,70 @@ class IngestionStore:
                         (status, result_path, audit_result_id, utc_now(), task_id, int(row["id"])),
                     )
 
+    def claim_content_for_analysis(
+        self,
+        task_id: str,
+        platform: str,
+        content_key: str,
+        *,
+        analyze_limit: int = 0,
+    ) -> bool | None:
+        """Atomically claim one task/content row for a single analysis worker.
+
+        ``None`` means the content has not reached durable task membership yet;
+        callers on the legacy direct-stream path may continue in-memory.
+        """
+        if not task_id or not content_key:
+            return False
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                "SELECT id FROM contents WHERE platform = ? AND content_key = ?",
+                (platform, content_key),
+            ).fetchone()
+            if not row:
+                return None
+            content_id = int(row["id"])
+            membership = conn.execute(
+                "SELECT analyze_status FROM task_contents WHERE task_id = ? AND content_id = ?",
+                (task_id, content_id),
+            ).fetchone()
+            if not membership:
+                return None
+            if str(membership["analyze_status"] or "") not in {"queued", "failed"}:
+                return False
+            if analyze_limit > 0:
+                claimed = conn.execute(
+                    """
+                    SELECT COUNT(DISTINCT content_id) AS count
+                    FROM task_contents
+                    WHERE task_id = ? AND analyze_status IN ('analyzing', 'completed')
+                    """,
+                    (task_id,),
+                ).fetchone()
+                if int(claimed["count"] or 0) >= analyze_limit:
+                    return False
+            cursor = conn.execute(
+                """
+                UPDATE task_contents
+                SET analyze_status = 'analyzing', updated_at = ?
+                WHERE task_id = ? AND content_id = ?
+                  AND analyze_status IN ('queued', 'failed')
+                """,
+                (utc_now(), task_id, content_id),
+            )
+            if cursor.rowcount != 1:
+                return False
+            conn.execute(
+                """
+                UPDATE contents
+                SET analyze_status = 'analyzing', last_seen_at = ?
+                WHERE id = ?
+                """,
+                (utc_now(), content_id),
+            )
+            return True
+
     def mark_task_content_status(
         self,
         task_id: str,
@@ -1298,5 +1362,18 @@ class IngestionStore:
                   AND analyze_status = 'analyzing'
                 """,
                 (utc_now(), task_id),
+            )
+            return int(cursor.rowcount or 0)
+
+    def reset_all_analyzing(self) -> int:
+        """Return orphaned in-flight analysis leases to the durable queue on startup."""
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE task_contents
+                SET analyze_status = 'queued', updated_at = ?
+                WHERE analyze_status = 'analyzing'
+                """,
+                (utc_now(),),
             )
             return int(cursor.rowcount or 0)

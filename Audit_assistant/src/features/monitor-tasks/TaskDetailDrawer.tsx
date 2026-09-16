@@ -121,16 +121,32 @@ export function TaskDetailDrawer({ task, mode, onClose, onControl }: TaskDetailD
               <Button
                 type="button"
                 variant="secondary"
-                disabled={!task.raw.available_actions?.stop_analysis}
+                disabled={!task.raw.available_actions?.resume_crawl}
+                onClick={() => void onControl(task, "resume_crawl", "继续采集")}
+              >
+                继续采集
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!task.raw.available_actions?.pause_analysis}
                 onClick={() => void onControl(task, "pause_analysis", "暂停分析")}
               >
                 暂停分析
               </Button>
               <Button
                 type="button"
+                variant="secondary"
+                disabled={!task.raw.available_actions?.stop_analysis}
+                onClick={() => void onControl(task, "stop_analysis", "停止分析")}
+              >
+                停止分析
+              </Button>
+              <Button
+                type="button"
                 variant="primary"
-                disabled={!task.raw.available_actions?.backfill_analysis}
-                onClick={() => void onControl(task, "backfill_analysis", "继续分析")}
+                disabled={!task.raw.available_actions?.resume_analysis}
+                onClick={() => void onControl(task, "resume_analysis", "继续分析")}
               >
                 继续分析
               </Button>

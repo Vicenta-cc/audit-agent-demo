@@ -307,7 +307,7 @@ class LegacyAwareExecutionAdapter(FakeExecutionAdapter):
         self.validation_calls = 0
 
     def validate_execution_configuration(
-        self, configuration: dict, *, schema_version: str
+        self, configuration: dict, *, schema_version: str, job_id: str = ""
     ) -> None:
         self.validation_calls += 1
         if schema_version == "investigation-run-config-v3":

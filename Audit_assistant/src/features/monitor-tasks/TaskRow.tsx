@@ -16,7 +16,7 @@ interface TaskRowProps {
 type PipelineTone = "success" | "warning" | "danger" | "neutral";
 
 interface PipelineStatusMeta {
-  label: "进行中" | "已暂停" | "已完成" | "未开始" | "失败" | "部分失败";
+  label: "进行中" | "暂停中" | "停止中" | "已停止" | "已中断" | "已暂停" | "已完成" | "未开始" | "失败" | "部分失败";
   tone: PipelineTone;
 }
 
@@ -161,6 +161,19 @@ function getPipelineStatus(value = ""): PipelineStatusMeta {
 
   if (normalized === "partial") {
     return { label: "部分失败", tone: "warning" };
+  }
+
+  if (normalized === "pausing") {
+    return { label: "暂停中", tone: "warning" };
+  }
+  if (normalized === "stopping") {
+    return { label: "停止中", tone: "warning" };
+  }
+  if (normalized === "stopped") {
+    return { label: "已停止", tone: "warning" };
+  }
+  if (normalized === "interrupted") {
+    return { label: "已中断", tone: "warning" };
   }
 
   if (normalized.includes("fail") || normalized.includes("error") || normalized.includes("interrupted")) {

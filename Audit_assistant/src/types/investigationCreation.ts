@@ -73,7 +73,23 @@ export interface InvestigationDraftSuggestion {
   recall_lexicons: RecallLexiconSummary[];
 }
 
+export interface InvestigationTaskParameters {
+  crawler_account_id?: string | null;
+  start_page: number;
+  max_notes: number;
+  max_comments: number;
+  collect_comments: boolean;
+  get_sub_comment: boolean;
+  collect_media: boolean;
+  max_items_per_minute: number;
+  max_concurrency: number;
+  auto_analyze: boolean;
+  analyze_limit: number;
+  analysis_batch_size: number;
+}
+
 export interface InvestigationDraftConfiguration {
+  task_parameters?: InvestigationTaskParameters;
   schema_version: "investigation-draft-config-v4";
   platform: InvestigationPlatform;
   investigation:
@@ -115,6 +131,10 @@ export interface PublicInvestigationDraft {
 }
 
 export interface ConfirmationPreview {
+  task_settings_revision?: number;
+  requested_parameters?: InvestigationTaskParameters;
+  effective_parameters?: InvestigationTaskParameters;
+  estimated_max_contents?: number;
   draft_id: string;
   draft_revision: number;
   title: string;
@@ -162,6 +182,21 @@ export interface InvestigationRunProjection {
   analysis_status: string;
   task_stats: Record<string, unknown>;
   audit_results: CompletedAuditResult[];
+  logs?: Array<{
+    time?: string;
+    stage?: string;
+    level?: "info" | "warning" | "error" | string;
+    message?: string;
+  }>;
+  available_actions?: {
+    pause_crawl?: boolean;
+    resume_crawl?: boolean;
+    pause_analysis?: boolean;
+    resume_analysis?: boolean;
+    stop_analysis?: boolean;
+    backfill_analysis?: boolean;
+    delete_job?: boolean;
+  };
   report_status: string;
   report_version_id: string;
   error_code: string;

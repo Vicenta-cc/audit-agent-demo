@@ -332,16 +332,24 @@ class CrawlerAccountStore:
                 (str(message or "账号进入冷却")[:500], str(failure_kind), str(until), datetime.now().isoformat(timespec="seconds"), account_id),
             )
 
-    def next_available(self, platform: str, *, exclude_id: str = "") -> dict | None:
+    def available_accounts(self, platform: str, *, exclude_ids=()) -> list[dict]:
         now = datetime.now().isoformat(timespec="seconds")
+        excluded = tuple(str(value) for value in exclude_ids if str(value))
+        placeholders = ",".join("?" for _ in excluded)
+        exclusion = f"AND id NOT IN ({placeholders}) " if excluded else ""
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 "SELECT * FROM crawler_accounts WHERE platform=? AND status='active' "
-                "AND COALESCE(auth_state_ciphertext,'')<>'' AND id<>? "
+                "AND COALESCE(auth_state_ciphertext,'')<>'' "
+                + exclusion +
                 "AND (cooldown_until IS NULL OR cooldown_until<=?) ORDER BY last_used_at IS NOT NULL, last_used_at, id",
-                (platform, exclude_id, now),
+                (platform, *excluded, now),
             ).fetchall()
-            return self._row_to_account(rows[0]) if rows else None
+            return [self._row_to_account(row) for row in rows]
+
+    def next_available(self, platform: str, *, exclude_id: str = "") -> dict | None:
+        accounts = self.available_accounts(platform, exclude_ids=(exclude_id,))
+        return accounts[0] if accounts else None
 
     def _ensure_account_id_available(
         self,

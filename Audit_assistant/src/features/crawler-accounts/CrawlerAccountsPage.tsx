@@ -37,7 +37,7 @@ import { CrawlerAccountDrawer } from "./CrawlerAccountDrawer";
 import { CrawlerAccountLoginDialog } from "./CrawlerAccountLoginDialog";
 
 type PlatformFilter = "all" | CrawlerAccountPlatform;
-type StatusFilter = "all" | CrawlerAccountStatus;
+type StatusFilter = "all" | CrawlerAccountStatus | "cooling";
 
 const platformMeta: Record<CrawlerAccountPlatform, { label: string; icon: string }> = {
   xhs: {
@@ -80,6 +80,7 @@ export function CrawlerAccountsPage() {
   const [deleteTarget, setDeleteTarget] = useState<CrawlerAccount | null>(null);
   const [loginTarget, setLoginTarget] = useState<CrawlerAccount | null>(null);
   const [toast, setToast] = useState<{ message: string; tone?: "success" | "info" } | null>(null);
+  const [clock, setClock] = useState(() => Date.now());
   const loadGenerationRef = useRef(0);
   const [expandedPlatforms, setExpandedPlatforms] = useState<Record<string, boolean>>({
     xhs: true,
@@ -125,6 +126,11 @@ export function CrawlerAccountsPage() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const filteredAccounts = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     return accounts.filter((account) => {
@@ -135,19 +141,24 @@ export function CrawlerAccountsPage() {
           .toLowerCase()
           .includes(keyword);
       const matchesPlatform = platformFilter === "all" || account.platform === platformFilter;
-      const matchesStatus = statusFilter === "all" || account.status === statusFilter;
+      const cooling = isCooling(account, clock);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "cooling" ? cooling : account.status === statusFilter && !cooling);
       return matchesQuery && matchesPlatform && matchesStatus;
     });
-  }, [accounts, platformFilter, query, statusFilter]);
+  }, [accounts, clock, platformFilter, query, statusFilter]);
 
   const stats = useMemo(
     () => ({
       total: accounts.length,
-      active: accounts.filter((account) => account.status === "active").length,
-      attention: accounts.filter((account) => ["login_required", "expired"].includes(account.status)).length,
+      active: accounts.filter((account) => account.status === "active" && !isCooling(account, clock)).length,
+      attention: accounts.filter(
+        (account) => isCooling(account, clock) || ["login_required", "expired"].includes(account.status)
+      ).length,
       disabled: accounts.filter((account) => account.status === "disabled").length
     }),
-    [accounts]
+    [accounts, clock]
   );
 
   const openCreate = () => {
@@ -275,6 +286,7 @@ export function CrawlerAccountsPage() {
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
               <option value="all">全部状态</option>
               <option value="active">可用</option>
+              <option value="cooling">冷却中</option>
               <option value="login_required">待登录</option>
               <option value="expired">已失效</option>
               <option value="disabled">已停用</option>
@@ -303,7 +315,9 @@ export function CrawlerAccountsPage() {
               const groupAccounts = filteredAccounts.filter((a) => a.platform === platformKey);
               if (groupAccounts.length === 0) return null;
               const meta = platformMeta[platformKey];
-              const activeCount = groupAccounts.filter((a) => a.status === "active").length;
+              const activeCount = groupAccounts.filter(
+                (account) => account.status === "active" && !isCooling(account, clock)
+              ).length;
               const exceptionCount = groupAccounts.length - activeCount;
 
               const isExpanded = expandedPlatforms[platformKey] ?? true;
@@ -341,7 +355,7 @@ export function CrawlerAccountsPage() {
                         <span>操作</span>
                       </div>
                       {groupAccounts.map((account) => {
-                        const status = statusMeta[account.status];
+                        const status = accountStatus(account, clock);
                         const isActing = actionId === account.id;
                         return (
                           <div className="crawler-account-table-row" role="row" key={account.id}>
@@ -473,6 +487,22 @@ function formatDateTime(value: string): string {
     minute: "2-digit",
     hour12: false
   }).format(date);
+}
+
+function isCooling(account: CrawlerAccount, now: number): boolean {
+  if (account.status !== "active" || !account.cooldownUntil) return false;
+  const until = new Date(account.cooldownUntil).getTime();
+  return Number.isFinite(until) && until > now;
+}
+
+function accountStatus(account: CrawlerAccount, now: number): { label: string; className: string } {
+  if (isCooling(account, now)) {
+    return {
+      label: `冷却中 · 至 ${formatDateTime(account.cooldownUntil)}`,
+      className: "is-cooling"
+    };
+  }
+  return statusMeta[account.status];
 }
 
 function readApiError(error: unknown): string {

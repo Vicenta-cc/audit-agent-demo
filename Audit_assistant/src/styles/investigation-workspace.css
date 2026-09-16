@@ -2204,6 +2204,160 @@
   color: #b91c1c;
 }
 
+.investigation-run-controls {
+  display: grid;
+  gap: 8px;
+}
+
+.investigation-run-controls > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.investigation-run-controls > div > span {
+  min-width: 64px;
+  color: #475569;
+  font-weight: 680;
+}
+
+.investigation-run-controls button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  gap: 5px;
+  padding: 0 9px;
+  color: #1e40af;
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.investigation-run-controls button:hover:not(:disabled) {
+  background: #eff6ff;
+}
+
+.investigation-run-controls button:disabled {
+  color: #94a3b8;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
+}
+
+.investigation-control-error {
+  color: #b91c1c !important;
+}
+
+.investigation-runtime-logs {
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.investigation-runtime-logs-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  color: #334155;
+  background: #f8fafc;
+  border: 0;
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.investigation-runtime-logs-trigger > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.investigation-runtime-logs-trigger small {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.investigation-runtime-logs-trigger > svg {
+  transition: transform 160ms ease;
+}
+
+.investigation-runtime-logs-trigger > svg.is-expanded {
+  transform: rotate(180deg);
+}
+
+.investigation-runtime-log-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border-top: 1px solid #e2e8f0;
+}
+
+.investigation-runtime-log {
+  display: grid;
+  grid-template-columns: 72px 78px 42px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 8px 11px;
+  color: #475569;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.investigation-runtime-log time {
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.investigation-runtime-log > span,
+.investigation-runtime-log > em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.investigation-runtime-log > span {
+  color: #1d4ed8;
+  font-weight: 680;
+}
+
+.investigation-runtime-log > em {
+  color: #64748b;
+  font-style: normal;
+}
+
+.investigation-runtime-log p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #334155;
+}
+
+.investigation-runtime-log.is-warning {
+  background: #fffbeb;
+}
+
+.investigation-runtime-log.is-error {
+  background: #fef2f2;
+}
+
+.investigation-runtime-log.is-error > em,
+.investigation-runtime-log.is-error p {
+  color: #b91c1c;
+}
+
+.investigation-runtime-log-empty {
+  padding: 18px 12px;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
+}
+
 .investigation-run-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -9139,3 +9293,15 @@
 .inv-delete-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px; }
 .inv-delete-confirm { background: #dc2626; color: white; border-color: #dc2626; }
 .inv-delete-error { color: #b91c1c; }
+.investigation-parameters { margin: 18px 0; padding: 18px; border: 1px solid #dce5f2; border-radius: 12px; background: #f8faff; color: #24344d; }
+.investigation-parameters h4 { margin: 0 0 8px; }
+.investigation-parameters p { font-size: 13px; line-height: 1.7; }
+.investigation-parameters fieldset { border: 0; border-top: 1px solid #dce5f2; padding: 12px 0; margin: 12px 0; min-width: 0; }
+.investigation-parameters legend { font-weight: 600; padding-right: 8px; }
+.investigation-parameter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.investigation-parameter-field { display: flex; flex-direction: column; gap: 7px; font-size: 13px; margin-bottom: 10px; }
+.investigation-parameter-field input { width: 95px; }
+.investigation-parameter-field input, .investigation-parameter-field select { border: 1px solid #bdcce0; border-radius: 6px; padding: 7px; background: white; color: #24344d; }
+.investigation-parameter-check { display: inline-flex; align-items: center; gap: 6px; margin: 8px 18px 12px 0; font-size: 13px; }
+.investigation-parameters small { color: #64748b; font-size: 12px; line-height: 1.6; }
+.investigation-effective-parameters { background: #eaf1ff; border-radius: 8px; padding: 10px; }

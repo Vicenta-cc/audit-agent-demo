@@ -4,13 +4,48 @@ import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from backend.audit_agent.auth_state_cipher import AuthStateCipher
+from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.crawler_login_manager import CrawlerAccountLoginManager, LoginSession
 
 
 class CrawlerAccountLoginManagerTest(unittest.TestCase):
+    def test_douyin_login_can_be_configured_headed(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            helper = root / "headed_login.py"
+            helper.write_text(
+                "import json, sys\n"
+                "assert '--headed' in sys.argv\n"
+                "print(json.dumps({'type': 'success', "
+                "'auth_state': {'cookies': [], 'origins': []}}), flush=True)\n",
+                encoding="utf-8",
+            )
+            store = CrawlerAccountStore(root / "audit.sqlite3")
+            manager = CrawlerAccountLoginManager(
+                store=store,
+                cipher=AuthStateCipher(key_file=root / "auth.key"),
+                python_path=Path(sys.executable),
+                helper_path=helper,
+                timeout_seconds=60,
+            )
+            account = store.create(platform="dy", display_name="测试账号")
+
+            with patch.object(settings, "crawler_login_headed", True):
+                session = manager.start(account)
+                deadline = time.monotonic() + 3
+                while time.monotonic() < deadline:
+                    session = manager.get(session["id"])
+                    if session and session["status"] == "success":
+                        break
+                    time.sleep(0.02)
+
+            self.assertEqual(session["status"], "success")
+            manager.shutdown()
+
     def test_scanned_state_clears_qr_and_remains_active(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

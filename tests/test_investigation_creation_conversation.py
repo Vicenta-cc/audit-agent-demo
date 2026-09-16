@@ -2714,15 +2714,15 @@ def test_production_limits_are_previewed_and_frozen_without_changing_demo_defaul
     monkeypatch.setattr(settings, 'm3_analyze_limit', 340)
     monkeypatch.setattr(settings, 'm3_comments_per_post', 1000)
     preview = stack['client'].get(endpoint + '/confirmation-preview').json()
-    assert preview['max_notes'] == min(340, len(preview['resolved_search_terms']) * 20)
-    assert preview['max_posts_per_keyword'] == 20
+    assert preview['max_notes'] == min(340, len(preview['resolved_search_terms']) * 5)
+    assert preview['max_posts_per_keyword'] == 5
     assert preview['max_comments_per_post'] == 1000
     assert preview['get_sub_comment'] is False
     queued = stack['client'].post(endpoint + '/confirm-and-queue', json={'expected_revision': draft['current_revision'], 'confirmed': True}, headers={'Idempotency-Key': 'production-limits'})
     assert queued.status_code == 202, queued.text
     run = stack['creation_store'].get_run(queued.json()['run_id'], principal='principal-a')
     snapshot = ConfirmedConfigurationSnapshotV4.model_validate(run.confirmed_configuration)
-    assert snapshot.max_notes == snapshot.execution.max_notes == 20
+    assert snapshot.max_notes == snapshot.execution.max_notes == 5
     assert snapshot.execution.analyze_limit == 340
     assert snapshot.execution.max_comments == 1000
     assert snapshot.execution.max_concurrency == 1

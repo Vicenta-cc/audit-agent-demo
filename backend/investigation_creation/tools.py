@@ -99,6 +99,7 @@ class GetInvestigationDraftInput(StrictModel):
 
 
 class ConfirmAndQueueInvestigationInput(StrictModel):
+    expected_task_settings_revision: int | None = Field(default=None, ge=0)
     draft_id: str = Field(min_length=1, max_length=160)
     expected_revision: int = Field(ge=1)
     confirmed: StrictBool
@@ -252,6 +253,10 @@ M3_TOOL_DESCRIPTIONS = {
 
 def _creation_tool_schema(schema: type[StrictModel]) -> dict[str, Any]:
     parameters = schema.model_json_schema()
+    # Application parameters are managed in the global settings, not by dialogue.
+    parameters.get("$defs", {}).get("InvestigationDraftConfiguration", {}).get("properties", {}).pop("task_parameters", None)
+    task_schema = parameters.get("$defs", {}).get("InvestigationTaskParameters", {})
+    task_schema.get("properties", {}).pop("crawler_account_id", None)
 
     def remove_legacy_platform(node: Any) -> None:
         if isinstance(node, dict):

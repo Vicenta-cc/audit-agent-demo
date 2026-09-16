@@ -37,6 +37,7 @@ import { ApiError } from "../../services/apiClient";
 import { deleteInvestigationWorkspace } from "../../services/investigations";
 import { fetchPublishedReportVersion, fetchPublishedReportVersions } from "../../services/reports";
 import { InvestigationSidebar, type SubViewType } from "./InvestigationSidebar";
+import { TaskSettingsPage } from "./TaskSettingsPage";
 import { InvestigationCenterArea } from "./InvestigationCenterArea";
 import { DeleteSessionDialog } from "./DeleteSessionDialog";
 import { InvestigationContextDrawer, type DrawerType } from "./InvestigationContextDrawer";
@@ -540,7 +541,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   );
   useEffect(() => {
     const view = new URLSearchParams(location.search).get("view");
-    setActiveSubViewState(view === "audit-rules" || view === "slang-library" || view === "users" || view === "crawler-accounts"
+    setActiveSubViewState(view === "audit-rules" || view === "slang-library" || view === "users" || view === "crawler-accounts" || view === "task-settings"
       ? view : routeState.restoreInvestigationState?.activeSubView ?? initialSubView);
   }, [location.search, initialSubView, routeState.restoreInvestigationState?.activeSubView]);
 
@@ -1489,7 +1490,9 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           runPollTimersRef.current.delete(uiSessionId);
           return;
         }
-        if (run.status === "FAILED" || run.status === "INTERRUPTED") {
+        const crawlActive = ["queued", "running", "pausing"].includes(run.crawl_status);
+        const analysisActive = ["queued", "running", "pausing"].includes(run.analysis_status);
+        if (run.status === "FAILED" || (run.status === "INTERRUPTED" && !crawlActive && !analysisActive)) {
           runPollTimersRef.current.delete(uiSessionId);
           return;
         }
@@ -1526,6 +1529,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     try {
       const run = await confirmAndQueueInvestigation(draft.id, {
         expectedRevision: draft.current_revision,
+        taskSettingsRevision: preview.task_settings_revision ?? 0,
         idempotencyKey
       });
       const view = mapInvestigationRunState(run);
@@ -1610,7 +1614,12 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       if (
         !binding
         || !run
-        || ["AUDIT_COMPLETED", "PUBLISHED", "FAILED", "INTERRUPTED"].includes(run.status)
+        || ["AUDIT_COMPLETED", "PUBLISHED", "FAILED"].includes(run.status)
+        || (
+          run.status === "INTERRUPTED"
+          && !["queued", "running", "pausing"].includes(run.crawl_status)
+          && !["queued", "running", "pausing"].includes(run.analysis_status)
+        )
         || runPollTimersRef.current.has(session.id)
       ) return;
       pollCreationRun(
@@ -2305,6 +2314,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
               <span style={{ fontSize: "15px", fontWeight: "800", color: "#0f172a" }}>
                 {activeSubView === "users" && "重点用户管理"}
                 {activeSubView === "crawler-accounts" && "采集账号管理"}
+                {activeSubView === "task-settings" && "采集与分析设置"}
                 {activeSubView === "audit-rules" && "审核规则"}
                 {activeSubView === "slang-library" && "黑话库"}
               </span>
@@ -2315,6 +2325,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           <div ref={subViewScrollRef} style={{ flex: 1, overflowY: "auto" }}>
             {activeSubView === "users" && <FocusUsersPage />}
             {activeSubView === "crawler-accounts" && <CrawlerAccountsPage />}
+            {activeSubView === "task-settings" && <TaskSettingsPage />}
             {(activeSubView === "audit-rules" || activeSubView === "slang-library") && (
               <KnowledgeCenterPage
                 key={activeSubView}
@@ -2339,6 +2350,11 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           onToggleSidebar={() => setIsSidebarCollapsed(false)}
           onUpdateDraftKeywords={handleUpdateDraftKeywords}
           onUpdateCreationSearchTerms={handleUpdateCreationSearchTerms}
+          onRunControlAccepted={() => {
+            const binding = activeSession.creationBinding;
+            if (!binding?.run) return;
+            pollCreationRun(activeSession.id, binding.workspaceSessionId, binding.run.run_id);
+          }}
           onUpdateDraftPlatforms={handleUpdateDraftPlatforms}
           onGenerateTaskConfig={handleGenerateTaskConfig}
           onStartAgentExecution={handleStartAgentExecution}

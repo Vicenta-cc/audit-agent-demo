@@ -53,9 +53,13 @@ export interface CreateJobInput {
   start_page?: number;
   max_notes?: number;
   max_comments: number;
+  collect_comments?: boolean;
   max_concurrency: number;
   max_items_per_minute: number;
   crawler_account_id?: string;
+  get_sub_comment?: boolean;
+  collect_media?: boolean;
+  auto_analyze?: boolean;
   analyze_limit?: number;
   run_crawler: boolean;
   source_output_id?: string | null;
@@ -215,7 +219,7 @@ export function mapJobsToMonitorTasks(jobs: RawJob[], auditResults: AuditResult[
     const planName = [revision?.source_policy_name || "自定义审核配置", revision?.source_policy_version || ""]
       .join(" ")
       .trim();
-    const statusMeta = getStatusMeta(job.status);
+    const statusMeta = getStatusMeta(hasActivePhase(job) ? "running" : job.status);
 
     return {
       id: job.id,
@@ -241,7 +245,7 @@ export function mapJobsToMonitorTasks(jobs: RawJob[], auditResults: AuditResult[
 
 export function computeTaskStats(tasks: MonitorTask[], auditResults: AuditResult[]): TaskStatsSummary {
   return {
-    runningTasks: tasks.filter((task) => isRunningJobStatus(task.raw.status)).length,
+    runningTasks: tasks.filter((task) => hasActivePhase(task.raw) || isRunningJobStatus(task.raw.status)).length,
     recentRiskCount: auditResults.filter((result) => isRiskAuditResult(result) && isWithinRecentDays(getResultTime(result), 7)).length,
     liveTaskCount: tasks.filter((task) => task.source === "直播接入").length,
     focusUserTaskCount: tasks.filter((task) => task.source === "重点用户").length,
@@ -284,11 +288,9 @@ export function getPlatformLabel(platform = "", inputType = "") {
 }
 
 function buildRunMetrics(stats: JobTaskStats, outputs: AuditResult[]): TaskRunMetrics {
-  const crawled = Math.max(
-    toNumber(stats.ingested_count),
-    toNumber(stats.batch_processed_count),
-    toNumber(stats.batch_item_count)
-  );
+  // Resumed batches may include already ingested content; only unique task
+  // memberships count as collected content.
+  const crawled = toNumber(stats.ingested_count);
   return {
     crawled,
     analyzed: toNumber(stats.completed_analysis_count),
@@ -463,6 +465,12 @@ function buildStatusTimeLabel(verb: string, value: string) {
 
 function isRunningJobStatus(status: string) {
   return ["running", "analysis_running", "crawl_pausing", "analysis_stopping", "stopping"].includes(status);
+}
+
+function hasActivePhase(job: RawJob) {
+  return [job.crawl_status, job.analysis_status].some((phase) =>
+    ["queued", "running", "pausing", "stopping"].includes(phase || "")
+  );
 }
 
 function isWithinRecentDays(value: string, days: number) {

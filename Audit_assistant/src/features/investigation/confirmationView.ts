@@ -78,6 +78,15 @@ export function formatConfirmationBlockerMessage(code: string, message: string) 
 
 export function formatCreationErrorMessage(message: string) {
   const normalized = message.toUpperCase();
+  if (normalized.includes("CRAWLER_ACCOUNT_VERIFICATION_REQUIRED") || /账号.*平台验证/.test(message)) {
+    return "采集账号需要平台验证，请完成验证后再继续；登录态未判定失效。";
+  }
+  if (normalized.includes("CRAWLER_RATE_LIMITED")) {
+    return "采集受到平台限流，请等待冷却结束后再继续。";
+  }
+  if (normalized.includes("CRAWLER_ACCOUNT_LOGIN_REQUIRED")) {
+    return "采集账号需要重新登录，请在采集账号中处理后再继续。";
+  }
   if (normalized.includes("DATA_INSPECTION_FAILED")) {
     return "本轮未完成：模型服务的内容检查拒绝了请求。可以调整请求或使用已有资源。";
   }

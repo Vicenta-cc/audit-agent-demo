@@ -5,6 +5,8 @@ import json
 import os
 import shutil
 import tempfile
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -28,6 +30,7 @@ from backend.audit_agent.ingestion import (
     SelectedContentPayloadUnavailableError,
 )
 from backend.audit_agent.job_store import JobStore
+from backend.audit_agent.job_state import available_job_actions
 from backend.audit_agent.pipeline import AuditPipeline
 from backend.reporting.integration_source import CanonicalReportSource
 
@@ -135,12 +138,15 @@ def _run_pipeline(
     crawler: CandidateCrawler,
     mode: str = "search",
     analyze_limit: int = 1,
+    task_parameters: dict | None = None,
 ) -> tuple[JobStore, IngestionStore, list[str]]:
     audit_db = tmp_path / "audit.sqlite3"
     outputs_dir = tmp_path / "outputs"
     jobs = JobStore(audit_db)
     ingestion = IngestionStore(audit_db)
     configuration = _configuration(mode=mode, analyze_limit=analyze_limit)
+    if task_parameters:
+        configuration.update(task_parameters)
     if jobs.get(job_id) is None:
         jobs.create(
             job_id=job_id,
@@ -185,6 +191,117 @@ def _run_pipeline(
     pipeline.run(SimpleNamespace(**configuration))
     assert pipeline.authoritative_m3 is False
     return jobs, ingestion, analyzed
+
+
+@pytest.mark.parametrize("automatic,limit,completed", [(True, 1, 1), (False, 0, 0)])
+def test_new_task_collection_keeps_all_contents_independent_of_analysis_limit(tmp_path, monkeypatch, automatic, limit, completed):
+    jobs, ingestion, analyzed = _run_pipeline(tmp_path, monkeypatch, job_id="independent-limits",
+        crawler=CandidateCrawler([{"note_id": f"item-{i}", "title": "item"} for i in range(3)]),
+        analyze_limit=limit, task_parameters={"auto_analyze": automatic})
+    stats = ingestion.stats_for_task("independent-limits")
+    assert stats["ingested_count"] == 3
+    assert stats["completed_analysis_count"] == completed
+    assert stats["queued_analysis_count"] == 3 - completed
+    assert len(analyzed) == completed
+
+
+@pytest.mark.parametrize("action,expected", [("analysis_stop_requested", "stopped"), ("analysis_paused", "paused")])
+def test_idle_analysis_control_is_acknowledged_while_crawler_is_still_running(tmp_path, monkeypatch, action, expected):
+    class ControlledCrawler(CandidateCrawler):
+        def _run(self, mode, **kwargs):
+            jobs = pipeline_module.job_store
+            jobs.update_control("idle-control", **{action: True})
+            jobs.update("idle-control", analysis_status="stopping" if expected == "stopped" else "pausing")
+            deadline = time.monotonic() + 3
+            while jobs.get("idle-control")["analysis_status"] != expected and time.monotonic() < deadline:
+                time.sleep(0.01)
+            job = jobs.get("idle-control")
+            assert job["analysis_status"] == expected
+            assert job["crawl_status"] == "running"
+            assert available_job_actions(job, {})["resume_analysis"]
+            jobs.update_control("idle-control", **{action: False})
+            jobs.update("idle-control", analysis_status="running")
+            return super()._run(mode, **kwargs)
+
+    jobs, ingestion, analyzed = _run_pipeline(tmp_path, monkeypatch, job_id="idle-control",
+        crawler=ControlledCrawler([{"note_id": "after-resume", "title": "item"}]), mode="search", analyze_limit=1)
+    assert analyzed == ["after-resume"]
+    assert ingestion.stats_for_task("idle-control")["completed_analysis_count"] == 1
+
+
+def test_crawl_stop_becomes_terminal_before_inflight_analysis_finishes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    audit_db = tmp_path / "phase-independence.sqlite3"
+    jobs = JobStore(audit_db)
+    ingestion = IngestionStore(audit_db)
+    configuration = _configuration(mode="search", analyze_limit=1)
+    job_id = "phase-independence"
+    jobs.create(
+        job_id=job_id,
+        **{key: value for key, value in configuration.items() if not key.startswith("_")},
+    )
+    monkeypatch.setattr(pipeline_module, "job_store", jobs)
+    monkeypatch.setattr(pipeline_module.settings, "outputs_dir", tmp_path / "outputs")
+    monkeypatch.setattr(pipeline_module.settings, "auto_analyze_crawled_content", True)
+
+    pipeline = AuditPipeline.__new__(AuditPipeline)
+    pipeline.job_id = job_id
+    pipeline.ingestion = ingestion
+    pipeline.audit_results = object()
+    pipeline.prompt_profile_snapshot = {}
+    pipeline.audit_config_revision_id = ""
+    pipeline.rule_snapshot = {}
+    analysis_started = threading.Event()
+    release_analysis = threading.Event()
+
+    class StopWhileAnalysisIsInflightCrawler(CandidateCrawler):
+        def _run(self, mode: str, **kwargs) -> CrawlOutput:
+            output = super()._run(mode, **kwargs)
+            assert analysis_started.wait(5)
+            jobs.update_control(job_id, crawl_stop_requested=True)
+            return output
+
+    pipeline.crawler = StopWhileAnalysisIsInflightCrawler(
+        [{"note_id": "blocked-analysis", "title": "item"}]
+    )
+
+    def analyze(subject):
+        analysis_started.set()
+        assert release_analysis.wait(5)
+        return {"note_id": subject.note_id, "decision": "pass"}
+
+    pipeline._analyze_subject = analyze
+    pipeline._persist_audit_result = lambda **kwargs: {
+        **kwargs["result"],
+        "content_key": kwargs["content_key"],
+    }
+    worker = threading.Thread(
+        target=pipeline.run,
+        args=(SimpleNamespace(**configuration),),
+        daemon=True,
+    )
+    worker.start()
+    assert analysis_started.wait(5)
+
+    deadline = time.monotonic() + 5
+    while jobs.get(job_id)["crawl_status"] != "stopped" and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+    stopped = jobs.get(job_id)
+    assert worker.is_alive()
+    assert stopped["crawl_status"] == "stopped"
+    assert stopped["analysis_status"] == "running"
+    assert available_job_actions(stopped, ingestion.stats_for_task(job_id))["resume_crawl"] is True
+
+    jobs.update_control(job_id, crawl_stop_requested=False, crawl_epoch=1)
+    jobs.update(job_id, status="queued", crawl_status="queued")
+    release_analysis.set()
+    worker.join(5)
+    assert not worker.is_alive()
+    resumed = jobs.get(job_id)
+    assert resumed["status"] == "queued"
+    assert resumed["crawl_status"] == "queued"
 
 
 @pytest.mark.parametrize("mode", ["search", "creator"])
@@ -458,7 +575,7 @@ def test_all_invalid_candidates_fail_without_business_rows(
     assert job["items"] == []
 
 
-def test_authoritative_provider_failure_prevents_completed_result_persistence(
+def test_authoritative_provider_failure_is_isolated_without_result_persistence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     audit_db = tmp_path / "provider-failure.sqlite3"
@@ -508,14 +625,16 @@ def test_authoritative_provider_failure_prevents_completed_result_persistence(
     pipeline.run(SimpleNamespace(**configuration))
 
     job = jobs.get(job_id)
-    assert job["status"] == "failed"
-    assert job["error"] == "audit_provider_failed: 审核服务调用失败"
+    assert job["status"] == "completed"
+    assert job["crawl_status"] == "completed"
+    assert job["analysis_status"] == "partial"
+    assert not job["error"]
     assert persist_calls == []
     assert ingestion.stats_for_task(job_id)["completed_analysis_count"] == 0
     assert ingestion.stats_for_task(job_id)["failed_analysis_count"] == 1
 
 
-def test_authoritative_pipeline_does_not_switch_an_invalid_frozen_account(
+def test_authoritative_pipeline_fails_cleanly_when_account_pool_is_empty(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     audit_db = tmp_path / "invalid-frozen-account.sqlite3"
@@ -539,7 +658,10 @@ def test_authoritative_pipeline_does_not_switch_an_invalid_frozen_account(
     monkeypatch.setattr(
         pipeline_module,
         "crawler_account_store",
-        SimpleNamespace(get=lambda _account_id: None),
+        SimpleNamespace(
+            get=lambda _account_id: None,
+            available_accounts=lambda _platform: [],
+        ),
     )
     monkeypatch.setattr(pipeline_module.settings, "outputs_dir", tmp_path / "outputs")
     monkeypatch.setattr(
@@ -558,8 +680,6 @@ def test_authoritative_pipeline_does_not_switch_an_invalid_frozen_account(
 
     job = jobs.get(job_id)
     assert job["status"] == "failed"
-    assert job["error"] == (
-        "crawler_account_login_required: 抖音采集服务当前不可用，请稍后重试。"
-    )
+    assert job["error"].startswith("crawler_account_login_required:")
     assert crawler.calls == []
     assert ingestion.stats_for_task(job_id)["ingested_count"] == 0

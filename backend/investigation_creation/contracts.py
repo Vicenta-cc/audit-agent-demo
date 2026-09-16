@@ -268,6 +268,28 @@ RuleSetJudgement = Annotated[
 ]
 
 
+class InvestigationTaskParameters(StrictModel):
+    crawler_account_id: StrictStr | None = None
+    start_page: StrictInt = Field(default=1, ge=1)
+    max_notes: StrictInt = Field(default=1, ge=1, le=5)
+    max_comments: StrictInt = Field(default=1, ge=0, le=1000)
+    collect_comments: StrictBool = True
+    get_sub_comment: StrictBool = False
+    collect_media: StrictBool = True
+    max_items_per_minute: StrictInt = Field(default=1, ge=1, le=5)
+    max_concurrency: StrictInt = Field(default=1, ge=1, le=3)
+    auto_analyze: StrictBool = True
+    analyze_limit: StrictInt = Field(default=5, ge=0, le=10000)
+    analysis_batch_size: StrictInt = Field(default=1, ge=1, le=20)
+
+    @model_serializer(mode="wrap")
+    def serialize_parameters(self, handler):
+        payload = handler(self)
+        if self.crawler_account_id is None:
+            payload.pop("crawler_account_id", None)
+        return payload
+
+
 class InvestigationDraftConfiguration(StrictModel):
     schema_version: Literal["investigation-draft-config-v4"] = (
         "investigation-draft-config-v4"
@@ -275,6 +297,14 @@ class InvestigationDraftConfiguration(StrictModel):
     platform: Platform
     investigation: InvestigationMode
     judgement: RuleSetJudgement
+    task_parameters: InvestigationTaskParameters | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_configuration(self, handler):
+        payload = handler(self)
+        if self.task_parameters is None:
+            payload.pop("task_parameters", None)
+        return payload
 
     @field_validator("judgement", mode="before")
     @classmethod
@@ -301,12 +331,14 @@ class CollectionConfiguration(StrictModel):
     creator_url: StrictStr = ""
     display_name: StrictStr = ""
     start_page: StrictInt = Field(default=1, ge=1)
-    max_notes: StrictInt = Field(default=10_000, ge=1)
-    max_comments: StrictInt = Field(default=300, ge=0)
-    max_concurrency: StrictInt = Field(default=1, ge=1)
+    max_notes: StrictInt = Field(default=5, ge=1, le=5)
+    max_comments: StrictInt = Field(default=300, ge=0, le=1000)
+    max_concurrency: StrictInt = Field(default=1, ge=1, le=3)
     max_items_per_minute: StrictInt = Field(default=5, ge=1, le=5)
     crawler_account_id: StrictStr | None = None
     get_sub_comment: StrictBool = False
+    collect_comments: StrictBool = True
+    collect_media: StrictBool = True
     run_crawler: StrictBool = True
     source_output_id: StrictStr | None = None
 
@@ -363,7 +395,7 @@ class AnalysisConfiguration(StrictModel):
     capabilities: list[AnalysisCapability] = Field(default_factory=list)
     scoring_template: ScoringTemplate = ScoringTemplate.BALANCED
     analyze_limit: StrictInt = Field(default=10_000, ge=0)
-    analysis_batch_size: StrictInt = Field(default=5, ge=1)
+    analysis_batch_size: StrictInt = Field(default=5, ge=1, le=20)
 
     @field_validator("policy_id")
     @classmethod
@@ -614,6 +646,10 @@ class CrawlerAccountConfirmedState(StrictModel):
 
 
 class ConfirmationPreview(StrictModel):
+    task_settings_revision: int = 0
+    requested_parameters: InvestigationTaskParameters | None = None
+    effective_parameters: InvestigationTaskParameters | None = None
+    estimated_max_contents: StrictInt = Field(default=1, ge=0)
     draft_id: StrictStr
     draft_revision: StrictInt = Field(ge=1)
     title: StrictStr
@@ -625,9 +661,9 @@ class ConfirmationPreview(StrictModel):
     recall_plan: RecallPlanPreview
     ruleset_revision: RuleSetRevisionSummary | None = None
     temporary_ruleset: TemporaryRuleSetJudgement | None = None
-    max_notes: StrictInt = Field(default=1, ge=1)
-    max_posts_per_keyword: StrictInt = Field(default=1, ge=1)
-    max_comments_per_post: StrictInt = Field(default=300, ge=0)
+    max_notes: StrictInt = Field(default=1, ge=0)
+    max_posts_per_keyword: StrictInt = Field(default=1, ge=1, le=5)
+    max_comments_per_post: StrictInt = Field(default=300, ge=0, le=1000)
     get_sub_comment: StrictBool = False
     blockers: list[InvestigationBlocker] = Field(default_factory=list)
     can_confirm: StrictBool
@@ -650,6 +686,19 @@ class AuditConfigRevisionSnapshot(StrictModel):
 
 
 class ResolvedExecutionConfiguration(StrictModel):
+    # Absent on historical snapshots; omit absent fields from canonical hashes.
+    auto_analyze: StrictBool | None = None
+    collect_comments: StrictBool | None = None
+    collect_media: StrictBool | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_execution(self, handler):
+        payload = handler(self)
+        for key in ("auto_analyze", "collect_comments", "collect_media"):
+            if payload.get(key) is None:
+                payload.pop(key, None)
+        return payload
+
     platform: Platform
     display_name: StrictStr = ""
     crawl_mode: CrawlMode
@@ -664,9 +713,9 @@ class ResolvedExecutionConfiguration(StrictModel):
     creator_url: StrictStr = ""
     creator_id: StrictStr = ""
     start_page: StrictInt = Field(ge=1)
-    max_notes: StrictInt = Field(ge=1)
-    max_comments: StrictInt = Field(ge=0)
-    max_concurrency: StrictInt = Field(ge=1)
+    max_notes: StrictInt = Field(ge=1, le=5)
+    max_comments: StrictInt = Field(ge=0, le=1000)
+    max_concurrency: StrictInt = Field(ge=1, le=3)
     max_items_per_minute: StrictInt = Field(ge=1, le=5)
     crawler_account_id: StrictStr | None = None
     crawler_account_display_name: StrictStr = ""
@@ -675,7 +724,7 @@ class ResolvedExecutionConfiguration(StrictModel):
     analyze_limit: StrictInt = Field(ge=0)
     run_crawler: StrictBool
     source_output_id: StrictStr | None = None
-    analysis_batch_size: StrictInt = Field(ge=1)
+    analysis_batch_size: StrictInt = Field(ge=1, le=20)
     prompt_profile_snapshot: dict[str, Any]
     policy_id: StrictStr = ""
     audit_config_revision: AuditConfigRevisionSnapshot
@@ -779,6 +828,7 @@ class FrozenRuleSetSource(StrictModel):
 
 
 class ConfirmationResolution(FrozenRuleSetSource):
+    requested_parameters: InvestigationTaskParameters | None = None
     mode: Literal["search", "creator"]
     platform: Platform
     resolved_search_terms: list[StrictStr] = Field(default_factory=list)
@@ -904,6 +954,15 @@ class ConfirmedConfigurationSnapshotV3(StrictModel):
 
 
 class ConfirmedConfigurationSnapshotV4(FrozenRuleSetSource):
+    requested_parameters: InvestigationTaskParameters | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_snapshot(self, handler):
+        payload = handler(self)
+        payload.pop("temporary_ruleset" if self.temporary_ruleset is None else "ruleset_revision", None)
+        if self.requested_parameters is None:
+            payload.pop("requested_parameters", None)
+        return payload
     schema_version: Literal["investigation-run-config-v4"]
     draft_id: StrictStr
     draft_revision: StrictInt = Field(ge=1)
@@ -914,7 +973,7 @@ class ConfirmedConfigurationSnapshotV4(FrozenRuleSetSource):
     resolved_search_terms: list[StrictStr] = Field(default_factory=list)
     creator_url: StrictStr = ""
     recall_plan: ConfirmedRecallPlanSnapshot | None = None
-    max_notes: StrictInt = Field(ge=1)
+    max_notes: StrictInt = Field(ge=1, le=5)
     execution: ResolvedExecutionConfiguration
     config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
     confirmed_by: StrictStr
@@ -1012,6 +1071,7 @@ class UpdateDraftCommand(StrictModel):
 
 
 class ConfirmAndQueueCommand(StrictModel):
+    expected_task_settings_revision: int | None = Field(default=None, ge=0)
     draft_id: str = Field(min_length=1, max_length=160)
     expected_revision: int = Field(ge=1)
     confirmed: StrictBool
@@ -1088,6 +1148,8 @@ class InvestigationRunProjection(StrictModel):
     analysis_status: str
     task_stats: dict[str, Any]
     audit_results: list[dict[str, Any]] = Field(default_factory=list)
+    logs: list[dict[str, Any]] = Field(default_factory=list)
+    available_actions: dict[str, StrictBool] = Field(default_factory=dict)
     report_status: str
     report_version_id: str = ""
     report_session_id: str = ""

@@ -9,7 +9,7 @@ from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Respons
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool, StrictInt
 
 from .api.investigation import create_investigation_router
 from .api.historical_reports import create_historical_report_router
@@ -39,6 +39,11 @@ from .audit_agent.crawler_adapter import SUPPORTED_PLATFORMS, MediaCrawlerAdapte
 from .audit_agent.evidence_groups import build_evidence_groups
 from .audit_agent.ingestion import AuditResultStore, IngestionStore
 from .audit_agent.job_store import job_store
+from .audit_agent.job_state import (
+    RECOVERABLE_CRAWL_FAILURE_CODES,
+    available_job_actions,
+    failure_from_job,
+)
 from .audit_agent.lexicon_store import (
     LexiconCategoryReferenceConflictError,
     LexiconStore,
@@ -53,6 +58,7 @@ from .audit_agent.rule_compiler import (
     normalize_capabilities,
     normalize_library_ids,
 )
+from .investigation_creation.contracts import RunStatus
 from .reporting.store import ReportStore
 from .reporting.runtime import R31ReportRuntime
 from .hermes_runtime.service import HermesInvestigationAgentService
@@ -154,6 +160,7 @@ investigation_run_projector = (
         job_store=job_store,
         ingestion_store=ingestion_store,
         report_store=report_store,
+        crawler_account_store=crawler_account_store,
     )
 )
 investigation_creation_service = InvestigationCreationService(
@@ -429,17 +436,20 @@ class CrawlRequest(BaseModel):
     lexicon_keywords: list[str] = []
     creator_url: str = ""
     creator_id: str = ""
-    start_page: int = 1
-    max_notes: int = 10000
-    max_comments: int = 1000
-    max_concurrency: int = 1
-    max_items_per_minute: int = Field(default=5, ge=1, le=5)
+    start_page: StrictInt = Field(default=0, ge=0)
+    max_notes: StrictInt = Field(default=5, ge=1, le=5)
+    max_comments: StrictInt = Field(default=100, ge=0, le=1000)
+    max_concurrency: StrictInt = Field(default=1, ge=1, le=3)
+    max_items_per_minute: StrictInt = Field(default=5, ge=1, le=5)
     crawler_account_id: Optional[str] = None
-    get_sub_comment: bool = False
-    analyze_limit: int = 10000
-    run_crawler: bool = True
+    collect_comments: StrictBool = True
+    get_sub_comment: StrictBool = False
+    collect_media: StrictBool = True
+    auto_analyze: StrictBool = True
+    analyze_limit: StrictInt = Field(default=0, ge=0)
+    run_crawler: StrictBool = True
     source_output_id: Optional[str] = None
-    analysis_batch_size: int = 5
+    analysis_batch_size: StrictInt = Field(default=5, ge=1, le=20)
     prompt_profile_snapshot: dict = Field(default_factory=dict)
     policy_id: str = ""
     relation_context: dict = Field(default_factory=dict)
@@ -460,7 +470,46 @@ def crawl_request_from_job(job: dict) -> CrawlRequest:
         for name in model_fields
         if name in job and job[name] is not None
     }
+    effective_config = dict(job.get("effective_config") or {})
+    for name in ("collect_comments", "collect_media"):
+        if name not in payload and name in effective_config:
+            payload[name] = effective_config[name]
     return CrawlRequest(**payload)
+
+
+def resume_job_and_requeue_run(job_id: str, operation, *args) -> None:
+    """Finish a Job resume, then wake its interrupted Investigation Run."""
+    try:
+        operation(*args)
+    finally:
+        completed = job_store.get(job_id) or {}
+    if str(completed.get("status") or "") != "completed":
+        if str(completed.get("status") or "") == "failed":
+            failure = failure_from_job(completed)
+            error_message = str(completed.get("error") or "任务恢复失败")
+            investigation_creation_store.fail_recovery_for_job(
+                job_id,
+                error_code=str(failure.get("code") or "crawl_resume_failed"),
+                error_message=error_message,
+            )
+        return
+    if investigation_creation_store.requeue_interrupted_run_for_job(job_id):
+        job_store.log(
+            job_id,
+            "任务已从检查点完成，调查流程继续生成结果",
+            stage="recovery",
+        )
+
+
+class ResumeJobTask:
+    """Bound background callable that preserves the Job identity for diagnostics."""
+
+    def __init__(self, job_id: str, operation) -> None:
+        self.job_id = job_id
+        self.operation = operation
+
+    def run(self, *args) -> None:
+        resume_job_and_requeue_run(self.job_id, self.operation, *args)
 
 
 class AuditPolicyRequest(BaseModel):
@@ -882,7 +931,10 @@ def ensure_relation_context_matches_creator(context: dict, creator_url: str) -> 
 
 
 def enrich_job(job: dict) -> dict:
+    from .investigation_creation.adapters import _public_job_logs
+
     enriched = dict(job)
+    enriched["logs"] = _public_job_logs(enriched.get("logs") or [])
     control = enriched.get("control") or {}
     stats = ingestion_store.stats_for_task(enriched["id"])
     status = str(enriched.get("status") or "")
@@ -894,10 +946,14 @@ def enrich_job(job: dict) -> dict:
         else:
             enriched["display_name"] = enriched.get("keyword") or enriched.get("lexicon_category") or enriched["id"]
 
+    persisted_crawl_status = str(enriched.get("crawl_status") or "")
+    persisted_analysis_status = str(enriched.get("analysis_status") or "")
     if not enriched.get("run_crawler"):
         crawl_status = "skipped"
     elif control.get("stop_all_requested"):
         crawl_status = "stopping"
+    elif persisted_crawl_status and persisted_crawl_status != "pending":
+        crawl_status = persisted_crawl_status
     elif status in {"crawl_paused", "stopped", "interrupted"} or control.get("crawl_stop_requested"):
         crawl_status = "stopped"
     elif status in {"completed", "analysis_paused", "analysis_stopped"}:
@@ -909,10 +965,12 @@ def enrich_job(job: dict) -> dict:
     else:
         crawl_status = "unknown"
 
-    if status == "interrupted":
+    if control.get("stop_all_requested") or status == "stopped":
+        analysis_status = "stopping" if control.get("stop_all_requested") else "stopped"
+    elif persisted_analysis_status and persisted_analysis_status != "pending":
+        analysis_status = persisted_analysis_status
+    elif status == "interrupted":
         analysis_status = "pending"
-    elif control.get("stop_all_requested") or status == "stopped":
-        analysis_status = "stopped"
     elif status == "analysis_stopped":
         analysis_status = "stopped"
     elif control.get("analysis_stop_requested") or status == "analysis_stopping":
@@ -939,7 +997,23 @@ def enrich_job(job: dict) -> dict:
             enriched["creator_author"] = author
     enriched["crawl_status"] = crawl_status
     enriched["analysis_status"] = analysis_status
-    enriched["available_actions"] = available_job_actions(enriched, stats)
+    actions = available_job_actions(enriched, stats)
+    preferred_account_id = str(
+        ((control.get("execution_account") or {}).get("id"))
+        or enriched.get("crawler_account_id")
+        or ""
+    ).strip()
+    if (
+        actions.get("resume_crawl")
+        and preferred_account_id
+        and not crawler_account_store.available_accounts(
+            str(enriched.get("platform") or "")
+        )
+    ):
+        # Keep the UI control in sync with the endpoint guard. A fresh GET will
+        # reopen it when cooldown expires or a login refresh clears cooldown.
+        actions["resume_crawl"] = False
+    enriched["available_actions"] = actions
     revision_id = str(enriched.get("current_audit_config_revision_id") or "")
     if revision_id:
         revision = audit_config_revision_store.get(revision_id)
@@ -997,52 +1071,17 @@ def validate_crawler_account_for_job(account_id: str | None, platform: str) -> d
     return account
 
 
-def available_job_actions(job: dict, stats: dict) -> dict:
-    status = str(job.get("status") or "")
-    control = job.get("control") or {}
-    has_pending = int(stats.get("pending_analysis_count") or 0) > 0
-    has_failed = int(stats.get("failed_analysis_count") or 0) > 0
-    has_analyzing = int(stats.get("analyzing_count") or 0) > 0
-    has_retriable = has_pending or has_failed
-    deleting_or_stopping_all = status == "stopping" or bool(control.get("stop_all_requested"))
-
-    crawl_active = bool(job.get("run_crawler")) and (
-        status in {"queued", "running"}
-        or (status == "crawl_pausing" and not control.get("crawl_stop_requested"))
-    )
-    analysis_active = (
-        status in {"running", "analysis_running", "crawl_pausing"}
-        and not control.get("analysis_stop_requested")
-        and not control.get("stop_all_requested")
-    )
-    analysis_stopping = status == "analysis_stopping" or bool(control.get("analysis_stop_requested"))
-    can_backfill = (
-        has_retriable
-        and not deleting_or_stopping_all
-        and status not in {"queued", "running", "crawl_pausing", "analysis_running"}
-    )
-    if analysis_stopping:
-        can_backfill = (has_retriable or has_analyzing or status == "analysis_stopping") and not deleting_or_stopping_all
-
-    return {
-        "pause_crawl": crawl_active and not deleting_or_stopping_all,
-        "resume_crawl": bool(job.get("run_crawler"))
-        and status in {"crawl_paused", "interrupted", "failed"}
-        and not deleting_or_stopping_all,
-        "stop_analysis": analysis_active,
-        "backfill_analysis": can_backfill,
-        "delete_job": bool(job.get("id")),
-    }
-
-
 @app.on_event("startup")
 def recover_interrupted_jobs():
     deleted_results = audit_result_store.delete_for_archived_jobs()
     if deleted_results:
         print(f"[startup] deleted results for archived jobs: {deleted_results}")
     recovered = job_store.recover_interrupted_jobs()
+    requeued_analysis = ingestion_store.reset_all_analyzing()
     if recovered:
         print(f"[startup] recovered interrupted jobs: {recovered}")
+    if requeued_analysis:
+        print(f"[startup] requeued orphaned analysis items: {requeued_analysis}")
     investigation_recovery = investigation_turn_executor.recover()
     if any(investigation_recovery.values()):
         print(f"[startup] investigation Turn recovery: {investigation_recovery}")
@@ -1574,8 +1613,67 @@ def gpu_health():
     }
 
 
+from backend.audit_agent.task_settings import TaskSettingsStore, TaskSettingsConflict, effective_parameters
+from backend.investigation_creation.contracts import InvestigationTaskParameters
+
+
+class TaskSettingsRequest(BaseModel):
+    expected_revision: int = Field(ge=0)
+    parameters: InvestigationTaskParameters
+
+
+@app.get("/api/task-settings")
+def get_task_settings():
+    saved = TaskSettingsStore(job_store.db_path).get()
+    return {**saved, "effective_parameters": effective_parameters(saved["parameters"]).model_dump(mode="json")}
+
+
+@app.put("/api/task-settings")
+def save_task_settings(request: TaskSettingsRequest):
+    try:
+        saved = TaskSettingsStore(job_store.db_path).save(
+            request.parameters.model_dump(mode="json"), request.expected_revision)
+        return {**saved, "effective_parameters": effective_parameters(saved["parameters"]).model_dump(mode="json")}
+    except TaskSettingsConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @app.post("/api/jobs")
 def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
+    saved_settings = TaskSettingsStore(job_store.db_path).get()
+    if saved_settings["revision"] and request.run_crawler:
+        effective = effective_parameters(saved_settings["parameters"])
+        request = CrawlRequest.model_validate({**request.model_dump(), **effective.model_dump(mode="json"),
+                                              "crawler_account_id": effective.crawler_account_id})
+        if not request.crawler_account_id:
+            account = crawler_account_store.next_available(request.platform)
+            if not account:
+                raise HTTPException(status_code=409, detail="当前没有可用采集账号，请检查登录状态或等待冷却结束。")
+            request.crawler_account_id = account["id"]
+    requested_config = request.model_dump(
+        include={
+            "platform",
+            "crawl_mode",
+            "keyword",
+            "keyword_source",
+            "crawler_account_id",
+            "creator_url",
+            "start_page",
+            "max_notes",
+            "max_comments",
+            "max_concurrency",
+            "max_items_per_minute",
+            "collect_comments",
+            "get_sub_comment",
+            "collect_media",
+            "auto_analyze",
+            "analyze_limit",
+            "analysis_batch_size",
+            "run_crawler",
+            "source_output_id",
+        },
+        mode="json",
+    )
     relation_context = normalize_relation_context(request.relation_context)
     provided_library_ids = [item for item in request.library_ids if str(item).strip()]
     provided_capabilities = [item for item in request.capabilities if str(item).strip()]
@@ -1655,6 +1753,39 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
 
     request.crawler_account_id = str(request.crawler_account_id or "").strip() or None
     crawler_account = validate_crawler_account_for_job(request.crawler_account_id, request.platform)
+    keyword_count = len(
+        [item for item in str(request.keyword or "").split(",") if item.strip()]
+    ) if request.crawl_mode == "search" else 1
+    effective_max_concurrency = min(
+        request.max_concurrency,
+        max(1, settings.crawler_max_concurrency),
+    )
+    effective_auto_analyze = bool(
+        request.auto_analyze
+        and request.analyze_limit > 0
+        and settings.auto_analyze_crawled_content
+    )
+    request.max_concurrency = effective_max_concurrency
+    request.auto_analyze = effective_auto_analyze
+    request.collect_comments = bool(request.collect_comments)
+    if not request.collect_comments:
+        request.max_comments = 0
+        request.get_sub_comment = False
+    effective_config = {
+        **requested_config,
+        "keyword": request.keyword,
+        "keyword_source": request.keyword_source,
+        "keyword_count": keyword_count,
+        "max_notes": request.max_notes,
+        "estimated_max_total": keyword_count * request.max_notes,
+        "max_concurrency": effective_max_concurrency,
+        "collect_comments": request.collect_comments,
+        "max_comments": request.max_comments,
+        "get_sub_comment": request.get_sub_comment,
+        "collect_media": request.collect_media,
+        "auto_analyze": effective_auto_analyze,
+        "analyze_limit": request.analyze_limit,
+    }
 
     job = job_store.create(
         platform=request.platform,
@@ -1678,11 +1809,14 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         max_concurrency=request.max_concurrency,
         max_items_per_minute=request.max_items_per_minute,
         get_sub_comment=request.get_sub_comment,
+        auto_analyze=request.auto_analyze,
         analyze_limit=request.analyze_limit,
         run_crawler=request.run_crawler,
         source_output_id=request.source_output_id,
         analysis_batch_size=request.analysis_batch_size,
         prompt_profile_snapshot=request.prompt_profile_snapshot,
+        requested_config=requested_config,
+        effective_config=effective_config,
     )
     if revision_payload is None:
         revision_payload = build_audit_config_revision_payload(
@@ -1704,7 +1838,25 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
     job_store.log(
         job["id"],
         f"生成任务审核配置 Revision {revision.get('version')}：{revision.get('source_policy_name') or '自定义审核配置'}",
+        stage="configuration",
     )
+    job_store.log(
+        job["id"],
+        (
+            f"执行参数已冻结：每关键词最多 {request.max_notes} 条，"
+            f"预计最大总量 {effective_config['estimated_max_total']} 条，"
+            f"每帖评论 {request.max_comments} 条，并发 {request.max_concurrency}，"
+            f"媒体采集 {'开启' if request.collect_media else '关闭'}，"
+            f"自动分析 {'开启' if request.auto_analyze else '关闭'}"
+        ),
+        stage="configuration",
+    )
+    if crawler_account:
+        job_store.log(
+            job["id"],
+            f"已选择可用的 {request.platform} 采集账号",
+            stage="account",
+        )
     if relation_context and relation_parent_result:
         relation = job_store.upsert_comment_user_relation(
             analysis_job_id=job["id"],
@@ -1879,42 +2031,88 @@ def control_job(job_id: str, request: JobControlRequest, background_tasks: Backg
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
+    stats = ingestion_store.stats_for_task(job_id)
+    actions = available_job_actions(job, stats)
+
     if request.action == "pause_crawl":
+        if not actions["pause_crawl"]:
+            raise HTTPException(status_code=409, detail="当前任务状态不允许暂停采集")
         job_store.update_control(job_id, crawl_stop_requested=True)
-        job_store.update(job_id, status="crawl_pausing")
-        job_store.log(job_id, "收到控制指令：停止采集")
+        job_store.update(job_id, status="crawl_pausing", crawl_status="pausing")
+        job_store.log(job_id, "收到控制指令：在安全检查点暂停采集", stage="control")
     elif request.action == "resume_crawl":
-        if not available_job_actions(job, ingestion_store.stats_for_task(job_id))["resume_crawl"]:
+        if not actions["resume_crawl"]:
             raise HTTPException(status_code=409, detail="当前任务状态不允许继续采集")
         crawl_request = crawl_request_from_job(job)
-        validate_crawler_account_for_job(
-            crawl_request.crawler_account_id,
-            crawl_request.platform,
+        preferred_account_id = (
+            ((job.get("control") or {}).get("execution_account") or {}).get("id")
+            or crawl_request.crawler_account_id
         )
+        if preferred_account_id and not crawler_account_store.available_accounts(crawl_request.platform):
+            raise HTTPException(
+                status_code=409,
+                detail="当前没有结束冷却且已登录的可用采集账号，请稍后重试或补充账号。",
+            )
+        bound_run = investigation_creation_store.get_run_for_job(job_id)
+        if bound_run and bound_run.status == RunStatus.FAILED:
+            failure = failure_from_job(job)
+            if not investigation_creation_store.begin_recoverable_crawl_for_job(
+                job_id,
+                failure_code=str(failure.get("code") or ""),
+                allowed_error_codes=RECOVERABLE_CRAWL_FAILURE_CODES,
+            ):
+                raise HTTPException(status_code=409, detail="该调查失败原因不支持继续采集")
+        crawl_epoch = int((job.get("control") or {}).get("crawl_epoch") or 0) + 1
         job_store.update_control(
             job_id,
             crawl_stop_requested=False,
-            analysis_paused=False,
-            analysis_stop_requested=False,
             stop_all_requested=False,
+            crawl_epoch=crawl_epoch,
+            failure={},
         )
-        job_store.update(job_id, status="queued", error="")
-        job_store.log(job_id, "收到控制指令：从采集检查点继续")
+        job_store.update(job_id, status="queued", crawl_status="queued", error="")
+        job_store.log(job_id, "收到控制指令：从采集检查点继续", stage="control")
         pipeline = AuditPipeline(job_id=job_id)
-        background_tasks.add_task(pipeline.run, crawl_request)
-    elif request.action in {"pause_analysis", "stop_analysis"}:
+        background_tasks.add_task(
+            ResumeJobTask(job_id, pipeline.run).run,
+            crawl_request,
+            crawl_epoch,
+        )
+    elif request.action == "pause_analysis":
+        if not actions["pause_analysis"]:
+            raise HTTPException(status_code=409, detail="当前任务状态不允许暂停分析")
+        job_store.update_control(job_id, analysis_paused=True, analysis_stop_requested=False)
+        job_store.update(job_id, status="analysis_pausing", analysis_status="pausing")
+        job_store.log(job_id, "收到控制指令：在当前内容完成后暂停分析", stage="control")
+    elif request.action == "stop_analysis":
+        if not actions["stop_analysis"]:
+            raise HTTPException(status_code=409, detail="当前任务状态不允许停止分析")
         job_store.update_control(job_id, analysis_paused=False, analysis_stop_requested=True)
-        job_store.update(job_id, status="analysis_stopping")
-        job_store.log(job_id, "收到控制指令：停止分析")
+        job_store.update(job_id, status="analysis_stopping", analysis_status="stopping")
+        job_store.log(job_id, "收到控制指令：安全停止分析，已完成内容不会重复", stage="control")
     elif request.action == "resume_analysis":
+        if not actions["resume_analysis"]:
+            raise HTTPException(status_code=409, detail="当前任务状态不允许继续分析")
         job_store.update_control(
             job_id,
             analysis_paused=False,
             analysis_stop_requested=False,
             stop_all_requested=False,
         )
-        job_store.update(job_id, status="running")
-        job_store.log(job_id, "收到控制指令：恢复分析")
+        crawl_is_active = str(job.get("crawl_status") or "") in {"queued", "running", "pausing"}
+        job_store.update(
+            job_id,
+            status="running" if crawl_is_active else "analysis_running",
+            analysis_status="running",
+        )
+        job_store.log(job_id, "收到控制指令：继续处理待分析内容", stage="control")
+        if not crawl_is_active or not job.get("auto_analyze", True):
+            pipeline = AuditPipeline(job_id=job_id)
+            background_tasks.add_task(
+                ResumeJobTask(job_id, pipeline.resume_pending_analysis).run,
+                request.analyze_limit or int(job.get("analyze_limit") or 0),
+                int(job.get("analysis_batch_size") or 5),
+            )
     elif request.action == "stop_all":
         job_store.update_control(
             job_id,
@@ -1923,8 +2121,8 @@ def control_job(job_id: str, request: JobControlRequest, background_tasks: Backg
             analysis_stop_requested=True,
             stop_all_requested=True,
         )
-        job_store.update(job_id, status="stopping")
-        job_store.log(job_id, "收到控制指令：停止全部")
+        job_store.update(job_id, status="stopping", crawl_status="stopping", analysis_status="stopping")
+        job_store.log(job_id, "收到控制指令：停止全部", stage="control")
     elif request.action == "backfill_analysis":
         job_store.log(job_id, "收到控制指令：继续分析")
         if job.get("status") == "analysis_stopping":
@@ -1934,7 +2132,7 @@ def control_job(job_id: str, request: JobControlRequest, background_tasks: Backg
                 analysis_stop_requested=False,
                 stop_all_requested=False,
             )
-            job_store.update(job_id, status="running")
+            job_store.update(job_id, status="running", analysis_status="running")
             job_store.log(job_id, "已取消停止分析请求，当前分析将继续")
             return enrich_job(job_store.get(job_id))
         if job.get("status") in {"queued", "running", "crawl_pausing", "stopping", "analysis_running"}:

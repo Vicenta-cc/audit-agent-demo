@@ -100,6 +100,32 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
         self.assertEqual(command[command.index("--lt") + 1], "cookie")
         self.assertNotIn("plain-cookie-secret", " ".join(command))
 
+    def test_task_can_disable_comments_and_media_without_exposing_deployment_options(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = RecordingAdapter(Path(temp_dir))
+            output = adapter.run_search(
+                platform="dy",
+                keyword="测试",
+                start_page=0,
+                max_notes=1,
+                max_comments=100,
+                max_concurrency=1,
+                max_items_per_minute=5,
+                get_sub_comment=True,
+                collect_comments=False,
+                collect_media=False,
+                save_root=Path(temp_dir) / "output",
+            )
+
+        command = output.command
+        self.assertEqual(command[command.index("--get_comment") + 1], "false")
+        self.assertEqual(command[command.index("--get_sub_comment") + 1], "false")
+        self.assertEqual(command[command.index("--get_media") + 1], "false")
+        self.assertEqual(
+            command[command.index("--max_comments_count_singlenotes") + 1],
+            "0",
+        )
+
     def test_checkpoint_parser_supports_douyin(self):
         self.assertEqual(
             latest_search_checkpoint(
