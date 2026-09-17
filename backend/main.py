@@ -1215,6 +1215,9 @@ def get_config():
         "runtime_data_dir": str(settings.data_dir),
         "runtime_backend_port": os.getenv("XHS_AUDIT_BACKEND_PORT", ""),
         "runtime_boundary_error": runtime_boundary_error,
+        "activity_stream_enabled": settings.activity_stream_enabled,
+        "answer_stream_enabled": settings.answer_stream_enabled,
+        "creation_answer_stream_enabled": settings.creation_answer_stream_enabled,
         "risk_rule_defaults": {
             "capabilities": DEFAULT_CAPABILITIES,
             "thresholds": DEFAULT_THRESHOLDS,

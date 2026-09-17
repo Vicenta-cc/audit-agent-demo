@@ -8,6 +8,13 @@ ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
 
 
+def environment_flag(name: str, *, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true"}
+
+
 class Settings:
     root_dir = ROOT
     data_dir = Path(os.getenv("XHS_AUDIT_DATA_DIR", str(ROOT / "data"))).expanduser()
@@ -52,6 +59,15 @@ class Settings:
     hermes_creation_fake_stage_seconds = max(
         0.05,
         float(os.getenv("HERMES_CREATION_FAKE_STAGE_SECONDS", "1.2")),
+    )
+    # Investigation streaming is introduced behind independent, default-off
+    # switches so the accepted synchronous behavior remains the rollback path.
+    activity_stream_enabled = environment_flag(
+        "INVESTIGATION_ACTIVITY_STREAM_ENABLED"
+    )
+    answer_stream_enabled = environment_flag("INVESTIGATION_ANSWER_STREAM_ENABLED")
+    creation_answer_stream_enabled = environment_flag(
+        "INVESTIGATION_CREATION_ANSWER_STREAM_ENABLED"
     )
     qwen_report_model = os.getenv("QWEN_REPORT_MODEL", qwen_text_model).strip()
     report_prompt_version = os.getenv("REPORT_PROMPT_VERSION", "report-v2-human").strip()
