@@ -165,6 +165,33 @@ def test_completed_short_sentence_streams_without_waiting_for_holdback(tmp_path)
     assert "内部账号引用已隐藏" in _latest_revision_text(events)
 
 
+def test_single_character_provider_chunks_are_coalesced_before_persistence(tmp_path):
+    store = InvestigationStore(tmp_path / "write-amplification.sqlite3")
+    session, turn = _running_turn(store)
+    streamer = PublicAnswerStreamer(
+        store,
+        enabled=lambda: True,
+        sanitize=redact_internal_account_references,
+    )
+    answer = "流" * 6_000
+
+    with streamer.bind_turn(session.id, turn.id):
+        streamer.begin_iteration(session.id, 1)
+        for character in answer:
+            streamer.stream_delta(session.id, character)
+        streamer.finalize(turn.id, answer)
+
+    events = _answer_events(store, turn.id)
+    deltas = [
+        str(event["delta"])
+        for event in events
+        if event["event_type"] == "answer_delta"
+    ]
+    assert "".join(deltas) == answer
+    assert len(deltas) < len(answer) // 8
+    assert all(1 <= len(delta) <= 4_096 for delta in deltas)
+
+
 def test_disabled_streamer_exposes_no_callbacks_or_events(tmp_path):
     store = InvestigationStore(tmp_path / "disabled.sqlite3")
     session, turn = _running_turn(store)
