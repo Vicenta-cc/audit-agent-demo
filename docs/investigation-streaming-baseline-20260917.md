@@ -6,6 +6,10 @@
 - Source tag: `douyin-m3-unified-report-appendix-acceptance-20260917`.
 - Development branch: `codex/investigation-streaming-activity`.
 - Development worktree: `/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-investigation-streaming-activity`.
+- The source commit descends from deployment UI commit
+  `9788b62370b82579a52fa49052aa5d1e56627dbb`; the product frontend modified by
+  this work is `Audit_assistant`, including its collection and analysis
+  settings, rather than the older 8027 `frontend-v2`.
 
 The streaming work is additive. With all three rollout switches disabled, the
 accepted answer, tool execution, persistence, authorization, and UI behavior
@@ -211,6 +215,7 @@ Phase 4 verification used the controller-recorded Node `v24.19.0`:
    **Complete.**
 4. Shared expandable activity timeline in the investigation UI. **Frozen and accepted.**
 5. Filtered, buffered report answer deltas with reset/revision semantics.
+   **Implemented; stable candidate pending live Qwen acceptance.**
 6. Server-side creation-answer filtering followed by creation answer deltas.
 7. Replay, refresh, idempotency, performance, and failure-injection hardening.
 8. Feature-flagged acceptance in the order: activity, unified report answers,
@@ -247,3 +252,57 @@ Phase 4 is therefore the frozen functional baseline for Phase 5. Future
 non-blocking hardening should add bounded or lazy historical activity recovery
 and observability for terminal-time `running` backfill; neither changes the
 accepted Phase 4 protocol or behavior.
+
+## Phase 5 report answer typewriter stream
+
+Phase 5 connects the existing Hermes/Qwen `stream_delta_callback` to the
+durable public SSE protocol for report A/B/C and unified reports. It composes
+the answer observer with the Phase 3 activity observer, so the real tool
+lifecycle and provisional answer use the same ordered Turn sequence without
+changing tool definitions, arguments, execution count, provider retry limits,
+grounding retry behavior, mutation receipts, or final-answer persistence.
+
+The public draft is deliberately not a second answer source. Model text is
+sanitized cumulatively on the server, buffered before persistence, and emitted
+as revisioned `answer_delta` events. A tool boundary, a later model iteration,
+an interruption, or a process-resume boundary emits `answer_reset` before a new
+draft can replace the old one. The canonical, server-cleaned answer is
+reconciled into the current revision immediately before the Turn is completed;
+the existing `completed.answer` remains authoritative.
+
+The `Audit_assistant` frontend merges deltas idempotently by message, revision,
+and sequence, and renders the in-progress answer as plain text with a live
+typewriter cursor. Incomplete Markdown is never rendered. Completion removes
+the provisional draft and continues to render the existing canonical answer
+through `AssistantMarkdown`. Refresh recovery returns only the latest running
+Turn's collapsed draft, not all historical answer events, which keeps workspace
+state bounded while preserving `Last-Event-ID`/`after_sequence` replay.
+
+The answer switch remains default-off. With it disabled, Hermes retains the
+previous no-op stream callback, no answer events or draft state are exposed,
+and the UI falls back to the Phase 4 pending/final-answer behavior. Projection
+and persistence failures remain fail-open and cannot fail the underlying Turn.
+
+Phase 5 candidate verification used the immutable A/B archives and the pinned
+Douyin acceptance crawler as read-only dependencies:
+
+- Full clean-environment backend gate: `1408 passed, 28 skipped, 67 subtests
+  passed` in 202.45 seconds; only five pre-existing dependency/lifespan
+  deprecation warnings remained.
+- Focused answer/activity/creation backend gate: `98 passed`; the final API
+  recovery rerun added `7 passed` after the latest draft-state assertions.
+- Focused frontend logic gate: `46 passed`; system-Chrome answer/activity
+  rendering gate: `5 passed`.
+- Broader frontend gate: `89 passed, 2 skipped`, with the same four pre-existing
+  presentation/selector contract failures documented at Phase 4 and two new
+  Phase 5 tests passing.
+- TypeScript checking and the Vite production build passed; the existing
+  large-chunk warning remains.
+- Neither the formal 3198/8198 runtime nor the independent 8027 acceptance
+  runtime was started, restarted, or modified.
+
+This is an implementation-complete stable candidate, not yet a frozen Phase 5
+baseline. Freezing requires one feature-flagged live Qwen/browser acceptance
+covering visible incremental output, tool-boundary reset, disconnect/replay,
+refresh recovery, final-answer replacement, and an internal-reference leak
+probe across A/B/C and unified-report conversations.
