@@ -23,6 +23,7 @@ from backend.api.investigation import (
     _raise_public_error,
     _turn_status_response,
     public_activity_events_for_turns,
+    public_answer_draft_for_turn,
     turn_event_stream_response,
 )
 from backend.api.investigation_creation import (
@@ -178,6 +179,15 @@ def create_investigation_conversation_router(
                 activity_events=public_activity_events_for_turns(
                     service.store,
                     activity_turn_ids,
+                ),
+                report_answer_draft=(
+                    public_answer_draft_for_turn(
+                        service.store,
+                        state.latest_report_turn.id,
+                    )
+                    if state.latest_report_turn is not None
+                    and state.latest_report_turn.status == "running"
+                    else None
                 ),
             )
         except Exception as exc:

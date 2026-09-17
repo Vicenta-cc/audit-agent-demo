@@ -207,6 +207,13 @@ class InvestigationActivityEventResponse(PublicActivityPayload):
     occurred_at: str
 
 
+class InvestigationAnswerDraftResponse(PublicApiModel):
+    message_id: str = Field(pattern=r"^public-answer:[0-9a-f]{16,64}$")
+    revision: int = Field(ge=1)
+    text: str = ""
+    event_sequence: int = Field(ge=1)
+
+
 class InvestigationWorkspaceStateResponse(PublicApiModel):
     workspace: InvestigationWorkspaceSessionResponse
     messages: tuple[InvestigationMessageResponse, ...] = ()
@@ -216,6 +223,7 @@ class InvestigationWorkspaceStateResponse(PublicApiModel):
     report_messages: tuple[InvestigationMessageResponse, ...] = ()
     latest_report_turn: InvestigationWorkspaceTurnStatusResponse | None = None
     activity_events: tuple[InvestigationActivityEventResponse, ...] = ()
+    report_answer_draft: InvestigationAnswerDraftResponse | None = None
 
 
 class InvestigationTurnEventResponse(PublicApiModel):

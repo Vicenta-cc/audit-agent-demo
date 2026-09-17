@@ -8,6 +8,7 @@ from pydantic import Field
 from backend.api.contracts import (
     CreateInvestigationTurnRequest,
     InvestigationActivityEventResponse,
+    InvestigationAnswerDraftResponse,
     InvestigationPublicStage,
     InvestigationTurnStatus,
     PublicApiModel,
@@ -16,6 +17,7 @@ from backend.api.investigation import (
     _raise_public_error,
     _turn_status_response,
     public_activity_events_for_turns,
+    public_answer_draft_for_turn,
     turn_event_stream_response,
 )
 from backend.investigation_creation.principal import Principal, PrincipalProvider
@@ -90,6 +92,7 @@ class HistoricalWorkspaceResponse(PublicApiModel):
     conversation: tuple[HistoricalConversationMessageResponse, ...] = ()
     latest_turn: HistoricalTurnStatusResponse | None = None
     activity_events: tuple[InvestigationActivityEventResponse, ...] = ()
+    answer_draft: InvestigationAnswerDraftResponse | None = None
 
 
 class HistoricalWorkspaceListResponse(PublicApiModel):
@@ -254,6 +257,14 @@ def _workspace_response(service: Any, item: dict[str, Any]) -> HistoricalWorkspa
         activity_events=public_activity_events_for_turns(
             service.report_service.store,
             activity_turn_ids,
+        ),
+        answer_draft=(
+            public_answer_draft_for_turn(
+                service.report_service.store,
+                latest_turn.id,
+            )
+            if latest_turn is not None and latest_turn.status == "running"
+            else None
         ),
     )
 

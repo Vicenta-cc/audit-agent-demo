@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from backend.api.contracts import (
     CreateInvestigationTurnRequest,
     InvestigationActivityEventResponse,
+    InvestigationAnswerDraftResponse,
     InvestigationAnswerDeltaEventResponse,
     InvestigationAnswerResetEventResponse,
     InvestigationMessageResponse,
@@ -69,6 +70,63 @@ def public_activity_events_for_turns(
                 )
     events.sort(key=lambda event: (event.occurred_at, event.turn_id, event.sequence))
     return tuple(events)
+
+
+def public_answer_draft_for_turn(
+    store: Any,
+    turn_id: object,
+) -> InvestigationAnswerDraftResponse | None:
+    """Collapse the current public answer revision for one pending Turn."""
+
+    if not settings.answer_stream_enabled:
+        return None
+    normalized_turn_id = str(turn_id or "").strip()
+    if not normalized_turn_id:
+        return None
+    message_id = ""
+    revision = 0
+    text = ""
+    event_sequence = 0
+    for raw_event in store.list_public_turn_events(normalized_turn_id):
+        event_type = str(raw_event.get("event_type") or "")
+        if event_type not in {"answer_delta", "answer_reset"}:
+            continue
+        try:
+            _, event = _public_stream_event(raw_event)
+        except (ValidationError, TypeError, ValueError):
+            logger.warning(
+                "Skipping invalid public answer event %s for Turn %s",
+                raw_event.get("event_id", ""),
+                normalized_turn_id,
+                exc_info=True,
+            )
+            continue
+        if message_id and event.message_id != message_id:
+            logger.warning(
+                "Skipping mismatched public answer message for Turn %s",
+                normalized_turn_id,
+            )
+            continue
+        message_id = event.message_id
+        if event.revision < revision:
+            continue
+        if event_type == "answer_reset":
+            revision = event.revision
+            text = ""
+        else:
+            if event.revision > revision:
+                revision = event.revision
+                text = ""
+            text += event.delta
+        event_sequence = event.sequence
+    if not message_id or not revision or not event_sequence:
+        return None
+    return InvestigationAnswerDraftResponse(
+        message_id=message_id,
+        revision=revision,
+        text=text,
+        event_sequence=event_sequence,
+    )
 
 
 def create_investigation_router(

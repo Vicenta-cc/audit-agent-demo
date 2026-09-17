@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from contextlib import closing, nullcontext
+from contextlib import ExitStack, closing, nullcontext
 import json
+import logging
 import re
 import sqlite3
 from pathlib import Path
@@ -21,6 +22,7 @@ from backend.investigation.contracts import (
 from backend.investigation.errors import InvestigationTurnNotFoundError
 from backend.investigation.protocol import validate_hermes_transcript_messages
 from backend.investigation.public_activity import PublicActivityEmitter
+from backend.investigation.public_answer import PublicAnswerStreamer
 from backend.investigation.report_query import ReportQueryFacade
 from backend.investigation.store import InvestigationStore
 
@@ -36,6 +38,9 @@ _INTERNAL_ACCOUNT_VALUES = (
     re.compile(r"(?i)[`]?account-entry-[0-9a-f]{16,64}[`]?"),
 )
 _INTERNAL_ACCOUNT_FIELD = re.compile(r"(?i)\b(?:internal_)?account_ref\b")
+
+
+logger = logging.getLogger(__name__)
 
 
 def redact_internal_account_references(value: str) -> tuple[str, bool]:
@@ -96,6 +101,11 @@ class HermesInvestigationAgentService:
         self._activity_emitter = PublicActivityEmitter(
             self.store,
             enabled=lambda: settings.activity_stream_enabled,
+        )
+        self._answer_streamer = PublicAnswerStreamer(
+            self.store,
+            enabled=lambda: settings.answer_stream_enabled,
+            sanitize=redact_internal_account_references,
         )
 
     def close(self) -> None:
@@ -207,7 +217,13 @@ class HermesInvestigationAgentService:
                             "查询跨报告账号活动时，须在本轮重新读取证据或账号工具；"
                             "不得仅据历史回答中的空账号字段，判定当前工具仍无法识别该账号。"
                         )
-                with self._activity_emitter.bind_turn(session.id, turn.id):
+                with ExitStack() as public_streams:
+                    public_streams.enter_context(
+                        self._activity_emitter.bind_turn(session.id, turn.id)
+                    )
+                    public_streams.enter_context(
+                        self._answer_streamer.bind_turn(session.id, turn.id)
+                    )
                     result = agent.run_conversation(
                         user_message,
                         system_message=system_message,
@@ -217,20 +233,24 @@ class HermesInvestigationAgentService:
             if not isinstance(result, dict):
                 raise RuntimeError("Hermes returned a non-object Turn result")
         except Exception as exc:
+            self._answer_streamer.interrupt(turn.id)
             self.store.mark_interrupted(
                 turn.id,
                 error_code="hermes_unknown_outcome",
                 safe_message="调查执行结果暂时无法确认，可以安全恢复。",
                 retryable=True,
             )
+            self._answer_streamer.release(turn.id)
             raise RuntimeError("Hermes Turn ended with an unknown outcome") from exc
         if bool(result.get("interrupted")):
+            self._answer_streamer.interrupt(turn.id)
             self.store.mark_interrupted(
                 turn.id,
                 error_code="hermes_interrupted",
                 safe_message="调查执行被中断，可以安全恢复。",
                 retryable=True,
             )
+            self._answer_streamer.release(turn.id)
             raise RuntimeError("Hermes Turn was interrupted")
         if bool(result.get("failed")) or not bool(result.get("completed", True)):
             return self._persist_result(
@@ -254,13 +274,16 @@ class HermesInvestigationAgentService:
         except Exception as exc:
             current = self.store.get_turn(turn.id)
             if current.status == "completed":
+                self._answer_streamer.release(turn.id)
                 return self.store.turn_result(turn.id)
+            self._answer_streamer.interrupt(turn.id)
             self.store.mark_interrupted(
                 turn.id,
                 error_code="hermes_unknown_outcome",
                 safe_message="调查执行结果暂时无法确认，可以安全恢复。",
                 retryable=True,
             )
+            self._answer_streamer.release(turn.id)
             raise RuntimeError("Hermes Turn ended with an unknown outcome") from exc
 
     def accept_resume(self, turn_id: str) -> tuple[InvestigationTurn, bool]:
@@ -321,17 +344,55 @@ class HermesInvestigationAgentService:
         with self._agent_lock:
             agent = self._agents.get(session_id)
             if agent is None:
+                callbacks = self._compose_agent_callbacks(
+                    self._answer_streamer.agent_callbacks(session_id),
+                    self._activity_emitter.agent_callbacks(session_id),
+                )
+                callbacks.setdefault("stream_delta_callback", lambda _delta: None)
                 agent = self.runtime_binding.create_agent(
                     session_id=session_id,
                     agent_factory=self.agent_factory,
                     product_mode=self._product_mode(session_id),
                     base_url=settings.dashscope_base_url,
                     api_key=settings.dashscope_api_key,
-                    stream_delta_callback=lambda _delta: None,
-                    **self._activity_emitter.agent_callbacks(session_id),
+                    **callbacks,
                 )
                 self._agents[session_id] = agent
             return agent
+
+    @staticmethod
+    def _compose_agent_callbacks(
+        *callback_groups: dict[str, Callable[..., None]],
+    ) -> dict[str, Callable[..., None]]:
+        """Compose optional Hermes observers without coupling their projections."""
+
+        callbacks: dict[str, list[Callable[..., None]]] = {}
+        for group in callback_groups:
+            for name, callback in group.items():
+                callbacks.setdefault(name, []).append(callback)
+
+        def composed(
+            name: str, observers: tuple[Callable[..., None], ...]
+        ) -> Callable[..., None]:
+            def notify(*args: Any, **kwargs: Any) -> None:
+                for observer in observers:
+                    try:
+                        observer(*args, **kwargs)
+                    except Exception:
+                        logger.warning(
+                            "Public Hermes callback %s failed open",
+                            name,
+                            exc_info=True,
+                        )
+
+            return notify
+
+        return {
+            name: observers[0]
+            if len(observers) == 1
+            else composed(name, tuple(observers))
+            for name, observers in callbacks.items()
+        }
 
     def _bind_session(self, session: InvestigationSession) -> None:
         if not self.bind_runtime:
@@ -475,6 +536,7 @@ class HermesInvestigationAgentService:
             raw_answer
         )
         if bool(result.get("failed")) or not bool(result.get("completed", True)):
+            self._answer_streamer.interrupt(turn_id)
             self.store.fail_turn(
                 turn_id,
                 error_code="hermes_execution_failed",
@@ -486,6 +548,7 @@ class HermesInvestigationAgentService:
                 llm_call_count=int(result.get("api_calls") or 0),
                 stop_reason=str(result.get("turn_exit_reason") or "failed"),
             )
+            self._answer_streamer.release(turn_id)
             return self.store.turn_result(turn_id)
         if transcript is None:
             raise RuntimeError("completed Hermes result requires a validated transcript")
@@ -508,6 +571,14 @@ class HermesInvestigationAgentService:
         ]
         tool_calls = self._tool_calls(trace_messages)
         session = self.store.get_session(self.store.get_turn(turn_id).session_id)
+        try:
+            self._answer_streamer.finalize(turn_id, answer)
+        except Exception:
+            logger.warning(
+                "Public answer finalization failed open for Turn %s",
+                turn_id,
+                exc_info=True,
+            )
         self.store.complete_turn(
             turn_id,
             answer=answer,
@@ -550,6 +621,7 @@ class HermesInvestigationAgentService:
             scope_remaining_issues=[],
             hermes_transcript=transcript,
         )
+        self._answer_streamer.release(turn_id)
         self._notify(turn_id, "persist_turn")
         return self.store.turn_result(turn_id)
 

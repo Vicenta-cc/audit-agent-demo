@@ -2546,7 +2546,9 @@ def test_m3_report_and_resource_routes_hide_cross_principal_resources(
 
 def test_workspace_state_restores_pending_and_interrupted_report_turn(
     creation_stack: dict,
+    monkeypatch,
 ) -> None:
+    monkeypatch.setattr(settings, "answer_stream_enabled", True)
     result = _create_completed_turn(
         creation_stack, workspace_key="pending-report-turn"
     )
@@ -2567,6 +2569,17 @@ def test_workspace_state_restores_pending_and_interrupted_report_turn(
     creation_stack["conversation"].store.append_public_turn_event(
         turn.id, stage="accepted"
     )
+    answer_message_id = "public-answer:" + "a" * 32
+    answer_event = creation_stack["conversation"].store.append_public_stream_event(
+        turn.id,
+        event_type="answer_delta",
+        payload={
+            "message_id": answer_message_id,
+            "revision": 1,
+            "delta": "正在恢复的报告回答",
+        },
+        idempotency_key="public-event:" + "b" * 32,
+    )
 
     pending = creation_stack["client"].get(
         f"/api/investigation-workspaces/{result['workspace_id']}/state"
@@ -2575,6 +2588,12 @@ def test_workspace_state_restores_pending_and_interrupted_report_turn(
     assert pending.json()["latest_report_turn"]["turn_id"] == turn.id
     assert pending.json()["latest_report_turn"]["status"] == "running"
     assert [item["role"] for item in pending.json()["report_messages"]] == ["user"]
+    assert pending.json()["report_answer_draft"] == {
+        "message_id": answer_message_id,
+        "revision": 1,
+        "text": "正在恢复的报告回答",
+        "event_sequence": answer_event["sequence"],
+    }
     assert "session_id" not in json.dumps(
         pending.json()["latest_report_turn"], ensure_ascii=False
     )
@@ -2597,6 +2616,7 @@ def test_workspace_state_restores_pending_and_interrupted_report_turn(
     assert interrupted.status_code == 200
     assert interrupted.json()["latest_report_turn"]["status"] == "interrupted"
     assert interrupted.json()["latest_report_turn"]["retryable"] is True
+    assert interrupted.json()["report_answer_draft"] is None
 
     assert creation_stack["client"].post(
         f"/api/investigation-turns/{turn.id}/resume"
