@@ -67,6 +67,16 @@ def test_new_tasks_publish_one_deterministic_unified_report_for_every_safe_risk_
         "review": expected["review"],
         "reject": expected["reject"],
     }
+    assert "snapshot_summary" not in view["accounts"]
+    assert view["accounts"]["coverage"] == {
+        "target_account_count": 0,
+        "post_author_account_count": 1,
+        "comment_author_account_count": 0,
+        "distinct_account_count": 1,
+        "default_active_comment_account_count": 0,
+        "full_account_index_available": True,
+    }
+    assert len(view["accounts"]["post_author_entries"]) == 1
 
     sections = {item["section_number"]: item for item in document["ordered_sections"]}
     assert sections["1"]["title"] == "报告概览"
@@ -79,6 +89,20 @@ def test_new_tasks_publish_one_deterministic_unified_report_for_every_safe_risk_
     assert ("2" in sections) is bool(expected["review"] or expected["reject"])
     assert ("3" in sections) is bool(expected["pass"])
     assert "4" not in sections
+
+    presentation_sections = {
+        item["section_number"]: item for item in view["ordered_sections"]
+    }
+    assert sum(
+        len(presentation_sections[number]["group_posts"])
+        for number in ("2", "3", "4")
+        if number in presentation_sections
+    ) == len(verdicts)
+    for number in ("2", "3", "4"):
+        if number in presentation_sections:
+            assert presentation_sections[number]["group_total"] == len(
+                presentation_sections[number]["group_posts"]
+            )
 
     grouped_refs = [
         ref
@@ -101,6 +125,106 @@ def test_new_tasks_publish_one_deterministic_unified_report_for_every_safe_risk_
             "WHERE report_version_id = ?",
             (result.report_version_id,),
         ).fetchone()[0] == 0
+
+
+def test_unified_report_presents_publishers_commenters_and_complete_post_navigation(
+    tmp_path,
+):
+    comments = [
+        {
+            "comment_id": "comment-1",
+            "audit_status": "completed",
+            "risk_level": "none",
+            "risk_type": "none",
+            "content": "普通评论",
+            "nickname": "评论账号",
+            "sec_uid": "stable-commenter",
+            "create_time": 1789603200,
+        }
+    ]
+    verdicts = [
+        ("pass", "none"),
+        ("review", "medium"),
+        ("pass", "none"),
+        ("reject", "high"),
+        ("pass", "none"),
+    ]
+    source, store = seed["seed_audit"](
+        tmp_path,
+        verdicts=verdicts,
+        comments=comments,
+    )
+    result = seed["R31ReportRuntime"](store).generate(
+        "new-search-task",
+        source=source,
+        checkpoint_path=tmp_path / "checkpoints.sqlite3",
+    )
+
+    reopened = seed["ReportStore"](store.db_path)
+    view = reopened.get_presentation_projection(result.report_version_id)
+    assert view["report_metadata"]["template_kind"] == "unified_audit"
+    assert view["accounts"]["coverage"]["post_author_account_count"] == 1
+    assert view["accounts"]["coverage"]["comment_author_account_count"] == 1
+    assert view["accounts"]["coverage"]["distinct_account_count"] == 2
+    assert [
+        item["display_name"]
+        for item in view["accounts"]["comment_author_entries"]
+    ] == ["评论账号"]
+
+    grouped = [
+        post
+        for section in view["ordered_sections"]
+        for post in section.get("group_posts") or []
+    ]
+    assert len(grouped) == 5
+    assert len({item["post_ref"] for item in grouped}) == 5
+    for post in grouped:
+        detail = reopened.get_presentation_post_detail(
+            result.report_version_id,
+            post_ref=post["post_ref"],
+        )
+        assert detail["source_url"].startswith("https://www.douyin.com/video/")
+        assert detail["audit_summary"]
+
+    appendix = reopened.get_presentation_appendix(
+        result.report_version_id,
+        view="posts",
+        limit=100,
+    )
+    assert appendix["matched_count"] == 5
+    assert len(appendix["items"]) == 5
+
+
+def test_unified_report_omits_unresolved_commenter_without_nickname_merge(tmp_path):
+    comments = [
+        {
+            "comment_id": "comment-without-stable-account",
+            "audit_status": "completed",
+            "risk_level": "none",
+            "risk_type": "none",
+            "content": "昵称相同也不能作为账号身份",
+            "nickname": "帖子作者",
+            "sec_uid": "",
+            "create_time": 1789603200,
+        }
+    ]
+    source, store = seed["seed_audit"](
+        tmp_path,
+        verdicts=[("pass", "none")],
+        comments=comments,
+    )
+
+    result = seed["R31ReportRuntime"](store).generate(
+        "new-search-task",
+        source=source,
+        checkpoint_path=tmp_path / "checkpoints.sqlite3",
+    )
+
+    view = store.get_presentation_projection(result.report_version_id)
+    assert view["accounts"]["coverage"]["post_author_account_count"] == 1
+    assert view["accounts"]["coverage"]["comment_author_account_count"] == 0
+    assert view["accounts"]["coverage"]["distinct_account_count"] == 1
+    assert view["accounts"]["comment_author_entries"] == []
 
 
 def test_unified_report_supports_all_pass_review_reject_decision_combinations(tmp_path):

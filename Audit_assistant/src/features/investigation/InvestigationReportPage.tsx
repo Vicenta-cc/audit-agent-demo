@@ -121,10 +121,11 @@ function AccountMetricGrid({ statistics, includesPublishing, className = "" }: {
   );
 }
 
-type AccountTableMode = "publishing" | "cross" | "risk";
+type AccountTableMode = "publishing" | "commenting" | "cross" | "risk";
 
 const accountTableHeaders: Record<AccountTableMode, string[]> = {
   publishing: ["账号", "发布帖子", "风险帖子", "评论", "风险评论", "评论涉及帖子", "详情"],
+  commenting: ["账号", "评论", "风险评论", "涉及帖子", "评论对象", "详情"],
   cross: ["账号", "出现调查", "本次评论", "本次风险评论", "本次涉及帖子", "详情"],
   risk: ["账号", "风险评论", "评论", "涉及帖子", "评论对象", "详情"]
 };
@@ -174,6 +175,14 @@ function AccountTable({
                   <span role="cell">{displayNumber(statistics.comment_count)}</span>
                   <span role="cell">{displayNumber(statistics.risk_comment_count)}</span>
                   <span role="cell">{displayNumber(statistics.commented_post_count)}</span>
+                </>
+              ) : null}
+              {mode === "commenting" ? (
+                <>
+                  <span role="cell">{displayNumber(statistics.comment_count)}</span>
+                  <span role="cell" className={Number(statistics.risk_comment_count || 0) > 0 ? "is-risk" : ""}>{displayNumber(statistics.risk_comment_count)}</span>
+                  <span role="cell">{displayNumber(statistics.commented_post_count)}</span>
+                  <span role="cell">{displayNumber(statistics.commented_post_author_count)}</span>
                 </>
               ) : null}
               {mode === "risk" ? (
@@ -322,6 +331,7 @@ function ReportSection({
 
   if (section.presentation_kind === "account_activity_overview") {
     const accounts = report.accounts;
+    const isUnifiedAudit = metadata.template_kind === "unified_audit";
     if (accounts.snapshot_summary) {
       return (
         <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
@@ -376,7 +386,18 @@ function ReportSection({
             ) : null}
           </div>
         </div>
-        <div className="r31-account-group r31-comment-account-panel r31-dynamic-commenters">
+        {isUnifiedAudit ? (
+          <div className="r31-account-group r31-comment-account-panel r31-current-commenters">
+            <div className="r31-group-heading">
+              <h3>本次评论账号</h3>
+              <span>基于本次发布报告</span>
+            </div>
+            {accounts.comment_author_entries?.length
+              ? <AccountTable entries={accounts.comment_author_entries} mode="commenting" onOpen={onOpenAccount} />
+              : <p className="r31-empty-line">本次调查没有具有稳定标识的评论账号。</p>}
+          </div>
+        ) : <>
+          <div className="r31-account-group r31-comment-account-panel r31-dynamic-commenters">
           <div className="r31-group-heading">
             <h3>跨调查评论账号</h3>
             <span>{accounts.cross_investigation_commenters?.basis_label}</span>
@@ -415,6 +436,43 @@ function ReportSection({
             </button>
           ) : null}
         </div>
+        </>}
+      </section>
+    );
+  }
+
+  if (["risk_post_analysis", "safe_post_analysis", "pending_post_analysis"].includes(section.presentation_kind)) {
+    return (
+      <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+        <SectionHeading section={section} />
+        {section.group_summary ? <p>{section.group_summary}</p> : null}
+        <div className="r31-post-list">
+          {(section.group_posts || []).map((post) => (
+            <article className="r31-standalone-row" key={post.post_ref}>
+              <PostRow post={post} onOpen={onOpenPost} />
+              <p className="r31-disposition-note"><strong>原审核说明：</strong>{post.audit_summary || "原审核结果未提供文字说明。"}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (section.presentation_kind === "appendix") {
+    return (
+      <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
+        <SectionHeading section={section} />
+        <FormalParagraphs paragraphs={section.paragraphs} />
+        <dl className="r31-stat-band">
+          <StatBandItem label="完整帖子" value={report.appendix.post_count} />
+          <StatBandItem label="直接研判依据" value={report.appendix.direct_evidence_count} />
+        </dl>
+        <button type="button" className="r31-text-action" onClick={() => onOpenAppendix({ view: "posts" })}>
+          查看全部帖子与审核结论（{displayNumber(report.appendix.post_count)}） <ChevronRight size={15} />
+        </button>
+        <button type="button" className="r31-text-action" onClick={() => onOpenAppendix({ view: "evidence" })}>
+          查看全部研判依据（{displayNumber(report.appendix.direct_evidence_count)}） <ChevronRight size={15} />
+        </button>
       </section>
     );
   }
