@@ -219,6 +219,7 @@ Phase 4 verification used the controller-recorded Node `v24.19.0`:
 6. Server-side creation-answer filtering followed by creation answer deltas.
    **Frozen and accepted.**
 7. Replay, refresh, idempotency, performance, and failure-injection hardening.
+   **Stable candidate; deterministic gate complete.**
 8. Feature-flagged acceptance in the order: activity, unified report answers,
    A/B/C answers, creation answers.
 
@@ -443,4 +444,62 @@ The temporary frontend and backend were stopped after the gate. Neither formal
 3198/8198, the previous 3199/8199 acceptance runtime, the independent 8027
 runtime, nor the Phase 5 3299/8299 runtime was started, restarted, or modified.
 Phase 6 is therefore frozen and accepted at the revision carrying this record;
-Phase 7 has not started.
+at the time of that freeze, Phase 7 had not started.
+
+## Phase 7 replay and failure hardening
+
+Phase 7 starts from the frozen Phase 6 tag
+`investigation-creation-answer-stream-phase6-acceptance-20260917` and remains
+on the isolated `codex/investigation-streaming-hardening` worktree. It does not
+change report or creation tool definitions, authorization, provider retries,
+grounding retries, mutation receipts, or canonical final-answer persistence.
+
+The workspace recovery payload now reads public activity only for the most
+recent 20 Turns by default. The bound is configurable with
+`INVESTIGATION_ACTIVITY_RECOVERY_TURN_LIMIT` (1 through 100), while the current
+Turn answer draft and canonical message history retain their existing recovery
+paths. Store queries filter activity/answer/Turn event types in SQLite instead
+of materializing unrelated public events.
+
+Durable SSE replay now reads at most 256 events per batch by default, controlled
+by `INVESTIGATION_STREAM_REPLAY_BATCH_SIZE` (1 through 1,000). Backlog batches
+drain without the live-poll delay. A terminal event closes the stream only after
+the cursor is caught up with the Turn's latest durable sequence, so an older
+interruption at a batch boundary cannot hide a later resume attempt. The
+`Last-Event-ID` lookup remains scoped to the requested Turn and has an explicit
+cross-Turn regression test.
+
+Projection-storage failures were injected into both report and creation paths.
+In each case streaming failed open: the canonical Turn completed, report tools
+executed once, creation produced exactly one Draft and no Run, and no partial
+display event changed business execution. Two report Sessions also streamed in
+parallel without sharing answer text or revisions. A 6,000-character answer
+delivered one character at a time was coalesced before persistence, reconstructed
+exactly, and kept every public delta within the 4,096-character contract.
+
+The browser stream consumer now rejects otherwise valid activity, answer, reset,
+and terminal events whose `turn_id` differs from the requested Turn. Existing
+sequence and revision idempotency remains in place.
+
+### Phase 7 deterministic gate
+
+The tested source revision is `c957dc7d435aefffded665e98ca2f459c7efb6f3`.
+The formal runtime, the 3199/8199 acceptance runtime, the independent 8027
+runtime, and the Phase 5/6 temporary runtimes were not started or modified.
+
+- Focused streaming/activity/creation backend gate: `108 passed`.
+- Full backend gate with the immutable A/B archives: `1418 passed, 28 skipped,
+  67 subtests passed` in 200.11 seconds.
+- TypeScript checking: passed.
+- Frontend logic gate: `14 passed`.
+- Focused activity/typewriter browser gate: `6 passed`.
+- Vite production build: passed; the pre-existing large-chunk advisory remains.
+- Report A/B archive hashes remained
+  `f70d1b9fb6cd85471d3f9e8e3bc2c0d89f390329a6c5a02449d4a3c506b46560` and
+  `2de176629ac0cd2d06588bc436786dc45819555ec48bc2cad59a84207c8793bf`;
+  both read-only `PRAGMA quick_check` results were `ok`.
+
+The structured receipt is
+`docs/evidence/investigation-streaming-phase7-hardening.json`. Phase 7 is a
+stable candidate, not a rollout acceptance. Phase 8 has not started and no
+Phase 7 freeze tag is created by this record.

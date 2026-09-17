@@ -1,0 +1,52 @@
+{
+  "phase": 7,
+  "status": "stable_candidate",
+  "date": "2026-09-17",
+  "baseline": {
+    "tag": "investigation-creation-answer-stream-phase6-acceptance-20260917",
+    "commit": "9b17f0ae573cd6485fb39b50abc3fe4bb8533a00"
+  },
+  "tested_source_commit": "c957dc7d435aefffded665e98ca2f459c7efb6f3",
+  "branch": "codex/investigation-streaming-hardening",
+  "hardening": {
+    "activity_recovery_turn_limit_default": 20,
+    "activity_recovery_turn_limit_range": [1, 100],
+    "stream_replay_batch_size_default": 256,
+    "stream_replay_batch_size_range": [1, 1000],
+    "typed_store_filtering": true,
+    "turn_scoped_last_event_id_regression": true,
+    "terminal_batch_boundary_regression": true,
+    "projection_failure_is_fail_open": true,
+    "parallel_session_isolation": true,
+    "browser_turn_isolation": true,
+    "single_character_provider_input_length": 6000,
+    "maximum_public_delta_length": 4096
+  },
+  "verification": {
+    "focused_backend": "108 passed, 5 warnings in 18.73s",
+    "full_backend": "1418 passed, 28 skipped, 5 warnings, 67 subtests passed in 200.11s",
+    "typescript": "passed",
+    "frontend_logic": "14 passed",
+    "focused_browser": "6 passed",
+    "vite_production_build": "passed with pre-existing large-chunk advisory"
+  },
+  "historical_archives": {
+    "report_a_sha256": "f70d1b9fb6cd85471d3f9e8e3bc2c0d89f390329a6c5a02449d4a3c506b46560",
+    "report_b_sha256": "2de176629ac0cd2d06588bc436786dc45819555ec48bc2cad59a84207c8793bf",
+    "report_a_quick_check": "ok",
+    "report_b_quick_check": "ok",
+    "access": "read_only_test_inputs"
+  },
+  "runtime_mutation": {
+    "formal_3198_8198": false,
+    "acceptance_3199_8199": false,
+    "independent_8027": false,
+    "phase5_temporary_runtime": false,
+    "phase6_temporary_runtime": false
+  },
+  "rollout": {
+    "phase8_started": false,
+    "freeze_tag_created": false,
+    "streaming_flags_default_off": true
+  }
+}
