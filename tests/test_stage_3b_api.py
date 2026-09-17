@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,8 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from backend.api.contracts import (
+    InvestigationActivityEventResponse,
+    InvestigationAnswerDeltaEventResponse,
     InvestigationPublicStage,
     InvestigationTurnEventResponse,
     ReportTextBlockResponse,
@@ -51,6 +54,39 @@ class Stage3BPublicContractTest(unittest.TestCase):
             retryable=True,
         )
         self.assertEqual(event.safe_message, "调查暂时无法完成。")
+
+    def test_stream_extensions_reject_internal_and_oversized_payloads(self):
+        with self.assertRaises(ValidationError):
+            InvestigationActivityEventResponse(
+                event_id="investigation-stream-event:" + "1" * 32,
+                turn_id="investigation-turn:1",
+                sequence=1,
+                occurred_at="2026-08-11T00:00:00+00:00",
+                activity_id="public-activity:" + "2" * 16,
+                status="running",
+                label="读取报告概览",
+                tool_call_id="private-tool-call:1",
+            )
+        with self.assertRaises(ValidationError):
+            InvestigationAnswerDeltaEventResponse(
+                event_id="investigation-stream-event:" + "3" * 32,
+                turn_id="investigation-turn:1",
+                sequence=2,
+                occurred_at="2026-08-11T00:00:01+00:00",
+                message_id="raw-model-message-id",
+                revision=1,
+                delta="内部标识不应被接受",
+            )
+        with self.assertRaises(ValidationError):
+            InvestigationAnswerDeltaEventResponse(
+                event_id="investigation-stream-event:" + "4" * 32,
+                turn_id="investigation-turn:1",
+                sequence=3,
+                occurred_at="2026-08-11T00:00:02+00:00",
+                message_id="public-answer:" + "5" * 16,
+                revision=1,
+                delta="字" * 4_097,
+            )
 
 
 class InvestigationTurnEventStoreTest(unittest.TestCase):
@@ -97,6 +133,221 @@ class InvestigationTurnEventStoreTest(unittest.TestCase):
                 ),
                 2,
             )
+
+    def test_stream_extensions_are_durable_ordered_and_idempotent(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "investigation.sqlite3"
+            store = InvestigationStore(path)
+            session = store.create_session(self._report_context("extensions"))
+            turn, _ = store.create_turn(
+                session.id,
+                client_message_id="client-message:stream-extensions",
+                user_input="请解释这份报告。",
+            )
+            accepted = store.append_public_turn_event(turn.id, stage="accepted")
+            activity_payload = {
+                "activity_id": "public-activity:" + "1" * 16,
+                "status": "running",
+                "label": "读取报告概览",
+                "summary": "正在读取公开报告内容。",
+                "result_count": 1,
+            }
+            activity = store.append_public_stream_event(
+                turn.id,
+                event_type="activity",
+                payload=activity_payload,
+                idempotency_key="public-event:" + "2" * 16,
+            )
+            duplicate = store.append_public_stream_event(
+                turn.id,
+                event_type="activity",
+                payload=activity_payload,
+                idempotency_key="public-event:" + "2" * 16,
+            )
+            first_delta = store.append_public_stream_event(
+                turn.id,
+                event_type="answer_delta",
+                payload={
+                    "message_id": "public-answer:" + "3" * 16,
+                    "revision": 1,
+                    "delta": "相同",
+                },
+                idempotency_key="public-event:" + "4" * 16,
+            )
+            second_delta = store.append_public_stream_event(
+                turn.id,
+                event_type="answer_delta",
+                payload={
+                    "message_id": "public-answer:" + "3" * 16,
+                    "revision": 1,
+                    "delta": "相同",
+                },
+                idempotency_key="public-event:" + "5" * 16,
+            )
+            reset = store.append_public_stream_event(
+                turn.id,
+                event_type="answer_reset",
+                payload={
+                    "message_id": "public-answer:" + "3" * 16,
+                    "revision": 2,
+                },
+                idempotency_key="public-event:" + "6" * 16,
+            )
+            planning = store.append_public_turn_event(turn.id, stage="planning")
+
+            self.assertEqual(activity, duplicate)
+            self.assertEqual(
+                [
+                    accepted["sequence"],
+                    activity["sequence"],
+                    first_delta["sequence"],
+                    second_delta["sequence"],
+                    reset["sequence"],
+                    planning["sequence"],
+                ],
+                [1, 2, 3, 4, 5, 6],
+            )
+            self.assertEqual(
+                [item["event_type"] for item in store.list_public_turn_events(turn.id)],
+                [
+                    "turn",
+                    "activity",
+                    "answer_delta",
+                    "answer_delta",
+                    "answer_reset",
+                    "turn",
+                ],
+            )
+            self.assertNotEqual(first_delta["event_id"], second_delta["event_id"])
+            self.assertNotIn("idempotency_key", activity)
+
+            with self.assertRaisesRegex(ValueError, "idempotency conflict"):
+                store.append_public_stream_event(
+                    turn.id,
+                    event_type="activity",
+                    payload={**activity_payload, "label": "读取其他内容"},
+                    idempotency_key="public-event:" + "2" * 16,
+                )
+            with self.assertRaises(ValidationError):
+                store.append_public_stream_event(
+                    turn.id,
+                    event_type="activity",
+                    payload={**activity_payload, "raw_arguments": {"report_id": "private"}},
+                    idempotency_key="public-event:" + "7" * 16,
+                )
+
+            store.mark_interrupted(
+                turn.id,
+                error_code="test_interruption",
+                safe_message="调查执行已中断。",
+                retryable=True,
+            )
+            self.assertEqual(
+                store.append_public_stream_event(
+                    turn.id,
+                    event_type="activity",
+                    payload=activity_payload,
+                    idempotency_key="public-event:" + "2" * 16,
+                ),
+                activity,
+            )
+            with self.assertRaisesRegex(ValueError, "running Turn"):
+                store.append_public_stream_event(
+                    turn.id,
+                    event_type="activity",
+                    payload=activity_payload,
+                    idempotency_key="public-event:" + "a" * 16,
+                )
+
+            reopened = InvestigationStore(path)
+            self.assertEqual(
+                reopened.list_public_turn_events(
+                    turn.id, after_sequence=activity["sequence"]
+                )[0]["delta"],
+                "相同",
+            )
+
+    def test_existing_event_table_is_migrated_without_losing_replay(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "investigation.sqlite3"
+            store = InvestigationStore(path)
+            session = store.create_session(self._report_context("migration"))
+            turn, _ = store.create_turn(
+                session.id,
+                client_message_id="client-message:stream-migration",
+                user_input="继续调查。",
+            )
+            accepted = store.append_public_turn_event(turn.id, stage="accepted")
+
+            with sqlite3.connect(path) as connection:
+                connection.execute("PRAGMA foreign_keys = OFF")
+                connection.execute(
+                    """
+                    CREATE TABLE legacy_public_turn_events (
+                        event_id TEXT PRIMARY KEY,
+                        turn_id TEXT NOT NULL,
+                        sequence INTEGER NOT NULL,
+                        stage TEXT NOT NULL,
+                        answer TEXT NOT NULL DEFAULT '',
+                        safe_message TEXT NOT NULL DEFAULT '',
+                        retryable INTEGER NOT NULL DEFAULT 0,
+                        artifact_json TEXT NOT NULL DEFAULT '{}',
+                        occurred_at TEXT NOT NULL,
+                        UNIQUE(turn_id, sequence)
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    INSERT INTO legacy_public_turn_events (
+                        event_id, turn_id, sequence, stage, answer, safe_message,
+                        retryable, artifact_json, occurred_at
+                    )
+                    SELECT event_id, turn_id, sequence, stage, answer, safe_message,
+                           retryable, artifact_json, occurred_at
+                    FROM investigation_public_turn_events
+                    """
+                )
+                connection.execute("DROP TABLE investigation_public_turn_events")
+                connection.execute(
+                    "ALTER TABLE legacy_public_turn_events "
+                    "RENAME TO investigation_public_turn_events"
+                )
+
+            migrated = InvestigationStore(path)
+            restored = migrated.list_public_turn_events(turn.id)
+            self.assertEqual(restored[0]["event_id"], accepted["event_id"])
+            self.assertEqual(restored[0]["event_type"], "turn")
+            activity = migrated.append_public_stream_event(
+                turn.id,
+                event_type="activity",
+                payload={
+                    "activity_id": "public-activity:" + "8" * 16,
+                    "status": "succeeded",
+                    "label": "读取报告概览",
+                    "summary": "已读取公开报告。",
+                    "result_count": 1,
+                },
+                idempotency_key="public-event:" + "9" * 16,
+            )
+            self.assertEqual(activity["sequence"], 2)
+
+    @staticmethod
+    def _report_context(suffix: str) -> PublishedReportContext:
+        return PublishedReportContext(
+            task_id=f"task-stage-3b-{suffix}",
+            report_id="report:" + "a" * 32,
+            report_version_id="report-version:" + "b" * 32,
+            version_number=1,
+            source_snapshot_id=f"source-snapshot:stage-3b-{suffix}",
+            snapshot_hash="c" * 64,
+            source_hash=f"source-stage-3b-{suffix}",
+            title="测试报告",
+            content_hash=f"content-stage-3b-{suffix}",
+            published_at="2026-08-11T00:00:00+00:00",
+            finding_ids=(),
+            evidence_ids=(),
+        )
 
 
 class _BlockingAsyncService:
@@ -408,6 +659,93 @@ class InvestigationSessionApiTest(unittest.TestCase):
         self.assertIn('"stage":"completed"', response.text)
         self.assertNotIn("tool_calls", response.text)
         self.assertNotIn("current_node", response.text)
+
+    def test_sse_interleaves_typed_extensions_and_resumes_after_one(self):
+        activity_id = "investigation-stream-event:activity"
+        self.service.store.events = (
+            {**self.service.store.events[0], "event_type": "turn"},
+            {
+                "event_id": activity_id,
+                "turn_id": self.service.store.turn.id,
+                "sequence": 2,
+                "event_type": "activity",
+                "activity_id": "public-activity:" + "1" * 16,
+                "status": "succeeded",
+                "label": "读取报告概览",
+                "summary": "已读取公开报告。",
+                "result_count": 1,
+                "occurred_at": "2026-08-11T00:00:01+00:00",
+            },
+            {
+                "event_id": "investigation-stream-event:delta-1",
+                "turn_id": self.service.store.turn.id,
+                "sequence": 3,
+                "event_type": "answer_delta",
+                "message_id": "public-answer:" + "2" * 16,
+                "revision": 1,
+                "delta": "这份",
+                "occurred_at": "2026-08-11T00:00:01+00:00",
+            },
+            {
+                "event_id": "investigation-stream-event:reset",
+                "turn_id": self.service.store.turn.id,
+                "sequence": 4,
+                "event_type": "answer_reset",
+                "message_id": "public-answer:" + "2" * 16,
+                "revision": 2,
+                "occurred_at": "2026-08-11T00:00:01+00:00",
+            },
+            {
+                **self.service.store.events[1],
+                "sequence": 5,
+                "event_type": "turn",
+            },
+        )
+
+        response = self.client.get(
+            "/api/investigation-turns/investigation-turn:1/events"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("event: activity", response.text)
+        self.assertIn("event: answer_delta", response.text)
+        self.assertIn("event: answer_reset", response.text)
+        self.assertLess(response.text.index("event: activity"), response.text.index("event: answer_delta"))
+        self.assertLess(response.text.index("event: answer_reset"), response.text.index('"stage":"completed"'))
+        self.assertNotIn("idempotency_key", response.text)
+        self.assertNotIn("tool_call_id", response.text)
+
+        replay = self.client.get(
+            "/api/investigation-turns/investigation-turn:1/events",
+            headers={"Last-Event-ID": activity_id},
+        )
+        self.assertNotIn("event: activity", replay.text)
+        self.assertIn("event: answer_delta", replay.text)
+        self.assertIn('"stage":"completed"', replay.text)
+
+    def test_status_projection_ignores_display_only_extensions(self):
+        self.service.store.turn.status = "running"
+        self.service.store.turn.current_node = "prepare_context"
+        self.service.store.events = (
+            {**self.service.store.events[0], "event_type": "turn"},
+            {
+                "event_id": "investigation-stream-event:activity",
+                "turn_id": self.service.store.turn.id,
+                "sequence": 2,
+                "event_type": "activity",
+                "activity_id": "public-activity:" + "3" * 16,
+                "status": "running",
+                "label": "读取报告概览",
+                "summary": "",
+                "result_count": None,
+                "occurred_at": "2026-08-11T00:00:02+00:00",
+            },
+        )
+        response = self.client.get("/api/investigation-turns/investigation-turn:1")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["stage"], "accepted")
+        self.assertEqual(
+            response.json()["updated_at"], "2026-08-11T00:00:01+00:00"
+        )
 
     def test_sse_replay_does_not_stop_at_a_previous_resume_attempt(self):
         self.service.store.turn.status = "interrupted"

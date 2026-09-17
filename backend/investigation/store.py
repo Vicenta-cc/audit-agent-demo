@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,6 +45,10 @@ from backend.investigation.errors import (
     ReportNotFoundError,
 )
 from backend.investigation.protocol import validate_hermes_transcript_messages
+from backend.investigation.public_stream import (
+    PUBLIC_STREAM_EVENT_TYPES,
+    normalize_public_stream_payload,
+)
 
 
 def utc_now() -> str:
@@ -164,6 +169,10 @@ class InvestigationStore:
                     event_id TEXT PRIMARY KEY,
                     turn_id TEXT NOT NULL,
                     sequence INTEGER NOT NULL,
+                    event_type TEXT NOT NULL DEFAULT 'turn' CHECK(event_type IN (
+                        'turn', 'activity', 'answer_delta', 'answer_reset'
+                    )),
+                    idempotency_key TEXT NOT NULL DEFAULT '',
                     stage TEXT NOT NULL CHECK(stage IN (
                         'accepted', 'planning', 'preparing_sources',
                         'acquiring_source', 'answering', 'completed',
@@ -173,6 +182,7 @@ class InvestigationStore:
                     safe_message TEXT NOT NULL DEFAULT '',
                     retryable INTEGER NOT NULL DEFAULT 0,
                     artifact_json TEXT NOT NULL DEFAULT '{}',
+                    payload_json TEXT NOT NULL DEFAULT '{}',
                     occurred_at TEXT NOT NULL,
                     UNIQUE(turn_id, sequence),
                     FOREIGN KEY(turn_id) REFERENCES investigation_turns(id)
@@ -330,6 +340,51 @@ class InvestigationStore:
                     "ALTER TABLE investigation_public_turn_events "
                     "ADD COLUMN artifact_json TEXT NOT NULL DEFAULT '{}'"
                 )
+            if "event_type" not in public_event_columns:
+                connection.execute(
+                    "ALTER TABLE investigation_public_turn_events "
+                    "ADD COLUMN event_type TEXT NOT NULL DEFAULT 'turn'"
+                )
+            if "idempotency_key" not in public_event_columns:
+                connection.execute(
+                    "ALTER TABLE investigation_public_turn_events "
+                    "ADD COLUMN idempotency_key TEXT NOT NULL DEFAULT ''"
+                )
+            if "payload_json" not in public_event_columns:
+                connection.execute(
+                    "ALTER TABLE investigation_public_turn_events "
+                    "ADD COLUMN payload_json TEXT NOT NULL DEFAULT '{}'"
+                )
+            connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_investigation_public_event_idempotency
+                ON investigation_public_turn_events(
+                    turn_id, event_type, idempotency_key
+                )
+                WHERE idempotency_key <> ''
+                """
+            )
+            connection.executescript(
+                """
+                CREATE TRIGGER IF NOT EXISTS validate_investigation_public_event_type_insert
+                BEFORE INSERT ON investigation_public_turn_events
+                WHEN NEW.event_type NOT IN (
+                    'turn', 'activity', 'answer_delta', 'answer_reset'
+                )
+                BEGIN
+                    SELECT RAISE(ABORT, 'invalid public stream event type');
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS validate_investigation_public_event_type_update
+                BEFORE UPDATE OF event_type ON investigation_public_turn_events
+                WHEN NEW.event_type NOT IN (
+                    'turn', 'activity', 'answer_delta', 'answer_reset'
+                )
+                BEGIN
+                    SELECT RAISE(ABORT, 'invalid public stream event type');
+                END;
+                """
+            )
             connection.execute(
                 """
                 CREATE UNIQUE INDEX IF NOT EXISTS uq_investigation_session_anchor
@@ -943,14 +998,22 @@ class InvestigationStore:
                 """,
                 (turn_id,),
             ).fetchone()
-            if latest is not None and (
-                str(latest["stage"]) == normalized_stage
-                and str(latest["answer"]) == normalized_answer
-                and str(latest["safe_message"]) == normalized_safe_message
-                and bool(latest["retryable"]) is bool(retryable)
-                and str(latest["artifact_json"]) == artifact_json
+            latest_turn = connection.execute(
+                """
+                SELECT * FROM investigation_public_turn_events
+                WHERE turn_id = ? AND event_type = 'turn'
+                ORDER BY sequence DESC LIMIT 1
+                """,
+                (turn_id,),
+            ).fetchone()
+            if latest_turn is not None and (
+                str(latest_turn["stage"]) == normalized_stage
+                and str(latest_turn["answer"]) == normalized_answer
+                and str(latest_turn["safe_message"]) == normalized_safe_message
+                and bool(latest_turn["retryable"]) is bool(retryable)
+                and str(latest_turn["artifact_json"]) == artifact_json
             ):
-                return self._public_turn_event(latest)
+                return self._public_turn_event(latest_turn)
             sequence = int(latest["sequence"] if latest is not None else 0) + 1
             event_id = (
                 "investigation-turn-event:"
@@ -965,9 +1028,10 @@ class InvestigationStore:
             connection.execute(
                 """
                 INSERT INTO investigation_public_turn_events (
-                    event_id, turn_id, sequence, stage, answer,
-                    safe_message, retryable, artifact_json, occurred_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    event_id, turn_id, sequence, event_type, stage, answer,
+                    safe_message, retryable, artifact_json, payload_json,
+                    occurred_at
+                ) VALUES (?, ?, ?, 'turn', ?, ?, ?, ?, ?, '{}', ?)
                 """,
                 (
                     event_id,
@@ -978,6 +1042,97 @@ class InvestigationStore:
                     normalized_safe_message,
                     int(retryable),
                     artifact_json,
+                    now,
+                ),
+            )
+            stored = connection.execute(
+                "SELECT * FROM investigation_public_turn_events WHERE event_id = ?",
+                (event_id,),
+            ).fetchone()
+        return self._public_turn_event(stored)
+
+    def append_public_stream_event(
+        self,
+        turn_id: str,
+        *,
+        event_type: str,
+        payload: dict[str, Any],
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        normalized_type = str(event_type or "").strip()
+        if normalized_type not in PUBLIC_STREAM_EVENT_TYPES:
+            raise ValueError("invalid public stream event type")
+        normalized_key = str(idempotency_key or "").strip()
+        if not re.fullmatch(r"public-event:[0-9a-f]{16,64}", normalized_key):
+            raise ValueError("invalid public stream event idempotency key")
+        normalized_payload = normalize_public_stream_payload(
+            normalized_type,
+            dict(payload or {}),
+        )
+        payload_json = self._dump(normalized_payload)
+        now = utc_now()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            turn = connection.execute(
+                "SELECT id, status FROM investigation_turns WHERE id = ?", (turn_id,)
+            ).fetchone()
+            if turn is None:
+                raise InvestigationTurnNotFoundError(turn_id)
+            existing = connection.execute(
+                """
+                SELECT * FROM investigation_public_turn_events
+                WHERE turn_id = ? AND event_type = ? AND idempotency_key = ?
+                """,
+                (turn_id, normalized_type, normalized_key),
+            ).fetchone()
+            if existing is not None:
+                if str(existing["payload_json"]) != payload_json:
+                    raise ValueError("public stream event idempotency conflict")
+                return self._public_turn_event(existing)
+            if str(turn["status"]) != "running":
+                raise ValueError("public stream events require a running Turn")
+            latest = connection.execute(
+                """
+                SELECT * FROM investigation_public_turn_events
+                WHERE turn_id = ? ORDER BY sequence DESC LIMIT 1
+                """,
+                (turn_id,),
+            ).fetchone()
+            latest_turn = connection.execute(
+                """
+                SELECT stage FROM investigation_public_turn_events
+                WHERE turn_id = ? AND event_type = 'turn'
+                ORDER BY sequence DESC LIMIT 1
+                """,
+                (turn_id,),
+            ).fetchone()
+            sequence = int(latest["sequence"] if latest is not None else 0) + 1
+            legacy_stage = str(latest_turn["stage"]) if latest_turn else "accepted"
+            event_id = (
+                "investigation-stream-event:"
+                + stable_hash(
+                    {
+                        "turn_id": turn_id,
+                        "event_type": normalized_type,
+                        "idempotency_key": normalized_key,
+                    }
+                )[:32]
+            )
+            connection.execute(
+                """
+                INSERT INTO investigation_public_turn_events (
+                    event_id, turn_id, sequence, event_type, idempotency_key,
+                    stage, payload_json, occurred_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_id,
+                    turn_id,
+                    sequence,
+                    normalized_type,
+                    normalized_key,
+                    legacy_stage,
+                    payload_json,
                     now,
                 ),
             )
@@ -2747,16 +2902,26 @@ class InvestigationStore:
 
     @staticmethod
     def _public_turn_event(row: sqlite3.Row) -> dict[str, Any]:
-        return {
+        common = {
             "event_id": str(row["event_id"]),
             "turn_id": str(row["turn_id"]),
             "sequence": int(row["sequence"]),
+            "event_type": str(row["event_type"]),
+            "occurred_at": str(row["occurred_at"]),
+        }
+        if common["event_type"] != "turn":
+            payload = InvestigationStore._json(row["payload_json"], {})
+            return {
+                **(payload if isinstance(payload, dict) else {}),
+                **common,
+            }
+        return {
+            **common,
             "stage": str(row["stage"]),
             "answer": str(row["answer"]),
             "safe_message": str(row["safe_message"]),
             "retryable": bool(row["retryable"]),
             "artifact": InvestigationStore._json(row["artifact_json"], {}) or None,
-            "occurred_at": str(row["occurred_at"]),
         }
 
     @classmethod

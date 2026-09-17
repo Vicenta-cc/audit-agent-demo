@@ -12,6 +12,11 @@ from backend.investigation_creation.public_projection import (
     PublicInvestigationDraft,
     PublicInvestigationRunProjection,
 )
+from backend.investigation.public_stream import (
+    PublicActivityPayload,
+    PublicAnswerDeltaPayload,
+    PublicAnswerResetPayload,
+)
 
 
 class PublicApiModel(BaseModel):
@@ -226,3 +231,24 @@ class InvestigationTurnEventResponse(PublicApiModel):
         } and not self.safe_message.strip():
             raise ValueError("failed event requires a safe message")
         return self
+
+
+class InvestigationActivityEventResponse(PublicActivityPayload):
+    event_id: str
+    turn_id: str
+    sequence: int = Field(ge=1)
+    occurred_at: str
+
+
+class InvestigationAnswerDeltaEventResponse(PublicAnswerDeltaPayload):
+    event_id: str
+    turn_id: str
+    sequence: int = Field(ge=1)
+    occurred_at: str
+
+
+class InvestigationAnswerResetEventResponse(PublicAnswerResetPayload):
+    event_id: str
+    turn_id: str
+    sequence: int = Field(ge=1)
+    occurred_at: str

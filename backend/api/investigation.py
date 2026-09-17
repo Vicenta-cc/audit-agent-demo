@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 
 from backend.api.contracts import (
     CreateInvestigationTurnRequest,
+    InvestigationActivityEventResponse,
+    InvestigationAnswerDeltaEventResponse,
+    InvestigationAnswerResetEventResponse,
     InvestigationMessageResponse,
     InvestigationPublicStage,
     InvestigationSessionResponse,
@@ -26,6 +31,9 @@ from backend.investigation.errors import (
     ReportScopeError,
 )
 from backend.api.reporting import published_report_task_id
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_investigation_router(
@@ -277,7 +285,10 @@ def _turn_status_response(service: Any, turn: Any) -> InvestigationTurnStatusRes
     if turn.status in {"completed", "error"}:
         return _terminal_turn_response(service.store.turn_result(turn.id), turn)
     events = service.store.list_public_turn_events(turn.id)
-    latest = events[-1] if events else None
+    turn_events = tuple(
+        event for event in events if str(event.get("event_type", "turn")) == "turn"
+    )
+    latest = turn_events[-1] if turn_events else None
     interrupted = turn.status == "interrupted"
     return InvestigationTurnStatusResponse(
         session_id=turn.session_id,
@@ -330,26 +341,41 @@ def turn_event_stream_response(
             events = service.store.list_public_turn_events(
                 turn_id, after_sequence=cursor
             )
-            for index, raw_event in enumerate(events):
-                event = InvestigationTurnEventResponse.model_validate(raw_event)
-                cursor = event.sequence
+            terminal_stage: InvestigationPublicStage | None = None
+            for raw_event in events:
+                cursor = int(raw_event["sequence"])
                 idle_ticks = 0
+                try:
+                    event_name, event = _public_stream_event(raw_event)
+                except (ValidationError, TypeError, ValueError):
+                    logger.warning(
+                        "Skipping invalid public stream event %s for Turn %s",
+                        raw_event.get("event_id", ""),
+                        turn_id,
+                        exc_info=True,
+                    )
+                    continue
                 yield (
                     f"id: {event.event_id}\n"
-                    "event: turn\n"
+                    f"event: {event_name}\n"
                     f"data: {event.model_dump_json()}\n\n"
                 )
-                if event.stage in {
-                    InvestigationPublicStage.COMPLETED,
-                    InvestigationPublicStage.INTERRUPTED,
-                    InvestigationPublicStage.FAILED,
-                } and _is_current_terminal_event(
-                    service,
-                    turn_id,
-                    event.stage,
-                    is_latest_in_batch=index == len(events) - 1,
-                ):
-                    return
+                if event_name == "turn":
+                    if event.stage in {
+                        InvestigationPublicStage.COMPLETED,
+                        InvestigationPublicStage.INTERRUPTED,
+                        InvestigationPublicStage.FAILED,
+                    }:
+                        terminal_stage = event.stage
+                    else:
+                        terminal_stage = None
+            if terminal_stage is not None and _is_current_terminal_event(
+                service,
+                turn_id,
+                terminal_stage,
+                is_latest_in_batch=True,
+            ):
+                return
             if await request.is_disconnected():
                 return
             idle_ticks += 1
@@ -363,6 +389,22 @@ def turn_event_stream_response(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def _public_stream_event(raw_event: dict[str, Any]) -> tuple[str, Any]:
+    event_type = str(raw_event.get("event_type", "turn"))
+    payload = dict(raw_event)
+    payload.pop("event_type", None)
+    response_models = {
+        "turn": InvestigationTurnEventResponse,
+        "activity": InvestigationActivityEventResponse,
+        "answer_delta": InvestigationAnswerDeltaEventResponse,
+        "answer_reset": InvestigationAnswerResetEventResponse,
+    }
+    response_model = response_models.get(event_type)
+    if response_model is None:
+        raise ValueError("invalid public stream event type")
+    return event_type, response_model.model_validate(payload)
 
 
 def _public_stage(node_name: str) -> InvestigationPublicStage:
