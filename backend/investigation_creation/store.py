@@ -1387,6 +1387,47 @@ class InvestigationCreationStore:
             ).fetchall()
         return frozenset(str(row["owner_principal"]) for row in rows)
 
+    def authorized_published_report_version_ids(
+        self, *, run_id: str, current_report_version_id: str
+    ) -> tuple[str, ...]:
+        """Return published peer reports owned by the current M3 Run principal.
+
+        The current Run and ReportVersion must match before its principal can be
+        used as an authorization root. Report-template filtering remains the
+        responsibility of the report runtime, which owns the published body.
+        """
+
+        normalized_run_id = str(run_id or "").strip()
+        normalized_report_version_id = str(
+            current_report_version_id or ""
+        ).strip()
+        if not normalized_run_id or not normalized_report_version_id:
+            return ()
+        with self._connect() as connection:
+            owner = connection.execute(
+                """
+                SELECT owner_principal
+                FROM investigation_runs
+                WHERE id = ? AND status = 'PUBLISHED'
+                  AND report_version_id = ? AND report_version_id <> ''
+                """,
+                (normalized_run_id, normalized_report_version_id),
+            ).fetchone()
+            if owner is None:
+                return ()
+            rows = connection.execute(
+                """
+                SELECT report_version_id, MIN(created_at) AS first_created_at
+                FROM investigation_runs
+                WHERE owner_principal = ? AND status = 'PUBLISHED'
+                  AND report_version_id <> '' AND report_version_id <> ?
+                GROUP BY report_version_id
+                ORDER BY first_created_at, report_version_id
+                """,
+                (str(owner["owner_principal"]), normalized_report_version_id),
+            ).fetchall()
+        return tuple(str(row["report_version_id"]) for row in rows)
+
     def get_run_for_job(self, job_id: str) -> InvestigationRun | None:
         with self._connect() as connection:
             row = connection.execute("SELECT * FROM investigation_runs WHERE job_id=?", (job_id,)).fetchone()

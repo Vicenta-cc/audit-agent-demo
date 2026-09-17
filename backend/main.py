@@ -117,6 +117,19 @@ audit_policy_store = AuditPolicyStore()
 audit_config_revision_store = TaskAuditConfigRevisionStore()
 report_store = ReportStore()
 r31_report_runtime = R31ReportRuntime(report_store)
+investigation_creation_store = InvestigationCreationStore()
+
+
+def _authorized_m3_peer_report_versions(session, anchor: str) -> tuple[str, ...]:
+    prefix = "m3-run:"
+    if not str(anchor or "").startswith(prefix):
+        return ()
+    return investigation_creation_store.authorized_published_report_version_ids(
+        run_id=str(anchor)[len(prefix):],
+        current_report_version_id=session.report_version_id,
+    )
+
+
 investigation_agent_service = (
     HermesInvestigationAgentService(
         agent_factory=FakePublishedReportHermesAgent,
@@ -126,6 +139,7 @@ investigation_agent_service = (
             if item.workspace_id in {"historical-report-a", "historical-report-b", "historical-report-c"}
         ),
         authorized_context_anchor_prefixes=("historical-report:",),
+        authorized_report_version_resolver=_authorized_m3_peer_report_versions,
     )
     if settings.hermes_creation_fake_runtime
     else HermesInvestigationAgentService(
@@ -134,9 +148,9 @@ investigation_agent_service = (
             if item.workspace_id in {"historical-report-a", "historical-report-b", "historical-report-c"}
         ),
         authorized_context_anchor_prefixes=("historical-report:",),
+        authorized_report_version_resolver=_authorized_m3_peer_report_versions,
     )
 )
-investigation_creation_store = InvestigationCreationStore()
 investigation_configuration_resolver = InvestigationConfigurationResolver(
     lexicon_store=lexicon_store,
     policy_store=audit_policy_store,

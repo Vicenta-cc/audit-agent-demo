@@ -92,6 +92,71 @@ LOCAL = Principal(LOCAL_PRINCIPAL_ID)
 OTHER = Principal("other-local-profile")
 
 
+def test_authorized_published_reports_are_limited_to_current_run_owner(tmp_path):
+    store = InvestigationCreationStore(tmp_path / "creation.sqlite3")
+    now = "2026-09-17T00:00:00+00:00"
+
+    def insert_run(run_id, owner, report_version_id, status="PUBLISHED"):
+        draft_id = f"draft-{run_id}"
+        with store._connect() as connection:
+            connection.execute(
+                """INSERT INTO investigation_drafts
+                   (id, owner_principal, status, current_revision, title,
+                    objective, configuration_json, created_by, updated_by,
+                    created_at, updated_at)
+                   VALUES (?, ?, 'QUEUED', 1, 'title', 'objective', '{}',
+                           ?, ?, ?, ?)""",
+                (draft_id, owner, owner, owner, now, now),
+            )
+            connection.execute(
+                """INSERT INTO investigation_draft_revisions
+                   (draft_id, revision, title, objective, configuration_json,
+                    created_by, created_at)
+                   VALUES (?, 1, 'title', 'objective', '{}', ?, ?)""",
+                (draft_id, owner, now),
+            )
+            connection.execute(
+                """INSERT INTO investigation_runs
+                   (id, owner_principal, draft_id, draft_revision,
+                    idempotency_key, status, confirmed_configuration_json,
+                    confirmed_by, confirmed_at, report_version_id,
+                    created_at, updated_at)
+                   VALUES (?, ?, ?, 1, ?, ?, '{}', ?, ?, ?, ?, ?)""",
+                (
+                    run_id,
+                    owner,
+                    draft_id,
+                    f"key-{run_id}",
+                    status,
+                    owner,
+                    now,
+                    report_version_id,
+                    now,
+                    now,
+                ),
+            )
+
+    insert_run("run-current", "principal-a", "report-current")
+    insert_run("run-peer", "principal-a", "report-peer")
+    insert_run("run-other", "principal-b", "report-other")
+    insert_run(
+        "run-unfinished",
+        "principal-a",
+        "report-unfinished",
+        status="REPORT_GENERATING",
+    )
+
+    assert store.authorized_published_report_version_ids(
+        run_id="run-current", current_report_version_id="report-current"
+    ) == ("report-peer",)
+    assert store.authorized_published_report_version_ids(
+        run_id="run-current", current_report_version_id="wrong-report"
+    ) == ()
+    assert store.authorized_published_report_version_ids(
+        run_id="missing", current_report_version_id="report-current"
+    ) == ()
+
+
 def configuration_payload(*, keyword: str = "subject") -> dict:
     return {
         "platform": "xhs",
