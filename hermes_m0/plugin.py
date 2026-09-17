@@ -38,7 +38,7 @@ _TOOL_NAMES = frozenset(
         *REAL_REPORT_TASK_TOOLS,
         *M2_ACCOUNT_ACTIVITY_TOOLS,
     )
-)
+) | frozenset({"compare_authorized_report_accounts"})
 _M3_CREATION_TOOL_NAMES = frozenset(
     schema["name"] for schema in HERMES_M3_TOOL_SCHEMAS
 )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import closing, nullcontext
 import json
+import re
 import sqlite3
 from pathlib import Path
 from threading import RLock
@@ -21,6 +22,30 @@ from backend.investigation.errors import InvestigationTurnNotFoundError
 from backend.investigation.protocol import validate_hermes_transcript_messages
 from backend.investigation.report_query import ReportQueryFacade
 from backend.investigation.store import InvestigationStore
+
+
+_INTERNAL_ACCOUNT_ASSIGNMENT = re.compile(
+    r"(?i)\b(?:internal_)?account_ref\b\s*[:=]\s*[`\"']?"
+    r"(?:account\d+_[0-9a-z-]+|account:v2:[0-9a-f]{64}|"
+    r"account-entry-[0-9a-f]{16,64})[`\"']?"
+)
+_INTERNAL_ACCOUNT_VALUES = (
+    re.compile(r"(?i)[`]?account\d+_[0-9a-z-]+[`]?"),
+    re.compile(r"(?i)[`]?account:v2:[0-9a-f]{64}[`]?"),
+    re.compile(r"(?i)[`]?account-entry-[0-9a-f]{16,64}[`]?"),
+)
+_INTERNAL_ACCOUNT_FIELD = re.compile(r"(?i)\b(?:internal_)?account_ref\b")
+
+
+def redact_internal_account_references(value: str) -> tuple[str, bool]:
+    """Remove account navigation tokens from one user-visible model answer."""
+
+    original = str(value or "")
+    redacted = _INTERNAL_ACCOUNT_ASSIGNMENT.sub("内部账号引用已隐藏", original)
+    for pattern in _INTERNAL_ACCOUNT_VALUES:
+        redacted = pattern.sub("内部账号引用已隐藏", redacted)
+    redacted = _INTERNAL_ACCOUNT_FIELD.sub("内部账号引用", redacted)
+    return redacted, redacted != original
 
 
 class HermesInvestigationAgentService:
@@ -438,7 +463,10 @@ class HermesInvestigationAgentService:
         previous_message_count: int,
         transcript: list[dict[str, Any]] | None,
     ) -> TurnResult:
-        answer = str(result.get("final_response") or "").strip()
+        raw_answer = str(result.get("final_response") or "").strip()
+        answer, answer_was_redacted = redact_internal_account_references(
+            raw_answer
+        )
         if bool(result.get("failed")) or not bool(result.get("completed", True)):
             self.store.fail_turn(
                 turn_id,
@@ -454,6 +482,17 @@ class HermesInvestigationAgentService:
             return self.store.turn_result(turn_id)
         if transcript is None:
             raise RuntimeError("completed Hermes result requires a validated transcript")
+        public_transcript = []
+        transcript_was_redacted = False
+        for message in transcript:
+            projected = dict(message)
+            if projected.get("role") == "assistant":
+                projected["content"], changed = redact_internal_account_references(
+                    str(projected.get("content") or "")
+                )
+                transcript_was_redacted = transcript_was_redacted or changed
+            public_transcript.append(projected)
+        transcript = public_transcript
         new_messages = transcript[previous_message_count:]
         trace_messages = [
             item
@@ -472,7 +511,11 @@ class HermesInvestigationAgentService:
                 "source_count": sum(
                     item.get("role") == "tool" for item in trace_messages
                 ),
-                "warnings": [],
+                "warnings": (
+                    ["internal_account_reference_redacted"]
+                    if answer_was_redacted or transcript_was_redacted
+                    else []
+                ),
             },
             resolved_references=[],
             all_tool_calls=tool_calls,

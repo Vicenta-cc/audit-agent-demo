@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import Counter, defaultdict
+from itertools import combinations
 from pathlib import Path
 import json
 from typing import Any, Callable
@@ -56,6 +58,9 @@ class AccountActivityToolService:
             "list_account_occurrences": self._list_account_occurrences,
             "read_account_occurrence": self._read_account_occurrence,
             "read_account_post": self._read_account_post,
+            "compare_authorized_report_accounts": (
+                self._compare_authorized_report_accounts
+            ),
         }
 
     def bind_session(
@@ -376,6 +381,268 @@ class AccountActivityToolService:
             session_id, account_ref, repository
         )
         return self._account_overview_result(session_id, repository, account_record, session_account_ref)
+
+    def _compare_authorized_report_accounts(
+        self, session_id: str, args: dict[str, Any]
+    ) -> str:
+        """Compare every stable publisher/commenter in authorized unified reports.
+
+        The stable account identity remains server-side.  The result deliberately
+        contains no account references because it is intended for exhaustive
+        natural-language comparison rather than follow-up object navigation.
+        """
+
+        _require_exact_keys(args, set())
+        repository = self._load_repository()
+        report_repositories = tuple(
+            item
+            for item in self.authorized_report_repositories
+            if str(getattr(item, "template_kind", "")) == "unified_audit"
+        )
+        report_specs = []
+        seen_tasks: set[str] = set()
+        current_task_id = str(
+            self.report_repository.fixture.provenance.source_task_id
+        )
+        for position, report_repository in enumerate(report_repositories, 1):
+            task_id = str(report_repository.fixture.provenance.source_task_id)
+            if task_id in seen_tasks:
+                raise AccountActivityLookupError(
+                    "duplicate_authorized_report_task",
+                    "Authorized unified reports must have unique source investigations.",
+                )
+            seen_tasks.add(task_id)
+            report_specs.append(
+                {
+                    "position": position,
+                    "task_id": task_id,
+                    "title": str(report_repository.report.title),
+                    "is_current_report": task_id == current_task_id,
+                }
+            )
+
+        counts_by_task: dict[str, dict[str, Counter[str]]] = {
+            item["task_id"]: defaultdict(Counter) for item in report_specs
+        }
+        unresolved_by_task: dict[str, Counter[str]] = {
+            item["task_id"]: Counter() for item in report_specs
+        }
+        for occurrence in repository.corpus.occurrences:
+            task_id = str(occurrence.get("task_id") or "")
+            if task_id not in counts_by_task:
+                continue
+            kind = str(occurrence.get("kind") or "")
+            if kind not in {"post_author", "comment_author"}:
+                continue
+            stable_identity = str(occurrence.get("account_ref") or "")
+            if not stable_identity:
+                unresolved_by_task[task_id][kind] += 1
+                continue
+            counts_by_task[task_id][stable_identity][kind] += 1
+
+        role_label = {
+            "post_author": "发布者",
+            "comment_author": "评论者",
+        }
+
+        def ordered_identities(values: set[str]) -> list[str]:
+            return sorted(
+                values,
+                key=lambda identity: (
+                    repository.display_name(identity).casefold(),
+                    identity,
+                ),
+            )
+
+        def roles_for(counter: Counter[str]) -> list[str]:
+            return [
+                role_label[kind]
+                for kind in ("post_author", "comment_author")
+                if counter.get(kind, 0)
+            ]
+
+        def natural_account(
+            identity: str, counter: Counter[str], position: int
+        ) -> dict[str, Any]:
+            return {
+                "position": position,
+                "display_name": repository.display_name(identity),
+                "roles": roles_for(counter),
+                "published_post_count": int(counter.get("post_author", 0)),
+                "comment_count": int(counter.get("comment_author", 0)),
+            }
+
+        accounts_by_report = []
+        for report_spec in report_specs:
+            task_id = report_spec["task_id"]
+            task_counts = counts_by_task[task_id]
+            identities = ordered_identities(set(task_counts))
+            unresolved = unresolved_by_task[task_id]
+            accounts_by_report.append(
+                {
+                    "report_position": report_spec["position"],
+                    "report_title": report_spec["title"],
+                    "is_current_report": report_spec["is_current_report"],
+                    "account_count": len(identities),
+                    "publisher_count": sum(
+                        bool(task_counts[item].get("post_author"))
+                        for item in identities
+                    ),
+                    "commenter_count": sum(
+                        bool(task_counts[item].get("comment_author"))
+                        for item in identities
+                    ),
+                    "accounts": [
+                        natural_account(identity, task_counts[identity], position)
+                        for position, identity in enumerate(identities, 1)
+                    ],
+                    "unresolved_activity": {
+                        "publisher_occurrence_count": int(
+                            unresolved.get("post_author", 0)
+                        ),
+                        "commenter_occurrence_count": int(
+                            unresolved.get("comment_author", 0)
+                        ),
+                    },
+                }
+            )
+
+        tasks_by_identity: dict[str, set[str]] = defaultdict(set)
+        for task_id, account_counts in counts_by_task.items():
+            for identity in account_counts:
+                tasks_by_identity[identity].add(task_id)
+        shared_identities = ordered_identities(
+            {
+                identity
+                for identity, task_ids in tasks_by_identity.items()
+                if len(task_ids) >= 2
+            }
+        )
+        report_by_task = {item["task_id"]: item for item in report_specs}
+        shared_accounts = []
+        for position, identity in enumerate(shared_identities, 1):
+            appearances = []
+            for task_id in sorted(
+                tasks_by_identity[identity],
+                key=lambda value: report_by_task[value]["position"],
+            ):
+                counter = counts_by_task[task_id][identity]
+                appearances.append(
+                    {
+                        "report_position": report_by_task[task_id]["position"],
+                        "report_title": report_by_task[task_id]["title"],
+                        "roles": roles_for(counter),
+                        "published_post_count": int(
+                            counter.get("post_author", 0)
+                        ),
+                        "comment_count": int(counter.get("comment_author", 0)),
+                    }
+                )
+            shared_accounts.append(
+                {
+                    "position": position,
+                    "display_name": repository.display_name(identity),
+                    "report_count": len(appearances),
+                    "report_appearances": appearances,
+                }
+            )
+
+        pairwise_comparisons = []
+        for first, second in combinations(report_specs, 2):
+            first_counts = counts_by_task[first["task_id"]]
+            second_counts = counts_by_task[second["task_id"]]
+            first_ids = set(first_counts)
+            second_ids = set(second_counts)
+            common_ids = first_ids & second_ids
+            common_publishers = {
+                identity
+                for identity in common_ids
+                if first_counts[identity].get("post_author")
+                and second_counts[identity].get("post_author")
+            }
+            common_commenters = {
+                identity
+                for identity in common_ids
+                if first_counts[identity].get("comment_author")
+                and second_counts[identity].get("comment_author")
+            }
+
+            def pair_entries(values: set[str]) -> list[dict[str, Any]]:
+                return [
+                    {
+                        "position": position,
+                        "display_name": repository.display_name(identity),
+                        "first_report_roles": roles_for(first_counts[identity]),
+                        "second_report_roles": roles_for(second_counts[identity]),
+                    }
+                    for position, identity in enumerate(
+                        ordered_identities(values), 1
+                    )
+                ]
+
+            pairwise_comparisons.append(
+                {
+                    "first_report": {
+                        "position": first["position"],
+                        "title": first["title"],
+                    },
+                    "second_report": {
+                        "position": second["position"],
+                        "title": second["title"],
+                    },
+                    "common_account_count": len(common_ids),
+                    "common_accounts": pair_entries(common_ids),
+                    "common_publisher_count": len(common_publishers),
+                    "common_publishers": pair_entries(common_publishers),
+                    "common_commenter_count": len(common_commenters),
+                    "common_commenters": pair_entries(common_commenters),
+                }
+            )
+
+        unresolved_activity_count = sum(
+            sum(counter.values()) for counter in unresolved_by_task.values()
+        )
+        return success_result(
+            tool="compare_authorized_report_accounts",
+            result_kind="authorized_unified_report_account_comparison",
+            content_state="complete_stable_identity_comparison",
+            scope={
+                "report_name": self.report_repository.report.title,
+                "account_activity_scope": (
+                    "authorized_published_unified_audit_reports"
+                ),
+                "source_task_is_metadata_only": True,
+            },
+            authority_basis="current_authorized_unified_report_account_corpus",
+            data={
+                "scope_label": "当前用户已授权的新增统一审核报告",
+                "identity_basis": "抖音稳定账号标识；同昵称不会自动合并",
+                "report_count": len(report_specs),
+                "reports_compared": [
+                    {
+                        "position": item["position"],
+                        "title": item["title"],
+                        "is_current_report": item["is_current_report"],
+                    }
+                    for item in report_specs
+                ],
+                "accounts_by_report": accounts_by_report,
+                "shared_account_count": len(shared_accounts),
+                "shared_accounts": shared_accounts,
+                "pairwise_comparisons": pairwise_comparisons,
+                "comparison_complete_for_stable_accounts": True,
+                "unresolved_activity_count": unresolved_activity_count,
+            },
+            not_loaded=[
+                "historical AuditFinding or Evidence",
+                "activities without a stable platform account identity",
+            ],
+            limitations=[
+                "Only published unified-audit reports in the current authorized set are compared.",
+                "Every stable publisher and commenter is enumerated; activities without stable identity are counted but never merged by nickname.",
+                "The result intentionally exposes no internal account reference or platform identity value.",
+            ],
+        )
 
     def _account_overview_result(self, session_id, repository, account_record, session_account_ref):
         overview = repository.overview(account_record.object_id)

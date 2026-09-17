@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 
 from .pass_support import PassReportToolService, pass_tool_schemas
 from .schemas import REPORT_STATISTICS_DESCRIPTION
@@ -11,6 +12,24 @@ from .service import (
     _require_exact_keys,
     _require_string_list,
 )
+
+
+COMPARE_AUTHORIZED_REPORT_ACCOUNTS = {
+    "name": "compare_authorized_report_accounts",
+    "description": (
+        "完整枚举并比较当前用户已授权的所有已发布新增统一审核报告中的稳定账号。"
+        "当用户询问两份或多份新增报告是否存在共同发布者、共同评论者、共同账号，"
+        "或要求列出各报告全部发布者和评论者时，直接调用本工具，不要用昵称搜索逐个拼接。"
+        "结果按抖音稳定账号标识确定性计算，同时给出每份报告的完整稳定账号目录、"
+        "任意角色交集、共同发布者、共同评论者以及无法稳定识别的活动数量。"
+        "同昵称不会合并；结果不返回任何内部账号引用或平台身份原值。"
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    },
+}
 
 
 class UnifiedAuditReportToolService(PassReportToolService):
@@ -24,6 +43,10 @@ class UnifiedAuditReportToolService(PassReportToolService):
             "list_post_risk_comments",
         ):
             self._handlers.pop(tool_name, None)
+        if self.account_activity is not None:
+            self._handlers["compare_authorized_report_accounts"] = (
+                self._dispatch_account_activity
+            )
 
     def _read_real_report(self, session_id, args):
         if args:
@@ -103,6 +126,7 @@ def unified_tool_schemas():
     schemas = [
         schema for schema in pass_tool_schemas() if schema["name"] != "search_posts"
     ]
+    schemas.append(deepcopy(COMPARE_AUTHORIZED_REPORT_ACCOUNTS))
     for schema in schemas:
         if schema["name"] == "read_report":
             schema["description"] = (
@@ -128,4 +152,5 @@ UNIFIED_REPORT_SYSTEM_PROMPT = """你是新增统一审核报告的问答助手�
 解释为什么通过、复审或拒绝，必须归因于read_posts返回的原审核说明及可核对材料。需要材料目录时调用list_evidence，需要具体材料原文时调用read_evidence；没有独立材料时明确说明结论依据仅为原审核说明，不能伪造Finding或Evidence。所有评论使用list_post_comments；未审核或审核失败的评论不等于无风险，帖子风险不能传递给评论。
 询问评论统计时，重新调用read_report取得当前汇总。完成审核数、评论自身风险数和报告引用评论材料数含义不同，不能混用；范围限当前报告冻结帖子下的已存评论，不代表平台全部评论。
 只有昵称时先调用search_accounts。唯一精确匹配可以继续查看账号概览和活动；同名或模糊匹配必须请用户选择，不能按昵称强行合并。报告内容范围与账号活动授权范围分别说明，账号没有整体审核决定，不能把帖子或评论通过说成“账号审核通过”。
+用户询问两份或多份新增统一报告是否存在共同发布者、共同评论者、共同账号，或要求穷举各报告全部发布者和评论者时，必须调用compare_authorized_report_accounts。该工具已按稳定账号标识完整枚举授权新增报告，不要再用search_accounts逐个猜测或根据已读帖子自行补齐。回答时区分“任意角色共同账号”“共同发布者”“共同评论者”；如果存在无法稳定识别的活动，明确说明它们没有参与账号合并，不能按昵称强行归并。不得在回答中复述任何账号引用或稳定标识原值。
 引用失效时重新读取当前报告取得入口，不猜引用。连续追问可以复用当前会话已经验证的引用和资料；需要新细节必须调用相应工具。回答使用中文、自然名称和可理解的依据，不展示工具名、内部ID、引用token、数据库路径或配置字段。"""
