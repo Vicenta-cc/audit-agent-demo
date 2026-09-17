@@ -19,6 +19,7 @@ from backend.api.investigation_execution import InvestigationTurnExecutor
 from backend.api.investigation import create_investigation_router
 from backend.api.reporting import create_reporting_router
 from backend.audit_agent.audit_policy_store import AuditPolicyStore
+from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.job_store import JobStore
 from backend.audit_agent.lexicon_store import LexiconStore
@@ -702,6 +703,48 @@ def test_turn_and_sse_replay_do_not_create_a_second_draft(creation_stack: dict) 
     assert '"stage":"completed"' in response.text
     assert "crawler_account" not in response.text
     assert "fixture account" not in response.text
+
+
+def test_fake_runtime_activity_stream_preserves_turn_replay_idempotency(
+    creation_stack: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "activity_stream_enabled", True)
+    result = _create_completed_turn(
+        creation_stack,
+        workspace_key="activity-stream-replay",
+    )
+    events = creation_stack["conversation"].store.list_public_turn_events(
+        result["turn_id"]
+    )
+    activities = [event for event in events if event["event_type"] == "activity"]
+
+    assert [(event["label"], event["status"]) for event in activities] == [
+        ("查询可用平台、审核规则和黑话库", "running"),
+        ("查询可用平台、审核规则和黑话库", "succeeded"),
+        ("查询可用平台、审核规则和黑话库", "running"),
+        ("查询可用平台、审核规则和黑话库", "succeeded"),
+        ("创建任务配置草案", "running"),
+        ("创建任务配置草案", "succeeded"),
+    ]
+    assert _draft_count(creation_stack["creation_store"]) == 1
+    assert _run_count(creation_stack["creation_store"]) == 0
+
+    replay = creation_stack["client"].post(
+        f"/api/investigation-workspaces/{result['workspace_id']}/turns",
+        json={
+            "client_message_id": "message-1",
+            "content": "帮我调查世界杯期间的博彩引流",
+        },
+    )
+    assert replay.status_code == 202
+    assert replay.json()["turn_id"] == result["turn_id"]
+    replayed_events = creation_stack["conversation"].store.list_public_turn_events(
+        result["turn_id"]
+    )
+    assert replayed_events == events
+    assert _draft_count(creation_stack["creation_store"]) == 1
+    assert _run_count(creation_stack["creation_store"]) == 0
 
 
 def test_fake_runtime_uses_mutation_receipt_when_same_turn_is_replayed(

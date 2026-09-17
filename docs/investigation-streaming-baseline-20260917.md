@@ -134,11 +134,49 @@ the immutable A/B archives, and the pinned Douyin acceptance crawler:
   existing large-chunk warning remains.
 - No runtime was started or restarted, and all rollout switches remain off.
 
+## Phase 3 allowlisted public activity projection
+
+Phase 3 connects Hermes tool lifecycle callbacks to the durable `activity`
+event without changing tool schemas, arguments, results, retry configuration,
+mutation receipts, or execution order. The projector covers every tool in the
+published report A/B/C, pass-report, unified-report, task creation, and resource
+management catalogs through one explicit allowlist.
+
+Each public activity contains only a hashed activity ID and fixed product copy.
+The projector never persists callback arguments, callback results, Hermes tool
+call IDs, database IDs, hashes, stack traces, or model reasoning. Unknown tools
+are ignored. A success state is emitted only after the canonical tool callback
+returns an explicit success envelope; an unfinished callback is closed as
+`interrupted` when the Turn exits.
+
+The projection is fail-open. Callback or persistence failures are logged and
+cannot fail the underlying tool or Turn. Ambiguous concurrent Turn bindings are
+suppressed instead of being attached to the wrong Turn. With the activity flag
+off, agents are constructed exactly as before and no activity row is written.
+
+The deterministic creation runtime uses the same callback boundary. Its
+integration gate verifies that enabling activities and replaying the same
+`client_message_id` still creates exactly one Draft, starts no Run, and emits no
+duplicate activity. The existing Hermes provider retry fence remains unchanged
+at `CANONICAL_API_MAX_RETRIES = 1`.
+
+Phase 3 verification used the frozen runtime paths and did not start or restart
+any service:
+
+- Activity projector and creation replay gate: `7 passed`.
+- A/B/C, unified-report, creation, process-isolation, and session-runtime gate:
+  `118 passed, 12 subtests passed`.
+- Full clean-environment backend gate: `1399 passed, 28 skipped, 67 subtests
+  passed` in 189.64 seconds.
+- The only output was five pre-existing dependency/lifespan deprecation
+  warnings; all rollout switches remain default-off.
+
 ## Phase gates
 
 1. Default-off configuration and this regression contract. **Complete.**
 2. Backward-compatible durable public SSE event protocol. **Complete.**
 3. Allowlisted public activity projector for all report/creation/resource tools.
+   **Complete.**
 4. Shared expandable activity timeline in the investigation UI.
 5. Filtered, buffered report answer deltas with reset/revision semantics.
 6. Server-side creation-answer filtering followed by creation answer deltas.

@@ -20,6 +20,7 @@ from backend.investigation.contracts import (
 )
 from backend.investigation.errors import InvestigationTurnNotFoundError
 from backend.investigation.protocol import validate_hermes_transcript_messages
+from backend.investigation.public_activity import PublicActivityEmitter
 from backend.investigation.report_query import ReportQueryFacade
 from backend.investigation.store import InvestigationStore
 
@@ -92,6 +93,10 @@ class HermesInvestigationAgentService:
         self._bound_sessions: set[str] = set()
         self._agent_lock = RLock()
         self._turn_node_observers: list[Callable[[str, str], None]] = []
+        self._activity_emitter = PublicActivityEmitter(
+            self.store,
+            enabled=lambda: settings.activity_stream_enabled,
+        )
 
     def close(self) -> None:
         with self._agent_lock:
@@ -202,12 +207,13 @@ class HermesInvestigationAgentService:
                             "查询跨报告账号活动时，须在本轮重新读取证据或账号工具；"
                             "不得仅据历史回答中的空账号字段，判定当前工具仍无法识别该账号。"
                         )
-                result = agent.run_conversation(
-                    user_message,
-                    system_message=system_message,
-                    conversation_history=history,
-                    task_id=turn.id,
-                )
+                with self._activity_emitter.bind_turn(session.id, turn.id):
+                    result = agent.run_conversation(
+                        user_message,
+                        system_message=system_message,
+                        conversation_history=history,
+                        task_id=turn.id,
+                    )
             if not isinstance(result, dict):
                 raise RuntimeError("Hermes returned a non-object Turn result")
         except Exception as exc:
@@ -322,6 +328,7 @@ class HermesInvestigationAgentService:
                     base_url=settings.dashscope_base_url,
                     api_key=settings.dashscope_api_key,
                     stream_delta_callback=lambda _delta: None,
+                    **self._activity_emitter.agent_callbacks(session_id),
                 )
                 self._agents[session_id] = agent
             return agent

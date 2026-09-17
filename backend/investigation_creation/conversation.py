@@ -23,6 +23,7 @@ from backend.investigation.errors import (
     InvestigationTurnNotFoundError,
     ReportScopeError,
 )
+from backend.investigation.public_activity import PublicActivityEmitter
 from backend.investigation.store import InvestigationStore
 
 from .contracts import (
@@ -273,11 +274,15 @@ class FakeCreationHermesAgent:
         session_id: str,
         tool_service: InvestigationCreationToolService,
         principal_resolver: Callable[[str], Principal],
+        tool_start_callback: Callable[..., None] | None = None,
+        tool_complete_callback: Callable[..., None] | None = None,
         **_: Any,
     ) -> None:
         self.session_id = session_id
         self.tool_service = tool_service
         self.principal_resolver = principal_resolver
+        self.tool_start_callback = tool_start_callback
+        self.tool_complete_callback = tool_complete_callback
 
     def close(self) -> None:
         return None
@@ -299,8 +304,14 @@ class FakeCreationHermesAgent:
             "mode": mode,
             "page_size": 20,
         }
-        options = self.tool_service.execute(
-            "query_investigation_options", option_args, principal=principal
+        option_call_id = f"{task_id}:options"
+        options = self._execute_tool(
+            option_call_id,
+            "query_investigation_options",
+            option_args,
+            lambda: self.tool_service.execute(
+                "query_investigation_options", option_args, principal=principal
+            ),
         )
         ruleset = (options.get("ruleset_revisions") or [None])[0]
         platform = (options.get("platforms") or [None])[0]
@@ -321,6 +332,7 @@ class FakeCreationHermesAgent:
         lexicon_options = options
         lexicon_option_args: dict[str, Any] | None = None
         if mode == "search" and lexicon is not None:
+            lexicon_option_call_id = f"{task_id}:lexicon-options"
             lexicon_option_args = {
                 "domain_hint": message.strip()[:200],
                 "mode": "search",
@@ -329,10 +341,15 @@ class FakeCreationHermesAgent:
                 "page_size": 20,
                 "lexicon_term_limit": 100,
             }
-            lexicon_options = self.tool_service.execute(
+            lexicon_options = self._execute_tool(
+                lexicon_option_call_id,
                 "query_investigation_options",
                 lexicon_option_args,
-                principal=principal,
+                lambda: self.tool_service.execute(
+                    "query_investigation_options",
+                    lexicon_option_args,
+                    principal=principal,
+                ),
             )
             lexicon = (lexicon_options.get("recall_lexicons") or [None])[0]
         missing_resource = ""
@@ -342,7 +359,6 @@ class FakeCreationHermesAgent:
             missing_resource = "当前没有可用的已发布黑话库，无法创建关键词调查 Draft。"
         if missing_resource:
             final = missing_resource
-            option_call_id = f"{task_id}:options"
             messages = [
                 *history,
                 {"role": "user", "content": message},
@@ -396,17 +412,21 @@ class FakeCreationHermesAgent:
             "objective": message.strip(),
             "configuration": configuration,
         }
-        option_call_id = f"{task_id}:options"
         lexicon_option_call_id = f"{task_id}:lexicon-options"
         create_call_id = f"{task_id}:create-draft"
-        create_result = self.tool_service.execute_with_identity(
+        create_result = self._execute_tool(
+            create_call_id,
             "create_investigation_draft",
             draft_args,
-            principal=principal,
-            identity=HermesToolExecutionIdentity.require(
-                session_id=self.session_id,
-                turn_id=task_id,
-                tool_call_id=create_call_id,
+            lambda: self.tool_service.execute_with_identity(
+                "create_investigation_draft",
+                draft_args,
+                principal=principal,
+                identity=HermesToolExecutionIdentity.require(
+                    session_id=self.session_id,
+                    turn_id=task_id,
+                    tool_call_id=create_call_id,
+                ),
             ),
         )
         if create_result.get("status") != "ok":
@@ -433,14 +453,19 @@ class FakeCreationHermesAgent:
             (view.get("confirmation_preview") or {}).get("can_confirm")
         )
         if explicit_confirm and can_confirm:
-            confirm_result = self.tool_service.execute_with_identity(
+            confirm_result = self._execute_tool(
+                confirm_call_id,
                 "confirm_and_queue_investigation",
                 confirm_args,
-                principal=principal,
-                identity=HermesToolExecutionIdentity.require(
-                    session_id=self.session_id,
-                    turn_id=task_id,
-                    tool_call_id=confirm_call_id,
+                lambda: self.tool_service.execute_with_identity(
+                    "confirm_and_queue_investigation",
+                    confirm_args,
+                    principal=principal,
+                    identity=HermesToolExecutionIdentity.require(
+                        session_id=self.session_id,
+                        turn_id=task_id,
+                        tool_call_id=confirm_call_id,
+                    ),
                 ),
             )
             if confirm_result.get("status") != "ok":
@@ -518,6 +543,49 @@ class FakeCreationHermesAgent:
             "turn_exit_reason": "completed",
             "api_calls": 0,
         }
+
+    def _execute_tool(
+        self,
+        tool_call_id: str,
+        tool_name: str,
+        arguments: dict[str, Any],
+        operation: Callable[[], dict[str, Any]],
+    ) -> dict[str, Any]:
+        if self.tool_start_callback is not None:
+            try:
+                self.tool_start_callback(tool_call_id, tool_name, arguments)
+            except Exception:
+                pass
+        try:
+            result = operation()
+        except Exception:
+            if self.tool_complete_callback is not None:
+                try:
+                    self.tool_complete_callback(
+                        tool_call_id,
+                        tool_name,
+                        arguments,
+                        {"status": "error"},
+                    )
+                except Exception:
+                    pass
+            raise
+        if self.tool_complete_callback is not None:
+            callback_result = (
+                result
+                if result.get("status") in {"ok", "error"}
+                else {"status": "ok", "data": result}
+            )
+            try:
+                self.tool_complete_callback(
+                    tool_call_id,
+                    tool_name,
+                    arguments,
+                    callback_result,
+                )
+            except Exception:
+                pass
+        return result
 
     @staticmethod
     def _creator_request(message: str) -> tuple[str, str] | None:
@@ -597,6 +665,10 @@ class InvestigationCreationConversationService:
         self._agents: dict[str, Any] = {}
         self._agent_lock = RLock()
         self._turn_node_observers: list[Callable[[str, str], None]] = []
+        self._activity_emitter = PublicActivityEmitter(
+            self.store,
+            enabled=lambda: settings.activity_stream_enabled,
+        )
 
     def close(self) -> None:
         with self._agent_lock:
@@ -1046,19 +1118,8 @@ class InvestigationCreationConversationService:
         self._notify(turn.id, "call_qwen")
         self.tool_service.begin_conversation_turn(session.id, turn.id)
         try:
-            if self.fake_runtime:
-                agent = self._agent(session.id)
-                result = agent.run_conversation(
-                    user_message,
-                    system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
-                    conversation_history=history,
-                    task_id=turn.id,
-                )
-            else:
-                with self.runtime_binding.product_mode_execution(
-                    session_runtime_home(self.hermes_state_dir, session.id),
-                    product_mode="creation"
-                ):
+            with self._activity_emitter.bind_turn(session.id, turn.id):
+                if self.fake_runtime:
                     agent = self._agent(session.id)
                     result = agent.run_conversation(
                         user_message,
@@ -1066,6 +1127,18 @@ class InvestigationCreationConversationService:
                         conversation_history=history,
                         task_id=turn.id,
                     )
+                else:
+                    with self.runtime_binding.product_mode_execution(
+                        session_runtime_home(self.hermes_state_dir, session.id),
+                        product_mode="creation"
+                    ):
+                        agent = self._agent(session.id)
+                        result = agent.run_conversation(
+                            user_message,
+                            system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
+                            conversation_history=history,
+                            task_id=turn.id,
+                        )
             if not isinstance(result, dict):
                 raise RuntimeError("Hermes returned a non-object Turn result")
             if bool(result.get("interrupted")):
@@ -1175,6 +1248,7 @@ class InvestigationCreationConversationService:
                         session_id=session_id,
                         tool_service=self.tool_service,
                         principal_resolver=self.principal_for_session,
+                        **self._activity_emitter.agent_callbacks(session_id),
                     )
                 else:
                     agent = self.runtime_binding.create_agent(
@@ -1184,6 +1258,7 @@ class InvestigationCreationConversationService:
                         base_url=settings.dashscope_base_url,
                         api_key=settings.dashscope_api_key,
                         stream_delta_callback=lambda _delta: None,
+                        **self._activity_emitter.agent_callbacks(session_id),
                     )
                 self._agents[session_id] = agent
             return agent
