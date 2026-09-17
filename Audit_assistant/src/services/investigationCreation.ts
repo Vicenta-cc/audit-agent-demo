@@ -1,5 +1,5 @@
 import { apiRequest, withQuery } from "./apiClient";
-import { waitForTurn } from "./investigations";
+import { waitForTurn, type InvestigationTurnWaitOptions } from "./investigations";
 import type {
   ConfirmationPreview,
   InvestigationDraftConfiguration,
@@ -11,7 +11,6 @@ import type {
 } from "../types/investigationCreation";
 import type {
   InvestigationTurnAcceptedResponse,
-  InvestigationTurnEvent,
   InvestigationTurnResponse
 } from "../types/investigations";
 import type { PublishedReportDetail } from "../types/reports";
@@ -80,13 +79,7 @@ export function sendInvestigationCreationTurn(
 
 export function waitForInvestigationCreationTurn(
   turnId: string,
-  options: {
-    onEvent?: (event: InvestigationTurnEvent) => void;
-    signal?: AbortSignal;
-    timeoutMs?: number;
-    afterSequence?: number;
-    resumeReplay?: boolean;
-  } = {}
+  options: InvestigationTurnWaitOptions = {}
 ) {
   return waitForTurn(
     turnId,
@@ -225,13 +218,7 @@ export function waitForInvestigationWorkspaceReportTurn(
   workspaceSessionId: string,
   runId: string,
   turnId: string,
-  options: {
-    onEvent?: (event: InvestigationTurnEvent) => void;
-    signal?: AbortSignal;
-    timeoutMs?: number;
-    afterSequence?: number;
-    resumeReplay?: boolean;
-  } = {}
+  options: InvestigationTurnWaitOptions = {}
 ) {
   const base = `/api/investigation-workspaces/${encodeURIComponent(workspaceSessionId)}`
     + `/runs/${encodeURIComponent(runId)}/report-turns/${encodeURIComponent(turnId)}`;

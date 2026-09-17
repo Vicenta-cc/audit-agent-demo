@@ -93,10 +93,51 @@ The existing Douyin acceptance controller remains read-only reference
 infrastructure. This branch does not change or restart the 8027 or 3198/8198
 runtimes.
 
+## Phase 2 durable public event protocol
+
+Phase 2 adds three display-only event types alongside the existing `turn`
+event. It does not connect Hermes/Qwen callbacks, project tool calls, or render
+new UI:
+
+| SSE event | Public payload | Purpose |
+| --- | --- | --- |
+| `activity` | hashed public activity ID, status, label, safe summary, optional count | Expandable business activity |
+| `answer_delta` | hashed public answer ID, revision, buffered text delta | Provisional typewriter answer |
+| `answer_reset` | hashed public answer ID and new revision | Discard a provisional revision before replacement |
+
+All four event types share the existing per-Turn monotonic sequence and
+`Last-Event-ID` replay path. Existing databases are migrated in place: legacy
+rows default to `event_type=turn`, and their IDs, sequence numbers, and replay
+behavior are retained.
+
+The extension writer requires strict allowlisted payloads and hashed public
+identifiers. Raw tool arguments/results, tool-call IDs, database IDs, and
+unknown fields are rejected before persistence. Event retries are idempotent:
+the same key and payload return the original row even after the Turn becomes
+terminal, while a conflicting payload is rejected. A new display event can
+only be appended while the Turn is running.
+
+Only `turn` events can terminate SSE or determine the status projection.
+Activity and provisional-answer events therefore cannot complete, fail,
+interrupt, resume, save, or start anything. The frontend accepts the new named
+events through optional callbacks, ignores malformed or replayed sequences,
+and retains the existing polling fallback. The final persisted
+`completed.answer` remains authoritative.
+
+Phase 2 verification used the controller-recorded Python and Node runtimes,
+the immutable A/B archives, and the pinned Douyin acceptance crawler:
+
+- Full backend gate: `1392 passed, 28 skipped, 67 subtests passed` in 188.03s.
+- Focused protocol/creation/recovery gate: `101 passed, 12 subtests passed`.
+- Historical A/B gate: `11 passed`.
+- `Audit_assistant` TypeScript checking and Vite production build passed; the
+  existing large-chunk warning remains.
+- No runtime was started or restarted, and all rollout switches remain off.
+
 ## Phase gates
 
-1. Default-off configuration and this regression contract.
-2. Backward-compatible durable public SSE event protocol.
+1. Default-off configuration and this regression contract. **Complete.**
+2. Backward-compatible durable public SSE event protocol. **Complete.**
 3. Allowlisted public activity projector for all report/creation/resource tools.
 4. Shared expandable activity timeline in the investigation UI.
 5. Filtered, buffered report answer deltas with reset/revision semantics.

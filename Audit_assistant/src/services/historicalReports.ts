@@ -1,12 +1,11 @@
 import { apiRequest } from "./apiClient";
-import { waitForTurn } from "./investigations";
+import { waitForTurn, type InvestigationTurnWaitOptions } from "./investigations";
 import type {
   HistoricalReportTurnAccepted,
   HistoricalReportTurnStatus,
   HistoricalReportWorkspace,
   HistoricalReportWorkspaceList
 } from "../types/historicalReports";
-import type { InvestigationTurnEvent } from "../types/investigations";
 
 function workspacePath(workspaceId: string) {
   return `/api/historical-report-workspaces/${encodeURIComponent(workspaceId)}`;
@@ -48,13 +47,7 @@ export function resumeHistoricalReportTurn(workspaceId: string, turnId: string) 
 export function waitForHistoricalReportTurn(
   workspaceId: string,
   turnId: string,
-  options: {
-    onEvent?: (event: InvestigationTurnEvent) => void;
-    signal?: AbortSignal;
-    timeoutMs?: number;
-    afterSequence?: number;
-    resumeReplay?: boolean;
-  } = {}
+  options: InvestigationTurnWaitOptions = {}
 ) {
   const turnPath = `${workspacePath(workspaceId)}/turns/${encodeURIComponent(turnId)}`;
   return waitForTurn(

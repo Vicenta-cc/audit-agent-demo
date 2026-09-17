@@ -50,3 +50,46 @@ export interface InvestigationTurnEvent {
   retryable: boolean;
   artifact?: InvestigationConversationArtifact | null;
 }
+
+export type InvestigationActivityStatus =
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "interrupted";
+
+export interface InvestigationActivityEvent {
+  event_id: string;
+  turn_id: string;
+  sequence: number;
+  occurred_at: string;
+  activity_id: string;
+  status: InvestigationActivityStatus;
+  label: string;
+  summary: string;
+  result_count?: number | null;
+}
+
+export interface InvestigationAnswerDeltaEvent {
+  event_id: string;
+  turn_id: string;
+  sequence: number;
+  occurred_at: string;
+  message_id: string;
+  revision: number;
+  delta: string;
+}
+
+export interface InvestigationAnswerResetEvent {
+  event_id: string;
+  turn_id: string;
+  sequence: number;
+  occurred_at: string;
+  message_id: string;
+  revision: number;
+}
+
+export type InvestigationStreamEvent =
+  | InvestigationTurnEvent
+  | InvestigationActivityEvent
+  | InvestigationAnswerDeltaEvent
+  | InvestigationAnswerResetEvent;
