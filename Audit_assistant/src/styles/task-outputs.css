@@ -1221,6 +1221,13 @@
   gap: 12px;
   color: #64748b;
   font-size: 13px;
+  padding: 24px;
+  text-align: center;
+}
+
+.detail-media-empty strong {
+  color: #475569;
+  font-size: 14px;
 }
 
 .detail-media-empty svg {

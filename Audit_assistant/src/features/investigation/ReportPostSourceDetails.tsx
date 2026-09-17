@@ -25,7 +25,7 @@ export function ReportPostSourceDetails({ detail, reportVersionId }: { detail: R
       {publishedLabel ? <p>发布时间：{publishedLabel}</p> : null}
       {auditPath ? <p><button type="button" className="mt-button mt-button-primary" onClick={() => navigate(auditPath, {
         state: { returnTo: `${location.pathname}${location.search}`, returnLabel: "调查报告", returnTitle: detail.title }
-      })}><FileSearch size={16} />查看完整审核详情</button></p> : null}
+      })}><FileSearch size={16} />查看原审核记录</button></p> : null}
       {detail.source_url && /^https?:\/\//i.test(detail.source_url) ? (
         <a href={detail.source_url} target="_blank" rel="noopener noreferrer">打开原帖</a>
       ) : null}

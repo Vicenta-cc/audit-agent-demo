@@ -383,7 +383,8 @@ export function TaskOutputDetailPage() {
             ) : (
               <div className="detail-media-empty">
                 <ImageIcon size={38} />
-                <span>暂无可展示的原始素材</span>
+                <strong>{result.report_snapshot_source ? "当前报告未保存可回放的视频或图片" : "暂无可展示的原始素材"}</strong>
+                {result.report_snapshot_source ? <span>帖子正文、语音转写和审核结论仍可继续查看。</span> : null}
               </div>
             )}
 
