@@ -96,6 +96,8 @@ def test_new_tasks_publish_one_deterministic_unified_report_for_every_safe_risk_
     assert "finding" not in methodology
     assert "冻结快照" not in methodology
     assert "未调用模型" not in methodology
+    appendix_text = "".join(item["text"] for item in sections["8"]["paragraphs"])
+    assert f"全部 {len(verdicts)} 条帖子" in appendix_text
     assert ("2" in sections) is bool(expected["review"] or expected["reject"])
     assert ("3" in sections) is bool(expected["pass"])
     assert "4" not in sections
