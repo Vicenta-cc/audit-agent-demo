@@ -53,6 +53,12 @@ import {
 import { mapInvestigationRunState } from "./investigationRunState";
 import { buildConfirmationIdempotencyKey } from "./confirmationView";
 import {
+  activityTimelineMessage,
+  activityTimelineMessages,
+  insertActivityTimelineBeforeLatestAssistant,
+  mergeInvestigationActivityEvent
+} from "./investigationActivity";
+import {
   buildNewInvestigationWorkspaceSession,
   buildWorkspaceRecoveryErrorSession,
   presentCreationAssistantContent,
@@ -783,6 +789,26 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             after_sequence: event.sequence
           });
         }
+      },
+      onActivity: (event: import("../../types/investigations").InvestigationActivityEvent) => {
+        setSessions((current) => current.map((item) => (
+          item.id === uiSessionId
+          && item.reportBinding?.pendingTurn?.turnId === turnId
+            ? {
+                ...item,
+                reportBinding: {
+                  ...item.reportBinding,
+                  pendingTurn: {
+                    ...item.reportBinding.pendingTurn,
+                    activityEvents: mergeInvestigationActivityEvent(
+                      item.reportBinding.pendingTurn.activityEvents,
+                      event
+                    )
+                  }
+                }
+              }
+            : item
+        )));
       }
     });
     const waitForTerminal = (afterSequence = 0, resumeReplay = false) => (
@@ -848,6 +874,26 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       setSessions((current) => current.map((item) => {
         if (item.id !== uiSessionId || !item.reportBinding) return item;
         const answerId = `msg-answer-${turnId}`;
+        const activityMessage = activityTimelineMessage(
+          turnId,
+          item.reportBinding.pendingTurn?.activityEvents
+        );
+        let messages = item.messages;
+        if (activityMessage && !messages.some((message) => message.id === activityMessage.id)) {
+          messages = [...messages, activityMessage];
+        }
+        if (!messages.some((message) => message.id === answerId)) {
+          messages = [
+            ...messages,
+            {
+              id: answerId,
+              sender: "assistant",
+              timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+              content: answer,
+              type: result.status === "completed" ? "grounded_answer" : "text"
+            }
+          ];
+        }
         return {
           ...item,
           updatedAt: "刚刚",
@@ -855,18 +901,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             ...item.reportBinding,
             pendingTurn: undefined
           },
-          messages: item.messages.some((message) => message.id === answerId)
-            ? item.messages
-            : [
-                ...item.messages,
-                {
-                  id: answerId,
-                  sender: "assistant",
-                  timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-                  content: answer,
-                  type: result.status === "completed" ? "grounded_answer" : "text"
-                }
-              ]
+          messages
         };
       }));
     } catch (error) {
@@ -876,24 +911,33 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         setSessions((current) => current.map((item) => {
           if (item.id !== uiSessionId || !item.reportBinding) return item;
           const answerId = `msg-answer-error-${turnId}`;
+          const activityMessage = activityTimelineMessage(
+            turnId,
+            item.reportBinding.pendingTurn?.activityEvents
+          );
+          let messages = item.messages;
+          if (activityMessage && !messages.some((message) => message.id === activityMessage.id)) {
+            messages = [...messages, activityMessage];
+          }
+          if (!messages.some((message) => message.id === answerId)) {
+            messages = [
+              ...messages,
+              {
+                id: answerId,
+                sender: "assistant",
+                timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+                content: "这次报告问答暂时无法完成，请稍后重试。",
+                type: "text"
+              }
+            ];
+          }
           return {
             ...item,
             reportBinding: {
               ...item.reportBinding,
               pendingTurn: undefined
             },
-            messages: item.messages.some((message) => message.id === answerId)
-              ? item.messages
-              : [
-                  ...item.messages,
-                  {
-                    id: answerId,
-                    sender: "assistant",
-                    timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-                    content: "这次报告问答暂时无法完成，请稍后重试。",
-                    type: "text"
-                  }
-                ]
+            messages
           };
         }));
       }
@@ -930,7 +974,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                     clientMessageId,
                     stage: "accepted",
                     afterSequence: 0,
-                    recovering: false
+                    recovering: false,
+                    activityEvents: []
                   }
                 }
               }
@@ -963,7 +1008,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   clientMessageId,
                   stage: "accepted",
                   afterSequence: 0,
-                  recovering: false
+                  recovering: false,
+                  activityEvents: []
                 }
               }
             }
@@ -1735,7 +1781,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   turnId: pendingReportTurn.turnId,
                   clientMessageId: pendingReportTurn.clientMessageId,
                   stage: pendingReportTurn.stage,
-                  afterSequence: 0
+                  afterSequence: 0,
+                  activityEvents: pendingReportTurn.activityEvents
                 }
               : undefined
           }
@@ -1848,10 +1895,28 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           : item
       )));
     };
+    const handleCreationActivity = (event: import("../../types/investigations").InvestigationActivityEvent) => {
+      setSessions((current) => current.map((item) => (
+        item.id === uiSessionId
+        && item.creationBinding?.pendingTurnId === turnId
+          ? {
+              ...item,
+              creationBinding: {
+                ...item.creationBinding,
+                pendingActivityEvents: mergeInvestigationActivityEvent(
+                  item.creationBinding.pendingActivityEvents,
+                  event
+                )
+              }
+            }
+          : item
+      )));
+    };
     try {
       let result = await waitForInvestigationCreationTurn(turnId, {
         signal: controller.signal,
-        onEvent: handleCreationEvent
+        onEvent: handleCreationEvent,
+        onActivity: handleCreationActivity
       });
       if (result.status === "interrupted" && result.retryable && !resumeAttempted) {
         setSessions((current) => current.map((item) => (
@@ -1870,7 +1935,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           signal: controller.signal,
           afterSequence: result.event_sequence || 0,
           resumeReplay: !result.event_sequence,
-          onEvent: handleCreationEvent
+          onEvent: handleCreationEvent,
+          onActivity: handleCreationActivity
         });
       }
       const answer = result.status === "completed"
@@ -1880,9 +1946,17 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       if (result.artifact) {
         const currentState = await getInvestigationWorkspaceState(uiSessionId);
         const restored = restoreInvestigationWorkspace(currentState);
-        setSessions((current) => current.map((item) => (
-          item.id === uiSessionId ? restored : item
-        )));
+        setSessions((current) => current.map((item) => {
+          if (item.id !== uiSessionId) return item;
+          return {
+            ...restored,
+            messages: insertActivityTimelineBeforeLatestAssistant(
+              restored.messages,
+              turnId,
+              item.creationBinding?.pendingActivityEvents
+            )
+          };
+        }));
       } else {
         setSessions((current) => current.map((item) => (
           item.id === uiSessionId && item.creationBinding
@@ -1890,6 +1964,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                 ...item,
                 messages: [
                   ...item.messages,
+                  ...activityTimelineMessages(
+                    turnId,
+                    item.creationBinding.pendingActivityEvents
+                  ),
                   {
                     id: `msg-answer-${turnId}`,
                     sender: "assistant",
@@ -1902,6 +1980,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   ...item.creationBinding,
                   pendingTurnId: undefined,
                   pendingTurnStage: undefined,
+                  pendingActivityEvents: undefined,
                   resumeAttempted: undefined,
                   error: result.status === "completed" ? undefined : answer
                 }
@@ -1917,6 +1996,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
               ...item,
               messages: [
                 ...item.messages,
+                ...activityTimelineMessages(
+                  turnId,
+                  item.creationBinding.pendingActivityEvents
+                ),
                 {
                   id: `msg-creation-error-${turnId}`,
                   sender: "assistant",
@@ -1929,6 +2012,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                 ...item.creationBinding,
                 pendingTurnId: undefined,
                 pendingTurnStage: undefined,
+                pendingActivityEvents: undefined,
                 resumeAttempted: undefined,
                 error: message
               }
@@ -2021,6 +2105,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   ...item.creationBinding,
                   pendingTurnId: accepted.turn_id,
                   pendingTurnStage: "accepted",
+                  pendingActivityEvents: [],
                   resumeAttempted: false
                 }
               }

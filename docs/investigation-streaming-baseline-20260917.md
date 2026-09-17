@@ -171,13 +171,45 @@ any service:
 - The only output was five pre-existing dependency/lifespan deprecation
   warnings; all rollout switches remain default-off.
 
+## Phase 4 shared expandable activity timeline
+
+Phase 4 consumes the optional `onActivity` callback in both published-report
+questions and investigation/resource creation conversations. Events with the
+same hashed public activity ID update one visible row in first-seen order, so a
+real tool moves from `running` to its terminal status without duplicate rows.
+
+While a Turn is running, the timeline is expanded and retains the existing
+public Turn-stage text below the real tool rows. When the Turn finishes, the
+same safe activity list is stored next to that answer as a collapsed,
+user-expandable conversation item. This applies to report A/B/C, pass and
+unified reports, task configuration, ruleset/lexicon work, save operations,
+confirmation, and Run status reads through the shared backend allowlist.
+
+The UI does not infer completion from assistant prose. It renders only validated
+public events already accepted by the shared SSE client. When the feature flag
+is off or no activity has arrived, the previous report/creation pending status
+is rendered unchanged. Retry and resume keep the accumulated public rows, and
+the final answer and artifact recovery paths remain authoritative.
+
+Phase 4 verification used the controller-recorded Node `v24.19.0`:
+
+- TypeScript checking passed.
+- Four focused activity tests passed, including browser rendering, live-region
+  semantics, collapse behavior, sequence replacement, and answer ordering.
+- The Vite production build passed. The existing large-chunk warning remains.
+- The broader frontend run reached `87 passed, 2 skipped`; its four failures
+  are pre-existing contract expectations in unchanged code. Both mixed-rule
+  browser failures were reproduced unchanged at Phase 3 commit `64d225b`.
+- No formal or acceptance runtime was started or restarted. The activity flag
+  remains default-off.
+
 ## Phase gates
 
 1. Default-off configuration and this regression contract. **Complete.**
 2. Backward-compatible durable public SSE event protocol. **Complete.**
 3. Allowlisted public activity projector for all report/creation/resource tools.
    **Complete.**
-4. Shared expandable activity timeline in the investigation UI.
+4. Shared expandable activity timeline in the investigation UI. **Complete.**
 5. Filtered, buffered report answer deltas with reset/revision semantics.
 6. Server-side creation-answer filtering followed by creation answer deltas.
 7. Replay, refresh, idempotency, performance, and failure-injection hardening.

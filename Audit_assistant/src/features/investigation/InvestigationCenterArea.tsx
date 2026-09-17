@@ -27,7 +27,11 @@ import { GeneratedRulesMessage } from "./GeneratedRulesMessage";
 import { AssistantMarkdown } from "./AssistantMarkdown";
 import { HistoricalProgressCard } from "./HistoricalProgressCard";
 import { HistoricalReportPendingStatus } from "./HistoricalReportPendingStatus";
-import { shouldShowHistoricalPending } from "./historicalReportPresentation";
+import {
+  historicalPendingStatus,
+  shouldShowHistoricalPending
+} from "./historicalReportPresentation";
+import { InvestigationActivityTimeline } from "./InvestigationActivityTimeline";
 import { platformOptionsList } from "../../mocks/investigationMocks";
 
 interface InvestigationCenterAreaProps {
@@ -141,6 +145,10 @@ export function InvestigationCenterArea({
     Boolean(session.reportBinding?.pendingTurn)
   );
   const showCreationPending = Boolean(session.creationBinding && isSendingMessage && !session.reportBinding);
+  const pendingActivityEvents = session.reportBinding?.pendingTurn?.activityEvents
+    || session.creationBinding?.pendingActivityEvents
+    || [];
+  const pendingActivitySequence = pendingActivityEvents[pendingActivityEvents.length - 1]?.sequence || 0;
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(() => (
     getInitialStreamingMessageId(session)
   ));
@@ -197,7 +205,13 @@ export function InvestigationCenterArea({
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [session.id, session.messages.length, session.reportBinding, showHistoricalPending]);
+  }, [
+    pendingActivitySequence,
+    session.id,
+    session.messages.length,
+    session.reportBinding,
+    showHistoricalPending
+  ]);
 
   const handleSend = () => {
     if (!inputText.trim() || isSendingMessage) return;
@@ -440,6 +454,15 @@ export function InvestigationCenterArea({
               if (msg.type === "historical_progress") {
                 return (
                   <HistoricalProgressCard key={msg.id} workspaceId={session.id} />
+                );
+              }
+
+              if (msg.type === "activity_timeline" && msg.activityEvents?.length) {
+                return (
+                  <InvestigationActivityTimeline
+                    key={msg.id}
+                    events={msg.activityEvents}
+                  />
                 );
               }
 
@@ -720,10 +743,21 @@ export function InvestigationCenterArea({
                 <Bot size={16} />
                 <span>研判助手</span>
               </div>
-              <HistoricalReportPendingStatus
-                stage={sendingMessageStage}
-                recovering={session.reportBinding?.pendingTurn?.recovering}
-              />
+              {pendingActivityEvents.length ? (
+                <InvestigationActivityTimeline
+                  events={pendingActivityEvents}
+                  active
+                  activeLabel={historicalPendingStatus(
+                    sendingMessageStage,
+                    session.reportBinding?.pendingTurn?.recovering
+                  )}
+                />
+              ) : (
+                <HistoricalReportPendingStatus
+                  stage={sendingMessageStage}
+                  recovering={session.reportBinding?.pendingTurn?.recovering}
+                />
+              )}
             </div>
           ) : null}
           {showCreationPending ? (
@@ -732,10 +766,18 @@ export function InvestigationCenterArea({
                 <Bot size={16} />
                 <span>研判助手</span>
               </div>
-              <div className="inv-creation-pending-status">
-                <Loader2 size={17} className="spin" />
-                <span>{creationPendingLabel(sendingMessageStage)}</span>
-              </div>
+              {pendingActivityEvents.length ? (
+                <InvestigationActivityTimeline
+                  events={pendingActivityEvents}
+                  active
+                  activeLabel={creationPendingLabel(sendingMessageStage)}
+                />
+              ) : (
+                <div className="inv-creation-pending-status">
+                  <Loader2 size={17} className="spin" />
+                  <span>{creationPendingLabel(sendingMessageStage)}</span>
+                </div>
+              )}
             </div>
           ) : null}
         </div>

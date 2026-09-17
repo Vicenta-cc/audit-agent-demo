@@ -5,6 +5,7 @@ import type {
   InvestigationRunProjection,
   PublicInvestigationDraft
 } from "./investigationCreation";
+import type { InvestigationActivityEvent } from "./investigations";
 
 export type TaskSessionStatus = "配置中" | "等待确认" | "研判中" | "审核完成" | "报告已生成" | "已创建" | "调查失败" | "调查已中断";
 
@@ -161,7 +162,8 @@ export interface ChatMessage {
   sender: "user" | "assistant" | "system";
   timestamp: string;
   content?: string;
-  type?: "text" | "task_proposal" | "task_confirmation" | "agent_collaboration" | "historical_progress" | "report_card" | "evidence_list" | "comparison_list" | "grounded_answer";
+  type?: "text" | "task_proposal" | "task_confirmation" | "agent_collaboration" | "historical_progress" | "report_card" | "evidence_list" | "comparison_list" | "grounded_answer" | "activity_timeline";
+  activityEvents?: InvestigationActivityEvent[];
   proposalData?: {
     taskName: string;
     taskType: string;
@@ -203,6 +205,7 @@ export interface InvestigationSession {
     presentationStage?: "suggestion" | "confirmation";
     pendingTurnId?: string;
     pendingTurnStage?: import("./investigations").InvestigationTurnStage;
+    pendingActivityEvents?: InvestigationActivityEvent[];
     resumeAttempted?: boolean;
     run?: InvestigationRunProjection;
     confirmationKey?: string;
@@ -212,6 +215,7 @@ export interface InvestigationSession {
       question: string;
       stage: import("./investigations").InvestigationTurnStage;
       resumeAttempted?: boolean;
+      activityEvents?: InvestigationActivityEvent[];
     };
     error?: string;
   };
@@ -229,6 +233,7 @@ export interface InvestigationSession {
       afterSequence?: number;
       resumeAttempted?: boolean;
       recovering?: boolean;
+      activityEvents?: InvestigationActivityEvent[];
     };
   };
 }
