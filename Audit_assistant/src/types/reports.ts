@@ -181,6 +181,9 @@ export interface ReportPresentationSection {
   standalone_count?: number;
   sample_posts?: ReportPostPresentation[];
   sample_total?: number;
+  group_posts?: ReportPostPresentation[];
+  group_total?: number;
+  group_summary?: string;
 }
 
 export interface ReportPresentationProjection {
@@ -194,6 +197,7 @@ export interface ReportPresentationProjection {
     source_name: string;
     status: string;
     published_at: string;
+    template_kind: string;
     platform: ReportPlatformProjection;
     scope: ReportScopeProjection;
   };
@@ -240,6 +244,7 @@ export interface ReportPresentationProjection {
     };
     target_entries?: ReportAccountEntry[];
     post_author_entries?: ReportAccountEntry[];
+    comment_author_entries?: ReportAccountEntry[];
     cross_investigation_commenters?: ReportAccountPresentationGroup;
     risk_commenters?: ReportAccountPresentationGroup;
     index?: {

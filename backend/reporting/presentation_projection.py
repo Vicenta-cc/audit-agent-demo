@@ -116,8 +116,10 @@ def build_presentation_projection(
         comment_statistics=comment_statistics,
     )
     summary = _investigation_summary(statistics)
-    if document.get("template_kind") in {"all_pass", "single_risk_post", "unified_audit"}:
+    template_kind = str(document.get("template_kind") or "")
+    if template_kind in {"all_pass", "single_risk_post"}:
         accounts["snapshot_summary"] = document.get("snapshot_account_summary")
+    if template_kind in {"all_pass", "single_risk_post", "unified_audit"}:
         overview = next(
             (section for section in sections if section["section_type"] == "overview"), {}
         )
@@ -138,6 +140,7 @@ def build_presentation_projection(
             "source_name": str(metadata.get("source_name") or ""),
             "status": str(metadata.get("status") or "published"),
             "published_at": str(metadata.get("published_at") or ""),
+            "template_kind": template_kind,
             "platform": _platform_projection(snapshot),
             "scope": _scope_projection(metadata),
         },
@@ -550,6 +553,39 @@ def _section_projection(
         output["sample_posts"] = [_public_post(posts_by_ref[ref], audits_by_ref=audits_by_ref) for ref in refs]
         output["sample_total"] = len(posts_by_ref)
         return output
+    if section_type in {
+        "risk_post_analysis",
+        "safe_post_analysis",
+        "pending_post_analysis",
+    }:
+        audit_refs = [
+            str(ref)
+            for claim in section.get("claims") or []
+            for ref in claim.get("audit_finding_refs") or []
+            if str(ref)
+        ]
+        post_refs = [
+            str(audits_by_ref[ref].get("post_ref") or "")
+            for ref in audit_refs
+            if ref in audits_by_ref
+        ]
+        if (
+            len(post_refs) != len(audit_refs)
+            or any(ref not in posts_by_ref for ref in post_refs)
+            or len(set(post_refs)) != len(post_refs)
+        ):
+            raise ReportGenerationError(
+                "unified report group references are missing or invalid"
+            )
+        output["group_posts"] = [
+            _public_post(posts_by_ref[ref], audits_by_ref=audits_by_ref)
+            for ref in post_refs
+        ]
+        output["group_total"] = len(post_refs)
+        output["group_summary"] = (
+            output["paragraphs"][0] if output["paragraphs"] else ""
+        )
+        return output
     if section_type != "investigation_finding":
         return output
 
@@ -637,6 +673,10 @@ def _account_groups(
         "post_author_entries": [
             _public_account_entry(item) for item in other_post_authors
         ],
+        "comment_author_entries": [
+            _public_account_entry(item)
+            for item in collections["comment_authors"]
+        ],
         "cross_investigation_commenters": _public_account_group(
             collections["cross_investigation_commenter"]
         ),
@@ -689,6 +729,18 @@ def _account_collections(
     occupied = target_refs | {
         str(item.get("entry_ref")) for item in other_post_authors
     }
+    comment_authors = sorted(
+        (
+            item
+            for item in entries
+            if "comment_author" in (item.get("roles") or [])
+        ),
+        key=lambda item: (
+            -int(_entry_statistics(item).get("risk_comment_count") or 0),
+            -int(_entry_statistics(item).get("comment_count") or 0),
+            str(item.get("entry_ref") or ""),
+        ),
+    )
     risk_candidates = _sort_risk_commenters(
         [
             item
@@ -733,6 +785,7 @@ def _account_collections(
         "entries": entries,
         "targets": targets,
         "other_post_authors": other_post_authors,
+        "comment_authors": comment_authors,
         "post_author": {
             "status": "available",
             "all_entries": [item for item in entries if "post_author" in (item.get("roles") or [])],

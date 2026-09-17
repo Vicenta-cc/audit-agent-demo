@@ -205,6 +205,7 @@ class ReportAccountOverviewProjector:
         *,
         target_account_identity: dict[str, str] | None,
         require_target: bool = True,
+        allow_unresolved_comment_accounts: bool = False,
     ) -> dict[str, Any]:
         task_id = snapshot.task_id
         try:
@@ -268,7 +269,12 @@ class ReportAccountOverviewProjector:
                 ["Report Snapshot Posts do not match the authorized Account task snapshot"],
             )
 
-        expected = self._frozen_occurrences(snapshot)
+        expected = self._frozen_occurrences(
+            snapshot,
+            allow_unresolved_comment_accounts=(
+                allow_unresolved_comment_accounts
+            ),
+        )
         expected_keys = {
             (item["kind"], item["content_key"], item["comment_id"])
             for item in expected
@@ -474,6 +480,8 @@ class ReportAccountOverviewProjector:
     @staticmethod
     def _frozen_occurrences(
         snapshot: ImmutableReportSnapshot,
+        *,
+        allow_unresolved_comment_accounts: bool = False,
     ) -> list[dict[str, Any]]:
         finding_by_post = {
             item.post_ref: item.payload for item in snapshot.findings
@@ -536,6 +544,14 @@ class ReportAccountOverviewProjector:
                         ["a frozen Comment lacks required review fields"],
                     )
                 if str(comment["audit_status"] or "") != "completed":
+                    continue
+                if (
+                    allow_unresolved_comment_accounts
+                    and not normalize_source_id(comment.get("sec_uid"))
+                ):
+                    # Nicknames are labels, never identity keys. Unified reports
+                    # still publish the post and simply omit this unresolved
+                    # commenter from Account activity.
                     continue
                 comment_id = normalize_source_id(comment["comment_id"])
                 if not comment_id:

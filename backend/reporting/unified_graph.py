@@ -5,7 +5,14 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any, Iterable
 
+from langgraph.graph import END, START, StateGraph
+
+from backend.reporting.account_overview import (
+    ReportAccountOverviewProjector,
+    public_account_overview_projection,
+)
 from backend.reporting.comment_statistics import snapshot_comment_coverage
+from backend.reporting.contracts import ReportGraphState
 from backend.reporting.errors import ReportValidationError
 from backend.reporting.pass_graph import PassReportGraph, SCOPE
 from backend.reporting.structured_contract import validate_structured_report_document
@@ -61,6 +68,51 @@ class UnifiedAuditReportGraph(PassReportGraph):
 
     template_kind = UNIFIED_REPORT_TEMPLATE_KIND
     template_version = UNIFIED_REPORT_TEMPLATE_VERSION
+
+    def _build_graph(self):
+        graph = StateGraph(ReportGraphState)
+        steps = {
+            "freeze_source_snapshot": self._freeze_source_snapshot,
+            "build_statistics": self._build_statistics,
+            "build_unified_account_overview": (
+                self._build_unified_account_overview
+            ),
+            "draft_pass_report": self._draft_pass_report,
+            "assemble_pass_report": self._assemble_pass_report,
+            "publish_report_version": self._publish_report_version,
+        }
+        previous = START
+        for name, method in steps.items():
+            graph.add_node(name, self._wrap_node(name, method))
+            graph.add_edge(previous, name)
+            previous = name
+        graph.add_edge(previous, END)
+        return graph
+
+    def _build_unified_account_overview(self, state):
+        snapshot = self._snapshot(state["report_version_id"])
+        projection = ReportAccountOverviewProjector.from_snapshot(
+            snapshot
+        ).build(
+            snapshot,
+            target_account_identity=self.report_source.creator_account_identity(
+                snapshot.task_id
+            ),
+            require_target=self.report_source.has_explicit_creator_target(
+                snapshot.task_id
+            ),
+            allow_unresolved_comment_accounts=True,
+        )
+        self.store.record_run_event(
+            state["run_id"],
+            "build_unified_account_overview",
+            "validated",
+            {
+                **projection["statistics"],
+                "projection_hash": projection["projection_hash"],
+            },
+        )
+        return {"report_account_projection": projection}
 
     @staticmethod
     def _validate_snapshot(snapshot):
@@ -284,22 +336,18 @@ class UnifiedAuditReportGraph(PassReportGraph):
                 claims=claims,
             )
 
-        stable_authors = {
-            str(((post.payload.get("raw_content_payload") or {}).get("author") or {}).get("sec_uid") or "").strip()
-            for post in snapshot.posts
-        } - {""}
+        account_statistics = state["report_account_projection"]["statistics"]
         self._section(
             sections,
             number="5",
             kind="account_activity_overview",
             title="账号关联分析",
             paragraphs=[
-                (
-                    f"本次冻结样本记录到 {len(stable_authors)} 个具有稳定标识的发布账号；"
-                    "本阶段仅陈述当前报告内活动，不进行跨报告扩展。"
-                    if stable_authors
-                    else "本次冻结样本没有足以稳定合并发布账号的标识；同昵称账号不会被强行合并。"
-                )
+                f"本次冻结样本记录到具有稳定标识的发布账号 "
+                f"{account_statistics['post_author_account_count']} 个、评论账号 "
+                f"{account_statistics['comment_author_account_count']} 个，去重后共 "
+                f"{account_statistics['distinct_account_count']} 个账号。"
+                "报告正文展示当前报告内的发布与评论活动；同昵称不会被强行合并。"
             ],
         )
         recommendations = []
@@ -362,12 +410,35 @@ class UnifiedAuditReportGraph(PassReportGraph):
 
     def _assemble_pass_report(self, state):
         result = super()._assemble_pass_report(state)
-        audit_model = result["assembled_report"]["body_json"]["audit_model"]
+        body = result["assembled_report"]["body_json"]
+        audit_model = body["audit_model"]
         audit_model["investigation_findings"] = []
         audit_model["standalone_risk_posts"] = list(
             state.get("standalone_risk_posts") or []
         )
         audit_model["risk_post_coverage_complete"] = True
+        account_projection = state["report_account_projection"]
+        public_projection = public_account_overview_projection(
+            account_projection
+        )
+        document = body["report_document"]
+        body["account_model"] = public_projection
+        for key in (
+            "account_coverage_statistics",
+            "default_active_comment_entries",
+            "full_account_index",
+            "target_account_entries",
+        ):
+            document[key] = public_projection[key]
+        document["account_scope_boundary"] = public_projection[
+            "scope_boundary"
+        ]
+        document["account_source"] = "report_snapshot"
+        document.pop("snapshot_account_summary", None)
+        validate_structured_report_document(
+            document,
+            account_model=public_projection,
+        )
         return result
 
     def _publish_report_version(self, state):
@@ -387,6 +458,7 @@ class UnifiedAuditReportGraph(PassReportGraph):
             categories=body["audit_model"].get("categories") or [],
             investigation_findings=[],
             standalone_risk_posts=state.get("standalone_risk_posts") or [],
+            account_projection=state["report_account_projection"],
         )
         self.store.update_run(
             state["run_id"],

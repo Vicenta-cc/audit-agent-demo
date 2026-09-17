@@ -8838,6 +8838,7 @@
 }
 
 .r31-account-table.is-cross,
+.r31-account-table.is-commenting,
 .r31-account-table.is-risk {
   --r31-account-columns: minmax(180px, 1.35fr) repeat(4, minmax(80px, 1fr)) 42px;
 }
@@ -9159,6 +9160,7 @@
   }
 
   .r31-account-table.is-cross,
+  .r31-account-table.is-commenting,
   .r31-account-table.is-risk {
     --r31-account-columns: minmax(92px, 1.8fr) repeat(4, minmax(43px, 0.72fr)) 27px;
   }
