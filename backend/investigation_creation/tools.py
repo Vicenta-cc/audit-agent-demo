@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from threading import RLock
-from typing import Any
+from typing import Any, Callable
 
 from pydantic import (
     Field,
@@ -353,6 +353,15 @@ class InvestigationCreationToolService:
         self.application_service = application_service
         self._conversation_turns: dict[str, str] = {}
         self._conversation_lock = RLock()
+        self._tool_start_observer: Callable[[str, str, str], None] | None = None
+
+    def set_tool_start_observer(
+        self,
+        observer: Callable[[str, str, str], None] | None,
+    ) -> None:
+        """Install a fail-open projection observer at the application boundary."""
+
+        self._tool_start_observer = observer
 
     def begin_conversation_turn(self, session_id: str, turn_id: str) -> None:
         with self._conversation_lock:
@@ -472,6 +481,14 @@ class InvestigationCreationToolService:
             turn_id=identity.turn_id,
             tool_call_id=identity.tool_call_id,
         )
+        observer = self._tool_start_observer
+        if observer is not None:
+            try:
+                observer(identity.session_id, identity.tool_call_id, tool_name)
+            except Exception:
+                # Public activity is a display projection and must never alter
+                # validation, receipt fencing, replay, or mutation execution.
+                pass
         raw_arguments = dict(arguments or {})
         if tool_name in M3_MUTATION_TOOL_NAMES:
             try:

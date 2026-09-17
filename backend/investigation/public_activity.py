@@ -223,9 +223,28 @@ class PublicActivityEmitter:
         turn_id = self._active_turn(session_id)
         if not turn_id or tool_name not in PUBLIC_TOOL_ACTIVITIES:
             return
+        normalized_call_id = str(tool_call_id or "")
+        with self._lock:
+            start_was_observed = (
+                normalized_call_id in self._active_calls.get(turn_id, {})
+            )
+        if not start_was_observed:
+            # Some runtime paths can surface the canonical completion callback
+            # without their best-effort start callback. Backfill the public
+            # lifecycle at the projection boundary only. The durable event
+            # idempotency key makes this harmless when a start was already
+            # persisted before a process restart or callback-state loss.
+            started = public_activity_event(
+                turn_id=turn_id,
+                tool_call_id=normalized_call_id,
+                tool_name=tool_name,
+                phase="started",
+            )
+            if started is not None:
+                self._append(turn_id, started)
         projected = public_activity_event(
             turn_id=turn_id,
-            tool_call_id=str(tool_call_id or ""),
+            tool_call_id=normalized_call_id,
             tool_name=tool_name,
             phase="completed",
             result=result,
@@ -233,7 +252,7 @@ class PublicActivityEmitter:
         if projected is not None:
             self._append(turn_id, projected)
         with self._lock:
-            self._active_calls.get(turn_id, {}).pop(str(tool_call_id or ""), None)
+            self._active_calls.get(turn_id, {}).pop(normalized_call_id, None)
 
     def _active_turn(self, session_id: str) -> str:
         if not self.enabled():

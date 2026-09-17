@@ -669,6 +669,11 @@ class InvestigationCreationConversationService:
             self.store,
             enabled=lambda: settings.activity_stream_enabled,
         )
+        set_tool_start_observer = getattr(
+            self.tool_service, "set_tool_start_observer", None
+        )
+        if callable(set_tool_start_observer):
+            set_tool_start_observer(self._activity_emitter.tool_started)
 
     def close(self) -> None:
         with self._agent_lock:

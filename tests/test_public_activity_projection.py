@@ -14,7 +14,12 @@ from backend.investigation.store import InvestigationStore
 from backend.investigation_creation.conversation import (
     InvestigationCreationConversationService,
 )
-from backend.investigation_creation.tools import M3_TOOL_INPUTS
+from backend.investigation_creation.principal import Principal
+from backend.investigation_creation.tools import (
+    HermesToolExecutionIdentity,
+    InvestigationCreationToolService,
+    M3_TOOL_INPUTS,
+)
 from hermes_m0.pass_support import pass_tool_schemas
 from hermes_m0.schemas import (
     M2_ACCOUNT_ACTIVITY_TOOLS,
@@ -175,6 +180,81 @@ def test_emitter_is_durable_idempotent_and_interrupts_unfinished_activity(tmp_pa
     assert "tool-call:" not in serialized
     assert "must-not-be-persisted" not in serialized
     assert "private-evidence-id" not in serialized
+
+
+def test_completion_backfills_missing_running_without_duplicate_execution(tmp_path):
+    store = InvestigationStore(tmp_path / "investigation.sqlite3")
+    session = store.create_session(_report_context())
+    turn, _ = store.create_turn(
+        session.id,
+        client_message_id="client-message:backfill",
+        user_input="保存并启动。",
+    )
+    store.append_public_turn_event(turn.id, stage="accepted")
+    emitter = PublicActivityEmitter(store, enabled=lambda: True)
+
+    with emitter.bind_turn(session.id, turn.id):
+        emitter.tool_completed(
+            session.id,
+            "tool-call:confirm",
+            "confirm_and_queue_investigation",
+            {"status": "ok", "data": {"run_id": "must-not-be-persisted"}},
+        )
+
+    activities = [
+        event
+        for event in store.list_public_turn_events(turn.id)
+        if event["event_type"] == "activity"
+    ]
+    assert [event["status"] for event in activities] == ["running", "succeeded"]
+    assert len({event["activity_id"] for event in activities}) == 1
+    assert "must-not-be-persisted" not in str(activities)
+
+    # A restarted projector may not remember the start callback, but the
+    # durable idempotency key still prevents a second public running event.
+    before_restart = store.list_public_turn_events(turn.id)
+    restarted = PublicActivityEmitter(store, enabled=lambda: True)
+    with restarted.bind_turn(session.id, turn.id):
+        restarted.tool_completed(
+            session.id,
+            "tool-call:confirm",
+            "confirm_and_queue_investigation",
+            {"status": "ok"},
+        )
+    assert store.list_public_turn_events(turn.id) == before_restart
+    assert len([
+        event
+        for event in store.list_public_turn_events(turn.id)
+        if event["event_type"] == "activity"
+    ]) == 2
+
+
+def test_creation_tool_boundary_observes_start_before_validation() -> None:
+    tools = InvestigationCreationToolService(SimpleNamespace())
+    observed: list[tuple[str, str, str]] = []
+    tools.set_tool_start_observer(
+        lambda session_id, tool_call_id, tool_name: observed.append(
+            (session_id, tool_call_id, tool_name)
+        )
+    )
+
+    result = tools.execute_with_identity(
+        "create_investigation_draft",
+        {},
+        principal=Principal("principal-a"),
+        identity=HermesToolExecutionIdentity(
+            session_id="investigation-session:creation",
+            turn_id="investigation-turn:creation",
+            tool_call_id="tool-call:create",
+        ),
+    )
+
+    assert result["status"] == "error"
+    assert observed == [(
+        "investigation-session:creation",
+        "tool-call:create",
+        "create_investigation_draft",
+    )]
 
 
 def test_emitter_is_a_noop_when_the_rollout_switch_is_off(tmp_path):
