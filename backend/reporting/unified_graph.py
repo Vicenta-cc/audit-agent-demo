@@ -413,9 +413,11 @@ class UnifiedAuditReportGraph(PassReportGraph):
             title="附录",
             paragraphs=[
                 (
-                    "附录保留全部帖子、审核结论和相关依据，可用于逐条核对。"
+                    f"附录收录本报告全部 {len(snapshot.posts)} 条帖子、审核结论和相关依据，"
+                    "可用于逐条核对。"
                     if snapshot.evidence
-                    else "附录保留全部帖子及其审核结论，可用于逐条核对。"
+                    else f"附录收录本报告全部 {len(snapshot.posts)} 条帖子及其审核结论，"
+                    "可用于逐条核对。"
                 )
             ],
         )

@@ -463,10 +463,6 @@ function ReportSection({
       <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
         <SectionHeading section={section} />
         <FormalParagraphs paragraphs={section.paragraphs} />
-        <dl className="r31-stat-band">
-          <StatBandItem label="完整帖子" value={report.appendix.post_count} />
-          {report.appendix.direct_evidence_count > 0 ? <StatBandItem label="独立依据" value={report.appendix.direct_evidence_count} /> : null}
-        </dl>
         <button type="button" className="r31-text-action" onClick={() => onOpenAppendix({ view: "posts" })}>
           查看全部帖子与审核结论（{displayNumber(report.appendix.post_count)}） <ChevronRight size={15} />
         </button>
@@ -474,7 +470,7 @@ function ReportSection({
           <button type="button" className="r31-text-action" onClick={() => onOpenAppendix({ view: "evidence" })}>
             查看全部研判依据（{displayNumber(report.appendix.direct_evidence_count)}） <ChevronRight size={15} />
           </button>
-        ) : <p className="r31-availability-note">本报告没有单独的依据条目；每条帖子的审核理由仍可在帖子详情中查看。</p>}
+        ) : null}
       </section>
     );
   }
