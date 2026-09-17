@@ -9,7 +9,12 @@ import sqlite3
 from types import SimpleNamespace
 from unittest.mock import Mock, call
 
+from backend.hermes_runtime.service import HermesInvestigationAgentService
+from backend.investigation.contracts import PublishedReportContext
+from backend.investigation.store import InvestigationStore
 from hermes_m0.runtime import configure_real_report_runtime
+from hermes_m0.pass_support import pass_tool_schemas
+from hermes_m0.schemas import M2_ACCOUNT_ACTIVITY_TOOLS
 from hermes_m0.unified_support import (
     UNIFIED_REPORT_SYSTEM_PROMPT,
     UnifiedAuditReportToolService,
@@ -39,6 +44,13 @@ def test_unified_overview_prompt_and_schema_require_all_post_report_read():
     assert "search_posts" not in names
     assert "list_post_risk_comments" not in names
     assert "list_finding_posts" not in names
+    assert "compare_authorized_report_accounts" in names
+    assert "compare_authorized_report_accounts" not in {
+        schema["name"] for schema in pass_tool_schemas()
+    }
+    assert "compare_authorized_report_accounts" not in {
+        schema["name"] for schema in M2_ACCOUNT_ACTIVITY_TOOLS
+    }
 
 
 def test_unified_report_read_report_exposes_every_mixed_post(tmp_path):
@@ -387,3 +399,185 @@ def test_unified_peer_reports_merge_same_sec_uid_account_activity(tmp_path):
         ]
         == 1
     )
+
+
+def test_unified_reports_deterministically_enumerate_and_compare_all_stable_accounts(
+    tmp_path,
+):
+    from hermes_m0.account_activity_service import AccountActivityToolService
+    from hermes_m0.pass_support import SnapshotAccountData, SnapshotAccountRepository
+
+    comments = [
+        {
+            "comment_id": "shared-comment",
+            "audit_status": "completed",
+            "risk_level": "none",
+            "risk_type": "none",
+            "content": "共同评论者的冻结评论",
+            "nickname": "共同评论者",
+            "sec_uid": "stable-shared-commenter",
+            "create_time": 1789603200,
+        }
+    ]
+    source, store = seed["seed_audit"](
+        tmp_path,
+        verdicts=[("review", "medium")],
+        comments=comments,
+    )
+    result = seed["R31ReportRuntime"](store).generate(
+        "new-search-task",
+        source=source,
+        checkpoint_path=tmp_path / "checkpoints.sqlite3",
+    )
+    version = store.get_version(result.report_version_id)
+    snapshot = store.get_source_snapshot(result.report_version_id)
+    current_service = configure_real_report_runtime(
+        store.db_path,
+        report_version_id=result.report_version_id,
+        expected_database_sha256=hashlib.sha256(store.db_path.read_bytes()).hexdigest(),
+        expected_content_hash=version["content_hash"],
+        expected_snapshot_hash=snapshot["snapshot_hash"],
+        ledger_path=tmp_path / "compare-source-ledger.sqlite3",
+    )
+    current = current_service.repository
+    peer = SimpleNamespace(
+        template_kind="unified_audit",
+        account_source="report_snapshot",
+        fixture=SimpleNamespace(
+            provenance=SimpleNamespace(source_task_id="authorized-peer-task")
+        ),
+        report=SimpleNamespace(title="另一份新增统一报告"),
+        snapshot_payloads=current.snapshot_payloads,
+        snapshot_hash="peer-" + current.snapshot_hash,
+        content_hash="peer-" + current.content_hash,
+        finding_for_post=current.finding_for_post,
+        _report_comments_by_post=current._report_comments_by_post,
+    )
+    legacy = SimpleNamespace(
+        template_kind="single_risk_post",
+        account_source="report_snapshot",
+        fixture=SimpleNamespace(
+            provenance=SimpleNamespace(source_task_id="historical-report-a-task")
+        ),
+        report=SimpleNamespace(title="Report A"),
+        snapshot_payloads=current.snapshot_payloads,
+        snapshot_hash="legacy-" + current.snapshot_hash,
+        content_hash="legacy-" + current.content_hash,
+        finding_for_post=current.finding_for_post,
+        _report_comments_by_post=current._report_comments_by_post,
+    )
+    combined = SnapshotAccountRepository(
+        SnapshotAccountData((current, peer, legacy))
+    )
+    activity = AccountActivityToolService(
+        current,
+        repository_loader=lambda: combined,
+        authorized_report_repositories=(current, peer, legacy),
+    )
+    service = UnifiedAuditReportToolService(current, account_activity=activity)
+    service.bind_session("compare-reports-session")
+
+    comparison = json.loads(
+        service.dispatch(
+            "compare_authorized_report_accounts",
+            {},
+            session_id="compare-reports-session",
+            turn_id="compare",
+        )
+    )
+    assert comparison["ok"], comparison
+    assert comparison["scope"]["account_activity_scope"] == (
+        "authorized_published_unified_audit_reports"
+    )
+    data = comparison["data"]
+    assert data["report_count"] == 2
+    assert data["comparison_complete_for_stable_accounts"] is True
+    assert [item["account_count"] for item in data["accounts_by_report"]] == [2, 2]
+    assert {
+        role
+        for report in data["accounts_by_report"]
+        for account in report["accounts"]
+        for role in account["roles"]
+    } == {"发布者", "评论者"}
+    assert data["shared_account_count"] == 2
+    pair = data["pairwise_comparisons"][0]
+    assert pair["common_account_count"] == 2
+    assert pair["common_publisher_count"] == 1
+    assert pair["common_commenter_count"] == 1
+    encoded = json.dumps(comparison, ensure_ascii=False)
+    assert "account_ref" not in encoded
+    assert "account:v2:" not in encoded
+    assert "stable-author" not in encoded
+    assert "stable-shared-commenter" not in encoded
+
+
+def test_report_answer_persistence_redacts_internal_account_references(tmp_path):
+    context = PublishedReportContext(
+        task_id="task-redaction",
+        report_id="report:" + "1" * 32,
+        report_version_id="report-version:" + "1" * 32,
+        version_number=1,
+        source_snapshot_id="source-snapshot:redaction",
+        snapshot_hash="1" * 64,
+        source_hash="source-redaction",
+        title="脱敏验收报告",
+        content_hash="content-redaction",
+        published_at="2026-09-17T00:00:00+00:00",
+        finding_ids=(),
+        evidence_ids=(),
+    )
+
+    class Facade:
+        db_path = tmp_path / "unused.sqlite3"
+
+        @staticmethod
+        def get_published_report_context(_report_version_id):
+            return context
+
+    class Agent:
+        _api_max_retries = 1
+
+        @staticmethod
+        def run_conversation(message, **kwargs):
+            leaked = (
+                "黑玫瑰对应 account_ref=account8_34088f，底层标识是 "
+                + "account:v2:"
+                + "a" * 64
+                + "。"
+            )
+            history = [dict(item) for item in kwargs.get("conversation_history") or []]
+            return {
+                "completed": True,
+                "failed": False,
+                "final_response": leaked,
+                "messages": [
+                    *history,
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": leaked},
+                ],
+            }
+
+    service = HermesInvestigationAgentService(
+        report_facade=Facade(),
+        store=InvestigationStore(tmp_path / "sessions.sqlite3"),
+        agent_factory=lambda **_kwargs: Agent(),
+        bind_runtime=False,
+    )
+    session = service.create_session(context.report_version_id)
+    turn, _ = service.accept_message(
+        session.id,
+        client_message_id="redact-account-reference",
+        content="这个账号是谁？",
+    )
+    result = service.execute_turn(turn.id)
+
+    assert "account8_34088f" not in result.answer
+    assert "account:v2:" not in result.answer
+    assert "account_ref" not in result.answer
+    assert "内部账号引用已隐藏" in result.answer
+    public_messages = service.get_messages(session.id)
+    assert all("account8_34088f" not in item.content for item in public_messages)
+    transcript = service.store.latest_completed_hermes_transcript(session.id)
+    assert transcript is not None
+    assert "account8_34088f" not in transcript[-1]["content"]
+    assert "account:v2:" not in transcript[-1]["content"]
