@@ -74,6 +74,17 @@ test("presentation details and appendix use only encoded stable refs", async () 
   ]);
 });
 
+test("appendix header uses one compact count instead of duplicate statistics", () => {
+  const appendixPage = readFileSync(
+    new URL("../src/features/investigation/InvestigationEvidenceAppendixPage.tsx", import.meta.url),
+    "utf8"
+  );
+
+  expect(appendixPage).not.toContain("当前记录");
+  expect(appendixPage).not.toContain("<dt>报告帖子</dt>");
+  expect(appendixPage).toContain('className="r31-appendix-header-summary"');
+});
+
 test("formal report frontend keeps the revised public contract", () => {
   const reportPage = readFileSync(
     new URL("../src/features/investigation/InvestigationReportPage.tsx", import.meta.url),
