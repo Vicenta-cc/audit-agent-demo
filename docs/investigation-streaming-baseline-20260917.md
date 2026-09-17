@@ -215,7 +215,7 @@ Phase 4 verification used the controller-recorded Node `v24.19.0`:
    **Complete.**
 4. Shared expandable activity timeline in the investigation UI. **Frozen and accepted.**
 5. Filtered, buffered report answer deltas with reset/revision semantics.
-   **Implemented; stable candidate pending live Qwen acceptance.**
+   **Frozen and accepted.**
 6. Server-side creation-answer filtering followed by creation answer deltas.
 7. Replay, refresh, idempotency, performance, and failure-injection hardening.
 8. Feature-flagged acceptance in the order: activity, unified report answers,
@@ -301,8 +301,55 @@ Douyin acceptance crawler as read-only dependencies:
 - Neither the formal 3198/8198 runtime nor the independent 8027 acceptance
   runtime was started, restarted, or modified.
 
-This is an implementation-complete stable candidate, not yet a frozen Phase 5
-baseline. Freezing requires one feature-flagged live Qwen/browser acceptance
-covering visible incremental output, tool-boundary reset, disconnect/replay,
-refresh recovery, final-answer replacement, and an internal-reference leak
-probe across A/B/C and unified-report conversations.
+### Phase 5 live Qwen and browser acceptance
+
+The final gate ran from source revision `eb32e56` in the isolated temporary
+runtime
+`/Users/ext.wanghongtao6/Documents/Codex/acceptance/investigation-answer-stream-20260917.UZxv0Q`
+on frontend/backend ports 3299/8299. Its databases were SQLite backup copies,
+all of which passed `PRAGMA quick_check`. The runtime read the frozen report
+archives and model configuration without writing to them. The answer and
+activity switches were enabled; the creation-answer switch remained disabled.
+
+Four independent real-Qwen Turns passed:
+
+| Report | Answer deltas | Activity events | First delta | Total time | Running draft recovered |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Historical A | 16 | 2 | 28.481s | 36.422s | 19 chars |
+| Historical B | 38 | 2 | 25.670s | 39.234s | 2 chars |
+| Historical C | 38 | 2 | 26.194s | 38.729s | 16 chars |
+| Unified, 5 posts | 35 | 2 | 26.480s | 39.091s | 2 chars |
+
+Each case deliberately disconnected immediately after its first answer delta,
+then reconnected using both `after_sequence` and `Last-Event-ID`. The combined
+stream retained strictly increasing, unique sequence numbers; no boundary
+event was repeated, no later event was lost, and terminal replay exactly
+matched the live event sequence. Workspace state exposed the current draft
+while the Turn was still running. In every case the accumulated draft exactly
+matched the final canonical `completed.answer`, and the real tool activity
+moved from `running` to a terminal status once.
+
+The browser gate used the production `Audit_assistant` through a streaming
+Node proxy. A real Report A question visibly showed the expandable activity
+timeline, a growing plain-text answer, and the typewriter cursor before the
+Turn completed. The provisional draft was then replaced by the existing
+Markdown-rendered canonical answer. A reload that completed after the Qwen
+Turn finished restored one final answer bubble and one activity timeline,
+without duplication. A running-draft refresh was independently asserted in
+all four live runtime cases above; Report A suffices for the visual gate because
+all report types use the same frontend stream component.
+
+All public events and browser-visible text passed a forbidden-field probe for
+raw tool arguments, tool-call IDs, internal account references, snapshots,
+fingerprints, filesystem paths, and internal receipts. Receipts retain only
+counts, timings, booleans, and answer hashes:
+
+- `receipts/live-answer-stream.json`: four real-Qwen runtime cases.
+- `receipts/browser-answer-stream.json`: visible typewriter and replacement
+  observations.
+
+Neither formal 3198/8198, the previous 3199/8199 acceptance runtime, nor the
+independent 8027 runtime was started, restarted, or modified. Phase 5 is
+therefore frozen and accepted at the revision carrying this record. Phase 6
+remains separate and will add creation-answer filtering only after explicit
+authorization.
