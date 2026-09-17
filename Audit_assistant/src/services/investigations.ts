@@ -124,7 +124,11 @@ export function waitForTurn(
     };
     const handleEvent = (message: MessageEvent<string>) => {
       const event = parseTurnEvent(message.data);
-      if (!event || !acceptSequence(event.sequence)) return;
+      if (
+        !event
+        || !eventBelongsToInvestigationTurn(event, turnId)
+        || !acceptSequence(event.sequence)
+      ) return;
       const terminal = event.stage === "completed"
         || event.stage === "interrupted"
         || event.stage === "failed";
@@ -170,17 +174,32 @@ export function waitForTurn(
     };
     const handleActivity = (message: MessageEvent<string>) => {
       const event = parseActivityEvent(message.data);
-      if (!event || !acceptSequence(event.sequence) || !resumeBoundaryReached) return;
+      if (
+        !event
+        || !eventBelongsToInvestigationTurn(event, turnId)
+        || !acceptSequence(event.sequence)
+        || !resumeBoundaryReached
+      ) return;
       notify(options.onActivity, event);
     };
     const handleAnswerDelta = (message: MessageEvent<string>) => {
       const event = parseAnswerDeltaEvent(message.data);
-      if (!event || !acceptSequence(event.sequence) || !resumeBoundaryReached) return;
+      if (
+        !event
+        || !eventBelongsToInvestigationTurn(event, turnId)
+        || !acceptSequence(event.sequence)
+        || !resumeBoundaryReached
+      ) return;
       notify(options.onAnswerDelta, event);
     };
     const handleAnswerReset = (message: MessageEvent<string>) => {
       const event = parseAnswerResetEvent(message.data);
-      if (!event || !acceptSequence(event.sequence) || !resumeBoundaryReached) return;
+      if (
+        !event
+        || !eventBelongsToInvestigationTurn(event, turnId)
+        || !acceptSequence(event.sequence)
+        || !resumeBoundaryReached
+      ) return;
       notify(options.onAnswerReset, event);
     };
     const poll = async () => {
@@ -220,6 +239,13 @@ type PublicEventEnvelope = {
   sequence: number;
   occurred_at: string;
 };
+
+export function eventBelongsToInvestigationTurn(
+  event: Pick<PublicEventEnvelope, "turn_id">,
+  turnId: string
+) {
+  return event.turn_id === turnId;
+}
 
 function parsePublicEvent(value: string): [Record<string, unknown>, PublicEventEnvelope] | null {
   try {
