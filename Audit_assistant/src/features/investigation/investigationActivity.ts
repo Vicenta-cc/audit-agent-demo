@@ -37,6 +37,44 @@ export function activityTimelineMessages(
   return message ? [message] : [];
 }
 
+export function activityEventsForTurn(
+  events: InvestigationActivityEvent[] | undefined,
+  turnId: string
+) {
+  return (events || [])
+    .filter((event) => event.turn_id === turnId)
+    .reduce<InvestigationActivityEvent[]>(
+      (merged, event) => mergeInvestigationActivityEvent(merged, event),
+      []
+    );
+}
+
+export function restoreActivityTimelines(
+  messages: ChatMessage[],
+  sourceMessages: Array<{ turn_id: string; role: "user" | "assistant"; created_at: string }>,
+  events: InvestigationActivityEvent[] | undefined
+) {
+  const restored: ChatMessage[] = [];
+  const inserted = new Set<string>();
+  messages.forEach((message, index) => {
+    const source = sourceMessages[index];
+    const turnId = source?.turn_id || "";
+    if (source?.role === "assistant" && turnId && !inserted.has(turnId)) {
+      const timeline = activityTimelineMessage(
+        turnId,
+        activityEventsForTurn(events, turnId),
+        message.timestamp
+      );
+      if (timeline) {
+        restored.push(timeline);
+        inserted.add(turnId);
+      }
+    }
+    restored.push(message);
+  });
+  return restored;
+}
+
 export function insertActivityTimelineBeforeLatestAssistant(
   messages: ChatMessage[],
   turnId: string,

@@ -22,6 +22,7 @@ from backend.api.investigation import (
     _is_public_conversation_message,
     _raise_public_error,
     _turn_status_response,
+    public_activity_events_for_turns,
     turn_event_stream_response,
 )
 from backend.api.investigation_creation import (
@@ -144,6 +145,14 @@ def create_investigation_conversation_router(
             state = service.get_workspace_state(
                 workspace_session_id, principal=principal
             )
+            activity_turn_ids = [
+                message.turn_id
+                for message in (*state.messages, *state.report_messages)
+            ]
+            if state.latest_turn is not None:
+                activity_turn_ids.append(state.latest_turn.id)
+            if state.latest_report_turn is not None:
+                activity_turn_ids.append(state.latest_report_turn.id)
             return InvestigationWorkspaceStateResponse(
                 workspace=_workspace_response(state.session),
                 messages=_public_messages(service, state.messages),
@@ -165,6 +174,10 @@ def create_investigation_conversation_router(
                     _workspace_turn_status_response(service, state.latest_report_turn)
                     if state.latest_report_turn is not None
                     else None
+                ),
+                activity_events=public_activity_events_for_turns(
+                    service.store,
+                    activity_turn_ids,
                 ),
             )
         except Exception as exc:

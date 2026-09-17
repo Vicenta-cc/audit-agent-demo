@@ -12,6 +12,10 @@ import type {
 import { buildConfirmationIdempotencyKey } from "./confirmationView";
 import { mapInvestigationRunState } from "./investigationRunState";
 import { presentCreationAssistantContent } from "./creationContentPresentation";
+import {
+  activityEventsForTurn,
+  restoreActivityTimelines
+} from "./investigationActivity";
 export { presentCreationAssistantContent } from "./creationContentPresentation";
 
 function messageTime(createdAt: string) {
@@ -186,12 +190,17 @@ export function restoreInvestigationWorkspace(
   const recoveredSuggestionArtifact = artifact
     ? { ...artifact, presentation_stage: "suggestion" as const }
     : null;
-  const messages = state.messages.map((message, index) => publicMessage(
+  const creationMessages = state.messages.map((message, index) => publicMessage(
     index === artifactMessageIndex && !message.artifact?.proposal_presentations?.length
       ? { ...message, artifact: recoveredSuggestionArtifact }
       : message,
     confirmationVisible
   ));
+  const messages = restoreActivityTimelines(
+    creationMessages,
+    state.messages,
+    state.activity_events
+  );
   if (run) {
     messages.push({
       id: `workspace-run:${run.run_id}`,
@@ -209,7 +218,11 @@ export function restoreInvestigationWorkspace(
     });
   }
   const reportMessages = state.report_messages || [];
-  messages.push(...reportMessages.map((message) => publicMessage(message, false, false)));
+  messages.push(...restoreActivityTimelines(
+    reportMessages.map((message) => publicMessage(message, false, false)),
+    reportMessages,
+    state.activity_events
+  ));
 
   const draft: TaskDraft = artifact && preview
     ? {
@@ -267,6 +280,9 @@ export function restoreInvestigationWorkspace(
       presentationStage: artifact?.presentation_stage,
       pendingTurnId: pendingTurn?.turn_id,
       pendingTurnStage: pendingTurn?.stage,
+      pendingActivityEvents: pendingTurn
+        ? activityEventsForTurn(state.activity_events, pendingTurn.turn_id)
+        : undefined,
       resumeAttempted: false,
       run: run || undefined,
       confirmationKey: artifact
@@ -282,7 +298,11 @@ export function restoreInvestigationWorkspace(
             clientMessageId: "",
             question: pendingReportQuestion,
             stage: pendingReportTurn.stage,
-            resumeAttempted: false
+            resumeAttempted: false,
+            activityEvents: activityEventsForTurn(
+              state.activity_events,
+              pendingReportTurn.turn_id
+            )
           }
         : undefined,
       error: latestTurn?.status === "error"

@@ -730,6 +730,44 @@ def test_fake_runtime_activity_stream_preserves_turn_replay_idempotency(
     assert _draft_count(creation_stack["creation_store"]) == 1
     assert _run_count(creation_stack["creation_store"]) == 0
 
+    recovered = creation_stack["client"].get(
+        f"/api/investigation-workspaces/{result['workspace_id']}/state"
+    )
+    assert recovered.status_code == 200
+    recovered_activities = recovered.json()["activity_events"]
+    assert [event["status"] for event in recovered_activities] == [
+        "running",
+        "succeeded",
+        "running",
+        "succeeded",
+        "running",
+        "succeeded",
+    ]
+    assert {event["turn_id"] for event in recovered_activities} == {
+        result["turn_id"]
+    }
+    assert all(
+        set(event) == {
+            "event_id",
+            "turn_id",
+            "sequence",
+            "occurred_at",
+            "activity_id",
+            "status",
+            "label",
+            "summary",
+            "result_count",
+        }
+        for event in recovered_activities
+    )
+    monkeypatch.setattr(settings, "activity_stream_enabled", False)
+    disabled_recovery = creation_stack["client"].get(
+        f"/api/investigation-workspaces/{result['workspace_id']}/state"
+    )
+    assert disabled_recovery.status_code == 200
+    assert disabled_recovery.json()["activity_events"] == []
+    monkeypatch.setattr(settings, "activity_stream_enabled", True)
+
     replay = creation_stack["client"].post(
         f"/api/investigation-workspaces/{result['workspace_id']}/turns",
         json={

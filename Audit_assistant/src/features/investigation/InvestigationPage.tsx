@@ -1885,6 +1885,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     if (pendingTurnControllersRef.current.has(turnId)) return;
     const controller = new AbortController();
     pendingTurnControllersRef.current.set(turnId, controller);
+    setSendingMessageSessionId(uiSessionId);
     const handleCreationEvent = (event: import("../../types/investigations").InvestigationTurnEvent) => {
       setSessions((current) => current.map((item) => (
         item.id === uiSessionId && item.creationBinding

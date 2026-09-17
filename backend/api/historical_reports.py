@@ -7,6 +7,7 @@ from pydantic import Field
 
 from backend.api.contracts import (
     CreateInvestigationTurnRequest,
+    InvestigationActivityEventResponse,
     InvestigationPublicStage,
     InvestigationTurnStatus,
     PublicApiModel,
@@ -14,6 +15,7 @@ from backend.api.contracts import (
 from backend.api.investigation import (
     _raise_public_error,
     _turn_status_response,
+    public_activity_events_for_turns,
     turn_event_stream_response,
 )
 from backend.investigation_creation.principal import Principal, PrincipalProvider
@@ -87,6 +89,7 @@ class HistoricalWorkspaceResponse(PublicApiModel):
     display_timeline: tuple[HistoricalDisplayMessageResponse, ...]
     conversation: tuple[HistoricalConversationMessageResponse, ...] = ()
     latest_turn: HistoricalTurnStatusResponse | None = None
+    activity_events: tuple[InvestigationActivityEventResponse, ...] = ()
 
 
 class HistoricalWorkspaceListResponse(PublicApiModel):
@@ -224,6 +227,12 @@ def create_historical_report_router(
 
 def _workspace_response(service: Any, item: dict[str, Any]) -> HistoricalWorkspaceResponse:
     latest_turn = item.get("latest_turn")
+    activity_turn_ids = [
+        str(message.get("turn_id") or "")
+        for message in item.get("conversation") or ()
+    ]
+    if latest_turn is not None:
+        activity_turn_ids.append(latest_turn.id)
     return HistoricalWorkspaceResponse(
         workspace_id=str(item["id"]),
         run_id=str(item["run_id"]),
@@ -241,6 +250,10 @@ def _workspace_response(service: Any, item: dict[str, Any]) -> HistoricalWorkspa
         ),
         latest_turn=(
             _turn_response(service, latest_turn) if latest_turn is not None else None
+        ),
+        activity_events=public_activity_events_for_turns(
+            service.report_service.store,
+            activity_turn_ids,
         ),
     )
 

@@ -200,6 +200,13 @@ class InvestigationWorkspaceTurnStatusResponse(PublicApiModel):
         return self
 
 
+class InvestigationActivityEventResponse(PublicActivityPayload):
+    event_id: str
+    turn_id: str
+    sequence: int = Field(ge=1)
+    occurred_at: str
+
+
 class InvestigationWorkspaceStateResponse(PublicApiModel):
     workspace: InvestigationWorkspaceSessionResponse
     messages: tuple[InvestigationMessageResponse, ...] = ()
@@ -208,6 +215,7 @@ class InvestigationWorkspaceStateResponse(PublicApiModel):
     run: PublicInvestigationRunProjection | None = None
     report_messages: tuple[InvestigationMessageResponse, ...] = ()
     latest_report_turn: InvestigationWorkspaceTurnStatusResponse | None = None
+    activity_events: tuple[InvestigationActivityEventResponse, ...] = ()
 
 
 class InvestigationTurnEventResponse(PublicApiModel):
@@ -231,13 +239,6 @@ class InvestigationTurnEventResponse(PublicApiModel):
         } and not self.safe_message.strip():
             raise ValueError("failed event requires a safe message")
         return self
-
-
-class InvestigationActivityEventResponse(PublicActivityPayload):
-    event_id: str
-    turn_id: str
-    sequence: int = Field(ge=1)
-    occurred_at: str
 
 
 class InvestigationAnswerDeltaEventResponse(PublicAnswerDeltaPayload):

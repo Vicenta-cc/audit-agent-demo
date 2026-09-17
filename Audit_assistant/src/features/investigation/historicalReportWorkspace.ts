@@ -11,6 +11,10 @@ import {
   clearHistoricalPendingTurn,
   readHistoricalPendingTurn
 } from "./historicalReportPending";
+import {
+  activityEventsForTurn,
+  restoreActivityTimelines
+} from "./investigationActivity";
 
 function messageTime(createdAt: string) {
   const value = new Date(createdAt);
@@ -91,13 +95,18 @@ export function buildHistoricalReportSession(
     type: "report_card",
     reportData: buildPublishedReportSummary(report)
   });
-  messages.push(...workspace.conversation.map((message) => ({
+  const conversationMessages = workspace.conversation.map((message) => ({
     id: message.message_id,
     sender: message.role,
     timestamp: messageTime(message.created_at),
     content: message.content,
     type: message.role === "assistant" ? "grounded_answer" as const : "text" as const
-  })));
+  }));
+  messages.push(...restoreActivityTimelines(
+    conversationMessages,
+    workspace.conversation,
+    workspace.activity_events
+  ));
 
   const persisted = readHistoricalPendingTurn(workspace.workspace_id);
   const pending = workspace.latest_turn
@@ -135,6 +144,10 @@ export function buildHistoricalReportSession(
             afterSequence: Math.max(
               pending.event_sequence,
               persisted?.turn_id === pending.turn_id ? persisted.after_sequence : 0
+            ),
+            activityEvents: activityEventsForTurn(
+              workspace.activity_events,
+              pending.turn_id
             )
           }
         : undefined

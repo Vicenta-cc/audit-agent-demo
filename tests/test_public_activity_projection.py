@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from backend.audit_agent.config import settings
+from backend.api.investigation import public_activity_events_for_turns
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 from backend.investigation.contracts import PublishedReportContext
 from backend.investigation.public_activity import (
@@ -227,6 +228,41 @@ def test_completion_backfills_missing_running_without_duplicate_execution(tmp_pa
         for event in store.list_public_turn_events(turn.id)
         if event["event_type"] == "activity"
     ]) == 2
+
+
+def test_workspace_activity_recovery_returns_only_validated_public_events(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "activity_stream_enabled", True)
+    store = InvestigationStore(tmp_path / "investigation.sqlite3")
+    session = store.create_session(_report_context())
+    turn, _ = store.create_turn(
+        session.id,
+        client_message_id="client-message:recovery",
+        user_input="读取报告。",
+    )
+    store.append_public_turn_event(turn.id, stage="accepted")
+    emitter = PublicActivityEmitter(store, enabled=lambda: True)
+    with emitter.bind_turn(session.id, turn.id):
+        emitter.tool_started(session.id, "tool-call:read", "read_report")
+        emitter.tool_completed(
+            session.id,
+            "tool-call:read",
+            "read_report",
+            {"status": "ok", "data": {"private": "must-not-be-persisted"}},
+        )
+
+    recovered = public_activity_events_for_turns(
+        store,
+        [turn.id, turn.id, ""],
+    )
+    assert [event.status for event in recovered] == ["running", "succeeded"]
+    assert {event.turn_id for event in recovered} == {turn.id}
+    assert "must-not-be-persisted" not in str(recovered)
+
+    monkeypatch.setattr(settings, "activity_stream_enabled", False)
+    assert public_activity_events_for_turns(store, [turn.id]) == ()
 
 
 def test_creation_tool_boundary_observes_start_before_validation() -> None:

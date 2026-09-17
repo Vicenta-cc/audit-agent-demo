@@ -1,4 +1,7 @@
-import type { InvestigationTurnResponse } from "./investigations";
+import type {
+  InvestigationActivityEvent,
+  InvestigationTurnResponse
+} from "./investigations";
 
 export type InvestigationPlatform = "xhs" | "dy" | "ks" | "wb";
 export type InvestigationCreationPlatform = Exclude<InvestigationPlatform, "wb">;
@@ -287,4 +290,5 @@ export interface InvestigationWorkspaceState {
   run: InvestigationRunProjection | null;
   report_messages: InvestigationWorkspaceMessage[];
   latest_report_turn: InvestigationTurnResponse | null;
+  activity_events: InvestigationActivityEvent[];
 }

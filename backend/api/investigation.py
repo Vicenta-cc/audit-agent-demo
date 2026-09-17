@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 import logging
 from typing import Any
 
@@ -31,9 +32,43 @@ from backend.investigation.errors import (
     ReportScopeError,
 )
 from backend.api.reporting import published_report_task_id
+from backend.audit_agent.config import settings
 
 
 logger = logging.getLogger(__name__)
+
+
+def public_activity_events_for_turns(
+    store: Any,
+    turn_ids: Iterable[object],
+) -> tuple[InvestigationActivityEventResponse, ...]:
+    """Return only validated, allowlisted activity projections for UI recovery."""
+
+    if not settings.activity_stream_enabled:
+        return ()
+    events: list[InvestigationActivityEventResponse] = []
+    seen_turn_ids: set[str] = set()
+    for raw_turn_id in turn_ids:
+        turn_id = str(raw_turn_id or "").strip()
+        if not turn_id or turn_id in seen_turn_ids:
+            continue
+        seen_turn_ids.add(turn_id)
+        for raw_event in store.list_public_turn_events(turn_id):
+            if raw_event.get("event_type") != "activity":
+                continue
+            payload = dict(raw_event)
+            payload.pop("event_type", None)
+            try:
+                events.append(InvestigationActivityEventResponse.model_validate(payload))
+            except (ValidationError, TypeError, ValueError):
+                logger.warning(
+                    "Skipping invalid public activity event %s for Turn %s",
+                    raw_event.get("event_id", ""),
+                    turn_id,
+                    exc_info=True,
+                )
+    events.sort(key=lambda event: (event.occurred_at, event.turn_id, event.sequence))
+    return tuple(events)
 
 
 def create_investigation_router(
