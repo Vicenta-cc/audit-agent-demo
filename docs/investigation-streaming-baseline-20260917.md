@@ -217,6 +217,7 @@ Phase 4 verification used the controller-recorded Node `v24.19.0`:
 5. Filtered, buffered report answer deltas with reset/revision semantics.
    **Frozen and accepted.**
 6. Server-side creation-answer filtering followed by creation answer deltas.
+   **Frozen and accepted.**
 7. Replay, refresh, idempotency, performance, and failure-injection hardening.
 8. Feature-flagged acceptance in the order: activity, unified report answers,
    A/B/C answers, creation answers.
@@ -351,5 +352,95 @@ counts, timings, booleans, and answer hashes:
 Neither formal 3198/8198, the previous 3199/8199 acceptance runtime, nor the
 independent 8027 runtime was started, restarted, or modified. Phase 5 is
 therefore frozen and accepted at the revision carrying this record. Phase 6
-remains separate and will add creation-answer filtering only after explicit
-authorization.
+was implemented separately after explicit authorization and is recorded below.
+
+## Phase 6 creation and resource answer typewriter stream
+
+Phase 6 connects the existing creation/resource Hermes stream callback to the
+same durable answer protocol used by reports. This covers read-only platform,
+ruleset and lexicon queries; ruleset Proposal and lexicon Edit generation or
+updates; formal save operations; investigation Draft create/update; explicit
+confirm-and-queue; and Run status reads without changing any tool definition,
+argument, receipt, idempotency fence, provider retry, fallback retry, or
+business mutation order.
+
+Creation text has a separate server-side projection. It cumulatively removes
+internal field names, tool-call and receipt identities, Draft/Run/Proposal
+identities, hashes, UUIDs, and filesystem paths before an unfinished fragment
+can become public. Tool and later-model-iteration boundaries reset the
+provisional revision. The same projection is applied to the final assistant
+answer and transcript before persistence, and the provisional draft is
+reconciled with that canonical answer before the Turn becomes terminal.
+Authoritative public artifacts and mutation receipts remain separate from the
+natural-language answer and are not inferred from model prose.
+
+The frontend consumes creation `answer_delta` and `answer_reset` events through
+the existing shared SSE client. The growing plain-text answer and the Phase 4
+activity timeline occupy one pending assistant card. On completion, the draft
+is removed and the existing canonical Markdown answer plus any authoritative
+artifact are rendered. Workspace recovery exposes only the latest running
+creation Turn's collapsed draft. The creation-answer switch remains
+independent and default-off; disabling it restores the previous creation
+pending/final-answer behavior.
+
+Phase 6 candidate verification used the immutable A/B archives and pinned
+Douyin crawler as read-only dependencies:
+
+- Full clean-environment backend gate: `1411 passed, 28 skipped, 67 subtests
+  passed` in 226.22 seconds; only the five existing dependency/lifespan
+  deprecation warnings remained.
+- The new creation stream, filtering, canonical reconciliation, and recovery
+  tests passed. The preceding focused answer/activity/creation gate passed
+  `89` tests, and the final new focused gate passed `4` tests.
+- TypeScript checking and the Vite production build passed; the existing
+  large-chunk warning remains.
+- The focused system-Chrome creation/activity rendering gate passed `6` tests.
+- The broader frontend gate reached `91 passed, 2 skipped`; its four failures
+  are the same pre-existing presentation/selector expectations documented in
+  Phases 4 and 5. Both new Phase 6 tests passed.
+
+### Phase 6 live Qwen and browser acceptance
+
+The final gate ran from candidate revisions `a404d14` and `a696ac4` in the
+isolated temporary runtime
+`/Users/ext.wanghongtao6/Documents/Codex/acceptance/investigation-creation-answer-stream-20260917.99uhLP`
+on frontend/backend ports 3399/8399. All databases were copies and passed
+SQLite `PRAGMA quick_check`; the formal environment and previous acceptance
+copies were not written.
+
+Two independent real-Qwen creation Turns passed:
+
+| Case | Answer deltas | Activity events | Complete lifecycles | Draft delta | Run delta | First delta | Total time |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Read existing resources | 64 | 2 | 1 | 0 | 0 | 19.319s | 31.832s |
+| Create editable Draft | 47 | 6 | 3 | 1 | 0 | 24.188s | 44.846s |
+
+Each case disconnected after the first answer delta and reconnected with both
+`after_sequence` and `Last-Event-ID`. Sequences remained strictly increasing
+and unique, full replay exactly matched the live stream, and the running
+workspace state restored the current creation draft. The collapsed answer
+exactly matched the terminal canonical answer. Reposting the same
+`client_message_id` returned the same Turn and did not repeat a business
+mutation. The read-only case created no Draft or Run; the mutation case created
+exactly one editable Draft and no Run, confirming that streaming and replay do
+not turn Draft creation into task startup.
+
+All creation answer/activity projections passed a forbidden-field scan for raw
+tool parameters, tool-call IDs, internal receipts, Draft/Run/Proposal IDs,
+hashes, and local paths. The browser gate independently showed the real
+resource-query activity, a growing plain-text answer with a typewriter cursor,
+canonical Markdown replacement, and one final answer/activity timeline after
+reload.
+
+Acceptance receipts:
+
+- `receipts/live-creation-answer-stream.json`: real Qwen, disconnect/reconnect,
+  refresh recovery, exact replay, idempotent resubmission, and mutation counts.
+- `receipts/browser-creation-answer-stream.json`: visible typewriter, activity,
+  canonical replacement, reload, and leak observations.
+
+The temporary frontend and backend were stopped after the gate. Neither formal
+3198/8198, the previous 3199/8199 acceptance runtime, the independent 8027
+runtime, nor the Phase 5 3299/8299 runtime was started, restarted, or modified.
+Phase 6 is therefore frozen and accepted at the revision carrying this record;
+Phase 7 has not started.
