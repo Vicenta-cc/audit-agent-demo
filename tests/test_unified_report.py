@@ -80,12 +80,22 @@ def test_new_tasks_publish_one_deterministic_unified_report_for_every_safe_risk_
 
     sections = {item["section_number"]: item for item in document["ordered_sections"]}
     assert sections["1"]["title"] == "报告概览"
-    assert "任务：单条帖子审核演示" in sections["1"]["paragraphs"][0]["text"]
-    assert "平台：抖音" in sections["1"]["paragraphs"][0]["text"]
+    overview = sections["1"]["paragraphs"][0]["text"]
+    assert "任务“单条帖子审核演示”" in overview
+    assert "在抖音平台完成" in overview
+    assert f"{len(verdicts)} 条帖子审核结果" in overview
+    assert "冻结时间" not in overview
+    assert "0 条" not in overview
     assert sections["5"]["title"] == "账号关联分析"
     assert sections["6"]["title"] == "审核建议"
     assert sections["7"]["title"] == "方法、范围与限制"
     assert sections["8"]["title"] == "附录"
+    methodology = "".join(item["text"] for item in sections["7"]["paragraphs"])
+    assert f"当前列出的 {len(verdicts)} 条帖子" in methodology
+    assert "回到对应帖子和原审核记录核对" in methodology
+    assert "finding" not in methodology
+    assert "冻结快照" not in methodology
+    assert "未调用模型" not in methodology
     assert ("2" in sections) is bool(expected["review"] or expected["reject"])
     assert ("3" in sections) is bool(expected["pass"])
     assert "4" not in sections

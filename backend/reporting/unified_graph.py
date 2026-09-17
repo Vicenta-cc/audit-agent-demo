@@ -14,7 +14,7 @@ from backend.reporting.account_overview import (
 from backend.reporting.comment_statistics import snapshot_comment_coverage
 from backend.reporting.contracts import ReportGraphState
 from backend.reporting.errors import ReportValidationError
-from backend.reporting.pass_graph import PassReportGraph, SCOPE
+from backend.reporting.pass_graph import PassReportGraph
 from backend.reporting.structured_contract import validate_structured_report_document
 
 
@@ -262,18 +262,29 @@ class UnifiedAuditReportGraph(PassReportGraph):
         pending_count = len(groups["pending"])
         sections: list[dict[str, Any]] = []
 
+        platform = (
+            "抖音"
+            if snapshot.posts[0].payload.get("platform") in {"dy", "douyin"}
+            else (snapshot.posts[0].payload.get("platform") or "未记录平台")
+        )
+        outcome_parts = []
+        for count, label in (
+            (safe_count, "条审核通过"),
+            (counts["review"], "条建议复审"),
+            (counts["reject"], "条建议拒绝"),
+            (pending_count, "条待确认"),
+        ):
+            if count:
+                outcome_parts.append(f"{count} {label}")
+
         self._section(
             sections,
             number="1",
             kind="overview",
             title="报告概览",
             paragraphs=[
-                f"任务：{snapshot.display_name}；平台："
-                f"{'抖音' if snapshot.posts[0].payload.get('platform') in {'dy', 'douyin'} else (snapshot.posts[0].payload.get('platform') or '未记录')}；"
-                f"冻结时间：{state['source_snapshot'].get('generated_at') or '未记录'}。",
-                f"本次共完成 {len(snapshot.posts)} 条帖子的审核。",
-                f"安全 {safe_count} 条、建议复审 {counts['review']} 条、"
-                f"建议拒绝 {counts['reject']} 条、待确认 {pending_count} 条。",
+                f"本报告汇总任务“{snapshot.display_name}”在{platform}平台完成的 "
+                f"{len(snapshot.posts)} 条帖子审核结果：{'、'.join(outcome_parts)}。",
             ],
         )
 
@@ -366,20 +377,33 @@ class UnifiedAuditReportGraph(PassReportGraph):
             title="审核建议",
             paragraphs=recommendations,
         )
+        if comment_coverage.get("available"):
+            comment_total = comment_coverage.get("total") or 0
+            comment_completed = comment_coverage.get("completed") or 0
+            if comment_total == 0:
+                comment_scope = "本次没有保存可供审核的评论。"
+            elif comment_total == comment_completed:
+                comment_scope = f"本次保存的 {comment_total} 条评论均已完成审核。"
+            else:
+                comment_scope = (
+                    f"本次共保存 {comment_total} 条评论，其中 {comment_completed} 条已完成审核；"
+                    "未完成审核的评论不作为安全依据。"
+                )
+        else:
+            comment_scope = (
+                "部分帖子的评论列表没有完整保存，因此不能据此判断“没有评论风险”。"
+            )
         self._section(
             sections,
             number="7",
             kind="methodology",
             title="方法、范围与限制",
             paragraphs=[
-                SCOPE,
-                "报告数量、分组、审核结论、finding 与证据引用均来自发布前冻结快照；本版本未调用模型生成报告正文。",
-                (
-                    f"冻结资料包含 {comment_coverage.get('total') or 0} 条已存评论；"
-                    f"完成独立审核 {comment_coverage.get('completed') or 0} 条。"
-                    if comment_coverage.get("available")
-                    else "部分帖子的评论列表未完整冻结，不能把缺失评论解释为零评论。"
-                ),
+                f"本报告只覆盖当前列出的 {len(snapshot.posts)} 条帖子和已经完成审核的评论，"
+                "不代表相关账号的其他内容或后续内容。",
+                "报告由系统根据生成时保存的审核结果自动整理；"
+                "每条结论都可以回到对应帖子和原审核记录核对。",
+                comment_scope,
             ],
         )
         self._section(
@@ -388,7 +412,11 @@ class UnifiedAuditReportGraph(PassReportGraph):
             kind="appendix",
             title="附录",
             paragraphs=[
-                "附录保留全部帖子完整详情、原审核 finding 与证据引用，供详情页和报告问询核对。"
+                (
+                    "附录保留全部帖子、审核结论和相关依据，可用于逐条核对。"
+                    if snapshot.evidence
+                    else "附录保留全部帖子及其审核结论，可用于逐条核对。"
+                )
             ],
         )
 

@@ -290,7 +290,7 @@ export function InvestigationEvidenceAppendixPage() {
         {tocOpen ? <button type="button" className="r31-toc-backdrop" aria-label="关闭目录" onClick={() => setTocOpen(false)} /> : null}
         <nav className={`ethnic-report-toc ethnic-appendix-toc r31-report-toc ${tocOpen ? "is-open" : ""}`} aria-label="报告附录目录">
           <div className="r31-toc-heading"><span>附录目录</span><button type="button" onClick={() => setTocOpen(false)} aria-label="关闭目录"><X size={17} /></button></div>
-          {(Object.keys(viewCopy) as AppendixView[]).map((item) => (
+          {(Object.keys(viewCopy) as AppendixView[]).filter((item) => item !== "evidence" || report.appendix.direct_evidence_count > 0).map((item) => (
             <button key={item} type="button" className={view === item ? "is-active" : ""} aria-current={view === item ? "page" : undefined} onClick={() => selectView(item)}>
               <span>{viewCopy[item].number}</span>{viewCopy[item].nav}
             </button>
@@ -305,7 +305,7 @@ export function InvestigationEvidenceAppendixPage() {
             <dl>
               <div><dt>当前记录</dt><dd>{displayNumber(page.matched_count)} 条</dd></div>
               <div><dt>报告帖子</dt><dd>{displayNumber(report.appendix.post_count)} 篇</dd></div>
-              <div><dt>直接研判依据</dt><dd>{displayNumber(report.appendix.direct_evidence_count)} 条</dd></div>
+              {report.appendix.direct_evidence_count > 0 ? <div><dt>独立依据</dt><dd>{displayNumber(report.appendix.direct_evidence_count)} 条</dd></div> : null}
             </dl>
           </header>
 
