@@ -75,10 +75,12 @@ def public_activity_events_for_turns(
 def public_answer_draft_for_turn(
     store: Any,
     turn_id: object,
+    *,
+    enabled: bool | None = None,
 ) -> InvestigationAnswerDraftResponse | None:
     """Collapse the current public answer revision for one pending Turn."""
 
-    if not settings.answer_stream_enabled:
+    if not (settings.answer_stream_enabled if enabled is None else enabled):
         return None
     normalized_turn_id = str(turn_id or "").strip()
     if not normalized_turn_id:

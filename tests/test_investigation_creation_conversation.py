@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable
 from unittest.mock import patch
@@ -44,6 +45,9 @@ from backend.investigation_creation.fake_runtime import (
     FakePublishedReportHermesAgent,
 )
 from backend.investigation_creation.principal import Principal
+from backend.investigation_creation.public_answer import (
+    redact_creation_internal_references,
+)
 from backend.investigation_creation.resources import InvestigationResourceService
 from backend.investigation_creation.service import InvestigationCreationService
 from backend.investigation_creation.store import InvestigationCreationStore
@@ -2646,6 +2650,206 @@ def test_workspace_state_restores_pending_and_interrupted_report_turn(
     ]
     assert restored.json()["latest_report_turn"]["status"] == "completed"
     assert "report_session_id" not in restored.text
+
+
+def test_creation_answer_stream_is_filtered_revisioned_and_canonical(
+    creation_stack: dict,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(settings, "activity_stream_enabled", True)
+    monkeypatch.setattr(settings, "answer_stream_enabled", False)
+    monkeypatch.setattr(settings, "creation_answer_stream_enabled", True)
+    conversation = creation_stack["conversation"]
+    captured: dict[str, Any] = {}
+    raw_final = (
+        "调查方案已生成。"
+        "draft_id=investigation-draft:" + "a" * 32
+        + "，尚未开始采集。内部文件 /Users/private/runtime/state.db 不应展示。"
+    )
+
+    class StreamingAgent:
+        def __init__(self, **options: Any) -> None:
+            captured.update(options)
+            self.options = options
+
+        def close(self) -> None:
+            return None
+
+        def run_conversation(self, message: str, **kwargs: Any) -> dict[str, Any]:
+            self.options["step_callback"](1, [])
+            self.options["stream_delta_callback"]("正在读取可用配置。")
+            self.options["tool_start_callback"](
+                "private-tool-call-id",
+                "query_investigation_options",
+                {"draft_id": "private-argument"},
+            )
+            self.options["tool_complete_callback"](
+                "private-tool-call-id",
+                "query_investigation_options",
+                {"draft_id": "private-argument"},
+                {"status": "ok", "data": {"receipt_id": "private-receipt"}},
+            )
+            self.options["step_callback"](2, ["query_investigation_options"])
+            for offset in range(0, len(raw_final), 9):
+                self.options["stream_delta_callback"](raw_final[offset : offset + 9])
+            history = [dict(item) for item in kwargs.get("conversation_history") or []]
+            return {
+                "completed": True,
+                "failed": False,
+                "interrupted": False,
+                "final_response": raw_final,
+                "messages": [
+                    *history,
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": raw_final},
+                ],
+                "turn_exit_reason": "completed",
+                "api_calls": 1,
+            }
+
+    class Runtime:
+        def create_agent(self, **options: Any) -> StreamingAgent:
+            return StreamingAgent(**options)
+
+        @contextmanager
+        def product_mode_execution(self, *_args: Any, **_kwargs: Any):
+            yield
+
+    conversation.fake_runtime = False
+    conversation.runtime_binding = Runtime()
+    session = conversation.create_session(
+        principal=Principal("principal-a"), workspace_key="creation-answer-stream"
+    )
+    turn, replayed = conversation.accept_message(
+        session.id,
+        client_message_id="creation-answer-stream-message",
+        content="请说明当前可用配置，不要启动任务。",
+        principal=Principal("principal-a"),
+    )
+    assert replayed is False
+    result = conversation.execute_turn(turn.id)
+
+    expected = redact_creation_internal_references(raw_final)[0]
+    assert result.answer == expected
+    assert callable(captured["stream_delta_callback"])
+    events = conversation.store.list_public_turn_events(turn.id)
+    answer_events = [
+        event
+        for event in events
+        if event["event_type"] in {"answer_delta", "answer_reset"}
+    ]
+    assert any(event["event_type"] == "answer_reset" for event in answer_events)
+    revision = 0
+    draft = ""
+    for event in answer_events:
+        if event["event_type"] == "answer_reset":
+            revision = event["revision"]
+            draft = ""
+        elif event["revision"] >= revision:
+            if event["revision"] > revision:
+                revision = event["revision"]
+                draft = ""
+            draft += event["delta"]
+    assert draft == expected
+    activity = [event for event in events if event["event_type"] == "activity"]
+    assert [event["status"] for event in activity] == ["running", "succeeded"]
+    serialized = json.dumps(events, ensure_ascii=False)
+    for forbidden in (
+        "private-tool-call-id",
+        "private-argument",
+        "private-receipt",
+        "investigation-draft:",
+        "/Users/private",
+        "draft_id",
+    ):
+        assert forbidden not in serialized
+
+
+def test_creation_answer_filter_covers_resource_run_and_receipt_metadata() -> None:
+    raw = "\n".join(
+        [
+            "审核规则草案已生成，尚未正式保存。",
+            'proposal_id="ruleset-proposal:' + "a" * 32 + '"',
+            'presentation_id="ruleset-presentation:' + "b" * 32 + '"',
+            'run_id="investigation-run:' + "c" * 32 + '"',
+            'receipt_id="creation-tool-receipt:' + "d" * 32 + '"',
+            'content_hash="' + "e" * 64 + '"',
+            "tool_call_id=tool-call:private-call-id",
+            "runtime=/tmp/private/creation.sqlite3",
+            "应用阶段：image_evidence、comment_audit、fusion_audit。",
+        ]
+    )
+
+    public, changed = redact_creation_internal_references(raw)
+
+    assert changed is True
+    assert "审核规则草案已生成，尚未正式保存。" in public
+    assert "图片证据提取、评论研判、融合研判" in public
+    for forbidden in (
+        "proposal_id",
+        "presentation_id",
+        "run_id",
+        "receipt_id",
+        "content_hash",
+        "tool_call_id",
+        "ruleset-proposal:",
+        "ruleset-presentation:",
+        "investigation-run:",
+        "creation-tool-receipt:",
+        "/tmp/private",
+        "image_evidence",
+        "comment_audit",
+        "fusion_audit",
+    ):
+        assert forbidden not in public
+
+
+def test_workspace_state_restores_creation_answer_only_when_enabled(
+    creation_stack: dict,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(settings, "creation_answer_stream_enabled", True)
+    conversation = creation_stack["conversation"]
+    session = conversation.create_session(
+        principal=Principal("principal-a"), workspace_key="pending-creation-answer"
+    )
+    turn, replayed = conversation.accept_message(
+        session.id,
+        client_message_id="pending-creation-answer-message",
+        content="请读取审核规则。",
+        principal=Principal("principal-a"),
+    )
+    assert replayed is False
+    conversation.store.append_public_turn_event(turn.id, stage="answering")
+    event = conversation.store.append_public_stream_event(
+        turn.id,
+        event_type="answer_delta",
+        payload={
+            "message_id": "public-answer:" + "c" * 32,
+            "revision": 1,
+            "delta": "正在整理调查建议",
+        },
+        idempotency_key="public-event:" + "d" * 32,
+    )
+
+    state = creation_stack["client"].get(
+        f"/api/investigation-workspaces/{session.id}/state"
+    )
+    assert state.status_code == 200
+    assert state.json()["creation_answer_draft"] == {
+        "message_id": "public-answer:" + "c" * 32,
+        "revision": 1,
+        "text": "正在整理调查建议",
+        "event_sequence": event["sequence"],
+    }
+    assert state.json()["report_answer_draft"] is None
+
+    monkeypatch.setattr(settings, "creation_answer_stream_enabled", False)
+    disabled = creation_stack["client"].get(
+        f"/api/investigation-workspaces/{session.id}/state"
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["creation_answer_draft"] is None
 
 
 def test_confirm_prepares_fake_report_after_confirmation_fence_without_lock_conflict(

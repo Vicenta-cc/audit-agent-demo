@@ -36,6 +36,7 @@ from backend.investigation_creation.principal import (
     PrincipalProvider,
 )
 from backend.api.reporting import published_report_detail_response
+from backend.audit_agent.config import settings
 
 
 class CreateInvestigationWorkspaceRequest(BaseModel):
@@ -179,6 +180,16 @@ def create_investigation_conversation_router(
                 activity_events=public_activity_events_for_turns(
                     service.store,
                     activity_turn_ids,
+                ),
+                creation_answer_draft=(
+                    public_answer_draft_for_turn(
+                        service.store,
+                        state.latest_turn.id,
+                        enabled=settings.creation_answer_stream_enabled,
+                    )
+                    if state.latest_turn is not None
+                    and state.latest_turn.status == "running"
+                    else None
                 ),
                 report_answer_draft=(
                     public_answer_draft_for_turn(

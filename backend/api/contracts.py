@@ -223,6 +223,7 @@ class InvestigationWorkspaceStateResponse(PublicApiModel):
     report_messages: tuple[InvestigationMessageResponse, ...] = ()
     latest_report_turn: InvestigationWorkspaceTurnStatusResponse | None = None
     activity_events: tuple[InvestigationActivityEventResponse, ...] = ()
+    creation_answer_draft: InvestigationAnswerDraftResponse | None = None
     report_answer_draft: InvestigationAnswerDraftResponse | None = None
 
 

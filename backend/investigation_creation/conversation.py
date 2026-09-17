@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
@@ -24,6 +26,7 @@ from backend.investigation.errors import (
     ReportScopeError,
 )
 from backend.investigation.public_activity import PublicActivityEmitter
+from backend.investigation.public_answer import PublicAnswerStreamer
 from backend.investigation.store import InvestigationStore
 
 from .contracts import (
@@ -44,6 +47,7 @@ from .errors import (
 )
 from .principal import Principal
 from .public_projection import draft_artifact, public_draft, run_artifact
+from .public_answer import redact_creation_internal_references
 from .tools import (
     HermesToolExecutionIdentity,
     InvestigationCreationToolService,
@@ -56,6 +60,8 @@ PUBLISHED_SESSION_NOTICE = (
     "当前会话已生成并发布报告，后续可继续围绕该报告进行提问。\n"
     "如需基于当前配置发起新的调查，请新建会话。"
 )
+
+logger = logging.getLogger(__name__)
 
 CREATION_SYSTEM_PROMPT = """You are the investigation configuration and resource assistant for a
 content-audit platform. Application appends the complete authoritative 审核规则 Proposal snapshot
@@ -669,6 +675,11 @@ class InvestigationCreationConversationService:
             self.store,
             enabled=lambda: settings.activity_stream_enabled,
         )
+        self._answer_streamer = PublicAnswerStreamer(
+            self.store,
+            enabled=lambda: settings.creation_answer_stream_enabled,
+            sanitize=redact_creation_internal_references,
+        )
         set_tool_start_observer = getattr(
             self.tool_service, "set_tool_start_observer", None
         )
@@ -1123,7 +1134,13 @@ class InvestigationCreationConversationService:
         self._notify(turn.id, "call_qwen")
         self.tool_service.begin_conversation_turn(session.id, turn.id)
         try:
-            with self._activity_emitter.bind_turn(session.id, turn.id):
+            with ExitStack() as public_streams:
+                public_streams.enter_context(
+                    self._activity_emitter.bind_turn(session.id, turn.id)
+                )
+                public_streams.enter_context(
+                    self._answer_streamer.bind_turn(session.id, turn.id)
+                )
                 if self.fake_runtime:
                     agent = self._agent(session.id)
                     result = agent.run_conversation(
@@ -1147,8 +1164,10 @@ class InvestigationCreationConversationService:
             if not isinstance(result, dict):
                 raise RuntimeError("Hermes returned a non-object Turn result")
             if bool(result.get("interrupted")):
+                self._answer_streamer.interrupt(turn.id)
                 raise RuntimeError("Hermes creation Turn was interrupted")
             if bool(result.get("failed")) or not bool(result.get("completed", True)):
+                self._answer_streamer.interrupt(turn.id)
                 self.store.fail_turn(
                     turn.id,
                     error_code="hermes_execution_failed",
@@ -1158,6 +1177,7 @@ class InvestigationCreationConversationService:
                     ) + ("\n" + self._binding_failure_notice(turn) if self._binding_failure_notice(turn) else ""),
                     retryable=False,
                 )
+                self._answer_streamer.release(turn.id)
                 return self.store.turn_result(turn.id)
             transcript = HermesInvestigationAgentService._validate_completed_transcript(
                 result, history=history, user_message=user_message
@@ -1169,13 +1189,16 @@ class InvestigationCreationConversationService:
         except Exception as exc:
             current = self.store.get_turn(turn.id)
             if current.status == "completed":
+                self._answer_streamer.release(turn.id)
                 return self.store.turn_result(turn.id)
+            self._answer_streamer.interrupt(turn.id)
             self.store.mark_interrupted(
                 turn.id,
                 error_code="hermes_unknown_outcome",
                 safe_message="调查方案生成结果暂时无法确认，可以安全恢复。" + self._binding_failure_notice(turn),
                 retryable=True,
             )
+            self._answer_streamer.release(turn.id)
             raise RuntimeError("Hermes creation Turn ended with an unknown outcome") from exc
         finally:
             self.tool_service.end_conversation_turn(session.id)
@@ -1248,12 +1271,17 @@ class InvestigationCreationConversationService:
         with self._agent_lock:
             agent = self._agents.get(session_id)
             if agent is None:
+                callbacks = HermesInvestigationAgentService._compose_agent_callbacks(
+                    self._answer_streamer.agent_callbacks(session_id),
+                    self._activity_emitter.agent_callbacks(session_id),
+                )
+                callbacks.setdefault("stream_delta_callback", lambda _delta: None)
                 if self.fake_runtime:
                     agent = FakeCreationHermesAgent(
                         session_id=session_id,
                         tool_service=self.tool_service,
                         principal_resolver=self.principal_for_session,
-                        **self._activity_emitter.agent_callbacks(session_id),
+                        **callbacks,
                     )
                 else:
                     agent = self.runtime_binding.create_agent(
@@ -1262,8 +1290,7 @@ class InvestigationCreationConversationService:
                         product_mode="creation",
                         base_url=settings.dashscope_base_url,
                         api_key=settings.dashscope_api_key,
-                        stream_delta_callback=lambda _delta: None,
-                        **self._activity_emitter.agent_callbacks(session_id),
+                        **callbacks,
                     )
                 self._agents[session_id] = agent
             return agent
@@ -1389,6 +1416,10 @@ class InvestigationCreationConversationService:
         artifact: dict[str, Any],
     ) -> TurnResult:
         answer = str(result.get("final_response") or "").strip()
+        answer_was_redacted = False
+        transcript_was_redacted = False
+        if settings.creation_answer_stream_enabled:
+            answer, answer_was_redacted = redact_creation_internal_references(answer)
         history_count = len(self.store.hermes_conversation_history(turn.id) or [])
         trace_messages = [
             item
@@ -1398,14 +1429,53 @@ class InvestigationCreationConversationService:
         notice = self._binding_failure_notice(turn, trace_messages)
         if notice:
             answer = "\n\n".join(filter(None, [answer, notice]))
+        if settings.creation_answer_stream_enabled:
+            public_transcript = []
+            for message in transcript:
+                projected = dict(message)
+                if projected.get("role") == "assistant":
+                    projected["content"], changed = redact_creation_internal_references(
+                        str(projected.get("content") or "")
+                    )
+                    transcript_was_redacted = transcript_was_redacted or changed
+                public_transcript.append(projected)
+            transcript = public_transcript
+            history_count = len(self.store.hermes_conversation_history(turn.id) or [])
+            trace_messages = [
+                item
+                for item in transcript[history_count:]
+                if item.get("role") in {"assistant", "tool"}
+            ]
         tool_calls = HermesInvestigationAgentService._tool_calls(trace_messages)
         session = self.store.get_session(turn.session_id)
+        try:
+            self._answer_streamer.finalize(turn.id, answer)
+        except Exception:
+            # The public projection is fail-open and cannot change a successful
+            # creation/resource operation or its authoritative receipt.
+            logger.warning(
+                "Creation answer finalization failed open for Turn %s",
+                turn.id,
+                exc_info=True,
+            )
         self.store.complete_turn(
             turn.id,
             answer=answer,
             trace_messages=trace_messages,
             pending_sources=[],
-            grounding_validation={"status": "passed", "source_count": 0, "warnings": []},
+            grounding_validation={
+                "status": "passed",
+                "source_count": 0,
+                "warnings": (
+                    ["internal_creation_reference_redacted"]
+                    if answer_was_redacted
+                    or (
+                        settings.creation_answer_stream_enabled
+                        and transcript_was_redacted
+                    )
+                    else []
+                ),
+            },
             resolved_references=[],
             all_tool_calls=tool_calls,
             query_receipts=[],
@@ -1436,6 +1506,7 @@ class InvestigationCreationConversationService:
                 session_id=turn.session_id, turn_id=turn.id,
             ),
         )
+        self._answer_streamer.release(turn.id)
         self._notify(turn.id, "persist_turn")
         return self.store.turn_result(turn.id)
 
