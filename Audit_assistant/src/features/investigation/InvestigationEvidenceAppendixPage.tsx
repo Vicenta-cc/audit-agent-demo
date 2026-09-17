@@ -274,6 +274,7 @@ export function InvestigationEvidenceAppendixPage() {
 
   const postItems = page.item_kind === "post" ? items as ReportPostPresentation[] : [];
   const evidenceItems = page.item_kind === "evidence" ? items as ReportEvidencePresentation[] : [];
+  const appendixCountLabel = page.item_kind === "evidence" ? "条研判依据" : "条帖子";
 
   return (
     <main className="ethnic-report-page ethnic-appendix-page r31-appendix-page">
@@ -302,11 +303,10 @@ export function InvestigationEvidenceAppendixPage() {
             <span>调查报告附录</span>
             <h1>{copy.title}</h1>
             <p>{report.report_metadata.title}</p>
-            <dl>
-              <div><dt>当前记录</dt><dd>{displayNumber(page.matched_count)} 条</dd></div>
-              <div><dt>报告帖子</dt><dd>{displayNumber(report.appendix.post_count)} 篇</dd></div>
-              {report.appendix.direct_evidence_count > 0 ? <div><dt>独立依据</dt><dd>{displayNumber(report.appendix.direct_evidence_count)} 条</dd></div> : null}
-            </dl>
+            <div className="r31-appendix-header-summary">
+              共 <strong>{displayNumber(page.matched_count)}</strong> {appendixCountLabel}
+              {findingRef ? <span>已按调查发现筛选</span> : null}
+            </div>
           </header>
 
           <section className="ethnic-report-section ethnic-appendix-section r31-report-section">
