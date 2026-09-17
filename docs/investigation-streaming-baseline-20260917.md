@@ -209,9 +209,41 @@ Phase 4 verification used the controller-recorded Node `v24.19.0`:
 2. Backward-compatible durable public SSE event protocol. **Complete.**
 3. Allowlisted public activity projector for all report/creation/resource tools.
    **Complete.**
-4. Shared expandable activity timeline in the investigation UI. **Complete.**
+4. Shared expandable activity timeline in the investigation UI. **Frozen and accepted.**
 5. Filtered, buffered report answer deltas with reset/revision semantics.
 6. Server-side creation-answer filtering followed by creation answer deltas.
 7. Replay, refresh, idempotency, performance, and failure-injection hardening.
 8. Feature-flagged acceptance in the order: activity, unified report answers,
    A/B/C answers, creation answers.
+
+## Phase 4 frozen acceptance follow-up
+
+The final Phase 4 acceptance was run from source revision `3b8dd6a` after the
+two immutable historical archives were recovered from the formal frozen
+backup. The archives were used as read-only test inputs; neither the formal nor
+acceptance runtime was started, restarted, or written by this run.
+
+- Report A SHA-256:
+  `f70d1b9fb6cd85471d3f9e8e3bc2c0d89f390329a6c5a02449d4a3c506b46560`.
+- Report B SHA-256:
+  `2de176629ac0cd2d06588bc436786dc45819555ec48bc2cad59a84207c8793bf`.
+- Both archives passed SQLite `PRAGMA quick_check`.
+- Historical report and deletion/restart gate: `16 passed`.
+- Activity projection, SSE/flag, Stage 3B API, and creation gate:
+  `92 passed`.
+- Focused frontend activity and historical recovery gate: `9 passed`.
+- TypeScript checking and the Vite production build passed with Node
+  `v24.19.0`; the existing large-chunk warning remains.
+- Full clean-environment backend gate: `1402 passed, 28 skipped, 67 subtests
+  passed` in 243.69 seconds. The only warnings were the five pre-existing
+  dependency/lifespan deprecation warnings.
+
+The untracked Phase 5 prototype `backend/investigation/public_answer.py` was
+excluded from every commit and remained unchanged during acceptance (SHA-256
+`526b6f9804b2ccb185334c6ee637e00210bcda214f723c425c9d4f7f5990de5a`,
+mtime `2026-09-17T16:03:31+0800`).
+
+Phase 4 is therefore the frozen functional baseline for Phase 5. Future
+non-blocking hardening should add bounded or lazy historical activity recovery
+and observability for terminal-time `running` backfill; neither changes the
+accepted Phase 4 protocol or behavior.
