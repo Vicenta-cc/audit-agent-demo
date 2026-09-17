@@ -209,6 +209,12 @@ test("refresh recovery marks the pending Turn without expanding storage", () => 
     updated_at: "2026-08-25T00:07:00Z",
     event_sequence: 3
   };
+  pendingWorkspace.answer_draft = {
+    message_id: "public-answer:" + "a".repeat(32),
+    revision: 2,
+    text: "刷新前已生成的回答",
+    event_sequence: 7
+  };
   storeHistoricalPendingTurn(pendingWorkspace.workspace_id, {
     client_message_id: "client-pending",
     turn_id: "turn-pending",
@@ -219,8 +225,13 @@ test("refresh recovery marks the pending Turn without expanding storage", () => 
   expect(session.reportBinding?.pendingTurn).toMatchObject({
     turnId: "turn-pending",
     clientMessageId: "client-pending",
-    afterSequence: 3,
-    recovering: true
+    afterSequence: 7,
+    recovering: true,
+    answerDraft: {
+      revision: 2,
+      text: "刷新前已生成的回答",
+      event_sequence: 7
+    }
   });
   expect(Object.keys(JSON.parse([...storage.values()][0])).sort()).toEqual([
     "after_sequence", "client_message_id", "turn_id"

@@ -3258,6 +3258,37 @@
   align-self: stretch;
 }
 
+.inv-report-answer-live {
+  margin-top: 14px;
+  color: #263244;
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.inv-report-answer-live > i {
+  display: inline-block;
+  width: 2px;
+  height: 1.05em;
+  margin-left: 3px;
+  border-radius: 1px;
+  background: #5b6cff;
+  vertical-align: -0.12em;
+  animation: inv-answer-caret 0.9s steps(1, end) infinite;
+}
+
+@keyframes inv-answer-caret {
+  0%, 46% { opacity: 1; }
+  47%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inv-report-answer-live > i {
+    animation: none;
+  }
+}
+
 .inv-assistant-markdown {
   width: 100%;
   min-width: 0;

@@ -302,7 +302,8 @@ export function restoreInvestigationWorkspace(
             activityEvents: activityEventsForTurn(
               state.activity_events,
               pendingReportTurn.turn_id
-            )
+            ),
+            answerDraft: state.report_answer_draft || undefined
           }
         : undefined,
       error: latestTurn?.status === "error"

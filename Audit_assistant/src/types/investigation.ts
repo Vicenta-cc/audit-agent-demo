@@ -216,6 +216,7 @@ export interface InvestigationSession {
       stage: import("./investigations").InvestigationTurnStage;
       resumeAttempted?: boolean;
       activityEvents?: InvestigationActivityEvent[];
+      answerDraft?: import("./investigations").InvestigationAnswerDraft;
     };
     error?: string;
   };
@@ -234,6 +235,7 @@ export interface InvestigationSession {
       resumeAttempted?: boolean;
       recovering?: boolean;
       activityEvents?: InvestigationActivityEvent[];
+      answerDraft?: import("./investigations").InvestigationAnswerDraft;
     };
   };
 }

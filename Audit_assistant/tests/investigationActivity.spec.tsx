@@ -4,6 +4,10 @@ import {
   insertActivityTimelineBeforeLatestAssistant,
   mergeInvestigationActivityEvent
 } from "../src/features/investigation/investigationActivity";
+import {
+  applyInvestigationAnswerReset,
+  mergeInvestigationAnswerDelta
+} from "../src/features/investigation/investigationAnswer";
 import type { InvestigationActivityEvent } from "../src/types/investigations";
 
 function activity(
@@ -77,6 +81,47 @@ test("activity timeline summary distinguishes active, successful and incomplete 
     events[0],
     { ...events[1], sequence: 4, status: "interrupted" }
   ], false)).toBe("已完成 · 1 个成功，1 个未完成");
+});
+
+test("answer deltas merge idempotently and a newer revision replaces the draft", () => {
+  const envelope = {
+    event_id: "investigation-stream-event:" + "e".repeat(32),
+    turn_id: "investigation-turn:1",
+    occurred_at: "2026-09-17T00:00:02Z",
+    message_id: "public-answer:" + "f".repeat(32)
+  };
+  const first = mergeInvestigationAnswerDelta(undefined, {
+    ...envelope,
+    sequence: 4,
+    revision: 1,
+    delta: "第一段"
+  });
+  const second = mergeInvestigationAnswerDelta(first, {
+    ...envelope,
+    sequence: 5,
+    revision: 1,
+    delta: "第二段"
+  });
+  expect(second.text).toBe("第一段第二段");
+  expect(mergeInvestigationAnswerDelta(second, {
+    ...envelope,
+    sequence: 5,
+    revision: 1,
+    delta: "重复事件"
+  })).toBe(second);
+
+  const reset = applyInvestigationAnswerReset(second, {
+    ...envelope,
+    sequence: 6,
+    revision: 2
+  });
+  expect(reset.text).toBe("");
+  expect(mergeInvestigationAnswerDelta(reset, {
+    ...envelope,
+    sequence: 7,
+    revision: 2,
+    delta: "修订后的回答"
+  })).toMatchObject({ revision: 2, text: "修订后的回答", event_sequence: 7 });
 });
 
 test("active activity timeline is expanded, live and collapsible in the browser", async ({ page }) => {

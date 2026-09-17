@@ -143,12 +143,14 @@ export function buildHistoricalReportSession(
             recovering: true,
             afterSequence: Math.max(
               pending.event_sequence,
+              workspace.answer_draft?.event_sequence || 0,
               persisted?.turn_id === pending.turn_id ? persisted.after_sequence : 0
             ),
             activityEvents: activityEventsForTurn(
               workspace.activity_events,
               pending.turn_id
-            )
+            ),
+            answerDraft: workspace.answer_draft || undefined
           }
         : undefined
     }

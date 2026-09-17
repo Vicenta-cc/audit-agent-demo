@@ -1,5 +1,6 @@
 import type {
   InvestigationActivityEvent,
+  InvestigationAnswerDraft,
   InvestigationTurnStage,
   InvestigationTurnStatus
 } from "./investigations";
@@ -64,6 +65,7 @@ export interface HistoricalReportWorkspace {
   conversation: HistoricalConversationMessage[];
   latest_turn: HistoricalReportTurnStatus | null;
   activity_events: InvestigationActivityEvent[];
+  answer_draft?: InvestigationAnswerDraft | null;
 }
 
 export interface HistoricalReportWorkspaceList {

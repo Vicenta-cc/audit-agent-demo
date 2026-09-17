@@ -88,6 +88,13 @@ export interface InvestigationAnswerResetEvent {
   revision: number;
 }
 
+export interface InvestigationAnswerDraft {
+  message_id: string;
+  revision: number;
+  text: string;
+  event_sequence: number;
+}
+
 export type InvestigationStreamEvent =
   | InvestigationTurnEvent
   | InvestigationActivityEvent

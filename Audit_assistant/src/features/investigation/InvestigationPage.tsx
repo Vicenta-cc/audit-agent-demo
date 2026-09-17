@@ -59,6 +59,10 @@ import {
   mergeInvestigationActivityEvent
 } from "./investigationActivity";
 import {
+  applyInvestigationAnswerReset,
+  mergeInvestigationAnswerDelta
+} from "./investigationAnswer";
+import {
   buildNewInvestigationWorkspaceSession,
   buildWorkspaceRecoveryErrorSession,
   presentCreationAssistantContent,
@@ -800,6 +804,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   ...item.reportBinding,
                   pendingTurn: {
                     ...item.reportBinding.pendingTurn,
+                    afterSequence: event.sequence,
+                    recovering: false,
                     activityEvents: mergeInvestigationActivityEvent(
                       item.reportBinding.pendingTurn.activityEvents,
                       event
@@ -809,6 +815,71 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
               }
             : item
         )));
+        if (historicalWorkspaceId && clientMessageId) {
+          storeHistoricalPendingTurn(historicalWorkspaceId, {
+            client_message_id: clientMessageId,
+            turn_id: turnId,
+            after_sequence: event.sequence
+          });
+        }
+      },
+      onAnswerDelta: (event: import("../../types/investigations").InvestigationAnswerDeltaEvent) => {
+        setSessions((current) => current.map((item) => (
+          item.id === uiSessionId
+          && item.reportBinding?.pendingTurn?.turnId === turnId
+            ? {
+                ...item,
+                reportBinding: {
+                  ...item.reportBinding,
+                  pendingTurn: {
+                    ...item.reportBinding.pendingTurn,
+                    afterSequence: event.sequence,
+                    recovering: false,
+                    answerDraft: mergeInvestigationAnswerDelta(
+                      item.reportBinding.pendingTurn.answerDraft,
+                      event
+                    )
+                  }
+                }
+              }
+            : item
+        )));
+        if (historicalWorkspaceId && clientMessageId) {
+          storeHistoricalPendingTurn(historicalWorkspaceId, {
+            client_message_id: clientMessageId,
+            turn_id: turnId,
+            after_sequence: event.sequence
+          });
+        }
+      },
+      onAnswerReset: (event: import("../../types/investigations").InvestigationAnswerResetEvent) => {
+        setSessions((current) => current.map((item) => (
+          item.id === uiSessionId
+          && item.reportBinding?.pendingTurn?.turnId === turnId
+            ? {
+                ...item,
+                reportBinding: {
+                  ...item.reportBinding,
+                  pendingTurn: {
+                    ...item.reportBinding.pendingTurn,
+                    afterSequence: event.sequence,
+                    recovering: false,
+                    answerDraft: applyInvestigationAnswerReset(
+                      item.reportBinding.pendingTurn.answerDraft,
+                      event
+                    )
+                  }
+                }
+              }
+            : item
+        )));
+        if (historicalWorkspaceId && clientMessageId) {
+          storeHistoricalPendingTurn(historicalWorkspaceId, {
+            client_message_id: clientMessageId,
+            turn_id: turnId,
+            after_sequence: event.sequence
+          });
+        }
       }
     });
     const waitForTerminal = (afterSequence = 0, resumeReplay = false) => (
@@ -1781,8 +1852,14 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   turnId: pendingReportTurn.turnId,
                   clientMessageId: pendingReportTurn.clientMessageId,
                   stage: pendingReportTurn.stage,
-                  afterSequence: 0,
-                  activityEvents: pendingReportTurn.activityEvents
+                  afterSequence: Math.max(
+                    pendingReportTurn.activityEvents?.[
+                      pendingReportTurn.activityEvents.length - 1
+                    ]?.sequence || 0,
+                    pendingReportTurn.answerDraft?.event_sequence || 0
+                  ),
+                  activityEvents: pendingReportTurn.activityEvents,
+                  answerDraft: pendingReportTurn.answerDraft
                 }
               : undefined
           }

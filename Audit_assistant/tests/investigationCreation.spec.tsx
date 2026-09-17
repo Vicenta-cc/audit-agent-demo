@@ -624,12 +624,18 @@ test("restores report messages and a pending report Turn in the same workspace",
     }],
     latest_report_turn: {
       turn_id: "report-turn-1",
-      status: "interrupted",
-      stage: "interrupted",
+      status: "running",
+      stage: "answering",
       answer: "",
-      safe_message: "报告问答执行已中断，可以安全恢复。",
-      retryable: true,
+      safe_message: "",
+      retryable: false,
       updated_at: "2026-08-28T00:02:00Z"
+    },
+    report_answer_draft: {
+      message_id: "public-answer:" + "a".repeat(32),
+      revision: 1,
+      text: "正在恢复的报告回答",
+      event_sequence: 9
     }
   }));
 
@@ -640,8 +646,13 @@ test("restores report messages and a pending report Turn in the same workspace",
   expect(published.creationBinding?.pendingReportTurn).toMatchObject({
     turnId: "report-turn-1",
     question: "报告中有哪些主要风险？",
-    stage: "interrupted",
-    resumeAttempted: false
+    stage: "answering",
+    resumeAttempted: false,
+    answerDraft: {
+      revision: 1,
+      text: "正在恢复的报告回答",
+      event_sequence: 9
+    }
   });
   expect(JSON.stringify(published)).not.toContain("report_session_id");
 });

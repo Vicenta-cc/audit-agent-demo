@@ -149,6 +149,8 @@ export function InvestigationCenterArea({
     || session.creationBinding?.pendingActivityEvents
     || [];
   const pendingActivitySequence = pendingActivityEvents[pendingActivityEvents.length - 1]?.sequence || 0;
+  const pendingAnswerDraft = session.reportBinding?.pendingTurn?.answerDraft;
+  const pendingAnswerSequence = pendingAnswerDraft?.event_sequence || 0;
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(() => (
     getInitialStreamingMessageId(session)
   ));
@@ -207,6 +209,7 @@ export function InvestigationCenterArea({
     return () => window.cancelAnimationFrame(frameId);
   }, [
     pendingActivitySequence,
+    pendingAnswerSequence,
     session.id,
     session.messages.length,
     session.reportBinding,
@@ -752,12 +755,23 @@ export function InvestigationCenterArea({
                     session.reportBinding?.pendingTurn?.recovering
                   )}
                 />
-              ) : (
+              ) : !pendingAnswerDraft?.text ? (
                 <HistoricalReportPendingStatus
                   stage={sendingMessageStage}
                   recovering={session.reportBinding?.pendingTurn?.recovering}
                 />
-              )}
+              ) : null}
+              {pendingAnswerDraft?.text ? (
+                <div
+                  className="inv-report-answer-live"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="回答正在生成"
+                >
+                  <span>{pendingAnswerDraft.text}</span>
+                  <i aria-hidden="true" />
+                </div>
+              ) : null}
             </div>
           ) : null}
           {showCreationPending ? (
