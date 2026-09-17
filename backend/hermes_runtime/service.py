@@ -37,6 +37,10 @@ class HermesInvestigationAgentService:
         hermes_state_dir: Path | None = None,
         authorized_report_version_ids: tuple[str, ...] | None = None,
         authorized_context_anchor_prefixes: tuple[str, ...] | None = None,
+        authorized_report_version_resolver: Callable[
+            [InvestigationSession, str], tuple[str, ...]
+        ]
+        | None = None,
     ) -> None:
         self.report_facade = report_facade or ReportQueryFacade()
         self.store = store or InvestigationStore()
@@ -55,6 +59,9 @@ class HermesInvestigationAgentService:
             tuple(authorized_context_anchor_prefixes)
             if authorized_context_anchor_prefixes is not None
             else None
+        )
+        self.authorized_report_version_resolver = (
+            authorized_report_version_resolver
         )
         self._agents: dict[str, Any] = {}
         self._bound_sessions: set[str] = set()
@@ -257,18 +264,27 @@ class HermesInvestigationAgentService:
         if not self.bind_runtime:
             return "account-activity"
         session = self.store.get_session(session_id)
+        template_kind = self._published_report_template_kind(
+            session.report_version_id
+        )
+        if template_kind == "all_pass":
+            return "pass-report"
+        if template_kind == "unified_audit":
+            return "unified-report"
+        return "account-activity"
+
+    def _published_report_template_kind(self, report_version_id: str) -> str:
         uri = self.report_facade.db_path.resolve().as_uri() + "?mode=ro"
         with closing(sqlite3.connect(uri, uri=True)) as connection:
             row = connection.execute(
-                "SELECT body_json FROM report_versions WHERE id=? AND status='published'",
-                (session.report_version_id,),
+                "SELECT body_json FROM report_versions "
+                "WHERE id=? AND status='published'",
+                (report_version_id,),
             ).fetchone()
-        document = (json.loads(row[0]).get("report_document") or {}) if row else {}
-        if document.get("template_kind") == "all_pass":
-            return "pass-report"
-        if document.get("template_kind") == "unified_audit":
-            return "unified-report"
-        return "account-activity"
+        if row is None:
+            return ""
+        document = json.loads(row[0]).get("report_document") or {}
+        return str(document.get("template_kind") or "")
 
     def _agent(self, session_id: str) -> Any:
         with self._agent_lock:
@@ -317,6 +333,8 @@ class HermesInvestigationAgentService:
     def _authorized_report_contexts(
         self, session: InvestigationSession
     ) -> tuple[Any, ...]:
+        anchor = ""
+        product_mode = self._product_mode(session.id)
         if self.authorized_context_anchor_prefixes is not None:
             anchor = self.store.session_anchor(session.id)
             if anchor.startswith("historical-report:") and session.report_version_id not in self.authorized_report_version_ids:
@@ -331,8 +349,7 @@ class HermesInvestigationAgentService:
             # account sources. Report navigation remains bound to their own snapshot.
             snapshot_report_anchor = (
                 anchor.startswith("m3-run:")
-                and self._product_mode(session.id)
-                in {"pass-report", "unified-report"}
+                and product_mode in {"pass-report", "unified-report"}
             )
             if not allowed_anchor and not snapshot_report_anchor:
                 return ()
@@ -353,6 +370,36 @@ class HermesInvestigationAgentService:
                 )
             seen_tasks.add(context.task_id)
             additional_contexts.append(context)
+        if (
+            anchor.startswith("m3-run:")
+            and product_mode == "unified-report"
+            and self.authorized_report_version_resolver is not None
+        ):
+            candidates = self.authorized_report_version_resolver(session, anchor)
+            dynamic_contexts = []
+            dynamic_tasks = {session.task_id}
+            for report_version_id in dict.fromkeys(
+                str(item or "").strip() for item in candidates
+            ):
+                if (
+                    not report_version_id
+                    or report_version_id == session.report_version_id
+                    or self._published_report_template_kind(report_version_id)
+                    != "unified_audit"
+                ):
+                    continue
+                context = self.report_facade.get_published_report_context(
+                    report_version_id
+                )
+                if context.task_id in dynamic_tasks:
+                    continue
+                dynamic_tasks.add(context.task_id)
+                dynamic_contexts.append(context)
+            for context in dynamic_contexts:
+                if context.task_id in seen_tasks:
+                    continue
+                seen_tasks.add(context.task_id)
+                additional_contexts.append(context)
         return tuple(additional_contexts)
 
     def _validate_business_scope(self, session: InvestigationSession) -> None:
