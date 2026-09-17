@@ -2852,6 +2852,40 @@ def test_workspace_state_restores_creation_answer_only_when_enabled(
     assert disabled.json()["creation_answer_draft"] is None
 
 
+def test_creation_stream_projection_failure_does_not_repeat_or_block_draft(
+    creation_stack: dict,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(settings, "activity_stream_enabled", True)
+    monkeypatch.setattr(settings, "creation_answer_stream_enabled", True)
+    conversation = creation_stack["conversation"]
+    projection_attempts = 0
+
+    def fail_projection(*_args, **_kwargs):
+        nonlocal projection_attempts
+        projection_attempts += 1
+        raise OSError("injected creation projection failure")
+
+    monkeypatch.setattr(
+        conversation.store,
+        "append_public_stream_event",
+        fail_projection,
+    )
+    result = _create_completed_turn(
+        creation_stack,
+        workspace_key="creation-projection-failure",
+    )
+
+    assert result["terminal"]["stage"] == "completed"
+    assert result["terminal"]["artifact"]["artifact_type"] == "investigation_draft"
+    assert _draft_count(creation_stack["creation_store"]) == 1
+    assert _run_count(creation_stack["creation_store"]) == 0
+    assert projection_attempts >= 2
+    events = conversation.store.list_public_turn_events(result["turn_id"])
+    assert events
+    assert {event["event_type"] for event in events} == {"turn"}
+
+
 def test_confirm_prepares_fake_report_after_confirmation_fence_without_lock_conflict(
     creation_stack: dict,
 ) -> None:

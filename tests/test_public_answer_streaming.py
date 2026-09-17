@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from types import SimpleNamespace
 
 import pytest
@@ -311,3 +313,124 @@ def test_interrupted_turn_resets_draft_before_resume(tmp_path, monkeypatch):
     result = service.execute_resume(turn.id)
     assert result.answer == final_answer
     assert _latest_revision_text(_answer_events(store, turn.id)) == final_answer
+
+
+def test_stream_projection_storage_failure_does_not_fail_report_turn(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "activity_stream_enabled", True)
+    monkeypatch.setattr(settings, "answer_stream_enabled", True)
+    context = _context()
+    final_answer = "投影写入失败时仍然保留权威回答。"
+    tool_executions = 0
+
+    class Agent:
+        _api_max_retries = 0
+
+        def __init__(self, **options):
+            self.options = options
+
+        def close(self):
+            return None
+
+        def run_conversation(self, message, **kwargs):
+            nonlocal tool_executions
+            self.options["step_callback"](1, [])
+            self.options["stream_delta_callback"]("临时回答。")
+            self.options["tool_start_callback"](
+                "private-tool-call",
+                "read_report",
+                {"private": "argument"},
+            )
+            tool_executions += 1
+            self.options["tool_complete_callback"](
+                "private-tool-call",
+                "read_report",
+                {},
+                {"status": "ok"},
+            )
+            self.options["step_callback"](2, ["read_report"])
+            self.options["stream_delta_callback"](final_answer)
+            history = [dict(item) for item in kwargs.get("conversation_history") or []]
+            return {
+                "completed": True,
+                "failed": False,
+                "final_response": final_answer,
+                "messages": [
+                    *history,
+                    {"role": "user", "content": message},
+                    {"role": "assistant", "content": final_answer},
+                ],
+            }
+
+    store = InvestigationStore(tmp_path / "projection-failure.sqlite3")
+    projection_attempts = 0
+
+    def fail_projection(*_args, **_kwargs):
+        nonlocal projection_attempts
+        projection_attempts += 1
+        raise OSError("injected public projection failure")
+
+    monkeypatch.setattr(store, "append_public_stream_event", fail_projection)
+    service = HermesInvestigationAgentService(
+        report_facade=SimpleNamespace(
+            get_published_report_context=lambda _report_version_id: context,
+        ),
+        store=store,
+        agent_factory=Agent,
+        bind_runtime=False,
+    )
+    session = service.create_session(context.report_version_id)
+    turn, _ = service.accept_message(
+        session.id,
+        client_message_id="projection-failure",
+        content="请读取报告后回答。",
+    )
+
+    result = service.execute_turn(turn.id)
+
+    assert result.status == "completed"
+    assert result.answer == final_answer
+    assert store.turn_result(turn.id).answer == final_answer
+    assert tool_executions == 1
+    assert projection_attempts >= 3
+    assert store.list_public_turn_events(turn.id) == ()
+
+
+def test_parallel_sessions_keep_answer_revisions_isolated(tmp_path):
+    store = InvestigationStore(tmp_path / "parallel-streams.sqlite3")
+    session_a, turn_a = _running_turn(store)
+    session_b, turn_b = _running_turn(store)
+    streamer = PublicAnswerStreamer(
+        store,
+        enabled=lambda: True,
+        sanitize=redact_internal_account_references,
+    )
+    barrier = Barrier(2)
+    answers = {
+        turn_a.id: "会话甲的独立回答。" * 24,
+        turn_b.id: "会话乙的独立回答。" * 24,
+    }
+
+    def stream(session_id: str, turn_id: str) -> None:
+        answer = answers[turn_id]
+        with streamer.bind_turn(session_id, turn_id):
+            streamer.begin_iteration(session_id, 1)
+            barrier.wait(timeout=5)
+            for offset in range(0, len(answer), 11):
+                streamer.stream_delta(session_id, answer[offset : offset + 11])
+            streamer.finalize(turn_id, answer)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = (
+            pool.submit(stream, session_a.id, turn_a.id),
+            pool.submit(stream, session_b.id, turn_b.id),
+        )
+        for future in futures:
+            future.result(timeout=10)
+
+    assert _latest_revision_text(_answer_events(store, turn_a.id)) == answers[turn_a.id]
+    assert _latest_revision_text(_answer_events(store, turn_b.id)) == answers[turn_b.id]
+    assert answers[turn_b.id] not in str(_answer_events(store, turn_a.id))
+    assert answers[turn_a.id] not in str(_answer_events(store, turn_b.id))
