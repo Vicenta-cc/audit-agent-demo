@@ -7,6 +7,7 @@ export interface RuntimeConfig {
   activity_stream_enabled?: boolean;
   answer_stream_enabled?: boolean;
   creation_answer_stream_enabled?: boolean;
+  activity_recovery_turn_limit?: number;
 }
 
 export function fetchRuntimeConfig() {

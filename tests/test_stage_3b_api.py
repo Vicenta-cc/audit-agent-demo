@@ -516,10 +516,22 @@ class _InvestigationApiStoreStub:
             total_tokens=999,
         )
 
-    def list_public_turn_events(self, turn_id: str, *, after_sequence: int = 0):
+    def list_public_turn_events(
+        self,
+        turn_id: str,
+        *,
+        after_sequence: int = 0,
+        event_types: tuple[str, ...] | None = None,
+    ):
         self.get_turn(turn_id)
         return tuple(
-            item for item in self.events if item["sequence"] > after_sequence
+            item
+            for item in self.events
+            if item["sequence"] > after_sequence
+            and (
+                event_types is None
+                or str(item.get("event_type") or "turn") in event_types
+            )
         )
 
     def get_public_turn_event_sequence(self, turn_id: str, event_id: str):

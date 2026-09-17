@@ -265,6 +265,113 @@ def test_workspace_activity_recovery_returns_only_validated_public_events(
     assert public_activity_events_for_turns(store, [turn.id]) == ()
 
 
+def test_workspace_activity_recovery_reads_only_recent_turn_activity(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "activity_stream_enabled", True)
+    store = InvestigationStore(tmp_path / "investigation.sqlite3")
+    session = store.create_session(_report_context())
+    emitter = PublicActivityEmitter(store, enabled=lambda: True)
+    turn_ids: list[str] = []
+
+    for index in range(4):
+        turn, _ = store.create_turn(
+            session.id,
+            client_message_id=f"client-message:bounded-{index}",
+            user_input=f"读取第 {index + 1} 轮报告。",
+        )
+        turn_ids.append(turn.id)
+        store.append_public_turn_event(turn.id, stage="accepted")
+        with emitter.bind_turn(session.id, turn.id):
+            emitter.tool_started(
+                session.id,
+                f"tool-call:bounded-{index}",
+                "read_report",
+            )
+            emitter.tool_completed(
+                session.id,
+                f"tool-call:bounded-{index}",
+                "read_report",
+                {"status": "ok"},
+            )
+        store.fail_turn(
+            turn.id,
+            error_code="bounded_recovery_fixture",
+            safe_message="测试 Turn 已结束。",
+            retryable=False,
+        )
+
+    original_list_events = store.list_public_turn_events
+    reads: list[tuple[str, tuple[str, ...] | None]] = []
+
+    def observed_list_events(
+        turn_id: str,
+        *,
+        after_sequence: int = 0,
+        event_types: tuple[str, ...] | None = None,
+    ):
+        reads.append((turn_id, event_types))
+        return original_list_events(
+            turn_id,
+            after_sequence=after_sequence,
+            event_types=event_types,
+        )
+
+    monkeypatch.setattr(store, "list_public_turn_events", observed_list_events)
+    recovered = public_activity_events_for_turns(
+        store,
+        [turn_ids[0], turn_ids[1], turn_ids[1], *turn_ids[2:]],
+        max_turns=2,
+    )
+
+    assert {event.turn_id for event in recovered} == set(turn_ids[-2:])
+    assert len(recovered) == 4
+    assert reads == [
+        (turn_ids[-2], ("activity",)),
+        (turn_ids[-1], ("activity",)),
+    ]
+    assert all(event.status in {"running", "succeeded"} for event in recovered)
+
+
+def test_public_turn_event_store_can_filter_without_changing_replay(tmp_path):
+    store = InvestigationStore(tmp_path / "investigation.sqlite3")
+    session = store.create_session(_report_context())
+    turn, _ = store.create_turn(
+        session.id,
+        client_message_id="client-message:event-filter",
+        user_input="读取报告。",
+    )
+    store.append_public_turn_event(turn.id, stage="accepted")
+    emitter = PublicActivityEmitter(store, enabled=lambda: True)
+    with emitter.bind_turn(session.id, turn.id):
+        emitter.tool_started(session.id, "tool-call:event-filter", "read_report")
+        emitter.tool_completed(
+            session.id,
+            "tool-call:event-filter",
+            "read_report",
+            {"status": "ok"},
+        )
+
+    all_events = store.list_public_turn_events(turn.id)
+    activity_events = store.list_public_turn_events(
+        turn.id,
+        event_types=("activity",),
+    )
+
+    assert len(all_events) == 3
+    assert [event["event_type"] for event in activity_events] == [
+        "activity",
+        "activity",
+    ]
+    assert store.list_public_turn_events(turn.id, event_types=()) == ()
+    assert store.list_public_turn_events(
+        turn.id,
+        after_sequence=activity_events[0]["sequence"],
+        event_types=("activity",),
+    ) == (activity_events[1],)
+
+
 def test_creation_tool_boundary_observes_start_before_validation() -> None:
     tools = InvestigationCreationToolService(SimpleNamespace())
     observed: list[tuple[str, str, str]] = []

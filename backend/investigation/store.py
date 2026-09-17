@@ -1143,17 +1143,37 @@ class InvestigationStore:
         return self._public_turn_event(stored)
 
     def list_public_turn_events(
-        self, turn_id: str, *, after_sequence: int = 0
+        self,
+        turn_id: str,
+        *,
+        after_sequence: int = 0,
+        event_types: tuple[str, ...] | None = None,
     ) -> tuple[dict[str, Any], ...]:
         self.get_turn(turn_id)
+        normalized_types = tuple(
+            dict.fromkeys(
+                str(event_type or "").strip()
+                for event_type in (event_types or ())
+                if str(event_type or "").strip()
+            )
+        )
+        if event_types is not None and not normalized_types:
+            return ()
+        type_clause = ""
+        parameters: list[Any] = [turn_id, max(0, int(after_sequence))]
+        if normalized_types:
+            placeholders = ", ".join("?" for _ in normalized_types)
+            type_clause = f" AND event_type IN ({placeholders})"
+            parameters.extend(normalized_types)
         with self._connect() as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT * FROM investigation_public_turn_events
                 WHERE turn_id = ? AND sequence > ?
+                {type_clause}
                 ORDER BY sequence, event_id
                 """,
-                (turn_id, max(0, int(after_sequence))),
+                tuple(parameters),
             ).fetchall()
         return tuple(self._public_turn_event(row) for row in rows)
 
@@ -1169,6 +1189,19 @@ class InvestigationStore:
         if row is None:
             raise InvestigationTurnNotFoundError("public Turn event not found")
         return int(row["sequence"])
+
+    def get_latest_public_turn_event_sequence(self, turn_id: str) -> int:
+        self.get_turn(turn_id)
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT COALESCE(MAX(sequence), 0)
+                FROM investigation_public_turn_events
+                WHERE turn_id = ?
+                """,
+                (turn_id,),
+            ).fetchone()
+        return int(row[0] if row is not None else 0)
 
     def set_turn_node(self, turn_id: str, node_name: str) -> None:
         with self._connect() as connection:

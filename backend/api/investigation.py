@@ -42,21 +42,43 @@ logger = logging.getLogger(__name__)
 def public_activity_events_for_turns(
     store: Any,
     turn_ids: Iterable[object],
+    *,
+    max_turns: int | None = None,
 ) -> tuple[InvestigationActivityEventResponse, ...]:
-    """Return only validated, allowlisted activity projections for UI recovery."""
+    """Return validated activity for a bounded window of recent Turns.
+
+    Conversation messages remain authoritative and unbounded. Only the
+    optional activity decoration is bounded so workspace recovery cannot grow
+    by rereading every event from every historical Turn.
+    """
 
     if not settings.activity_stream_enabled:
         return ()
     events: list[InvestigationActivityEventResponse] = []
+    recovery_limit = max(
+        1,
+        min(
+            100,
+            int(
+                settings.activity_recovery_turn_limit
+                if max_turns is None
+                else max_turns
+            ),
+        ),
+    )
+    normalized_turn_ids: list[str] = []
     seen_turn_ids: set[str] = set()
     for raw_turn_id in turn_ids:
         turn_id = str(raw_turn_id or "").strip()
         if not turn_id or turn_id in seen_turn_ids:
             continue
         seen_turn_ids.add(turn_id)
-        for raw_event in store.list_public_turn_events(turn_id):
-            if raw_event.get("event_type") != "activity":
-                continue
+        normalized_turn_ids.append(turn_id)
+    for turn_id in normalized_turn_ids[-recovery_limit:]:
+        for raw_event in store.list_public_turn_events(
+            turn_id,
+            event_types=("activity",),
+        ):
             payload = dict(raw_event)
             payload.pop("event_type", None)
             try:
@@ -89,7 +111,10 @@ def public_answer_draft_for_turn(
     revision = 0
     text = ""
     event_sequence = 0
-    for raw_event in store.list_public_turn_events(normalized_turn_id):
+    for raw_event in store.list_public_turn_events(
+        normalized_turn_id,
+        event_types=("answer_delta", "answer_reset"),
+    ):
         event_type = str(raw_event.get("event_type") or "")
         if event_type not in {"answer_delta", "answer_reset"}:
             continue
@@ -379,9 +404,9 @@ def _terminal_turn_response(result: Any, turn: Any) -> InvestigationTurnStatusRe
 def _turn_status_response(service: Any, turn: Any) -> InvestigationTurnStatusResponse:
     if turn.status in {"completed", "error"}:
         return _terminal_turn_response(service.store.turn_result(turn.id), turn)
-    events = service.store.list_public_turn_events(turn.id)
-    turn_events = tuple(
-        event for event in events if str(event.get("event_type", "turn")) == "turn"
+    turn_events = service.store.list_public_turn_events(
+        turn.id,
+        event_types=("turn",),
     )
     latest = turn_events[-1] if turn_events else None
     interrupted = turn.status == "interrupted"

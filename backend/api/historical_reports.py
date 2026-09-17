@@ -271,8 +271,11 @@ def _workspace_response(service: Any, item: dict[str, Any]) -> HistoricalWorkspa
 
 def _turn_response(service: Any, turn: Any) -> HistoricalTurnStatusResponse:
     response = _turn_status_response(service.report_service, turn)
-    events = service.report_service.store.list_public_turn_events(turn.id)
     return HistoricalTurnStatusResponse(
         **response.model_dump(exclude={"session_id", "artifact"}),
-        event_sequence=int(events[-1]["sequence"]) if events else 0,
+        event_sequence=(
+            service.report_service.store.get_latest_public_turn_event_sequence(
+                turn.id
+            )
+        ),
     )

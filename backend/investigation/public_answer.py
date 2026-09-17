@@ -248,7 +248,10 @@ class PublicAnswerStreamer:
     def _restore_state(self, turn_id: str) -> _AnswerState:
         message_id = public_answer_message_id(turn_id)
         state = _AnswerState(turn_id=turn_id, message_id=message_id)
-        events = self.store.list_public_turn_events(turn_id)
+        events = self.store.list_public_turn_events(
+            turn_id,
+            event_types=("answer_delta", "answer_reset"),
+        )
         for event in events:
             if event.get("event_type") not in {"answer_delta", "answer_reset"}:
                 continue

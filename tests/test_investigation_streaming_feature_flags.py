@@ -28,8 +28,10 @@ def test_runtime_config_exposes_independent_streaming_feature_flags(
     monkeypatch.setattr(settings, "activity_stream_enabled", True)
     monkeypatch.setattr(settings, "answer_stream_enabled", False)
     monkeypatch.setattr(settings, "creation_answer_stream_enabled", True)
+    monkeypatch.setattr(settings, "activity_recovery_turn_limit", 17)
     runtime_config = get_config()
 
     assert runtime_config["activity_stream_enabled"] is True
     assert runtime_config["answer_stream_enabled"] is False
     assert runtime_config["creation_answer_stream_enabled"] is True
+    assert runtime_config["activity_recovery_turn_limit"] == 17
