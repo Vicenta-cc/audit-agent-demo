@@ -149,7 +149,8 @@ export function InvestigationCenterArea({
     || session.creationBinding?.pendingActivityEvents
     || [];
   const pendingActivitySequence = pendingActivityEvents[pendingActivityEvents.length - 1]?.sequence || 0;
-  const pendingAnswerDraft = session.reportBinding?.pendingTurn?.answerDraft;
+  const pendingAnswerDraft = session.reportBinding?.pendingTurn?.answerDraft
+    || session.creationBinding?.pendingAnswerDraft;
   const pendingAnswerSequence = pendingAnswerDraft?.event_sequence || 0;
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(() => (
     getInitialStreamingMessageId(session)
@@ -786,12 +787,21 @@ export function InvestigationCenterArea({
                   active
                   activeLabel={creationPendingLabel(sendingMessageStage)}
                 />
-              ) : (
+              ) : !pendingAnswerDraft?.text ? (
                 <div className="inv-creation-pending-status">
                   <Loader2 size={17} className="spin" />
                   <span>{creationPendingLabel(sendingMessageStage)}</span>
                 </div>
-              )}
+              ) : null}
+              {pendingAnswerDraft?.text ? (
+                <div
+                  className="inv-report-answer-live"
+                  aria-label="调查建议正在生成"
+                >
+                  <span>{pendingAnswerDraft.text}</span>
+                  <i aria-hidden="true" />
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>

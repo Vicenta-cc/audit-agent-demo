@@ -206,6 +206,7 @@ export interface InvestigationSession {
     pendingTurnId?: string;
     pendingTurnStage?: import("./investigations").InvestigationTurnStage;
     pendingActivityEvents?: InvestigationActivityEvent[];
+    pendingAnswerDraft?: import("./investigations").InvestigationAnswerDraft;
     resumeAttempted?: boolean;
     run?: InvestigationRunProjection;
     confirmationKey?: string;

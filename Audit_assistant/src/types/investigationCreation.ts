@@ -291,5 +291,6 @@ export interface InvestigationWorkspaceState {
   report_messages: InvestigationWorkspaceMessage[];
   latest_report_turn: InvestigationTurnResponse | null;
   activity_events: InvestigationActivityEvent[];
+  creation_answer_draft?: import("./investigations").InvestigationAnswerDraft | null;
   report_answer_draft?: import("./investigations").InvestigationAnswerDraft | null;
 }

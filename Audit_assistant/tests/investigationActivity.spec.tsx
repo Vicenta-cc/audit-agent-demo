@@ -174,3 +174,91 @@ test("active activity timeline is expanded, live and collapsible in the browser"
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(timeline.getByRole("list")).toHaveCount(0);
 });
+
+test("creation activity and answer draft grow in the same pending assistant card", async ({ page }) => {
+  await page.route("**/api/**", (route) => route.fulfill({ json: { items: [] } }));
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const load = (path: string) => import(path);
+    const React = (await load("/node_modules/.vite/deps/react.js")).default;
+    const { createRoot } = (await load("/node_modules/.vite/deps/react-dom_client.js")).default;
+    const { InvestigationCenterArea } = await load(
+      "/src/features/investigation/InvestigationCenterArea.tsx"
+    );
+    const { restoreInvestigationWorkspace } = await load(
+      "/src/features/investigation/workspaceRecovery.ts"
+    );
+    const session = restoreInvestigationWorkspace({
+      workspace: {
+        workspace_session_id: "creation-stream-session",
+        status: "active",
+        created_at: "2026-09-17T00:00:00Z",
+        updated_at: "2026-09-17T00:00:01Z"
+      },
+      messages: [{
+        message_id: "creation-question",
+        turn_id: "creation-turn",
+        role: "user",
+        content: "请创建调查草案",
+        sequence: 1,
+        created_at: "2026-09-17T00:00:00Z"
+      }],
+      latest_turn: {
+        turn_id: "creation-turn",
+        status: "running",
+        stage: "answering",
+        answer: "",
+        safe_message: "",
+        retryable: false,
+        updated_at: "2026-09-17T00:00:01Z"
+      },
+      draft_artifact: null,
+      run: null,
+      report_messages: [],
+      latest_report_turn: null,
+      activity_events: [{
+        event_id: "investigation-stream-event:" + "a".repeat(32),
+        turn_id: "creation-turn",
+        sequence: 2,
+        occurred_at: "2026-09-17T00:00:01Z",
+        activity_id: "public-activity:" + "b".repeat(32),
+        status: "succeeded",
+        label: "查询可用平台、审核规则和黑话库",
+        summary: "已读取可用平台、审核规则和黑话库。",
+        result_count: null
+      }],
+      creation_answer_draft: {
+        message_id: "public-answer:" + "c".repeat(32),
+        revision: 1,
+        text: "调查方案正在生成，尚未启动任务。",
+        event_sequence: 3
+      }
+    });
+    const host = document.createElement("div");
+    document.body.replaceChildren(host);
+    const noop = () => {};
+    createRoot(host).render(React.createElement(InvestigationCenterArea, {
+      session,
+      isSendingMessage: true,
+      isSidebarCollapsed: true,
+      onToggleSidebar: noop,
+      onUpdateDraftKeywords: noop,
+      onUpdateCreationSearchTerms: async () => {},
+      onUpdateDraftPlatforms: noop,
+      onGenerateTaskConfig: noop,
+      onStartAgentExecution: noop,
+      onPhaseChange: noop,
+      onSendMessage: noop,
+      onOpenDrawer: noop,
+      onOpenReportSupport: noop,
+      onExamplePromptSelect: noop
+    }));
+  });
+
+  const pending = page.locator('[aria-label="调查建议正在生成"]');
+  await expect(pending).toHaveText("调查方案正在生成，尚未启动任务。");
+  await expect(pending.locator("i")).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "调用过程" }))
+    .toContainText("查询可用平台、审核规则和黑话库");
+  await expect(page.locator(".inv-creation-pending")).toHaveCount(1);
+});

@@ -1990,11 +1990,47 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           : item
       )));
     };
+    const handleCreationAnswerDelta = (event: import("../../types/investigations").InvestigationAnswerDeltaEvent) => {
+      setSessions((current) => current.map((item) => (
+        item.id === uiSessionId
+        && item.creationBinding?.pendingTurnId === turnId
+          ? {
+              ...item,
+              creationBinding: {
+                ...item.creationBinding,
+                pendingAnswerDraft: mergeInvestigationAnswerDelta(
+                  item.creationBinding.pendingAnswerDraft,
+                  event
+                )
+              }
+            }
+          : item
+      )));
+    };
+    const handleCreationAnswerReset = (event: import("../../types/investigations").InvestigationAnswerResetEvent) => {
+      setSessions((current) => current.map((item) => (
+        item.id === uiSessionId
+        && item.creationBinding?.pendingTurnId === turnId
+          ? {
+              ...item,
+              creationBinding: {
+                ...item.creationBinding,
+                pendingAnswerDraft: applyInvestigationAnswerReset(
+                  item.creationBinding.pendingAnswerDraft,
+                  event
+                )
+              }
+            }
+          : item
+      )));
+    };
     try {
       let result = await waitForInvestigationCreationTurn(turnId, {
         signal: controller.signal,
         onEvent: handleCreationEvent,
-        onActivity: handleCreationActivity
+        onActivity: handleCreationActivity,
+        onAnswerDelta: handleCreationAnswerDelta,
+        onAnswerReset: handleCreationAnswerReset
       });
       if (result.status === "interrupted" && result.retryable && !resumeAttempted) {
         setSessions((current) => current.map((item) => (
@@ -2014,7 +2050,9 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           afterSequence: result.event_sequence || 0,
           resumeReplay: !result.event_sequence,
           onEvent: handleCreationEvent,
-          onActivity: handleCreationActivity
+          onActivity: handleCreationActivity,
+          onAnswerDelta: handleCreationAnswerDelta,
+          onAnswerReset: handleCreationAnswerReset
         });
       }
       const answer = result.status === "completed"
@@ -2059,6 +2097,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   pendingTurnId: undefined,
                   pendingTurnStage: undefined,
                   pendingActivityEvents: undefined,
+                  pendingAnswerDraft: undefined,
                   resumeAttempted: undefined,
                   error: result.status === "completed" ? undefined : answer
                 }
@@ -2091,6 +2130,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                 pendingTurnId: undefined,
                 pendingTurnStage: undefined,
                 pendingActivityEvents: undefined,
+                pendingAnswerDraft: undefined,
                 resumeAttempted: undefined,
                 error: message
               }
@@ -2184,6 +2224,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                   pendingTurnId: accepted.turn_id,
                   pendingTurnStage: "accepted",
                   pendingActivityEvents: [],
+                  pendingAnswerDraft: undefined,
                   resumeAttempted: false
                 }
               }

@@ -283,6 +283,9 @@ export function restoreInvestigationWorkspace(
       pendingActivityEvents: pendingTurn
         ? activityEventsForTurn(state.activity_events, pendingTurn.turn_id)
         : undefined,
+      pendingAnswerDraft: pendingTurn
+        ? state.creation_answer_draft || undefined
+        : undefined,
       resumeAttempted: false,
       run: run || undefined,
       confirmationKey: artifact

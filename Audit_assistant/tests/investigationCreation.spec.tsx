@@ -657,6 +657,36 @@ test("restores report messages and a pending report Turn in the same workspace",
   expect(JSON.stringify(published)).not.toContain("report_session_id");
 });
 
+test("restores only the latest running creation answer draft", () => {
+  const pending = restoreInvestigationWorkspace(workspaceState({
+    latest_turn: {
+      turn_id: "creation-turn-1",
+      status: "running",
+      stage: "answering",
+      answer: "",
+      safe_message: "",
+      retryable: false,
+      updated_at: "2026-09-17T00:00:00Z"
+    },
+    creation_answer_draft: {
+      message_id: "public-answer:" + "c".repeat(32),
+      revision: 2,
+      text: "正在恢复的调查建议",
+      event_sequence: 11
+    }
+  }));
+
+  expect(pending.creationBinding).toMatchObject({
+    pendingTurnId: "creation-turn-1",
+    pendingTurnStage: "answering",
+    pendingAnswerDraft: {
+      revision: 2,
+      text: "正在恢复的调查建议",
+      event_sequence: 11
+    }
+  });
+});
+
 test("workspace state API failures stay explicit and never produce a demo fallback", async () => {
   globalThis.fetch = async () => new Response(JSON.stringify({
     detail: "调查工作区不存在"
