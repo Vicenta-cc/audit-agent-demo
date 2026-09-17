@@ -1219,6 +1219,7 @@ def get_config():
         "answer_stream_enabled": settings.answer_stream_enabled,
         "creation_answer_stream_enabled": settings.creation_answer_stream_enabled,
         "activity_recovery_turn_limit": settings.activity_recovery_turn_limit,
+        "stream_replay_batch_size": settings.stream_replay_batch_size,
         "risk_rule_defaults": {
             "capabilities": DEFAULT_CAPABILITIES,
             "thresholds": DEFAULT_THRESHOLDS,

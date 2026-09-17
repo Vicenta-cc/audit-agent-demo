@@ -457,9 +457,12 @@ def turn_event_stream_response(
     async def event_stream():
         nonlocal cursor
         idle_ticks = 0
+        batch_size = settings.stream_replay_batch_size
         while True:
             events = service.store.list_public_turn_events(
-                turn_id, after_sequence=cursor
+                turn_id,
+                after_sequence=cursor,
+                limit=batch_size,
             )
             terminal_stage: InvestigationPublicStage | None = None
             for raw_event in events:
@@ -489,15 +492,23 @@ def turn_event_stream_response(
                         terminal_stage = event.stage
                     else:
                         terminal_stage = None
+            caught_up = len(events) < batch_size
+            if not caught_up:
+                caught_up = (
+                    service.store.get_latest_public_turn_event_sequence(turn_id)
+                    <= cursor
+                )
             if terminal_stage is not None and _is_current_terminal_event(
                 service,
                 turn_id,
                 terminal_stage,
-                is_latest_in_batch=True,
+                is_latest_in_batch=caught_up,
             ):
                 return
             if await request.is_disconnected():
                 return
+            if not caught_up:
+                continue
             idle_ticks += 1
             if idle_ticks >= 60:
                 idle_ticks = 0

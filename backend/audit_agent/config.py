@@ -76,6 +76,13 @@ class Settings:
             int(os.getenv("INVESTIGATION_ACTIVITY_RECOVERY_TURN_LIMIT", "20")),
         ),
     )
+    stream_replay_batch_size = max(
+        1,
+        min(
+            1_000,
+            int(os.getenv("INVESTIGATION_STREAM_REPLAY_BATCH_SIZE", "256")),
+        ),
+    )
     qwen_report_model = os.getenv("QWEN_REPORT_MODEL", qwen_text_model).strip()
     report_prompt_version = os.getenv("REPORT_PROMPT_VERSION", "report-v2-human").strip()
     report_request_timeout = int(os.getenv("REPORT_REQUEST_TIMEOUT", "180"))

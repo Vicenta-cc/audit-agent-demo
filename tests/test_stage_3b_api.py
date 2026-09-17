@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -21,9 +22,11 @@ from backend.api.contracts import (
 from backend.api.investigation import create_investigation_router
 from backend.api.investigation_execution import InvestigationTurnExecutor
 from backend.api.reporting import create_reporting_router
+from backend.audit_agent.config import settings
 from backend.investigation.errors import (
     ConcurrentTurnError,
     InvestigationSessionNotFoundError,
+    InvestigationTurnNotFoundError,
 )
 from backend.investigation.contracts import PublishedReportContext
 from backend.investigation.store import InvestigationStore
@@ -133,6 +136,27 @@ class InvestigationTurnEventStoreTest(unittest.TestCase):
                 ),
                 2,
             )
+            self.assertEqual(
+                [
+                    item["stage"]
+                    for item in reopened.list_public_turn_events(turn.id, limit=1)
+                ],
+                ["accepted"],
+            )
+
+            other_session = store.create_session(self._report_context("other-cursor"))
+            other_turn, _ = store.create_turn(
+                other_session.id,
+                client_message_id="client-message:other-cursor",
+                user_input="另一个会话的问题。",
+            )
+            other_event = store.append_public_turn_event(
+                other_turn.id, stage="accepted"
+            )
+            with self.assertRaises(InvestigationTurnNotFoundError):
+                reopened.get_public_turn_event_sequence(
+                    turn.id, other_event["event_id"]
+                )
 
     def test_stream_extensions_are_durable_ordered_and_idempotent(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -465,6 +489,7 @@ class InvestigationTurnExecutorTest(unittest.TestCase):
 
 class _InvestigationApiStoreStub:
     def __init__(self):
+        self.requested_limits: list[int | None] = []
         self.turn = SimpleNamespace(
             id="investigation-turn:1",
             session_id="investigation-session:1",
@@ -522,9 +547,11 @@ class _InvestigationApiStoreStub:
         *,
         after_sequence: int = 0,
         event_types: tuple[str, ...] | None = None,
+        limit: int | None = None,
     ):
         self.get_turn(turn_id)
-        return tuple(
+        self.requested_limits.append(limit)
+        events = tuple(
             item
             for item in self.events
             if item["sequence"] > after_sequence
@@ -533,6 +560,7 @@ class _InvestigationApiStoreStub:
                 or str(item.get("event_type") or "turn") in event_types
             )
         )
+        return events[:limit] if limit is not None else events
 
     def get_public_turn_event_sequence(self, turn_id: str, event_id: str):
         self.get_turn(turn_id)
@@ -540,6 +568,10 @@ class _InvestigationApiStoreStub:
             if item["event_id"] == event_id:
                 return item["sequence"]
         raise InvestigationSessionNotFoundError(event_id)
+
+    def get_latest_public_turn_event_sequence(self, turn_id: str):
+        self.get_turn(turn_id)
+        return max((int(item["sequence"]) for item in self.events), default=0)
 
 
 class _InvestigationApiServiceStub:
@@ -734,6 +766,65 @@ class InvestigationSessionApiTest(unittest.TestCase):
         self.assertIn("event: answer_delta", replay.text)
         self.assertIn('"stage":"completed"', replay.text)
 
+    def test_sse_replays_large_history_in_bounded_ordered_batches(self):
+        self.service.store.events = (
+            {**self.service.store.events[0], "event_type": "turn"},
+            {
+                "event_id": "investigation-stream-event:activity-batch",
+                "turn_id": self.service.store.turn.id,
+                "sequence": 2,
+                "event_type": "activity",
+                "activity_id": "public-activity:" + "4" * 16,
+                "status": "succeeded",
+                "label": "读取报告概览",
+                "summary": "已读取公开报告。",
+                "result_count": 1,
+                "occurred_at": "2026-08-11T00:00:01+00:00",
+            },
+            {
+                "event_id": "investigation-stream-event:delta-batch-1",
+                "turn_id": self.service.store.turn.id,
+                "sequence": 3,
+                "event_type": "answer_delta",
+                "message_id": "public-answer:" + "5" * 16,
+                "revision": 1,
+                "delta": "第一段",
+                "occurred_at": "2026-08-11T00:00:02+00:00",
+            },
+            {
+                "event_id": "investigation-stream-event:delta-batch-2",
+                "turn_id": self.service.store.turn.id,
+                "sequence": 4,
+                "event_type": "answer_delta",
+                "message_id": "public-answer:" + "5" * 16,
+                "revision": 1,
+                "delta": "第二段",
+                "occurred_at": "2026-08-11T00:00:03+00:00",
+            },
+            {
+                **self.service.store.events[1],
+                "sequence": 5,
+                "event_type": "turn",
+            },
+        )
+
+        with patch.object(settings, "stream_replay_batch_size", 2):
+            response = self.client.get(
+                "/api/investigation-turns/investigation-turn:1/events"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        event_ids = [
+            item[4:]
+            for item in response.text.splitlines()
+            if item.startswith("id: ")
+        ]
+        self.assertEqual(
+            event_ids,
+            [item["event_id"] for item in self.service.store.events],
+        )
+        self.assertEqual(self.service.store.requested_limits, [2, 2, 2])
+
     def test_status_projection_ignores_display_only_extensions(self):
         self.service.store.turn.status = "running"
         self.service.store.turn.current_node = "prepare_context"
@@ -796,9 +887,10 @@ class InvestigationSessionApiTest(unittest.TestCase):
                 "occurred_at": "2026-08-11T00:00:04+00:00",
             },
         )
-        response = self.client.get(
-            "/api/investigation-turns/investigation-turn:1/events"
-        )
+        with patch.object(settings, "stream_replay_batch_size", 2):
+            response = self.client.get(
+                "/api/investigation-turns/investigation-turn:1/events"
+            )
         self.assertEqual(response.status_code, 200)
         self.assertIn("investigation-turn-event:first-interrupted", response.text)
         self.assertIn("investigation-turn-event:resume-accepted", response.text)

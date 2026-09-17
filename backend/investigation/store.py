@@ -1148,6 +1148,7 @@ class InvestigationStore:
         *,
         after_sequence: int = 0,
         event_types: tuple[str, ...] | None = None,
+        limit: int | None = None,
     ) -> tuple[dict[str, Any], ...]:
         self.get_turn(turn_id)
         normalized_types = tuple(
@@ -1165,6 +1166,10 @@ class InvestigationStore:
             placeholders = ", ".join("?" for _ in normalized_types)
             type_clause = f" AND event_type IN ({placeholders})"
             parameters.extend(normalized_types)
+        limit_clause = ""
+        if limit is not None:
+            limit_clause = " LIMIT ?"
+            parameters.append(max(1, int(limit)))
         with self._connect() as connection:
             rows = connection.execute(
                 f"""
@@ -1172,6 +1177,7 @@ class InvestigationStore:
                 WHERE turn_id = ? AND sequence > ?
                 {type_clause}
                 ORDER BY sequence, event_id
+                {limit_clause}
                 """,
                 tuple(parameters),
             ).fetchall()
