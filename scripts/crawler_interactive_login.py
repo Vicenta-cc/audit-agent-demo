@@ -100,6 +100,16 @@ async def inputs(context):
                 if page:
                     await asyncio.wait_for(apply_input(page, command), 3)
                     print("login input applied", file=sys.stderr, flush=True)
+                    if command["type"] == "pointer_up":
+                        try:
+                            hit = await asyncio.wait_for(page.evaluate("""([x,y]) => {
+                              const e = document.elementFromPoint(x,y);
+                              return {tag:e?.tagName, role:e?.getAttribute('role'),
+                                frames:[...document.querySelectorAll('iframe')].map(f=>({src:f.src.split('?')[0],rect:f.getBoundingClientRect().toJSON()}))};
+                            }""", [command["x"], command["y"]]), 2)
+                            print("login hit", json.dumps(hit), file=sys.stderr, flush=True)
+                        except Exception as exc:
+                            print("login hit error", type(exc).__name__, file=sys.stderr, flush=True)
             except (ValueError, TypeError, asyncio.TimeoutError) as exc:
                 print("login input error", type(exc).__name__, file=sys.stderr, flush=True)
                 continue
@@ -174,6 +184,7 @@ async def interactive_flow(account_id, expected_account_id):
             request = route.request
             host = urlsplit(request.url).hostname or ""
             if request.is_navigation_request() and not (host == "douyin.com" or host.endswith(".douyin.com")):
+                print("login navigation blocked", host, file=sys.stderr, flush=True)
                 await route.abort()
             else:
                 await route.continue_()
