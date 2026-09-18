@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 
 from backend.audit_agent.crawler_login_interaction import VIEW_WIDTH, VIEW_HEIGHT, validate_login_input
 from scripts import crawler_account_login as login
+from scripts.crawler_login_pages import close_rendered_pages
 
 
 @contextmanager
@@ -218,8 +219,7 @@ async def interactive_flow(account_id, expected_account_id):
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             # Close the active renderer before the persistent context flushes its Profile.
-            for tab in list(context.pages):
-                with suppress(Exception):
-                    await asyncio.wait_for(tab.close(), 3)
+            with suppress(Exception):
+                await close_rendered_pages(context)
     state = await headless_state(account_id)
     return state, identity

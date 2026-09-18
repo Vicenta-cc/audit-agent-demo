@@ -8,7 +8,7 @@ import json
 import os
 import time
 import sys
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -410,10 +410,19 @@ async def login_context(platform: str, account_id: str = "", *, headless: bool =
         )
         try:
             await request_login_reset()
-            await adapter.prepare_account_login(context, profile)
+            if headless:
+                await adapter.prepare_account_login(context, profile)
+            else:
+                from scripts.crawler_login_pages import prepare_headed_login
+                await prepare_headed_login(context, profile)
             yield context
         finally:
-            await context.close()
+            if sys.exc_info()[0] is not None:
+                # Cleanup must not hide the original navigation/reset failure.
+                with suppress(Exception):
+                    await asyncio.wait_for(context.close(), 15)
+            else:
+                await asyncio.wait_for(context.close(), 15)
         return
 
     async with async_playwright() as playwright:
