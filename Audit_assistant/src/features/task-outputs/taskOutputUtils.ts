@@ -227,8 +227,12 @@ export function buildTaskLogs(task: MonitorTask): TaskLog[] {
       timestamp,
       time: formatLogTime(timestamp),
       date: timestamp ? timestamp.slice(0, 10) : "",
-      level: inferLogLevel(log.message || ""),
-      content: log.message || "任务状态更新"
+      level: normalizeLogLevel(log.level),
+      content: log.message || "任务状态更新",
+      reason: log.reason || undefined,
+      errorCode: log.error_code || undefined,
+      retryable: log.retryable,
+      action: log.action || undefined
     };
   });
 }
@@ -338,14 +342,10 @@ function getDurationSeconds(output: AuditResult) {
   return Number.isFinite(duration) && duration > 0 ? duration : null;
 }
 
-function inferLogLevel(message: string): TaskLogLevel {
-  const lower = message.toLowerCase();
-  if (lower.includes("error") || message.includes("失败") || message.includes("异常") || message.includes("超时")) {
-    return "ERROR";
-  }
-  if (lower.includes("warn") || message.includes("重试") || message.includes("较慢")) {
-    return "WARN";
-  }
+function normalizeLogLevel(level?: string): TaskLogLevel {
+  const normalized = String(level || "info").trim().toLowerCase();
+  if (normalized === "error") return "ERROR";
+  if (normalized === "warning" || normalized === "warn") return "WARN";
   return "INFO";
 }
 

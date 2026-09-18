@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from types import SimpleNamespace
 from urllib.parse import urlparse
 
@@ -19,6 +20,28 @@ from backend.reporting.structured_contract import (
 PASS_TEMPLATE_VERSION = "report-all-pass/v1"
 SAMPLE_LIMIT = 3
 SCOPE = "结论仅适用于本次实际完成审核的帖子、已审核评论及所用审核规则，不代表账号全部内容或未来内容均无风险。"
+
+
+def partial_coverage_paragraphs(snapshot) -> list[str]:
+    coverage = snapshot.statistics.get("source_coverage") or {}
+    failures = coverage.get("excluded_failed_posts") or []
+    if not failures:
+        return []
+    paragraphs = [
+        f"本任务共有 {coverage.get('candidate_posts', len(snapshot.posts) + len(failures))} 条候选帖子，"
+        f"其中 {coverage.get('selected_posts', len(snapshot.posts))} 条审核成功并纳入统计，"
+        f"{len(failures)} 条审核失败并排除在风险比例分母之外。"
+    ]
+    for failure in failures:
+        paragraphs.append(
+            "失败帖子 {post_id}：阶段 {stage}；原因 {reason}；错误码 {error_code}。".format(
+                post_id=failure.get("post_id") or failure.get("note_id") or "未记录",
+                stage=failure.get("stage") or "post_audit",
+                reason=failure.get("reason") or "帖子审核未完成",
+                error_code=failure.get("error_code") or "post_audit_failed",
+            )
+        )
+    return paragraphs
 
 
 def safe_public_url(value):
@@ -123,6 +146,9 @@ class PassReportGraph(IntegrationReportGraph):
         section("2.1", "deterministic_statistics", "内容与评论规模", [f"纳入报告帖子 {count} 条。" + comment_note], "section-2")
         section("2.2", "deterministic_statistics", "审核结果与风险等级", [f"通过 {count} 条，复审 0 条，拒绝 0 条；无风险 {count} 条，低、中、高风险均为 0 条。"], "section-2")
         section("2.3", "account_activity_overview", "账号活动概览", ["仅展示本次样本中记录的发布账号与发布数量，不据此推断账号整体立场或历史活动。"], "section-2")
+        partial_paragraphs = partial_coverage_paragraphs(snapshot)
+        if partial_paragraphs:
+            section("2.4", "coverage_diagnostics", "失败帖子与统计口径", partial_paragraphs, "section-2")
         sample_text = "本次仅审核 1 条帖子，以下完整展示该样本及已有审核结论。" if count == 1 else f"按本次资料冻结顺序展示前 {sample_count} 条已审核样本，全部 {count} 条帖子可在附录查阅。"
         section("3", "audit_samples", "审核结果与样本展示", [sample_text])
         # The same frozen fields also remain readable in the chat's text report.
@@ -161,6 +187,13 @@ class PassReportGraph(IntegrationReportGraph):
             document[key] = account_model[key]
         document["account_scope_boundary"] = SCOPE
         document["comment_audit_coverage"] = comments
+        coverage = snapshot.statistics.get("source_coverage")
+        if isinstance(coverage, dict):
+            public_coverage = deepcopy(coverage)
+            document["statistics"] = deepcopy(document.get("statistics") or {})
+            document["statistics"].pop("source_configuration", None)
+            document["statistics"]["source_coverage"] = public_coverage
+            document["source_coverage"] = public_coverage
         # Account summaries use stable source identity when present. Missing IDs
         # remain separate occurrences; identical nicknames are never merged.
         authors = {}

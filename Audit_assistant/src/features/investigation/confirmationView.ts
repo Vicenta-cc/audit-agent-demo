@@ -6,6 +6,7 @@ const platformLabels = {
   xhs: "小红书",
   ks: "快手",
   wb: "微博",
+  xy: "闲鱼",
   multi: "多平台"
 } as const;
 

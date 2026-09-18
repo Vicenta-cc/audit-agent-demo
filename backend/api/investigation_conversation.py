@@ -240,7 +240,9 @@ def create_investigation_conversation_router(
                 principal=principal,
             )
             return InvestigationTurnAcceptedResponse(
-                session_id=turn.session_id, turn_id=turn.id
+                session_id=turn.session_id,
+                turn_id=turn.id,
+                updated_at=turn.created_at,
             )
         except Exception as exc:
             _raise_public_error(exc)
@@ -294,7 +296,10 @@ def create_investigation_conversation_router(
                 client_message_id=request.client_message_id,
                 content=request.content,
             )
-            return InvestigationWorkspaceReportTurnAcceptedResponse(turn_id=turn.id)
+            return InvestigationWorkspaceReportTurnAcceptedResponse(
+                turn_id=turn.id,
+                updated_at=turn.created_at,
+            )
         except Exception as exc:
             _raise_public_error(exc)
 
@@ -364,7 +369,10 @@ def create_investigation_conversation_router(
                 workspace_session_id, run_id, turn_id, principal=principal
             )
             turn = report_executor.resume_turn(turn_id)
-            return InvestigationWorkspaceReportTurnAcceptedResponse(turn_id=turn.id)
+            return InvestigationWorkspaceReportTurnAcceptedResponse(
+                turn_id=turn.id,
+                updated_at=turn.created_at,
+            )
         except Exception as exc:
             _raise_public_error(exc)
 
@@ -416,7 +424,9 @@ def create_investigation_conversation_router(
             service.authorize_turn(turn_id, principal=principal)
             turn = executor.resume_turn(turn_id)
             return InvestigationTurnAcceptedResponse(
-                session_id=turn.session_id, turn_id=turn.id
+                session_id=turn.session_id,
+                turn_id=turn.id,
+                updated_at=turn.created_at,
             )
         except Exception as exc:
             _raise_public_error(exc)

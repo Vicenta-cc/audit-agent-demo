@@ -68,6 +68,11 @@ import {
   presentCreationAssistantContent,
   restoreInvestigationWorkspace
 } from "./workspaceRecovery";
+import {
+  formatSessionTimestamp,
+  latestSessionTimestamp,
+  sortInvestigationSessions
+} from "./sessionOrdering";
 
 interface InvestigationPageProps {
   initialSubView?: SubViewType;
@@ -583,9 +588,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     void listInvestigationWorkspaces().then((items) => {
       if (!active) return;
       const restored = items.filter((item) => !deletedSessionIdsRef.current.has(item.workspace_session_id)).map((item): InvestigationSession => ({
-        ...buildNewInvestigationWorkspaceSession(item.workspace_session_id),
+        ...buildNewInvestigationWorkspaceSession(item.workspace_session_id, item.updated_at),
         title: item.title,
-        updatedAt: new Date(item.updated_at).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+        updatedAt: formatSessionTimestamp(item.updated_at),
+        updatedAtIso: item.updated_at,
         status: item.run_status === "PUBLISHED" ? "报告已生成"
           : item.run_status === "AUDIT_COMPLETED" ? "审核完成"
           : item.run_status === "FAILED" ? "调查失败"
@@ -594,11 +600,11 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           : item.presentation_stage === "confirmation" ? "等待确认" : "配置中"
       }));
       // Keep already loaded conversations and in-flight turns; summaries only fill missing rows.
-      setSessions((current) => [
+      setSessions((current) => sortInvestigationSessions([
         ...current.filter((session) => Boolean(session.creationBinding)),
         ...restored.filter((session) => !current.some((existing) => existing.id === session.id)),
         ...current.filter((session) => !session.creationBinding)
-      ]);
+      ]));
     }).catch((error) => console.error("Failed to load investigation workspaces", error));
     return () => { active = false; };
   }, []);
@@ -631,13 +637,13 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         const report = await fetchPublishedReportVersion(workspace.report_version_id);
         return buildHistoricalReportSession(workspace, report);
       }));
-      setSessions((current) => [
+      setSessions((current) => sortInvestigationSessions([
         ...historicalSessions.filter((session) => !deletedSessionIdsRef.current.has(session.id)),
         ...current.filter((session) => (
           Boolean(session.creationBinding)
           && !historicalSessions.some((historical) => historical.id === session.id)
         ))
-      ]);
+      ]));
       const requestedHistorical = investigationId
         ? historicalSessions.find((session) => session.id === investigationId)
         : null;
@@ -665,13 +671,13 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     void getInvestigationWorkspaceState(investigationId).then((state) => {
       if (deletedSessionIdsRef.current.has(investigationId)) return;
       const restored = restoreInvestigationWorkspace(state);
-      setSessions((current) => [
+      setSessions((current) => sortInvestigationSessions([
         restored,
         ...current.filter((session) => (
           session.id !== restored.id
           && session.creationBinding?.workspaceSessionId !== restored.id
         ))
-      ]);
+      ]));
       setActiveSessionId(restored.id);
       setActiveDrawer(null);
     }).catch((error) => {
@@ -682,14 +688,21 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         return;
       }
       const message = error instanceof Error ? error.message : "无法读取调查工作区";
-      const failed = buildWorkspaceRecoveryErrorSession(investigationId, message);
-      setSessions((current) => [
-        failed,
-        ...current.filter((session) => (
-          session.id !== investigationId
-          && session.creationBinding?.workspaceSessionId !== investigationId
-        ))
-      ]);
+      setSessions((current) => {
+        const previous = current.find((session) => session.id === investigationId);
+        const failed = buildWorkspaceRecoveryErrorSession(
+          investigationId,
+          message,
+          previous?.updatedAtIso
+        );
+        return sortInvestigationSessions([
+          failed,
+          ...current.filter((session) => (
+            session.id !== investigationId
+            && session.creationBinding?.workspaceSessionId !== investigationId
+          ))
+        ]);
+      });
       setActiveSessionId(investigationId);
     });
   }, [investigationId]);
@@ -968,6 +981,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         return {
           ...item,
           updatedAt: "刚刚",
+          updatedAtIso: result.updated_at,
           reportBinding: {
             ...item.reportBinding,
             pendingTurn: undefined
@@ -1038,6 +1052,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             ? {
                 ...item,
                 updatedAt: "刚刚",
+                updatedAtIso: result.updated_at,
                 reportBinding: {
                   ...item.reportBinding,
                   pendingTurn: {
@@ -1072,6 +1087,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           ? {
               ...item,
               updatedAt: "刚刚",
+              updatedAtIso: result.updated_at,
               reportBinding: {
                 ...item.reportBinding,
                 pendingTurn: {
@@ -1167,9 +1183,9 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       return;
     }
     const newId = workspace.workspace_session_id;
-    const newSession = buildNewInvestigationWorkspaceSession(newId);
+    const newSession = buildNewInvestigationWorkspaceSession(newId, workspace.updated_at);
 
-    setSessions((prev) => [newSession, ...prev]);
+    setSessions((prev) => sortInvestigationSessions([newSession, ...prev]));
     setActiveSessionId(newId);
     setActiveDrawer(null);
     if (window.matchMedia("(max-width: 760px)").matches) {
@@ -1568,7 +1584,9 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         setSessions((current) => current.map((item) => (
           item.id === uiSessionId && item.creationBinding
             ? {
-                ...item,
+              ...item,
+                updatedAt: formatSessionTimestamp(run.updated_at),
+                updatedAtIso: run.updated_at,
                 status: run.status === "PUBLISHED"
                   ? "报告已生成"
                   : run.status === "AUDIT_COMPLETED"
@@ -1657,6 +1675,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         );
         return {
           ...item,
+          updatedAt: formatSessionTimestamp(run.updated_at),
+          updatedAtIso: run.updated_at,
           status: "研判中",
           executionPhase: view.phase,
           draft: { ...item.draft, status: "已创建", confirmed: true },
@@ -1821,11 +1841,16 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           (message) => message.id === reportMessage.id
         );
         const pendingReportTurn = session.creationBinding?.pendingReportTurn;
+        const updatedAtIso = latestSessionTimestamp(
+          session.updatedAtIso,
+          report.published_at
+        );
         return {
           ...session,
           title: report.presentation.title,
           status: "报告已生成",
-          updatedAt: "刚刚",
+          updatedAt: formatSessionTimestamp(updatedAtIso),
+          updatedAtIso,
           draft: {
             ...session.draft,
             status: "报告已生成",
@@ -2078,6 +2103,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           item.id === uiSessionId && item.creationBinding
             ? {
                 ...item,
+                updatedAt: formatSessionTimestamp(result.updated_at),
+                updatedAtIso: result.updated_at,
                 messages: [
                   ...item.messages,
                   ...activityTimelineMessages(
@@ -2168,7 +2195,6 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         item.id === session.id
           ? {
               ...item,
-              updatedAt: "刚刚",
               messages: [
                 ...item.messages,
                 {
@@ -2195,7 +2221,6 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         item.id === session.id
           ? {
               ...item,
-              updatedAt: "刚刚",
               messages: [
                 ...item.messages,
                 {
@@ -2219,6 +2244,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           item.id === session.id && item.creationBinding
             ? {
                 ...item,
+                updatedAt: "刚刚",
+                updatedAtIso: accepted.updated_at,
                 creationBinding: {
                   ...item.creationBinding,
                   pendingTurnId: accepted.turn_id,
@@ -2458,7 +2485,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     <div className="inv-workspace-root">
       {/* Column 1: Left Investigation Sidebar */}
       <InvestigationSidebar
-        sessions={sessions}
+        sessions={sortInvestigationSessions(sessions)}
         activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}
         onNewInvestigation={handleNewInvestigation}

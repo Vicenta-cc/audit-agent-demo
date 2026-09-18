@@ -196,11 +196,7 @@ def draft_artifact(
             objective=draft.objective,
             mode=preview.mode,
             creator_url=preview.creator_url,
-            platform_options=[
-                option
-                for option in options.platforms
-                if option.available and option.id is not Platform.WEIBO
-            ],
+            platform_options=list(options.platforms),
             selected_platform=preview.platform,
             search_terms=list(preview.resolved_search_terms),
             ruleset_revision=preview.ruleset_revision,

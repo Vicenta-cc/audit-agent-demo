@@ -263,6 +263,7 @@ class InvestigationConfigurationResolver:
             "creator_id": creator_url,
             "start_page": collection.start_page,
             "max_notes": collection.max_notes,
+            "max_total_notes": collection.max_total_notes,
             "max_comments": collection.max_comments,
             "max_concurrency": collection.max_concurrency,
             "max_items_per_minute": collection.max_items_per_minute,
@@ -389,6 +390,7 @@ class InvestigationConfigurationResolver:
             "creator_id": creator_url,
             "start_page": collection.start_page,
             "max_notes": collection.max_notes,
+            "max_total_notes": collection.max_total_notes,
             "max_comments": collection.max_comments,
             "max_concurrency": collection.max_concurrency,
             "max_items_per_minute": collection.max_items_per_minute,
@@ -482,6 +484,7 @@ class AuditPipelineExecutionAdapter:
                     "creator_url",
                     "start_page",
                     "max_notes",
+                    "max_total_notes",
                     "max_comments",
                     "max_concurrency",
                     "max_items_per_minute",
@@ -530,6 +533,7 @@ class AuditPipelineExecutionAdapter:
                         "creator_id",
                         "start_page",
                         "max_notes",
+                        "max_total_notes",
                         "max_comments",
                         "max_concurrency",
                         "max_items_per_minute",
@@ -677,8 +681,11 @@ class AuditPipelineExecutionAdapter:
             "keyword",
             "creator_url",
             "max_notes",
+            "max_total_notes",
             "analyze_limit",
         ):
+            if key not in configuration:
+                continue
             if str(job.get(key) or "") != str(configuration.get(key) or ""):
                 raise RuntimeError(f"stable Job {key} does not match confirmed Run")
 
@@ -689,18 +696,27 @@ class AuditPipelineExecutionAdapter:
         schema_version: str = "",
         job_id: str = "",
     ) -> None:
-        if not 1 <= int(configuration.get("max_notes") or 0) <= min(
-            5, settings.m3_posts_per_keyword
-        ):
+        max_notes_limit = (
+            min(5, settings.m3_posts_per_keyword)
+            if schema_version == "investigation-run-config-v3"
+            else 5
+        )
+        if not 1 <= int(configuration.get("max_notes") or 0) <= max_notes_limit:
             raise ValueError("M3 execution exceeds this backend's per-keyword limit")
         analyze_limit = int(configuration.get("analyze_limit") or 0)
+        max_total_notes = int(
+            configuration.get("max_total_notes") or analyze_limit or 0
+        )
         # v3 snapshots are immutable historical contracts. A deployment may
         # lower its current default later, but must still be able to resume the
         # exact limit that was confirmed and frozen into an existing v3 run.
         valid_analysis_limit = (
             analyze_limit >= 1
             if schema_version == "investigation-run-config-v3"
-            else 0 <= analyze_limit <= settings.m3_analyze_limit
+            else (
+                1 <= max_total_notes <= 5
+                and analyze_limit == max_total_notes
+            )
         )
         if not valid_analysis_limit:
             raise ValueError("M3 execution exceeds this backend's analysis limit")
@@ -894,6 +910,11 @@ def _public_job_logs(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "[本地路径]",
                 message,
             )
+        item["reason"] = re.sub(
+            r"/(?:Users|private|tmp|var)/[^\s，,;]+",
+            "[本地路径]",
+            str(item.get("reason") or ""),
+        )
         logs.append(item)
     return logs
 

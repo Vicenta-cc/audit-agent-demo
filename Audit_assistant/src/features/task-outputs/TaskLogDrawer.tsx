@@ -39,7 +39,17 @@ export function TaskLogDrawer({ taskId, logs, onClose }: TaskLogDrawerProps) {
           <article className="task-log-item" key={item.id}>
             <time>{item.time}</time>
             <span className={`task-log-level level-${item.level.toLowerCase()}`}>{item.level}</span>
-            <p>{item.content}</p>
+            <div className="task-log-content">
+              <p>{item.content}</p>
+              {(item.errorCode || item.reason || item.action || item.retryable != null) && (
+                <dl className="task-log-diagnostics">
+                  {item.errorCode && <><dt>代码</dt><dd>{item.errorCode}</dd></>}
+                  {item.reason && <><dt>原因</dt><dd>{item.reason}</dd></>}
+                  {item.action && <><dt>处理</dt><dd>{item.action}</dd></>}
+                  {item.retryable != null && <><dt>可重试</dt><dd>{item.retryable ? "是" : "否"}</dd></>}
+                </dl>
+              )}
+            </div>
           </article>
         )) : <div className="task-log-empty">当前筛选下没有日志</div>}
       </div>

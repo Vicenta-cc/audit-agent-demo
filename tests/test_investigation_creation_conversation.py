@@ -332,6 +332,46 @@ def test_workspace_list_recovers_sessions_and_respects_owner_and_pagination(crea
     assert _draft_count(stack["creation_store"]) == 0
 
 
+def test_accepted_user_message_updates_workspace_order_but_idempotent_replay_does_not(
+    creation_stack,
+):
+    conversation = creation_stack["conversation"]
+    owner = Principal("principal-a")
+    first = conversation.create_session(principal=owner)
+    second = conversation.create_session(principal=owner)
+    with sqlite3.connect(conversation.store.db_path) as connection:
+        connection.execute(
+            "UPDATE investigation_sessions SET updated_at = ? WHERE id = ?",
+            ("2026-01-01T00:00:00+00:00", first.id),
+        )
+        connection.execute(
+            "UPDATE investigation_sessions SET updated_at = ? WHERE id = ?",
+            ("2026-01-02T00:00:00+00:00", second.id),
+        )
+
+    turn, replayed = conversation.store.create_turn(
+        first.id,
+        client_message_id="stable-order-message",
+        user_input="更新这个会话",
+    )
+    assert replayed is False
+    accepted_at = conversation.store.get_session(first.id).updated_at
+    assert accepted_at == turn.created_at
+    assert [
+        item["workspace_session_id"]
+        for item in conversation.list_workspaces(principal=owner)
+    ][:2] == [first.id, second.id]
+
+    replay, replayed = conversation.store.create_turn(
+        first.id,
+        client_message_id="stable-order-message",
+        user_input="更新这个会话",
+    )
+    assert replayed is True
+    assert replay.id == turn.id
+    assert conversation.store.get_session(first.id).updated_at == accepted_at
+
+
 def _run_count(store: InvestigationCreationStore) -> int:
     with sqlite3.connect(store.db_path) as connection:
         return int(
@@ -609,14 +649,23 @@ def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
     assert artifact["presentation_stage"] == "suggestion"
     assert artifact["draft_id"] == artifact["draft"]["id"]
     assert artifact["draft_revision"] == 1
-    assert artifact["confirmation_preview"]["max_notes"] == 1
+    assert artifact["confirmation_preview"]["max_notes"] == min(
+        5, len(artifact["confirmation_preview"]["resolved_search_terms"])
+    )
     suggestion = artifact["suggestion"]
     assert [item["id"] for item in suggestion["platform_options"]] == [
         "dy",
         "xhs",
         "ks",
+        "wb",
     ]
-    assert suggestion["selected_platform"] in {"dy", "xhs", "ks"}
+    assert [item["available"] for item in suggestion["platform_options"]] == [
+        True,
+        False,
+        False,
+        False,
+    ]
+    assert suggestion["selected_platform"] == "dy"
     assert suggestion["search_terms"]
     assert suggestion["ruleset_revision"]["version"] >= 1
     assert suggestion["recall_lexicons"]
@@ -1449,7 +1498,9 @@ def test_platform_edit_and_confirmation_preview_are_durable_without_run_or_job(
     assert preview.status_code == 200
     assert preview.json()["draft_revision"] == 2
     assert preview.json()["platform"] == "xhs"
-    assert preview.json()["max_notes"] == 1
+    assert preview.json()["max_notes"] == min(
+        5, len(preview.json()["resolved_search_terms"])
+    )
 
     suggestion_state = client.get(
         f"/api/investigation-workspaces/{result['workspace_id']}/state"
@@ -1612,7 +1663,7 @@ def test_workspace_state_recovers_public_draft_from_structured_hermes_transcript
     assert _job_count(creation_stack["resource_db"]) == 0
 
 
-def test_new_drafts_cannot_write_wb_but_options_only_offer_creation_platforms(
+def test_new_drafts_cannot_write_wb_but_options_expose_it_as_unavailable(
     creation_stack: dict,
 ) -> None:
     result = _create_completed_turn(creation_stack, workspace_key="reject-wb")
@@ -1636,6 +1687,13 @@ def test_new_drafts_cannot_write_wb_but_options_only_offer_creation_platforms(
         "dy",
         "xhs",
         "ks",
+        "wb",
+    ]
+    assert [item["available"] for item in options.json()["platforms"]] == [
+        True,
+        False,
+        False,
+        False,
     ]
     assert _draft_count(creation_stack["creation_store"]) == 1
     assert _run_count(creation_stack["creation_store"]) == 0
@@ -3051,7 +3109,7 @@ def test_t1_draft_card_does_not_recommend_provenance_as_runtime_lexicon(creation
     assert artifact["confirmation_preview"]["recall_plan"]["source_lexicon_ids"] == ["gambling"]
 
 
-def test_production_limits_are_previewed_and_frozen_without_changing_demo_defaults(creation_stack, monkeypatch):
+def test_collection_limits_are_previewed_and_frozen_with_all_posts_audited(creation_stack, monkeypatch):
     from backend.audit_agent.config import settings
     from backend.investigation_creation.contracts import ConfirmedConfigurationSnapshotV4
     stack = creation_stack
@@ -3065,12 +3123,12 @@ def test_production_limits_are_previewed_and_frozen_without_changing_demo_defaul
     draft = response.json()
     endpoint = '/api/investigation-drafts/' + draft['id']
     demo = stack['client'].get(endpoint + '/confirmation-preview').json()
-    assert demo['max_notes'] == 1
+    assert demo['max_notes'] == min(5, len(demo['resolved_search_terms']))
     monkeypatch.setattr(settings, 'm3_posts_per_keyword', 20)
     monkeypatch.setattr(settings, 'm3_analyze_limit', 340)
     monkeypatch.setattr(settings, 'm3_comments_per_post', 1000)
     preview = stack['client'].get(endpoint + '/confirmation-preview').json()
-    assert preview['max_notes'] == min(340, len(preview['resolved_search_terms']) * 5)
+    assert preview['max_notes'] == min(5, len(preview['resolved_search_terms']) * 5)
     assert preview['max_posts_per_keyword'] == 5
     assert preview['max_comments_per_post'] == 1000
     assert preview['get_sub_comment'] is False
@@ -3079,7 +3137,8 @@ def test_production_limits_are_previewed_and_frozen_without_changing_demo_defaul
     run = stack['creation_store'].get_run(queued.json()['run_id'], principal='principal-a')
     snapshot = ConfirmedConfigurationSnapshotV4.model_validate(run.confirmed_configuration)
     assert snapshot.max_notes == snapshot.execution.max_notes == 5
-    assert snapshot.execution.analyze_limit == 340
+    assert snapshot.execution.max_total_notes == 5
+    assert snapshot.execution.analyze_limit == 5
     assert snapshot.execution.max_comments == 1000
     assert snapshot.execution.max_concurrency == 1
     assert snapshot.execution.get_sub_comment is False
@@ -3090,8 +3149,9 @@ def test_production_limits_are_previewed_and_frozen_without_changing_demo_defaul
     adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
     monkeypatch.setattr(settings, 'm3_posts_per_keyword', 1)
     monkeypatch.setattr(settings, 'm3_analyze_limit', 1)
-    with pytest.raises(ValueError, match='per-keyword limit'):
-        adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
+    # Frozen v4 task settings use their own 1..5 contract and are no longer
+    # retroactively rejected when hidden deployment defaults change.
+    adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
     changed = snapshot.model_dump(mode='json')
     changed['max_notes'] = 1
     with pytest.raises(ValidationError):

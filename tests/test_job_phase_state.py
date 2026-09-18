@@ -31,6 +31,110 @@ def test_job_persists_independent_phase_statuses_configs_and_structured_logs(tmp
     assert job["effective_config"]["max_concurrency"] == 1
     assert job["logs"][-1]["stage"] == "control"
     assert job["logs"][-1]["level"] == "warning"
+    assert job["logs"][-1]["reason"] == "任务已在安全检查点暂停"
+    assert job["logs"][-1]["error_code"] == "operation_paused"
+    assert job["logs"][-1]["retryable"] is True
+    assert job["logs"][-1]["action"] == "resume_when_ready"
+
+
+def test_log_level_uses_explicit_metadata_and_does_not_treat_zero_failures_as_error(tmp_path):
+    store = JobStore(tmp_path / "log-levels.sqlite3")
+    store.create(job_id="log-levels", run_crawler=True)
+
+    store.log(
+        "log-levels",
+        "逐条评论审核完成，成功=10，失败=0，翻译失败=0",
+    )
+    store.log(
+        "log-levels",
+        "首次结果漏项，进行补偿重试",
+        level="warning",
+        reason="模型首次结果缺少部分评论",
+        error_code="comment_audit_incomplete",
+        retryable=True,
+        action="retry_missing_comments",
+    )
+    store.log(
+        "log-levels",
+        "补偿重试后仍漏项，停止重试",
+        level="error",
+        reason="重试耗尽",
+        error_code="comment_audit_retry_exhausted",
+        retryable=False,
+        action="mark_missing_comments_failed",
+    )
+
+    logs = store.get("log-levels")["logs"]
+    assert [item["level"] for item in logs] == ["info", "warning", "error"]
+    assert logs[1]["error_code"] == "comment_audit_incomplete"
+    assert logs[1]["retryable"] is True
+    assert logs[1]["action"] == "retry_missing_comments"
+    assert logs[2]["reason"] == "重试耗尽"
+    assert logs[2]["retryable"] is False
+
+
+def test_warning_logs_fill_safe_structured_diagnostics_when_callers_omit_them(tmp_path):
+    store = JobStore(tmp_path / "warning-metadata.sqlite3")
+    store.create(job_id="warning-metadata", run_crawler=True)
+
+    messages = (
+        (
+            "ASR 翻译返回不完整，自动按段拆批重试：segments=8，finish_reason=length",
+            "asr_translation_incomplete",
+            True,
+            "retry_in_smaller_batches",
+        ),
+        (
+            "笔记 note-1：视频下载失败：private provider detail",
+            "video_download_failed",
+            True,
+            "continue_without_video",
+        ),
+        (
+            "笔记 note-2：远程媒体不是可播放视频，已跳过 video.bin",
+            "invalid_remote_video",
+            False,
+            "skip_invalid_video",
+        ),
+        (
+            "继续分析：已有输出媒体目录不可用，回退当前任务目录：private path",
+            "expected_fallback",
+            False,
+            "continue_with_fallback",
+        ),
+    )
+    for message, _, _, _ in messages:
+        store.log("warning-metadata", message)
+
+    logs = store.get("warning-metadata")["logs"]
+    assert len(logs) == len(messages)
+    for log, (_, error_code, retryable, action) in zip(logs, messages):
+        assert log["level"] == "warning"
+        assert log["reason"]
+        assert "private" not in log["reason"]
+        assert log["error_code"] == error_code
+        assert log["retryable"] is retryable
+        assert log["action"] == action
+
+
+def test_explicit_warning_metadata_overrides_inferred_defaults(tmp_path):
+    store = JobStore(tmp_path / "explicit-warning-metadata.sqlite3")
+    store.create(job_id="explicit-warning-metadata", run_crawler=True)
+    store.log(
+        "explicit-warning-metadata",
+        "视频下载失败",
+        level="warning",
+        reason="明确原因",
+        error_code="explicit_code",
+        retryable=False,
+        action="explicit_action",
+    )
+
+    log = store.get("explicit-warning-metadata")["logs"][-1]
+    assert log["reason"] == "明确原因"
+    assert log["error_code"] == "explicit_code"
+    assert log["retryable"] is False
+    assert log["action"] == "explicit_action"
 
 
 def test_available_actions_keep_collection_and_analysis_controls_independent():
@@ -204,13 +308,25 @@ def test_public_runtime_logs_redact_accounts_commands_and_local_paths():
         [
             {"stage": "account", "level": "info", "message": "执行账号：Alice"},
             {"stage": "crawl", "level": "info", "message": "MediaCrawler command: --secret /Users/demo/data"},
-            {"stage": "media", "level": "info", "message": "处理 /private/tmp/video.mp4 完成"},
+            {
+                "stage": "media",
+                "level": "warning",
+                "message": "处理 /private/tmp/video.mp4 完成",
+                "reason": "源文件 /Users/demo/video.mp4 不可用",
+                "error_code": "media_unavailable",
+                "retryable": False,
+                "action": "skip_media",
+            },
         ]
     )
     assert logs[0]["message"] == "已完成采集账号可用性校验"
     assert logs[1]["message"] == "采集执行器命令已完成"
     assert "/private/tmp" not in logs[2]["message"]
     assert "[本地路径]" in logs[2]["message"]
+    assert "/Users/demo" not in logs[2]["reason"]
+    assert logs[2]["error_code"] == "media_unavailable"
+    assert logs[2]["retryable"] is False
+    assert logs[2]["action"] == "skip_media"
 
 
 def test_monitor_job_projection_redacts_paths_without_mutating_stored_logs(tmp_path, monkeypatch):

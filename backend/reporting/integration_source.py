@@ -237,6 +237,106 @@ class CanonicalReportSource:
             raise ValueError("canonical audit rows contain duplicate content keys")
         return rows
 
+    def coverage(self, task_id: str) -> dict[str, Any]:
+        """Return public, sanitized coverage for completed and failed posts."""
+        with self.connect() as connection:
+            rows = list(
+                connection.execute(
+                    """
+                    SELECT c.content_key, c.note_id, tc.analyze_status
+                    FROM task_contents AS tc
+                    JOIN contents AS c ON c.id = tc.content_id
+                    WHERE tc.task_id = ?
+                    ORDER BY tc.id
+                    """,
+                    (task_id,),
+                )
+            )
+        failure_records: dict[str, dict[str, Any]] = {}
+        failure_dir = self.outputs_dir / task_id / "post_failures"
+        if failure_dir.is_dir():
+            for path in sorted(failure_dir.glob("*.json")):
+                try:
+                    value = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if not isinstance(value, dict):
+                    continue
+                for identity in (value.get("content_key"), value.get("note_id")):
+                    cleaned = str(identity or "").strip()
+                    if cleaned:
+                        failure_records[cleaned] = value
+
+        excluded: list[dict[str, str]] = []
+        for row in rows:
+            if str(row["analyze_status"] or "") != "failed":
+                continue
+            post_id = str(row["note_id"] or row["content_key"] or "").strip()
+            record = failure_records.get(str(row["content_key"] or "")) or failure_records.get(post_id) or {}
+            error_code = self._public_failure_code(record)
+            excluded.append(
+                {
+                    "post_id": post_id,
+                    "note_id": post_id,
+                    "analyze_status": "failed",
+                    "stage": self._public_failure_stage(record.get("stage")),
+                    "reason": self._public_failure_reason(error_code),
+                    "error_code": error_code,
+                }
+            )
+        return {
+            "candidate_posts": len(rows),
+            "selected_posts": sum(
+                str(row["analyze_status"] or "") == "completed" for row in rows
+            ),
+            "excluded_failed_posts": excluded,
+        }
+
+    @staticmethod
+    def _public_failure_code(record: dict[str, Any]) -> str:
+        stored = str(record.get("error_code") or "").strip().lower()
+        if stored and all(character.isalnum() or character == "_" for character in stored):
+            return stored[:80]
+        statuses = [
+            int(value)
+            for value in record.get("http_statuses") or []
+            if isinstance(value, int) or str(value).isdigit()
+        ]
+        if statuses:
+            return f"audit_http_{statuses[-1]}"
+        error_types = {
+            str(value or "")
+            for value in [record.get("error_type"), *(record.get("cause_types") or [])]
+        }
+        if "FusionAuditContractError" in error_types:
+            return "fusion_contract_invalid"
+        if error_types.intersection(
+            {"QwenTimeoutError", "Timeout", "TimeoutError", "ReadTimeout"}
+        ):
+            return "audit_timeout"
+        return "post_audit_failed"
+
+    @staticmethod
+    def _public_failure_stage(value: Any) -> str:
+        stage = str(value or "post_audit").strip().lower()
+        if not stage or not all(character.isalnum() or character == "_" for character in stage):
+            return "post_audit"
+        return stage[:80]
+
+    @staticmethod
+    def _public_failure_reason(error_code: str) -> str:
+        if error_code == "fusion_contract_invalid":
+            return "审核结果未通过证据或格式校验"
+        if error_code == "audit_timeout":
+            return "审核请求超时，补试结束后仍未完成"
+        if error_code.startswith("audit_http_401") or error_code.startswith("audit_http_403"):
+            return "审核服务认证失败"
+        if error_code.startswith("audit_http_4"):
+            return "审核服务未接受本次请求"
+        if error_code.startswith("audit_http_5"):
+            return "审核服务暂时不可用"
+        return "帖子审核未完成"
+
     def adapt_evidence(self, row: sqlite3.Row):
         context = EvidenceContext(
             audit_result_id=int(row["id"]),
@@ -485,8 +585,10 @@ def build_immutable_snapshot(
         "risk_level": dict(sorted(risk_levels.items())),
         "manual_corrections": manual_matches,
     }
-    if hasattr(source, "coverage"):
-        statistics["source_coverage"] = source.coverage
+    coverage_source = getattr(source, "coverage", None)
+    coverage = coverage_source(task_id) if callable(coverage_source) else coverage_source
+    if isinstance(coverage, dict):
+        statistics["source_coverage"] = coverage
         statistics["source_configuration"] = config
     relations = [
         {"post_ref": item.post_ref, "finding_ref": item.finding_ref, "evidence_ref": item.ref}
@@ -504,7 +606,7 @@ def build_immutable_snapshot(
         "evidence": [item.payload_hash for item in evidences],
         "relations": relation_hash,
     }
-    if hasattr(source, "coverage"):
+    if isinstance(coverage, dict):
         snapshot_body["source_configuration_hash"] = stable_hash(config)
     snapshot_hash = stable_hash(snapshot_body)
     return ImmutableReportSnapshot(

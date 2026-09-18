@@ -11,6 +11,7 @@ import {
   ShieldAlert
 } from "lucide-react";
 import type { InvestigationSession } from "../../types/investigation";
+import { sortInvestigationSessions } from "./sessionOrdering";
 
 export type SubViewType = "users" | "crawler-accounts" | "audit-rules" | "slang-library" | "task-settings" | null;
 
@@ -44,7 +45,7 @@ export function InvestigationSidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
-  const filteredSessions = sessions.filter((s) =>
+  const filteredSessions = sortInvestigationSessions(sessions).filter((s) =>
     s.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 

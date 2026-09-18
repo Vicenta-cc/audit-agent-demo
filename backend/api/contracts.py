@@ -147,11 +147,13 @@ class InvestigationPublicStage(str, Enum):
 class InvestigationTurnAcceptedResponse(PublicApiModel):
     session_id: str
     turn_id: str
+    updated_at: str
     status: Literal[InvestigationTurnStatus.RUNNING] = InvestigationTurnStatus.RUNNING
 
 
 class InvestigationWorkspaceReportTurnAcceptedResponse(PublicApiModel):
     turn_id: str
+    updated_at: str
     status: Literal[InvestigationTurnStatus.RUNNING] = InvestigationTurnStatus.RUNNING
 
 

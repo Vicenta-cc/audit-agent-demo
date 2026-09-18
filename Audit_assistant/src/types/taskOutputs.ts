@@ -63,6 +63,10 @@ export interface TaskLog {
   date: string;
   level: TaskLogLevel;
   content: string;
+  reason?: string;
+  errorCode?: string;
+  retryable?: boolean | null;
+  action?: string;
 }
 
 export type EvidenceTypeFilter = "全部" | "文本" | "OCR" | "ASR" | "视觉" | "评论";

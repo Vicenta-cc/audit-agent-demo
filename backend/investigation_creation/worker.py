@@ -270,6 +270,7 @@ class InvestigationWorker:
                 error_message=f"Job has non-final status: {status or 'unknown'}",
             )
         failed_posts = int((state.get("task_stats") or {}).get("failed_analysis_count") or 0)
+        completed_posts = int((state.get("task_stats") or {}).get("completed_analysis_count") or 0)
         snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
         if snapshot.execution.auto_analyze is not None and int((state.get("task_stats") or {}).get("queued_analysis_count") or 0) > 0:
             return self.store.mark_interrupted(run.id, run.claim_token,
@@ -283,8 +284,9 @@ class InvestigationWorker:
                 error_code=error_code,
                 error_message=error_message,
             )
-        if failed_posts:
-            # Processing finished with recorded post failures. Do not claim a complete report.
+        if completed_posts < 1:
+            # Processing is drained, but a report cannot be built without at
+            # least one authoritative completed audit result.
             return self.store.mark_audit_completed(run.id, run.claim_token)
         run = self.store.mark_report_generating(run.id, run.claim_token)
         return self._finish_report(run, allow_generation=True)
@@ -299,7 +301,16 @@ class InvestigationWorker:
                 error_code="report_job_missing",
                 error_message="REPORT_GENERATING Run has no Job binding.",
             )
-        gate_failure = self._completion_gate_failure(run)
+        state = self.execution_adapter.get_job_state(run.job_id)
+        failed_posts = int(
+            ((state or {}).get("task_stats") or {}).get("failed_analysis_count")
+            or 0
+        )
+        gate_failure = self._completion_gate_failure(
+            run,
+            state=state,
+            allow_failed_posts=failed_posts > 0,
+        )
         if gate_failure is not None:
             error_code, error_message = gate_failure
             return self.store.mark_failed(

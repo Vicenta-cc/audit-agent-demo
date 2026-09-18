@@ -37,6 +37,7 @@ export interface InvestigationTurnAcceptedResponse {
   session_id: string;
   turn_id: string;
   status: "running";
+  updated_at: string;
 }
 
 export interface InvestigationTurnEvent {

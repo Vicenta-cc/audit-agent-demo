@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import threading
 from datetime import datetime
@@ -77,6 +78,7 @@ JOB_SUMMARY_COLUMNS = ", ".join((
     "crawl_checkpoint_page",
     "crawl_checkpoint_keyword",
     "max_notes",
+    "max_total_notes",
     "max_comments",
     "max_concurrency",
     "max_items_per_minute",
@@ -140,6 +142,7 @@ class JobStore:
                     crawl_checkpoint_page INTEGER,
                     crawl_checkpoint_keyword TEXT,
                     max_notes INTEGER,
+                    max_total_notes INTEGER NOT NULL DEFAULT 5,
                     max_comments INTEGER,
                     max_concurrency INTEGER,
                     max_items_per_minute INTEGER NOT NULL DEFAULT 5,
@@ -167,7 +170,11 @@ class JobStore:
                     time TEXT NOT NULL,
                     stage TEXT NOT NULL DEFAULT 'pipeline',
                     level TEXT NOT NULL DEFAULT 'info',
-                    message TEXT NOT NULL
+                    message TEXT NOT NULL,
+                    reason TEXT NOT NULL DEFAULT '',
+                    error_code TEXT NOT NULL DEFAULT '',
+                    retryable INTEGER,
+                    action TEXT NOT NULL DEFAULT ''
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_job_logs_job_id ON job_logs(job_id, id);
@@ -255,12 +262,24 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN effective_config TEXT NOT NULL DEFAULT '{}'")
             if "auto_analyze" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN auto_analyze INTEGER NOT NULL DEFAULT 1")
+            if "max_total_notes" not in columns:
+                # Zero marks historical rows whose pre-cap collection semantics
+                # must be derived from their mode, keyword count and max_notes.
+                conn.execute("ALTER TABLE jobs ADD COLUMN max_total_notes INTEGER NOT NULL DEFAULT 0")
 
             log_columns = {row["name"] for row in conn.execute("PRAGMA table_info(job_logs)").fetchall()}
             if "stage" not in log_columns:
                 conn.execute("ALTER TABLE job_logs ADD COLUMN stage TEXT NOT NULL DEFAULT 'pipeline'")
             if "level" not in log_columns:
                 conn.execute("ALTER TABLE job_logs ADD COLUMN level TEXT NOT NULL DEFAULT 'info'")
+            if "reason" not in log_columns:
+                conn.execute("ALTER TABLE job_logs ADD COLUMN reason TEXT NOT NULL DEFAULT ''")
+            if "error_code" not in log_columns:
+                conn.execute("ALTER TABLE job_logs ADD COLUMN error_code TEXT NOT NULL DEFAULT ''")
+            if "retryable" not in log_columns:
+                conn.execute("ALTER TABLE job_logs ADD COLUMN retryable INTEGER")
+            if "action" not in log_columns:
+                conn.execute("ALTER TABLE job_logs ADD COLUMN action TEXT NOT NULL DEFAULT ''")
 
             related_columns = {
                 row["name"]
@@ -302,13 +321,13 @@ class JobStore:
                     library_ids, capabilities, scoring_template, rule_snapshot,
                     lexicon_keywords, prompt_profile_snapshot, current_audit_config_revision_id,
                     creator_url, creator_id, start_page, crawl_checkpoint_page, crawl_checkpoint_keyword, max_notes,
-                    max_comments, max_concurrency, max_items_per_minute,
+                    max_total_notes, max_comments, max_concurrency, max_items_per_minute,
                     get_sub_comment, analyze_limit, auto_analyze, run_crawler,
                     source_output_id, analysis_batch_size, input_type, input_filename,
                     requested_config, effective_config, items, control,
                     error, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job["id"],
@@ -336,6 +355,10 @@ class JobStore:
                     job.get("crawl_checkpoint_page"),
                     job.get("crawl_checkpoint_keyword"),
                     job.get("max_notes"),
+                    job.get("max_total_notes")
+                    or job.get("analyze_limit")
+                    or job.get("max_notes")
+                    or 5,
                     job.get("max_comments"),
                     job.get("max_concurrency"),
                     job.get("max_items_per_minute", 5),
@@ -463,6 +486,7 @@ class JobStore:
             "crawl_checkpoint_page",
             "crawl_checkpoint_keyword",
             "max_notes",
+            "max_total_notes",
             "max_comments",
             "max_concurrency",
             "max_items_per_minute",
@@ -511,13 +535,54 @@ class JobStore:
             )
             return dict(control)
 
-    def log(self, job_id: str, message: str, *, stage: str = "", level: str = "") -> None:
+    def log(
+        self,
+        job_id: str,
+        message: str,
+        *,
+        stage: str = "",
+        level: str = "",
+        reason: str = "",
+        error_code: str = "",
+        retryable: bool | None = None,
+        action: str = "",
+    ) -> None:
         now = datetime.now().isoformat(timespec="seconds")
         inferred_stage, inferred_level = self._classify_log(message)
+        normalized_level = str(level or "").strip().lower()
+        if normalized_level == "warn":
+            normalized_level = "warning"
+        if normalized_level not in {"info", "warning", "error"}:
+            normalized_level = inferred_level
+        default_reason = ""
+        default_error_code = ""
+        default_retryable: bool | None = None
+        default_action = ""
+        if normalized_level == "warning":
+            (
+                default_reason,
+                default_error_code,
+                default_retryable,
+                default_action,
+            ) = self._warning_metadata(message)
+        resolved_retryable = default_retryable if retryable is None else retryable
         with self._lock, self._connect() as conn:
             conn.execute(
-                "INSERT INTO job_logs (job_id, time, stage, level, message) VALUES (?, ?, ?, ?, ?)",
-                (job_id, now, stage or inferred_stage, level or inferred_level, message),
+                """INSERT INTO job_logs (
+                       job_id, time, stage, level, message,
+                       reason, error_code, retryable, action
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    job_id,
+                    now,
+                    stage or inferred_stage,
+                    normalized_level,
+                    message,
+                    str(reason or default_reason),
+                    str(error_code or default_error_code),
+                    None if resolved_retryable is None else int(resolved_retryable),
+                    str(action or default_action),
+                ),
             )
             conn.execute("UPDATE jobs SET updated_at = ? WHERE id = ?", (now, job_id))
 
@@ -1085,15 +1150,16 @@ class JobStore:
         job["archived"] = bool(job.get("archived"))
         if log_limit is None:
             logs = conn.execute(
-                "SELECT time, stage, level, message FROM job_logs WHERE job_id = ? ORDER BY id ASC",
+                """SELECT time, stage, level, message, reason, error_code, retryable, action
+                   FROM job_logs WHERE job_id = ? ORDER BY id ASC""",
                 (job["id"],),
             ).fetchall()
         elif log_limit > 0:
             logs = conn.execute(
                 """
-                SELECT time, stage, level, message
+                SELECT time, stage, level, message, reason, error_code, retryable, action
                 FROM (
-                    SELECT id, time, stage, level, message
+                    SELECT id, time, stage, level, message, reason, error_code, retryable, action
                     FROM job_logs
                     WHERE job_id = ?
                     ORDER BY id DESC
@@ -1111,6 +1177,10 @@ class JobStore:
                 "stage": log["stage"],
                 "level": log["level"],
                 "message": log["message"],
+                "reason": log["reason"],
+                "error_code": log["error_code"],
+                "retryable": None if log["retryable"] is None else bool(log["retryable"]),
+                "action": log["action"],
             }
             for log in logs
         ]
@@ -1119,9 +1189,41 @@ class JobStore:
     @staticmethod
     def _classify_log(message: str) -> tuple[str, str]:
         text = str(message or "")
-        level = "error" if any(token in text for token in ("失败", "异常", "不可用")) else (
-            "warning" if any(token in text for token in ("暂停", "停止", "跳过", "冷却")) else "info"
+        # Counters such as "失败=0" describe a successful summary and must not
+        # promote the entire event to ERROR merely because the word is present.
+        semantic_text = re.sub(
+            r"(?:失败|异常|超时|不可用)\s*[=:：]\s*0(?!\d)",
+            "",
+            text,
         )
+        if any(token in semantic_text for token in (
+            "任务失败",
+            "审核线程异常",
+            "继续分析失败",
+            "本地视频审核任务失败",
+            "审核失败（",
+            "重试后仍漏项",
+            "连续两次超时",
+        )):
+            level = "error"
+        elif any(token in semantic_text for token in (
+            "失败",
+            "异常",
+            "不可用",
+            "超时",
+            "重试",
+            "暂停",
+            "停止",
+            "跳过",
+            "冷却",
+            "降级",
+            "兜底",
+            "漏项",
+            "回退",
+        )):
+            level = "warning"
+        else:
+            level = "info"
         if any(token in text for token in ("参数", "limit", "配置")):
             stage = "configuration"
         elif any(token in text for token in ("账号", "登录", "验证")):
@@ -1141,6 +1243,187 @@ class JobStore:
         else:
             stage = "pipeline"
         return stage, level
+
+    @staticmethod
+    def _warning_metadata(message: str) -> tuple[str, str, bool, str]:
+        """Provide safe, stable diagnostics for inferred WARN events.
+
+        Call sites can still supply more precise fields; ``log`` only uses these
+        values for fields the caller omitted.  Reasons intentionally avoid raw
+        exception text because logs are also projected into the public API.
+        """
+        text = str(message or "")
+        rules: tuple[tuple[tuple[str, ...], tuple[str, str, bool, str]], ...] = (
+            (
+                ("ASR 翻译返回不完整",),
+                (
+                    "ASR 翻译输出不完整，已自动拆分重试",
+                    "asr_translation_incomplete",
+                    True,
+                    "retry_in_smaller_batches",
+                ),
+            ),
+            (
+                ("ASR 翻译未完成",),
+                (
+                    "ASR 翻译未生成可用结果，已保留原始转写并继续",
+                    "asr_translation_failed",
+                    True,
+                    "continue_with_original_transcript",
+                ),
+            ),
+            (
+                ("视频下载失败",),
+                (
+                    "远程视频下载失败，已跳过该视频并继续审核",
+                    "video_download_failed",
+                    True,
+                    "continue_without_video",
+                ),
+            ),
+            (
+                ("图片下载失败",),
+                (
+                    "远程图片下载失败，已跳过该图片并继续审核",
+                    "image_download_failed",
+                    True,
+                    "continue_without_image",
+                ),
+            ),
+            (
+                ("远程媒体不是可播放视频",),
+                (
+                    "远程媒体不是可播放的视频文件，已安全跳过",
+                    "invalid_remote_video",
+                    False,
+                    "skip_invalid_video",
+                ),
+            ),
+            (
+                ("媒体已确定无音轨",),
+                (
+                    "媒体没有音轨，无需执行语音识别",
+                    "audio_track_missing",
+                    False,
+                    "skip_asr",
+                ),
+            ),
+            (
+                ("音频抽取失败",),
+                (
+                    "未能抽取音频，已跳过语音识别并继续视频审核",
+                    "audio_extraction_failed",
+                    True,
+                    "continue_without_asr",
+                ),
+            ),
+            (
+                ("音频/转写失败",),
+                (
+                    "音频处理或语音识别未完成，已继续处理其他证据",
+                    "audio_transcription_failed",
+                    True,
+                    "continue_without_asr",
+                ),
+            ),
+            (
+                ("ASR 未识别到有效语音文本",),
+                (
+                    "语音识别未产生有效文本，无需执行翻译",
+                    "asr_text_empty",
+                    False,
+                    "skip_asr_translation",
+                ),
+            ),
+            (
+                ("融合模型调用", "超时", "将重试"),
+                (
+                    "融合审核调用超时，正在执行预期重试",
+                    "fusion_timeout_retry",
+                    True,
+                    "retry_fusion",
+                ),
+            ),
+            (
+                ("评论审核", "漏项"),
+                (
+                    "评论审核结果不完整，正在执行补偿处理",
+                    "comment_audit_incomplete",
+                    True,
+                    "retry_missing_comments",
+                ),
+            ),
+            (
+                ("账号", "冷却"),
+                (
+                    "采集账号处于冷却期，当前任务将等待或切换账号",
+                    "crawler_account_cooldown",
+                    True,
+                    "wait_or_switch_account",
+                ),
+            ),
+            (
+                ("限流",),
+                (
+                    "平台请求受到限流，需等待冷却后继续",
+                    "crawler_rate_limited",
+                    True,
+                    "wait_and_retry",
+                ),
+            ),
+        )
+        for required_tokens, metadata in rules:
+            if all(token in text for token in required_tokens):
+                return metadata
+
+        if "暂停" in text:
+            return (
+                "任务已在安全检查点暂停",
+                "operation_paused",
+                True,
+                "resume_when_ready",
+            )
+        if "停止" in text:
+            return (
+                "任务或当前处理阶段已安全停止",
+                "operation_stopped",
+                True,
+                "resume_or_restart",
+            )
+        if any(token in text for token in ("降级", "兜底", "回退")):
+            return (
+                "已启用预期的降级或兜底路径继续处理",
+                "expected_fallback",
+                False,
+                "continue_with_fallback",
+            )
+        if "跳过" in text:
+            return (
+                "当前步骤不满足处理条件，已跳过并继续",
+                "expected_skip",
+                False,
+                "skip_and_continue",
+            )
+        if any(token in text for token in ("重试", "超时", "漏项")):
+            return (
+                "当前步骤未完整完成，系统将按既定策略重试",
+                "expected_retry",
+                True,
+                "retry",
+            )
+        if any(token in text for token in ("失败", "异常", "不可用")):
+            return (
+                "当前步骤未完成，任务已继续或等待后续恢复",
+                "recoverable_operation_failure",
+                True,
+                "continue_or_retry",
+            )
+        return (
+            "任务进入需要关注但不阻断执行的状态",
+            "operation_degraded",
+            False,
+            "inspect_if_repeated",
+        )
 
     def _to_db_value(self, key: str, value):
         if key in JSON_FIELDS:

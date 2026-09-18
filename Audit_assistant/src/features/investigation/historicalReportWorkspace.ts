@@ -15,6 +15,7 @@ import {
   activityEventsForTurn,
   restoreActivityTimelines
 } from "./investigationActivity";
+import { formatSessionTimestamp, latestSessionTimestamp } from "./sessionOrdering";
 
 function messageTime(createdAt: string) {
   const value = new Date(createdAt);
@@ -116,12 +117,19 @@ export function buildHistoricalReportSession(
   if (!pending && persisted) {
     clearHistoricalPendingTurn(workspace.workspace_id);
   }
+  const updatedAtIso = latestSessionTimestamp(
+    report.published_at,
+    workspace.latest_turn?.updated_at,
+    ...workspace.display_timeline.map((message) => message.occurred_at),
+    ...workspace.conversation.map((message) => message.created_at)
+  );
 
   return {
     id: workspace.workspace_id,
     title: workspace.title,
     status: "报告已生成",
-    updatedAt: "历史报告",
+    updatedAt: formatSessionTimestamp(updatedAtIso, "历史报告"),
+    updatedAtIso,
     draft,
     messages,
     executionPhase: "completed",

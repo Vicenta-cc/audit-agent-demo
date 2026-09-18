@@ -81,7 +81,11 @@ def test_collection_continues_while_analysis_skips_or_stops(tmp_path, monkeypatc
     p.ingestion=ingestion; p.rule_snapshot={};p.prompt_profile_snapshot={};p.audit_config_revision_id=''
     p._set_prompt_context = Mock();p._write_result_json=Mock(return_value=tmp_path/'result.json')
     p._persist_audit_result=lambda **kwargs: kwargs['result']
-    p._build_subjects=lambda platform, items, *args: [subject(i['note_id']) for i in items]
+    media_flags=[]
+    def build_subjects(platform, items, *args, **kwargs):
+        media_flags.append(kwargs.get('include_media'))
+        return [subject(i['note_id']) for i in items]
+    p._build_subjects=build_subjects
     seen=[]; collected=[]
     failure_recorded = threading.Event()
     original_record = p._record_subject_failure
@@ -119,11 +123,17 @@ def test_collection_continues_while_analysis_skips_or_stops(tmp_path, monkeypatc
                     assert not kwargs['stop_checker']()
         return CrawlOutput(platform='xhs',contents=items,comments=[],output_dir=tmp_path/'crawler',command=[])
     p.crawler=SimpleNamespace(run_search=crawl)
-    config=_configuration();config.update(analyze_limit=5, max_notes=5, _confirmed_analyze_limit=5)
+    config=_configuration();config.update(
+        analyze_limit=5,
+        max_notes=5,
+        collect_media=False,
+        _confirmed_analyze_limit=5,
+    )
     jobs.create(job_id=p.job_id,**{k:v for k,v in config.items() if not k.startswith('_')})
     p.run(SimpleNamespace(**config))
     job=jobs.get(p.job_id);stats=ingestion.stats_for_task(p.job_id)
     assert collected == ['1','2','3','4','5']
+    assert media_flags and all(flag is False for flag in media_flags)
     assert not jobs.control(p.job_id)['stop_all_requested']
     assert not jobs.control(p.job_id)['crawl_stop_requested']
     assert stats['ingested_count']==5
@@ -158,7 +168,11 @@ def test_resumed_authoritative_audit_cannot_persist_provider_fallback(tmp_path, 
     ingestion = IngestionStore(tmp_path / 'audit.sqlite3')
     monkeypatch.setattr(module, 'job_store', jobs)
     monkeypatch.setattr(module.settings, 'outputs_dir', tmp_path / 'outputs')
-    jobs.create(job_id='resume-health', platform='xhs')
+    jobs.create(
+        job_id='resume-health',
+        platform='xhs',
+        effective_config={'collect_media': False},
+    )
     p = AuditPipeline.__new__(AuditPipeline)
     p.job_id = 'resume-health'
     p.authoritative_m3 = True
@@ -181,6 +195,7 @@ def test_resumed_authoritative_audit_cannot_persist_provider_fallback(tmp_path, 
         return {'note_id': 'n', 'decision': 'pass', 'risk_level': 'none'}
     p._analyze_subject = fallback
     p.resume_pending_analysis()
+    assert p._build_subjects.call_args.kwargs['include_media'] is False
     p._write_result_json.assert_not_called()
     p._persist_audit_result.assert_not_called()
     assert any(c.args[2] == 'failed' for c in ingestion.mark_content_status.call_args_list)

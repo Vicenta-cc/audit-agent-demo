@@ -107,65 +107,162 @@ class MediaCrawlerAdapter:
         account_id: str = "",
         collect_comments: bool = True,
         collect_media: bool = True,
+        max_total_notes: int | None = None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         effective_max_comments = max_comments if collect_comments else 0
-        command = [
-            *self._base_command(platform),
-            "--platform",
-            platform,
-            "--lt",
-            "cookie" if auth_state else "qrcode",
-            "--type",
-            "search",
-            "--keywords",
-            keyword,
-            "--start",
-            str(start_page),
-            "--crawler_max_notes_count",
-            str(max_notes),
-            "--max_comments_count_singlenotes",
-            str(effective_max_comments),
-            "--max_concurrency_num",
-            str(max_concurrency),
-            "--crawler_max_items_per_minute",
-            str(max_items_per_minute),
-            "--crawler_sleep_sec",
-            str(settings.crawler_sleep_seconds),
-            "--get_comment",
-            "true" if collect_comments else "false",
-            "--get_sub_comment",
-            "true" if collect_comments and get_sub_comment else "false",
-            "--get_media",
-            "true" if collect_media else "false",
-            "--stream_items",
-            "true" if stream_items else "false",
-            "--save_data_option",
-            "jsonl",
-            "--save_data_path",
-            str(save_root),
-        ]
-        if skip_content_ids_file:
-            command.extend(["--skip_aweme_ids_file", str(skip_content_ids_file)])
-        if reusable_content_db:
-            command.extend(["--reusable_content_db", str(reusable_content_db)])
-        if current_task_id:
-            command.extend(["--current_task_id", current_task_id])
-        if resume_keyword and resume_page is not None:
-            command.extend(["--resume_keyword", resume_keyword, "--resume_page", str(resume_page)])
-        return self._run_command(
-            command=command,
-            save_root=save_root,
-            platform=platform,
-            max_notes=max_notes * len([term for term in keyword.split(",") if term.strip()]),
-            progress_callback=progress_callback,
-            content_callback=content_callback,
-            stop_checker=stop_checker,
-            auth_state=auth_state,
-            started_callback=started_callback,
-            checkpoint_callback=checkpoint_callback,
-            account_id=account_id,
+        terms = list(
+            dict.fromkeys(term.strip() for term in keyword.split(",") if term.strip())
         )
+        if not terms:
+            raise ValueError("at least one search keyword is required")
+        total_limit = min(
+            max_notes * len(terms),
+            max_total_notes if max_total_notes is not None else max_notes * len(terms),
+        )
+        existing = self._load_platform_output(save_root, platform)
+        known_ids = {
+            identity
+            for item in existing.contents
+            if (identity := self._content_identity(item, platform))
+        }
+        streamed_ids = set(known_ids)
+        collected_by_term: dict[str, int] = {}
+        for item in existing.contents:
+            identity = self._content_identity(item, platform)
+            source_term = str(item.get("source_keyword") or "").strip()
+            if identity and source_term:
+                collected_by_term[source_term] = collected_by_term.get(source_term, 0) + 1
+
+        if resume_keyword in terms:
+            terms = terms[terms.index(resume_keyword) :]
+
+        last_command: list[str] = []
+        output = existing
+        crawler_started = False
+        for term in terms:
+            remaining_total = total_limit - len(known_ids)
+            existing_for_term = collected_by_term.get(term, 0)
+            remaining_for_term = max_notes - existing_for_term
+            new_capacity = min(remaining_total, remaining_for_term)
+            if new_capacity <= 0:
+                continue
+            if stop_checker and stop_checker():
+                break
+
+            # Douyin initializes its per-keyword result list with completed
+            # rows from the reusable task database, so its CLI value is an
+            # absolute target. Other enabled platforms do not restore that
+            # count and must receive only the remaining new-item capacity.
+            term_target = existing_for_term + new_capacity
+            crawler_restores_term_count = bool(
+                platform == "dy" and reusable_content_db and current_task_id
+            )
+            command_limit = (
+                term_target if crawler_restores_term_count else new_capacity
+            )
+
+            command = [
+                *self._base_command(platform),
+                "--platform",
+                platform,
+                "--lt",
+                "cookie" if auth_state else "qrcode",
+                "--type",
+                "search",
+                "--keywords",
+                term,
+                "--start",
+                str(start_page),
+                "--crawler_max_notes_count",
+                str(command_limit),
+                "--max_comments_count_singlenotes",
+                str(effective_max_comments),
+                "--max_concurrency_num",
+                str(max_concurrency),
+                "--crawler_max_items_per_minute",
+                str(max_items_per_minute),
+                "--crawler_sleep_sec",
+                str(settings.crawler_sleep_seconds),
+                "--get_comment",
+                "true" if collect_comments else "false",
+                "--get_sub_comment",
+                "true" if collect_comments and get_sub_comment else "false",
+                "--get_media",
+                "true" if collect_media else "false",
+                "--stream_items",
+                "true" if stream_items else "false",
+                "--save_data_option",
+                "jsonl",
+                "--save_data_path",
+                str(save_root),
+            ]
+            if skip_content_ids_file:
+                command.extend(["--skip_aweme_ids_file", str(skip_content_ids_file)])
+            if reusable_content_db:
+                command.extend(["--reusable_content_db", str(reusable_content_db)])
+            if current_task_id:
+                command.extend(["--current_task_id", current_task_id])
+            if term == resume_keyword and resume_page is not None:
+                command.extend(
+                    ["--resume_keyword", resume_keyword, "--resume_page", str(resume_page)]
+                )
+
+            def relay_content(contents: list[dict], comments: list[dict]) -> None:
+                if content_callback is None:
+                    return
+                new_contents = []
+                for item in contents:
+                    identity = self._content_identity(item, platform)
+                    if not identity or identity in streamed_ids:
+                        continue
+                    streamed_ids.add(identity)
+                    new_contents.append(item)
+                if new_contents:
+                    content_callback(new_contents, comments)
+
+            def relay_progress(_current: int, _target: int) -> None:
+                if progress_callback is None:
+                    return
+                current_total = self._latest_content_count(save_root, platform)
+                progress_callback(min(current_total, total_limit), total_limit)
+
+            output = self._run_command(
+                command=command,
+                save_root=save_root,
+                platform=platform,
+                max_notes=command_limit,
+                progress_callback=relay_progress if progress_callback else None,
+                content_callback=relay_content if content_callback else None,
+                stop_checker=stop_checker,
+                auth_state=auth_state,
+                started_callback=(
+                    started_callback if not crawler_started else None
+                ),
+                checkpoint_callback=checkpoint_callback,
+                account_id=account_id,
+            )
+            crawler_started = True
+            last_command = command
+            output = self._load_platform_output(save_root, platform)
+            known_ids = {
+                identity
+                for item in output.contents
+                if (identity := self._content_identity(item, platform))
+            }
+            collected_by_term[term] = sum(
+                1
+                for item in output.contents
+                if str(item.get("source_keyword") or "").strip() == term
+                and self._content_identity(item, platform)
+            )
+            if progress_callback:
+                progress_callback(min(len(known_ids), total_limit), total_limit)
+            if len(known_ids) >= total_limit:
+                break
+
+        output.command = last_command
+        return output
 
     def run_creator(
         self,

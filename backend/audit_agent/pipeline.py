@@ -206,6 +206,38 @@ class AuditPipeline:
                 self.rule_snapshot = self._rule_snapshot_from_source(job_snapshot or request)
                 self._set_prompt_context(self._prompt_category_from_source(request), self._prompt_profile_from_source(request))
 
+            collect_media = bool(getattr(request, "collect_media", True))
+            if not collect_media:
+                job_store.log(
+                    self.job_id,
+                    "图片与视频采集及审核已关闭：仅处理帖子文本和已采集评论",
+                    stage="configuration",
+                    level="info",
+                    reason="任务参数 collect_media=false",
+                    retryable=False,
+                    action="skip_image_and_video_analysis",
+                )
+
+            configured_total_notes = int(
+                getattr(request, "max_total_notes", 0) or 0
+            )
+            if configured_total_notes > 0:
+                crawl_total_notes = configured_total_notes
+            elif request.crawl_mode == "creator":
+                crawl_total_notes = int(request.max_notes)
+            else:
+                historical_keyword_count = max(
+                    1,
+                    len(
+                        [
+                            term
+                            for term in str(request.keyword or "").split(",")
+                            if term.strip()
+                        ]
+                    ),
+                )
+                crawl_total_notes = int(request.max_notes) * historical_keyword_count
+
             def analysis_stop_requested() -> bool:
                 current = control()
                 return bool(current.get("stop_all_requested") or current.get("analysis_stop_requested"))
@@ -424,6 +456,7 @@ class AuditPipeline:
                         [ref["item"]],
                         ref.get("comments", []),
                         source_root,
+                        include_media=collect_media,
                     )
                     for subject in subjects:
                         subject_key = content_key or content_identity(ref["item"], request.platform) or subject.note_id
@@ -489,6 +522,7 @@ class AuditPipeline:
                         contents,
                         comments,
                         source_root,
+                        include_media=collect_media,
                     )
                     for subject in subjects:
                         if not subject.note_id or subject.note_id in analyzed_ids:
@@ -575,7 +609,15 @@ class AuditPipeline:
                     except Exception as exc:
                         analysis_errors.append(exc)
                         job_store.update_control(self.job_id, analysis_stop_requested=True)
-                        job_store.log(self.job_id, f"审核线程异常：{type(exc).__name__}；仅停止审核，采集继续")
+                        job_store.log(
+                            self.job_id,
+                            f"审核线程异常：{type(exc).__name__}；仅停止审核，采集继续",
+                            level="error",
+                            reason="审核线程发生不可恢复异常",
+                            error_code="analysis_thread_failed",
+                            retryable=False,
+                            action="stop_analysis_only",
+                        )
 
                 stream_analyzer = None
                 batch_flusher = None
@@ -674,7 +716,10 @@ class AuditPipeline:
                                 return self.crawler.run_creator(
                                     platform=request.platform,
                                     creator_id=creator_ref,
-                                    max_notes=request.max_notes,
+                                    max_notes=min(
+                                        request.max_notes,
+                                        crawl_total_notes,
+                                    ),
                                     max_comments=request.max_comments,
                                     max_concurrency=crawler_concurrency,
                                     max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
@@ -702,6 +747,7 @@ class AuditPipeline:
                                 keyword=request.keyword,
                                 start_page=crawler_start_page,
                                 max_notes=request.max_notes,
+                                max_total_notes=crawl_total_notes,
                                 max_comments=request.max_comments,
                                 max_concurrency=crawler_concurrency,
                                 max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
@@ -860,7 +906,9 @@ class AuditPipeline:
 
             job_store.log(
                 self.job_id,
-                f"crawl limits requested: max_notes={request.max_notes}, max_comments={request.max_comments}, "
+                f"crawl limits requested: max_notes={request.max_notes}, "
+                f"max_total_notes={crawl_total_notes}, "
+                f"max_comments={request.max_comments}, "
                 f"max_items_per_minute={getattr(request, 'max_items_per_minute', 5)}, "
                 f"max_concurrency={request.max_concurrency}, effective_max_concurrency="
                 f"{crawler_concurrency}, "
@@ -948,6 +996,7 @@ class AuditPipeline:
                 output.comments,
                 source_root,
                 output.creators,
+                include_media=collect_media,
             )
             total_comments = sum(len(subject.comments) for subject in subjects)
             job_store.log(self.job_id, f"subjects built: subjects={len(subjects)}, comments={total_comments}")
@@ -1109,6 +1158,11 @@ class AuditPipeline:
             job_store.log(
                 self.job_id,
                 f"任务失败：audit_provider_unavailable: {exc}",
+                level="error",
+                reason="审核服务当前不可用",
+                error_code="audit_provider_unavailable",
+                retryable=True,
+                action="retry_later",
             )
         except AuditProviderCallError as exc:
             if getattr(request, "run_crawler", False) and not crawl_epoch_is_current():
@@ -1124,7 +1178,15 @@ class AuditPipeline:
                 self.job_id,
                 failure=failure_metadata("audit_provider_failed", "审核服务调用失败"),
             )
-            job_store.log(self.job_id, f"任务失败：audit_provider_failed: {exc}")
+            job_store.log(
+                self.job_id,
+                f"任务失败：audit_provider_failed: {exc}",
+                level="error",
+                reason="审核服务调用失败",
+                error_code="audit_provider_failed",
+                retryable=True,
+                action="retry_later",
+            )
         except Exception as exc:
             if getattr(request, "run_crawler", False) and not crawl_epoch_is_current():
                 job_store.log(self.job_id, f"旧采集轮次异常结束，未覆盖当前轮次状态：{exc}")
@@ -1155,7 +1217,19 @@ class AuditPipeline:
                 self.job_id,
                 failure=failure_metadata(error_code, error_text),
             )
-            job_store.log(self.job_id, f"任务失败：{exc}")
+            job_store.log(
+                self.job_id,
+                f"任务失败：{exc}",
+                level="error",
+                reason=error_text,
+                error_code=error_code or "task_failed",
+                retryable=error_code in {
+                    "crawler_account_verification_required",
+                    "crawler_account_login_required",
+                    "crawler_rate_limited",
+                },
+                action="retry_after_recovery",
+            )
 
     def _begin_subject_audit(self) -> None:
         # A previous post's error must not poison the next post's valid result.
@@ -1188,23 +1262,44 @@ class AuditPipeline:
         folder.mkdir(parents=True, exist_ok=True)
         if statuses:
             reason = f"审核接口返回 HTTP {statuses[-1]}"
+            error_code = f"audit_http_{statuses[-1]}"
         elif any(isinstance(e, (QwenTimeoutError, requests.Timeout, TimeoutError)) for e in chain):
             reason = "审核请求超时，当前请求补试已结束"
+            error_code = "audit_timeout"
         elif isinstance(exc, FusionAuditContractError):
             reason = "审核输出不满足证据或格式合同；详见阶段诊断"
+            error_code = "fusion_contract_invalid"
         else:
             reason = "审核步骤执行异常；详见阶段诊断"
+            error_code = "post_audit_failed"
         record = {"note_id": subject.note_id, "content_key": content_key, "reason": reason,
+                  "error_code": error_code,
                   "stage": getattr(self, "_current_audit_stage", "post_audit"),
                   "error_type": type(exc).__name__, "cause_types": [type(e).__name__ for e in chain],
                   "http_statuses": statuses, "consecutive_provider_failures": count,
                   "action": "stop_analysis_only" if fatal_provider or count >= 3 else "skip_post"}
         (folder / f"{subject.note_id}-{time_ns()}.json").write_text(
             json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-        job_store.log(self.job_id, f"笔记 {subject.note_id}：审核失败（{type(exc).__name__}），已记录并跳过")
+        job_store.log(
+            self.job_id,
+            f"笔记 {subject.note_id}：审核失败（{type(exc).__name__}），已记录并跳过",
+            level="error",
+            reason=reason,
+            error_code=error_code,
+            retryable=bool(provider_failure and not fatal_provider and count < 3),
+            action=record["action"],
+        )
         if fatal_provider or count >= 3:
             job_store.update_control(self.job_id, analysis_stop_requested=True)
-            job_store.log(self.job_id, "审核服务不可用或连续三帖调用失败，仅停止审核；采集继续，待审核内容保留")
+            job_store.log(
+                self.job_id,
+                "审核服务不可用或连续三帖调用失败，仅停止审核；采集继续，待审核内容保留",
+                level="error",
+                reason="审核服务不可用或连续失败已达到停止阈值",
+                error_code="analysis_provider_failure_threshold",
+                retryable=True,
+                action="stop_analysis_only",
+            )
 
     def _assert_authoritative_provider_healthy(self) -> None:
         if not getattr(self, "authoritative_m3", False):
@@ -1230,6 +1325,7 @@ class AuditPipeline:
                 analysis_batch_size = verified["analysis_batch_size"]
                 self.authoritative_m3 = True
             platform = str(job.get("platform") or "xhs")
+            collect_media = bool(job.get("collect_media", True))
             source_root = self._resume_source_root(job)
             refs = self.ingestion.pending_for_task(self.job_id, limit=max(0, analyze_limit))
             existing_items = job.get("items") or []
@@ -1250,6 +1346,16 @@ class AuditPipeline:
             )
             if source_root.resolve() != (settings.outputs_dir / self.job_id).resolve():
                 job_store.log(self.job_id, f"继续分析复用已有输出媒体目录：{source_root.name}")
+            if not collect_media:
+                job_store.log(
+                    self.job_id,
+                    "继续分析时图片与视频审核保持关闭：仅处理帖子文本和已采集评论",
+                    stage="configuration",
+                    level="info",
+                    reason="任务冻结参数 collect_media=false",
+                    retryable=False,
+                    action="skip_image_and_video_analysis",
+                )
             if self._analysis_media_scope() == "image_text":
                 job_store.log(self.job_id, "继续分析范围：仅分析图文内容，视频内容将跳过")
             job_store.log(self.job_id, f"继续分析开始：待处理 {len(refs)} 条")
@@ -1264,7 +1370,13 @@ class AuditPipeline:
                     if current_control.get("stop_all_requested") or current_control.get("analysis_stop_requested") or current_control.get("analysis_paused"):
                         break
                     content_key = str(ref.get("content_key") or "")
-                    subjects = self._build_subjects(platform, [ref["item"]], ref.get("comments", []), source_root)
+                    subjects = self._build_subjects(
+                        platform,
+                        [ref["item"]],
+                        ref.get("comments", []),
+                        source_root,
+                        include_media=collect_media,
+                    )
                     for subject in subjects:
                         subject_key = content_key or content_identity(ref["item"], platform) or subject.note_id
                         if subject.note_id in analyzed_ids:
@@ -1350,7 +1462,15 @@ class AuditPipeline:
                 job_store.log(self.job_id, "继续分析完成")
         except Exception as exc:
             job_store.update(self.job_id, status="failed", analysis_status="failed", error=str(exc))
-            job_store.log(self.job_id, f"继续分析失败：{exc}")
+            job_store.log(
+                self.job_id,
+                f"继续分析失败：{exc}",
+                level="error",
+                reason=str(exc),
+                error_code="resume_analysis_failed",
+                retryable=True,
+                action="retry_resume_analysis",
+            )
 
     def run_local_video(self, video_path: Path, title: str = "", desc: str = "") -> None:
         try:
@@ -1392,7 +1512,15 @@ class AuditPipeline:
             job_store.log(self.job_id, "本地视频审核任务完成")
         except Exception as exc:
             job_store.update(self.job_id, status="failed", error=str(exc))
-            job_store.log(self.job_id, f"本地视频审核任务失败：{exc}")
+            job_store.log(
+                self.job_id,
+                f"本地视频审核任务失败：{exc}",
+                level="error",
+                reason=str(exc),
+                error_code="local_video_audit_failed",
+                retryable=False,
+                action="inspect_input_and_retry",
+            )
 
     def _persist_audit_result(
         self,
@@ -1795,6 +1923,8 @@ class AuditPipeline:
         comments: list[dict],
         media_root: Path,
         creators: list[dict] | None = None,
+        *,
+        include_media: bool = True,
     ) -> list[AuditSubject]:
         comments_by_note: dict[str, list[dict]] = {}
         for comment in comments:
@@ -1805,11 +1935,35 @@ class AuditPipeline:
         subjects = []
         for item in contents:
             note_id = self._content_id(item, platform)
-            local_video_paths = self._valid_local_video_paths(
-                note_id,
-                self._find_local_media(media_root, platform, note_id, "videos", VIDEO_EXTENSIONS),
-            )
-            local_image_paths = self._find_local_media(media_root, platform, note_id, "images", IMAGE_EXTENSIONS)
+            if include_media:
+                local_video_paths = self._valid_local_video_paths(
+                    note_id,
+                    self._find_local_media(
+                        media_root,
+                        platform,
+                        note_id,
+                        "videos",
+                        VIDEO_EXTENSIONS,
+                    ),
+                )
+                local_image_paths = self._find_local_media(
+                    media_root,
+                    platform,
+                    note_id,
+                    "images",
+                    IMAGE_EXTENSIONS,
+                )
+                image_urls = (
+                    [] if local_video_paths else self._image_urls(item, platform)
+                )
+                video_urls = (
+                    [] if local_video_paths else self._video_urls(item, platform)
+                )
+            else:
+                local_video_paths = []
+                local_image_paths = []
+                image_urls = []
+                video_urls = []
             subjects.append(
                 AuditSubject(
                     platform=platform,
@@ -1818,8 +1972,8 @@ class AuditPipeline:
                     title=str(item.get("title", "") or ""),
                     desc=str(item.get("desc", "") or ""),
                     author=self._author_info(item, platform, creators_by_key),
-                    image_urls=[] if local_video_paths else self._image_urls(item, platform),
-                    video_urls=[] if local_video_paths else self._video_urls(item, platform),
+                    image_urls=image_urls,
+                    video_urls=video_urls,
                     comments=comments_by_note.get(note_id, []),
                     local_image_paths=local_image_paths,
                     local_video_paths=local_video_paths,
@@ -4900,6 +5054,11 @@ class AuditPipeline:
             f"笔记 {subject.note_id}：逐条评论审核完成，成功={stats['completed']}，失败={stats['failed']}，"
             f"达到复核阈值={stats['review_count']}，需翻译={stats['translation_required']}，"
             f"翻译成功={stats['translation_completed']}，翻译失败={stats['translation_failed']}",
+            level="info" if stats["failed"] == 0 else "warning",
+            reason="" if stats["failed"] == 0 else "部分评论审核或翻译未完成",
+            error_code="" if stats["failed"] == 0 else "comment_audit_partial",
+            retryable=False if stats["failed"] else None,
+            action="exclude_failed_comments" if stats["failed"] else "",
         )
         return output
 
@@ -4973,6 +5132,11 @@ class AuditPipeline:
             self.job_id,
             f"评论 {comment_id} 在保留 source_text/translation_zh 各最多300字后仍超过 "
             "V2 Prompt 总预算，已仅标记该条审核失败",
+            level="error",
+            reason="单条评论超过审核提示词预算",
+            error_code="comment_prompt_budget_exceeded",
+            retryable=False,
+            action="exclude_comment",
         )
         return {comment_id: result}
 
@@ -5055,7 +5219,15 @@ class AuditPipeline:
                 except QwenTimeoutError as exc:
                     # The client already used the one allowed timeout retry.
                     # Do not turn this into another split-batch compensation round.
-                    job_store.log(self.job_id, "评论审核请求连续两次超时，停止重试")
+                    job_store.log(
+                        self.job_id,
+                        "评论审核请求连续两次超时，停止重试",
+                        level="error",
+                        reason="评论审核请求超时且重试已耗尽",
+                        error_code="comment_audit_timeout",
+                        retryable=False,
+                        action="stop_comment_audit",
+                    )
                     raise AuditProviderCallError("text Provider request timed out after one retry") from exc
                 except QwenProviderError as exc:
                     raise AuditProviderCallError("comment Provider request failed") from exc
@@ -5095,6 +5267,11 @@ class AuditPipeline:
                     self.job_id,
                     f"笔记 {subject.note_id}：评论审核批次 {batch_label} 首次结果漏项={len(pending)}，"
                     "仅补偿重试一次",
+                    level="warning",
+                    reason="模型首次结果缺少部分评论",
+                    error_code="comment_audit_incomplete",
+                    retryable=True,
+                    action="retry_missing_comments",
                 )
 
         for comment in pending:
@@ -5116,6 +5293,11 @@ class AuditPipeline:
                 self.job_id,
                 f"笔记 {subject.note_id}：评论审核批次 {batch_label} 补偿重试后仍漏项={len(pending)}，"
                 "已标记审核失败，不再继续重试",
+                level="error",
+                reason="补偿重试后仍缺少评论审核结果",
+                error_code="comment_audit_retry_exhausted",
+                retryable=False,
+                action="mark_missing_comments_failed",
             )
         return normalized
 

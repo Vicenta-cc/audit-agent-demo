@@ -719,15 +719,17 @@ class InvestigationStore:
         return self.get_session(session_id)
 
     def list_creation_sessions(
-        self, *, principal: str, limit: int = 50, offset: int = 0
+        self, *, principal: str, limit: int | None = 50, offset: int = 0
     ) -> tuple[InvestigationSession, ...]:
         with self._connect() as connection:
-            rows = connection.execute(
-                """SELECT * FROM investigation_sessions
-                   WHERE scope_type='creation' AND owner_principal=? AND status='active'
-                   ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?""",
-                (principal, limit, offset),
-            ).fetchall()
+            query = """SELECT * FROM investigation_sessions
+                       WHERE scope_type='creation' AND owner_principal=? AND status='active'
+                       ORDER BY updated_at DESC, id DESC"""
+            parameters: tuple[object, ...] = (principal,)
+            if limit is not None:
+                query += " LIMIT ? OFFSET ?"
+                parameters = (principal, limit, offset)
+            rows = connection.execute(query, parameters).fetchall()
         return tuple(self._session(row) for row in rows)
 
     def get_session(self, session_id: str) -> InvestigationSession:
@@ -887,6 +889,10 @@ class InvestigationStore:
                     ) VALUES (?, ?, ?, ?, 'running', ?, ?)
                     """,
                     (turn_id, session_id, message_id, client_message_id, now, now),
+                )
+                connection.execute(
+                    "UPDATE investigation_sessions SET updated_at = ? WHERE id = ?",
+                    (now, session_id),
                 )
         except sqlite3.IntegrityError as exc:
             if "uq_investigation_running_turn" in str(exc) or "UNIQUE constraint failed" in str(exc):

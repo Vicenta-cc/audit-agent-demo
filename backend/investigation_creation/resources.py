@@ -48,8 +48,14 @@ from .errors import ConfigurationValidationError, ResourceStaleError
 from .principal import Principal
 
 
-_PLATFORM_NAMES = {"xhs": "小红书", "dy": "抖音", "ks": "快手"}
-_CREATION_PLATFORM_ORDER = ("dy", "xhs", "ks")
+_PLATFORM_NAMES = {
+    "dy": "抖音",
+    "xhs": "小红书",
+    "ks": "快手",
+    "wb": "微博",
+}
+_CREATION_PLATFORM_ORDER = ("dy", "xhs", "ks", "wb")
+_ENABLED_CREATION_PLATFORMS = frozenset({"dy"})
 _RULES_MANAGEMENT_PATH = "/rule-assistant/rulesets?return_to=/investigation"
 
 
@@ -296,9 +302,9 @@ class InvestigationResourceService:
             PlatformOption(
                 id=Platform(value),
                 name=_PLATFORM_NAMES.get(value, value),
+                available=value in _ENABLED_CREATION_PLATFORMS,
             )
             for value in _CREATION_PLATFORM_ORDER
-            if value in SUPPORTED_PLATFORMS
             if query.platform is None or value == query.platform.value
         ]
         return InvestigationOptions(
@@ -390,6 +396,10 @@ class InvestigationResourceService:
 
         effective_configuration, settings_revision = self.task_configuration(effective_configuration, resource_connection)
         parameters = effective_task_parameters(effective_configuration)
+        planned_content_count = min(
+            parameters.max_total_notes,
+            parameters.max_notes * max(1, len(resolved_terms)),
+        )
         if parameters.crawler_account_id and not any(a["id"] == parameters.crawler_account_id for a in available_accounts):
             blockers.append(self._blocker("collection_service_unavailable", "所选采集账号当前不可用，请重新选择。"))
         blockers = self._dedupe_blockers(blockers)
@@ -397,7 +407,7 @@ class InvestigationResourceService:
             task_settings_revision=settings_revision,
             requested_parameters=effective_configuration.task_parameters,
             effective_parameters=parameters,
-            estimated_max_contents=parameters.max_notes * max(1, len(resolved_terms)),
+            estimated_max_contents=planned_content_count,
             draft_id=draft.id,
             draft_revision=draft.current_revision,
             title=draft.title,
@@ -407,10 +417,7 @@ class InvestigationResourceService:
             resolved_search_terms=resolved_terms,
             creator_url=creator_url,
             recall_plan=recall_preview,
-            max_notes=min(
-                parameters.analyze_limit,
-                parameters.max_notes * max(1, len(resolved_terms)),
-            ),
+            max_notes=planned_content_count,
             max_posts_per_keyword=parameters.max_notes,
             max_comments_per_post=parameters.max_comments,
             get_sub_comment=parameters.get_sub_comment,
@@ -716,26 +723,37 @@ class InvestigationResourceService:
         mode = configuration.investigation.mode
         collection: dict[str, Any]
         if mode == "search":
+            collection_keywords = list(
+                configuration.investigation.recall_plan.enabled_main_terms
+                if configuration.investigation.recall_plan.strategy
+                == "existing_lexicon"
+                else configuration.investigation.recall_plan.terms
+            )
+            planned_content_count = min(
+                parameters.max_total_notes,
+                parameters.max_notes * max(1, len(collection_keywords)),
+            )
             collection = {
                 "crawl_mode": "search",
                 "keyword_source": "keyword",
-                "keywords": list(
-                    configuration.investigation.recall_plan.enabled_main_terms
-                    if configuration.investigation.recall_plan.strategy
-                    == "existing_lexicon"
-                    else configuration.investigation.recall_plan.terms
-                ),
+                "keywords": collection_keywords,
                 "max_notes": parameters.max_notes,
+                "max_total_notes": planned_content_count,
                 "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
             }
         else:
+            planned_content_count = min(
+                parameters.max_total_notes,
+                parameters.max_notes,
+            )
             collection = {
                 "crawl_mode": "creator",
                 "keyword_source": "keyword",
                 "keywords": [],
                 "creator_url": configuration.investigation.creator_url,
                 "max_notes": parameters.max_notes,
+                "max_total_notes": planned_content_count,
                 "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
             }
@@ -748,7 +766,7 @@ class InvestigationResourceService:
             "platform": configuration.platform.value,
             "collection": collection,
             "analysis": {
-                "analyze_limit": parameters.analyze_limit,
+                "analyze_limit": planned_content_count,
                 "analysis_batch_size": parameters.analysis_batch_size,
             },
         }
@@ -780,7 +798,8 @@ class InvestigationResourceService:
         resolved.update(
             {
                 "max_notes": parameters.max_notes,
-                "analyze_limit": parameters.analyze_limit,
+                "max_total_notes": planned_content_count,
+                "analyze_limit": planned_content_count,
                 "crawler_account_id": selected_account["id"],
                 "crawler_account_display_name": selected_account["display_name"],
                 "crawler_account_confirmed_state": CrawlerAccountConfirmedState(
@@ -797,9 +816,11 @@ class InvestigationResourceService:
         )
 
         if configuration.task_parameters is not None:
-            resolved.update(auto_analyze=parameters.auto_analyze,
-                            collect_comments=parameters.collect_comments,
-                            collect_media=parameters.collect_media)
+            resolved.update(
+                auto_analyze=True,
+                collect_comments=parameters.collect_comments,
+                collect_media=parameters.collect_media,
+            )
         recall_snapshot: ConfirmedRecallPlanSnapshot | None = None
         if mode == "search":
             plan = configuration.investigation.recall_plan

@@ -3,6 +3,7 @@ import type {
   AuditResult,
   AuditResultDetail,
   DeleteJobResponse,
+  JobLog,
   JobsSnapshot,
   JobTaskStats,
   MonitorTask,
@@ -52,6 +53,7 @@ export interface CreateJobInput {
   creator_url?: string;
   start_page?: number;
   max_notes?: number;
+  max_total_notes?: number;
   max_comments: number;
   collect_comments?: boolean;
   max_concurrency: number;
@@ -301,7 +303,7 @@ function buildRunMetrics(stats: JobTaskStats, outputs: AuditResult[]): TaskRunMe
   };
 }
 
-function normalizeLogs(logs: Array<{ time?: string; message?: string }>, job: RawJob) {
+function normalizeLogs(logs: JobLog[], job: RawJob): JobLog[] {
   const items = logs
     .slice()
     .reverse()
@@ -310,7 +312,11 @@ function normalizeLogs(logs: Array<{ time?: string; message?: string }>, job: Ra
   if (items.length) {
     return items;
   }
-  return [{ time: job.updated_at || job.created_at || "", message: "任务已创建" }];
+  return [{
+    time: job.updated_at || job.created_at || "",
+    level: "info",
+    message: "任务已创建"
+  }];
 }
 
 function getTaskSource(job: RawJob): MonitorTaskSource {
@@ -385,6 +391,7 @@ function compactJob(job: RawJob): RawJob {
     run_crawler: job.run_crawler,
     start_page: job.start_page,
     max_notes: job.max_notes,
+    max_total_notes: job.max_total_notes,
     max_comments: job.max_comments,
     max_concurrency: job.max_concurrency,
     max_items_per_minute: job.max_items_per_minute,

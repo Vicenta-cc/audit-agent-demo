@@ -452,6 +452,7 @@ class CrawlRequest(BaseModel):
     creator_id: str = ""
     start_page: StrictInt = Field(default=0, ge=0)
     max_notes: StrictInt = Field(default=5, ge=1, le=5)
+    max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
     max_comments: StrictInt = Field(default=100, ge=0, le=1000)
     max_concurrency: StrictInt = Field(default=1, ge=1, le=3)
     max_items_per_minute: StrictInt = Field(default=5, ge=1, le=5)
@@ -1679,6 +1680,7 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
             "creator_url",
             "start_page",
             "max_notes",
+            "max_total_notes",
             "max_comments",
             "max_concurrency",
             "max_items_per_minute",
@@ -1775,17 +1777,19 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
     keyword_count = len(
         [item for item in str(request.keyword or "").split(",") if item.strip()]
     ) if request.crawl_mode == "search" else 1
+    planned_content_count = min(
+        request.max_total_notes,
+        keyword_count * request.max_notes,
+    )
     effective_max_concurrency = min(
         request.max_concurrency,
         max(1, settings.crawler_max_concurrency),
     )
-    effective_auto_analyze = bool(
-        request.auto_analyze
-        and request.analyze_limit > 0
-        and settings.auto_analyze_crawled_content
-    )
+    effective_auto_analyze = bool(settings.auto_analyze_crawled_content)
     request.max_concurrency = effective_max_concurrency
     request.auto_analyze = effective_auto_analyze
+    request.max_total_notes = planned_content_count
+    request.analyze_limit = planned_content_count
     request.collect_comments = bool(request.collect_comments)
     if not request.collect_comments:
         request.max_comments = 0
@@ -1796,7 +1800,8 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         "keyword_source": request.keyword_source,
         "keyword_count": keyword_count,
         "max_notes": request.max_notes,
-        "estimated_max_total": keyword_count * request.max_notes,
+        "max_total_notes": planned_content_count,
+        "estimated_max_total": planned_content_count,
         "max_concurrency": effective_max_concurrency,
         "collect_comments": request.collect_comments,
         "max_comments": request.max_comments,
@@ -1824,6 +1829,7 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         creator_id=request.creator_id,
         start_page=request.start_page,
         max_notes=request.max_notes,
+        max_total_notes=request.max_total_notes,
         max_comments=request.max_comments,
         max_concurrency=request.max_concurrency,
         max_items_per_minute=request.max_items_per_minute,
@@ -1863,9 +1869,9 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         job["id"],
         (
             f"执行参数已冻结：每关键词最多 {request.max_notes} 条，"
-            f"预计最大总量 {effective_config['estimated_max_total']} 条，"
+            f"单任务总量最多 {effective_config['estimated_max_total']} 条，"
             f"每帖评论 {request.max_comments} 条，并发 {request.max_concurrency}，"
-            f"媒体采集 {'开启' if request.collect_media else '关闭'}，"
+            f"图片与视频采集及审核 {'开启' if request.collect_media else '关闭'}，"
             f"自动分析 {'开启' if request.auto_analyze else '关闭'}"
         ),
         stage="configuration",

@@ -76,6 +76,7 @@ class HistoricalTurnStatusResponse(PublicApiModel):
 
 class HistoricalTurnAcceptedResponse(PublicApiModel):
     turn_id: str
+    updated_at: str
     status: Literal["running"] = "running"
 
 
@@ -163,7 +164,10 @@ def create_historical_report_router(
                 client_message_id=request.client_message_id,
                 content=request.content,
             )
-            return HistoricalTurnAcceptedResponse(turn_id=turn.id)
+            return HistoricalTurnAcceptedResponse(
+                turn_id=turn.id,
+                updated_at=turn.created_at,
+            )
         except Exception as exc:
             _raise_public_error(exc)
 
@@ -221,7 +225,10 @@ def create_historical_report_router(
             turn = service.resume_turn(
                 workspace_id, turn_id, principal_id=principal.id
             )
-            return HistoricalTurnAcceptedResponse(turn_id=turn.id)
+            return HistoricalTurnAcceptedResponse(
+                turn_id=turn.id,
+                updated_at=turn.created_at,
+            )
         except Exception as exc:
             _raise_public_error(exc)
 

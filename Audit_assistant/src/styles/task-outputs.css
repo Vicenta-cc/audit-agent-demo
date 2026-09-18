@@ -950,6 +950,21 @@
   line-height: 1.55;
 }
 
+.task-log-content { min-width: 0; }
+
+.task-log-diagnostics {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.task-log-diagnostics dt { font-weight: 650; }
+.task-log-diagnostics dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+
 .task-log-empty {
   display: grid;
   place-items: center;

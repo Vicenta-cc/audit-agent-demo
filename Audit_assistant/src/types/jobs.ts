@@ -38,6 +38,10 @@ export interface JobLog {
   stage?: string;
   level?: "info" | "warning" | "error" | string;
   message?: string;
+  reason?: string;
+  error_code?: string;
+  retryable?: boolean | null;
+  action?: string;
 }
 
 export interface JobAuditConfigRevision {
@@ -200,6 +204,7 @@ export interface RawJob {
   run_crawler?: boolean;
   start_page?: number;
   max_notes?: number;
+  max_total_notes?: number;
   max_comments?: number;
   max_concurrency?: number;
   max_items_per_minute?: number;

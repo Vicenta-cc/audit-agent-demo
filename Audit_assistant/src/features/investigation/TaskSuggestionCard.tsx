@@ -23,8 +23,10 @@ export {
 
 const defaultPlatformOptions: Array<{ code: PlatformCode; label: string; available?: boolean }> = [
   { code: "dy", label: "抖音", available: true },
-  { code: "xhs", label: "小红书", available: true },
-  { code: "ks", label: "快手", available: true }
+  { code: "xhs", label: "小红书", available: false },
+  { code: "ks", label: "快手", available: false },
+  { code: "wb", label: "微博", available: false },
+  { code: "xy", label: "闲鱼", available: false }
 ];
 
 interface TaskSuggestionCardProps {
@@ -74,6 +76,16 @@ export function TaskSuggestionCard({
   const [keywordDraft, setKeywordDraft] = useState(keywordsText);
   const [isSavingKeywords, setIsSavingKeywords] = useState(false);
   const parsedKeywordDraft = parseInvestigationSearchTerms(keywordDraft);
+  const displayPlatformOptions = defaultPlatformOptions.map((fallback) => {
+    const authoritative = platformOptions.find((item) => item.code === fallback.code);
+    return {
+      code: fallback.code,
+      label: authoritative?.label || fallback.label,
+      // Rollout is intentionally Douyin-only. Backend options can add labels,
+      // but cannot accidentally make an unopened platform interactive.
+      available: fallback.code === "dy" && authoritative?.available === true
+    };
+  });
 
   useEffect(() => {
     setKeywordDraft(keywordsText);
@@ -259,7 +271,7 @@ export function TaskSuggestionCard({
           <section className="task-suggestion-section">
             <div className="task-suggestion-label">采集平台</div>
             <div className="task-suggestion-field-body task-suggestion-platforms" aria-label="采集平台单选">
-              {platformOptions.map((platform) => {
+              {displayPlatformOptions.map((platform) => {
                 const isSelected = draft.platforms.includes(platform.code);
                 return (
                   <button

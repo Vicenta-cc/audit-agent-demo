@@ -712,17 +712,30 @@ class InvestigationCreationConversationService:
 
     def list_workspaces(self, *, principal: Principal, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
         items = []
-        for session in self.store.list_creation_sessions(principal=principal.id, limit=limit, offset=offset):
+        for session in self.store.list_creation_sessions(principal=principal.id, limit=None):
             state = self.get_workspace_state(session.id, principal=principal)
             first_question = next((message.content for message in state.messages if message.role == "user"), "")
+            timestamp_candidates = [
+                session.updated_at,
+                state.run.updated_at if state.run else "",
+                str((state.draft_artifact.get("draft") or {}).get("updated_at") or ""),
+                state.latest_report_turn.completed_at if state.latest_report_turn else "",
+                *(message.created_at for message in state.messages),
+                *(message.created_at for message in state.report_messages),
+            ]
+            updated_at = max((value for value in timestamp_candidates if value), default=session.updated_at)
             items.append({
                 "workspace_session_id": session.id,
                 "title": (state.draft_artifact.get("draft") or {}).get("title") or first_question[:48] or "新调查需求",
-                "updated_at": session.updated_at,
+                "updated_at": updated_at,
                 "run_status": state.run.status if state.run else "",
                 "presentation_stage": state.draft_artifact.get("presentation_stage", ""),
             })
-        return items
+        items.sort(
+            key=lambda item: (item["updated_at"], item["workspace_session_id"]),
+            reverse=True,
+        )
+        return items[offset:offset + limit]
 
     def get_session(self, session_id: str, *, principal: Principal) -> InvestigationSession:
         session = self.store.get_session(session_id)
@@ -848,11 +861,22 @@ class InvestigationCreationConversationService:
         configuration = view.draft.configuration
         if (isinstance(configuration, InvestigationDraftConfiguration)
                 and configuration.judgement.strategy == "temporary_ruleset"):
-            from .resources import _CREATION_PLATFORM_ORDER, _PLATFORM_NAMES
+            from .resources import (
+                _CREATION_PLATFORM_ORDER,
+                _ENABLED_CREATION_PLATFORMS,
+                _PLATFORM_NAMES,
+            )
 
             return draft_artifact(
                 view, options=InvestigationOptions(
-                    platforms=[PlatformOption(id=key, name=_PLATFORM_NAMES[key]) for key in _CREATION_PLATFORM_ORDER],
+                    platforms=[
+                        PlatformOption(
+                            id=key,
+                            name=_PLATFORM_NAMES[key],
+                            available=key in _ENABLED_CREATION_PLATFORMS,
+                        )
+                        for key in _CREATION_PLATFORM_ORDER
+                    ],
                     ruleset_revisions=[], recall_lexicons=[],
                 ), presentation_stage=presentation_stage,
             ).model_dump(mode="json")

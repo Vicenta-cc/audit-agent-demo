@@ -138,6 +138,7 @@ export function InvestigationCenterArea({
   onExamplePromptSelect
 }: InvestigationCenterAreaProps) {
   const [inputText, setInputText] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const isPublishedReportSession = Boolean(session.reportBinding);
   const showHistoricalPending = shouldShowHistoricalPending(
     isPublishedReportSession,
@@ -158,6 +159,20 @@ export function InvestigationCenterArea({
   const timelineRef = useRef<HTMLDivElement>(null);
   const observedSessionIdRef = useRef(session.id);
   const knownMessageIdsRef = useRef(new Set(session.messages.map((message) => message.id)));
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.style.height = "0px";
+    const styles = window.getComputedStyle(input);
+    const lineHeight = Number.parseFloat(styles.lineHeight) || 21;
+    const padding = (Number.parseFloat(styles.paddingTop) || 0)
+      + (Number.parseFloat(styles.paddingBottom) || 0);
+    const maxHeight = lineHeight * 6 + padding;
+    const nextHeight = Math.min(input.scrollHeight, maxHeight);
+    input.style.height = `${nextHeight}px`;
+    input.style.overflowY = input.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [inputText]);
 
   useLayoutEffect(() => {
     if (observedSessionIdRef.current !== session.id) {
@@ -223,7 +238,7 @@ export function InvestigationCenterArea({
     setInputText("");
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const suggestedPrompt = getSuggestedPrompt(getPlaceholder());
     if (e.key === "Tab" && !e.shiftKey && inputText === "" && suggestedPrompt) {
       e.preventDefault();
@@ -231,7 +246,7 @@ export function InvestigationCenterArea({
       return;
     }
 
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSend();
     }
@@ -810,15 +825,17 @@ export function InvestigationCenterArea({
       {/* Input Bar */}
       <div className="inv-input-bar-wrap">
         <div className="inv-input-box-container">
-          <input
-            type="text"
+          <textarea
+            ref={inputRef}
+            rows={1}
+            maxLength={4000}
             className="inv-main-input"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={getPlaceholder()}
             disabled={isSendingMessage}
-            aria-keyshortcuts={getSuggestedPrompt(getPlaceholder()) ? "Tab" : undefined}
+            aria-keyshortcuts={getSuggestedPrompt(getPlaceholder()) ? "Enter Shift+Enter Tab" : "Enter Shift+Enter"}
           />
           <button
             type="button"

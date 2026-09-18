@@ -351,6 +351,7 @@ def test_main_workspace_parameters_are_previewed_frozen_and_applied(m3_stack, mo
     configuration["investigation"]["recall_plan"]["terms"] = ["上分", "盘口"]
     configuration["task_parameters"] = {
         "max_notes": limit, "max_comments": 2, "collect_comments": False,
+        "max_total_notes": 5,
         "get_sub_comment": True, "collect_media": False, "max_concurrency": 3,
         "auto_analyze": False, "analyze_limit": 5, "analysis_batch_size": 2,
         "max_items_per_minute": 2, "start_page": 2,
@@ -358,11 +359,14 @@ def test_main_workspace_parameters_are_previewed_frozen_and_applied(m3_stack, mo
     }
     draft = _create_draft(m3_stack, configuration)
     preview = m3_stack["service"].get_draft_view(draft.id, principal=_principal(m3_stack)).confirmation_preview
-    assert preview.estimated_max_contents == limit * 2
+    expected_total = min(limit * 2, 5)
+    assert preview.estimated_max_contents == expected_total
     assert preview.effective_parameters.max_concurrency == 1
     assert preview.effective_parameters.max_comments == 0
     assert preview.effective_parameters.get_sub_comment is False
-    assert preview.max_notes == 0
+    assert preview.max_notes == expected_total
+    assert preview.effective_parameters.auto_analyze is True
+    assert preview.effective_parameters.analyze_limit == 5
     run = m3_stack["service"].confirm_and_queue(ConfirmAndQueueCommand(
         draft_id=draft.id, expected_revision=draft.current_revision, confirmed=True,
         idempotency_key=f"parameters-{limit}"), principal=_principal(m3_stack))
@@ -374,9 +378,11 @@ def test_main_workspace_parameters_are_previewed_frozen_and_applied(m3_stack, mo
     job = adapter.job_store.get(job_id)
     assert job["requested_config"]["max_concurrency"] == 3
     assert job["effective_config"]["max_concurrency"] == 1
-    assert job["auto_analyze"] is False
+    assert job["auto_analyze"] is True
     assert job["collect_media"] is False
     assert job["max_notes"] == limit
+    assert job["max_total_notes"] == expected_total
+    assert job["analyze_limit"] == expected_total
     assert job["start_page"] == 2
     assert job["analysis_batch_size"] == 2
     assert adapter.ensure_job(run) == job_id

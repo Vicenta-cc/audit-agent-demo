@@ -24,6 +24,65 @@ def bare_pipeline() -> AuditPipeline:
     return pipeline
 
 
+class SubjectMediaSelectionTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.pipeline = bare_pipeline()
+        self.item = {
+            "aweme_id": "note-1",
+            "title": "帖子标题",
+            "desc": "帖子正文",
+            "note_download_url": "https://example.test/cover.jpg",
+            "video_download_url": "https://example.test/video.mp4",
+        }
+        self.comments = [
+            {
+                "aweme_id": "note-1",
+                "comment_id": "comment-1",
+                "content": "评论内容",
+            }
+        ]
+
+    def test_collect_media_false_excludes_local_and_remote_media(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            media_root = Path(directory)
+            image_dir = media_root / "assets" / "note-1" / "images"
+            video_dir = media_root / "assets" / "note-1" / "videos"
+            image_dir.mkdir(parents=True)
+            video_dir.mkdir(parents=True)
+            (image_dir / "image.jpg").write_bytes(b"image")
+            (video_dir / "video.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42")
+
+            subject = self.pipeline._build_subjects(
+                "dy",
+                [self.item],
+                self.comments,
+                media_root,
+                include_media=False,
+            )[0]
+
+        self.assertEqual(subject.image_urls, [])
+        self.assertEqual(subject.video_urls, [])
+        self.assertEqual(subject.local_image_paths, [])
+        self.assertEqual(subject.local_video_paths, [])
+        self.assertEqual(subject.comments, self.comments)
+        self.assertEqual(subject.title, "帖子标题")
+        self.assertEqual(subject.desc, "帖子正文")
+
+    def test_collect_media_true_preserves_existing_media_behavior(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            subject = self.pipeline._build_subjects(
+                "dy",
+                [self.item],
+                self.comments,
+                Path(directory),
+                include_media=True,
+            )[0]
+
+        self.assertEqual(subject.image_urls, ["https://example.test/cover.jpg"])
+        self.assertEqual(subject.video_urls, ["https://example.test/video.mp4"])
+        self.assertEqual(subject.comments, self.comments)
+
+
 class ReviewChunkTests(unittest.TestCase):
     def setUp(self) -> None:
         self.pipeline = bare_pipeline()

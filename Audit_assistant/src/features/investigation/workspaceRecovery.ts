@@ -16,6 +16,7 @@ import {
   activityEventsForTurn,
   restoreActivityTimelines
 } from "./investigationActivity";
+import { formatSessionTimestamp, latestSessionTimestamp } from "./sessionOrdering";
 export { presentCreationAssistantContent } from "./creationContentPresentation";
 
 function messageTime(createdAt: string) {
@@ -123,13 +124,15 @@ function emptyDraft(): TaskDraft {
 
 export function buildWorkspaceRecoveryErrorSession(
   workspaceSessionId: string,
-  message: string
+  message: string,
+  updatedAtIso = ""
 ): InvestigationSession {
   return {
     id: workspaceSessionId,
     title: "调查工作区读取失败",
     status: "配置中",
-    updatedAt: "刚刚",
+    updatedAt: formatSessionTimestamp(updatedAtIso),
+    updatedAtIso,
     draft: emptyDraft(),
     messages: [{
       id: `workspace-recovery-error:${workspaceSessionId}`,
@@ -145,13 +148,15 @@ export function buildWorkspaceRecoveryErrorSession(
 }
 
 export function buildNewInvestigationWorkspaceSession(
-  workspaceSessionId: string
+  workspaceSessionId: string,
+  updatedAtIso = ""
 ): InvestigationSession {
   return {
     id: workspaceSessionId,
     title: "新调查需求",
     status: "配置中",
-    updatedAt: "刚刚",
+    updatedAt: formatSessionTimestamp(updatedAtIso),
+    updatedAtIso,
     draft: emptyDraft(),
     executionPhase: "idle",
     executionProgress: 0,
@@ -246,6 +251,13 @@ export function restoreInvestigationWorkspace(
         message.turn_id === pendingReportTurn.turn_id && message.role === "user"
       ))?.content || ""
     : "";
+  const updatedAtIso = latestSessionTimestamp(
+    state.workspace.updated_at,
+    artifact?.draft.updated_at,
+    run?.updated_at,
+    ...state.messages.map((message) => message.created_at),
+    ...reportMessages.map((message) => message.created_at)
+  );
 
   return {
     id: workspaceSessionId,
@@ -263,7 +275,8 @@ export function restoreInvestigationWorkspace(
         : artifact
           ? artifact.presentation_stage === "confirmation" ? "等待确认" : "配置中"
           : "配置中",
-    updatedAt: "刚刚",
+    updatedAt: formatSessionTimestamp(updatedAtIso),
+    updatedAtIso,
     draft,
     messages,
     executionPhase: runView?.phase || "idle",

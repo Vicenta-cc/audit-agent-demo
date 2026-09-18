@@ -241,6 +241,7 @@ def create_investigation_router(
         return InvestigationTurnAcceptedResponse(
             session_id=turn.session_id,
             turn_id=turn.id,
+            updated_at=turn.created_at,
         )
 
     @router.get(
@@ -308,6 +309,7 @@ def create_investigation_router(
         return InvestigationTurnAcceptedResponse(
             session_id=turn.session_id,
             turn_id=turn.id,
+            updated_at=turn.created_at,
         )
 
     return router

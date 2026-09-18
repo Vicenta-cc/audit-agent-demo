@@ -14,7 +14,7 @@ from backend.reporting.account_overview import (
 from backend.reporting.comment_statistics import snapshot_comment_coverage
 from backend.reporting.contracts import ReportGraphState
 from backend.reporting.errors import ReportValidationError
-from backend.reporting.pass_graph import PassReportGraph
+from backend.reporting.pass_graph import PassReportGraph, partial_coverage_paragraphs
 from backend.reporting.structured_contract import validate_structured_report_document
 
 
@@ -393,18 +393,20 @@ class UnifiedAuditReportGraph(PassReportGraph):
             comment_scope = (
                 "部分帖子的评论列表没有完整保存，因此不能据此判断“没有评论风险”。"
             )
+        methodology_paragraphs = [
+            f"本报告只覆盖当前列出的 {len(snapshot.posts)} 条帖子和已经完成审核的评论，"
+            "不代表相关账号的其他内容或后续内容。",
+            "报告由系统根据生成时保存的审核结果自动整理；"
+            "每条结论都可以回到对应帖子和原审核记录核对。",
+            comment_scope,
+            *partial_coverage_paragraphs(snapshot),
+        ]
         self._section(
             sections,
             number="7",
             kind="methodology",
             title="方法、范围与限制",
-            paragraphs=[
-                f"本报告只覆盖当前列出的 {len(snapshot.posts)} 条帖子和已经完成审核的评论，"
-                "不代表相关账号的其他内容或后续内容。",
-                "报告由系统根据生成时保存的审核结果自动整理；"
-                "每条结论都可以回到对应帖子和原审核记录核对。",
-                comment_scope,
-            ],
+            paragraphs=methodology_paragraphs,
         )
         self._section(
             sections,

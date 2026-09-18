@@ -1,7 +1,7 @@
 """One audited risk post: preserve its verdict and evidence without clustering."""
 
 from backend.reporting.errors import ReportValidationError
-from backend.reporting.pass_graph import PassReportGraph, SCOPE
+from backend.reporting.pass_graph import PassReportGraph, SCOPE, partial_coverage_paragraphs
 
 SINGLE_POST_TEMPLATE_VERSION = "report-single-risk-post/v1"
 DECISIONS = {"pass": "通过", "review": "复审", "reject": "拒绝"}
@@ -64,6 +64,9 @@ class SinglePostReportGraph(PassReportGraph):
         add("2.1", "deterministic_statistics", "内容与评论规模", [coverage], "section-2")
         add("2.2", "deterministic_statistics", "审核结果与风险等级", [f"审核决定：{verdict}；风险等级：{risk}。"], "section-2")
         add("2.3", "account_activity_overview", "账号活动概览", ["仅统计本次样本中的发布账号，不推断账号全部历史活动。"], "section-2")
+        partial_paragraphs = partial_coverage_paragraphs(snapshot)
+        if partial_paragraphs:
+            add("2.4", "coverage_diagnostics", "失败帖子与统计口径", partial_paragraphs, "section-2")
         add("3", "audit_samples", "本次审核发现与样本", [
             "本次仅审核 1 条帖子，作为独立样本展示；原审核说明及直接依据可在帖子详情中核对。",
             result.get("summary") or "原审核结果未提供文字说明。",

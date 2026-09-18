@@ -272,6 +272,7 @@ class InvestigationTaskParameters(StrictModel):
     crawler_account_id: StrictStr | None = None
     start_page: StrictInt = Field(default=1, ge=1)
     max_notes: StrictInt = Field(default=1, ge=1, le=5)
+    max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
     max_comments: StrictInt = Field(default=1, ge=0, le=1000)
     collect_comments: StrictBool = True
     get_sub_comment: StrictBool = False
@@ -332,6 +333,7 @@ class CollectionConfiguration(StrictModel):
     display_name: StrictStr = ""
     start_page: StrictInt = Field(default=1, ge=1)
     max_notes: StrictInt = Field(default=5, ge=1, le=5)
+    max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
     max_comments: StrictInt = Field(default=300, ge=0, le=1000)
     max_concurrency: StrictInt = Field(default=1, ge=1, le=3)
     max_items_per_minute: StrictInt = Field(default=5, ge=1, le=5)
@@ -690,11 +692,17 @@ class ResolvedExecutionConfiguration(StrictModel):
     auto_analyze: StrictBool | None = None
     collect_comments: StrictBool | None = None
     collect_media: StrictBool | None = None
+    max_total_notes: StrictInt | None = Field(default=None, ge=1, le=5)
 
     @model_serializer(mode="wrap")
     def serialize_execution(self, handler):
         payload = handler(self)
-        for key in ("auto_analyze", "collect_comments", "collect_media"):
+        for key in (
+            "auto_analyze",
+            "collect_comments",
+            "collect_media",
+            "max_total_notes",
+        ):
             if payload.get(key) is None:
                 payload.pop(key, None)
         return payload

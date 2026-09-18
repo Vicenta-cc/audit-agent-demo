@@ -1292,10 +1292,22 @@ class WorkerRecoveryAndFencingTest(M3TestCase):
             ["note-a"],
         )
 
-    def test_recorded_post_failure_finishes_processing_without_full_report(self):
+    def test_recorded_post_failure_publishes_partial_report_when_one_post_succeeds(self):
         self.queue_run()
         state = FakeExecutionAdapter.completed_state(ingested=2, pending=1, completed=1)
         state["task_stats"]["failed_analysis_count"] = 1
+        execution = FakeExecutionAdapter(final_state=state)
+        report = FakeReportAdapter()
+        result = self.worker(execution, report).run_once()
+        self.assertEqual(result.status, RunStatus.PUBLISHED)
+        self.assertEqual(report.generate_calls, 1)
+        self.assertFalse(result.error_code)
+
+    def test_all_recorded_post_failures_finish_without_report(self):
+        self.queue_run()
+        state = FakeExecutionAdapter.completed_state(ingested=2, pending=2, completed=0)
+        state["task_stats"]["failed_analysis_count"] = 2
+        state["audit_results"] = []
         execution = FakeExecutionAdapter(final_state=state)
         report = FakeReportAdapter()
         result = self.worker(execution, report).run_once()

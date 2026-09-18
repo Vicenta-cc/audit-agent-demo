@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 import itertools
+import json
 from pathlib import Path
 import runpy
 from unittest.mock import Mock
@@ -137,6 +138,72 @@ def test_new_tasks_publish_one_deterministic_unified_report_for_every_safe_risk_
             "WHERE report_version_id = ?",
             (result.report_version_id,),
         ).fetchone()[0] == 0
+
+
+def test_partial_report_exposes_sanitized_failed_post_diagnostics(tmp_path):
+    source, store = seed["seed_audit"](tmp_path, count=1)
+    batch = tmp_path / "failed-batch.json"
+    batch.write_text(
+        json.dumps(
+            {
+                "task_id": "new-search-task",
+                "platform": "dy",
+                "items": [{"aweme_id": "failed-20002", "title": "失败帖子"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    ingestion = seed["IngestionStore"](store.db_path)
+    ingestion.ingest_batch(batch, tmp_path / "raw-failed")
+    ingestion.mark_content_status(
+        "dy", "failed-20002", "failed", task_id="new-search-task"
+    )
+    failure_dir = tmp_path / "outputs" / "new-search-task" / "post_failures"
+    failure_dir.mkdir(parents=True)
+    (failure_dir / "failed-20002-1.json").write_text(
+        json.dumps(
+            {
+                "note_id": "failed-20002",
+                "content_key": "failed-20002",
+                "stage": "fusion",
+                "error_code": "fusion_contract_invalid",
+                "reason": "private provider detail /Users/private/token",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = seed["R31ReportRuntime"](store).generate(
+        "new-search-task",
+        source=source,
+        checkpoint_path=tmp_path / "partial-checkpoints.sqlite3",
+    )
+    document = store.get_frontend_report(result.report_version_id)
+    coverage = document["source_coverage"]
+    assert coverage["candidate_posts"] == 2
+    assert coverage["selected_posts"] == 1
+    assert coverage["excluded_failed_posts"] == [
+        {
+            "post_id": "failed-20002",
+            "note_id": "failed-20002",
+            "analyze_status": "failed",
+            "stage": "fusion",
+            "reason": "审核结果未通过证据或格式校验",
+            "error_code": "fusion_contract_invalid",
+        }
+    ]
+    serialized = json.dumps(document, ensure_ascii=False)
+    assert "private provider detail" not in serialized
+    assert "/Users/private" not in serialized
+    methodology = next(
+        section
+        for section in document["ordered_sections"]
+        if section["section_number"] == "7"
+    )
+    text = "".join(paragraph["text"] for paragraph in methodology["paragraphs"])
+    assert "排除在风险比例分母之外" in text
+    assert "failed-20002" in text
+    assert "fusion_contract_invalid" in text
 
 
 def test_unified_report_presents_publishers_commenters_and_complete_post_navigation(

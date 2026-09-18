@@ -4,7 +4,7 @@ import type {
 } from "./investigations";
 
 export type InvestigationPlatform = "xhs" | "dy" | "ks" | "wb";
-export type InvestigationCreationPlatform = Exclude<InvestigationPlatform, "wb">;
+export type InvestigationCreationPlatform = InvestigationPlatform;
 export type InvestigationRunStatus =
   | "QUEUED"
   | "RUNNING"
@@ -80,6 +80,7 @@ export interface InvestigationTaskParameters {
   crawler_account_id?: string | null;
   start_page: number;
   max_notes: number;
+  max_total_notes: number;
   max_comments: number;
   collect_comments: boolean;
   get_sub_comment: boolean;

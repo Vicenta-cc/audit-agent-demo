@@ -201,7 +201,7 @@ export function sendInvestigationWorkspaceReportTurn(
   runId: string,
   request: { clientMessageId: string; content: string }
 ) {
-  return apiRequest<{ turn_id: string; status: "running" }>(
+  return apiRequest<{ turn_id: string; status: "running"; updated_at: string }>(
     `/api/investigation-workspaces/${encodeURIComponent(workspaceSessionId)}`
       + `/runs/${encodeURIComponent(runId)}/report-turns`,
     {

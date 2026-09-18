@@ -13,13 +13,17 @@ class TaskSettingsConflict(ValueError):
 
 def effective_parameters(requested):
     requested = InvestigationTaskParameters.model_validate(requested)
+    max_total_notes = min(requested.max_total_notes, 5)
     return requested.model_copy(update={
-        "max_notes": min(requested.max_notes, settings.m3_posts_per_keyword),
+        "max_notes": min(requested.max_notes, 5),
+        "max_total_notes": max_total_notes,
         "max_comments": min(requested.max_comments, settings.m3_comments_per_post) if requested.collect_comments else 0,
         "get_sub_comment": requested.get_sub_comment and requested.collect_comments and requested.max_comments > 0 and settings.m3_comments_per_post > 0,
         "max_concurrency": min(requested.max_concurrency, max(1, settings.crawler_max_concurrency)),
-        "analyze_limit": min(requested.analyze_limit, settings.m3_analyze_limit) if requested.auto_analyze and settings.auto_analyze_crawled_content else 0,
-        "auto_analyze": requested.auto_analyze and requested.analyze_limit > 0 and settings.auto_analyze_crawled_content,
+        # Every collected post is audited. The exact per-task limit is frozen
+        # later, after the final keyword count is known.
+        "analyze_limit": max_total_notes,
+        "auto_analyze": True,
     })
 
 

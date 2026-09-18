@@ -113,7 +113,7 @@ export function TaskConfirmationCard({
             </div>
             <div className="task-final-field">
               <span>采集数量</span>
-              <strong>预计最多采集 {preview.estimated_max_contents ?? preview.max_notes} 条；自动分析最多 {preview.max_notes} 条</strong>
+              <strong>预计最多采集 {preview.estimated_max_contents ?? preview.max_notes} 条；实际采集内容全部自动审核</strong>
             </div>
             {preview.max_posts_per_keyword !== undefined ? (
               <div className="task-final-field">
@@ -128,7 +128,7 @@ export function TaskConfirmationCard({
       {preview?.effective_parameters ? <p aria-label="本次使用的统一设置">
         本次使用统一采集与分析设置：{preview.effective_parameters.max_items_per_minute} 条/分钟，
         并发 {preview.effective_parameters.max_concurrency}，分析批次 {preview.effective_parameters.analysis_batch_size}；
-        {preview.effective_parameters.auto_analyze ? "边采集边分析" : "仅采集，分析手动启动"}。
+        实际采集内容全部自动审核。
         如需修改，请到左侧业务入口“采集与分析设置”；启动后本任务参数保持不变。
       </p> : null}
 

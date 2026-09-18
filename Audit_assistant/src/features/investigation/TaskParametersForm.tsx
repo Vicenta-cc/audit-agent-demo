@@ -17,7 +17,14 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  useEffect(() => { setValues(initial); setDirty(false); onDirty(false); }, [preview]);
+  const initialKey = JSON.stringify(initial ?? null);
+  const [syncedKey, setSyncedKey] = useState(initialKey);
+  useEffect(() => {
+    if (dirty || initialKey === syncedKey) return;
+    setValues(initial);
+    setSyncedKey(initialKey);
+    onDirty(false);
+  }, [dirty, initial, initialKey, onDirty, syncedKey]);
   useEffect(() => {
     let live = true;
     fetchCrawlerAccounts().then(items => { if (live) setAccounts(items.filter(a => a.platform === preview.platform)); })
@@ -42,9 +49,14 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
       disabled={inactive} onChange={event => change(key, event.target.checked)} />{label}</label>
   );
   const effective = preview.effective_parameters;
+  const keywordCount = Math.max(1, preview.resolved_search_terms.length);
+  const plannedCount = Math.min(values.max_total_notes, values.max_notes * keywordCount);
   return <form className="investigation-parameters" aria-label="采集与分析参数" onSubmit={async event => {
     event.preventDefault(); setSaving(true); setError("");
-    try { await onSave(values); setDirty(false); onDirty(false); }
+    try {
+      await onSave({ ...values, auto_analyze: true, analyze_limit: values.max_total_notes });
+      setDirty(false); onDirty(false);
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : "参数保存失败"); }
     finally { setSaving(false); }
   }}>
@@ -62,33 +74,37 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
       {accountError ? <p role="alert">{accountError}</p> : null}
       <div className="investigation-parameter-grid">
         {numeric("max_notes", preview.mode === "search" ? "每个关键词采集上限" : "本任务采集上限", 1, 5, "条", "默认 1 条")}
+        {numeric("max_total_notes", "单任务总采集上限", 1, 5, "条", "达到后停止后续关键词")}
         {numeric("start_page", "起始页", 1, 10000, "页", "默认第 1 页；恢复使用检查点")}
       </div>
-      <p>{globalSettings ? `关键词任务每词最多 ${values.max_notes} 条；博主任务总量最多 ${values.max_notes} 条。` : `${preview.resolved_search_terms.length} 个关键词，预计最多 ${values.max_notes * Math.max(1, preview.resolved_search_terms.length)} 条。`}</p>
-      {toggle("collect_media", "采集图片与视频媒体")}
+      <p>{globalSettings ? `关键词任务每词最多 ${values.max_notes} 条，单任务最多 ${values.max_total_notes} 条。` : `${preview.resolved_search_terms.length} 个关键词，预计最多 ${plannedCount} 条；实际采集内容全部自动审核。`}</p>
+      {toggle("collect_media", "采集并审核图片与视频")}
     </fieldset>
-    <fieldset disabled={saving || disabled}><legend>评论与速度</legend>
+    <fieldset disabled={saving || disabled}><legend>评论采集</legend>
       {toggle("collect_comments", "采集评论")}
       {toggle("get_sub_comment", "采集二级评论", !values.collect_comments)}
       <div className="investigation-parameter-grid">
         {numeric("max_comments", "每帖一级评论上限", 0, 1000, "条", "0 表示不采集评论", !values.collect_comments)}
-        {numeric("max_items_per_minute", "每分钟内容数", 1, 5, "条/分钟", "默认 1；不等同于 API 请求频率")}
+      </div>
+    </fieldset>
+    <fieldset disabled={saving || disabled}><legend>抓帖速度</legend>
+      <div className="investigation-parameter-grid">
+        {numeric("max_items_per_minute", "帖子抓取速度", 1, 5, "条/分钟", "默认 1；不等同于评论抓取速度")}
         {numeric("max_concurrency", "采集并发", 1, 3, "个", "默认 1；受服务端上限约束")}
       </div>
     </fieldset>
     <fieldset disabled={saving || disabled}><legend>分析设置</legend>
-      {toggle("auto_analyze", "入库后自动分析")}
       <div className="investigation-parameter-grid">
-        {numeric("analyze_limit", "自动分析上限", 0, 10000, "条", "0 表示不自动分析", !values.auto_analyze)}
         {numeric("analysis_batch_size", "分析批次", 1, 20, "条/批", "默认 1；内容完成后响应暂停/停止")}
       </div>
-      <small>关闭自动分析仍会保留采集内容，可从流水线手动继续分析。管理员限速、凭据和浏览器配置由服务端管理。</small>
+      <small>实际采集并入库的内容会全部自动审核；审核数量不再单独设置。管理员限速、凭据和浏览器配置由服务端管理。</small>
     </fieldset>
     {effective ? <p className="investigation-effective-parameters" aria-label="已保存的实际生效参数">
-      已保存生效值：采集上限 {effective.max_notes} 条{preview.mode === "search" ? "/词" : "/任务"}{globalSettings ? "" : `，最多 ${preview.estimated_max_contents} 条`}；
+      已保存生效值：采集上限 {effective.max_notes} 条{preview.mode === "search" ? "/词" : "/任务"}，单任务最多 {effective.max_total_notes} 条{globalSettings ? "" : `，本次预计最多 ${preview.estimated_max_contents} 条`}；
       评论 {effective.max_comments} 条/帖，{effective.get_sub_comment ? "含二级评论" : "仅一级评论"}；
+      图片与视频{effective.collect_media ? "采集并审核" : "不采集、不审核"}；
       {effective.max_items_per_minute} 条/分钟，并发 {effective.max_concurrency}；
-      {effective.auto_analyze ? `自动分析最多 ${effective.analyze_limit} 条` : "不自动分析"}，每批 {effective.analysis_batch_size} 条。
+      实际采集内容全部自动审核，每批 {effective.analysis_batch_size} 条。
     </p> : null}
     {error ? <p role="alert">{error}</p> : null}
     <button type="submit" className="mt-button mt-button-secondary" disabled={(!dirty && !globalSettings) || saving || disabled}>{saving ? "保存中…" : globalSettings ? "保存统一设置" : "保存采集与分析参数"}</button>

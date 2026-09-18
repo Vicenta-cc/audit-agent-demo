@@ -75,4 +75,5 @@ export interface HistoricalReportWorkspaceList {
 export interface HistoricalReportTurnAccepted {
   turn_id: string;
   status: "running";
+  updated_at: string;
 }

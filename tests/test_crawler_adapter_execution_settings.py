@@ -20,11 +20,16 @@ from backend.audit_agent.crawler_adapter import (
 
 
 class RecordingAdapter(MediaCrawlerAdapter):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.recorded_calls = []
+
     def _build_runner(self) -> list[str]:
         return ["python", "main.py"]
 
     def _run_command(self, **kwargs) -> CrawlOutput:
         self.recorded = kwargs
+        self.recorded_calls.append(kwargs)
         return CrawlOutput(
             platform=kwargs["platform"],
             contents=[],
@@ -58,7 +63,12 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
                                         max_comments=1000, max_concurrency=1, max_items_per_minute=3,
                                         get_sub_comment=False, save_root=Path(temp_dir) / 'output')
             self.assertEqual(result.command[result.command.index('--crawler_max_notes_count') + 1], '20')
-            self.assertEqual(adapter.recorded['max_notes'], 40)
+            self.assertEqual(len(adapter.recorded_calls), 2)
+            self.assertEqual([call['max_notes'] for call in adapter.recorded_calls], [20, 20])
+            self.assertEqual(
+                [call['command'][call['command'].index('--keywords') + 1] for call in adapter.recorded_calls],
+                ['词一', '词二'],
+            )
 
     def test_multi_keyword_resume_keeps_initial_page_separate_from_checkpoint(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -70,10 +80,130 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
                 current_task_id="task-a", resume_keyword="词一", resume_page=3,
             )
 
-            self.assertEqual(result.command[result.command.index("--start") + 1], "0")
-            self.assertEqual(result.command[result.command.index("--resume_keyword") + 1], "词一")
-            self.assertEqual(result.command[result.command.index("--resume_page") + 1], "3")
-            self.assertEqual(adapter.recorded["max_notes"], 4)
+            first = adapter.recorded_calls[0]
+            self.assertEqual(first['command'][first['command'].index("--start") + 1], "0")
+            self.assertEqual(first['command'][first['command'].index("--resume_keyword") + 1], "词一")
+            self.assertEqual(first['command'][first['command'].index("--resume_page") + 1], "3")
+            self.assertEqual([call["max_notes"] for call in adapter.recorded_calls], [2, 2])
+
+    def test_total_limit_is_consumed_in_keyword_order_and_uses_unused_capacity(self):
+        class ResultAdapter(RecordingAdapter):
+            def __init__(self, root, actual_counts):
+                super().__init__(root)
+                self.actual_counts = actual_counts
+                self.contents = []
+
+            def _run_command(self, **kwargs):
+                self.recorded_calls.append(kwargs)
+                command = kwargs['command']
+                term = command[command.index('--keywords') + 1]
+                limit = int(command[command.index('--crawler_max_notes_count') + 1])
+                count = min(limit, self.actual_counts.get(term, 0))
+                offset = len(self.contents)
+                self.contents.extend(
+                    {'aweme_id': f'{term}-{offset + index}', 'source_keyword': term}
+                    for index in range(count)
+                )
+                return CrawlOutput(kwargs['platform'], list(self.contents), [], kwargs['save_root'], command=command)
+
+            def _load_platform_output(self, save_root, platform):
+                return CrawlOutput(platform, list(self.contents), [], save_root)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = ResultAdapter(Path(temp_dir), {'词一': 4, '词二': 4})
+            output = adapter.run_search(
+                platform='dy', keyword='词一,词二', start_page=0, max_notes=4,
+                max_total_notes=5, max_comments=0, max_concurrency=1,
+                max_items_per_minute=1, get_sub_comment=False,
+                save_root=Path(temp_dir) / 'output',
+            )
+            self.assertEqual([call['max_notes'] for call in adapter.recorded_calls], [4, 1])
+            self.assertEqual(len(output.contents), 5)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = ResultAdapter(Path(temp_dir), {'词一': 2, '词二': 4})
+            output = adapter.run_search(
+                platform='dy', keyword='词一,词二', start_page=0, max_notes=4,
+                max_total_notes=5, max_comments=0, max_concurrency=1,
+                max_items_per_minute=1, get_sub_comment=False,
+                save_root=Path(temp_dir) / 'output',
+            )
+            self.assertEqual([call['max_notes'] for call in adapter.recorded_calls], [4, 3])
+            self.assertEqual(len(output.contents), 5)
+
+    def test_total_limit_resume_passes_absolute_keyword_target_to_crawler(self):
+        class ResumeAdapter(RecordingAdapter):
+            def __init__(self, root):
+                super().__init__(root)
+                self.contents = [
+                    {'aweme_id': '词一-existing-1', 'source_keyword': '词一'},
+                    {'aweme_id': '词一-existing-2', 'source_keyword': '词一'},
+                ]
+
+            def _run_command(self, **kwargs):
+                self.recorded_calls.append(kwargs)
+                command = kwargs['command']
+                term = command[command.index('--keywords') + 1]
+                target = int(command[command.index('--crawler_max_notes_count') + 1])
+                existing = sum(item['source_keyword'] == term for item in self.contents)
+                self.contents.extend(
+                    {'aweme_id': f'{term}-new-{index}', 'source_keyword': term}
+                    for index in range(existing, target)
+                )
+                return CrawlOutput(kwargs['platform'], list(self.contents), [], kwargs['save_root'], command=command)
+
+            def _load_platform_output(self, save_root, platform):
+                return CrawlOutput(platform, list(self.contents), [], save_root)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = ResumeAdapter(Path(temp_dir))
+            output = adapter.run_search(
+                platform='dy', keyword='词一,词二', start_page=0, max_notes=4,
+                max_total_notes=5, max_comments=0, max_concurrency=1,
+                max_items_per_minute=1, get_sub_comment=False,
+                save_root=Path(temp_dir) / 'output',
+                reusable_content_db=Path(temp_dir) / 'audit.sqlite3',
+                current_task_id='task-a', resume_keyword='词一', resume_page=3,
+            )
+
+            self.assertEqual([call['max_notes'] for call in adapter.recorded_calls], [4, 1])
+            self.assertEqual(len(output.contents), 5)
+
+    def test_total_limit_resume_uses_only_new_capacity_without_task_db_restore(self):
+        class ResumeAdapter(RecordingAdapter):
+            def __init__(self, root):
+                super().__init__(root)
+                self.contents = [
+                    {'note_id': '词一-existing-1', 'source_keyword': '词一'},
+                    {'note_id': '词一-existing-2', 'source_keyword': '词一'},
+                ]
+
+            def _run_command(self, **kwargs):
+                self.recorded_calls.append(kwargs)
+                command = kwargs['command']
+                term = command[command.index('--keywords') + 1]
+                new_count = int(command[command.index('--crawler_max_notes_count') + 1])
+                self.contents.extend(
+                    {'note_id': f'{term}-new-{index}', 'source_keyword': term}
+                    for index in range(new_count)
+                )
+                return CrawlOutput(kwargs['platform'], list(self.contents), [], kwargs['save_root'], command=command)
+
+            def _load_platform_output(self, save_root, platform):
+                return CrawlOutput(platform, list(self.contents), [], save_root)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = ResumeAdapter(Path(temp_dir))
+            output = adapter.run_search(
+                platform='xhs', keyword='词一,词二', start_page=1, max_notes=4,
+                max_total_notes=5, max_comments=0, max_concurrency=1,
+                max_items_per_minute=1, get_sub_comment=False,
+                save_root=Path(temp_dir) / 'output',
+                current_task_id='task-a', resume_keyword='词一', resume_page=3,
+            )
+
+            self.assertEqual([call['max_notes'] for call in adapter.recorded_calls], [2, 1])
+            self.assertEqual(len(output.contents), 5)
 
     def test_command_contains_rate_and_concurrency_but_not_login_state(self):
         auth_state = {
