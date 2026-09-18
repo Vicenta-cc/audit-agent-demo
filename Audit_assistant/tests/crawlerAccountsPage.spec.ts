@@ -34,7 +34,7 @@ test("interactive login keeps owner token, scales pointer input, accepts text an
   await page.keyboard.type("123456");
   await page.keyboard.press("Enter");
   await expect.poll(() => operations.filter(x => x.type === "text").map(x => x.text).join("")).toBe("123456");
-  expect(operations[0].type).toBe("pointer_down");
+  expect(operations[0].type).toBe("click");
   expect(Number(operations[0].x)).toBeCloseTo(500, 0);
   expect(Number(operations[0].y)).toBeCloseTo(380, 0);
   expect(new Set(tokens).size).toBe(1);

@@ -12,6 +12,7 @@ export function CrawlerLoginInteractiveView({ sessionId }: { sessionId: string }
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
   const dragging = useRef(false);
+  const pressedAt = useRef<{ x: number; y: number } | null>(null);
   const lastMove = useRef(0);
   const queue = useRef(Promise.resolve());
   const queued = useRef(0);
@@ -96,21 +97,32 @@ export function CrawlerLoginInteractiveView({ sessionId }: { sessionId: string }
       onContextMenu={event => event.preventDefault()}
       onPointerDown={event => {
         if (event.button !== 0 || !frame) return;
-        event.preventDefault(); dragging.current = true;
+        event.preventDefault(); dragging.current = false;
+        pressedAt.current = point(event);
         event.currentTarget.setPointerCapture(event.pointerId);
         inputRef.current?.focus({ preventScroll: true });
-        send({ type: "pointer_down", ...point(event) });
       }}
       onPointerMove={event => {
-        if (!dragging.current || Date.now() - lastMove.current < 75) return;
-        lastMove.current = Date.now(); send({ type: "pointer_move", ...point(event) });
+        const start = pressedAt.current;
+        if (!start) return;
+        const next = point(event);
+        if (!dragging.current) {
+          if (Math.hypot(next.x - start.x, next.y - start.y) < 5) return;
+          dragging.current = true;
+          send({ type: "pointer_down", ...start });
+        }
+        if (Date.now() - lastMove.current < 75) return;
+        lastMove.current = Date.now(); send({ type: "pointer_move", ...next });
       }}
       onPointerUp={event => {
-        if (!dragging.current) return;
-        dragging.current = false; send({ type: "pointer_up", ...point(event) });
+        if (!pressedAt.current) return;
+        send({ type: dragging.current ? "pointer_up" : "click", ...point(event) });
+        pressedAt.current = null;
+        dragging.current = false;
       }}
       onPointerCancel={event => {
         if (dragging.current) send({ type: "pointer_up", ...point(event) });
+        pressedAt.current = null;
         dragging.current = false;
       }}
       onWheel={event => send({ type: "scroll", delta: Math.max(-760, Math.min(760, event.deltaY)) })}>
