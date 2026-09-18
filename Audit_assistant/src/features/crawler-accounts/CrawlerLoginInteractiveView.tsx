@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { API_BASE, apiRequest } from "../../services/apiClient";
 import { loginControlHeaders } from "../../services/crawlerAccounts";
+import { Button } from "../../components/common/Button";
 
 const WIDTH = 1000;
 const HEIGHT = 760;
@@ -98,7 +99,7 @@ export function CrawlerLoginInteractiveView({ sessionId }: { sessionId: string }
   return <div className="crawler-login-interactive-view">
     <div className="crawler-login-prompt-controls">
       <span>页面点不动时，可先取消浏览器提示。</span>
-      <button type="button" className="button button-secondary" onClick={() => send({ type: "dismiss_browser_prompt" })}>取消浏览器提示</button>
+      <Button type="button" size="small" onClick={() => send({ type: "dismiss_browser_prompt" })}>取消浏览器提示</Button>
     </div>
     {notice ? <p role="status" className="crawler-login-input-notice">{notice}</p> : null}
     {error ? <p role="status" className="crawler-login-connection-error">{error}</p> : null}
