@@ -544,6 +544,8 @@
 .crawler-login-screen > span { display: block; padding: 40px; text-align: center; }
 .crawler-login-keyboard { position: absolute; width: 1px; height: 1px; opacity: 0; left: 0; top: 0; padding: 0; border: 0; }
 .crawler-login-connection-error { color: #b45309; font-size: 13px; text-align: center; }
+.crawler-login-prompt-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; font-size: 13px; color: #64748b; }
+.crawler-login-input-notice { font-size: 13px; text-align: center; color: #475569; }
 
 .crawler-login-header {
   display: flex;

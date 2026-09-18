@@ -11,6 +11,8 @@ def validate_login_input(event: dict) -> dict:
     if not isinstance(event, dict) or not isinstance(event.get("type"), str):
         raise ValueError("无效的登录操作")
     kind = event.get("type")
+    if kind == "dismiss_browser_prompt":
+        return {"type": kind}
     if kind in {"click", "pointer_down", "pointer_up", "pointer_move"}:
         values = (event.get("x"), event.get("y"))
         if not all(type(v) in (int, float) and math.isfinite(v) for v in values):

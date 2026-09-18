@@ -9,6 +9,7 @@ const keys = new Set(["Enter", "Backspace", "Delete", "Tab", "Escape", "ArrowLef
 export function CrawlerLoginInteractiveView({ sessionId }: { sessionId: string }) {
   const [frame, setFrame] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const composing = useRef(false);
   const dragging = useRef(false);
@@ -25,12 +26,14 @@ export function CrawlerLoginInteractiveView({ sessionId }: { sessionId: string }
     let timer = 0;
     let sequence = 0;
     let url = "";
+    let closed = false;
     async function poll() {
       try {
         const response = await fetch(`${API_BASE()}${base}/frame?after=${sequence}`, {
           headers: loginControlHeaders(), signal: abort.signal, cache: "no-store"
         });
         if (response.status === 410 || response.status === 403) {
+          closed = true;
           if (!abort.signal.aborted) setError("登录画面已关闭，请查看登录状态或重新打开窗口");
           return;
         }
@@ -48,7 +51,7 @@ export function CrawlerLoginInteractiveView({ sessionId }: { sessionId: string }
       } catch {
         if (!abort.signal.aborted) setError("暂时无法连接登录画面，正在重连");
       } finally {
-        if (!abort.signal.aborted) timer = window.setTimeout(poll, 550);
+        if (!abort.signal.aborted && !closed) timer = window.setTimeout(poll, 550);
       }
     }
     void poll();
@@ -70,6 +73,7 @@ export function CrawlerLoginInteractiveView({ sessionId }: { sessionId: string }
       if (!mounted.current) return;
       try {
         await apiRequest(`${base}/input`, { method: "POST", headers: loginControlHeaders(), body: JSON.stringify(event) });
+        if (event.type === "dismiss_browser_prompt" && mounted.current) setNotice("已发送取消操作，请再试一下页面按钮。");
       } catch (reason) {
         if (mounted.current) setError(reason instanceof Error ? reason.message : "操作未送达，请重试");
       }
@@ -92,6 +96,11 @@ export function CrawlerLoginInteractiveView({ sessionId }: { sessionId: string }
   }
 
   return <div className="crawler-login-interactive-view">
+    <div className="crawler-login-prompt-controls">
+      <span>页面点不动时，可先取消浏览器提示。</span>
+      <button type="button" className="button button-secondary" onClick={() => send({ type: "dismiss_browser_prompt" })}>取消浏览器提示</button>
+    </div>
+    {notice ? <p role="status" className="crawler-login-input-notice">{notice}</p> : null}
     {error ? <p role="status" className="crawler-login-connection-error">{error}</p> : null}
     <div className="crawler-login-screen" aria-label="平台登录页面" role="group"
       onContextMenu={event => event.preventDefault()}

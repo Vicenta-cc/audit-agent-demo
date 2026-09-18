@@ -27,6 +27,10 @@ def test_remote_input_rejects_shortcuts_and_unbounded_data(event):
         validate_login_input(event)
 
 
+def test_native_prompt_cancellation_cannot_accept_arbitrary_keys_or_displays():
+    assert validate_login_input({"type": "dismiss_browser_prompt", "key": "Return", "display": ":99"}) == {"type": "dismiss_browser_prompt"}
+
+
 def test_interactive_process_owner_frame_input_and_encrypted_completion():
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)

@@ -96,26 +96,15 @@ async def inputs(context):
             try:
                 command = validate_login_input(json.loads(line))
                 page = await current_page(context)
-                print("login input", command["type"], command.get("x", ""), command.get("y", ""), "page", bool(page), file=sys.stderr, flush=True)
-                if page:
+                if command["type"] == "dismiss_browser_prompt":
+                    from scripts.crawler_login_native import dismiss_browser_prompt
+                    await asyncio.to_thread(dismiss_browser_prompt)
+                elif page:
                     await asyncio.wait_for(page.bring_to_front(), 3)
                     await asyncio.wait_for(apply_input(page, command), 3)
-                    print("login input applied", file=sys.stderr, flush=True)
-                    if command["type"] == "pointer_up":
-                        try:
-                            hit = await asyncio.wait_for(page.evaluate("""([x,y]) => {
-                              const e = document.elementFromPoint(x,y);
-                              return {tag:e?.tagName, role:e?.getAttribute('role'), parents:[e,e?.parentElement,e?.parentElement?.parentElement].filter(Boolean).map(n=>({tag:n.tagName,cls:n.className,rect:n.getBoundingClientRect().toJSON()})),
-                                frames:[...document.querySelectorAll('iframe')].map(f=>({src:f.src.split('?')[0],rect:f.getBoundingClientRect().toJSON()}))};
-                            }""", [command["x"], command["y"]]), 2)
-                            print("login hit", json.dumps(hit), file=sys.stderr, flush=True)
-                        except Exception as exc:
-                            print("login hit error", type(exc).__name__, file=sys.stderr, flush=True)
-            except (ValueError, TypeError, asyncio.TimeoutError) as exc:
-                print("login input error", type(exc).__name__, file=sys.stderr, flush=True)
+            except (ValueError, TypeError, asyncio.TimeoutError):
                 continue
-            except Exception as exc:
-                print("login input error", type(exc).__name__, file=sys.stderr, flush=True)
+            except Exception:
                 continue  # A page may be replaced while an input is in flight.
     finally:
         transport.close()
@@ -186,7 +175,6 @@ async def interactive_flow(account_id, expected_account_id):
             host = urlsplit(request.url).hostname or ""
             trusted_frame = host == "lf-rc1.yhgfb-cn-static.com" and request.frame.parent_frame is not None
             if request.is_navigation_request() and not (host == "douyin.com" or host.endswith(".douyin.com") or trusted_frame):
-                print("login navigation blocked", host, file=sys.stderr, flush=True)
                 await route.abort()
             else:
                 await route.continue_()
@@ -194,8 +182,6 @@ async def interactive_flow(account_id, expected_account_id):
         page = await context.new_page()
         await page.set_viewport_size({"width": VIEW_WIDTH, "height": VIEW_HEIGHT})
         page.set_default_timeout(3000)
-        page.on("console", lambda message: print(message.text, file=sys.stderr, flush=True) if message.text.startswith("login-pointer") else None)
-        await page.add_init_script("""for (const kind of ['pointerdown','pointerup','click']) document.addEventListener(kind, e=>console.log('login-pointer',kind,e.clientX,e.clientY,e.target.tagName,e.target.className),true);""")
         context.on("dialog", lambda dialog: dialog.dismiss())
         tasks = [asyncio.create_task(frames(context)), asyncio.create_task(inputs(context))]
         try:

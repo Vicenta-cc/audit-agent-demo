@@ -37,6 +37,8 @@ test("interactive login keeps owner token, scales pointer input, accepts text an
   expect(operations[0].type).toBe("click");
   expect(Number(operations[0].x)).toBeCloseTo(500, 0);
   expect(Number(operations[0].y)).toBeCloseTo(380, 0);
+  await page.getByRole("button", { name: "取消浏览器提示" }).click();
+  await expect.poll(() => operations.some(x => x.type === "dismiss_browser_prompt")).toBe(true);
   expect(new Set(tokens).size).toBe(1);
   expect(tokens[0].length).toBeGreaterThanOrEqual(32);
   await page.getByRole("button", { name: "关闭登录窗口" }).click();
