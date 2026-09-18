@@ -603,10 +603,19 @@ class JobStore:
                 f"WHERE archived = 0 AND status IN ({placeholders})",
                 tuple(RECOVERABLE_STATUSES),
             ).fetchall()
+            recovered = 0
             for row in rows:
-                control = json.dumps(dict(DEFAULT_CONTROL), ensure_ascii=False)
                 crawl_status = str(row["crawl_status"] or "pending")
                 analysis_status = str(row["analysis_status"] or "pending")
+                active_phases = {"queued", "running", "pausing", "stopping"}
+                if (
+                    row["status"] == "analysis_paused"
+                    and crawl_status not in active_phases
+                    and analysis_status not in active_phases
+                ):
+                    # A settled user pause survives a service restart unchanged.
+                    continue
+                control = json.dumps(dict(DEFAULT_CONTROL), ensure_ascii=False)
                 if crawl_status in {"queued", "running", "pausing", "stopping"}:
                     crawl_status = "interrupted"
                 if analysis_status in {"queued", "running", "pausing", "stopping"}:
@@ -630,7 +639,8 @@ class JobStore:
                         f"服务启动恢复：任务从 {row['status']} 标记为已中断，可执行补分析。",
                     ),
                 )
-            return len(rows)
+                recovered += 1
+            return recovered
 
     def upsert_monitored_user_from_audit_result(self, audit_result: dict) -> dict:
         author = audit_result.get("author") if isinstance(audit_result.get("author"), dict) else {}

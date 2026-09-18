@@ -303,6 +303,29 @@ def test_restart_requeues_orphaned_analysis_without_changing_task_identity(tmp_p
     assert ingestion.stats_for_task("same-task")["queued_analysis_count"] == 1
 
 
+def test_restart_preserves_settled_analysis_pause_and_execution_account(tmp_path):
+    jobs = JobStore(tmp_path / "paused.sqlite3")
+    jobs.create(job_id="paused-task", run_crawler=True)
+    jobs.update(
+        "paused-task", status="analysis_paused", crawl_status="stopped",
+        analysis_status="paused",
+        control={"analysis_paused": True, "crawl_stop_requested": True,
+                 "execution_account": {"id": "fixed-account"}},
+    )
+    before = jobs.get("paused-task")
+    assert jobs.recover_interrupted_jobs() == 0
+    assert jobs.get("paused-task") == before
+
+
+def test_restart_recovers_active_crawler_even_when_analysis_is_paused(tmp_path):
+    jobs = JobStore(tmp_path / "active-crawler.sqlite3")
+    jobs.create(job_id="active-task", run_crawler=True)
+    jobs.update("active-task", status="analysis_paused", crawl_status="running",
+                analysis_status="paused", control={"analysis_paused": True})
+    assert jobs.recover_interrupted_jobs() == 1
+    assert jobs.get("active-task")["crawl_status"] == "interrupted"
+
+
 def test_public_runtime_logs_redact_accounts_commands_and_local_paths():
     logs = _public_job_logs(
         [
