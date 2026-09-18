@@ -99,11 +99,58 @@ def test_over_twenty_diversity_counts_and_unselected_results(pipeline):
 
 
 @pytest.mark.parametrize('field,value', [('evidence_risk_level', 'high'), ('rule_id', 'rule.b'), ('reason', '新编的依据'), ('matched_exemption_ids', ['new']), ('risk_score', 90), ('risk_basis', '新增依据'), ('risk_level', 'high')])
-def test_comment_judgment_changes_rejected(pipeline, field, value):
+def test_comment_judgment_changes_are_ignored_and_restored(pipeline, field, value):
     raw = response(['comment:1'])
     raw['evidence_items'][0][field] = value
-    with pytest.raises(FusionAuditContractError):
-        pipeline._validate_v2_fusion_contract(raw, index([comment(1, 'medium')]))
+    validated = pipeline._validate_v2_fusion_contract(raw, index([comment(1, 'medium')]))
+    assert validated['evidence_items'] == [{
+        'evidence_id': 'comment:1',
+        'rule_id': 'rule.a',
+        'evidence_risk_level': 'medium',
+        'reason': '已保存依据',
+    }]
+    warning = validated['_fusion_contract_warnings'][0]
+    assert warning['code'] == 'FUSION_COMPLETED_COMMENT_FIELDS_IGNORED'
+    assert warning['evidence_id'] == 'comment:1'
+    assert field in warning['fields']
+    assert field in warning['mutated_fields']
+
+
+def test_comment_mutation_does_not_discard_valid_non_comment_evidence(pipeline):
+    evidence = index([comment(1, 'medium')])
+    evidence['evidence_catalog'].append({
+        'evidence_id': 'image:1',
+        'primary_modality': 'image',
+        'text': '画面证据',
+    })
+    raw = response(level='medium')
+    raw['evidence_items'] = [
+        {'evidence_id': 'comment:1', 'reason': '模型重新编写的评论依据'},
+        {'evidence_id': 'image:1', 'evidence_risk_level': 'medium', 'reason': '原图像依据'},
+    ]
+    raw['rule_matches'] = [{
+        'rule_id': 'rule.a',
+        'evidence_ids': ['comment:1', 'image:1'],
+    }]
+
+    validated = pipeline._validate_v2_fusion_contract(raw, evidence)
+
+    by_id = {item['evidence_id']: item for item in validated['evidence_items']}
+    assert by_id['comment:1']['reason'] == '已保存依据'
+    assert by_id['image:1']['reason'] == '原图像依据'
+    assert by_id['image:1']['evidence_risk_level'] == 'medium'
+    assert {item['source'] for item in validated['_fusion_contract_warnings']} == {
+        'evidence_item', 'rule_match',
+    }
+
+
+def test_non_comment_evidence_contract_remains_strict(pipeline):
+    evidence = {'evidence_catalog': [{'evidence_id': 'image:1'}]}
+    raw = response(level='medium')
+    raw['evidence_items'] = [{'evidence_id': 'image:1'}]
+    raw['rule_matches'] = [{'rule_id': 'rule.a', 'evidence_ids': ['image:1']}]
+    with pytest.raises(FusionAuditContractError, match='evidence_risk_level'):
+        pipeline._validate_v2_fusion_contract(raw, evidence)
 
 
 def test_budget_trimming_keeps_reference_boundary_and_full_counts(pipeline):
@@ -132,6 +179,10 @@ def test_invalid_response_saved_then_corrected_once(pipeline, tmp_path):
     with patch.object(settings, 'outputs_dir', tmp_path), patch.object(settings, 'fusion_timeout_retries', 9), patch('backend.audit_agent.pipeline.job_store.log'):
         result = pipeline._run_fusion_audit('post', prompt, contract_validator=lambda raw: pipeline._validate_v2_fusion_contract(raw, evidence))
     assert len(calls) == 2 and 'comment:wrong' in calls[1] and 'allowed_evidence_ids' in calls[1]
+    feedback = json.loads(calls[1].split('完整 JSON：\n', 1)[1])
+    assert feedback['previous_output']['evidence_items'] == [{'evidence_id': 'comment:wrong'}]
+    assert '只能保留 evidence_id' in feedback['comment_evidence_contract']
+    assert '保留上次已经正确的非评论字段' in feedback['non_comment_evidence_contract']
     records = list(tmp_path.rglob('attempt-*.json'))
     assert len(records) == 1
     saved = json.loads(records[0].read_text())

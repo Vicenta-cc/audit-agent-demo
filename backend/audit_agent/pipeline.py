@@ -2682,31 +2682,53 @@ class AuditPipeline:
             if isinstance(item, dict) and str(item.get("evidence_id", "")).startswith("comment:")
             and item.get("rule_id") and item.get("evidence_risk_level") in {"low", "medium", "high"}
         }
-        # Resolve ID-only selections from saved judgments. Explicit attempts to
-        # change a judgment still fail; absent fields are not model judgments.
+        # Completed comment judgments are authoritative input to fusion. Treat
+        # any model representation of them as an ID-only selection, ignore
+        # returned fields/rule matches, and restore the saved judgment below.
+        # Non-comment evidence remains subject to the strict fusion contract.
         audit = {**audit, "evidence_items": [dict(x) if isinstance(x, dict) else x for x in audit["evidence_items"]],
                  "rule_matches": [dict(x) if isinstance(x, dict) else x for x in audit["rule_matches"]]}
+        contract_warnings: list[dict] = []
+        non_comment_evidence: list[object] = []
         for item in audit["evidence_items"]:
             if not isinstance(item, dict):
+                non_comment_evidence.append(item)
                 continue
             evidence_id = str(item.get("evidence_id") or "").strip()
             original = comment_decisions.get(evidence_id)
             if original is None:
+                non_comment_evidence.append(item)
                 continue
-            for key in ("rule_id", "evidence_risk_level", "reason"):
-                if key in item and item[key] != original.get(key, ""):
-                    raise FusionAuditContractError(f"fusion cannot change completed comment {key}")
-                item[key] = original.get(key, "")
-            for key, source_key in (("risk_score", "risk_score"), ("risk_level", "evidence_risk_level"), ("risk_basis", "reason")):
-                if key in item and item[key] != original.get(source_key):
-                    raise FusionAuditContractError(f"fusion cannot change completed comment {key}")
+            if evidence_id not in selectable_ids:
+                # Keep the normal invalid-reference path for model-selected
+                # comments that were outside this prompt's visible boundary.
+                non_comment_evidence.append(item)
+                continue
+            returned_fields = sorted(set(item) - {"evidence_id"})
+            field_sources = {
+                "rule_id": "rule_id",
+                "evidence_risk_level": "evidence_risk_level",
+                "reason": "reason",
+                "risk_score": "risk_score",
+                "risk_level": "evidence_risk_level",
+                "risk_basis": "reason",
+            }
+            mutated_fields = sorted(
+                key
+                for key, source_key in field_sources.items()
+                if key in item and item[key] != original.get(source_key, "")
+            )
             if item.get("matched_exemption_ids"):
-                raise FusionAuditContractError("fusion cannot exempt a completed risk comment")
-            item.clear()
-            item.update({key: original.get(key, "") for key in ("evidence_id", "rule_id", "evidence_risk_level", "reason")})
-            if not any(evidence_id in (match.get("evidence_ids") or [])
-                       for match in audit["rule_matches"] if isinstance(match, dict)):
-                audit["rule_matches"].append({"rule_id": original["rule_id"], "evidence_ids": [evidence_id]})
+                mutated_fields.append("matched_exemption_ids")
+            if returned_fields:
+                contract_warnings.append({
+                    "code": "FUSION_COMPLETED_COMMENT_FIELDS_IGNORED",
+                    "evidence_id": evidence_id,
+                    "source": "evidence_item",
+                    "fields": returned_fields,
+                    "mutated_fields": sorted(set(mutated_fields)),
+                })
+        audit["evidence_items"] = non_comment_evidence
         allowed_rule_ids = self._stage_rule_ids("fusion_audit")
         legal_matches: list[dict] = []
         exempted_evidence_ids: set[str] = set()
@@ -2714,13 +2736,12 @@ class AuditPipeline:
         for raw_match in audit.get("rule_matches") or []:
             if not isinstance(raw_match, dict):
                 raise FusionAuditContractError("fusion rule_match is not an object")
-            rule_id = str(raw_match.get("rule_id") or "").strip()
-            if rule_id not in allowed_rule_ids:
-                raise FusionAuditContractError("fusion rule_match has an invalid rule_id")
             raw_evidence_ids = raw_match.get("evidence_ids")
             if not isinstance(raw_evidence_ids, list):
                 raise FusionAuditContractError("fusion evidence_ids must be an array")
+            rule_id = str(raw_match.get("rule_id") or "").strip()
             evidence_ids = []
+            ignored_comment_ids = False
             for value in raw_evidence_ids:
                 evidence_id = str(value or "").strip()
                 if evidence_id not in selectable_ids:
@@ -2729,12 +2750,29 @@ class AuditPipeline:
                         invalid_evidence_ids=[evidence_id],
                     )
                 original = comment_decisions.get(evidence_id)
-                if original and (rule_id != original["rule_id"] or raw_match.get("matched_exemption_ids")):
-                    raise FusionAuditContractError("fusion cannot change a completed comment rule or exemption")
+                if original is not None:
+                    ignored_comment_ids = True
+                    mutated_fields = []
+                    if rule_id != original["rule_id"]:
+                        mutated_fields.append("rule_id")
+                    if raw_match.get("matched_exemption_ids"):
+                        mutated_fields.append("matched_exemption_ids")
+                    contract_warnings.append({
+                        "code": "FUSION_COMPLETED_COMMENT_RULE_MATCH_IGNORED",
+                        "evidence_id": evidence_id,
+                        "source": "rule_match",
+                        "fields": sorted(set(raw_match) - {"evidence_ids"}),
+                        "mutated_fields": mutated_fields,
+                    })
+                    continue
                 if evidence_id not in evidence_ids:
                     evidence_ids.append(evidence_id)
             if not evidence_ids:
+                if ignored_comment_ids:
+                    continue
                 raise FusionAuditContractError("fusion rule_match has no evidence_ids")
+            if rule_id not in allowed_rule_ids:
+                raise FusionAuditContractError("fusion rule_match has an invalid rule_id")
             matched_exemption_ids = self._normalize_matched_exemption_ids(
                 rule_id,
                 raw_match.get("matched_exemption_ids"),
@@ -2842,6 +2880,8 @@ class AuditPipeline:
         }
         if applied_exemption_ids:
             cleaned["matched_exemption_ids"] = applied_exemption_ids
+        if contract_warnings:
+            cleaned["_fusion_contract_warnings"] = contract_warnings
         for key in ("evidence", "score_breakdown", "category_scores"):
             cleaned.pop(key, None)
         if decision == "pass":
@@ -3108,10 +3148,34 @@ class AuditPipeline:
                     f"耗时={elapsed:.1f}s，error={exc}",
                 )
                 if attempt < attempts:
-                    request_prompt = prompt + "\n上次输出未通过程序校验，请仅纠正合同错误后重新输出 JSON：\n" + json.dumps({
-                        "error": str(exc), "invalid_evidence_ids": exc.invalid_evidence_ids,
+                    previous_output = (
+                        {
+                            key: audit[key]
+                            for key in (
+                                "schema_version", "content_title", "summary",
+                                "decision_suggestion", "risk_level_suggestion",
+                                "primary_risk", "categories", "evidence_items",
+                                "rule_matches",
+                            )
+                            if key in audit
+                        }
+                        if isinstance(audit, dict)
+                        else audit
+                    )
+                    request_prompt = prompt + "\n上次输出未通过程序校验，请仅纠正合同错误并返回完整 JSON：\n" + json.dumps({
+                        "error": str(exc),
+                        "invalid_evidence_ids": exc.invalid_evidence_ids,
                         "allowed_evidence_ids": valid_ids,
-                        "comment_constraint": "评论只选择合法 evidence_id；等级、规则与依据沿用已有结果，禁止改判。",
+                        "comment_evidence_contract": (
+                            "comment: 开头的证据属于已完成审核；evidence_items 中只能保留 evidence_id，"
+                            "不要为评论输出 rule_matches、等级、规则、依据或豁免。"
+                        ),
+                        "non_comment_evidence_contract": (
+                            "image:/ocr:/asr: 等非评论证据必须保留 evidence_id、"
+                            "evidence_risk_level（low/medium/high）和 reason，并在 rule_matches 中"
+                            "使用允许的 rule_id 建立闭环；保留上次已经正确的非评论字段。"
+                        ),
+                        "previous_output": previous_output,
                     }, ensure_ascii=False)
                     continue
                 if authoritative_m3:
@@ -3120,6 +3184,25 @@ class AuditPipeline:
                     ) from exc
                 raise
 
+            contract_warnings = (
+                audit.get("_fusion_contract_warnings")
+                if isinstance(audit, dict)
+                and isinstance(audit.get("_fusion_contract_warnings"), list)
+                else []
+            )
+            if contract_warnings:
+                warning_ids = sorted({
+                    str(item.get("evidence_id") or "")
+                    for item in contract_warnings
+                    if isinstance(item, dict) and item.get("evidence_id")
+                })
+                job_store.log(
+                    self.job_id,
+                    f"笔记 {note_id}：已忽略融合模型对已完成评论审核的重复字段，"
+                    f"warnings={len(contract_warnings)}，evidence_ids={warning_ids}",
+                    stage="analysis",
+                    level="warning",
+                )
             elapsed = perf_counter() - started_at
             llm_meta = (
                 audit.get("_llm_meta")

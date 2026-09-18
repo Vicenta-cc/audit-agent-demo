@@ -90,6 +90,29 @@ def test_binding_snapshot_preview_confirm_audit_and_replay(creation_stack, conte
     assert len(rows(stack["creation_store"], "investigation_draft_revisions")) == 1
 
 
+def test_proposal_created_draft_preserves_explicit_task_parameters(creation_stack, content):
+    stack = creation_stack
+    first = run(stack, content)
+    create_draft = creation()
+    create_draft["configuration"]["task_parameters"] = {
+        "max_notes": 3,
+        "max_comments": 10,
+        "collect_media": False,
+    }
+
+    result, _, _ = approve(
+        stack,
+        first,
+        arguments={"create_draft": create_draft},
+    )
+
+    assert result["status"] == "ok", result
+    parameters = result["data"]["draft"]["configuration"]["task_parameters"]
+    assert parameters["max_notes"] == 3
+    assert parameters["max_comments"] == 10
+    assert parameters["collect_media"] is False
+
+
 def test_temporary_lexicon_edit_reference_can_be_corrected_before_receipt(creation_stack, content):
     stack = creation_stack
     first = run(stack, content)

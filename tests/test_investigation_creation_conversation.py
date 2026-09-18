@@ -1947,6 +1947,14 @@ def test_creation_mode_keeps_legacy_tools_and_adds_resource_tools() -> None:
     assert "ruleset_revision_ids" in query_schema["parameters"]["properties"]
     serialized_query = json.dumps(query_schema["parameters"], sort_keys=True)
     assert "audit_policy" not in serialized_query
+    proposal_schema = next(
+        schema for schema in HERMES_M3_TOOL_SCHEMAS
+        if schema["name"] == "use_ruleset_proposal"
+    )
+    serialized_proposal = json.dumps(proposal_schema["parameters"], sort_keys=True)
+    assert "task_parameters" in serialized_proposal
+    assert "collect_media" in serialized_proposal
+    assert "crawler_account_id" not in serialized_proposal
     for tool_name in (
         "create_investigation_draft",
         "update_investigation_draft",
@@ -1957,6 +1965,8 @@ def test_creation_mode_keeps_legacy_tools_and_adds_resource_tools() -> None:
         )
         serialized = json.dumps(mutation_schema["parameters"], sort_keys=True)
         assert "judgement" in serialized
+        assert "task_parameters" in serialized
+        assert "collect_media" in serialized
         for forbidden in (
             "audit_policy",
             "capabilities",
@@ -1989,6 +1999,13 @@ def test_creation_prompt_leaves_resource_query_timing_to_the_agent() -> None:
         "Do not stop at a prose summary",
     ):
         assert workflow_first_instruction not in CREATION_SYSTEM_PROMPT
+
+
+def test_creation_prompt_preserves_explicit_per_run_parameters() -> None:
+    normalized_prompt = " ".join(CREATION_SYSTEM_PROMPT.split())
+    assert "configuration.task_parameters" in normalized_prompt
+    assert "collect_media=false" in normalized_prompt
+    assert "crawler_account_id remains application-managed" in normalized_prompt
 
 
 def test_creation_prompt_defaults_only_editable_fields_from_real_resources() -> None:

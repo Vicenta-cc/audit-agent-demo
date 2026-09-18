@@ -5,7 +5,13 @@ import sqlite3
 
 from pydantic import Field, StrictInt, StrictStr, field_validator, model_validator
 
-from .contracts import InvestigationMode, Platform, StrictModel, TemporaryRuleSetProposal
+from .contracts import (
+    InvestigationMode,
+    InvestigationTaskParameters,
+    Platform,
+    StrictModel,
+    TemporaryRuleSetProposal,
+)
 from .errors import ConfigurationValidationError
 from .presentation import message_presentations
 
@@ -13,6 +19,7 @@ from .presentation import message_presentations
 class ProposalDraftConfiguration(StrictModel):
     platform: Platform
     investigation: InvestigationMode
+    task_parameters: InvestigationTaskParameters | None = None
 
 
 class ProposalDraftCreation(StrictModel):

@@ -108,6 +108,13 @@ are available in the conversation context, that authoritative term snapshot is t
 configuration; do not ask the user to enter separate search keywords before creating the Draft. The
 user can review and edit these recommended values on the Draft afterward.
 
+Draft configuration may include task_parameters for per-run execution choices. Preserve every
+explicit user choice for post count, comments per post, sub-comments, concurrency, media collection,
+automatic analysis, analysis limit, batch size, page, or rate limit in configuration.task_parameters.
+In particular, an explicit request not to collect media must set collect_media=false; never report
+that such a choice cannot be represented. Omit task_parameters only when the user did not specify
+per-run execution choices. crawler_account_id remains application-managed and must not be supplied.
+
 Judge recall suitability from the actual enabled main terms, not the lexicon title, risk label,
 or the fact that its domain matches the Judgement rules. Ask whether searching those exact terms
 will discover the user's requested subject. Generic risk labels such as "群体攻击", "驱逐", or
