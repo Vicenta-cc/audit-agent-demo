@@ -98,6 +98,7 @@ async def inputs(context):
                 page = await current_page(context)
                 print("login input", command["type"], command.get("x", ""), command.get("y", ""), "page", bool(page), file=sys.stderr, flush=True)
                 if page:
+                    await asyncio.wait_for(page.bring_to_front(), 3)
                     await asyncio.wait_for(apply_input(page, command), 3)
                     print("login input applied", file=sys.stderr, flush=True)
                     if command["type"] == "pointer_up":
@@ -183,7 +184,8 @@ async def interactive_flow(account_id, expected_account_id):
         async def guard(route):
             request = route.request
             host = urlsplit(request.url).hostname or ""
-            if request.is_navigation_request() and not (host == "douyin.com" or host.endswith(".douyin.com")):
+            trusted_frame = host == "lf-rc1.yhgfb-cn-static.com" and request.frame.parent_frame is not None
+            if request.is_navigation_request() and not (host == "douyin.com" or host.endswith(".douyin.com") or trusted_frame):
                 print("login navigation blocked", host, file=sys.stderr, flush=True)
                 await route.abort()
             else:
