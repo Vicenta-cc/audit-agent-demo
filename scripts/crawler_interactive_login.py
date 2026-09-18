@@ -96,11 +96,15 @@ async def inputs(context):
             try:
                 command = validate_login_input(json.loads(line))
                 page = await current_page(context)
+                print("login input", command["type"], command.get("x", ""), command.get("y", ""), "page", bool(page), file=sys.stderr, flush=True)
                 if page:
                     await asyncio.wait_for(apply_input(page, command), 3)
-            except (ValueError, TypeError, asyncio.TimeoutError):
+                    print("login input applied", file=sys.stderr, flush=True)
+            except (ValueError, TypeError, asyncio.TimeoutError) as exc:
+                print("login input error", type(exc).__name__, file=sys.stderr, flush=True)
                 continue
-            except Exception:
+            except Exception as exc:
+                print("login input error", type(exc).__name__, file=sys.stderr, flush=True)
                 continue  # A page may be replaced while an input is in flight.
     finally:
         transport.close()
