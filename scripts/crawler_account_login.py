@@ -402,6 +402,9 @@ async def identify_logged_in_account(platform: str, context) -> str:
 async def login_context(platform: str, account_id: str = "", *, headless: bool = True):
     if platform == "dy":
         adapter = load_account_browser()
+        if settings.crawler_login_browser_version:
+            # Existing profiles retain their pinned version; new profiles use the deployment pin.
+            adapter.profile_for(account_id, settings.crawler_browser_profile_root, settings.crawler_login_browser_version)
         context, profile = await adapter.launch_account_context(
             account_id, settings.crawler_browser_profile_root, headless=headless,
         )
@@ -582,15 +585,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--account-id", default="")
     parser.add_argument("--expected-platform-account-id", default="")
     parser.add_argument("--headed", action="store_true")
+    parser.add_argument("--interactive", action="store_true")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
     try:
-        asyncio.run(run_login(args.platform, max(60, args.timeout), args.account_id,
-                             headless=not args.headed,
-                             expected_platform_account_id=args.expected_platform_account_id))
+        if args.interactive:
+            if args.platform != "dy":
+                raise ValueError("当前平台不支持交互登录")
+            from scripts.crawler_interactive_login import run_interactive_login
+            asyncio.run(run_interactive_login(args.account_id, max(60, args.timeout), args.expected_platform_account_id))
+        else:
+            asyncio.run(run_login(args.platform, max(60, args.timeout), args.account_id,
+                                 headless=not args.headed,
+                                 expected_platform_account_id=args.expected_platform_account_id))
     except KeyboardInterrupt:
         emit("error", message="登录进程被中断，请重新获取二维码")
     except Exception as exc:

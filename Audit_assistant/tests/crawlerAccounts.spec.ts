@@ -42,11 +42,13 @@ const apiSession = (status: string, qrImageDataUrl = "") => ({
 });
 
 test.beforeEach(() => {
+  const storage = new Map<string, string>();
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     value: {
       XHS_AUDIT_API_BASE: "http://api.test",
-      location: { origin: "http://ui.test" }
+      location: { origin: "http://ui.test" },
+      sessionStorage: { getItem: (key: string) => storage.get(key) || null, setItem: (key: string, value: string) => storage.set(key, value) }
     }
   });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Loader2, QrCode, RefreshCw, ShieldCheck, X } from "lucide-react";
+import { CrawlerLoginInteractiveView } from "./CrawlerLoginInteractiveView";
 import { Button } from "../../components/common/Button";
 import { IconButton } from "../../components/common/IconButton";
 import {
@@ -15,7 +16,7 @@ const platformNames = {
   ks: "快手"
 } as const;
 
-const activeLoginStatuses = ["starting", "waiting_scan", "scanned", "finalizing"];
+const activeLoginStatuses = ["starting", "waiting_scan", "scanned", "interactive", "finalizing"];
 const loginSessionStorageKey = (accountId: string) => `crawler-account-login-session:${accountId}`;
 
 interface CrawlerAccountLoginDialogProps {
@@ -113,7 +114,7 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
   }, [session?.id, session?.status]);
 
   useEffect(() => {
-    if (!session?.expiresAt || !["starting", "waiting_scan"].includes(session.status)) {
+    if (!session?.expiresAt || !activeLoginStatuses.includes(session.status)) {
       setSecondsLeft(0);
       return;
     }
@@ -153,10 +154,10 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
     onClose();
   };
 
-  const retry = () => {
+  const retry = async () => {
     window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
     if (session && activeLoginStatuses.includes(session.status)) {
-      void cancelCrawlerAccountLoginSession(session.id).catch(() => undefined);
+      await cancelCrawlerAccountLoginSession(session.id).catch(() => undefined);
     }
     requestedAccountRef.current = "";
     void beginLogin(false);
@@ -164,7 +165,7 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
 
   return (
     <div className="crawler-login-backdrop" role="presentation">
-      <section className="crawler-login-dialog" role="dialog" aria-modal="true" aria-labelledby="crawler-login-title">
+      <section className={`crawler-login-dialog${session?.interactive ? " is-interactive" : ""}`} role="dialog" aria-modal="true" aria-labelledby="crawler-login-title">
         <header className="crawler-login-header">
           <div>
             <span className="crawler-login-title-icon" aria-hidden="true">
@@ -181,10 +182,20 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
         </header>
 
         <div className="crawler-login-body">
+          {!isTerminalError && session?.interactive && session.status === "interactive" ? (
+            <>
+              <div className="crawler-login-interactive-copy">
+                <strong>请扫码，并在下方页面完成验证</strong>
+                <span>遇到手机号或短信验证时，可直接点击对应输入框填写。</span>
+              </div>
+              <CrawlerLoginInteractiveView sessionId={session.id} />
+              <div className="crawler-login-countdown">本次登录剩余 {formatCountdown(secondsLeft)}</div>
+            </>
+          ) : null}
           {!isTerminalError && (starting || session?.status === "starting") ? (
             <div className="crawler-login-state">
               <Loader2 className="spin" size={34} />
-              <strong>正在准备二维码</strong>
+              <strong>正在准备登录窗口</strong>
               <span>正在连接 {platformName}</span>
             </div>
           ) : null}
@@ -221,8 +232,8 @@ export function CrawlerAccountLoginDialog({ account, onClose, onSuccess }: Crawl
           {!isTerminalError && isFinalizing ? (
             <div className="crawler-login-state crawler-login-finalizing">
               <LoginFinalizingProgress session={session} />
-              <strong>登录已确认，正在保存</strong>
-              <span>正在等待登录凭证写入完整并加密保存</span>
+              <strong>{session.interactive ? "登录已确认，正在验证并保存" : "登录已确认，正在保存"}</strong>
+              <span>{session.interactive ? "正在检查登录状态能否用于采集，请稍候" : "正在等待登录凭证写入完整并加密保存"}</span>
             </div>
           ) : null}
 

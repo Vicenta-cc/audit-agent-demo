@@ -13,7 +13,7 @@ export default defineConfig({
     }
   },
   webServer: {
-    command: "VITE_API_PROXY_TARGET=http://127.0.0.1:8010 pnpm exec vite --host 127.0.0.1 --port 4173 --strictPort",
+    command: "VITE_API_PROXY_TARGET=http://127.0.0.1:8010 node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 4173 --strictPort",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: false
   }

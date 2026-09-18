@@ -182,6 +182,9 @@ class Settings:
         int(os.getenv("CRAWLER_LOGIN_TIMEOUT_SECONDS", "180")),
     )
     crawler_login_headed = os.getenv("CRAWLER_LOGIN_HEADED", "false").lower() == "true"
+    crawler_login_interactive = os.getenv("CRAWLER_LOGIN_INTERACTIVE", "false").lower() == "true"
+    crawler_login_interactive_timeout_seconds = max(180, min(1800, int(os.getenv("CRAWLER_LOGIN_INTERACTIVE_TIMEOUT_SECONDS", "600"))))
+    crawler_login_browser_version = os.getenv("CRAWLER_LOGIN_BROWSER_VERSION", "").strip()
     crawler_auth_encryption_key = os.getenv("CRAWLER_AUTH_ENCRYPTION_KEY", "").strip()
     crawler_auth_key_file = Path(
         os.getenv("CRAWLER_AUTH_KEY_FILE", str(data_dir / "crawler_auth.key"))

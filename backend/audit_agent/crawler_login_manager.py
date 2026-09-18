@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import base64
 import os
+import secrets
 import signal
 import subprocess
 import tempfile
@@ -16,9 +18,10 @@ from .auth_state_cipher import AuthStateCipher, auth_state_cipher
 from .config import settings
 from .crawler_account_store import CrawlerAccountStore, crawler_account_store
 from .crawler_browser import account_browser_env, scheduler_env
+from .crawler_login_interaction import validate_login_input
 
 
-ACTIVE_LOGIN_STATUSES = {"starting", "waiting_scan", "scanned", "finalizing"}
+ACTIVE_LOGIN_STATUSES = {"starting", "waiting_scan", "scanned", "interactive", "finalizing"}
 TERMINAL_LOGIN_STATUSES = {"success", "failed", "expired", "cancelled"}
 
 
@@ -47,6 +50,11 @@ class LoginSession:
     error: str = ""
     process: subprocess.Popen[str] | None = field(default=None, repr=False)
     diagnostic_file: TextIO | None = field(default=None, repr=False)
+    interactive: bool = False
+    owner_token: str = field(default="", repr=False)
+    frame: bytes = field(default=b"", repr=False)
+    frame_sequence: int = 0
+    input_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def public(self) -> dict:
         return {
@@ -63,6 +71,7 @@ class LoginSession:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "expires_at": self.expires_at,
+            "interactive": self.interactive,
         }
 
 
@@ -87,8 +96,17 @@ class CrawlerAccountLoginManager:
         )
         self._sessions: dict[str, LoginSession] = {}
         self._lock = threading.RLock()
+        self._start_lock = threading.Lock()
 
-    def start(self, account: dict) -> dict:
+    def start(self, account: dict, owner_token: str = "") -> dict:
+        # Serialize check + spawn; concurrent POSTs must not launch two browsers.
+        with self._start_lock:
+            return self._start(account, owner_token)
+
+    def _start(self, account: dict, owner_token: str) -> dict:
+        interactive = account["platform"] == "dy" and settings.crawler_login_interactive
+        if interactive and not (32 <= len(owner_token) <= 128):
+            raise PermissionError("请刷新页面后重新打开登录窗口")
         if account.get("status") == "disabled":
             raise ValueError("账号已停用，请先启用后再登录")
         if not self.python_path.is_file():
@@ -103,10 +121,12 @@ class CrawlerAccountLoginManager:
                 if session.status not in ACTIVE_LOGIN_STATUSES:
                     continue
                 if session.account_id == account["id"]:
+                    self._check_owner(session, owner_token)
                     return session.public()
                 raise ValueError("已有账号正在登录，请先完成或关闭当前登录窗口")
 
         now = _utc_now()
+        timeout = settings.crawler_login_interactive_timeout_seconds if interactive else self.timeout_seconds
         session = LoginSession(
             id=uuid4().hex,
             account_id=account["id"],
@@ -114,7 +134,9 @@ class CrawlerAccountLoginManager:
             status="starting",
             created_at=_iso(now),
             updated_at=_iso(now),
-            expires_at=_iso(now + timedelta(seconds=self.timeout_seconds)),
+            expires_at=_iso(now + timedelta(seconds=timeout)),
+            interactive=interactive,
+            owner_token=owner_token if interactive else "",
         )
         command = [
             str(self.python_path),
@@ -122,7 +144,7 @@ class CrawlerAccountLoginManager:
             "--platform",
             session.platform,
             "--timeout",
-            str(self.timeout_seconds),
+            str(timeout),
         ]
         env = os.environ.copy()
         if session.platform == "dy":
@@ -130,7 +152,9 @@ class CrawlerAccountLoginManager:
             env.update(browser_env)
             env.update(scheduler_env())
             command.extend(["--account-id", session.account_id])
-            if settings.crawler_login_headed:
+            if interactive:
+                command.append("--interactive")
+            elif settings.crawler_login_headed:
                 command.append("--headed")
             if account.get("platform_account_id"):
                 command.extend(["--expected-platform-account-id", account["platform_account_id"]])
@@ -174,13 +198,52 @@ class CrawlerAccountLoginManager:
             name=f"crawler-login-{session.id[:8]}",
             daemon=True,
         ).start()
+        timer = threading.Timer(timeout + 1, self._expire_if_needed, args=(session.id,))
+        timer.daemon = True
+        timer.start()
         return session.public()
 
-    def get(self, session_id: str) -> dict | None:
+    @staticmethod
+    def _check_owner(session: LoginSession, owner_token: str) -> None:
+        if session.interactive and (not owner_token or not secrets.compare_digest(session.owner_token, owner_token)):
+            raise PermissionError("该登录窗口属于另一个浏览器会话")
+
+    def get(self, session_id: str, owner_token: str = "") -> dict | None:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session:
+                self._check_owner(session, owner_token)
         self._expire_if_needed(session_id)
         with self._lock:
             session = self._sessions.get(session_id)
             return session.public() if session else None
+
+    def get_frame(self, session_id: str, owner_token: str, after: int = 0) -> tuple[bytes, int]:
+        self.get(session_id, owner_token)
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if not session or not session.interactive or session.status not in ACTIVE_LOGIN_STATUSES:
+                raise ValueError("登录窗口已结束")
+            return (session.frame if session.frame_sequence > after else b"", session.frame_sequence)
+
+    def send_input(self, session_id: str, owner_token: str, event: dict) -> None:
+        self.get(session_id, owner_token)
+        command = validate_login_input(event)
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if not session or not session.interactive or session.status not in {"interactive", "waiting_scan", "scanned"}:
+                raise ValueError("登录窗口当前不可操作")
+            process = session.process
+        if not process or not process.stdin or process.poll() is not None:
+            raise ValueError("登录窗口已断开")
+        # Do not let a stalled child block HTTP threads on a full pipe.
+        payload = (json.dumps(command, ensure_ascii=True) + "\n").encode()
+        with session.input_lock:
+            try:
+                os.set_blocking(process.stdin.fileno(), False)
+                os.write(process.stdin.fileno(), payload)
+            except (OSError, ValueError) as exc:
+                raise ValueError("登录窗口暂时忙，请稍后重试") from exc
 
     def _expire_if_needed(self, session_id: str) -> None:
         with self._lock:
@@ -196,6 +259,7 @@ class CrawlerAccountLoginManager:
             session.status = "expired"
             session.error = "二维码登录已超时，请重新获取二维码"
             session.qr_image_data_url = ""
+            session.frame = b""
             session.qr_expires_at = ""
             session.finalizing_started_at = ""
             session.finalizing_duration_seconds = 0
@@ -205,11 +269,13 @@ class CrawlerAccountLoginManager:
         self.store.mark_expired(account_id, session.error)
         self._stop_process(process)
 
-    def cancel(self, session_id: str) -> bool:
+    def cancel(self, session_id: str, owner_token: str = "", *, internal: bool = False) -> bool:
         with self._lock:
             session = self._sessions.get(session_id)
             if not session:
                 return False
+            if not internal:
+                self._check_owner(session, owner_token)
             if session.status in TERMINAL_LOGIN_STATUSES:
                 return True
             session.status = "cancelled"
@@ -218,6 +284,7 @@ class CrawlerAccountLoginManager:
             session.finalizing_started_at = ""
             session.finalizing_duration_seconds = 0
             session.updated_at = _iso(_utc_now())
+            session.frame = b""
             process = session.process
         self._stop_process(process)
         return True
@@ -230,7 +297,7 @@ class CrawlerAccountLoginManager:
                 if session.account_id == account_id and session.status in ACTIVE_LOGIN_STATUSES
             ]
         for session_id in ids:
-            self.cancel(session_id)
+            self.cancel(session_id, internal=True)
 
     def shutdown(self) -> None:
         with self._lock:
@@ -240,7 +307,7 @@ class CrawlerAccountLoginManager:
                 if session.status in ACTIVE_LOGIN_STATUSES
             ]
         for session_id in ids:
-            self.cancel(session_id)
+            self.cancel(session_id, internal=True)
 
     def _consume_process(self, session_id: str) -> None:
         with self._lock:
@@ -305,6 +372,26 @@ class CrawlerAccountLoginManager:
 
     def _handle_event(self, session_id: str, event: dict) -> None:
         event_type = str(event.get("type") or "")
+        if event_type in {"interactive", "frame"}:
+            with self._lock:
+                session = self._sessions.get(session_id)
+                if not session or not session.interactive or session.status not in ACTIVE_LOGIN_STATUSES:
+                    return
+                if event_type == "interactive":
+                    session.status = "interactive"
+                    session.updated_at = _iso(_utc_now())
+                else:
+                    encoded = event.get("jpeg", "")
+                    if not isinstance(encoded, str) or len(encoded) > 2_000_000:
+                        return
+                    try:
+                        frame = base64.b64decode(encoded, validate=True)
+                    except ValueError:
+                        return
+                    if frame.startswith(b"\xff\xd8"):
+                        session.frame = frame
+                        session.frame_sequence += 1
+            return
         if event_type == "reauth_started":
             with self._lock:
                 session = self._sessions.get(session_id)
@@ -394,6 +481,7 @@ class CrawlerAccountLoginManager:
                     if not account:
                         raise RuntimeError("采集账号已不存在")
                     session.status = "success"
+                    session.frame = b""
                     session.platform_account_id = account.get("platform_account_id", "")
                     session.qr_image_data_url = ""
                     session.qr_expires_at = ""
@@ -421,6 +509,7 @@ class CrawlerAccountLoginManager:
             if not session or session.status not in ACTIVE_LOGIN_STATUSES:
                 return
             session.status = status
+            session.frame = b""
             session.error = message[:500]
             session.qr_image_data_url = ""
             session.qr_expires_at = ""

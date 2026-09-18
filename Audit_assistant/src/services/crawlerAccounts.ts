@@ -30,6 +30,7 @@ interface ApiCrawlerAccountLoginSession {
   account_id: string;
   platform: CrawlerAccountPlatform;
   status: CrawlerAccountLoginStatus;
+  interactive?: boolean;
   qr_image_data_url: string;
   qr_expires_at: string;
   finalizing_started_at: string;
@@ -78,23 +79,35 @@ export async function deleteCrawlerAccount(accountId: string): Promise<void> {
   });
 }
 
+export function loginControlHeaders(): Record<string, string> {
+  const key = "crawler-login-control-token";
+  let token = window.sessionStorage.getItem(key);
+  if (!token) {
+    token = crypto.randomUUID() + crypto.randomUUID();
+    window.sessionStorage.setItem(key, token);
+  }
+  return { "X-Login-Token": token };
+}
+
 export async function startCrawlerAccountLogin(accountId: string): Promise<CrawlerAccountLoginSession> {
   const payload = await apiRequest<{ item: ApiCrawlerAccountLoginSession }>(
     `/api/crawler-accounts/${encodeURIComponent(accountId)}/login-sessions`,
-    { method: "POST" }
+    { method: "POST", headers: loginControlHeaders() }
   );
   return mapLoginSession(payload.item);
 }
 
 export async function fetchCrawlerAccountLoginSession(sessionId: string): Promise<CrawlerAccountLoginSession> {
   const payload = await apiRequest<{ item: ApiCrawlerAccountLoginSession }>(
-    `/api/crawler-account-login-sessions/${encodeURIComponent(sessionId)}`
+    `/api/crawler-account-login-sessions/${encodeURIComponent(sessionId)}`,
+    { headers: loginControlHeaders() }
   );
   return mapLoginSession(payload.item);
 }
 
 export async function cancelCrawlerAccountLoginSession(sessionId: string): Promise<void> {
   await apiRequest(`/api/crawler-account-login-sessions/${encodeURIComponent(sessionId)}`, {
+    headers: loginControlHeaders(),
     method: "DELETE"
   });
 }
@@ -132,6 +145,7 @@ function mapLoginSession(item: ApiCrawlerAccountLoginSession): CrawlerAccountLog
     accountId: item.account_id,
     platform: item.platform,
     status: item.status,
+    interactive: item.interactive || false,
     qrImageDataUrl: item.qr_image_data_url,
     qrExpiresAt: item.qr_expires_at,
     finalizingStartedAt: item.finalizing_started_at,

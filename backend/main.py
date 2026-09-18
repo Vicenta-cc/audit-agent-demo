@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal, Optional
 from urllib.parse import urlparse
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -1279,12 +1279,14 @@ def delete_crawler_account(account_id: str):
 
 
 @app.post("/api/crawler-accounts/{account_id}/login-sessions", status_code=201)
-def start_crawler_account_login(account_id: str, response: Response):
+def start_crawler_account_login(account_id: str, response: Response, request: Request):
     account = crawler_account_store.get(account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Crawler account not found")
     try:
-        session = crawler_account_login_manager.start(account)
+        session = crawler_account_login_manager.start(account, request.headers.get("x-login-token", ""))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -1294,8 +1296,11 @@ def start_crawler_account_login(account_id: str, response: Response):
 
 
 @app.get("/api/crawler-account-login-sessions/{session_id}")
-def get_crawler_account_login(session_id: str, response: Response):
-    session = crawler_account_login_manager.get(session_id)
+def get_crawler_account_login(session_id: str, response: Response, request: Request):
+    try:
+        session = crawler_account_login_manager.get(session_id, request.headers.get("x-login-token", ""))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     if not session:
         raise HTTPException(status_code=404, detail="Login session not found")
     response.headers["Cache-Control"] = "no-store"
@@ -1303,9 +1308,35 @@ def get_crawler_account_login(session_id: str, response: Response):
 
 
 @app.delete("/api/crawler-account-login-sessions/{session_id}", status_code=204)
-def cancel_crawler_account_login(session_id: str):
-    if not crawler_account_login_manager.cancel(session_id):
+def cancel_crawler_account_login(session_id: str, request: Request):
+    try:
+        cancelled = crawler_account_login_manager.cancel(session_id, request.headers.get("x-login-token", ""))
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    if not cancelled:
         raise HTTPException(status_code=404, detail="Login session not found")
+
+
+@app.get("/api/crawler-account-login-sessions/{session_id}/frame")
+def get_crawler_login_frame(session_id: str, request: Request, after: int = 0):
+    try:
+        frame, sequence = crawler_account_login_manager.get_frame(session_id, request.headers.get("x-login-token", ""), after)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=410, detail=str(exc)) from exc
+    return Response(content=frame, status_code=200 if frame else 204, media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store", "X-Frame-Sequence": str(sequence)})
+
+
+@app.post("/api/crawler-account-login-sessions/{session_id}/input", status_code=204)
+def send_crawler_login_input(session_id: str, request: Request, event: dict):
+    try:
+        crawler_account_login_manager.send_input(session_id, request.headers.get("x-login-token", ""), event)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/api/monitored-users")

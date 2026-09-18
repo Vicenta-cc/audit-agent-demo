@@ -4,6 +4,7 @@ export type CrawlerAccountLoginStatus =
   | "starting"
   | "waiting_scan"
   | "scanned"
+  | "interactive"
   | "finalizing"
   | "success"
   | "failed"
@@ -32,6 +33,7 @@ export interface CrawlerAccountLoginSession {
   accountId: string;
   platform: CrawlerAccountPlatform;
   status: CrawlerAccountLoginStatus;
+  interactive?: boolean;
   qrImageDataUrl: string;
   qrExpiresAt: string;
   finalizingStartedAt: string;

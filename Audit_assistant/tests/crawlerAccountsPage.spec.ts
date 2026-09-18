@@ -1,5 +1,49 @@
 import { expect, test } from "@playwright/test";
 
+test("interactive login keeps owner token, scales pointer input, accepts text and cancels", async ({ page }) => {
+  const operations: Record<string, unknown>[] = [];
+  const tokens: string[] = [];
+  let cancelled = false;
+  const session = { id: "interactive-one", account_id: "interactive-account", platform: "dy", status: "interactive",
+    interactive: true, expires_at: new Date(Date.now() + 600000).toISOString() };
+  await page.route("**/api/crawler-accounts", route => route.fulfill({ json: { items: [account("interactive-account", "交互测试", "dy")] } }));
+  await page.route("**/api/crawler-accounts/interactive-account/login-sessions", route => {
+    tokens.push(route.request().headers()["x-login-token"]);
+    return route.fulfill({ status: 201, json: { item: session } });
+  });
+  await page.route("**/api/crawler-account-login-sessions/interactive-one**", route => {
+    tokens.push(route.request().headers()["x-login-token"]);
+    if (route.request().url().includes("/frame?")) return route.fulfill({
+      contentType: "image/png", headers: { "X-Frame-Sequence": "1" },
+      body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6Eo0AAAAASUVORK5CYII=", "base64")
+    });
+    if (route.request().url().endsWith("/input")) {
+      operations.push(route.request().postDataJSON()); return route.fulfill({ status: 204 });
+    }
+    if (route.request().method() === "DELETE") { cancelled = true; return route.fulfill({ status: 204 }); }
+    return route.fulfill({ json: { item: session } });
+  });
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  await page.goto("/crawler-accounts");
+  await page.getByRole("button", { name: "重新登录交互测试" }).click();
+  await expect(page.getByText("请扫码，并在下方页面完成验证")).toBeVisible();
+  await expect(page.getByRole("img", { name: "可操作的平台登录页面" })).toBeVisible();
+  const screen = page.getByRole("group", { name: "平台登录页面" });
+  const box = await screen.boundingBox();
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.keyboard.type("123456");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => operations.filter(x => x.type === "text").map(x => x.text).join("")).toBe("123456");
+  expect(operations[0].type).toBe("pointer_down");
+  expect(Number(operations[0].x)).toBeCloseTo(500, 0);
+  expect(Number(operations[0].y)).toBeCloseTo(380, 0);
+  expect(new Set(tokens).size).toBe(1);
+  expect(tokens[0].length).toBeGreaterThanOrEqual(32);
+  await page.getByRole("button", { name: "关闭登录窗口" }).click();
+  await expect.poll(() => cancelled).toBe(true);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
 const account = (id: string, displayName: string, platform: "xhs" | "dy") => ({
   id,
   platform,

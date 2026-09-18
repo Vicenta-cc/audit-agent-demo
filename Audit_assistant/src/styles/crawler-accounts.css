@@ -530,6 +530,21 @@
   box-shadow: 0 28px 90px rgba(15, 23, 42, 0.28);
 }
 
+.crawler-login-dialog.is-interactive {
+  width: min(1040px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.crawler-login-dialog.is-interactive .crawler-login-body { padding: 12px; gap: 10px; }
+.crawler-login-interactive-copy { display: flex; flex-direction: column; gap: 4px; text-align: center; }
+.crawler-login-interactive-copy span { color: #64748b; font-size: 13px; }
+.crawler-login-interactive-view { width: 100%; }
+.crawler-login-screen { position: relative; width: 100%; aspect-ratio: 1000 / 760; background: #f1f5f9; touch-action: none; overflow: hidden; }
+.crawler-login-screen img { display: block; width: 100%; height: 100%; user-select: none; pointer-events: none; }
+.crawler-login-screen > span { display: block; padding: 40px; text-align: center; }
+.crawler-login-keyboard { position: absolute; width: 1px; height: 1px; opacity: 0; left: 0; top: 0; padding: 0; border: 0; }
+.crawler-login-connection-error { color: #b45309; font-size: 13px; text-align: center; }
+
 .crawler-login-header {
   display: flex;
   align-items: center;
