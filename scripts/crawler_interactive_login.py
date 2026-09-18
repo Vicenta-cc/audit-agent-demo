@@ -104,7 +104,7 @@ async def inputs(context):
                         try:
                             hit = await asyncio.wait_for(page.evaluate("""([x,y]) => {
                               const e = document.elementFromPoint(x,y);
-                              return {tag:e?.tagName, role:e?.getAttribute('role'),
+                              return {tag:e?.tagName, role:e?.getAttribute('role'), parents:[e,e?.parentElement,e?.parentElement?.parentElement].filter(Boolean).map(n=>({tag:n.tagName,cls:n.className,rect:n.getBoundingClientRect().toJSON()})),
                                 frames:[...document.querySelectorAll('iframe')].map(f=>({src:f.src.split('?')[0],rect:f.getBoundingClientRect().toJSON()}))};
                             }""", [command["x"], command["y"]]), 2)
                             print("login hit", json.dumps(hit), file=sys.stderr, flush=True)
@@ -192,6 +192,8 @@ async def interactive_flow(account_id, expected_account_id):
         page = await context.new_page()
         await page.set_viewport_size({"width": VIEW_WIDTH, "height": VIEW_HEIGHT})
         page.set_default_timeout(3000)
+        page.on("console", lambda message: print(message.text, file=sys.stderr, flush=True) if message.text.startswith("login-pointer") else None)
+        await page.add_init_script("""for (const kind of ['pointerdown','pointerup','click']) document.addEventListener(kind, e=>console.log('login-pointer',kind,e.clientX,e.clientY,e.target.tagName,e.target.className),true);""")
         context.on("dialog", lambda dialog: dialog.dismiss())
         tasks = [asyncio.create_task(frames(context)), asyncio.create_task(inputs(context))]
         try:
