@@ -13,7 +13,6 @@
 | 爬虫冻结分支 | `codex/douyin-v2-pagination-dedupe-20260914` |
 | 爬虫冻结标签 | `douyin-pagination-fix-20260916` |
 | 最新代码与启动说明入口 | `main` |
-| 文档归档分支 | `codex/r2-frozen-handoff-20260920` |
 
 [应用代码](https://github.com/Vicenta-cc/audit-agent-demo/tree/codex/r2-interactive-login-20260918) · [配套爬虫](https://github.com/Vicenta-cc/media-crawler/tree/codex/douyin-v2-pagination-dedupe-20260914)
 

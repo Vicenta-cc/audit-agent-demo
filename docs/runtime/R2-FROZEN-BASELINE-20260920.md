@@ -68,3 +68,18 @@
 9 月 18 日切换前快照：`runtime/archives/r2-interactive-before-20260918-193214`。该旧快照只用于追溯，下次发布须重新备份。
 
 本地完整操作交接：`/Users/ext.wanghongtao6/Documents/Codex/deployment-preparation/r2-interactive-release-20260918/RELEASE-HANDOFF-20260918.md`。仓库内说明仅包含版本、操作边界与启动文件，不上传业务收据中的账号明细和 Profile。
+
+## GitHub 分支清理（2026-09-20）
+
+远端保留 `main` 和当前冻结分支 `codex/r2-interactive-login-20260918`。文档分支已并入 main 后删除；旧发布/验收分支由以下精确标签取代，本地工作树不受影响。
+
+| 历史版本 | 保留标签 |
+| --- | --- |
+| 流式发布 f58232e | `frozen/r2-streaming-20260918` |
+| 统一报告 b9fc78c | `frozen/r2-unified-report-20260917` |
+| 本地旧正式 2134c7b | `frozen/local-formal-20260913` |
+| 本地 R2 验收 71b29b8 | `frozen/local-r2-acceptance-20260916` |
+| 旧 8027 控制器 a925969 | `frozen/douyin-8027-controller-20260916` |
+| 旧 8027 应用 bf5117a | `frozen/douyin-8027-app-20260916` |
+
+可通过 `git fetch origin --tags` 获取标签，再用 `git switch --detach <标签>` 查看对应历史快照。当前冻结标签 `douyin-r2-interactive-20260918-v3` 保留不变。
