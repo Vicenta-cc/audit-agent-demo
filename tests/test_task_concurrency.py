@@ -43,13 +43,7 @@ def resources(tmp_path, monkeypatch):
 
 
 def create_run(creation, auth, owner, key, account):
-    auth.grant_resource(
-        user_id=owner,
-        resource_type="crawler-account",
-        resource_id=account,
-        permission="use",
-        actor_user_id="admin",
-    )
+    auth.register_crawler_account(account, owner)
     payload = configuration_payload(keyword=key)
     payload["platform"] = "dy"
     config = InvestigationConfiguration.model_validate(payload)
@@ -292,7 +286,7 @@ def test_queued_task_loses_permission_without_borrowing_another_users_account(st
     run = create_run(creation, auth, a, "no-grant", "account-a")
     with creation.admission.connect() as db:
         db.execute(
-            "UPDATE resource_grants SET revoked_at='2026-09-20' WHERE user_id=?", (a,)
+            "DELETE FROM crawler_account_owners WHERE owner_user_id=?", (a,)
         )
     execution = FakeExecutionAdapter()
     execution.crawler_account_store = account_pool()
@@ -326,7 +320,7 @@ def test_report_recovery_does_not_wait_for_a_crawler_account(stack, status):
         assert ready
 
 
-def test_running_task_rechecks_its_allocated_account_grant(stack):
+def test_running_task_rechecks_its_allocated_account_owner(stack):
     from backend.task_admission.execution import execution_context, assert_execution
     from backend.task_admission.store import AdmissionError
 
@@ -343,7 +337,7 @@ def test_running_task_rechecks_its_allocated_account_grant(stack):
         assert_execution("job-running")
         with creation.admission.connect() as db:
             db.execute(
-                "UPDATE resource_grants SET revoked_at='2026-09-20' WHERE user_id=?",
+                "DELETE FROM crawler_account_owners WHERE owner_user_id=?",
                 (a,),
             )
         with pytest.raises(AdmissionError) as error:

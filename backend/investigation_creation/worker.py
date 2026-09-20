@@ -419,7 +419,7 @@ class InvestigationWorker:
         with self._lease(run) as lease:
             lease.assert_owned()
             report_session_id = self.session_adapter.ensure_session(
-                run.id, report_version_id
+                run.id, report_version_id, owner_principal=run.owner_principal
             )
             lease.assert_owned()
         self._notify("after_session_created", run, report_version_id)

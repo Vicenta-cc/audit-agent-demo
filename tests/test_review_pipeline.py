@@ -357,7 +357,8 @@ class VideoReviewFlowTests(unittest.TestCase):
             ):
                 result = pipeline._analyze_video_file(0, video_path, root / "out", "", "local")
 
-        self.assertEqual(pipeline.qwen.library_ids, ["hate", "fraud"])
+        # Independent libraries run concurrently; require exactly one call per library.
+        self.assertCountEqual(pipeline.qwen.library_ids, ["hate", "fraud"])
         self.assertEqual(len(result["review_sheets"]), 1)
         self.assertEqual(len(result["segment_reviews"]), 1)
         analysis = result["segment_reviews"][0]["analysis"]

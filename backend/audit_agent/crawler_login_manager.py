@@ -246,9 +246,8 @@ class CrawlerAccountLoginManager:
     ) -> None:
         caller = str(owner_user_id or "").strip()
         if (
-            session.owner_user_id
+            (session.owner_user_id or caller)
             and caller != session.owner_user_id
-            and not owner_is_admin
         ):
             raise PermissionError("该登录窗口属于另一个应用用户")
         if session.interactive and (not owner_token or not secrets.compare_digest(session.owner_token, owner_token)):

@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { AdminUsersPage } from "../features/auth/AdminUsersPage";
 import { ConfigCenterPage } from "../features/config-center/ConfigCenterPage";
 import { CrawlerAccountsPage } from "../features/crawler-accounts/CrawlerAccountsPage";
 import { FocusUsersPage } from "../features/focus-users/FocusUsersPage";
@@ -33,6 +34,7 @@ function RuleAssistantStructurePage() {
 export function AppRouter() {
   return (
     <Routes>
+      <Route path="/admin/users" element={<AdminUsersPage />} />
       <Route path="/" element={<Navigate to="/investigation" replace />} />
       <Route path="/investigation" element={<InvestigationPage />} />
       <Route path="/investigation/:investigationId" element={<InvestigationPage />} />

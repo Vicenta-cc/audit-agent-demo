@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, FileSearch, ListFilter, Loader2, Pause, Play, ScrollText, Square } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, FileSearch, ListFilter, Loader2, Pause, Play, ScrollText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { AgentExecutionPhase } from "../../types/investigation";
 import type { InvestigationRunProjection } from "../../types/investigationCreation";
-import { mapInvestigationRunState } from "./investigationRunState";
+import { mapInvestigationRunState, runOutcomePresentation } from "./investigationRunState";
 import { AnalysisBasisDrawer } from "./AnalysisBasisDrawer";
 import {
   createAnalysisRecord,
@@ -339,6 +339,9 @@ export function AgentCollaborationCard({
     ? ETHNIC_RELATIONS_TOTAL
     : analysisRecords.length;
   const runStats = run ? buildRunProgressItems(run) : [];
+  const totalStat = runStats.find(item => item.label === "进入研判");
+  const visibleStats = ["待分析", "分析中", "已完成", "审核失败"].flatMap(label => runStats.filter(item => item.label === label));
+  const outcome = run ? runOutcomePresentation(run) : null;
   const isHistoricalRun = run?.status === "AUDIT_COMPLETED" || run?.status === "PUBLISHED";
   const availableActions = run?.available_actions || {};
   const ending = availableActions.ending || (endSubmitted && !availableActions.ended);
@@ -423,7 +426,12 @@ export function AgentCollaborationCard({
                 ? runView?.label
                 : "调查流水线运行中"}
         </span>
-        {auditCompleted ? (
+        {outcome ? (
+          <span className={`agent-exec-status-tag is-${outcome.tone}`}>
+            {outcome.tone === "done" ? <CheckCircle2 size={13} /> : outcome.tone === "error" || outcome.tone === "warning" ? <AlertTriangle size={13} /> : null}
+            {outcome.label}
+          </span>
+        ) : auditCompleted ? (
           <span className="agent-exec-status-tag is-done">
             <CheckCircle2 size={13} />
             {runView?.label}
@@ -449,16 +457,17 @@ export function AgentCollaborationCard({
       </div>
 
       {run && runView ? (
-        <div className={`investigation-run-projection is-${run.status.toLowerCase()}`}>
+        <div className={`investigation-run-projection tone-${outcome?.tone || "running"}`}>
           <div className="investigation-run-summary">
             <strong>{runView.label}</strong>
             <span>
               采集 {statusLabel(run.crawl_status)} · 分析 {statusLabel(run.analysis_status)} · 报告 {reportStatusLabel(run.report_status)}
             </span>
+            {totalStat ? <span className="investigation-run-total">纳入分析 {totalStat.value} 条</span> : null}
           </div>
-          {runStats.length ? (
+          {visibleStats.length ? (
             <dl className="investigation-run-metrics" aria-label="本次调查进度统计">
-              {runStats.map((item) => (
+              {visibleStats.map((item) => (
                 <div key={item.label}>
                   <dt>{item.label}</dt>
                   <dd>{item.value}</dd>
@@ -467,45 +476,32 @@ export function AgentCollaborationCard({
             </dl>
           ) : null}
           {run.error_message ? <p role="alert">{formatRunFailureMessage(run)}</p> : null}
-          {hasRuntimeControls ? (
-            <div className="investigation-run-controls" aria-label="流水线实时控制">
-              <div>
-                <span>采集控制</span>
-                <button type="button" disabled={!availableActions.pause_crawl || Boolean(controlAction)} onClick={() => void submitControl("pause_crawl")}>
-                  {controlAction === "pause_crawl" ? <Loader2 size={13} className="spin" /> : <Pause size={13} />}
-                  暂停采集
-                </button>
-                <button type="button" disabled={!availableActions.resume_crawl || Boolean(controlAction)} onClick={() => void submitControl("resume_crawl")}>
-                  {controlAction === "resume_crawl" ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
-                  继续采集
-                </button>
-              </div>
-              <div>
-                <span>分析控制</span>
-                <button type="button" disabled={!availableActions.pause_analysis || Boolean(controlAction)} onClick={() => void submitControl("pause_analysis")}>
-                  {controlAction === "pause_analysis" ? <Loader2 size={13} className="spin" /> : <Pause size={13} />}
-                  暂停分析
-                </button>
-                <button type="button" disabled={!availableActions.stop_analysis || Boolean(controlAction)} onClick={() => void submitControl("stop_analysis")}>
-                  {controlAction === "stop_analysis" ? <Loader2 size={13} className="spin" /> : <Square size={12} />}
-                  停止分析
-                </button>
-                <button type="button" disabled={!availableActions.resume_analysis || Boolean(controlAction)} onClick={() => void submitControl("resume_analysis")}>
-                  {controlAction === "resume_analysis" ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
-                  继续分析
-                </button>
-              </div>
-            </div>
-          ) : null}
-          {availableActions.end_task || ending ? (
-            <div className="investigation-run-controls" aria-label="整个任务控制">
-              <small>暂停、继续不重复扣次。结束任务不可恢复，已扣次数不返还。</small>
-              <div><span>任务控制</span>
-                <button type="button" disabled={Boolean(ending || controlAction)} onClick={() => setConfirmEnd(true)}>
-                  {ending ? "正在结束…" : "结束任务"}
-                </button>
-              </div>
-              {ending ? <p role="status">正在结束，后台停止后可新建任务或删除会话。</p> : null}
+          {hasRuntimeControls || availableActions.end_task || ending ? (
+            <div className="investigation-task-actions">
+              {hasRuntimeControls ? (
+                <div className="investigation-run-controls" aria-label="流水线实时控制">
+                  {(["crawl", "analysis"] as const).map(stage => {
+                    const resume = Boolean(availableActions[`resume_${stage}`]);
+                    const action = `${resume ? "resume" : "pause"}_${stage}`;
+                    const enabled = resume || availableActions[`pause_${stage}`];
+                    if (!enabled && !["pausing", "stopping"].includes(stage === "crawl" ? run.crawl_status : run.analysis_status)) return null;
+                    const label = `${resume ? "继续" : "暂停"}${stage === "crawl" ? "采集" : "分析"}`;
+                    return <button key={stage} type="button" disabled={!enabled || Boolean(controlAction)} onClick={() => void submitControl(action)}>
+                      {controlAction === action ? <Loader2 size={13} className="spin" /> : resume ? <Play size={13} /> : <Pause size={13} />}
+                      {enabled ? label : `正在${label}`}
+                    </button>;
+                  })}
+                </div>
+              ) : null}
+              {(availableActions.end_task && !availableActions.ended) || ending ? (
+                <div className="investigation-run-controls investigation-end-control" aria-label="整个任务控制">
+                  <button type="button" disabled={Boolean(ending || controlAction)} onClick={() => setConfirmEnd(true)}>
+                    {ending ? "正在结束…" : "结束任务"}
+                  </button>
+                </div>
+              ) : null}
+              {ending ? <p role="status">正在结束，后台停止后可新建任务或删除会话。</p>
+                : <small className="investigation-control-hint">暂停、继续不重复扣次。</small>}
             </div>
           ) : null}
           {controlError ? <p className="investigation-control-error" role="alert">{controlError}</p> : null}
@@ -534,9 +530,9 @@ export function AgentCollaborationCard({
       ) : null}
 
       <EvidenceRelayPipeline
-        isDone={Boolean(done && !auditCompleted)}
-        auditCompleted={Boolean(auditCompleted)}
-        isStopped={terminalError}
+        isDone={Boolean(done && !auditCompleted && outcome?.tone !== "error")}
+        auditCompleted={Boolean(auditCompleted && outcome?.tone !== "error")}
+        isStopped={terminalError || outcome?.tone === "error"}
         authoritative={authoritative}
         activeStep={activeStep}
         isQueued={queued}

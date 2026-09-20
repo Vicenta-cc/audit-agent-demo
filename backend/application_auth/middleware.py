@@ -26,6 +26,7 @@ class ApplicationAuthMiddleware:
         cookie_name: str,
         public_api_paths: tuple[str, ...] = (
             "/api/auth/login",
+            "/api/auth/config",
             "/api/acceptance-runtime",
         ),
         public_api_prefixes: tuple[str, ...] = ("/api/health/",),
@@ -86,6 +87,11 @@ class ApplicationAuthMiddleware:
             )
             return
 
+        expected_user = headers.get("x-application-user", "")
+        if expected_user and expected_user != principal.id:
+            await _json_error(scope, receive, send, 409, "AUTH_IDENTITY_CHANGED", "登录身份已变化，请重新登录。")
+            return
+
         scope.setdefault("state", {})["principal"] = principal
         context_token = bind_request_principal(principal)
         is_event_stream = False
@@ -116,6 +122,7 @@ class ApplicationAuthMiddleware:
                     for key, value in response_start_headers
                     if key.lower() != b"cache-control"
                 ]
+                response_start_headers.append((b"x-application-user", principal.id.encode("ascii")))
                 response_start_headers.append(
                     (b"cache-control", b"private, no-store")
                 )

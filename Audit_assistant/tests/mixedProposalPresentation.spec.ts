@@ -38,7 +38,8 @@ async function mount(page: Page, stage: "suggestion" | "confirmation", mixed: bo
     const host = document.createElement("div");
     document.body.replaceChildren(host);
     const noop = () => {};
-    createRoot(host).render(React.createElement(InvestigationCenterArea, {
+    const { mountPresentation } = await load("/tests/presentationMount.tsx");
+    mountPresentation(host, React.createElement(InvestigationCenterArea, {
       session, isSendingMessage: false, isSidebarCollapsed: true,
       onToggleSidebar: noop, onUpdateDraftKeywords: noop,
       onUpdateCreationSearchTerms: async (terms: string[]) => { events.push(["update", terms]); },
@@ -97,11 +98,15 @@ for (const stage of ["suggestion", "confirmation"] as const) {
         const card = page.getByRole("region", { name: stage === "suggestion" ? "任务建议卡片" : "最终任务确认卡" });
         await expect(card).toBeVisible();
         if (mixed) {
-          const literal = page.locator(stage === "suggestion" ? ".task-suggestion-copy" : ".inv-assistant-text");
-          await expect(literal).toHaveCount(1);
-          expect(await literal.textContent()).toBe(content);
-          expect(await literal.locator("tag, a, code").count()).toBe(0);
-          expect(await literal.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+          const narrative = page.locator(".inv-assistant-markdown").filter({hasText: "完整规则快照"});
+          await expect(narrative).toHaveCount(1);
+          for (const phrase of ["模型说明", "规则 1：收费", "规则 2：培训贷", "豁免：无"]) {
+            await expect(narrative).toContainText(phrase);
+          }
+          expect(await narrative.locator("tag, script, iframe").count()).toBe(0);
+          const links = await narrative.locator("a").evaluateAll(nodes => nodes.map(node => node.getAttribute("href")));
+          expect(links.every(href => href?.startsWith("https://example.test"))).toBe(true);
+          expect(await narrative.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
         }
         expect(await page.evaluate(() => (window as unknown as { mixedTest: { messageIds: string[] } }).mixedTest.messageIds)).toEqual(["actual-answer"]);
         if (stage === "suggestion") {

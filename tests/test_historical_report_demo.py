@@ -257,7 +257,8 @@ def test_lazy_sessions_completed_history_idempotency_and_scope(
     )
     assert first.status_code == 202
     first_turn_id = first.json()["turn_id"]
-    assert set(first.json()) == {"turn_id", "status"}
+    assert set(first.json()) == {"turn_id", "status", "updated_at"}
+    assert first.json()["updated_at"] == historical_stack["service"].report_service.store.get_turn(first_turn_id).created_at
     assert _session_count(historical_stack) == 1
     assert _CapturingHermesAgent.histories == [[]]
 

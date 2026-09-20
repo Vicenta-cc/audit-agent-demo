@@ -150,6 +150,12 @@ def _authz_enabled() -> bool:
     return settings.app_auth_mode == "required"
 
 
+@app.get("/api/auth/config")
+def application_auth_config(response: Response):
+    response.headers["Cache-Control"] = "no-store"
+    return {"enabled": _authz_enabled()}
+
+
 def _require_admin(principal: Principal) -> None:
     if not _authz_enabled():
         return
@@ -205,7 +211,7 @@ def _require_crawler_account(
 
 def _authorized_crawler_accounts(principal: Principal) -> list[dict]:
     accounts = crawler_account_store.list()
-    if _authz_enabled() and not principal.is_admin:
+    if _authz_enabled():
         accounts = [
             item
             for item in accounts
@@ -218,7 +224,7 @@ def _authorized_available_crawler_accounts(
     principal: Principal, platform: str
 ) -> list[dict]:
     accounts = crawler_account_store.available_accounts(platform)
-    if _authz_enabled() and not principal.is_admin:
+    if _authz_enabled():
         accounts = [
             item
             for item in accounts
@@ -234,12 +240,7 @@ def _available_crawler_accounts_for_job(job: dict) -> list[dict]:
     if not _authz_enabled():
         return accounts
     owner_user_id = str(job.get("owner_user_id") or "").strip()
-    owner = auth_store.get_user(owner_user_id) if owner_user_id else None
-    if owner and owner.get("role") == "admin":
-        return accounts
-    authorized_ids = auth_store.granted_resource_ids(
-        owner_user_id, "crawler-account", "use"
-    ) if owner_user_id else frozenset()
+    authorized_ids = auth_store.owned_crawler_account_ids(owner_user_id) if owner_user_id else frozenset()
     return [
         item for item in accounts if str(item.get("id") or "") in authorized_ids
     ]
@@ -1402,13 +1403,19 @@ def create_crawler_account(
     request: CrawlerAccountCreateRequest,
     principal: Principal = Depends(principal_provider),
 ):
-    _require_admin(principal)
     try:
         item = crawler_account_store.create(
             platform=request.platform,
             display_name=request.display_name,
             platform_account_id=request.platform_account_id,
         )
+        if _authz_enabled():
+            try:
+                auth_store.register_crawler_account(str(item["id"]), principal.id)
+            except Exception:
+                # No profile/login exists yet. Never publish an ownerless new account.
+                crawler_account_store.delete(str(item["id"]))
+                raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"item": item}
@@ -1469,7 +1476,7 @@ def start_crawler_account_login(
             account,
             request.headers.get("x-login-token", ""),
             owner_user_id=principal.id if _authz_enabled() else "",
-            owner_is_admin=principal.is_admin,
+            owner_is_admin=False,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
@@ -1493,7 +1500,7 @@ def get_crawler_account_login(
             session_id,
             request.headers.get("x-login-token", ""),
             owner_user_id=principal.id if _authz_enabled() else "",
-            owner_is_admin=principal.is_admin,
+            owner_is_admin=False,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
@@ -1514,7 +1521,7 @@ def cancel_crawler_account_login(
             session_id,
             request.headers.get("x-login-token", ""),
             owner_user_id=principal.id if _authz_enabled() else "",
-            owner_is_admin=principal.is_admin,
+            owner_is_admin=False,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
@@ -1535,7 +1542,7 @@ def get_crawler_login_frame(
             request.headers.get("x-login-token", ""),
             after,
             owner_user_id=principal.id if _authz_enabled() else "",
-            owner_is_admin=principal.is_admin,
+            owner_is_admin=False,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
@@ -1558,7 +1565,7 @@ def send_crawler_login_input(
             request.headers.get("x-login-token", ""),
             event,
             owner_user_id=principal.id if _authz_enabled() else "",
-            owner_is_admin=principal.is_admin,
+            owner_is_admin=False,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
@@ -2156,7 +2163,7 @@ def create_job(
         if not request.crawler_account_id and _authz_enabled():
             raise HTTPException(
                 status_code=409,
-                detail="当前没有已授权且可用的采集账号，请联系管理员。",
+                detail="当前没有可用的个人采集账号，请先添加账号并扫码登录。",
             )
     crawler_account = validate_crawler_account_for_job(
         request.crawler_account_id,
@@ -2517,7 +2524,7 @@ def control_job(
                 if preferred:
                     _require_crawler_account(str(preferred),principal,permission="use")
                 if not _authorized_available_crawler_accounts(principal,crawl_request.platform):
-                    raise HTTPException(409,detail="当前没有已授权、已登录且结束冷却的可用采集账号。")
+                    raise HTTPException(409,detail="当前没有已登录且结束冷却的个人采集账号，请检查自己的账号状态。")
             if not isinstance(idempotency_key,str) or not idempotency_key.strip():
                 raise HTTPException(400,detail={"code":"IDEMPOTENCY_KEY_REQUIRED","message":"恢复任务需要请求标识。"})
             if request.action != "backfill_analysis" and not actions.get(request.action):
@@ -2553,7 +2560,7 @@ def control_job(
         if (_authz_enabled() or preferred_account_id) and not available_accounts:
             raise HTTPException(
                 status_code=409,
-                detail="当前没有已授权、已登录且结束冷却的可用采集账号，请稍后重试或联系管理员。",
+                detail="当前没有已登录且结束冷却的个人采集账号，请检查自己的账号登录状态或稍后重试。",
             )
         bound_run = investigation_creation_store.get_run_for_job(job_id)
         if bound_run and bound_run.status == RunStatus.FAILED:

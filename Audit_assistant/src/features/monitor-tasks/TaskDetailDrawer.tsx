@@ -114,46 +114,38 @@ export function TaskDetailDrawer({ task, mode, onClose, onControl }: TaskDetailD
             <div className="drawer-actions">
               {task.raw.available_actions?.end_task ? <Button type="button" variant="secondary"
                 onClick={() => void onControl(task, "stop_all", "结束任务")}>结束任务</Button> : null}
-              <Button
+              {task.raw.available_actions?.pause_crawl ? <Button
                 type="button"
                 variant="secondary"
                 disabled={!task.raw.available_actions?.pause_crawl}
                 onClick={() => void onControl(task, "pause_crawl", "暂停抓取")}
               >
                 暂停抓取
-              </Button>
-              <Button
+              </Button> : null}
+              {task.raw.available_actions?.resume_crawl ? <Button
                 type="button"
                 variant="secondary"
                 disabled={!task.raw.available_actions?.resume_crawl}
                 onClick={() => void onControl(task, "resume_crawl", "继续采集")}
               >
                 继续采集
-              </Button>
-              <Button
+              </Button> : null}
+              {task.raw.available_actions?.pause_analysis ? <Button
                 type="button"
                 variant="secondary"
                 disabled={!task.raw.available_actions?.pause_analysis}
                 onClick={() => void onControl(task, "pause_analysis", "暂停分析")}
               >
                 暂停分析
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!task.raw.available_actions?.stop_analysis}
-                onClick={() => void onControl(task, "stop_analysis", "停止分析")}
-              >
-                停止分析
-              </Button>
-              <Button
+              </Button> : null}
+              {task.raw.available_actions?.resume_analysis ? <Button
                 type="button"
                 variant="primary"
                 disabled={!task.raw.available_actions?.resume_analysis}
                 onClick={() => void onControl(task, "resume_analysis", "继续分析")}
               >
                 继续分析
-              </Button>
+              </Button> : null}
             </div>
           </section>
         </div>

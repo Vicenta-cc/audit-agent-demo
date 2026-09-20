@@ -58,3 +58,38 @@ test("quota rejection does not masquerade as a changed draft", async () => {
   expect(formatCreationErrorMessage("今日三次任务额度已用完。")).toContain("次日 00:00");
   expect(formatCreationErrorMessage("已有未完成任务，请完成或结束整个任务后再提交。")).toContain("继续原任务");
 });
+
+test("natural outcomes and user stops have distinct colors and controls", async ({ page }) => {
+  await page.route("**/api/me/task-quota", route => route.fulfill({ json: { enabled: false } }));
+  await page.goto("/tests/taskLifecycle.html");
+  const tag = page.locator(".agent-exec-status-tag");
+  for (const [scene, tone, label] of [
+    ["模拟正常发布", "done", "已完成"],
+    ["模拟部分失败发布", "warning", "已完成，部分失败"],
+    ["模拟全部失败", "error", "执行失败"],
+    ["模拟后台确认停止", "neutral", "已结束"]
+  ]) {
+    await page.getByRole("button", { name: scene, exact: true }).click();
+    await expect(tag).toHaveText(label);
+    await expect(tag).toHaveClass(`agent-exec-status-tag is-${tone}`);
+    await expect(page.locator(".investigation-run-projection")).toHaveClass(`investigation-run-projection tone-${tone}`);
+    await expect(page.getByRole("button", { name: "结束任务", exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("流水线实时控制")).toHaveCount(0);
+  }
+  await page.getByRole("button", { name: "模拟暂停状态" }).click();
+  await expect(tag).toHaveText("已暂停");
+  await expect(tag).toHaveClass("agent-exec-status-tag is-neutral");
+  await expect(page.getByRole("button", { name: "继续分析", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "暂停分析", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "模拟运行状态" }).click();
+  await expect(page.getByRole("button", { name: "暂停分析", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "继续分析", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "停止分析", exact: true })).toHaveCount(0);
+  let action = "";
+  await page.route("**/api/jobs/fixture-job/control", async route => {
+    action = route.request().postDataJSON().action;
+    await route.fulfill({ json: {} });
+  });
+  await page.getByRole("button", { name: "暂停分析", exact: true }).click();
+  await expect.poll(() => action).toBe("pause_analysis");
+});

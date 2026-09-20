@@ -3,14 +3,15 @@ import { TopNavigation } from "../components/navigation/TopNavigation";
 import { RuleAssistantWorkspaceProvider } from "../features/rule-assistant/RuleAssistantWorkspaceContext";
 import { AppRouter } from "./router";
 import { EnvironmentBoundary } from './EnvironmentBoundary';
+import { AuthBoundary } from "../features/auth/AuthBoundary";
 
 export default function App() {
   return (
-    <EnvironmentBoundary><BrowserRouter>
+    <BrowserRouter><AuthBoundary><EnvironmentBoundary>
       <RuleAssistantWorkspaceProvider>
         <TopNavigation />
         <AppRouter />
       </RuleAssistantWorkspaceProvider>
-    </BrowserRouter></EnvironmentBoundary>
+    </EnvironmentBoundary></AuthBoundary></BrowserRouter>
   );
 }

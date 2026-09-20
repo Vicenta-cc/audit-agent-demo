@@ -1,0 +1,8 @@
+.phase5-demo { height: 100vh; display: flex; flex-direction: column; }
+.phase5-demo-body { flex: 1; min-height: 0; overflow: auto; }
+.phase5-demo-body > div { height: 100%; }
+.phase5-demo-body .inv-workspace-root { height: 100%; }
+.phase5-demo-body .inv-center-area { height: 100%; }
+.phase5-demo-body .auth-screen { min-height: 100%; }
+.phase5-demo .demo-toolbar button[aria-pressed="true"] { color: white; background: #2563eb; border-color: #2563eb; }
+.phase5-demo .demo-toolbar a { color: #1d4ed8; margin-left: 8px; }

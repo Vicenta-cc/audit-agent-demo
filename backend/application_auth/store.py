@@ -16,6 +16,7 @@ from .passwords import hash_password, verify_password
 
 
 LEGACY_UNASSIGNED_USER_ID = "legacy-unassigned"
+ADMIN_SESSION_DAYS = 7
 VALID_ROLES = frozenset({"admin", "user", "system"})
 VALID_STATUSES = frozenset({"active", "disabled"})
 VALID_ACTIVATION_MODES = frozenset({"first_login", "created_at"})
@@ -101,6 +102,14 @@ class AuthStore:
                         ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS crawler_account_owners (
+                    account_id TEXT PRIMARY KEY,
+                    owner_user_id TEXT NOT NULL REFERENCES app_users(id),
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_crawler_account_owners_user
+                ON crawler_account_owners(owner_user_id);
+
                 CREATE TABLE IF NOT EXISTS resource_grants (
                     user_id TEXT NOT NULL,
                     resource_type TEXT NOT NULL,
@@ -169,7 +178,7 @@ class AuthStore:
         encoded_password = hash_password(password)
         now = _utc_now()
         started = now if mode == "created_at" else None
-        expires = now + timedelta(days=days) if started else None
+        expires = now + timedelta(days=days) if started and normalized_role != "admin" else None
         user_id = str(uuid4())
         try:
             with self._lock, self._connect() as connection:
@@ -229,7 +238,16 @@ class AuthStore:
                 raise AuthenticationError("invalid username or password")
             started = _parse_optional(row["validity_started_at"])
             expires = _parse_optional(row["expires_at"])
-            if started is None:
+            if row["role"] == "admin":
+                # Account lifetime is unlimited; login sessions remain bounded.
+                started = started or now
+                expires = None
+                connection.execute(
+                    "UPDATE app_users SET validity_started_at=?, expires_at=NULL, updated_at=? WHERE id=?",
+                    (_iso(started), _iso(now), row["id"]),
+                )
+                row = connection.execute("SELECT * FROM app_users WHERE id=?", (row["id"],)).fetchone()
+            elif started is None:
                 started = now
                 expires = now + timedelta(days=int(row["validity_days"]))
                 connection.execute(
@@ -243,8 +261,9 @@ class AuthStore:
                 row = connection.execute(
                     "SELECT * FROM app_users WHERE id=?", (row["id"],)
                 ).fetchone()
-            if expires is None or now >= expires:
+            if row["role"] != "admin" and (expires is None or now >= expires):
                 raise AccountExpiredError("account has expired")
+            session_expires = now + timedelta(days=ADMIN_SESSION_DAYS) if row["role"] == "admin" else expires
             session_token = secrets.token_urlsafe(32)
             csrf_token = secrets.token_urlsafe(32)
             session_id = str(uuid4())
@@ -260,7 +279,7 @@ class AuthStore:
                     _secret_hash(session_token),
                     _secret_hash(csrf_token),
                     _iso(now),
-                    _iso(expires),
+                    _iso(session_expires),
                 ),
             )
             self._audit(
@@ -317,16 +336,18 @@ class AuthStore:
         if row is None or row["revoked_at"] or row["status"] != "active":
             raise AuthenticationError("session is invalid")
         session_expires = _parse_required(row["session_expires_at"])
-        user_expires = _parse_required(row["user_expires_at"])
-        if observed >= session_expires or observed >= user_expires:
-            raise AccountExpiredError("account or session has expired")
+        user_expires = None if row["role"] == "admin" else _parse_optional(row["user_expires_at"])
+        if row["role"] != "admin" and (user_expires is None or observed >= user_expires):
+            raise AccountExpiredError("account has expired")
+        if observed >= session_expires:
+            raise AuthenticationError("session has expired; please log in again")
         if csrf_token is not None and not csrf_valid:
             raise AuthorizationError("CSRF validation failed")
         return Principal(
             id=str(row["user_id"]),
             role=str(row["role"]),
             session_id=str(row["session_id"]),
-            expires_at=_iso(min(session_expires, user_expires)),
+            expires_at=_iso(min(session_expires, user_expires) if user_expires else session_expires),
         )
 
     def logout(self, token: str, *, actor_user_id: str) -> None:
@@ -364,7 +385,7 @@ class AuthStore:
             row = connection.execute(
                 """
                 SELECT s.id, s.expires_at, s.revoked_at,
-                       u.status, u.expires_at AS user_expires_at
+                       u.status, u.role, u.expires_at AS user_expires_at
                 FROM login_sessions s
                 JOIN app_users u ON u.id=s.user_id
                 WHERE s.token_hash=?
@@ -373,11 +394,11 @@ class AuthStore:
             ).fetchone()
             if row is None or row["revoked_at"] or row["status"] != "active":
                 raise AuthenticationError("session is invalid")
-            if (
-                now >= _parse_required(row["expires_at"])
-                or now >= _parse_required(row["user_expires_at"])
-            ):
-                raise AccountExpiredError("account or session has expired")
+            user_expires = None if row["role"] == "admin" else _parse_optional(row["user_expires_at"])
+            if row["role"] != "admin" and (user_expires is None or now >= user_expires):
+                raise AccountExpiredError("account has expired")
+            if now >= _parse_required(row["expires_at"]):
+                raise AuthenticationError("session has expired; please log in again")
             connection.execute(
                 """
                 INSERT OR IGNORE INTO login_session_csrf_tokens (
@@ -405,13 +426,13 @@ class AuthStore:
             ).fetchone()
         if row is None or row["role"] == "system" or row["status"] != "active":
             raise AuthenticationError("account is invalid")
-        expires = _parse_optional(row["expires_at"])
-        if expires is None or observed >= expires:
+        expires = None if row["role"] == "admin" else _parse_optional(row["expires_at"])
+        if row["role"] != "admin" and (expires is None or observed >= expires):
             raise AccountExpiredError("account has expired")
         return Principal(
             id=str(row["id"]),
             role=str(row["role"]),
-            expires_at=_iso(expires),
+            expires_at=_iso(expires) if expires else "",
         )
 
     def list_users(self) -> list[dict[str, Any]]:
@@ -462,7 +483,16 @@ class AuthStore:
             if encoded_password is not None:
                 assignments.append("password_hash=?")
                 values.append(encoded_password)
-            if extension is not None:
+            effective_role = normalized_role or current["role"]
+            if effective_role == "admin":
+                if extension is not None:
+                    raise ValueError("administrator accounts do not expire and need no renewal")
+                assignments.append("expires_at=NULL")
+            elif current["role"] == "admin":
+                # Demotion must not leave a regular user with unlimited lifetime.
+                assignments.extend(("validity_started_at=?", "expires_at=?"))
+                values.extend((_iso(now), _iso(now + timedelta(days=extension or self.default_validity_days))))
+            elif extension is not None:
                 current_expires = _parse_optional(current["expires_at"])
                 base = max(now, current_expires) if current_expires else now
                 assignments.extend(("validity_started_at=COALESCE(validity_started_at, ?)", "expires_at=?"))
@@ -501,6 +531,27 @@ class AuthStore:
             ).fetchone()
         return _public_user(updated)
 
+    def register_crawler_account(self, account_id: str, owner_user_id: str) -> None:
+        """Bind a newly created account once. Existing bindings cannot be reassigned."""
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                "INSERT INTO crawler_account_owners(account_id, owner_user_id, created_at) VALUES (?, ?, ?)",
+                (_required_text(account_id, "account_id"), owner_user_id, _iso(_utc_now())),
+            )
+
+    def owns_crawler_account(self, user_id: str, account_id: str) -> bool:
+        with self._lock, self._connect() as connection:
+            return connection.execute(
+                "SELECT 1 FROM crawler_account_owners WHERE account_id=? AND owner_user_id=?",
+                (account_id, user_id),
+            ).fetchone() is not None
+
+    def owned_crawler_account_ids(self, user_id: str) -> frozenset[str]:
+        with self._lock, self._connect() as connection:
+            return frozenset(str(row[0]) for row in connection.execute(
+                "SELECT account_id FROM crawler_account_owners WHERE owner_user_id=?", (user_id,)
+            ).fetchall())
+
     def grant_resource(
         self,
         *,
@@ -511,6 +562,8 @@ class AuthStore:
         actor_user_id: str,
     ) -> dict[str, str]:
         kind = _required_text(resource_type, "resource_type")
+        if kind == "crawler-account":
+            raise ValueError("crawler accounts are private to their owner and cannot be shared")
         resource = _required_text(resource_id, "resource_id")
         normalized_permission = str(permission).strip().lower()
         if normalized_permission not in VALID_PERMISSIONS:
@@ -749,7 +802,7 @@ def _public_user(row: sqlite3.Row) -> dict[str, Any]:
         "activation_mode": str(row["activation_mode"]),
         "validity_days": int(row["validity_days"]),
         "validity_started_at": row["validity_started_at"],
-        "expires_at": row["expires_at"],
+        "expires_at": None if row["role"] == "admin" else row["expires_at"],
         "created_at": str(row["created_at"]),
         "updated_at": str(row["updated_at"]),
     }

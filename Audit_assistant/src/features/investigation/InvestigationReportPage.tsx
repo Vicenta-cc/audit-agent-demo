@@ -362,7 +362,7 @@ function ReportSection({
       <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
         <SectionHeading section={section} />
         <dl className="r31-account-coverage">
-          <StatBandItem label={accounts.target_entries?.length ? "调查目标" : "发布帖子"} value={accounts.target_entries?.length ? accounts.coverage?.target_account_count : accounts.post_author_entries?.reduce((sum, entry) => sum + Number(entry.statistics.published_post_count || 0), 0)} />
+          <StatBandItem label={accounts.target_entries?.length ? "调查目标" : "发布帖子"} value={accounts.target_entries?.length ? accounts.coverage?.target_account_count : statistics.canonical_posts} />
           <StatBandItem label="发布账号" value={accounts.coverage?.post_author_account_count} />
           <StatBandItem label="评论账号" value={accounts.coverage?.comment_author_account_count} />
           <StatBandItem label="去重账号" value={accounts.coverage?.distinct_account_count} />

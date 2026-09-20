@@ -6,6 +6,7 @@ import { TaskQuota } from "../src/components/feedback/TaskQuota";
 import type { InvestigationRunProjection } from "../src/types/investigationCreation";
 import "../src/styles/tokens.css";
 import "../src/styles/global.css";
+import "../src/styles/focus-users.css";
 import "../src/styles/investigation-workspace.css";
 
 const base: InvestigationRunProjection = {
@@ -22,6 +23,10 @@ function Fixture() {
     <TaskQuota />
     <button onClick={() => setRun({ ...base, job_id: "fixture-job", status: "INTERRUPTED", crawl_status: "stopped", analysis_status: "paused", available_actions: { end_task: true, resume_analysis: true } })}>模拟暂停状态</button>
     <button onClick={() => setRun({ ...base, status: "FAILED", crawl_status: "stopped", analysis_status: "stopped", report_status: "cancelled", error_code: "cancelled", error_message: "任务已终止。", available_actions: { ended: true } })}>模拟后台确认停止</button>
+    <button onClick={() => setRun({ ...base, job_id: "fixture-job", status: "RUNNING", crawl_status: "running", analysis_status: "running", available_actions: { end_task: true, pause_crawl: true, pause_analysis: true, stop_analysis: true } })}>模拟运行状态</button>
+    <button onClick={() => setRun({ ...base, status: "PUBLISHED", crawl_status: "completed", analysis_status: "partial", report_status: "published", available_actions: { ended: true } })}>模拟部分失败发布</button>
+    <button onClick={() => setRun({ ...base, status: "PUBLISHED", crawl_status: "completed", analysis_status: "completed", report_status: "published", task_stats: { completed_analysis_count: 4, failed_analysis_count: 0 }, available_actions: { ended: true } })}>模拟正常发布</button>
+    <button onClick={() => setRun({ ...base, status: "AUDIT_COMPLETED", crawl_status: "completed", analysis_status: "failed", report_status: "blocked_by_failed_posts", task_stats: { completed_analysis_count: 0, failed_analysis_count: 5 }, available_actions: { ended: true } })}>模拟全部失败</button>
     <AgentCollaborationCard phase="collection_working" authoritative run={run} investigationId="fixture" investigationTitle="验收任务"
       onControlAccepted={() => setRun(current => ({ ...current, available_actions: { ending: true } }))} />
   </main></MemoryRouter>;

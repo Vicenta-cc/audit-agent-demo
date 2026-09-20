@@ -39,46 +39,38 @@ export function TaskActionsMenu({
         </Button>
       }
     >
-      <button
+      {actions.pause_crawl ? <button
         type="button"
         disabled={!actions.pause_crawl}
         onClick={() => void onControl(task, "pause_crawl", "暂停抓取")}
       >
         <Pause size={15} />
         暂停抓取
-      </button>
-      <button
+      </button> : null}
+      {actions.resume_crawl ? <button
         type="button"
         disabled={!actions.resume_crawl}
         onClick={() => void onControl(task, "resume_crawl", "继续采集")}
       >
         <RotateCw size={15} />
         继续采集
-      </button>
-      <button
+      </button> : null}
+      {actions.pause_analysis ? <button
         type="button"
         disabled={!actions.pause_analysis}
         onClick={() => void onControl(task, "pause_analysis", "暂停分析")}
       >
         <Pause size={15} />
         暂停分析
-      </button>
-      <button
-        type="button"
-        disabled={!actions.stop_analysis}
-        onClick={() => void onControl(task, "stop_analysis", "停止分析")}
-      >
-        <Square size={14} />
-        停止分析
-      </button>
-      <button
+      </button> : null}
+      {actions.resume_analysis ? <button
         type="button"
         disabled={!actions.resume_analysis}
         onClick={() => void onControl(task, "resume_analysis", "继续分析")}
       >
         <Play size={15} />
         继续分析
-      </button>
+      </button> : null}
       {actions.end_task || actions.ending ? <button type="button" disabled={!actions.end_task}
         onClick={() => void onControl(task, "stop_all", "结束任务")}><Square size={14} />{actions.ending ? "正在结束…" : "结束任务"}</button> : null}
       <button type="button" className="is-danger" disabled={!actions.delete_job} onClick={() => onDelete(task)}>

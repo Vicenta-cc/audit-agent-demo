@@ -128,11 +128,12 @@ test("formal report frontend keeps the revised public contract", () => {
   expect(reportPage).toContain("total_count");
   expect(reportPage).not.toContain("按调查任务分布");
   expect(reportPage).not.toContain("TOP 5");
-  expect(reportPage).toContain("<small>风险帖子</small>");
+  expect(reportPage).toContain('label: "风险帖子"');
   expect(reportPage).not.toContain("风险或复审帖子");
-  expect(reportPage).not.toContain("statistics.decision.review");
+  // M3_REPORT_COMPLETION_20260909 explicitly added separate review statistics.
+  expect(reportPage).toContain("statistics.decision.review");
   expect(reportPage).not.toContain("需人工核验");
-  expect(reportPage).not.toContain("复审");
+  expect(reportPage).toContain('review: "复审"');
   expect(reportPage).not.toContain("history_activity");
   expect(reportPage).not.toContain("当前发布报告不包含历史活动");
   expect(reportPage).not.toContain("roleLabel");
@@ -147,4 +148,28 @@ test("formal report frontend keeps the revised public contract", () => {
   expect(appendixPage).not.toContain("reportSources");
   expect(appendixPage).not.toContain("fetchAuditResults");
   expect(appendixPage).toContain("finding_ref: findingRef");
+});
+
+test("published report renders pass, review and reject as separate server counts", async ({page}) => {
+  await page.route("**/api/auth/config", route => route.fulfill({json:{enabled:false}}));
+  await page.route("**/api/report-versions/*/presentation-projection", route => route.fulfill({json:{
+    schema_version:"r31-report-presentation/v1",
+    report_metadata:{title:"审核结果验收",source_name:"测试调查",status:"published",published_at:"2026-09-20T00:00:00Z",platform:{status:"available",label:"抖音"},scope:{status:"unavailable"}},
+    investigation_summary:{status:"available",paragraphs:[]},
+    statistics:{canonical_posts:9,independently_reviewed_comments:11,comment_own_risk:2,
+      decision:{pass:5,review:3,reject:1},risk_level:{high:1,medium:2,low:1,none:5},evidence:{direct:1,indirect:2,counter:0}},
+    ordered_sections:[{section_ref:"audit-counts",section_number:"1",title:"审核统计",presentation_kind:"audit_risk_statistics",paragraphs:[]},
+      {section_ref:"account-counts",section_number:"2",title:"账号概览",presentation_kind:"account_activity_overview",paragraphs:[]}],
+    accounts:{status:"available",target_entries:[],post_author_entries:[],coverage:{post_author_account_count:0,comment_author_account_count:0,distinct_account_count:0}}
+  }}));
+  await page.goto(`/investigation/acceptance/report?report=${encodeURIComponent(version)}`);
+  await expect(page.getByRole("heading",{name:"审核结果验收",exact:true})).toBeVisible();
+  // Missing/partial author identities must not reduce the authoritative post total.
+  await expect(page.locator(".r31-account-coverage .r31-stat-item").filter({hasText:"发布帖子"}).locator("dd")).toHaveText("9");
+  const decisions=page.getByRole("row").filter({hasText:"审核决定"});
+  await expect(decisions.getByRole("cell",{name:"通过 5",exact:true})).toBeVisible();
+  await expect(decisions.getByRole("cell",{name:"复审 3",exact:true})).toBeVisible();
+  await expect(decisions.getByRole("cell",{name:"拒绝 1",exact:true})).toBeVisible();
+  await expect(page.getByRole("row").filter({hasText:"评论审核"})).toContainText("已完成独立审核评论 11");
+  await expect(page.getByRole("row").filter({hasText:"评论审核"})).toContainText("评论自身风险 2");
 });

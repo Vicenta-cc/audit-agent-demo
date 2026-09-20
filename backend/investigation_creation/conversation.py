@@ -728,6 +728,7 @@ class InvestigationCreationConversationService:
             updated_at = max((value for value in timestamp_candidates if value), default=session.updated_at)
             items.append({
                 "workspace_session_id": session.id,
+                "run_id": state.run.run_id if state.run else "",
                 "title": (state.draft_artifact.get("draft") or {}).get("title") or first_question[:48] or "新调查需求",
                 "updated_at": updated_at,
                 "run_status": state.run.status if state.run else "",

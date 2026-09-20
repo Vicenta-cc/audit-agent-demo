@@ -185,22 +185,23 @@ class AdmissionStore:
         if (
             not user
             or user["status"] != "active"
-            or not user["expires_at"]
-            or datetime.fromisoformat(user["expires_at"]) <= self.clock()
+            or (user["role"] != "admin" and (
+                not user["expires_at"]
+                or datetime.fromisoformat(user["expires_at"]) <= self.clock()
+            ))
         ):
             raise AdmissionError(
                 "账号已失效，请重新登录或联系管理员。", code="ACCOUNT_EXPIRED"
             )
-        if account_id and user["role"] != "admin":
+        if account_id:
             grant = db.execute(
-                f"""SELECT 1 FROM {schema}.resource_grants
-                WHERE user_id=? AND resource_type='crawler-account' AND resource_id=?
-                AND permission IN ('use','manage') AND revoked_at IS NULL""",
+                f"""SELECT 1 FROM {schema}.crawler_account_owners
+                WHERE owner_user_id=? AND account_id=?""",
                 (owner, account_id),
             ).fetchone()
             if grant is None:
                 raise AdmissionError(
-                    "没有使用此采集账号的权限。", code="CRAWLER_ACCOUNT_FORBIDDEN"
+                    "只能使用自己的采集账号。", code="CRAWLER_ACCOUNT_FORBIDDEN"
                 )
 
     def reserve(
@@ -311,7 +312,7 @@ class AdmissionStore:
                 (owner, day),
             ).fetchone()[0]
             active = db.execute(
-                "SELECT task_id,job_id,queue_state,decision,day,waiting_reason,resource_account_id FROM task_admissions WHERE owner_id=? AND state='RESERVED'",
+                "SELECT task_id,job_id,kind,queue_state,decision,day,waiting_reason,resource_account_id FROM task_admissions WHERE owner_id=? AND state='RESERVED'",
                 (owner,),
             ).fetchone()
         used, reserved = counts.get("SUCCEEDED", 0), counts.get("RESERVED", 0)

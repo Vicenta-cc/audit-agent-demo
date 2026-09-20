@@ -193,13 +193,7 @@ def test_admin_grants_and_username_normalization(tmp_path):
     with pytest.raises(ValueError):
         store.create_user(username="alice", password=PASSWORD)
 
-    store.grant_resource(
-        user_id=user["id"],
-        resource_type="crawler-account",
-        resource_id="crawler-1",
-        permission="manage",
-        actor_user_id=admin["id"],
-    )
+    store.register_crawler_account("crawler-1", user["id"])
     service = ApplicationAuthService(store)
     _, admin_token, _ = store.login("Administrator", PASSWORD)
     _, user_token, _ = store.login(unicodedata.normalize("NFKC", "Ａlice"), PASSWORD)
@@ -442,3 +436,158 @@ def test_historical_workspace_requires_owner_or_explicit_grant(tmp_path):
     assert service.get_workspace(
         spec.workspace_id, principal_id=user["id"]
     )["id"] == spec.workspace_id
+
+
+def test_expected_browser_identity_blocks_cross_tab_reads_and_writes(tmp_path):
+    app, store = auth_app(tmp_path / "identity.sqlite3")
+    alice = store.create_user(username="identity-alice", password=PASSWORD)
+    bob = store.create_user(username="identity-bob", password=PASSWORD)
+    client = TestClient(app)
+    login(client, "identity-alice")
+    payload = login(client, "identity-bob")
+    for method in ("GET", "POST"):
+        stale = client.request(method, "/api/private", headers={
+            "X-Application-User": alice["id"], "X-CSRF-Token": payload["csrf_token"],
+        })
+        assert stale.status_code == 409
+        assert stale.json()["detail"]["code"] == "AUTH_IDENTITY_CHANGED"
+    own = client.get("/api/private", headers={"X-Application-User": bob["id"]})
+    assert own.status_code == 200
+    assert own.headers["x-application-user"] == bob["id"]
+
+
+def test_admin_http_lifecycle_and_non_admin_denial(tmp_path):
+    from datetime import datetime, timedelta
+
+    app, store = auth_app(tmp_path / "admin.sqlite3")
+    store.create_user(username="admin-http", password=PASSWORD, role="admin")
+    user = store.create_user(username="member-http", password=PASSWORD)
+    admin, member = TestClient(app), TestClient(app)
+    admin_headers = {"X-CSRF-Token": login(admin, "admin-http")["csrf_token"]}
+    member_headers = {"X-CSRF-Token": login(member, "member-http")["csrf_token"]}
+    path = f"/api/admin/users/{user['id']}"
+    for method, url, body in (
+        ("GET", "/api/admin/users", None),
+        ("POST", "/api/admin/users", {"username":"unauthorized", "password":PASSWORD}),
+        ("PATCH", path, {"renew_days":7}),
+        ("GET", path + "/grants", None),
+        ("PUT", path + "/grants/crawler-account/example", {"permission":"use"}),
+        ("DELETE", path + "/grants/crawler-account/example/use", None),
+    ):
+        assert member.request(method, url, headers=member_headers, json=body).status_code == 403
+    created = admin.post("/api/admin/users", headers=admin_headers, json={
+        "username":"created-user", "password":PASSWORD, "role":"user",
+        "validity_days":7, "activation_mode":"first_login",
+    })
+    assert created.status_code == 201
+    assert not created.json()["user"]["expires_at"]
+    activated = login(TestClient(app), "created-user")["user"]
+    assert datetime.fromisoformat(activated["expires_at"]) - datetime.fromisoformat(activated["validity_started_at"]) == timedelta(days=7)
+    old_expiry = datetime.fromisoformat(store.get_user(user["id"])["expires_at"])
+    renewed = admin.patch(path, headers=admin_headers, json={"renew_days":7})
+    assert datetime.fromisoformat(renewed.json()["user"]["expires_at"]) == old_expiry + timedelta(days=7)
+    assert admin.put(path + "/grants/crawler-account/example", headers=admin_headers, json={"permission":"use"}).status_code == 400
+    assert admin.put(path + "/grants/job/example", headers=admin_headers, json={"permission":"read"}).status_code == 200
+    assert admin.get(path + "/grants").json()["items"][0]["permission"] == "read"
+    assert admin.delete(path + "/grants/job/example/read", headers=admin_headers).status_code == 204
+    assert admin.get(path + "/grants").json()["items"] == []
+    assert admin.patch(path, headers=admin_headers, json={"status":"disabled"}).status_code == 200
+    assert member.get("/api/private").status_code == 401
+    admin.patch(path, headers=admin_headers, json={"status":"active"})
+    login(member, "member-http")
+    admin.patch(path, headers=admin_headers, json={"password":"changed password 1234"})
+    assert member.get("/api/private").status_code == 401
+    assert member.post("/api/auth/login", json={"username":"member-http","password":PASSWORD}).status_code == 401
+    login(member, "member-http", "changed password 1234")
+
+
+def test_auth_config_is_public_and_only_exposes_mode(tmp_path, monkeypatch):
+    from backend import main
+    from fastapi import Response
+
+    app, _ = auth_app(tmp_path / "config.sqlite3")
+    app.get("/api/auth/config")(main.application_auth_config)
+    client = TestClient(app)
+    for enabled in (True, False):
+        monkeypatch.setattr(main, "_authz_enabled", lambda: enabled)
+        result = client.get("/api/auth/config")
+        assert result.status_code == 200
+        assert result.json() == {"enabled": enabled}
+        assert result.headers["cache-control"] == "no-store"
+        assert client.get("/api/private").status_code == 401
+
+
+def test_workspace_navigation_run_id_is_owner_scoped(creation_stack):
+    stack = creation_stack
+    item = _create_completed_turn(stack, workspace_key="navigation-owner")
+    run = _publish_fake_run(stack, item, idempotency_key="navigation-owner")
+    own = stack["client"].get("/api/investigation-workspaces").json()["items"]
+    assert any(entry["run_id"] == run["run_id"] for entry in own)
+    from backend.investigation_creation.principal import Principal
+    stack["principals"].current = Principal("other-owner")
+    assert stack["client"].get("/api/investigation-workspaces").json()["items"] == []
+
+
+def test_admin_has_no_account_expiry_but_sessions_still_expire(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    store = AuthStore(tmp_path / "auth.sqlite3")
+    admin = store.create_user(username="permanent-admin", password=PASSWORD, role="admin", activation_mode="created_at")
+    assert admin["expires_at"] is None
+    # Historical seven-day admin records must not lock the administrator out.
+    with sqlite3.connect(store.db_path) as db:
+        db.execute("UPDATE app_users SET expires_at='2000-01-01T00:00:00+00:00' WHERE id=?", (admin["id"],))
+    assert store.get_user(admin["id"])["expires_at"] is None
+    assert store.principal_for_user(admin["id"]).is_admin
+    user, token, csrf = store.login("permanent-admin", PASSWORD)
+    assert user["expires_at"] is None
+    principal = store.authenticate_session(token, csrf_token=csrf)
+    assert principal.is_admin
+    store.authenticate_session(token, csrf_token=store.rotate_csrf(token))
+    future = datetime.now(timezone.utc) + timedelta(days=8)
+    with pytest.raises(AuthenticationError, match="session has expired"):
+        store.authenticate_session(token, now=future)
+    assert store.principal_for_user(admin["id"], now=future).is_admin
+    with sqlite3.connect(store.db_path) as db:
+        db.execute("UPDATE login_sessions SET expires_at='2000-01-01T00:00:00+00:00' WHERE user_id=?", (admin["id"],))
+    with pytest.raises(AuthenticationError, match="session has expired"):
+        store.rotate_csrf(token)
+    _, replacement, _ = store.login("permanent-admin", PASSWORD)
+    assert store.authenticate_session(replacement).is_admin
+    with pytest.raises(ValueError, match="need no renewal"):
+        store.update_user(admin["id"], actor_user_id="test", renew_days=7)
+    store.update_user(admin["id"], actor_user_id="test", password="replacement password 123")
+    with pytest.raises(AuthenticationError):
+        store.authenticate_session(replacement)
+    store.update_user(admin["id"], actor_user_id="test", status="disabled")
+    with pytest.raises(AuthenticationError):
+        store.login("permanent-admin", "replacement password 123")
+    with pytest.raises(AuthenticationError):
+        store.principal_for_user(admin["id"])
+
+
+def test_admin_role_changes_preserve_regular_user_expiry(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    store = AuthStore(tmp_path / "auth.sqlite3")
+    user = store.create_user(username="changing-role", password=PASSWORD)
+    _, token, _ = store.login("changing-role", PASSWORD)
+    promoted = store.update_user(user["id"], actor_user_id="test", role="admin")
+    assert promoted["expires_at"] is None
+    with pytest.raises(AuthenticationError):
+        store.authenticate_session(token)
+    demoted = store.update_user(user["id"], actor_user_id="test", role="user")
+    assert datetime.fromisoformat(demoted["expires_at"]) - datetime.fromisoformat(demoted["validity_started_at"]) == timedelta(days=7)
+    with pytest.raises(AccountExpiredError):
+        store.principal_for_user(user["id"], now=datetime.now(timezone.utc) + timedelta(days=8))
+
+
+def test_admin_login_cookie_uses_session_expiry(tmp_path):
+    app, store = auth_app(tmp_path / "auth.sqlite3")
+    store.create_user(username="cookie-admin", password=PASSWORD, role="admin")
+    client = TestClient(app)
+    result = client.post("/api/auth/login", json={"username":"cookie-admin", "password":PASSWORD})
+    assert result.status_code == 200
+    assert result.json()["user"]["expires_at"] is None
+    assert "Max-Age=" in result.headers["set-cookie"]
+    assert "HttpOnly" in result.headers["set-cookie"]
+    assert client.get("/api/auth/me").status_code == 200
+    assert client.get("/api/auth/csrf").status_code == 200

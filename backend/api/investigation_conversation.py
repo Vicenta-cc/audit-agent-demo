@@ -47,6 +47,7 @@ class CreateInvestigationWorkspaceRequest(BaseModel):
 
 class InvestigationWorkspaceListItem(BaseModel):
     workspace_session_id: str
+    run_id: str = ""
     title: str
     updated_at: str
     run_status: str

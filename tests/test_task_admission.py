@@ -236,8 +236,11 @@ def test_run_and_quota_commit_or_rollback_together(stack, monkeypatch):
     with pytest.raises(RuntimeError):
         make_run(creation, a, "rollback")
     assert creation.admission.summary(a)["reserved"] == 0
+    assert creation.admission.summary(a)["used"] == 0
+    assert creation.admission.summary(a)["remaining"] == 3
     with creation._connect() as db:
         assert db.execute("SELECT count(*) FROM investigation_runs").fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM task_admissions").fetchone()[0] == 0
     monkeypatch.setattr(creation, "_record_idempotency_key", original)
     run = make_run(creation, a, "accepted")
     assert creation.admission.for_task(run.id)["queue_state"] == "QUEUED"
@@ -305,6 +308,29 @@ def test_resume_retains_charge_and_terminal_task_cannot_reopen(stack):
         enqueue_resume(
             store, job, owner=a, action="resume_analysis", key="expand", analyze_limit=3
         )
+
+
+@pytest.mark.parametrize("completed", [0, 1])
+def test_natural_post_failures_release_slot_without_user_end(stack, completed):
+    creation, _, (owner, _) = stack
+    run = make_run(creation, owner, "natural-result")
+    final = FakeExecutionAdapter.completed_state(ingested=2, pending=2-completed, completed=completed)
+    final["task_stats"]["failed_analysis_count"] = 2-completed
+    if not completed:
+        final["audit_results"] = []
+    reports = FakeReportAdapter()
+    worker = worker_for(creation, FakeExecutionAdapter(final_state=final), reports)
+    result = worker.run_once()
+    assert result.status == (RunStatus.PUBLISHED if completed else RunStatus.AUDIT_COMPLETED)
+    from backend.task_admission.recovery import reconcile
+    reconcile(worker)
+    row = creation.admission.for_task(run.id)
+    assert row["state"] == ("SUCCEEDED" if completed else "RELEASED")
+    assert not row["end_requested_at"]
+    assert creation.admission.summary(owner)["reserved"] == 0
+    assert creation.admission.summary(owner)["used"] == 1
+    assert reports.generate_calls == int(bool(completed))
+    make_run(creation, owner, "next-investigation")
 
 
 def test_child_process_keeps_execution_fence_after_worker_exits(tmp_path):
@@ -413,13 +439,7 @@ def test_legacy_http_entry_persists_intent_before_job_and_worker_dispatch(
     creation, auth, (a, b) = stack
     jobs = JobStore(tmp_path / "jobs.sqlite3")
     revisions = TaskAuditConfigRevisionStore(jobs.db_path)
-    auth.grant_resource(
-        user_id=a,
-        resource_type="crawler-account",
-        resource_id="account",
-        permission="use",
-        actor_user_id="admin",
-    )
+    auth.register_crawler_account("account", a)
     monkeypatch.setattr(main, "job_store", jobs)
     monkeypatch.setattr(main, "audit_config_revision_store", revisions)
     monkeypatch.setattr(main, "investigation_creation_store", creation)
@@ -952,3 +972,76 @@ def test_crawler_preparation_io_fault_refunds_only_before_any_spawn(stack, tmp_p
                 adapter._run_command(["fixture"], blocked_output, "dy", 1, None, None, account_id="fixture-account")
         store.settle(row["task_id"], stopped=True)
         assert store.summary(owner)["used"] == int(previous)
+
+
+def test_last_daily_charge_cannot_be_reused_by_racing_failed_tasks(stack):
+    creation, _, (owner, _) = stack
+    store = creation.admission
+    for i in range(2):
+        row = enqueue(store, owner, f"earlier-{i}")
+        store.start(row["task_id"], f"worker-{i}")
+        store.collection_launch(row["task_id"], f"worker-{i}")
+        store.settle(row["task_id"], stopped=True, reason="failed")
+    assert store.summary(owner)["used"] == 2
+    barrier = Barrier(8)
+
+    def accept_then_fail(i):
+        barrier.wait()
+        try:
+            row = enqueue(store, owner, f"racing-{i}")
+        except AdmissionError as exc:
+            return exc.code
+        store.start(row["task_id"], f"racing-worker-{i}")
+        store.collection_launch(row["task_id"], f"racing-worker-{i}")
+        # Even releasing the unfinished position immediately must not let the
+        # next concurrent submitter reuse this last charge.
+        store.settle(row["task_id"], stopped=True, reason="failed")
+        return "accepted"
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        outcomes = list(pool.map(accept_then_fail, range(8)))
+    assert outcomes.count("accepted") == 1
+    assert set(outcomes) <= {"accepted", "DAILY_REPORT_LIMIT", "USER_TASK_LIMIT"}
+    assert store.summary(owner)["used"] == 3
+    assert store.summary(owner)["remaining"] == 0
+    assert store.summary(owner)["active_task"] is None
+    with pytest.raises(AdmissionError) as exc:
+        enqueue(store, owner, "fourth-after-all-failed")
+    assert exc.value.code == "DAILY_REPORT_LIMIT"
+
+
+@pytest.mark.parametrize("outcome", ["published", "failed", "cancelled", "refunded"])
+def test_lost_response_replay_after_restart_and_next_day_never_recharges(stack, outcome):
+    from backend.task_admission.store import AdmissionStore
+
+    creation, _, (owner, _) = stack
+    store = creation.admission
+    now = datetime(2026, 9, 20, 15, 59, tzinfo=timezone.utc)
+    store.clock = lambda: now
+    original = enqueue(store, owner, "lost-response")
+    # Reopening the store models replay after a committed acceptance whose
+    # response was lost, without a worker having started yet.
+    reopened = AdmissionStore(store.db_path, auth_db=store.auth_db, enabled=True, clock=lambda: now)
+    assert enqueue(reopened, owner, "lost-response")["id"] == original["id"]
+    assert reopened.summary(owner)["used"] == 1
+    if outcome == "published":
+        reopened.settle(original["task_id"], report_id="fixture-report")
+    else:
+        reopened.start(original["task_id"], "worker")
+        if outcome == "cancelled":
+            reopened.cancel(original["task_id"], owner)
+        elif outcome == "refunded":
+            reopened.system_fault(original["task_id"], "worker", "job_creation_failed")
+        else:
+            reopened.collection_launch(original["task_id"], "worker")
+        reopened.settle(original["task_id"], stopped=True, reason=outcome)
+    finished = reopened.for_task(original["task_id"])
+    now += timedelta(minutes=2)
+    replay = enqueue(reopened, owner, "lost-response")
+    assert replay["id"] == original["id"]
+    assert replay["state"] == finished["state"]
+    assert replay["charge_state"] == ("REFUNDED" if outcome == "refunded" else "CHARGED")
+    assert reopened.summary(owner)["used"] == 0
+    assert reopened.summary(owner)["active_task"] is None
+    with reopened.connect() as db:
+        assert db.execute("SELECT count(*) FROM task_admissions").fetchone()[0] == 1

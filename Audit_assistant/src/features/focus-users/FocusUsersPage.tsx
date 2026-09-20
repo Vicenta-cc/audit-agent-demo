@@ -1,3 +1,4 @@
+import { useApplicationAuth } from "../auth/AuthBoundary";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AccountHeader } from "./AccountHeader";
@@ -18,6 +19,7 @@ import { fetchMockCommentRiskProfiles } from "../../mocks/userPenetration";
 import type { CommentRiskProfile, MonitoredAccount, RiskOutput } from "../../types/focusUsers";
 
 export function FocusUsersPage() {
+  const { user } = useApplicationAuth();
   const navigate = useNavigate();
   const [sidebarMode, setSidebarMode] = useState<FocusSidebarMode>("monitored");
   const [accounts, setAccounts] = useState<MonitoredAccount[]>([]);
@@ -50,11 +52,12 @@ export function FocusUsersPage() {
 
   useEffect(() => {
     void loadAccounts();
+    if (user) return;
     void fetchMockCommentRiskProfiles().then((profiles) => {
       setPenetrationUsers(profiles);
       setSelectedPenetrationUserId(profiles[0]?.id ?? "");
     });
-  }, [loadAccounts]);
+  }, [loadAccounts, user]);
 
   useEffect(() => {
     if (!toast) {

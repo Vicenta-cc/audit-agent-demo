@@ -17,6 +17,7 @@ import type { PublishedReportDetail } from "../types/reports";
 
 export interface InvestigationWorkspaceListItem {
   workspace_session_id: string;
+  run_id?: string;
   title: string;
   updated_at: string;
   run_status: string;

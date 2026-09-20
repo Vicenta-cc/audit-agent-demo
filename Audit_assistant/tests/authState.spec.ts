@@ -91,3 +91,29 @@ test("duplicate task submissions share an intent and network retry reuses it", a
     globalThis.fetch = originalFetch;
   }
 });
+
+test("late response bodies cannot restore a previous user's data or clear a new login", async () => {
+  const { apiRequest } = await import("../src/services/apiClient");
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const status of [200, 401]) {
+      activateAuthenticatedUser("alice");
+      let release: (value: string) => void = () => {};
+      let reading: () => void = () => {};
+      const started = new Promise<void>(resolve => { reading = resolve; });
+      const body = new Promise<string>(resolve => { release = resolve; });
+      globalThis.fetch = async () => ({ ok: status === 200, status, headers: new Headers(),
+        json: async () => { reading(); return JSON.parse(await body); },
+        text: async () => { reading(); return body; }
+      }) as Response;
+      const result = apiRequest("/api/private");
+      const rejected = expect(result).rejects.toMatchObject({code:"AUTH_IDENTITY_CHANGED"});
+      await started;
+      activateAuthenticatedUser("bob"); setCsrfToken("bob-token");
+      release(status === 200 ? '{"owner":"alice"}' : '{"detail":{"code":"ACCOUNT_EXPIRED"}}');
+      await rejected;
+      expect(sessionStorage.getItem("xhs-audit-active-user-id:v1")).toBe("bob");
+      expect(sessionStorage.getItem("xhs-audit-csrf-token")).toBe("bob-token");
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});

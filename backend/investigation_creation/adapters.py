@@ -1101,10 +1101,13 @@ class ProductSessionAdapter:
     def __init__(self, service: HermesInvestigationAgentService) -> None:
         self.service = service
 
-    def ensure_session(self, run_id: str, report_version_id: str) -> str:
+    def ensure_session(
+        self, run_id: str, report_version_id: str, *, owner_principal: str
+    ) -> str:
         session = self.service.create_session(
             report_version_id,
             anchor_key=f"m3-run:{run_id}",
+            owner_principal=owner_principal,
         )
         if str(session.report_version_id) != report_version_id:
             raise RuntimeError("Product Session anchor does not match ReportVersion")

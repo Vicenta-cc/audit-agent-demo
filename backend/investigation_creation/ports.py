@@ -95,7 +95,9 @@ class ReportAdapter(Protocol):
 
 
 class ReportSessionAdapter(Protocol):
-    def ensure_session(self, run_id: str, report_version_id: str) -> str: ...
+    def ensure_session(
+        self, run_id: str, report_version_id: str, *, owner_principal: str
+    ) -> str: ...
 
 
 class EmptyRunProjector:

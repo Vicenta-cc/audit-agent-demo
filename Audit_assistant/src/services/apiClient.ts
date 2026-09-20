@@ -138,6 +138,7 @@ export function apiRequest<T>(path: string, options: RequestInit = {}): Promise<
 }
 
 async function apiRequestOnce<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const requestUser = browserSessionStorage()?.getItem(ACTIVE_USER_STORAGE_KEY) || "";
   const hasJsonBody = Boolean(options.body) && !(options.body instanceof FormData);
   const method = String(options.method || "GET").toUpperCase();
   const csrfToken = browserSessionStorage()?.getItem(CSRF_STORAGE_KEY) || "";
@@ -148,13 +149,27 @@ async function apiRequestOnce<T>(path: string, options: RequestInit = {}): Promi
     headers: {
       Accept: "application/json",
       ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
+      ...(requestUser && !path.startsWith("/api/auth/") ? { "X-Application-User": requestUser } : {}),
       ...(requiresCsrf && csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
       ...options.headers
     }
   });
 
+  const assertIdentity = () => {
+    if (requestUser !== (browserSessionStorage()?.getItem(ACTIVE_USER_STORAGE_KEY) || "")) {
+      throw new ApiError("登录身份已变化，请重新载入。", 409, "AUTH_IDENTITY_CHANGED");
+    }
+  };
+  assertIdentity();
+  const responseUser = response.headers.get("X-Application-User");
+  if (requestUser && responseUser && responseUser !== requestUser && !path.startsWith("/api/auth/")) {
+    window.dispatchEvent?.(new CustomEvent("application-auth-expired", { detail: "AUTH_IDENTITY_CHANGED" }));
+    throw new ApiError("登录身份已变化，请重新载入。", 409, "AUTH_IDENTITY_CHANGED");
+  }
+
   if (!response.ok) {
     const text = await response.text();
+    assertIdentity();
     let message = text || `${response.status} ${response.statusText}`;
     let code = "";
     let details: Record<string, unknown> = {};
@@ -173,6 +188,9 @@ async function apiRequestOnce<T>(path: string, options: RequestInit = {}): Promi
     }
     if (response.status === 401 || code === "ACCOUNT_EXPIRED") {
       clearAuthenticationState();
+      if (!path.startsWith("/api/auth/")) window.dispatchEvent?.(new CustomEvent("application-auth-expired", { detail: code }));
+    } else if (code === "CSRF_VALIDATION_FAILED" || code === "AUTH_IDENTITY_CHANGED") {
+      window.dispatchEvent?.(new CustomEvent("application-auth-expired", { detail: code }));
     }
     throw new ApiError(message, response.status, code, details);
   }
@@ -182,6 +200,7 @@ async function apiRequestOnce<T>(path: string, options: RequestInit = {}): Promi
   }
 
   const result = (await response.json()) as T;
+  assertIdentity();
   if (method === "POST" && (path.endsWith("/confirm-and-queue") || path === "/api/jobs" || /\/api\/tasks\/[^/]+\/cancel$/.test(path))) {
     window.dispatchEvent?.(new Event("task-quota-changed"));
   }

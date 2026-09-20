@@ -74,7 +74,7 @@ def create_auth_router(
                 status_code=401,
                 detail={"code": "INVALID_CREDENTIALS", "message": str(exc)},
             ) from exc
-        expires_at = datetime.fromisoformat(str(user["expires_at"]))
+        expires_at = datetime.fromisoformat(service.store.authenticate_session(token).expires_at)
         max_age = max(
             0,
             int((expires_at - datetime.now(expires_at.tzinfo)).total_seconds()),

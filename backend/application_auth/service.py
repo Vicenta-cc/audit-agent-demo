@@ -24,6 +24,8 @@ class ApplicationAuthService:
         resource_id: str,
         permission: str = "read",
     ) -> bool:
+        if resource_type == "crawler-account":
+            return self.store.owns_crawler_account(principal.id, str(resource_id))
         if principal.is_admin:
             return True
         owner = str(owner_user_id or "").strip()
@@ -52,14 +54,10 @@ class ApplicationAuthService:
             raise AuthorizationError("resource was not found")
 
     def can_use_crawler_account(self, principal: Principal, account_id: str) -> bool:
-        return principal.is_admin or self.store.has_grant(
-            principal.id, "crawler-account", account_id, "use"
-        )
+        return self.store.owns_crawler_account(principal.id, account_id)
 
     def can_manage_crawler_account(self, principal: Principal, account_id: str) -> bool:
-        return principal.is_admin or self.store.has_grant(
-            principal.id, "crawler-account", account_id, "manage"
-        )
+        return self.store.owns_crawler_account(principal.id, account_id)
 
     @staticmethod
     def public_crawler_account(account: dict[str, Any]) -> dict[str, Any]:

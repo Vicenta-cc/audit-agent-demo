@@ -158,6 +158,10 @@ def test_resume_rejects_globally_available_but_unauthorized_account(
     monkeypatch.setattr(main, "ingestion_store", ingestion)
     monkeypatch.setattr(main, "crawler_account_store", Accounts())
     monkeypatch.setattr(main, "auth_service", auth)
+    monkeypatch.setattr(
+        main, "auth_store",
+        SimpleNamespace(owned_crawler_account_ids=lambda owner: frozenset({"account-a"}) if owner == "user-a" else frozenset()),
+    )
     monkeypatch.setattr(main, "_authz_enabled", lambda: True)
 
     with pytest.raises(main.HTTPException) as exc_info:
@@ -168,7 +172,8 @@ def test_resume_rejects_globally_available_but_unauthorized_account(
             principal=Principal("user-a"),
         )
     assert exc_info.value.status_code == 409
-    assert "已授权" in str(exc_info.value.detail)
+    assert "个人采集账号" in str(exc_info.value.detail)
+    assert jobs.get(job["id"])["status"] == "crawl_paused"
 
 
 def test_recoverable_failed_m3_job_reenters_same_pipeline_and_run(tmp_path, monkeypatch):

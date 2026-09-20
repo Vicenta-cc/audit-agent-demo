@@ -1,4 +1,6 @@
+import { InvestigationAccountTools } from "./InvestigationAccountTools";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useApplicationAuth } from "../auth/AuthBoundary";
 import { ArrowLeft, Menu } from "lucide-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import type {
@@ -528,13 +530,16 @@ function restoreSessionFromAnalysisProgress(
 }
 
 export function InvestigationPage({ initialSubView = null }: InvestigationPageProps) {
+  const { user: applicationUser } = useApplicationAuth();
   const { investigationId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const routeState = (location.state || {}) as InvestigationRouteState;
+  // Legacy navigation payloads have no owner identity. Authenticated views reload
+  // their state from the authorized API instead of restoring another login's payload.
+  const routeState = (applicationUser ? {} : location.state || {}) as InvestigationRouteState;
   const [sessions, setSessions] = useState<InvestigationSession[]>(() => (
     restoreSessionFromAnalysisProgress(
-      createInitialSessions(),
+      applicationUser ? [] : createInitialSessions(),
       investigationId,
       routeState.restoreAnalysisProgress
     )
@@ -545,7 +550,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       ? routeState.restoreInvestigationState.activeSessionId
       : investigationId && sessions.some((session) => session.id === investigationId)
         ? investigationId
-        : sessions[0].id
+        : sessions[0]?.id || ""
   ));
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => (
     window.matchMedia("(max-width: 760px)").matches
@@ -574,6 +579,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const deletedSessionIdsRef = useRef(new Set<string>());
   const [confirmingCreationSessionId, setConfirmingCreationSessionId] = useState("");
   const [historicalWorkspacesLoaded, setHistoricalWorkspacesLoaded] = useState(false);
+  const [workspacesLoaded, setWorkspacesLoaded] = useState(false);
+  const [workspaceLoadError, setWorkspaceLoadError] = useState("");
   const subViewScrollRef = useRef<HTMLDivElement>(null);
   const loadingPublishedReportsRef = useRef(new Set<string>());
   const pendingTurnControllersRef = useRef(new Map<string, AbortController>());
@@ -605,7 +612,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         ...restored.filter((session) => !current.some((existing) => existing.id === session.id)),
         ...current.filter((session) => !session.creationBinding)
       ]));
-    }).catch((error) => console.error("Failed to load investigation workspaces", error));
+    }).catch((error) => {
+      console.error("Failed to load investigation workspaces", error);
+      if (active) setWorkspaceLoadError("调查会话读取失败，请刷新后重试。");
+    }).finally(() => { if (active) setWorkspacesLoaded(true); });
     return () => { active = false; };
   }, []);
 
@@ -657,6 +667,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       }
     }).catch((error) => {
       console.error("Failed to load historical report workspaces", error);
+      setWorkspaceLoadError("历史报告读取失败，请刷新后重试。");
     }).finally(() => {
       setHistoricalWorkspacesLoaded(true);
     });
@@ -748,9 +759,15 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     navigate(`${nextId ? `/investigation/${encodeURIComponent(nextId)}` : "/investigation"}${location.search}`, { replace: true });
   }, [activeSessionId, historicalWorkspacesLoaded, investigationId, location.search, navigate, sessions]);
 
+  useEffect(() => {
+    if (!applicationUser || investigationId || !sessions.length) return;
+    setActiveSessionId(sessions[0].id);
+    navigate(`/investigation/${encodeURIComponent(sessions[0].id)}${location.search}`, { replace: true });
+  }, [applicationUser, investigationId, sessions, location.search, navigate]);
+
   const activeSession = sessions.find((s) => s.id === activeSessionId) || sessions[0]
     || buildNewInvestigationWorkspaceSession("empty-workspace");
-  const activeRuleSet = activeSession.creationBinding
+  const activeRuleSet = applicationUser || activeSession.creationBinding
     ? undefined
     : mockAuditRuleSets.find((ruleSet) => ruleSet.name === activeSession.draft.matchedRuleSet)
       || mockAuditRuleSets[0];
@@ -1167,6 +1184,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       workspace = await createInvestigationWorkspace("");
     } catch (error) {
       const message = error instanceof Error ? error.message : "无法创建调查工作区";
+      setWorkspaceLoadError(`新调查创建失败：${message}`);
       updateActiveSession((session) => ({
         ...session,
         messages: [
@@ -2503,17 +2521,25 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         <button type="button" aria-label="关闭删除提示" onClick={() => setDeletionNotice("")}>×</button>
       </div> : null}
 
+      {workspaceLoadError ? <div role="alert" className="inv-deletion-notice">
+        <span>{workspaceLoadError}</span><button type="button" onClick={() => window.location.reload()}>重新加载</button>
+      </div> : null}
+
       {/* Column 2: Center Content (Either Investigation Chat or Embedded SubView) */}
       {!sessions.length && !activeSubView ? (
-        <main className="inv-empty-workspace">
-          <h2>暂无调查会话</h2>
+        <main className="inv-center-area">
+          <header className="inv-center-header"><span>调查工作区</span><InvestigationAccountTools /></header>
+          <div className="inv-empty-workspace">
+          {isSidebarCollapsed ? <button type="button" className="inv-expand-toggle" aria-label="展开侧栏" onClick={() => setIsSidebarCollapsed(false)}><Menu size={16} /></button> : null}
+          <h2>{!workspacesLoaded || !historicalWorkspacesLoaded ? "正在读取调查会话…" : "暂无调查会话"}</h2>
           <p>新建调查后，报告和会话历史会显示在这里。</p>
           <button type="button" className="mt-button mt-button-primary" onClick={handleNewInvestigation}>新建调查</button>
+          </div>
         </main>
       ) : activeSubView ? (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", background: "#f8fafc", minWidth: 0 }}>
           {/* SubView Top Header Bar */}
-          <div style={{ height: "52px", background: "#ffffff", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", flexShrink: 0, zIndex: 10 }}>
+          <div className="inv-center-header">
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               {isSidebarCollapsed ? (
                 <button
@@ -2543,6 +2569,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
                 {activeSubView === "slang-library" && "黑话库"}
               </span>
             </div>
+            <InvestigationAccountTools />
           </div>
 
           {/* SubView Content Container */}

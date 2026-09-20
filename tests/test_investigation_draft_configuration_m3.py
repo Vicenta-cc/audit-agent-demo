@@ -1184,6 +1184,21 @@ def test_douyin_jsonl_to_durable_published_report_and_session(
     assert completed.job_id == adapter.job_id_for_run(run.id)
     assert completed.report_version_id
     assert completed.report_session_id
+    # Browser report handoff requests this same anchor with the logged-in owner.
+    # The worker must persist ownership before the first HTTP follow-up arrives.
+    session = report_service.store.get_session(completed.report_session_id)
+    assert session.owner_principal == run.owner_principal
+    assert report_service.create_session(
+        completed.report_version_id,
+        anchor_key=f"m3-run:{run.id}",
+        owner_principal=run.owner_principal,
+    ).id == session.id
+    with pytest.raises(ValueError, match="across Principal"):
+        report_service.create_session(
+            completed.report_version_id,
+            anchor_key=f"m3-run:{run.id}",
+            owner_principal="different-user",
+        )
     assert "_authoritative_m3_contract" not in json.dumps(
         jobs.get(completed.job_id)
     )

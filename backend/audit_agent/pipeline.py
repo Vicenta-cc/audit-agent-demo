@@ -54,7 +54,7 @@ def _analysis_lock_for(job_id: str) -> threading.RLock:
 
 
 def _authorized_crawler_account_ids(job_id: str) -> frozenset[str] | None:
-    """Return the live account grant pool, or None when auth is disabled/admin."""
+    """Return the task owner's private accounts, or None when auth is disabled."""
     if settings.app_auth_mode != "required":
         return None
     job = job_store.get(job_id) or {}
@@ -68,12 +68,7 @@ def _authorized_crawler_account_ids(job_id: str) -> frozenset[str] | None:
         default_validity_days=settings.app_account_validity_days,
         activation_mode=settings.app_account_activation_mode,
     )
-    user = store.get_user(owner_user_id)
-    if user and user.get("role") == "admin":
-        return None
-    return store.granted_resource_ids(
-        owner_user_id, "crawler-account", "use"
-    )
+    return store.owned_crawler_account_ids(owner_user_id)
 
 AUDIO_URL_EXTENSIONS = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
 AUDIO_FILE_SIGNATURES = (
