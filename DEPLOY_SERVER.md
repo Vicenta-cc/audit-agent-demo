@@ -1,3 +1,5 @@
+> 历史 GPU 模型/后端部署说明。当前 R2 冻结版本、Audit_assistant 前端与云端启动入口请先阅读 [README](README.md) 和 [R2 基线说明](docs/runtime/R2-FROZEN-BASELINE-20260920.md)。
+
 # Server Backend + Qwen3-VL Deployment
 
 This project can run with the frontend on your local machine and the backend on a GPU server.

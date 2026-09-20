@@ -1,0 +1,41 @@
+{
+  "captured_on": "2026-09-20",
+  "files": {
+    "candidate-runtime.sh": {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/candidate-runtime.sh",
+      "sha256": "8493415052131532cd387fd035326aa0290e7d45b344851986d2f5f683370d67"
+    },
+    "candidate_runtime.py": {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/candidate_runtime.py",
+      "sha256": "bf7904dc2777ad48c0a43873e285775421ab4a7636e5964de78ff0d0e1bea1f9"
+    },
+    "runtime.json.example": {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/runtime.json",
+      "sha256": "fad8ff89274e6ccea2ba60585edd6720bbcd13e8bd9d0b5de0188c2bf8027365"
+    },
+    "runtime-support/serve.py": {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/runtime-support/serve.py",
+      "sha256": "cf1de607fef0656c774f81de3f46d29372b808eb1778bebbb6d05f673e581fbe"
+    },
+    "runtime-support/worker.py": {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/runtime-support/worker.py",
+      "sha256": "a50737899a2469bbf7b2787e3f8ac315ba49248781ded5a4fa9dafad399fdc2e"
+    },
+    "runtime-support/frontend.py": {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/runtime-support/frontend.py",
+      "sha256": "d5f160352f893941be77c0c15f2fe175bba318c4fd6251eb88d146ea121d8592"
+    },
+    "systemd/xhs-audit-r2-abc.service": {
+      "source": "/etc/systemd/system/xhs-audit-r2-abc.service",
+      "sha256": "9bee80c6e36ce0fcdef625e7362d926630caaae2fe2fa7e2134f3b40f41d6c35"
+    },
+    "systemd/20-coder-asr.conf": {
+      "source": "/etc/systemd/system/xhs-audit-r2-abc.service.d/20-coder-asr.conf",
+      "sha256": "4c5dfc01559218833a6d19489c6f5bb167a1327d63206cd8da627833b2fac5d3"
+    },
+    "systemd/10-cloakbrowser.conf": {
+      "source": "/etc/systemd/system/xhs-audit-r2-abc.service.d/10-cloakbrowser.conf",
+      "sha256": "d4149db2ee246f26cc0c34152973d603a2258b62195bb94610989ecbe6dd5b96"
+    }
+  }
+}

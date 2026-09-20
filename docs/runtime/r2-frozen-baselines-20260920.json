@@ -1,0 +1,47 @@
+{
+  "document_date": "2026-09-20",
+  "application_repository": "https://github.com/Vicenta-cc/audit-agent-demo",
+  "crawler_repository": "https://github.com/Vicenta-cc/media-crawler",
+  "documentation_branch": "codex/r2-frozen-handoff-20260920",
+  "application_baselines": [
+    {
+      "role": "current",
+      "commit": "509d922af4d23dec9d488e7f1e3b95042b0c4bf1",
+      "branch": "codex/r2-interactive-login-20260918"
+    },
+    {
+      "role": "streaming",
+      "commit": "f58232ed182bdae105a3b1753c8af1451caa4a3a",
+      "branch": "codex/r2-unified-report-streaming-20260918"
+    },
+    {
+      "role": "unified-report",
+      "commit": "b9fc78ce693c8affc50d438be1f5134fd2a778d5",
+      "branch": "codex/r2-unified-report"
+    },
+    {
+      "role": "local-formal",
+      "commit": "2134c7b53c572b9981a0cbd9a2a281ed7ca6eb3a",
+      "branch": "codex/unified-frozen-20260913"
+    },
+    {
+      "role": "local-r2-acceptance",
+      "commit": "71b29b891737778d7f094e3f928c34f4c780b9ba",
+      "branch": "codex/unified-report-account-penetration"
+    },
+    {
+      "role": "historical-controller",
+      "commit": "a925969d78e570bbd99413dfa2e2b0d5283811da",
+      "branch": "codex/unified-crawler-scheduler-20260915"
+    },
+    {
+      "role": "historical-8027",
+      "commit": "bf5117ae7031b10a184773886543bbf4dd573312",
+      "branch": null
+    }
+  ],
+  "crawler_baselines": {
+    "current": "efafe3186400b1020955c6acfdc201235b84a2d8",
+    "historical_8027": "6d2c85bcb02fd7dd1e30822e0cb2103bb9b42f39"
+  }
+}
