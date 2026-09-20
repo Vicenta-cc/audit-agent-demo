@@ -9,6 +9,7 @@ _N = 1 << 14
 _R = 8
 _P = 1
 _KEY_LENGTH = 32
+MIN_PASSWORD_LENGTH = 8
 
 
 def hash_password(password: str) -> str:
@@ -56,8 +57,8 @@ def verify_password(password: str, encoded: str) -> bool:
 
 def _validated_password(password: str) -> str:
     value = str(password)
-    if len(value) < 12:
-        raise ValueError("password must contain at least 12 characters")
+    if len(value) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"password must contain at least {MIN_PASSWORD_LENGTH} characters")
     if len(value) > 256:
         raise ValueError("password is too long")
     return value

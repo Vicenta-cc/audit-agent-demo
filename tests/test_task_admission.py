@@ -1045,3 +1045,27 @@ def test_lost_response_replay_after_restart_and_next_day_never_recharges(stack, 
     assert reopened.summary(owner)["active_task"] is None
     with reopened.connect() as db:
         assert db.execute("SELECT count(*) FROM task_admissions").fetchone()[0] == 1
+
+
+def test_admin_unlimited_quota_preserves_active_slot_and_role_changes(stack):
+    creation, auth, (owner, _) = stack
+    store = creation.admission
+    auth.update_user(owner, actor_user_id="test", role="admin")
+    for i in range(5):
+        row = enqueue(store, owner, f"admin-{i}")
+        with pytest.raises(AdmissionError) as error:
+            enqueue(store, owner, f"overlap-{i}")
+        assert error.value.code == "USER_TASK_LIMIT"
+        store.settle(row["task_id"], report_id=f"report-{i}")
+    summary = store.summary(owner)
+    assert summary["unlimited"] is True
+    assert summary["limit"] is None and summary["remaining"] is None
+    assert summary["used"] == 5
+    auth.update_user(owner, actor_user_id="test", role="user")
+    assert store.summary(owner)["unlimited"] is False
+    assert store.summary(owner)["remaining"] == 0
+    with pytest.raises(AdmissionError) as error:
+        enqueue(store, owner, "demoted")
+    assert error.value.code == "DAILY_REPORT_LIMIT"
+    auth.update_user(owner, actor_user_id="test", role="admin")
+    enqueue(store, owner, "promoted")

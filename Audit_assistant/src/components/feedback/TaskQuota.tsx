@@ -17,7 +17,7 @@ export function activeTaskMessage(task: ActiveTask) {
   return task.queue_state === "QUEUED" ? "任务已接受，正在等待执行。" : "当前任务尚未结束。";
 }
 
-type Quota = { enabled: boolean; used: number; remaining: number; limit: number; reset_at: string; legacy_record_count: number; active_task?: ActiveTask | null };
+type Quota = { enabled: boolean; used: number; remaining: number | null; limit: number | null; unlimited?: boolean; reset_at: string; legacy_record_count: number; active_task?: ActiveTask | null };
 
 export function TaskQuota({ compact = false }: { compact?: boolean }) {
   const navigate = useNavigate();
@@ -61,8 +61,8 @@ export function TaskQuota({ compact = false }: { compact?: boolean }) {
   if (unavailable) return <small role="status">任务额度暂不可用，请刷新或重新登录。</small>;
   if (!quota) return null;
   const content = <div aria-label="今日任务额度">
-    <div><small>今日已用 {quota.used} / {quota.limit} 次 · 剩余 {quota.remaining} 次</small></div>
-    <div><small>北京时间每日 00:00 重置；确认执行并接受任务后计次。</small></div>
+    <div><small>{quota.unlimited ? `管理员每日任务次数不限 · 今日已用 ${quota.used} 次` : `今日已用 ${quota.used} / ${quota.limit} 次 · 剩余 ${quota.remaining} 次`}</small></div>
+    <div><small>{quota.unlimited ? "当前任务结束后即可发起下一个任务。" : "北京时间每日 00:00 重置；确认执行并接受任务后计次。"}</small></div>
     {quota.active_task ? <div className="task-quota-active">
       <small>{activeTaskMessage(quota.active_task)}</small>
       <button className="task-quota-link" type="button" disabled={opening} onClick={() => void openCurrentTask()}>{opening ? "正在打开…" : "返回当前任务"}</button>
@@ -73,7 +73,7 @@ export function TaskQuota({ compact = false }: { compact?: boolean }) {
   if (!compact) return content;
   const waiting = quota.active_task?.queue_state === "QUEUED";
   return <details className="inv-toolbar-menu inv-quota-menu">
-    <summary>今日剩余 {quota.remaining} / {quota.limit} 次{waiting ? <span className="inv-quota-waiting">排队中</span> : null}<span aria-hidden="true">⌄</span></summary>
+    <summary>{quota.unlimited ? "每日任务次数不限" : `今日剩余 ${quota.remaining} / ${quota.limit} 次`}{waiting ? <span className="inv-quota-waiting">排队中</span> : null}<span aria-hidden="true">⌄</span></summary>
     <div className="inv-toolbar-popover">{content}</div>
   </details>;
 }

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.investigation_creation.principal import Principal, PrincipalProvider
 
+from .passwords import MIN_PASSWORD_LENGTH
 from .service import ApplicationAuthService
 from .store import (
     AccountExpiredError,
@@ -27,7 +28,7 @@ class CreateUserRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     username: str = Field(min_length=3, max_length=64)
-    password: str = Field(min_length=12, max_length=256)
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=256)
     role: Literal["admin", "user"] = "user"
     validity_days: int = Field(default=7, ge=1, le=365)
     activation_mode: Literal["first_login", "created_at"] = "first_login"
@@ -38,7 +39,7 @@ class UpdateUserRequest(BaseModel):
 
     status: Literal["active", "disabled"] | None = None
     role: Literal["admin", "user"] | None = None
-    password: str | None = Field(default=None, min_length=12, max_length=256)
+    password: str | None = Field(default=None, min_length=MIN_PASSWORD_LENGTH, max_length=256)
     renew_days: int | None = Field(default=None, ge=1, le=365)
 
 

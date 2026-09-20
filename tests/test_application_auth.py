@@ -591,3 +591,24 @@ def test_admin_login_cookie_uses_session_expiry(tmp_path):
     assert "HttpOnly" in result.headers["set-cookie"]
     assert client.get("/api/auth/me").status_code == 200
     assert client.get("/api/auth/csrf").status_code == 200
+
+
+def test_eight_character_password_create_reset_and_store_boundary(tmp_path):
+    from backend.application_auth.passwords import hash_password, verify_password
+
+    with pytest.raises(ValueError, match="at least 8"):
+        hash_password("1234567")
+    assert verify_password("12345678", hash_password("12345678"))
+    app, store = auth_app(tmp_path / "password-boundary.sqlite3")
+    store.create_user(username="password-admin", password=PASSWORD, role="admin")
+    client = TestClient(app)
+    headers = {"X-CSRF-Token": login(client, "password-admin")["csrf_token"]}
+    for password, expected in [("1234567", 422), ("12345678", 201)]:
+        response = client.post("/api/admin/users", headers=headers,
+                               json={"username": "eight-char", "password": password})
+        assert response.status_code == expected
+    user, _, _ = store.login("eight-char", "12345678")
+    path = f"/api/admin/users/{user['id']}"
+    assert client.patch(path, headers=headers, json={"password": "7654321"}).status_code == 422
+    assert client.patch(path, headers=headers, json={"password": "87654321"}).status_code == 200
+    assert store.login("eight-char", "87654321")[0]["id"] == user["id"]

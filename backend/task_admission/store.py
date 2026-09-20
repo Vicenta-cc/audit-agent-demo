@@ -199,13 +199,18 @@ class AdmissionStore:
     def now(self):
         return self.clock().astimezone(timezone.utc).isoformat()
 
-    def validate_user(self, db, owner, account_id=""):
+    def user_record(self, db, owner):
         if not self.enabled:
             return ""
         schema = "main" if self.auth_db == self.db_path else "admission_auth"
-        user = db.execute(
+        return db.execute(
             f"SELECT * FROM {schema}.app_users WHERE id=?", (owner,)
         ).fetchone()
+
+    def validate_user(self, db, owner, account_id=""):
+        if not self.enabled:
+            return
+        user = self.user_record(db, owner)
         if (
             not user
             or user["status"] != "active"
@@ -218,6 +223,7 @@ class AdmissionStore:
                 "账号已失效，请重新登录或联系管理员。", code="ACCOUNT_EXPIRED"
             )
         if account_id:
+            schema = "main" if self.auth_db == self.db_path else "admission_auth"
             grant = db.execute(
                 f"""SELECT 1 FROM {schema}.crawler_account_owners
                 WHERE owner_user_id=? AND account_id=?""",
@@ -268,11 +274,14 @@ class AdmissionStore:
         ).fetchone()
         return str(row[0] or "private") if row else ""
 
+        return user
+
     def reserve(
         self, db, *, owner, task_id, kind, key, payload, job_id="", request_hash=None
     ):
         digest = request_hash or fingerprint(payload)
-        self.validate_user(db, owner, payload.get("crawler_account_id") or "")
+        user = self.validate_user(db, owner, payload.get("crawler_account_id") or "")
+        unlimited = user is not None and user["role"] == "admin"
         previous = db.execute(
             "SELECT * FROM task_admissions WHERE owner_id=? AND request_key=?",
             (owner, key),
@@ -299,7 +308,7 @@ class AdmissionStore:
             + self.charge_predicate(),
             (owner, day),
         ).fetchone()[0]
-        if count >= 3:
+        if not unlimited and count >= 3:
             raise AdmissionError("今日三次任务额度已用完。", code="DAILY_REPORT_LIMIT")
         ident, now = uuid4().hex, self.now()
         db.execute(
@@ -356,6 +365,8 @@ class AdmissionStore:
             now.date() + timedelta(days=1), datetime.min.time(), tzinfo=now.tzinfo
         )
         with self.connect() as db:
+            user = self.user_record(db, owner)
+            unlimited = user is not None and user["role"] == "admin"
             counts = dict(
                 db.execute(
                     "SELECT state,count(*) FROM task_admissions WHERE owner_id=? AND day=? GROUP BY state",
@@ -383,7 +394,8 @@ class AdmissionStore:
         return dict(
             day=day,
             timezone="Asia/Shanghai",
-            limit=3,
+            unlimited=unlimited,
+            limit=None if unlimited else 3,
             completed=used,
             reserved=reserved,
             used=charged,
@@ -391,7 +403,7 @@ class AdmissionStore:
             refunded=refunded,
             quota_policy="accepted_v2",
             legacy_record_count=legacy,
-            remaining=max(0, 3 - charged),
+            remaining=None if unlimited else max(0, 3 - charged),
             reset_at=reset.isoformat(),
             active_task=dict(active) if active else None,
         )
