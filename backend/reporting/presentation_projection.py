@@ -18,8 +18,9 @@ _OMITTED_BOUNDARY_NOTES = frozenset({
 })
 APPENDIX_VIEWS = {"posts", "standalone", "evidence"}
 ACCOUNT_ROLES = {None, "post_author", "comment_author"}
-ACCOUNT_FILTERS = {"post_author", "cross_investigation_commenter", "risk_commenter"}
+ACCOUNT_FILTERS = {"comment_author", "post_author", "cross_investigation_commenter", "risk_commenter"}
 ACCOUNT_FILTER_SORTS = {
+    "comment_author": {"risk_comment_count", "comment_count", "commented_post_count", "latest_activity"},
     "post_author": {"published_post_count", "risk_published_post_count", "latest_activity"},
     "cross_investigation_commenter": {
         "investigation_count",
@@ -35,6 +36,7 @@ ACCOUNT_FILTER_SORTS = {
     },
 }
 ACCOUNT_FILTER_DEFAULT_SORT = {
+    "comment_author": "risk_comment_count",
     "post_author": "published_post_count",
     "cross_investigation_commenter": "investigation_count",
     "risk_commenter": "risk_comment_count",
@@ -786,6 +788,14 @@ def _account_collections(
         "targets": targets,
         "other_post_authors": other_post_authors,
         "comment_authors": comment_authors,
+        "comment_author": {
+            "status": "available",
+            "all_entries": comment_authors,
+            "total_count": len(comment_authors),
+            "action_label": "查看全部评论账号",
+            "drawer_title": "评论账号索引",
+            "basis_label": "基于本次发布报告",
+        },
         "post_author": {
             "status": "available",
             "all_entries": [item for item in entries if "post_author" in (item.get("roles") or [])],
@@ -868,6 +878,8 @@ def _sort_filtered_account_entries(
         ),
     }
     priorities = (
+        ("risk_comment_count", "comment_count")
+        if account_filter == "comment_author" and sort_order == "risk_comment_count" else
         (sort_order,) if account_filter == "post_author" else
         cross_priorities[sort_order]
         if account_filter == "cross_investigation_commenter"

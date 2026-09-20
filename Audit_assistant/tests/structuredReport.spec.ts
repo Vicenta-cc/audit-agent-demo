@@ -173,3 +173,50 @@ test("published report renders pass, review and reject as separate server counts
   await expect(page.getByRole("row").filter({hasText:"评论审核"})).toContainText("已完成独立审核评论 11");
   await expect(page.getByRole("row").filter({hasText:"评论审核"})).toContainText("评论自身风险 2");
 });
+
+test("current report shows five commenters and opens the full paged commenter drawer", async ({page}) => {
+  const entries = Array.from({length:25}, (_,i) => ({
+    entry_ref:`account:${i}`, display_name:`评论账号${i+1}`, roles:["comment_author"], is_target_account:false,
+    statistics:{comment_count:30-i,risk_comment_count:i<6?2:0,commented_post_count:1,commented_post_author_count:1}
+  }));
+  await page.route("**/api/auth/config", route => route.fulfill({json:{enabled:false}}));
+  await page.route("**/api/report-versions/*/presentation-projection", route => route.fulfill({json:{
+    schema_version:"r31-report-presentation/v1",
+    report_metadata:{title:"评论账号验收",template_kind:"unified_audit",source_name:"测试调查",status:"published",published_at:"2026-09-20T00:00:00Z",platform:{status:"available",label:"抖音"},scope:{status:"unavailable"}},
+    investigation_summary:{status:"available",paragraphs:[]},statistics:{canonical_posts:1},
+    ordered_sections:[{section_ref:"accounts",section_number:"5",title:"账号关联分析",presentation_kind:"account_activity_overview",paragraphs:[]}],
+    accounts:{status:"available",target_entries:[],post_author_entries:[],comment_author_entries:entries,
+      coverage:{post_author_account_count:0,comment_author_account_count:25,distinct_account_count:25}}
+  }}));
+  const requests:URL[]=[];
+  await page.route("**/api/report-versions/*/accounts?*", route => {
+    const url=new URL(route.request().url());requests.push(url);
+    const search=url.searchParams.get("search");const next=url.searchParams.get("cursor");
+    const list=search?entries.filter(e=>e.display_name===search):next?entries.slice(20):entries.slice(0,20);
+    return route.fulfill({json:{status:"available",filter:"comment_author",entries:list,total_count:search?list.length:25,
+      has_more:!search&&!next,next_cursor:!search&&!next?"account:19":null,filter_counts:{},sort:url.searchParams.get("sort")}});
+  });
+  await page.goto(`/investigation/acceptance/report?report=${encodeURIComponent(version)}`);
+  const panel=page.locator(".r31-current-commenters");
+  await expect(panel.locator(".r31-account-table-row")).toHaveCount(5);
+  await expect(panel.getByText("评论账号6",{exact:true})).toHaveCount(0);
+  await panel.getByRole("button",{name:"查看全部评论账号（25）"}).click();
+  const drawer=page.getByRole("dialog",{name:"评论账号索引",exact:true});
+  await expect(drawer.locator(".r31-account-table-row")).toHaveCount(20);
+  expect(requests[0].searchParams.get("filter")).toBe("comment_author");
+  expect(requests[0].searchParams.get("sort")).toBe("risk_comment_count");
+  await expect(drawer.getByRole("columnheader",{name:"评论对象",exact:true})).toBeVisible();
+  await expect(drawer.getByRole("group",{name:"评论账号筛选"})).toHaveCount(0);
+  await drawer.getByRole("button",{name:"下一页"}).click();
+  await expect(drawer.locator(".r31-account-table-row")).toHaveCount(5);
+  await expect(drawer.getByText("评论账号25",{exact:true})).toBeVisible();
+  await drawer.getByRole("button",{name:"上一页"}).click();
+  await expect(drawer.locator(".r31-account-table-row")).toHaveCount(20);
+  await drawer.getByRole("searchbox",{name:"搜索账号显示名"}).fill("评论账号25");
+  await expect(drawer.locator(".r31-account-table-row")).toHaveCount(1);
+  await drawer.getByRole("combobox",{name:"账号排序方式"}).selectOption("comment_count");
+  await expect.poll(()=>requests.at(-1)?.searchParams.get("sort")).toBe("comment_count");
+  await page.keyboard.press("Escape");
+  await expect(drawer).toHaveCount(0);
+  await expect(panel.locator(".r31-account-table-row")).toHaveCount(5);
+});
