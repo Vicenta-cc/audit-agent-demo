@@ -180,6 +180,11 @@ class AuditPipeline:
         return configuration
 
     def run(self, request, crawl_epoch: int | None = None) -> None:
+        if settings.app_auth_mode == "required":
+            from backend.task_admission.execution import assert_execution, current_execution
+            assert_execution(self.job_id)
+        from backend.task_admission.execution import current_execution
+        admission_execution = current_execution()
         crawl_epoch_is_current = lambda: True
         crawler_account_id = ""
         try:
@@ -192,7 +197,15 @@ class AuditPipeline:
             )
 
             def control() -> dict:
-                return job_store.control(self.job_id)
+                result = job_store.control(self.job_id)
+                if settings.app_auth_mode == "required":
+                    from backend.task_admission.execution import assert_execution
+                    from backend.task_admission.store import AdmissionError
+                    try:
+                        assert_execution(self.job_id, admission_execution)
+                    except AdmissionError:
+                        result.update(crawl_stop_requested=True,analysis_stop_requested=True,stop_all_requested=True)
+                return result
 
             def crawl_epoch_is_current() -> bool:
                 return int(control().get("crawl_epoch") or 0) == active_crawl_epoch
@@ -1347,6 +1360,9 @@ class AuditPipeline:
             raise AuditProviderCallError(provider_failure)
 
     def resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5) -> None:
+        if settings.app_auth_mode == "required":
+            from backend.task_admission.execution import assert_execution
+            assert_execution(self.job_id)
         with _analysis_lock_for(self.job_id):
             self._resume_pending_analysis(analyze_limit, analysis_batch_size)
 
@@ -1398,6 +1414,9 @@ class AuditPipeline:
             job_store.log(self.job_id, f"继续分析开始：待处理 {len(refs)} 条")
             batch_size = max(1, analysis_batch_size)
             for batch_start in range(0, len(refs), batch_size):
+                if settings.app_auth_mode == "required":
+                    from backend.task_admission.execution import assert_execution
+                    assert_execution(self.job_id)
                 current_control = job_store.control(self.job_id)
                 if current_control.get("stop_all_requested") or current_control.get("analysis_stop_requested") or current_control.get("analysis_paused"):
                     break

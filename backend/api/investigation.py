@@ -187,6 +187,10 @@ def create_investigation_router(
             if m3_run_store is not None
             else frozenset()
         )
+        admission = getattr(m3_run_store, "admission", None)
+        admitted = admission.for_task(task_id) if admission is not None else None
+        if admitted and admitted["owner_id"] == principal.id:
+            return
         if principal.id in owners or auth_service.store.has_grant(
             principal.id, "report-version", report_version_id, "read"
         ):

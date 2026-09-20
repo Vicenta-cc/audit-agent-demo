@@ -68,6 +68,25 @@ class InvestigationWorker:
         self.lifecycle_hook = lifecycle_hook
 
     def run_once(self) -> InvestigationRun | None:
+        if not self.store.admission.enabled:
+            return self._run_once()
+        from backend.task_admission.execution import execution_lock
+        from backend.task_admission.recovery import reconcile
+        from backend.task_admission.legacy import dispatch_one
+        with execution_lock(self.store.db_path) as acquired:
+            if not acquired:
+                return None
+            reconcile(self)
+            dispatched = dispatch_one(self)
+            result = dispatched if dispatched else self._run_once()
+        # Closing the original file description does not prove crawler children
+        # stopped. Only acquiring a NEW description proves none still holds it.
+        with execution_lock(self.store.db_path) as stopped:
+            if stopped:
+                reconcile(self)
+        return result
+
+    def _run_once(self) -> InvestigationRun | None:
         run = self.store.claim_next(
             self.worker_id,
             lease_timeout_seconds=self.lease_timeout_seconds,
@@ -75,17 +94,31 @@ class InvestigationWorker:
         if run is None:
             return None
         try:
-            if run.status == RunStatus.REPORT_GENERATING:
-                return self._finish_report(run, allow_generation=False)
-            if run.recovery_required:
-                return self._recover_execution(run)
-            return self._execute_claimed_run(run)
+            from contextlib import nullcontext
+            from backend.task_admission.execution import execution_context
+            from backend.task_admission.store import AdmissionError
+            admission = self.store.admission
+            if admission.enabled:
+                try:
+                    admission.start(run.id, run.claim_token)
+                except AdmissionError as exc:
+                    return self.store.mark_failed(run.id,run.claim_token,error_code=exc.code,error_message=str(exc))
+            with execution_context(admission,run.id,run.claim_token) if admission.enabled else nullcontext():
+                if run.status == RunStatus.REPORT_GENERATING:
+                    return self._finish_report(run, allow_generation=False)
+                if run.recovery_required:
+                    return self._recover_execution(run)
+                return self._execute_claimed_run(run)
         except LeaseLostError:
             return self.store.get_run_for_worker(run.id)
 
     def run_forever(self, *, poll_seconds: float = 1.0) -> None:
         while True:
-            completed = self.run_once()
+            try:
+                completed = self.run_once()
+            except Exception:
+                logger.exception("Task worker retained durable state after an execution error")
+                completed = None
             if completed is None:
                 time.sleep(max(0.05, poll_seconds))
 
@@ -207,6 +240,10 @@ class InvestigationWorker:
         *,
         job_state: dict[str, Any] | None = None,
     ) -> InvestigationRun:
+        if self.store.admission.enabled:
+            row = self.store.admission.for_task(run.id)
+            if row and row["decision"] == "CANCELLED":
+                return self.store.mark_failed(run.id,run.claim_token,error_code="task_cancelled",error_message="任务已取消。")
         failure = self._verify_job_or_fail(run)
         if failure is not None:
             return failure

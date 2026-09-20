@@ -392,8 +392,10 @@ class MediaCrawlerAdapter:
         with stdout_path.open("w", encoding="utf-8", errors="replace") as stdout_file, stderr_path.open(
             "w", encoding="utf-8", errors="replace"
         ) as stderr_file:
+            from backend.task_admission.execution import crawler_fds
             completed = subprocess.Popen(
                 command,
+                pass_fds=crawler_fds(),
                 cwd=self.media_crawler_dir,
                 env=env,
                 stdout=stdout_file,

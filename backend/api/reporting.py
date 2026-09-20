@@ -369,6 +369,10 @@ def can_read_m3_report(
                 principal.id, "report-version", report_version_id, "read"
             )
         )
+    admission = getattr(run_store, "admission", None)
+    admitted = admission.for_task(task_id) if admission is not None else None
+    if admitted and admitted["owner_id"] == principal.id:
+        return True
     owners = run_store.owner_principals_for_report(
         report_version_id=report_version_id, task_id=task_id
     )

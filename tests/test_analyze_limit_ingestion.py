@@ -729,7 +729,18 @@ def test_authenticated_pipeline_never_falls_back_to_anonymous_crawling(
     pipeline.audit_config_revision_id = ""
     pipeline.rule_snapshot = {}
 
-    pipeline.run(SimpleNamespace(**configuration))
+    from backend.application_auth.store import AuthStore
+    from backend.task_admission.store import AdmissionStore
+    from backend.task_admission.execution import execution_context
+    auth = AuthStore(tmp_path / "control.sqlite3")
+    user = auth.create_user(username="test-user",password="correct horse battery staple")
+    auth.login("test-user","correct horse battery staple")
+    admission = AdmissionStore(auth.db_path,auth_db=auth.db_path)
+    admission.enqueue(owner=user["id"],task_id=job_id,kind="legacy",key="test",
+                      payload={},job_id=job_id)
+    admission.start(job_id,"worker")
+    with execution_context(admission,job_id,"worker"):
+        pipeline.run(SimpleNamespace(**configuration))
 
     job = jobs.get(job_id)
     assert job["status"] == "failed"

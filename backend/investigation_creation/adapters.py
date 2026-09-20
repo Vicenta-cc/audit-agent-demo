@@ -1075,6 +1075,15 @@ class R31ReportAdapter:
         self.verify_published(report_version_id, task_id=task_id)
         return report_version_id
 
+    def resume(self, task_id: str, *, on_generation_started) -> str:
+        generation = self.store.get_latest_run_for_task(task_id)
+        if generation is None:
+            return self.generate(task_id,on_generation_started=on_generation_started)
+        on_generation_started(str(generation['id']),str(generation['report_version_id']))
+        result = self.runtime.resume(str(generation['id']))
+        self.verify_published(str(result.report_version_id),task_id=task_id)
+        return str(result.report_version_id)
+
     def verify_published(self, report_version_id: str, *, task_id: str) -> None:
         version = self.store.get_version(report_version_id)
         if version is None or version.get("status") != "published":

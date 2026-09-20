@@ -22,7 +22,8 @@ const USER_CACHE_KEYS = new Set([
 const USER_CACHE_PREFIXES = [
   "crawler-account-login-session:",
   "xhs-audit:historical-report-pending:",
-  "xhs-audit:list-scroll:"
+  "xhs-audit:list-scroll:",
+  "xhs-audit:task-intent:"
 ];
 
 function browserSessionStorage(): Storage | null {
@@ -102,7 +103,41 @@ export function withQuery(path: string, query: Record<string, QueryValue> = {}) 
   return suffix ? `${path}?${suffix}` : path;
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+const pendingTaskRequests = new Map<string, Promise<unknown>>();
+
+export function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const taskMutation = String(options.method || "GET").toUpperCase() === "POST" &&
+    (path === "/api/jobs" || /\/api\/jobs\/[^/]+\/control$/.test(path) ||
+      /\/api\/tasks\/[^/]+\/retry-report$/.test(path));
+  if (!taskMutation) return apiRequestOnce<T>(path, options);
+  const headers = new Headers(options.headers);
+  const user = browserSessionStorage()?.getItem(ACTIVE_USER_STORAGE_KEY) || "";
+  const identity = JSON.stringify([user, path, options.body, headers.get("Idempotency-Key")]);
+  const pending = pendingTaskRequests.get(identity);
+  if (pending) return pending as Promise<T>;
+  const request = (async () => {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(identity));
+    const storageKey = "xhs-audit:task-intent:" + Array.from(new Uint8Array(digest),
+      value => value.toString(16).padStart(2, "0")).join("");
+    const storage = browserSessionStorage();
+    const key = headers.get("Idempotency-Key") || storage?.getItem(storageKey) || crypto.randomUUID();
+    storage?.setItem(storageKey, key);
+    headers.set("Idempotency-Key", key);
+    try {
+      const result = await apiRequestOnce<T>(path, { ...options, headers: Object.fromEntries(headers) });
+      storage?.removeItem(storageKey);
+      return result;
+    } catch (error) {
+      // An uncertain network/server result keeps its intent across retry/refresh.
+      if (error instanceof ApiError && error.status < 500) storage?.removeItem(storageKey);
+      throw error;
+    }
+  })().finally(() => pendingTaskRequests.delete(identity));
+  pendingTaskRequests.set(identity, request);
+  return request;
+}
+
+async function apiRequestOnce<T>(path: string, options: RequestInit = {}): Promise<T> {
   const hasJsonBody = Boolean(options.body) && !(options.body instanceof FormData);
   const method = String(options.method || "GET").toUpperCase();
   const csrfToken = browserSessionStorage()?.getItem(CSRF_STORAGE_KEY) || "";

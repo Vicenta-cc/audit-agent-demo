@@ -96,6 +96,9 @@ class WorkspaceDeletionService:
                                 raise HTTPException(409, "会话关联了其他用户的任务，无法删除。")
                             if row["status"] in {"QUEUED", "RUNNING", "AUDIT_COMPLETED", "REPORT_GENERATING"}:
                                 raise HTTPException(409, "任务正在执行，请等待任务结束后再删除会话。")
+                            active_admission = db.execute("SELECT 1 FROM creation.task_admissions WHERE task_id=? AND state='RESERVED'",(row["id"],)).fetchone()
+                            if active_admission:
+                                raise HTTPException(409,"请先取消任务，等待执行停止后再删除会话。")
                             run_ids.add(row["id"])
                             draft_ids.add(row["draft_id"])
                             if row["report_version_id"]:

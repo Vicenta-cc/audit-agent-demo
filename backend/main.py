@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal, Optional
 from urllib.parse import urlparse
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import Header, BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +28,7 @@ from .audit_agent.audit_policy_store import (
     TaskAuditConfigRevisionStore,
 )
 from .audit_agent.config import settings
+from .audit_agent.requests import CrawlRequest, crawl_request_from_job
 from .audit_agent.crawler_account_store import account_is_cooling_down, crawler_account_store
 from .audit_agent.creator_url import (
     CreatorUrlValidationError,
@@ -84,6 +85,7 @@ from .investigation_creation.tools import (
     configure_hermes_investigation_creation_tools,
 )
 from .investigation_creation.store import InvestigationCreationStore
+from .task_admission.store import AdmissionError
 from .investigation_creation.principal import (
     LocalPrincipalProvider,
     Principal,
@@ -610,60 +612,9 @@ def _sanitize_audit_result_media(item: dict) -> dict:
     return sanitized
 
 
-class CrawlRequest(BaseModel):
-    platform: str = "xhs"
-    display_name: str = ""
-    crawl_mode: str = "search"
-    keyword: str = "泳装"
-    keyword_source: str = "keyword"
-    lexicon_category: str = ""
-    library_ids: list[str] = Field(default_factory=list)
-    capabilities: list[str] = Field(default_factory=list)
-    scoring_template: str = "balanced"
-    rule_snapshot: dict = Field(default_factory=dict)
-    lexicon_keywords: list[str] = []
-    creator_url: str = ""
-    creator_id: str = ""
-    start_page: StrictInt = Field(default=0, ge=0)
-    max_notes: StrictInt = Field(default=5, ge=1, le=5)
-    max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
-    max_comments: StrictInt = Field(default=100, ge=0, le=1000)
-    max_concurrency: StrictInt = Field(default=1, ge=1, le=3)
-    max_items_per_minute: StrictInt = Field(default=5, ge=1, le=5)
-    crawler_account_id: Optional[str] = None
-    collect_comments: StrictBool = True
-    get_sub_comment: StrictBool = False
-    collect_media: StrictBool = True
-    auto_analyze: StrictBool = True
-    analyze_limit: StrictInt = Field(default=0, ge=0)
-    run_crawler: StrictBool = True
-    source_output_id: Optional[str] = None
-    analysis_batch_size: StrictInt = Field(default=5, ge=1, le=20)
-    prompt_profile_snapshot: dict = Field(default_factory=dict)
-    policy_id: str = ""
-    relation_context: dict = Field(default_factory=dict)
-
-
 class JobControlRequest(BaseModel):
     action: str
     analyze_limit: int = 0
-
-
-def crawl_request_from_job(job: dict) -> CrawlRequest:
-    """Rebuild the frozen crawl inputs when the same task is resumed."""
-    model_fields = getattr(CrawlRequest, "model_fields", None) or getattr(
-        CrawlRequest, "__fields__", {}
-    )
-    payload = {
-        name: job[name]
-        for name in model_fields
-        if name in job and job[name] is not None
-    }
-    effective_config = dict(job.get("effective_config") or {})
-    for name in ("collect_comments", "collect_media"):
-        if name not in payload and name in effective_config:
-            payload[name] = effective_config[name]
-    return CrawlRequest(**payload)
 
 
 def resume_job_and_requeue_run(job_id: str, operation, *args) -> None:
@@ -1274,8 +1225,10 @@ def recover_interrupted_jobs():
     deleted_results = audit_result_store.delete_for_archived_jobs()
     if deleted_results:
         print(f"[startup] deleted results for archived jobs: {deleted_results}")
-    recovered = job_store.recover_interrupted_jobs()
-    requeued_analysis = ingestion_store.reset_all_analyzing()
+    # The durable worker reconciles admissions under the execution fence.
+    # An API restart must not rewrite another process's live Job state.
+    recovered = 0 if _authz_enabled() else job_store.recover_interrupted_jobs()
+    requeued_analysis = 0 if _authz_enabled() else ingestion_store.reset_all_analyzing()
     if recovered:
         print(f"[startup] recovered interrupted jobs: {recovered}")
     if requeued_analysis:
@@ -2015,7 +1968,9 @@ def create_job(
     request: CrawlRequest,
     background_tasks: BackgroundTasks,
     principal: Principal = Depends(principal_provider),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
+    raw_request_hash = hashlib.sha256(json.dumps(request.model_dump(mode="json"),sort_keys=True).encode()).hexdigest()
     # Preserve the callable service boundary used by maintenance scripts and
     # legacy tests when authentication is explicitly disabled. HTTP requests
     # always receive a real Principal from FastAPI dependency injection.
@@ -2232,8 +2187,7 @@ def create_job(
         "analyze_limit": request.analyze_limit,
     }
 
-    job = job_store.create(
-        owner_user_id=principal.id,
+    job_kwargs = dict(
         platform=request.platform,
         crawler_account_id=request.crawler_account_id,
         crawler_account_display_name=(crawler_account or {}).get("display_name", ""),
@@ -2265,6 +2219,29 @@ def create_job(
         requested_config=requested_config,
         effective_config=effective_config,
     )
+    if _authz_enabled():
+        from uuid import uuid4
+        from backend.task_admission.legacy import materialize
+        if not isinstance(idempotency_key,str) or not idempotency_key.strip():
+            raise HTTPException(400,detail={"code":"IDEMPOTENCY_KEY_REQUIRED","message":"提交任务需要请求标识。"})
+        if revision_payload is None:
+            revision_payload = build_audit_config_revision_payload(
+                source_policy_id="",source_policy_name="自定义审核配置",source_policy_version="",
+                library_ids=request.library_ids,lexicon_category=request.lexicon_category,
+                capabilities=request.capabilities,scoring_template=request.scoring_template,
+                rule_snapshot=request.rule_snapshot,force_composite=force_composite)
+        task_id = "legacy:" + uuid4().hex
+        job_id = "job-" + uuid4().hex
+        row = investigation_creation_store.admission.enqueue(
+            owner=principal.id,task_id=task_id,kind="legacy",key="job:"+idempotency_key,
+            job_id=job_id,request_hash=raw_request_hash,
+            payload={"request":request.model_dump(mode="json"),"job":job_kwargs,
+                     "revision":revision_payload,"crawler_account_id":request.crawler_account_id,
+                     "relation_context":relation_context,"relation_parent_result":relation_parent_result})
+        job = materialize(row,job_store,audit_config_revision_store)
+        return enrich_job(job)
+    job = job_store.create(owner_user_id=principal.id,**job_kwargs)
+
     if revision_payload is None:
         revision_payload = build_audit_config_revision_payload(
             source_policy_id="",
@@ -2475,6 +2452,8 @@ def create_job_audit_config_revision(
     principal: Principal = Depends(principal_provider),
 ):
     job = _require_job(job_id, principal, permission="manage")
+    if _authz_enabled() and investigation_creation_store.admission.for_task(job_id):
+        raise HTTPException(409,detail="该任务配置已冻结，请创建新任务使用其他审核配置。")
     policy = audit_policy_store.get(request.policy_id)
     if not policy:
         raise HTTPException(status_code=404, detail="Audit policy not found")
@@ -2500,11 +2479,37 @@ def control_job(
     request: JobControlRequest,
     background_tasks: BackgroundTasks,
     principal: Principal = Depends(principal_provider),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
     job = _require_job(job_id, principal, permission="manage")
 
     stats = ingestion_store.stats_for_task(job_id)
     actions = available_job_actions(job, stats)
+
+    if _authz_enabled():
+        admission = investigation_creation_store.admission
+        if request.action in {"resume_crawl","resume_analysis","backfill_analysis"}:
+            from backend.task_admission.legacy import enqueue_resume, replay_resume
+            if isinstance(idempotency_key,str) and replay_resume(admission,job_id,owner=principal.id,
+                    action=request.action,key=idempotency_key,analyze_limit=request.analyze_limit):
+                return enrich_job(job)
+            if request.action == "resume_crawl":
+                crawl_request = crawl_request_from_job(job)
+                preferred = ((job.get("control") or {}).get("execution_account") or {}).get("id") or crawl_request.crawler_account_id
+                if preferred:
+                    _require_crawler_account(str(preferred),principal,permission="use")
+                if not _authorized_available_crawler_accounts(principal,crawl_request.platform):
+                    raise HTTPException(409,detail="当前没有已授权、已登录且结束冷却的可用采集账号。")
+            if not isinstance(idempotency_key,str) or not idempotency_key.strip():
+                raise HTTPException(400,detail={"code":"IDEMPOTENCY_KEY_REQUIRED","message":"恢复任务需要请求标识。"})
+            if request.action != "backfill_analysis" and not actions.get(request.action):
+                raise HTTPException(409,detail="当前任务状态不允许恢复。")
+            enqueue_resume(admission,job,owner=principal.id,action=request.action,
+                           key=idempotency_key,analyze_limit=request.analyze_limit)
+            return {**enrich_job(job),"admission_status":"queued"}
+        if request.action == "stop_all":
+            admission.cancel(job_id, job["owner_user_id"], on_cancel=_signal_admission_stop)
+            return enrich_job(job_store.get(job_id))
 
     if request.action == "pause_crawl":
         if not actions["pause_crawl"]:
@@ -2639,6 +2644,10 @@ def delete_job(
     job_id: str, principal: Principal = Depends(principal_provider)
 ):
     job = _require_job(job_id, principal, permission="manage")
+    if _authz_enabled():
+        row = investigation_creation_store.admission.for_task(job_id)
+        if row and row["state"] == "RESERVED":
+            raise HTTPException(409,detail="请先取消任务，等待执行停止后再删除。")
     job_store.update_control(
         job_id,
         crawl_stop_requested=True,
@@ -2788,3 +2797,49 @@ def get_job_asset(
     if not target.is_file():
         raise HTTPException(status_code=404, detail="Asset not found")
     return FileResponse(target)
+
+
+@app.exception_handler(AdmissionError)
+async def admission_error_handler(request: Request, exc):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=409,content={"detail":{"code":exc.code,"message":str(exc),"details":exc.details}})
+
+
+@app.get("/api/me/task-quota")
+def current_task_quota(principal: Principal = Depends(principal_provider)):
+    return investigation_creation_store.admission.summary(principal.id)
+
+
+def _signal_admission_stop(row):
+    if row["job_id"]:
+        job_store.update_control(
+            row["job_id"], crawl_stop_requested=True, analysis_stop_requested=True,
+            analysis_paused=False, stop_all_requested=True,
+        )
+        job_store.update(row["job_id"], status="stopping")
+
+
+@app.post("/api/tasks/{task_id}/cancel")
+def cancel_admitted_task(task_id: str, principal: Principal = Depends(principal_provider)):
+    row = investigation_creation_store.admission.cancel(
+        task_id, principal.id, on_cancel=_signal_admission_stop
+    )
+    return {"task_id":row["task_id"],"state":row["state"],"decision":row["decision"]}
+
+
+@app.post("/api/tasks/{task_id}/retry-report")
+def retry_admitted_report(task_id: str, principal: Principal = Depends(principal_provider),
+                          idempotency_key: str = Header(alias="Idempotency-Key")):
+    from backend.task_admission.legacy import enqueue_resume, replay_resume
+    admission = investigation_creation_store.admission
+    row = admission.for_task(task_id)
+    if not row or row["owner_id"] != principal.id:
+        raise HTTPException(404,detail="任务不存在。")
+    replay = replay_resume(admission,row["job_id"],owner=principal.id,action="resume_report",key=idempotency_key)
+    if replay:
+        return {"task_id":replay["task_id"],"state":replay["state"]}
+    if row["reason"] != "report_generation_failed":
+        raise HTTPException(409,detail="该任务不处于报告生成失败状态。")
+    job = _require_job(row["job_id"],principal,permission="manage")
+    retried = enqueue_resume(admission,job,owner=principal.id,action="resume_report",key=idempotency_key)
+    return {"task_id":retried["task_id"],"state":retried["state"]}
