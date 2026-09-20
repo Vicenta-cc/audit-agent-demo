@@ -12,11 +12,12 @@
 | 配套 MediaCrawler | `efafe3186400b1020955c6acfdc201235b84a2d8` |
 | 爬虫冻结分支 | `codex/douyin-v2-pagination-dedupe-20260914` |
 | 爬虫冻结标签 | `douyin-pagination-fix-20260916` |
-| 本文档与启动文件归档分支 | `codex/r2-frozen-handoff-20260920` |
+| 最新代码与启动说明入口 | `main` |
+| 文档归档分支 | `codex/r2-frozen-handoff-20260920` |
 
 [应用代码](https://github.com/Vicenta-cc/audit-agent-demo/tree/codex/r2-interactive-login-20260918) · [配套爬虫](https://github.com/Vicenta-cc/media-crawler/tree/codex/douyin-v2-pagination-dedupe-20260914)
 
-文档分支从冻结提交派生，只整理 README、说明和部署文件归档，不代表线上切换到新的应用提交。`main` 不是本次指定的发布入口。
+`main` 已同步上述冻结代码与 README、启动文件归档，并保留原 main 的提交历史。业务源码仍对应冻结版本；线上运行提交没有因此改变。精确复现请使用冻结标签或完整提交号。
 
 - [完整基线、环境与更新说明](docs/runtime/R2-FROZEN-BASELINE-20260920.md)
 - [云端启动文件归档与使用边界](deploy/r2-frozen-20260918/README.md)
@@ -36,7 +37,7 @@ cd media-crawler-r2
 git switch --detach efafe3186400b1020955c6acfdc201235b84a2d8
 ```
 
-需要本说明与启动归档时，单独检出 `codex/r2-frozen-handoff-20260920`；运行副本保持冻结提交。
+直接克隆仓库默认 main 即可查看最新版说明与启动归档；生产运行副本仍按完整冻结提交检出，避免提交校验与构建收据不一致。
 
 ## 启动环境
 

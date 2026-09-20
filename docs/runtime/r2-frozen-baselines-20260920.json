@@ -43,5 +43,7 @@
   "crawler_baselines": {
     "current": "efafe3186400b1020955c6acfdc201235b84a2d8",
     "historical_8027": "6d2c85bcb02fd7dd1e30822e0cb2103bb9b42f39"
-  }
+  },
+  "default_branch": "main",
+  "promotion_policy": "main tree matches frozen runtime source plus documentation and archived deployment files; previous main history retained"
 }
