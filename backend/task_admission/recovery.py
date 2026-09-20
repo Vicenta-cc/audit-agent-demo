@@ -13,7 +13,10 @@ def reconcile(worker):
     for value in rows:
         row = dict(value)
         try:
-            reconcile_one(worker, row)
+            from .execution import execution_lock
+            with execution_lock(worker.store.db_path, row["task_id"]) as stopped:
+                if stopped:
+                    reconcile_one(worker, row)
         except Exception:
             import logging
 

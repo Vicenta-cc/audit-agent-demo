@@ -146,12 +146,13 @@ def enqueue_resume(admission, job, *, owner, action, key, analyze_limit=0):
         )
 
 
-def dispatch_one(worker):
+def dispatch_one(worker, task_id=None):
     """Called only under the process/crawler execution fence."""
     admission = worker.store.admission
     with admission.connect() as db:
         rows = db.execute(
-            "SELECT * FROM task_admissions WHERE state='RESERVED' AND queue_state='QUEUED' AND decision='OPEN' ORDER BY created_at,id"
+            "SELECT * FROM task_admissions WHERE state='RESERVED' AND queue_state='QUEUED' AND decision='OPEN' AND (? IS NULL OR task_id=?) ORDER BY created_at,id",
+            (task_id, task_id),
         ).fetchall()
     for value in rows:
         row = dict(value)

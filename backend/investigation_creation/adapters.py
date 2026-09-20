@@ -1070,7 +1070,9 @@ class R31ReportAdapter:
                 str(generation["report_version_id"]),
             )
 
-        result = self.runtime.generate(task_id, on_generation_created=bind)
+        from backend.task_admission.resources import report_capacity
+        with report_capacity(task_id):
+            result = self.runtime.generate(task_id, on_generation_created=bind)
         report_version_id = str(result.report_version_id)
         self.verify_published(report_version_id, task_id=task_id)
         return report_version_id
@@ -1080,7 +1082,9 @@ class R31ReportAdapter:
         if generation is None:
             return self.generate(task_id,on_generation_started=on_generation_started)
         on_generation_started(str(generation['id']),str(generation['report_version_id']))
-        result = self.runtime.resume(str(generation['id']))
+        from backend.task_admission.resources import report_capacity
+        with report_capacity(task_id):
+            result = self.runtime.resume(str(generation['id']))
         self.verify_published(str(result.report_version_id),task_id=task_id)
         return str(result.report_version_id)
 

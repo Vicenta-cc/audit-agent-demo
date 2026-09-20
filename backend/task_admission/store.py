@@ -78,6 +78,13 @@ class AdmissionStore:
                 );
             """)
 
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            columns = {r[1] for r in db.execute("PRAGMA table_info(task_admissions)")}
+            for column in ("waiting_reason", "resource_account_id"):
+                if column not in columns:
+                    db.execute(f"ALTER TABLE task_admissions ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+
     def connect(self):
         db = sqlite3.connect(self.db_path, timeout=30)
         db.row_factory = sqlite3.Row
@@ -210,7 +217,7 @@ class AdmissionStore:
                 ).fetchall()
             )
             active = db.execute(
-                "SELECT task_id,job_id,queue_state,decision,day FROM task_admissions WHERE owner_id=? AND state='RESERVED'",
+                "SELECT task_id,job_id,queue_state,decision,day,waiting_reason,resource_account_id FROM task_admissions WHERE owner_id=? AND state='RESERVED'",
                 (owner,),
             ).fetchone()
         used, reserved = counts.get("SUCCEEDED", 0), counts.get("RESERVED", 0)
@@ -267,7 +274,7 @@ class AdmissionStore:
             self.validate_user(
                 db,
                 row["owner_id"],
-                json.loads(row["payload_json"]).get("crawler_account_id") or "",
+                row["resource_account_id"] or json.loads(row["payload_json"]).get("crawler_account_id") or "",
             )
             if row["decision"] == "CANCELLED":
                 raise AdmissionError("任务已取消。", code="TASK_CANCELLED")

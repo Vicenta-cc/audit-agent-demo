@@ -55,6 +55,7 @@ class LoginSession:
     owner_token: str = field(default="", repr=False)
     frame: bytes = field(default=b"", repr=False)
     frame_sequence: int = 0
+    resource_handle: object | None = field(default=None, repr=False)
     input_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def public(self) -> dict:
@@ -193,10 +194,15 @@ class CrawlerAccountLoginManager:
         env["PYTHONPATH"] = os.pathsep.join(
             part for part in (root_path, current_python_path) if part
         )
+        from backend.task_admission.resources import acquire_account_handle
+        session.resource_handle = acquire_account_handle(session.platform, session.account_id)
+        if session.resource_handle is None:
+            raise ValueError("该采集账号正在采集或登录，请等待结束后再打开登录。")
         diagnostic_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
         try:
             process = subprocess.Popen(
                 command,
+                pass_fds=(session.resource_handle.fileno(),),
                 cwd=str(settings.root_dir),
                 env=env,
                 stdout=subprocess.PIPE,
@@ -212,6 +218,7 @@ class CrawlerAccountLoginManager:
             )
         except OSError as exc:
             diagnostic_file.close()
+            session.resource_handle.close()
             raise RuntimeError(f"无法启动登录浏览器：{exc}") from exc
 
         session.process = process
@@ -406,32 +413,36 @@ class CrawlerAccountLoginManager:
         if not session or not process or not process.stdout:
             return
 
-        for raw_line in process.stdout:
-            try:
-                event = json.loads(raw_line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(event, dict):
-                continue
-            self._handle_event(session_id, event)
+        try:
+            for raw_line in process.stdout:
+                try:
+                    event = json.loads(raw_line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                self._handle_event(session_id, event)
+                with self._lock:
+                    current = self._sessions.get(session_id)
+                    if not current or current.status in TERMINAL_LOGIN_STATUSES:
+                        break
+
+            process.stdout.close()
+            return_code = process.wait()
+            if process.stdin:
+                process.stdin.close()
+            diagnostic = self._read_process_diagnostic(session_id)
             with self._lock:
                 current = self._sessions.get(session_id)
-                if not current or current.status in TERMINAL_LOGIN_STATUSES:
-                    break
-
-        process.stdout.close()
-        return_code = process.wait()
-        if process.stdin:
-            process.stdin.close()
-        diagnostic = self._read_process_diagnostic(session_id)
-        with self._lock:
-            current = self._sessions.get(session_id)
-            needs_failure = bool(current and current.status in ACTIVE_LOGIN_STATUSES)
-        if needs_failure:
-            self._fail(
-                session_id,
-                self._unexpected_exit_message(return_code, diagnostic),
-            )
+                needs_failure = bool(current and current.status in ACTIVE_LOGIN_STATUSES)
+            if needs_failure:
+                self._fail(
+                    session_id,
+                    self._unexpected_exit_message(return_code, diagnostic),
+                )
+        finally:
+            if session.resource_handle is not None:
+                session.resource_handle.close()
 
     def _read_process_diagnostic(self, session_id: str) -> str:
         with self._lock:

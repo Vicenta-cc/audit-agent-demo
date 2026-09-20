@@ -1416,9 +1416,15 @@ def update_crawler_account(
     request: CrawlerAccountUpdateRequest,
     principal: Principal = Depends(principal_provider),
 ):
-    _require_crawler_account(account_id, principal, permission="manage")
-    if request.status == "disabled":
-        crawler_account_login_manager.cancel_for_account(account_id)
+    account = _require_crawler_account(account_id, principal, permission="manage")
+    from backend.task_admission.resources import account_lease
+    with account_lease(account["platform"], account_id) as acquired:
+        if not acquired:
+            raise HTTPException(409, detail="账号正在采集或登录，请等待结束后再修改。")
+        return _update_idle_crawler_account(account_id, request)
+
+
+def _update_idle_crawler_account(account_id, request):
     try:
         item = crawler_account_store.update(
             account_id,
@@ -1437,10 +1443,13 @@ def update_crawler_account(
 def delete_crawler_account(
     account_id: str, principal: Principal = Depends(principal_provider)
 ):
-    _require_crawler_account(account_id, principal, permission="manage")
-    crawler_account_login_manager.cancel_for_account(account_id)
-    if not crawler_account_store.delete(account_id):
-        raise HTTPException(status_code=404, detail="Crawler account not found")
+    account = _require_crawler_account(account_id, principal, permission="manage")
+    from backend.task_admission.resources import account_lease
+    with account_lease(account["platform"], account_id) as acquired:
+        if not acquired:
+            raise HTTPException(409, detail="账号正在采集或登录，请等待结束后再删除。")
+        if not crawler_account_store.delete(account_id):
+            raise HTTPException(status_code=404, detail="Crawler account not found")
 
 
 @app.post("/api/crawler-accounts/{account_id}/login-sessions", status_code=201)

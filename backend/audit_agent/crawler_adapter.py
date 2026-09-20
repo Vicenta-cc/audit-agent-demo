@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-import fcntl
+from contextlib import ExitStack
 import json
 import os
 import shutil
@@ -348,24 +348,22 @@ class MediaCrawlerAdapter:
         checkpoint_callback: CheckpointCallback | None = None,
         account_id: str = "",
     ) -> CrawlOutput:
-        # Both local backends use the same MediaCrawler browser profile. Serialize
-        # across worker processes as well as the existing in-process pipeline lock.
-        with (self.media_crawler_dir / '.xhs-audit-crawler.lock').open('a') as lock:
-            while True:
-                if stop_checker and stop_checker():
-                    raise RuntimeError('采集任务在等待采集服务时已停止')
-                try:
-                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    break
-                except BlockingIOError:
-                    sleep(0.5)
-            try:
-                return self._run_command_locked(
-                    command, save_root, platform, max_notes, progress_callback,
-                    content_callback, stop_checker, auth_state, started_callback, checkpoint_callback, account_id,
+        from backend.task_admission.resources import account_lease, file_lease
+        while True:
+            if stop_checker and stop_checker():
+                raise RuntimeError("采集任务在等待账号资源时已停止")
+            with ExitStack() as leases:
+                legacy_acquired = settings.app_auth_mode == "required" or leases.enter_context(
+                    file_lease(self.media_crawler_dir / ".xhs-audit-crawler.lock")
                 )
-            finally:
-                fcntl.flock(lock, fcntl.LOCK_UN)
+                acquired = legacy_acquired and leases.enter_context(account_lease(platform, account_id))
+                if acquired:
+                    return self._run_command_locked(
+                        command, save_root, platform, max_notes, progress_callback,
+                        content_callback, stop_checker, auth_state, started_callback,
+                        checkpoint_callback, account_id,
+                    )
+            sleep(0.1)
 
     def _run_command_locked(
         self, command: list[str], save_root: Path, platform: str, max_notes: int,

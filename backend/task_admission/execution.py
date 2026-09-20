@@ -1,35 +1,28 @@
-"""Phase-three execution fence; resource-level concurrency replaces it in phase four."""
+"""Per-task execution identity and inherited stop-proof fences."""
 
-import fcntl
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 
+from .resources import digest, file_lease, inherited_fds
+
 _current = ContextVar("admission_execution", default=None)
-_inherited_fd = None
 
 
 def crawler_fds():
-    return (_inherited_fd,) if _inherited_fd is not None else ()
+    return inherited_fds()
 
 
 @contextmanager
-def execution_lock(db_path):
-    global _inherited_fd
-    path = Path(db_path).with_suffix(".execution.lock")
-    with path.open("a+b") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            yield False
-            return
-        _inherited_fd = handle.fileno()
-        try:
-            yield True
-        finally:
-            _inherited_fd = None
-            # Close, don't LOCK_UN: a surviving crawler inherits this open file
-            # description and must retain the fence until it actually exits.
+def execution_lock(db_path, task_id=None):
+    root = Path(db_path).resolve()
+    path = (
+        root.parent / (root.stem + ".task-locks") / (digest(task_id) + ".lock")
+        if task_id is not None
+        else root.with_suffix(".execution.lock")
+    )
+    with file_lease(path) as acquired:
+        yield acquired
 
 
 @contextmanager
@@ -62,4 +55,4 @@ def assert_execution(job_id, execution=None):
     ):
         raise AdmissionError("任务已结束或执行权失效。", code="EXECUTION_FENCED")
     with store.connect() as db:
-        store.validate_user(db, row["owner_id"])
+        store.validate_user(db, row["owner_id"], row.get("resource_account_id") or "")

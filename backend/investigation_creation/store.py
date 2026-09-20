@@ -1521,6 +1521,7 @@ class InvestigationCreationStore:
         worker_id: str,
         *,
         lease_timeout_seconds: int = 300,
+        task_id: str | None = None,
     ) -> InvestigationRun | None:
         now_value = self.clock()
         now = self._datetime_text(now_value)
@@ -1533,7 +1534,8 @@ class InvestigationCreationStore:
             candidate = connection.execute(
                 """
                 SELECT * FROM investigation_runs
-                WHERE id NOT IN (SELECT run_id FROM investigation_run_execution_holds)
+                WHERE (? IS NULL OR id = ?)
+                  AND id NOT IN (SELECT run_id FROM investigation_run_execution_holds)
                   AND (? = 0 OR id IN (SELECT task_id FROM task_admissions WHERE state='RESERVED' AND decision!='CANCELLED'))
                   AND (status = 'QUEUED'
                    OR (
@@ -1550,7 +1552,7 @@ class InvestigationCreationStore:
                     id
                 LIMIT 1
                 """,
-                (int(self.admission.enabled), stale_before),
+                (task_id, task_id, int(self.admission.enabled), stale_before),
             ).fetchone()
             if candidate is None:
                 return None
