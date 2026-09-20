@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from threading import RLock
-from typing import Any
+from typing import Any, Callable
 
 from backend.historical_reports.catalog import HistoricalReportSpec
 from backend.historical_reports.importer import HistoricalReportImporter
@@ -21,6 +21,8 @@ class HistoricalReportDemoService:
         report_store: Any,
         report_service: Any,
         executor: Any,
+        auto_register: bool = True,
+        access_authorizer: Callable[[str, dict[str, Any]], bool] | None = None,
     ) -> None:
         self.specs = specs
         self.workspace_store = workspace_store
@@ -32,6 +34,8 @@ class HistoricalReportDemoService:
         )
         self.report_service = report_service
         self.executor = executor
+        self.auto_register = bool(auto_register)
+        self.access_authorizer = access_authorizer
         self.importer = HistoricalReportImporter(report_store.db_path)
         self._specs_by_workspace = {item.workspace_id: item for item in specs}
         self._report_version_ids = frozenset(
@@ -69,6 +73,8 @@ class HistoricalReportDemoService:
         self.get_workspace(spec.workspace_id, principal_id=principal_id)
 
     def ensure_registered(self, *, principal_id: str) -> None:
+        if not self.auto_register:
+            return
         if principal_id in self._registered_principals:
             return
         with self._registration_lock:
@@ -83,9 +89,18 @@ class HistoricalReportDemoService:
 
     def list_workspaces(self, *, principal_id: str) -> tuple[dict[str, Any], ...]:
         self.ensure_registered(principal_id=principal_id)
+        workspaces = (
+            self.workspace_store.list(principal_id=principal_id)
+            if self.auto_register
+            else tuple(
+                item
+                for item in self.workspace_store.list_all()
+                if self._can_access(principal_id, item)
+            )
+        )
         return tuple(
             self._workspace_state(item, principal_id=principal_id)
-            for item in self.workspace_store.list(principal_id=principal_id)
+            for item in workspaces
         )
 
     def get_workspace(
@@ -93,14 +108,26 @@ class HistoricalReportDemoService:
     ) -> dict[str, Any]:
         self.ensure_registered(principal_id=principal_id)
         try:
-            workspace = self.workspace_store.get(
-                workspace_id, principal_id=principal_id
+            workspace = (
+                self.workspace_store.get(workspace_id, principal_id=principal_id)
+                if self.auto_register
+                else self.workspace_store.get_any(workspace_id)
             )
+            if not self._can_access(principal_id, workspace):
+                raise KeyError(workspace_id)
         except KeyError as exc:
             raise InvestigationSessionNotFoundError(
                 "historical report workspace was not found"
             ) from exc
         return self._workspace_state(workspace, principal_id=principal_id)
+
+    def _can_access(self, principal_id: str, workspace: dict[str, Any]) -> bool:
+        if str(workspace.get("principal_id") or "") == principal_id:
+            return True
+        return bool(
+            self.access_authorizer
+            and self.access_authorizer(principal_id, workspace)
+        )
 
     def analysis_records(self, workspace_id: str, *, principal_id: str) -> dict[str, Any]:
         """Read all frozen post results, never replay or invent execution events."""
@@ -145,6 +172,7 @@ class HistoricalReportDemoService:
             session = self.report_service.create_session(
                 str(workspace["report_version_id"]),
                 anchor_key=self._current_anchor(workspace, principal_id),
+                owner_principal=principal_id,
             )
             return self.executor.accept_turn(
                 session.id,

@@ -11,6 +11,75 @@ export const API_BASE = () => {
   return value.replace(/\/$/, "");
 };
 
+const CSRF_STORAGE_KEY = "xhs-audit-csrf-token";
+const ACTIVE_USER_STORAGE_KEY = "xhs-audit-active-user-id:v1";
+const USER_CACHE_KEYS = new Set([
+  "saasv2:monitor-tasks:snapshot:v1",
+  "saasv2:create-monitor-task:draft:v1",
+  "crawler-login-control-token",
+  "crawler-account-login-target"
+]);
+const USER_CACHE_PREFIXES = [
+  "crawler-account-login-session:",
+  "xhs-audit:historical-report-pending:",
+  "xhs-audit:list-scroll:",
+  "xhs-audit:task-intent:"
+];
+
+function browserSessionStorage(): Storage | null {
+  try {
+    return typeof window !== "undefined" && window.sessionStorage
+      ? window.sessionStorage
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export const setCsrfToken = (token: string) => {
+  const storage = browserSessionStorage();
+  if (!storage) return;
+  if (token) storage.setItem(CSRF_STORAGE_KEY, token);
+  else storage.removeItem(CSRF_STORAGE_KEY);
+};
+
+function clearUserScopedBrowserState() {
+  const storage = browserSessionStorage();
+  if (!storage) return;
+  const keys: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key) keys.push(key);
+  }
+  keys.forEach((key) => {
+    if (USER_CACHE_KEYS.has(key) || USER_CACHE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+      storage.removeItem(key);
+    }
+  });
+}
+
+export const activateAuthenticatedUser = (userId: string) => {
+  const normalized = String(userId || "").trim();
+  if (!normalized) {
+    clearAuthenticationState();
+    return;
+  }
+  const storage = browserSessionStorage();
+  if (!storage) return;
+  const previous = storage.getItem(ACTIVE_USER_STORAGE_KEY) || "";
+  if (previous !== normalized) {
+    clearUserScopedBrowserState();
+  }
+  storage.setItem(ACTIVE_USER_STORAGE_KEY, normalized);
+};
+
+export const clearAuthenticationState = () => {
+  const storage = browserSessionStorage();
+  clearUserScopedBrowserState();
+  storage?.removeItem(CSRF_STORAGE_KEY);
+  storage?.removeItem(ACTIVE_USER_STORAGE_KEY);
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -34,19 +103,73 @@ export function withQuery(path: string, query: Record<string, QueryValue> = {}) 
   return suffix ? `${path}?${suffix}` : path;
 }
 
-export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+const pendingTaskRequests = new Map<string, Promise<unknown>>();
+
+export function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const taskMutation = String(options.method || "GET").toUpperCase() === "POST" &&
+    (path === "/api/jobs" || /\/api\/jobs\/[^/]+\/control$/.test(path) ||
+      /\/api\/tasks\/[^/]+\/retry-report$/.test(path));
+  if (!taskMutation) return apiRequestOnce<T>(path, options);
+  const headers = new Headers(options.headers);
+  const user = browserSessionStorage()?.getItem(ACTIVE_USER_STORAGE_KEY) || "";
+  const identity = JSON.stringify([user, path, options.body, headers.get("Idempotency-Key")]);
+  const pending = pendingTaskRequests.get(identity);
+  if (pending) return pending as Promise<T>;
+  const request = (async () => {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(identity));
+    const storageKey = "xhs-audit:task-intent:" + Array.from(new Uint8Array(digest),
+      value => value.toString(16).padStart(2, "0")).join("");
+    const storage = browserSessionStorage();
+    const key = headers.get("Idempotency-Key") || storage?.getItem(storageKey) || crypto.randomUUID();
+    storage?.setItem(storageKey, key);
+    headers.set("Idempotency-Key", key);
+    try {
+      const result = await apiRequestOnce<T>(path, { ...options, headers: Object.fromEntries(headers) });
+      storage?.removeItem(storageKey);
+      return result;
+    } catch (error) {
+      // An uncertain network/server result keeps its intent across retry/refresh.
+      if (error instanceof ApiError && error.status < 500) storage?.removeItem(storageKey);
+      throw error;
+    }
+  })().finally(() => pendingTaskRequests.delete(identity));
+  pendingTaskRequests.set(identity, request);
+  return request;
+}
+
+async function apiRequestOnce<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const requestUser = browserSessionStorage()?.getItem(ACTIVE_USER_STORAGE_KEY) || "";
   const hasJsonBody = Boolean(options.body) && !(options.body instanceof FormData);
+  const method = String(options.method || "GET").toUpperCase();
+  const csrfToken = browserSessionStorage()?.getItem(CSRF_STORAGE_KEY) || "";
+  const requiresCsrf = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
   const response = await fetch(`${API_BASE()}${path}`, {
     ...options,
+    credentials: "include",
     headers: {
       Accept: "application/json",
       ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
+      ...(requestUser && !path.startsWith("/api/auth/") ? { "X-Application-User": requestUser } : {}),
+      ...(requiresCsrf && csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
       ...options.headers
     }
   });
 
+  const assertIdentity = () => {
+    if (requestUser !== (browserSessionStorage()?.getItem(ACTIVE_USER_STORAGE_KEY) || "")) {
+      throw new ApiError("登录身份已变化，请重新载入。", 409, "AUTH_IDENTITY_CHANGED");
+    }
+  };
+  assertIdentity();
+  const responseUser = response.headers.get("X-Application-User");
+  if (requestUser && responseUser && responseUser !== requestUser && !path.startsWith("/api/auth/")) {
+    window.dispatchEvent?.(new CustomEvent("application-auth-expired", { detail: "AUTH_IDENTITY_CHANGED" }));
+    throw new ApiError("登录身份已变化，请重新载入。", 409, "AUTH_IDENTITY_CHANGED");
+  }
+
   if (!response.ok) {
     const text = await response.text();
+    assertIdentity();
     let message = text || `${response.status} ${response.statusText}`;
     let code = "";
     let details: Record<string, unknown> = {};
@@ -63,6 +186,12 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     } catch {
       // Keep the server's plain-text error as the public message.
     }
+    if (response.status === 401 || code === "ACCOUNT_EXPIRED") {
+      clearAuthenticationState();
+      if (!path.startsWith("/api/auth/")) window.dispatchEvent?.(new CustomEvent("application-auth-expired", { detail: code }));
+    } else if (code === "CSRF_VALIDATION_FAILED" || code === "AUTH_IDENTITY_CHANGED") {
+      window.dispatchEvent?.(new CustomEvent("application-auth-expired", { detail: code }));
+    }
     throw new ApiError(message, response.status, code, details);
   }
 
@@ -70,5 +199,10 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     return {} as T;
   }
 
-  return (await response.json()) as T;
+  const result = (await response.json()) as T;
+  assertIdentity();
+  if (method === "POST" && (path.endsWith("/confirm-and-queue") || path === "/api/jobs" || /\/api\/tasks\/[^/]+\/cancel$/.test(path))) {
+    window.dispatchEvent?.(new Event("task-quota-changed"));
+  }
+  return result;
 }

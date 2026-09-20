@@ -24,7 +24,8 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
       const host = document.createElement("div");
       document.body.replaceChildren(host);
       const noop = () => {};
-      createRoot(host).render(React.createElement(InvestigationCenterArea, {
+      const { mountPresentation } = await load("/tests/presentationMount.tsx");
+    mountPresentation(host, React.createElement(InvestigationCenterArea, {
         session, isSendingMessage: false, isSidebarCollapsed: true,
         onToggleSidebar: noop, onUpdateDraftKeywords: noop, onUpdateCreationSearchTerms: async () => {},
         onUpdateDraftPlatforms: noop, onGenerateTaskConfig: noop, onStartAgentExecution: noop,

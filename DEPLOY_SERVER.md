@@ -1,4 +1,4 @@
-> 历史 GPU 模型/后端部署说明。当前 R2 冻结版本、Audit_assistant 前端与云端启动入口请先阅读 [README](README.md) 和 [R2 基线说明](docs/runtime/R2-FROZEN-BASELINE-20260920.md)。
+> 历史 GPU 模型/后端部署说明。当前多用户候选版本与环境边界请先阅读 [README](README.md)；[R2 基线说明](docs/runtime/R2-FROZEN-BASELINE-20260920.md) 为旧版归档。
 
 # Server Backend + Qwen3-VL Deployment
 
@@ -81,7 +81,8 @@ QWEN_VL_MODEL=qwen3-vl-8b
 QWEN_USE_RESPONSE_FORMAT=false
 VL_IMAGE_MAX_SIDE=1024
 VL_IMAGE_QUALITY=75
-CORS_ALLOW_ORIGINS=*
+# Leave empty for same-origin hosting, or list the exact HTTPS frontend origin.
+CORS_ALLOW_ORIGINS=
 MEDIACRAWLER_DIR=/root/MediaCrawler
 MAX_IMAGES_PER_NOTE=4
 MAX_VIDEO_FRAMES=6

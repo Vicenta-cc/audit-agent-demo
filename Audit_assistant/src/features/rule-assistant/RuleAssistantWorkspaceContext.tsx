@@ -1,3 +1,4 @@
+import { useApplicationAuth } from "../auth/AuthBoundary";
 import { createContext, useContext, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuditRuleSet, RiskRule } from "../../types/investigation";
@@ -127,14 +128,15 @@ function withRecalculatedChanges(
 }
 
 export function RuleAssistantWorkspaceProvider({ children }: { children: ReactNode }) {
-  const [ruleSets, setRuleSets] = useState(initialRuleAssistantRuleSets);
-  const [lexicons, setLexicons] = useState(initialRuleAssistantLexicons);
-  const [conversations, setConversations] = useState(initialRuleAssistantConversations);
+  const { user } = useApplicationAuth();
+  const [ruleSets, setRuleSets] = useState(user ? [] : initialRuleAssistantRuleSets);
+  const [lexicons, setLexicons] = useState(user ? [] : initialRuleAssistantLexicons);
+  const [conversations, setConversations] = useState(user ? [] : initialRuleAssistantConversations);
   const [candidatePreviews, setCandidatePreviews] = useState<Record<string, RuleAssistantCandidatePreview>>({});
   const [candidateLexiconPreviews, setCandidateLexiconPreviews] = useState<Record<string, RuleAssistantCandidateLexiconPreview>>({});
   const [appliedRuleSets, setAppliedRuleSets] = useState<Record<string, RuleAssistantCandidateRuleSet>>({});
   const [appliedLexicons, setAppliedLexicons] = useState<Record<string, RuleAssistantCandidateLexicon>>({});
-  const [activeConversationId, setActiveConversationId] = useState("global-private-domain");
+  const [activeConversationId, setActiveConversationId] = useState(user ? "" : "global-private-domain");
   const [expandedRuleSetIds, setExpandedRuleSetIds] = useState<Set<string>>(
     () => new Set(["ruleset-erotic"])
   );

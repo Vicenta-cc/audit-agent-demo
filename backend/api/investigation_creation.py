@@ -225,6 +225,9 @@ def create_investigation_creation_router(
 
 
 def _raise_public_error(exc: Exception) -> None:
+    from backend.task_admission.store import AdmissionError
+    if isinstance(exc, AdmissionError):
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc), "details": exc.details}) from exc
     detail = (
         {
             "code": exc.code,

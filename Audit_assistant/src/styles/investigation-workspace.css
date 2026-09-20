@@ -694,6 +694,9 @@
   color: #b91c1c;
 }
 
+.agent-exec-status-tag.is-neutral { background: #f1f5f9; color: #475569; }
+.agent-exec-status-tag.is-warning { background: #fef3c7; color: #92400e; }
+
 .agent-exec-status-tag.is-queued {
   color: #475569;
   background: #f1f5f9;
@@ -2374,9 +2377,18 @@
 }
 
 .investigation-run-controls {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
+
+.investigation-run-total { margin-left: auto; color: #64748b; }
+.investigation-task-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.investigation-end-control { margin-left: auto; }
+.investigation-run-controls.investigation-end-control button { color: #b91c1c; border-color: #fecaca; }
+.investigation-control-hint { flex-basis: 100%; color: #64748b; font-size: 11px; }
+.investigation-task-actions > p[role="status"] { color: #475569; }
 
 .investigation-run-controls > div {
   display: flex;
@@ -2558,11 +2570,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-.investigation-run-projection.is-failed,
-.investigation-run-projection.is-interrupted {
+.investigation-run-projection.tone-error {
   border-left-color: #dc2626;
   background: #fef2f2;
 }
+
+.investigation-run-projection.tone-neutral { border-left-color: #94a3b8; background: #f8fafc; }
+.investigation-run-projection.tone-neutral p { color: #475569; }
+.investigation-run-projection.tone-warning { border-left-color: #d97706; background: #fffbeb; }
+.investigation-run-projection.tone-done { border-left-color: #059669; background: #f0fdf4; }
 
 .task-final-actions .mt-button svg {
   flex: 0 0 auto;
@@ -9519,3 +9535,23 @@
 .investigation-parameter-check { display: inline-flex; align-items: center; gap: 6px; margin: 8px 18px 12px 0; font-size: 13px; }
 .investigation-parameters small { color: #64748b; font-size: 12px; line-height: 1.6; }
 .investigation-effective-parameters { background: #eaf1ff; border: 1px solid #d6e3fb; border-radius: 10px; padding: 11px 12px; }
+
+/* Compact account controls share the conversation header. */
+.inv-center-header { height: auto; min-height: 52px; gap: 8px 16px; flex-wrap: wrap; padding-top: 8px; padding-bottom: 8px; position: relative; z-index: 20; }
+.inv-header-left { min-width: 0; }
+.inv-header-actions { flex-wrap: wrap; margin-left: auto; }
+.inv-account-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.inv-toolbar-menu { position: relative; font-size: 12px; color: #475569; }
+.inv-toolbar-menu > summary { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; cursor: pointer; list-style: none; white-space: nowrap; }
+.inv-toolbar-menu > summary::-webkit-details-marker { display: none; }
+.inv-toolbar-menu > summary:hover, .inv-toolbar-menu[open] > summary { background: #f1f5f9; }
+.inv-toolbar-menu > summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.inv-toolbar-popover { position: absolute; right: 0; top: calc(100% + 8px); width: 280px; max-width: calc(100vw - 32px); padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: white; box-shadow: 0 8px 24px #0f172a1a; line-height: 1.7; z-index: 30; }
+.inv-toolbar-popover small { font-size: 12px; }
+.inv-toolbar-popover .application-account > div { margin-top: 6px; }
+.inv-quota-waiting { color: #a16207; background: #fef9c3; padding: 0 5px; border-radius: 4px; font-size: 11px; }
+@media (max-width: 768px) {
+  .inv-header-actions { display: flex; width: 100%; gap: 6px; }
+  .inv-account-tools { flex-wrap: wrap; }
+  .inv-quota-menu .inv-toolbar-popover { left: 0; right: auto; }
+}

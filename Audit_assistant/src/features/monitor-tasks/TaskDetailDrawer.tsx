@@ -109,47 +109,43 @@ export function TaskDetailDrawer({ task, mode, onClose, onControl }: TaskDetailD
 
           <section className="drawer-section">
             <h3>任务操作</h3>
+            <p>暂停、继续不重复扣次。结束任务不可恢复，已扣次数不返还。</p>
+            {task.raw.available_actions?.ending ? <p role="status">正在结束，后台停止后可新建任务或删除会话。</p> : null}
             <div className="drawer-actions">
-              <Button
+              {task.raw.available_actions?.end_task ? <Button type="button" variant="secondary"
+                onClick={() => void onControl(task, "stop_all", "结束任务")}>结束任务</Button> : null}
+              {task.raw.available_actions?.pause_crawl ? <Button
                 type="button"
                 variant="secondary"
                 disabled={!task.raw.available_actions?.pause_crawl}
                 onClick={() => void onControl(task, "pause_crawl", "暂停抓取")}
               >
                 暂停抓取
-              </Button>
-              <Button
+              </Button> : null}
+              {task.raw.available_actions?.resume_crawl ? <Button
                 type="button"
                 variant="secondary"
                 disabled={!task.raw.available_actions?.resume_crawl}
                 onClick={() => void onControl(task, "resume_crawl", "继续采集")}
               >
                 继续采集
-              </Button>
-              <Button
+              </Button> : null}
+              {task.raw.available_actions?.pause_analysis ? <Button
                 type="button"
                 variant="secondary"
                 disabled={!task.raw.available_actions?.pause_analysis}
                 onClick={() => void onControl(task, "pause_analysis", "暂停分析")}
               >
                 暂停分析
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!task.raw.available_actions?.stop_analysis}
-                onClick={() => void onControl(task, "stop_analysis", "停止分析")}
-              >
-                停止分析
-              </Button>
-              <Button
+              </Button> : null}
+              {task.raw.available_actions?.resume_analysis ? <Button
                 type="button"
                 variant="primary"
                 disabled={!task.raw.available_actions?.resume_analysis}
                 onClick={() => void onControl(task, "resume_analysis", "继续分析")}
               >
                 继续分析
-              </Button>
+              </Button> : null}
             </div>
           </section>
         </div>

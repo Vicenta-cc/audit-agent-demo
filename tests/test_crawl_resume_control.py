@@ -10,6 +10,7 @@ from backend.audit_agent.job_state import failure_metadata
 from backend.audit_agent.pipeline import crawler_start_page, search_resume_parameters
 from backend.investigation_creation.contracts import RunStatus
 from backend.investigation_creation.adapters import InvestigationRunProjector
+from backend.investigation_creation.principal import Principal
 
 
 def _job_payload():
@@ -122,6 +123,57 @@ def test_resume_request_reuses_effective_comment_and_media_switches():
 
     assert request.collect_comments is False
     assert request.collect_media is False
+
+
+def test_resume_rejects_globally_available_but_unauthorized_account(
+    tmp_path, monkeypatch
+):
+    jobs = JobStore(tmp_path / "audit.sqlite3")
+    ingestion = IngestionStore(tmp_path / "audit.sqlite3")
+    job = jobs.create(
+        job_id="authorized-resume-dy",
+        owner_user_id="user-a",
+        **{**_job_payload(), "crawler_account_id": "account-a"},
+    )
+    jobs.update(
+        job["id"], status="crawl_paused", crawl_checkpoint_page=2,
+        crawl_checkpoint_keyword="风景",
+    )
+    jobs.update_control(job["id"], crawl_stop_requested=True)
+
+    class Accounts:
+        def get(self, account_id):
+            return {"id": account_id, "platform": "dy"}
+
+        def available_accounts(self, _platform):
+            return [{"id": "account-b", "platform": "dy"}]
+
+    auth = SimpleNamespace(
+        require_owned_resource=lambda *_args, **_kwargs: None,
+        can_use_crawler_account=lambda principal, account_id: (
+            principal.id == "user-a" and account_id == "account-a"
+        ),
+    )
+    monkeypatch.setattr(main, "job_store", jobs)
+    monkeypatch.setattr(main, "ingestion_store", ingestion)
+    monkeypatch.setattr(main, "crawler_account_store", Accounts())
+    monkeypatch.setattr(main, "auth_service", auth)
+    monkeypatch.setattr(
+        main, "auth_store",
+        SimpleNamespace(owned_crawler_account_ids=lambda owner: frozenset({"account-a"}) if owner == "user-a" else frozenset()),
+    )
+    monkeypatch.setattr(main, "_authz_enabled", lambda: True)
+
+    with pytest.raises(main.HTTPException) as exc_info:
+        main.control_job(
+            job["id"],
+            main.JobControlRequest(action="resume_crawl"),
+            BackgroundTasks(),
+            principal=Principal("user-a"),
+        )
+    assert exc_info.value.status_code == 409
+    assert "个人采集账号" in str(exc_info.value.detail)
+    assert jobs.get(job["id"])["status"] == "crawl_paused"
 
 
 def test_recoverable_failed_m3_job_reenters_same_pipeline_and_run(tmp_path, monkeypatch):

@@ -367,7 +367,7 @@ class ExplicitV2ReportAdapter:
 
 
 class ExplicitV2SessionAdapter:
-    def ensure_session(self, run_id: str, report_version_id: str) -> str:
+    def ensure_session(self, run_id: str, report_version_id: str, *, owner_principal: str) -> str:
         assert run_id
         assert report_version_id == "report-version:v2-provider-compat"
         return "investigation-session:v2-provider-compat"

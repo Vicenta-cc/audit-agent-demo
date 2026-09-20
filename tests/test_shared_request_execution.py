@@ -34,7 +34,7 @@ except Exception:
     monkeypatch.setenv('FIXTURE_STATUS','429' if mode.startswith('rate_limited') else '200')
     monkeypatch.setenv('FIXTURE_CLEAN_EXIT','1' if mode=='rate_limited_clean_exit' else '0')
     adapter=MediaCrawlerAdapter(tmp_path)
-    crawler_python = settings.media_crawler_dir / ".venv" / "bin" / "python"
+    crawler_python = settings.crawler_login_python
     monkeypatch.setattr(
         adapter,
         '_base_command',

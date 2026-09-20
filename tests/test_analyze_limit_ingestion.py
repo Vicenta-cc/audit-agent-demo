@@ -683,3 +683,66 @@ def test_authoritative_pipeline_fails_cleanly_when_account_pool_is_empty(
     assert job["error"].startswith("crawler_account_login_required:")
     assert crawler.calls == []
     assert ingestion.stats_for_task(job_id)["ingested_count"] == 0
+
+
+def test_authenticated_pipeline_never_falls_back_to_anonymous_crawling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    audit_db = tmp_path / "authenticated-empty-account.sqlite3"
+    jobs = JobStore(audit_db)
+    ingestion = IngestionStore(audit_db)
+    configuration = _configuration(mode="search", analyze_limit=1)
+    configuration["platform"] = "dy"
+    configuration["crawler_account_id"] = None
+    job_id = "authenticated-empty-account"
+    jobs.create(
+        job_id=job_id,
+        owner_user_id="ordinary-user",
+        **configuration,
+    )
+    crawler = CandidateCrawler([{"aweme_id": "must-not-be-crawled"}])
+    monkeypatch.setattr(pipeline_module, "job_store", jobs)
+    monkeypatch.setattr(
+        pipeline_module,
+        "crawler_account_store",
+        SimpleNamespace(
+            get=lambda _account_id: None,
+            available_accounts=lambda _platform: [],
+        ),
+    )
+    monkeypatch.setattr(
+        pipeline_module,
+        "_authorized_crawler_account_ids",
+        lambda _job_id: frozenset(),
+    )
+    monkeypatch.setattr(pipeline_module.settings, "app_auth_mode", "required")
+    monkeypatch.setattr(pipeline_module.settings, "outputs_dir", tmp_path / "outputs")
+    monkeypatch.setattr(
+        pipeline_module.settings, "auto_analyze_crawled_content", True
+    )
+    pipeline = AuditPipeline.__new__(AuditPipeline)
+    pipeline.job_id = job_id
+    pipeline.crawler = crawler
+    pipeline.ingestion = ingestion
+    pipeline.audit_results = object()
+    pipeline.prompt_profile_snapshot = {}
+    pipeline.audit_config_revision_id = ""
+    pipeline.rule_snapshot = {}
+
+    from backend.application_auth.store import AuthStore
+    from backend.task_admission.store import AdmissionStore
+    from backend.task_admission.execution import execution_context
+    auth = AuthStore(tmp_path / "control.sqlite3")
+    user = auth.create_user(username="test-user",password="correct horse battery staple")
+    auth.login("test-user","correct horse battery staple")
+    admission = AdmissionStore(auth.db_path,auth_db=auth.db_path)
+    admission.enqueue(owner=user["id"],task_id=job_id,kind="legacy",key="test",
+                      payload={},job_id=job_id)
+    admission.start(job_id,"worker")
+    with execution_context(admission,job_id,"worker"):
+        pipeline.run(SimpleNamespace(**configuration))
+
+    job = jobs.get(job_id)
+    assert job["status"] == "failed"
+    assert job["error"].startswith("crawler_account_login_required:")
+    assert crawler.calls == []

@@ -920,7 +920,7 @@ test("maps only real Run projection states, including parallel crawl and analysi
     label: "审核完成",
     step: 3,
     activity: "completed",
-    terminal: null
+    terminal: "completed"
   });
   expect(mapInvestigationRunState(run("REPORT_GENERATING"))).toMatchObject({
     phase: "report_generating", step: 4, activity: "running"

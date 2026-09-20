@@ -425,7 +425,7 @@ class FakeSessionAdapter:
         self.sessions: dict[str, tuple[str, str]] = {}
         self.failures_remaining = failures_remaining
 
-    def ensure_session(self, run_id: str, report_version_id: str) -> str:
+    def ensure_session(self, run_id: str, report_version_id: str, *, owner_principal: str) -> str:
         self.calls += 1
         if self.failures_remaining:
             self.failures_remaining -= 1

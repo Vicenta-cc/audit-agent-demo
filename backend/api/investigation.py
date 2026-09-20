@@ -5,7 +5,7 @@ from collections.abc import Iterable
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
@@ -34,6 +34,11 @@ from backend.investigation.errors import (
 )
 from backend.api.reporting import published_report_task_id
 from backend.audit_agent.config import settings
+from backend.investigation_creation.principal import (
+    LocalPrincipalProvider,
+    Principal,
+    PrincipalProvider,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -163,24 +168,70 @@ def create_investigation_router(
     report_store: Any | None = None,
     m3_run_store: Any | None = None,
     historical_report_service: Any | None = None,
+    principal_provider: PrincipalProvider | None = None,
+    auth_service: Any | None = None,
 ) -> APIRouter:
     """Expose the 3A Agent without leaking its internal execution contracts."""
 
     router = APIRouter(tags=["investigation"])
+    provide_principal = principal_provider or LocalPrincipalProvider()
+
+    def require_report_access(report_version_id: str, principal: Principal) -> None:
+        if auth_service is None or principal.is_admin:
+            return
+        task_id = published_report_task_id(report_store, report_version_id)
+        owners = (
+            m3_run_store.owner_principals_for_report(
+                report_version_id=report_version_id, task_id=task_id
+            )
+            if m3_run_store is not None
+            else frozenset()
+        )
+        admission = getattr(m3_run_store, "admission", None)
+        admitted = admission.for_task(task_id) if admission is not None else None
+        if admitted and admitted["owner_id"] == principal.id:
+            return
+        if principal.id in owners or auth_service.store.has_grant(
+            principal.id, "report-version", report_version_id, "read"
+        ):
+            return
+        raise HTTPException(
+            status_code=404, detail="Published report version not found"
+        )
+
+    def require_session_access(session_id: str, principal: Principal) -> Any:
+        if auth_service is None:
+            return None
+        session = service.store.get_session(session_id)
+        if not principal.is_admin:
+            if str(session.owner_principal or "") != principal.id:
+                raise InvestigationSessionNotFoundError(
+                    "investigation Session was not found"
+                )
+        return session
 
     @router.post(
         "/api/report-versions/{report_version_id}/investigation-sessions",
         response_model=InvestigationSessionResponse,
     )
-    def create_session(report_version_id: str) -> InvestigationSessionResponse:
+    def create_session(
+        report_version_id: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> InvestigationSessionResponse:
         _reject_legacy_m3_session_creation(
             report_store,
             m3_run_store,
             report_version_id,
             historical_report_service=historical_report_service,
         )
+        require_report_access(report_version_id, principal)
         try:
-            session = service.create_session(report_version_id)
+            if auth_service is None:
+                session = service.create_session(report_version_id)
+            else:
+                session = service.create_session(
+                    report_version_id, owner_principal=principal.id
+                )
         except Exception as exc:
             _raise_public_error(exc)
         return _session_response(session)
@@ -189,8 +240,12 @@ def create_investigation_router(
         "/api/investigation-sessions/{session_id}/messages",
         response_model=tuple[InvestigationMessageResponse, ...],
     )
-    def list_messages(session_id: str) -> tuple[InvestigationMessageResponse, ...]:
+    def list_messages(
+        session_id: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> tuple[InvestigationMessageResponse, ...]:
         try:
+            require_session_access(session_id, principal)
             _reject_workspace_handoff_session(
                 service,
                 session_id,
@@ -222,8 +277,10 @@ def create_investigation_router(
     def create_turn(
         session_id: str,
         request: CreateInvestigationTurnRequest,
+        principal: Principal = Depends(provide_principal),
     ) -> InvestigationTurnAcceptedResponse:
         try:
+            require_session_access(session_id, principal)
             _reject_workspace_handoff_session(
                 service,
                 session_id,
@@ -248,9 +305,13 @@ def create_investigation_router(
         "/api/investigation-turns/{turn_id}",
         response_model=InvestigationTurnStatusResponse,
     )
-    def get_turn(turn_id: str) -> InvestigationTurnStatusResponse:
+    def get_turn(
+        turn_id: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> InvestigationTurnStatusResponse:
         try:
             turn = service.store.get_turn(turn_id)
+            require_session_access(turn.session_id, principal)
             _reject_workspace_handoff_session(
                 service,
                 turn.session_id,
@@ -268,9 +329,11 @@ def create_investigation_router(
         request: Request,
         after_sequence: int = Query(default=0, ge=0),
         last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
+        principal: Principal = Depends(provide_principal),
     ) -> StreamingResponse:
         try:
             turn = service.store.get_turn(turn_id)
+            require_session_access(turn.session_id, principal)
             _reject_workspace_handoff_session(
                 service,
                 turn.session_id,
@@ -293,9 +356,13 @@ def create_investigation_router(
         response_model=InvestigationTurnAcceptedResponse,
         status_code=202,
     )
-    def resume_turn(turn_id: str) -> InvestigationTurnAcceptedResponse:
+    def resume_turn(
+        turn_id: str,
+        principal: Principal = Depends(provide_principal),
+    ) -> InvestigationTurnAcceptedResponse:
         try:
             turn = service.store.get_turn(turn_id)
+            require_session_access(turn.session_id, principal)
             _reject_workspace_handoff_session(
                 service,
                 turn.session_id,

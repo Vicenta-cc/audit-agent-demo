@@ -79,6 +79,13 @@ export function formatConfirmationBlockerMessage(code: string, message: string) 
 
 export function formatCreationErrorMessage(message: string) {
   const normalized = message.toUpperCase();
+  if (normalized.includes("DAILY_REPORT_LIMIT") || /今日三次任务额度已用完/.test(message)) {
+    return "今日三次任务额度已用完，北京时间次日 00:00 重置。";
+  }
+  if (normalized.includes("USER_TASK_LIMIT") || /已有未完成任务/.test(message)) {
+    return "已有未完成任务，请继续原任务，或结束整个任务后再发起新调查。";
+  }
+  if (normalized.includes("TASK_ALREADY_ENDED")) return "任务已结束，请在新对话发起调查。";
   if (normalized.includes("CRAWLER_ACCOUNT_VERIFICATION_REQUIRED") || /账号.*平台验证/.test(message)) {
     return "采集账号需要平台验证，请完成验证后再继续；登录态未判定失效。";
   }
@@ -113,4 +120,8 @@ export function formatCreationErrorMessage(message: string) {
   if (/平台/.test(message)) return "平台设置暂时无法保存，请稍后重试。";
   if (/确认/.test(message)) return "任务配置暂时无法确认，请稍后重试。";
   return "当前操作暂时无法完成，请稍后重试。";
+}
+
+export function isTaskAdmissionRejection(code: string): boolean {
+  return ["USER_TASK_LIMIT", "DAILY_REPORT_LIMIT", "TASK_ALREADY_ENDED", "TASK_ADMISSION_REJECTED", "ACCOUNT_EXPIRED", "CRAWLER_ACCOUNT_FORBIDDEN"].includes(code);
 }

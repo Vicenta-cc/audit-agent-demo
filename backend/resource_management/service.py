@@ -24,8 +24,16 @@ def require_version(actual, expected):
 
 
 class ResourceManagementService:
-    def __init__(self, application):
+    def __init__(
+        self,
+        application,
+        *,
+        shared_lexicon_writes_require_admin=False,
+    ):
         self.app = application
+        self.shared_lexicon_writes_require_admin = bool(
+            shared_lexicon_writes_require_admin
+        )
         resources = application.resource_service
         self.lexicons = resources.lexicon_store
         self.rulesets = resources.ruleset_service
@@ -80,6 +88,7 @@ class ResourceManagementService:
 
     def save_library(self, kind, resource_id, content, expected_version, operation_id, *, principal):
         """Publish a complete editor submission in one transaction, with retry receipts."""
+        self._require_shared_lexicon_writer(kind, principal)
         parsed = RuleSetContent.model_validate(content) if kind == 'ruleset' else LexiconContent.model_validate(content)
         if kind == 'ruleset':
             self.rulesets._validate_operator_content(parsed)
@@ -114,6 +123,7 @@ class ResourceManagementService:
             return result
 
     def delete_library(self, kind, resource_id, expected_version, *, principal):
+        self._require_shared_lexicon_writer(kind, principal)
         if kind == 'lexicon':
             try:
                 self.lexicons.delete_category_atomically(resource_id, expected_version=expected_version)
@@ -299,6 +309,7 @@ class ResourceManagementService:
                 raise ResourceError('操作 ID 已用于其他保存请求。', code='RESOURCE_IDEMPOTENCY_CONFLICT')
             return json.loads(previous['result_json'])
         edit = self.get_edit(edit_id, session_id=session_id, principal=principal)
+        self._require_shared_lexicon_writer(edit['kind'], principal)
         require_version(edit['version'], expected_version)
         source = edit['source']
         if mode == 'new' and edit['saves']:
@@ -344,6 +355,17 @@ class ResourceManagementService:
             result = dict(status='saved', operation_id=operation_id, kind=edit['kind'], edit_id=edit_id, edit_version=expected_version, edit_content_hash=edit['content_hash'], resource_id=identifier, **formal)
             conn.execute('INSERT INTO resource_save_receipts VALUES (?,?,?,?,?,?)', (principal.id, operation_id, session_id, request_hash, canonical(result), now()))
         return result
+
+    def _require_shared_lexicon_writer(self, kind, principal):
+        if (
+            self.shared_lexicon_writes_require_admin
+            and kind == 'lexicon'
+            and not getattr(principal, 'is_admin', False)
+        ):
+            raise ResourceError(
+                '只有管理员可以保存或删除共享词库。',
+                code='RESOURCE_FORBIDDEN',
+            )
 
     def _save_ruleset(self, conn, identifier, body, source, principal):
         if identifier in TRIAL_BUNDLES:

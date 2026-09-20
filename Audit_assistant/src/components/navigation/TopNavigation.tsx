@@ -1,5 +1,6 @@
-import { Bell, ChevronDown, ShieldCheck } from "lucide-react";
+import { Bell, ShieldCheck } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
+import { AccountMenu } from "../../features/auth/AuthBoundary";
 import { navigationItems } from "../../app/router";
 
 export function TopNavigation() {
@@ -8,6 +9,7 @@ export function TopNavigation() {
   // Hide top navigation in full-screen Investigation Workspace and embedded sub-pages
   if (
     location.pathname.startsWith("/investigation") ||
+    location.pathname.startsWith("/admin/users") ||
     location.pathname.startsWith("/knowledge-center") ||
     location.pathname.startsWith("/users") ||
     location.pathname.startsWith("/crawler-accounts") ||
@@ -45,11 +47,7 @@ export function TopNavigation() {
         <button className="icon-button" type="button" aria-label="通知">
           <Bell size={20} />
         </button>
-        <button className="user-menu-trigger" type="button" aria-label="当前用户菜单">
-          <span className="current-user-avatar" aria-hidden="true">张</span>
-          <span className="current-user-name">张警官</span>
-          <ChevronDown size={16} />
-        </button>
+        <AccountMenu />
       </div>
     </header>
   );

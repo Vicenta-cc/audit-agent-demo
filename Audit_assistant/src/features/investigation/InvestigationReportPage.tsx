@@ -362,7 +362,7 @@ function ReportSection({
       <section id={sectionDomId(section.section_ref)} className="ethnic-report-section r31-report-section">
         <SectionHeading section={section} />
         <dl className="r31-account-coverage">
-          <StatBandItem label={accounts.target_entries?.length ? "调查目标" : "发布帖子"} value={accounts.target_entries?.length ? accounts.coverage?.target_account_count : accounts.post_author_entries?.reduce((sum, entry) => sum + Number(entry.statistics.published_post_count || 0), 0)} />
+          <StatBandItem label={accounts.target_entries?.length ? "调查目标" : "发布帖子"} value={accounts.target_entries?.length ? accounts.coverage?.target_account_count : statistics.canonical_posts} />
           <StatBandItem label="发布账号" value={accounts.coverage?.post_author_account_count} />
           <StatBandItem label="评论账号" value={accounts.coverage?.comment_author_account_count} />
           <StatBandItem label="去重账号" value={accounts.coverage?.distinct_account_count} />
@@ -393,8 +393,13 @@ function ReportSection({
               <span>基于本次发布报告</span>
             </div>
             {accounts.comment_author_entries?.length
-              ? <AccountTable entries={accounts.comment_author_entries} mode="commenting" onOpen={onOpenAccount} />
+              ? <AccountTable entries={accounts.comment_author_entries.slice(0, 5)} mode="commenting" onOpen={onOpenAccount} />
               : <p className="r31-empty-line">本次调查没有具有稳定标识的评论账号。</p>}
+            {accounts.comment_author_entries?.length ? (
+              <button type="button" className="r31-text-action" onClick={() => onOpenAccountIndex("comment_author")}>
+                查看全部评论账号（{displayNumber(accounts.coverage?.comment_author_account_count)}） <ChevronRight size={15} />
+              </button>
+            ) : null}
           </div>
         ) : <>
           <div className="r31-account-group r31-comment-account-panel r31-dynamic-commenters">
@@ -781,6 +786,12 @@ const accountSortOptions: Record<ReportAccountFilter, Array<{ value: ReportAccou
     { value: "risk_published_post_count", label: "风险帖子数量优先" },
     { value: "latest_activity", label: "最近活动优先" }
   ],
+  comment_author: [
+    { value: "risk_comment_count", label: "风险评论数量优先" },
+    { value: "comment_count", label: "评论数量优先" },
+    { value: "commented_post_count", label: "涉及帖子数量优先" },
+    { value: "latest_activity", label: "最近活动优先" }
+  ],
   cross_investigation_commenter: [
     { value: "investigation_count", label: "调查数量优先" },
     { value: "comment_count", label: "本次评论数量优先" },
@@ -888,7 +899,7 @@ function AccountIndexDrawer({ reportVersionId, filter, onClose }: {
     setPageIndex((current) => current + 1);
   };
   const previousPage = () => setPageIndex((current) => Math.max(0, current - 1));
-  const tableMode: AccountTableMode = mode === "post_author" ? "publishing" : mode === "risk_commenter" ? "risk" : "cross";
+  const tableMode: AccountTableMode = mode === "post_author" ? "publishing" : mode === "comment_author" ? "commenting" : mode === "risk_commenter" ? "risk" : "cross";
   const modeCount = (value: ReportAccountFilter) => {
     const count = filterCounts?.[value];
     return count?.status === "available" ? ` ${displayNumber(count.total_count)}` : "";
@@ -910,7 +921,7 @@ function AccountIndexDrawer({ reportVersionId, filter, onClose }: {
       ) : (
         <div className="r31-account-index-shell">
           <div className="r31-account-index-controls">
-            {mode !== "post_author" ? <div className="r31-account-segments" role="group" aria-label="评论账号筛选">
+            {mode !== "post_author" && mode !== "comment_author" ? <div className="r31-account-segments" role="group" aria-label="评论账号筛选">
               <button type="button" className={mode === "cross_investigation_commenter" ? "is-active" : ""} onClick={() => changeMode("cross_investigation_commenter")}>跨调查评论账号{modeCount("cross_investigation_commenter")}</button>
               <button type="button" className={mode === "risk_commenter" ? "is-active" : ""} onClick={() => changeMode("risk_commenter")}>风险评论账号{modeCount("risk_commenter")}</button>
             </div> : null}

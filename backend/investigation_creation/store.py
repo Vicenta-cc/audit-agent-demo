@@ -65,12 +65,16 @@ class InvestigationCreationStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.clock = clock
         self._init_db()
+        from backend.task_admission.store import AdmissionStore
+        self.admission = AdmissionStore(self.db_path, clock=self.clock)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path, timeout=30)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA busy_timeout = 30000")
+        if settings.app_auth_mode == "required" and settings.app_auth_db.resolve() != self.db_path:
+            connection.execute("ATTACH DATABASE ? AS admission_auth", (str(settings.app_auth_db.resolve()),))
         return connection
 
     def _init_db(self) -> None:
@@ -1078,6 +1082,12 @@ class InvestigationCreationStore:
                         reject("CONFIGURATION_INVALID", str(exc))
                 elif snapshot.get("temporary_ruleset") is not None:
                     reject("CONFIGURATION_INVALID", "Temporary source does not match formal Draft.")
+            if self.admission.enabled:
+                self.admission.reserve(
+                    connection, owner=principal, task_id=run_id, kind="investigation",
+                    key="confirm:" + idempotency_key, payload=snapshot["execution"],
+                    request_hash=request_fingerprint,
+                )
             connection.execute(
                 """
                 INSERT INTO investigation_runs (
@@ -1511,6 +1521,7 @@ class InvestigationCreationStore:
         worker_id: str,
         *,
         lease_timeout_seconds: int = 300,
+        task_id: str | None = None,
     ) -> InvestigationRun | None:
         now_value = self.clock()
         now = self._datetime_text(now_value)
@@ -1523,7 +1534,9 @@ class InvestigationCreationStore:
             candidate = connection.execute(
                 """
                 SELECT * FROM investigation_runs
-                WHERE id NOT IN (SELECT run_id FROM investigation_run_execution_holds)
+                WHERE (? IS NULL OR id = ?)
+                  AND id NOT IN (SELECT run_id FROM investigation_run_execution_holds)
+                  AND (? = 0 OR id IN (SELECT task_id FROM task_admissions WHERE state='RESERVED' AND decision!='CANCELLED'))
                   AND (status = 'QUEUED'
                    OR (
                        status IN ('RUNNING', 'REPORT_GENERATING')
@@ -1539,7 +1552,7 @@ class InvestigationCreationStore:
                     id
                 LIMIT 1
                 """,
-                (stale_before,),
+                (task_id, task_id, int(self.admission.enabled), stale_before),
             ).fetchone()
             if candidate is None:
                 return None
@@ -1626,6 +1639,8 @@ class InvestigationCreationStore:
                 """,
                 (job_id, now, run_id, claim_token),
             )
+            if self.admission.enabled:
+                connection.execute("UPDATE task_admissions SET job_id=? WHERE task_id=? AND state='RESERVED'",(job_id,run_id))
         return self.get_run_for_worker(run_id)
 
     def mark_pipeline_started(

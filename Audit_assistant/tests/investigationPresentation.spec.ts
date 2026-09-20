@@ -31,7 +31,7 @@ const draft: TaskDraft = {
 const blockedPreview = {
   mode: "search",
   blockers: [{
-    code: "NO_PUBLISHED_AUDIT_POLICY",
+    code: "NO_PUBLISHED_RULESET",
     message: "internal message",
     resource_type: "audit_policy",
     resource_id: "",
@@ -43,11 +43,14 @@ const blockedPreview = {
 test("creation presentation hides internal diagnostics and keeps real management navigation", () => {
   expect(buildSuggestionAssistantCopy(draft, blockedPreview)).not.toContain("NO_PUBLISHED");
   expect(buildSuggestionBlockerLink(blockedPreview)).toEqual({
-    label: "去配置研判方案",
+    label: "去配置研判规则",
     managementUrl: "/rule-assistant/rulesets?return_to=/investigation"
   });
+  expect(formatConfirmationBlockerMessage("NO_PUBLISHED_RULESET", "internal"))
+    .toBe("当前还没有匹配的已发布研判规则，配置后即可继续。");
+  // Obsolete/unknown codes must keep internal diagnostics out of user-visible copy.
   expect(formatConfirmationBlockerMessage("NO_PUBLISHED_AUDIT_POLICY", "internal"))
-    .toBe("当前还没有匹配的研判方案，配置后即可继续。");
+    .toBe("当前配置暂时无法继续，请调整相关设置后重试。");
   expect(presentCreationAssistantContent(
     "| 项目 | 内容 |\n|---|---|\n| Draft ID | investigation-draft:secret |"
   )).toBe("当前操作暂时无法完成，请稍后重试。");
@@ -101,4 +104,12 @@ test("M3 source provenance exposes the stored original post without accepting un
   });
   expect(normalizePublicSourceUrl("javascript:alert(1)")).toBe("");
   expect(normalizePublicSourceUrl("not a url")).toBe("");
+});
+
+test("failed posts are separate from queued posts, including old payloads", () => {
+  const run = { task_stats: { pending_analysis_count: 1, failed_analysis_count: 1, completed_analysis_count: 4 } } as InvestigationRunProjection;
+  expect(buildRunProgressItems(run)).toContainEqual({ label: "待分析", value: 0 });
+  expect(buildRunProgressItems(run)).toContainEqual({ label: "审核失败", value: 1 });
+  run.task_stats.queued_analysis_count = 2;
+  expect(buildRunProgressItems(run)).toContainEqual({ label: "待分析", value: 2 });
 });

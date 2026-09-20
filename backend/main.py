@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal, Optional
 from urllib.parse import urlparse
 
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import Header, BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +28,7 @@ from .audit_agent.audit_policy_store import (
     TaskAuditConfigRevisionStore,
 )
 from .audit_agent.config import settings
+from .audit_agent.requests import CrawlRequest, crawl_request_from_job
 from .audit_agent.crawler_account_store import account_is_cooling_down, crawler_account_store
 from .audit_agent.creator_url import (
     CreatorUrlValidationError,
@@ -84,7 +85,16 @@ from .investigation_creation.tools import (
     configure_hermes_investigation_creation_tools,
 )
 from .investigation_creation.store import InvestigationCreationStore
-from .investigation_creation.principal import LocalPrincipalProvider
+from .task_admission.store import AdmissionError
+from .investigation_creation.principal import (
+    LocalPrincipalProvider,
+    Principal,
+    RequestPrincipalProvider,
+)
+from .application_auth.api import create_auth_router
+from .application_auth.middleware import ApplicationAuthMiddleware
+from .application_auth.service import ApplicationAuthService
+from .application_auth.store import AuthStore, AuthorizationError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,7 +106,7 @@ app = FastAPI(title="XHS Audit Agent Demo")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allow_origins,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -110,7 +120,140 @@ app.mount(
 ingestion_store = IngestionStore()
 audit_result_store = AuditResultStore()
 lexicon_store = LexiconStore()
-principal_provider = LocalPrincipalProvider()
+auth_store = AuthStore(
+    settings.app_auth_db,
+    default_validity_days=settings.app_account_validity_days,
+    activation_mode=settings.app_account_activation_mode,
+)
+auth_service = ApplicationAuthService(auth_store)
+if settings.app_auth_mode == "required":
+    app.add_middleware(
+        ApplicationAuthMiddleware,
+        store=auth_store,
+        cookie_name=settings.app_auth_cookie_name,
+    )
+    principal_provider = RequestPrincipalProvider()
+else:
+    principal_provider = LocalPrincipalProvider()
+app.include_router(
+    create_auth_router(
+        auth_service,
+        principal_provider=principal_provider,
+        cookie_name=settings.app_auth_cookie_name,
+        cookie_secure=settings.app_auth_cookie_secure,
+        cookie_samesite=settings.app_auth_cookie_samesite,
+    )
+)
+
+
+def _authz_enabled() -> bool:
+    return settings.app_auth_mode == "required"
+
+
+@app.get("/api/auth/config")
+def application_auth_config(response: Response):
+    response.headers["Cache-Control"] = "no-store"
+    return {"enabled": _authz_enabled()}
+
+
+def _require_admin(principal: Principal) -> None:
+    if not _authz_enabled():
+        return
+    try:
+        auth_service.require_admin(principal)
+    except AuthorizationError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+def _job_list_scope(principal: Principal) -> tuple[str | None, tuple[str, ...]]:
+    if not _authz_enabled() or principal.is_admin:
+        return None, ()
+    return (
+        principal.id,
+        tuple(auth_store.granted_resource_ids(principal.id, "job", "read")),
+    )
+
+
+def _require_job(job_id: str, principal: Principal, *, permission: str = "read") -> dict:
+    job = job_store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if _authz_enabled():
+        try:
+            auth_service.require_owned_resource(
+                principal,
+                owner_user_id=str(job.get("owner_user_id") or ""),
+                resource_type="job",
+                resource_id=job_id,
+                permission=permission,
+            )
+        except AuthorizationError as exc:
+            raise HTTPException(status_code=404, detail="Job not found") from exc
+    return job
+
+
+def _require_crawler_account(
+    account_id: str, principal: Principal, *, permission: str
+) -> dict:
+    account = crawler_account_store.get(account_id)
+    allowed = (
+        not _authz_enabled()
+        or (
+            auth_service.can_use_crawler_account(principal, account_id)
+            if permission == "use"
+            else auth_service.can_manage_crawler_account(principal, account_id)
+        )
+    )
+    if account is None or not allowed:
+        raise HTTPException(status_code=404, detail="Crawler account not found")
+    return account
+
+
+def _authorized_crawler_accounts(principal: Principal) -> list[dict]:
+    accounts = crawler_account_store.list()
+    if _authz_enabled():
+        accounts = [
+            item
+            for item in accounts
+            if auth_service.can_use_crawler_account(principal, str(item["id"]))
+        ]
+    return [auth_service.public_crawler_account(item) for item in accounts]
+
+
+def _authorized_available_crawler_accounts(
+    principal: Principal, platform: str
+) -> list[dict]:
+    accounts = crawler_account_store.available_accounts(platform)
+    if _authz_enabled():
+        accounts = [
+            item
+            for item in accounts
+            if auth_service.can_use_crawler_account(principal, str(item["id"]))
+        ]
+    return accounts
+
+
+def _available_crawler_accounts_for_job(job: dict) -> list[dict]:
+    accounts = crawler_account_store.available_accounts(
+        str(job.get("platform") or "")
+    )
+    if not _authz_enabled():
+        return accounts
+    owner_user_id = str(job.get("owner_user_id") or "").strip()
+    authorized_ids = auth_store.owned_crawler_account_ids(owner_user_id) if owner_user_id else frozenset()
+    return [
+        item for item in accounts if str(item.get("id") or "") in authorized_ids
+    ]
+
+
+def _require_result(
+    result_id: int, principal: Principal, *, permission: str = "read"
+) -> dict:
+    item = audit_result_store.get_result(result_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Audit result not found")
+    _require_job(str(item.get("job_id") or ""), principal, permission=permission)
+    return item
 ruleset_store = RuleSetStore()
 ruleset_service = RuleSetService(ruleset_store)
 audit_policy_store = AuditPolicyStore()
@@ -157,11 +300,17 @@ investigation_configuration_resolver = InvestigationConfigurationResolver(
     crawler_account_store=crawler_account_store,
     ruleset_service=ruleset_service,
     principal_provider=principal_provider,
+    crawler_account_authorizer=(
+        auth_service.can_use_crawler_account if _authz_enabled() else None
+    ),
 )
 investigation_resource_service = InvestigationResourceService(
     lexicon_store=lexicon_store,
     ruleset_service=ruleset_service,
     configuration_resolver=investigation_configuration_resolver,
+    crawler_account_authorizer=(
+        auth_service.can_use_crawler_account if _authz_enabled() else None
+    ),
 )
 investigation_run_projector = (
     FakeInvestigationRunProjector(
@@ -182,6 +331,7 @@ investigation_creation_service = InvestigationCreationService(
     configuration_resolver=investigation_configuration_resolver,
     resource_service=investigation_resource_service,
     run_projector=investigation_run_projector,
+    shared_lexicon_writes_require_admin=_authz_enabled(),
 )
 investigation_creation_tool_service = InvestigationCreationToolService(
     investigation_creation_service
@@ -190,6 +340,9 @@ investigation_creation_conversation_service = InvestigationCreationConversationS
     tool_service=investigation_creation_tool_service,
     store=investigation_agent_service.store,
     fake_runtime=settings.hermes_creation_fake_runtime,
+    principal_resolver=(
+        auth_store.principal_for_user if _authz_enabled() else None
+    ),
 )
 configure_hermes_investigation_creation_tools(
     investigation_creation_tool_service,
@@ -209,6 +362,26 @@ historical_report_demo_service = HistoricalReportDemoService(
     report_store=report_store,
     report_service=investigation_agent_service,
     executor=investigation_turn_executor,
+    auto_register=not _authz_enabled(),
+    access_authorizer=(
+        lambda principal_id, workspace: bool(
+            (auth_store.get_user(principal_id) or {}).get("role") == "admin"
+            or auth_store.has_grant(
+                principal_id,
+                "report-version",
+                str(workspace.get("report_version_id") or ""),
+                "read",
+            )
+            or auth_store.has_grant(
+                principal_id,
+                "historical-workspace",
+                str(workspace.get("id") or ""),
+                "read",
+            )
+        )
+        if _authz_enabled()
+        else None
+    ),
 )
 from .investigation.deletion import WorkspaceDeletionService, create_workspace_deletion_router
 
@@ -235,6 +408,7 @@ app.include_router(
         m3_run_store=investigation_creation_store,
         historical_report_service=historical_report_demo_service,
         outputs_dir=settings.outputs_dir,
+        auth_service=auth_service if _authz_enabled() else None,
     )
 )
 app.include_router(
@@ -259,6 +433,8 @@ app.include_router(
         report_store=report_store,
         m3_run_store=investigation_creation_store,
         historical_report_service=historical_report_demo_service,
+        principal_provider=principal_provider,
+        auth_service=auth_service if _authz_enabled() else None,
     )
 )
 app.include_router(
@@ -269,6 +445,7 @@ app.include_router(
         report_service=investigation_agent_service,
         report_executor=investigation_turn_executor,
         report_store=report_store,
+        bind_report_session_owner=_authz_enabled(),
     )
 )
 
@@ -436,60 +613,9 @@ def _sanitize_audit_result_media(item: dict) -> dict:
     return sanitized
 
 
-class CrawlRequest(BaseModel):
-    platform: str = "xhs"
-    display_name: str = ""
-    crawl_mode: str = "search"
-    keyword: str = "泳装"
-    keyword_source: str = "keyword"
-    lexicon_category: str = ""
-    library_ids: list[str] = Field(default_factory=list)
-    capabilities: list[str] = Field(default_factory=list)
-    scoring_template: str = "balanced"
-    rule_snapshot: dict = Field(default_factory=dict)
-    lexicon_keywords: list[str] = []
-    creator_url: str = ""
-    creator_id: str = ""
-    start_page: StrictInt = Field(default=0, ge=0)
-    max_notes: StrictInt = Field(default=5, ge=1, le=5)
-    max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
-    max_comments: StrictInt = Field(default=100, ge=0, le=1000)
-    max_concurrency: StrictInt = Field(default=1, ge=1, le=3)
-    max_items_per_minute: StrictInt = Field(default=5, ge=1, le=5)
-    crawler_account_id: Optional[str] = None
-    collect_comments: StrictBool = True
-    get_sub_comment: StrictBool = False
-    collect_media: StrictBool = True
-    auto_analyze: StrictBool = True
-    analyze_limit: StrictInt = Field(default=0, ge=0)
-    run_crawler: StrictBool = True
-    source_output_id: Optional[str] = None
-    analysis_batch_size: StrictInt = Field(default=5, ge=1, le=20)
-    prompt_profile_snapshot: dict = Field(default_factory=dict)
-    policy_id: str = ""
-    relation_context: dict = Field(default_factory=dict)
-
-
 class JobControlRequest(BaseModel):
     action: str
     analyze_limit: int = 0
-
-
-def crawl_request_from_job(job: dict) -> CrawlRequest:
-    """Rebuild the frozen crawl inputs when the same task is resumed."""
-    model_fields = getattr(CrawlRequest, "model_fields", None) or getattr(
-        CrawlRequest, "__fields__", {}
-    )
-    payload = {
-        name: job[name]
-        for name in model_fields
-        if name in job and job[name] is not None
-    }
-    effective_config = dict(job.get("effective_config") or {})
-    for name in ("collect_comments", "collect_media"):
-        if name not in payload and name in effective_config:
-            payload[name] = effective_config[name]
-    return CrawlRequest(**payload)
 
 
 def resume_job_and_requeue_run(job_id: str, operation, *args) -> None:
@@ -1020,15 +1146,17 @@ def enrich_job(job: dict) -> dict:
     ).strip()
     if (
         actions.get("resume_crawl")
-        and preferred_account_id
-        and not crawler_account_store.available_accounts(
-            str(enriched.get("platform") or "")
-        )
+        and (_authz_enabled() or preferred_account_id)
+        and not _available_crawler_accounts_for_job(enriched)
     ):
         # Keep the UI control in sync with the endpoint guard. A fresh GET will
         # reopen it when cooldown expires or a login refresh clears cooldown.
         actions["resume_crawl"] = False
-    enriched["available_actions"] = actions
+    from backend.task_admission.presentation import admission_actions
+    admission = investigation_creation_store.admission.for_task(job["id"]) if _authz_enabled() else None
+    enriched["available_actions"] = admission_actions(actions, admission)
+    if admission and admission["state"] == "RELEASED" and admission["end_requested_at"]:
+        enriched.update(crawl_status="stopped", analysis_status="stopped")
     revision_id = str(enriched.get("current_audit_config_revision_id") or "")
     if revision_id:
         revision = audit_config_revision_store.get(revision_id)
@@ -1064,12 +1192,23 @@ def redact_authoritative_m3_crawler_account(job: dict) -> dict:
     return public_job
 
 
-def validate_crawler_account_for_job(account_id: str | None, platform: str) -> dict | None:
+def validate_crawler_account_for_job(
+    account_id: str | None,
+    platform: str,
+    *,
+    principal: Principal | None = None,
+) -> dict | None:
     normalized_id = str(account_id or "").strip()
     if not normalized_id:
         return None
     account = crawler_account_store.get(normalized_id)
     if not account:
+        raise HTTPException(status_code=404, detail="采集账号不存在")
+    if (
+        principal is not None
+        and _authz_enabled()
+        and not auth_service.can_use_crawler_account(principal, normalized_id)
+    ):
         raise HTTPException(status_code=404, detail="采集账号不存在")
     if account["platform"] != platform:
         raise HTTPException(status_code=400, detail="采集账号与任务平台不匹配")
@@ -1091,8 +1230,10 @@ def recover_interrupted_jobs():
     deleted_results = audit_result_store.delete_for_archived_jobs()
     if deleted_results:
         print(f"[startup] deleted results for archived jobs: {deleted_results}")
-    recovered = job_store.recover_interrupted_jobs()
-    requeued_analysis = ingestion_store.reset_all_analyzing()
+    # The durable worker reconciles admissions under the execution fence.
+    # An API restart must not rewrite another process's live Job state.
+    recovered = 0 if _authz_enabled() else job_store.recover_interrupted_jobs()
+    requeued_analysis = 0 if _authz_enabled() else ingestion_store.reset_all_analyzing()
     if recovered:
         print(f"[startup] recovered interrupted jobs: {recovered}")
     if requeued_analysis:
@@ -1150,7 +1291,7 @@ def config_js():
 
 
 @app.get("/api/config")
-def get_config():
+def get_config(principal: Principal = Depends(principal_provider)):
     runtime_boundary_error = runtime_data_directory_error(
         data_dir=settings.data_dir,
         account_db_path=crawler_account_store.db_path,
@@ -1209,13 +1350,29 @@ def get_config():
         "remote_asr_base_url": settings.remote_asr_base_url,
         "remote_translation_base_url": settings.remote_translation_base_url,
         "remote_ocr_base_url": settings.remote_ocr_base_url,
-        "media_crawler_dir": str(settings.media_crawler_dir),
+        "media_crawler_dir": (
+            str(settings.media_crawler_dir)
+            if not _authz_enabled() or principal.is_admin
+            else ""
+        ),
         "crawler_max_concurrency": settings.crawler_max_concurrency,
         "crawler_sleep_seconds": settings.crawler_sleep_seconds,
-        "outputs_dir": str(settings.outputs_dir),
-        "runtime_data_dir": str(settings.data_dir),
+        "outputs_dir": (
+            str(settings.outputs_dir)
+            if not _authz_enabled() or principal.is_admin
+            else ""
+        ),
+        "runtime_data_dir": (
+            str(settings.data_dir)
+            if not _authz_enabled() or principal.is_admin
+            else ""
+        ),
         "runtime_backend_port": os.getenv("XHS_AUDIT_BACKEND_PORT", ""),
-        "runtime_boundary_error": runtime_boundary_error,
+        "runtime_boundary_error": (
+            runtime_boundary_error
+            if not _authz_enabled() or principal.is_admin
+            else ""
+        ),
         "activity_stream_enabled": settings.activity_stream_enabled,
         "answer_stream_enabled": settings.answer_stream_enabled,
         "creation_answer_stream_enabled": settings.creation_answer_stream_enabled,
@@ -1231,32 +1388,54 @@ def get_config():
 
 
 @app.get("/api/outputs")
-def list_outputs():
+def list_outputs(principal: Principal = Depends(principal_provider)):
+    _require_admin(principal)
     return {"outputs": MediaCrawlerAdapter().list_existing_outputs()}
 
 
 @app.get("/api/crawler-accounts")
-def list_crawler_accounts():
-    return {"items": crawler_account_store.list()}
+def list_crawler_accounts(principal: Principal = Depends(principal_provider)):
+    return {"items": _authorized_crawler_accounts(principal)}
 
 
 @app.post("/api/crawler-accounts", status_code=201)
-def create_crawler_account(request: CrawlerAccountCreateRequest):
+def create_crawler_account(
+    request: CrawlerAccountCreateRequest,
+    principal: Principal = Depends(principal_provider),
+):
     try:
         item = crawler_account_store.create(
             platform=request.platform,
             display_name=request.display_name,
             platform_account_id=request.platform_account_id,
         )
+        if _authz_enabled():
+            try:
+                auth_store.register_crawler_account(str(item["id"]), principal.id)
+            except Exception:
+                # No profile/login exists yet. Never publish an ownerless new account.
+                crawler_account_store.delete(str(item["id"]))
+                raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"item": item}
 
 
 @app.patch("/api/crawler-accounts/{account_id}")
-def update_crawler_account(account_id: str, request: CrawlerAccountUpdateRequest):
-    if request.status == "disabled":
-        crawler_account_login_manager.cancel_for_account(account_id)
+def update_crawler_account(
+    account_id: str,
+    request: CrawlerAccountUpdateRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    account = _require_crawler_account(account_id, principal, permission="manage")
+    from backend.task_admission.resources import account_lease
+    with account_lease(account["platform"], account_id) as acquired:
+        if not acquired:
+            raise HTTPException(409, detail="账号正在采集或登录，请等待结束后再修改。")
+        return _update_idle_crawler_account(account_id, request)
+
+
+def _update_idle_crawler_account(account_id, request):
     try:
         item = crawler_account_store.update(
             account_id,
@@ -1272,19 +1451,33 @@ def update_crawler_account(account_id: str, request: CrawlerAccountUpdateRequest
 
 
 @app.delete("/api/crawler-accounts/{account_id}", status_code=204)
-def delete_crawler_account(account_id: str):
-    crawler_account_login_manager.cancel_for_account(account_id)
-    if not crawler_account_store.delete(account_id):
-        raise HTTPException(status_code=404, detail="Crawler account not found")
+def delete_crawler_account(
+    account_id: str, principal: Principal = Depends(principal_provider)
+):
+    account = _require_crawler_account(account_id, principal, permission="manage")
+    from backend.task_admission.resources import account_lease
+    with account_lease(account["platform"], account_id) as acquired:
+        if not acquired:
+            raise HTTPException(409, detail="账号正在采集或登录，请等待结束后再删除。")
+        if not crawler_account_store.delete(account_id):
+            raise HTTPException(status_code=404, detail="Crawler account not found")
 
 
 @app.post("/api/crawler-accounts/{account_id}/login-sessions", status_code=201)
-def start_crawler_account_login(account_id: str, response: Response, request: Request):
-    account = crawler_account_store.get(account_id)
-    if not account:
-        raise HTTPException(status_code=404, detail="Crawler account not found")
+def start_crawler_account_login(
+    account_id: str,
+    response: Response,
+    request: Request,
+    principal: Principal = Depends(principal_provider),
+):
+    account = _require_crawler_account(account_id, principal, permission="manage")
     try:
-        session = crawler_account_login_manager.start(account, request.headers.get("x-login-token", ""))
+        session = crawler_account_login_manager.start(
+            account,
+            request.headers.get("x-login-token", ""),
+            owner_user_id=principal.id if _authz_enabled() else "",
+            owner_is_admin=False,
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -1296,9 +1489,19 @@ def start_crawler_account_login(account_id: str, response: Response, request: Re
 
 
 @app.get("/api/crawler-account-login-sessions/{session_id}")
-def get_crawler_account_login(session_id: str, response: Response, request: Request):
+def get_crawler_account_login(
+    session_id: str,
+    response: Response,
+    request: Request,
+    principal: Principal = Depends(principal_provider),
+):
     try:
-        session = crawler_account_login_manager.get(session_id, request.headers.get("x-login-token", ""))
+        session = crawler_account_login_manager.get(
+            session_id,
+            request.headers.get("x-login-token", ""),
+            owner_user_id=principal.id if _authz_enabled() else "",
+            owner_is_admin=False,
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     if not session:
@@ -1308,9 +1511,18 @@ def get_crawler_account_login(session_id: str, response: Response, request: Requ
 
 
 @app.delete("/api/crawler-account-login-sessions/{session_id}", status_code=204)
-def cancel_crawler_account_login(session_id: str, request: Request):
+def cancel_crawler_account_login(
+    session_id: str,
+    request: Request,
+    principal: Principal = Depends(principal_provider),
+):
     try:
-        cancelled = crawler_account_login_manager.cancel(session_id, request.headers.get("x-login-token", ""))
+        cancelled = crawler_account_login_manager.cancel(
+            session_id,
+            request.headers.get("x-login-token", ""),
+            owner_user_id=principal.id if _authz_enabled() else "",
+            owner_is_admin=False,
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     if not cancelled:
@@ -1318,9 +1530,20 @@ def cancel_crawler_account_login(session_id: str, request: Request):
 
 
 @app.get("/api/crawler-account-login-sessions/{session_id}/frame")
-def get_crawler_login_frame(session_id: str, request: Request, after: int = 0):
+def get_crawler_login_frame(
+    session_id: str,
+    request: Request,
+    after: int = 0,
+    principal: Principal = Depends(principal_provider),
+):
     try:
-        frame, sequence = crawler_account_login_manager.get_frame(session_id, request.headers.get("x-login-token", ""), after)
+        frame, sequence = crawler_account_login_manager.get_frame(
+            session_id,
+            request.headers.get("x-login-token", ""),
+            after,
+            owner_user_id=principal.id if _authz_enabled() else "",
+            owner_is_admin=False,
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -1330,9 +1553,20 @@ def get_crawler_login_frame(session_id: str, request: Request, after: int = 0):
 
 
 @app.post("/api/crawler-account-login-sessions/{session_id}/input", status_code=204)
-def send_crawler_login_input(session_id: str, request: Request, event: dict):
+def send_crawler_login_input(
+    session_id: str,
+    request: Request,
+    event: dict,
+    principal: Principal = Depends(principal_provider),
+):
     try:
-        crawler_account_login_manager.send_input(session_id, request.headers.get("x-login-token", ""), event)
+        crawler_account_login_manager.send_input(
+            session_id,
+            request.headers.get("x-login-token", ""),
+            event,
+            owner_user_id=principal.id if _authz_enabled() else "",
+            owner_is_admin=False,
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -1340,33 +1574,42 @@ def send_crawler_login_input(session_id: str, request: Request, event: dict):
 
 
 @app.get("/api/monitored-users")
-def list_monitored_users():
-    return {"items": job_store.list_monitored_users()}
+def list_monitored_users(principal: Principal = Depends(principal_provider)):
+    owner = None if not _authz_enabled() or principal.is_admin else principal.id
+    return {"items": job_store.list_monitored_users(owner_user_id=owner)}
 
 
 @app.post("/api/monitored-users/from-audit-result")
-def create_monitored_user_from_audit_result(request: MonitoredUserFromAuditResultRequest):
-    result = audit_result_store.get_result(request.audit_result_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Audit result not found")
+def create_monitored_user_from_audit_result(
+    request: MonitoredUserFromAuditResultRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    result = _require_result(request.audit_result_id, principal)
     try:
-        item = job_store.upsert_monitored_user_from_audit_result(result)
+        item = job_store.upsert_monitored_user_from_audit_result(
+            result, owner_user_id=principal.id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"item": item}
 
 
 @app.post("/api/monitored-users/comment-relation")
-def create_comment_user_relation(request: CommentUserRelationRequest):
+def create_comment_user_relation(
+    request: CommentUserRelationRequest,
+    principal: Principal = Depends(principal_provider),
+):
     relation_context = normalize_relation_context(request.relation_context)
     parent_result = relation_context_parent_result(relation_context)
     if not parent_result:
         raise HTTPException(status_code=404, detail="Parent audit result not found")
+    _require_result(int(parent_result.get("id") or 0), principal)
     try:
         relation = job_store.upsert_comment_user_relation(
             analysis_job_id="",
             relation_context=relation_context,
             parent_audit_result=parent_result,
+            owner_user_id=principal.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -1387,7 +1630,11 @@ def get_audit_policy(policy_id: str):
 
 
 @app.post("/api/audit-policies")
-def create_audit_policy(request: AuditPolicyRequest):
+def create_audit_policy(
+    request: AuditPolicyRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_admin(principal)
     config = dict(request.config or {})
     if not config:
         config = {
@@ -1409,7 +1656,12 @@ def create_audit_policy(request: AuditPolicyRequest):
 
 
 @app.patch("/api/audit-policies/{policy_id}")
-def update_audit_policy(policy_id: str, request: AuditPolicyRequest):
+def update_audit_policy(
+    policy_id: str,
+    request: AuditPolicyRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_admin(principal)
     existing = audit_policy_store.get(policy_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Audit policy not found")
@@ -1437,7 +1689,10 @@ def update_audit_policy(policy_id: str, request: AuditPolicyRequest):
 
 
 @app.post("/api/audit-policies/{policy_id}/publish")
-def publish_audit_policy(policy_id: str):
+def publish_audit_policy(
+    policy_id: str, principal: Principal = Depends(principal_provider)
+):
+    _require_admin(principal)
     policy = audit_policy_store.get(policy_id)
     if not policy:
         raise HTTPException(status_code=404, detail="Audit policy not found")
@@ -1457,7 +1712,10 @@ def publish_audit_policy(policy_id: str):
 
 
 @app.delete("/api/audit-policies/{policy_id}")
-def delete_audit_policy(policy_id: str):
+def delete_audit_policy(
+    policy_id: str, principal: Principal = Depends(principal_provider)
+):
+    _require_admin(principal)
     try:
         policy = audit_policy_store.delete(policy_id)
     except KeyError:
@@ -1471,7 +1729,11 @@ def list_lexicons():
 
 
 @app.post("/api/lexicons")
-def create_lexicon_category(request: LexiconCategoryRequest):
+def create_lexicon_category(
+    request: LexiconCategoryRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_admin(principal)
     try:
         category = lexicon_store.upsert_category(
             category_id=request.id,
@@ -1489,7 +1751,12 @@ def create_lexicon_category(request: LexiconCategoryRequest):
 
 
 @app.patch("/api/lexicons/{category_id}")
-def update_lexicon_category(category_id: str, request: LexiconCategoryRequest):
+def update_lexicon_category(
+    category_id: str,
+    request: LexiconCategoryRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_admin(principal)
     try:
         from .resource_management.legacy_lexicon import save_editor
         from .resource_management.contracts import ResourceError
@@ -1506,7 +1773,10 @@ def update_lexicon_category(category_id: str, request: LexiconCategoryRequest):
 
 
 @app.delete("/api/lexicons/{category_id}")
-def delete_lexicon_category(category_id: str):
+def delete_lexicon_category(
+    category_id: str, principal: Principal = Depends(principal_provider)
+):
+    _require_admin(principal)
     try:
         category = lexicon_store.delete_category_atomically(category_id)
     except KeyError:
@@ -1532,7 +1802,11 @@ def delete_lexicon_category(category_id: str):
 
 
 @app.post("/api/lexicon-keywords")
-def create_lexicon_keyword(request: LexiconKeywordRequest):
+def create_lexicon_keyword(
+    request: LexiconKeywordRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_admin(principal)
     try:
         keyword = lexicon_store.add_keyword(
             category_id=request.category_id,
@@ -1551,7 +1825,12 @@ def create_lexicon_keyword(request: LexiconKeywordRequest):
 
 
 @app.patch("/api/lexicon-keywords/{keyword_id}")
-def update_lexicon_keyword(keyword_id: int, request: LexiconKeywordRequest):
+def update_lexicon_keyword(
+    keyword_id: int,
+    request: LexiconKeywordRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_admin(principal)
     payload = request.dict(exclude_unset=True)
     payload.pop("category_id", None)
     try:
@@ -1564,7 +1843,10 @@ def update_lexicon_keyword(keyword_id: int, request: LexiconKeywordRequest):
 
 
 @app.delete("/api/lexicon-keywords/{keyword_id}")
-def delete_lexicon_keyword(keyword_id: int):
+def delete_lexicon_keyword(
+    keyword_id: int, principal: Principal = Depends(principal_provider)
+):
+    _require_admin(principal)
     try:
         lexicon_store.delete_keyword(keyword_id)
     except KeyError:
@@ -1573,7 +1855,12 @@ def delete_lexicon_keyword(keyword_id: int):
 
 
 @app.put("/api/lexicons/{category_id}/prompt-profile")
-def update_lexicon_prompt_profile(category_id: str, request: LexiconPromptProfileRequest):
+def update_lexicon_prompt_profile(
+    category_id: str,
+    request: LexiconPromptProfileRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_admin(principal)
     try:
         profile = lexicon_store.update_prompt_profile(
             category_id,
@@ -1589,7 +1876,10 @@ def update_lexicon_prompt_profile(category_id: str, request: LexiconPromptProfil
 
 
 @app.post("/api/lexicons/{category_id}/prompt-profile/reset")
-def reset_lexicon_prompt_profile(category_id: str):
+def reset_lexicon_prompt_profile(
+    category_id: str, principal: Principal = Depends(principal_provider)
+):
+    _require_admin(principal)
     try:
         profile = lexicon_store.reset_prompt_profile(category_id)
     except KeyError:
@@ -1680,7 +1970,11 @@ def get_task_settings():
 
 
 @app.put("/api/task-settings")
-def save_task_settings(request: TaskSettingsRequest):
+def save_task_settings(
+    request: TaskSettingsRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_admin(principal)
     try:
         saved = TaskSettingsStore(job_store.db_path).save(
             request.parameters.model_dump(mode="json"), request.expected_revision)
@@ -1690,17 +1984,44 @@ def save_task_settings(request: TaskSettingsRequest):
 
 
 @app.post("/api/jobs")
-def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
+def create_job(
+    request: CrawlRequest,
+    background_tasks: BackgroundTasks,
+    principal: Principal = Depends(principal_provider),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    raw_request_hash = hashlib.sha256(json.dumps(request.model_dump(mode="json"),sort_keys=True).encode()).hexdigest()
+    # Preserve the callable service boundary used by maintenance scripts and
+    # legacy tests when authentication is explicitly disabled. HTTP requests
+    # always receive a real Principal from FastAPI dependency injection.
+    if not isinstance(principal, Principal):
+        if _authz_enabled():
+            raise HTTPException(status_code=401, detail="authentication required")
+        principal = LocalPrincipalProvider()()
+    explicitly_selected_account = bool(
+        str(request.crawler_account_id or "").strip()
+    )
     saved_settings = TaskSettingsStore(job_store.db_path).get()
     if saved_settings["revision"] and request.run_crawler:
         effective = effective_parameters(saved_settings["parameters"])
         request = CrawlRequest.model_validate({**request.model_dump(), **effective.model_dump(mode="json"),
                                               "crawler_account_id": effective.crawler_account_id})
         if not request.crawler_account_id:
-            account = crawler_account_store.next_available(request.platform)
-            if not account:
+            account = next(
+                (
+                    item
+                    for item in _authorized_crawler_accounts(principal)
+                    if item.get("platform") == request.platform
+                    and item.get("status") == "active"
+                    and item.get("has_auth_state")
+                    and not account_is_cooling_down(item)
+                ),
+                None,
+            )
+            if not account and _authz_enabled():
                 raise HTTPException(status_code=409, detail="当前没有可用采集账号，请检查登录状态或等待冷却结束。")
-            request.crawler_account_id = account["id"]
+            if account:
+                request.crawler_account_id = account["id"]
     requested_config = request.model_dump(
         include={
             "platform",
@@ -1741,6 +2062,15 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="relation_context is only supported for creator jobs")
     request.lexicon_category = request.lexicon_category.strip() or "soft"
     relation_parent_result = relation_context_parent_result(relation_context)
+    if relation_parent_result:
+        _require_result(
+            int(
+                relation_parent_result.get("id")
+                or relation_parent_result.get("audit_result_id")
+                or 0
+            ),
+            principal,
+        )
     revision_payload = None
     if request.policy_id:
         policy = audit_policy_store.get(request.policy_id)
@@ -1802,9 +2132,44 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         relation_context = ensure_relation_context_matches_creator(relation_context, request.creator_url)
     if not request.run_crawler and not request.source_output_id:
         raise HTTPException(status_code=400, detail="source_output_id is required when run_crawler is false")
+    if not request.run_crawler:
+        _require_admin(principal)
 
     request.crawler_account_id = str(request.crawler_account_id or "").strip() or None
-    crawler_account = validate_crawler_account_for_job(request.crawler_account_id, request.platform)
+    if request.crawler_account_id and not explicitly_selected_account:
+        configured_account = crawler_account_store.get(request.crawler_account_id)
+        if (
+            configured_account is None
+            or (
+                _authz_enabled()
+                and not auth_service.can_use_crawler_account(
+                    principal, request.crawler_account_id
+                )
+            )
+        ):
+            request.crawler_account_id = None
+    if request.run_crawler and not request.crawler_account_id:
+        request.crawler_account_id = next(
+            (
+                str(item["id"])
+                for item in _authorized_crawler_accounts(principal)
+                if item.get("platform") == request.platform
+                and item.get("status") == "active"
+                and item.get("has_auth_state")
+                and not account_is_cooling_down(item)
+            ),
+            None,
+        )
+        if not request.crawler_account_id and _authz_enabled():
+            raise HTTPException(
+                status_code=409,
+                detail="当前没有可用的个人采集账号，请先添加账号并扫码登录。",
+            )
+    crawler_account = validate_crawler_account_for_job(
+        request.crawler_account_id,
+        request.platform,
+        principal=principal,
+    )
     keyword_count = len(
         [item for item in str(request.keyword or "").split(",") if item.strip()]
     ) if request.crawl_mode == "search" else 1
@@ -1842,7 +2207,7 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         "analyze_limit": request.analyze_limit,
     }
 
-    job = job_store.create(
+    job_kwargs = dict(
         platform=request.platform,
         crawler_account_id=request.crawler_account_id,
         crawler_account_display_name=(crawler_account or {}).get("display_name", ""),
@@ -1874,6 +2239,29 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
         requested_config=requested_config,
         effective_config=effective_config,
     )
+    if _authz_enabled():
+        from uuid import uuid4
+        from backend.task_admission.legacy import materialize
+        if not isinstance(idempotency_key,str) or not idempotency_key.strip():
+            raise HTTPException(400,detail={"code":"IDEMPOTENCY_KEY_REQUIRED","message":"提交任务需要请求标识。"})
+        if revision_payload is None:
+            revision_payload = build_audit_config_revision_payload(
+                source_policy_id="",source_policy_name="自定义审核配置",source_policy_version="",
+                library_ids=request.library_ids,lexicon_category=request.lexicon_category,
+                capabilities=request.capabilities,scoring_template=request.scoring_template,
+                rule_snapshot=request.rule_snapshot,force_composite=force_composite)
+        task_id = "legacy:" + uuid4().hex
+        job_id = "job-" + uuid4().hex
+        row = investigation_creation_store.admission.enqueue(
+            owner=principal.id,task_id=task_id,kind="legacy",key="job:"+idempotency_key,
+            job_id=job_id,request_hash=raw_request_hash,
+            payload={"request":request.model_dump(mode="json"),"job":job_kwargs,
+                     "revision":revision_payload,"crawler_account_id":request.crawler_account_id,
+                     "relation_context":relation_context,"relation_parent_result":relation_parent_result})
+        job = materialize(row,job_store,audit_config_revision_store)
+        return enrich_job(job)
+    job = job_store.create(owner_user_id=principal.id,**job_kwargs)
+
     if revision_payload is None:
         revision_payload = build_audit_config_revision_payload(
             source_policy_id="",
@@ -1918,6 +2306,7 @@ def create_job(request: CrawlRequest, background_tasks: BackgroundTasks):
             analysis_job_id=job["id"],
             relation_context=relation_context,
             parent_audit_result=relation_parent_result,
+            owner_user_id=principal.id,
         )
         if relation:
             job_store.log(
@@ -1941,6 +2330,7 @@ async def create_local_video_job(
     scoring_template: str = Form("balanced"),
     rule_snapshot: str = Form(""),
     policy_id: str = Form(""),
+    principal: Principal = Depends(principal_provider),
 ):
     suffix = Path(video.filename or "video.mp4").suffix.lower()
     if suffix not in {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}:
@@ -1973,6 +2363,7 @@ async def create_local_video_job(
     primary_category = context["library_ids"][0] if context["library_ids"] else "soft"
 
     job = job_store.create(
+        owner_user_id=principal.id,
         platform="local",
         display_name=display_name.strip() or title or video.filename or "本地视频审核",
         keyword=title or video.filename or "local video",
@@ -2023,34 +2414,51 @@ async def create_local_video_job(
 
 
 @app.get("/api/jobs")
-def list_jobs():
-    return [enrich_job(job) for job in job_store.list_summaries()]
+def list_jobs(principal: Principal = Depends(principal_provider)):
+    owner, grants = _job_list_scope(principal)
+    return [
+        enrich_job(job)
+        for job in job_store.list_summaries(
+            owner_user_id=owner, granted_job_ids=grants
+        )
+    ]
 
 
 @app.get("/api/job-policy-references")
-def list_job_policy_references():
-    return {"items": job_store.list_policy_references()}
+def list_job_policy_references(
+    principal: Principal = Depends(principal_provider),
+):
+    owner, grants = _job_list_scope(principal)
+    return {
+        "items": job_store.list_policy_references(
+            owner_user_id=owner, granted_job_ids=grants
+        )
+    }
 
 
 @app.get("/api/jobs/{job_id}")
-def get_job(job_id: str):
-    job = job_store.get_summary(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return enrich_job(job)
+def get_job(
+    job_id: str, principal: Principal = Depends(principal_provider)
+):
+    _require_job(job_id, principal)
+    return enrich_job(job_store.get_summary(job_id))
 
 
 @app.get("/api/jobs/{job_id}/audit-config-revisions")
-def list_job_audit_config_revisions(job_id: str):
-    if not job_store.exists(job_id):
-        raise HTTPException(status_code=404, detail="Job not found")
+def list_job_audit_config_revisions(
+    job_id: str, principal: Principal = Depends(principal_provider)
+):
+    _require_job(job_id, principal)
     return {"items": audit_config_revision_store.list_for_job(job_id)}
 
 
 @app.get("/api/jobs/{job_id}/audit-config-revisions/{revision_id}")
-def get_job_audit_config_revision(job_id: str, revision_id: str):
-    if not job_store.exists(job_id):
-        raise HTTPException(status_code=404, detail="Job not found")
+def get_job_audit_config_revision(
+    job_id: str,
+    revision_id: str,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_job(job_id, principal)
     revision = audit_config_revision_store.get_for_job(job_id, revision_id)
     if not revision:
         raise HTTPException(status_code=404, detail="Audit config revision not found")
@@ -2058,10 +2466,14 @@ def get_job_audit_config_revision(job_id: str, revision_id: str):
 
 
 @app.post("/api/jobs/{job_id}/audit-config-revisions")
-def create_job_audit_config_revision(job_id: str, request: AuditConfigRevisionRequest):
-    job = job_store.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+def create_job_audit_config_revision(
+    job_id: str,
+    request: AuditConfigRevisionRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    job = _require_job(job_id, principal, permission="manage")
+    if _authz_enabled() and investigation_creation_store.admission.for_task(job_id):
+        raise HTTPException(409,detail="该任务配置已冻结，请创建新任务使用其他审核配置。")
     policy = audit_policy_store.get(request.policy_id)
     if not policy:
         raise HTTPException(status_code=404, detail="Audit policy not found")
@@ -2082,13 +2494,47 @@ def create_job_audit_config_revision(job_id: str, request: AuditConfigRevisionRe
 
 
 @app.post("/api/jobs/{job_id}/control")
-def control_job(job_id: str, request: JobControlRequest, background_tasks: BackgroundTasks):
-    job = job_store.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+def control_job(
+    job_id: str,
+    request: JobControlRequest,
+    background_tasks: BackgroundTasks,
+    principal: Principal = Depends(principal_provider),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
+    job = _require_job(job_id, principal, permission="manage")
 
     stats = ingestion_store.stats_for_task(job_id)
     actions = available_job_actions(job, stats)
+
+    if _authz_enabled():
+        admission = investigation_creation_store.admission
+        row = admission.for_task(job_id)
+        if row and row["quota_policy"] == "accepted_v2" and request.action != "stop_all" and (
+            row["state"] != "RESERVED" or row["decision"] != "OPEN"
+        ):
+            raise AdmissionError("任务已结束或正在结束，不能继续操作。", code="TASK_ALREADY_ENDED")
+        if request.action in {"resume_crawl","resume_analysis","backfill_analysis"}:
+            from backend.task_admission.legacy import enqueue_resume, replay_resume
+            if isinstance(idempotency_key,str) and replay_resume(admission,job_id,owner=principal.id,
+                    action=request.action,key=idempotency_key,analyze_limit=request.analyze_limit):
+                return enrich_job(job)
+            if request.action == "resume_crawl":
+                crawl_request = crawl_request_from_job(job)
+                preferred = ((job.get("control") or {}).get("execution_account") or {}).get("id") or crawl_request.crawler_account_id
+                if preferred:
+                    _require_crawler_account(str(preferred),principal,permission="use")
+                if not _authorized_available_crawler_accounts(principal,crawl_request.platform):
+                    raise HTTPException(409,detail="当前没有已登录且结束冷却的个人采集账号，请检查自己的账号状态。")
+            if not isinstance(idempotency_key,str) or not idempotency_key.strip():
+                raise HTTPException(400,detail={"code":"IDEMPOTENCY_KEY_REQUIRED","message":"恢复任务需要请求标识。"})
+            if request.action != "backfill_analysis" and not actions.get(request.action):
+                raise HTTPException(409,detail="当前任务状态不允许恢复。")
+            enqueue_resume(admission,job,owner=principal.id,action=request.action,
+                           key=idempotency_key,analyze_limit=request.analyze_limit)
+            return {**enrich_job(job),"admission_status":"queued"}
+        if request.action == "stop_all":
+            admission.cancel(job_id, job["owner_user_id"], on_cancel=_signal_admission_stop)
+            return enrich_job(job_store.get(job_id))
 
     if request.action == "pause_crawl":
         if not actions["pause_crawl"]:
@@ -2104,10 +2550,17 @@ def control_job(job_id: str, request: JobControlRequest, background_tasks: Backg
             ((job.get("control") or {}).get("execution_account") or {}).get("id")
             or crawl_request.crawler_account_id
         )
-        if preferred_account_id and not crawler_account_store.available_accounts(crawl_request.platform):
+        if preferred_account_id:
+            _require_crawler_account(
+                str(preferred_account_id), principal, permission="use"
+            )
+        available_accounts = _authorized_available_crawler_accounts(
+            principal, crawl_request.platform
+        )
+        if (_authz_enabled() or preferred_account_id) and not available_accounts:
             raise HTTPException(
                 status_code=409,
-                detail="当前没有结束冷却且已登录的可用采集账号，请稍后重试或补充账号。",
+                detail="当前没有已登录且结束冷却的个人采集账号，请检查自己的账号登录状态或稍后重试。",
             )
         bound_run = investigation_creation_store.get_run_for_job(job_id)
         if bound_run and bound_run.status == RunStatus.FAILED:
@@ -2212,30 +2665,44 @@ def control_job(job_id: str, request: JobControlRequest, background_tasks: Backg
 
 
 @app.delete("/api/jobs/{job_id}")
-def delete_job(job_id: str):
-    job = job_store.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    job_store.update_control(
-        job_id,
-        crawl_stop_requested=True,
-        analysis_paused=False,
-        analysis_stop_requested=True,
-        stop_all_requested=True,
-    )
-    if job.get("status") not in {"completed", "failed", "stopped", "interrupted"}:
-        job_store.update(job_id, status="stopping")
-    job_store.log(job_id, "收到控制指令：删除任务及关联分析帖子")
-    job_store.archive(job_id)
-    deleted_result_count = audit_result_store.delete_for_job(job_id)
-    return {"ok": True, "id": job_id, "deleted_result_count": deleted_result_count}
+def delete_job(
+    job_id: str, principal: Principal = Depends(principal_provider)
+):
+    job = _require_job(job_id, principal, permission="manage")
+    from contextlib import ExitStack
+    from backend.task_admission.execution import execution_lock
+    with ExitStack() as guards:
+        if _authz_enabled():
+            admission = investigation_creation_store.admission
+            db = guards.enter_context(admission.connect())
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM task_admissions WHERE job_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1", (job_id,)).fetchone()
+            task_id = row["task_id"] if row else "legacy:" + job_id
+            if not guards.enter_context(execution_lock(admission.db_path, task_id)):
+                raise HTTPException(409, detail="后台尚未停止，请稍后再删除。")
+            if row and row["state"] == "RESERVED":
+                raise HTTPException(409, detail="请先结束整个任务，等待后台停止后再删除。")
+            if not row:
+                job = job_store.get(job_id)
+                stats = ingestion_store.stats_for_task(job_id)
+                if job.get("status") not in {"completed", "failed"} or stats.get("analyzing_count") or stats.get("queued_analysis_count"):
+                    raise HTTPException(409, detail="历史任务结束状态尚未核实，请联系管理员。")
+        else:
+            job_store.update_control(job_id, crawl_stop_requested=True, analysis_paused=False,
+                                     analysis_stop_requested=True, stop_all_requested=True)
+            if job.get("status") not in {"completed", "failed", "stopped", "interrupted"}:
+                job_store.update(job_id, status="stopping")
+        job_store.log(job_id, "收到控制指令：删除任务及关联分析帖子")
+        job_store.archive(job_id)
+        deleted_result_count = audit_result_store.delete_for_job(job_id)
+        return {"ok": True, "id": job_id, "deleted_result_count": deleted_result_count}
 
 
 @app.get("/api/jobs/{job_id}/items")
-def get_job_items(job_id: str):
-    job = job_store.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+def get_job_items(
+    job_id: str, principal: Principal = Depends(principal_provider)
+):
+    job = _require_job(job_id, principal)
     return {"items": job.get("items", [])}
 
 
@@ -2251,9 +2718,9 @@ def get_job_audit_results(
     keyword: str = "",
     sort: str = "id",
     compact: bool = False,
+    principal: Principal = Depends(principal_provider),
 ):
-    if not job_store.exists(job_id):
-        raise HTTPException(status_code=404, detail="Job not found")
+    _require_job(job_id, principal)
     return audit_result_store.list_results(
         job_id,
         after_id=max(0, after_id),
@@ -2280,7 +2747,9 @@ def list_audit_results(
     keyword: str = "",
     sort: str = "latest",
     compact: bool = False,
+    principal: Principal = Depends(principal_provider),
 ):
+    owner, grants = _job_list_scope(principal)
     return audit_result_store.list_results(
         job_id,
         after_id=max(0, after_id),
@@ -2292,14 +2761,16 @@ def list_audit_results(
         keyword=keyword,
         sort=sort,
         compact=compact,
+        owner_user_id=owner,
+        granted_job_ids=grants,
     )
 
 
 @app.get("/api/audit-results/{result_id}")
-def get_audit_result_detail(result_id: int):
-    item = audit_result_store.get_result(result_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Audit result not found")
+def get_audit_result_detail(
+    result_id: int, principal: Principal = Depends(principal_provider)
+):
+    item = _require_result(result_id, principal)
     item = _sanitize_audit_result_media(item)
     revision_id = str(item.get("audit_config_revision_id") or "")
     revision = audit_config_revision_store.get(revision_id) if revision_id else None
@@ -2315,13 +2786,21 @@ def get_audit_result_detail(result_id: int):
 
 
 @app.patch("/api/audit-results/{result_id}/review")
-def review_audit_result(result_id: int, request: AuditResultReviewRequest):
+def review_audit_result(
+    result_id: int,
+    request: AuditResultReviewRequest,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_result(result_id, principal, permission="manage")
+    owner, grants = _job_list_scope(principal)
     try:
         item = audit_result_store.review_result(
             result_id,
             status=request.status,
             note=request.note,
-            reviewer=request.reviewer,
+            reviewer=principal.id,
+            owner_user_id=owner,
+            granted_job_ids=grants,
         )
     except KeyError:
         raise HTTPException(status_code=404, detail="Audit result not found")
@@ -2337,9 +2816,12 @@ def review_audit_result(result_id: int, request: AuditResultReviewRequest):
 
 
 @app.get("/api/jobs/{job_id}/assets")
-def get_job_asset(job_id: str, path: str):
-    if not job_store.exists(job_id):
-        raise HTTPException(status_code=404, detail="Job not found")
+def get_job_asset(
+    job_id: str,
+    path: str,
+    principal: Principal = Depends(principal_provider),
+):
+    _require_job(job_id, principal)
 
     job_root = (settings.outputs_dir / job_id).resolve()
     target = (job_root / path).resolve()
@@ -2350,3 +2832,49 @@ def get_job_asset(job_id: str, path: str):
     if not target.is_file():
         raise HTTPException(status_code=404, detail="Asset not found")
     return FileResponse(target)
+
+
+@app.exception_handler(AdmissionError)
+async def admission_error_handler(request: Request, exc):
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=409,content={"detail":{"code":exc.code,"message":str(exc),"details":exc.details}})
+
+
+@app.get("/api/me/task-quota")
+def current_task_quota(principal: Principal = Depends(principal_provider)):
+    return {**investigation_creation_store.admission.summary(principal.id), "enabled": _authz_enabled()}
+
+
+def _signal_admission_stop(row):
+    if row["job_id"]:
+        job_store.update_control(
+            row["job_id"], crawl_stop_requested=True, analysis_stop_requested=True,
+            analysis_paused=False, stop_all_requested=True,
+        )
+        job_store.update(row["job_id"], status="stopping")
+
+
+@app.post("/api/tasks/{task_id}/cancel")
+def cancel_admitted_task(task_id: str, principal: Principal = Depends(principal_provider)):
+    row = investigation_creation_store.admission.cancel(
+        task_id, principal.id, on_cancel=_signal_admission_stop
+    )
+    return {"task_id":row["task_id"],"state":row["state"],"decision":row["decision"]}
+
+
+@app.post("/api/tasks/{task_id}/retry-report")
+def retry_admitted_report(task_id: str, principal: Principal = Depends(principal_provider),
+                          idempotency_key: str = Header(alias="Idempotency-Key")):
+    from backend.task_admission.legacy import enqueue_resume, replay_resume
+    admission = investigation_creation_store.admission
+    row = admission.for_task(task_id)
+    if not row or row["owner_id"] != principal.id:
+        raise HTTPException(404,detail="任务不存在。")
+    replay = replay_resume(admission,row["job_id"],owner=principal.id,action="resume_report",key=idempotency_key)
+    if replay:
+        return {"task_id":replay["task_id"],"state":replay["state"]}
+    if row["reason"] != "report_generation_failed":
+        raise HTTPException(409,detail="该任务不处于报告生成失败状态。")
+    job = _require_job(row["job_id"],principal,permission="manage")
+    retried = enqueue_resume(admission,job,owner=principal.id,action="resume_report",key=idempotency_key)
+    return {"task_id":retried["task_id"],"state":retried["state"]}

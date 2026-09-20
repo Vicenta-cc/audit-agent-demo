@@ -1,3 +1,4 @@
+import { InvestigationAccountTools } from "./InvestigationAccountTools";
 import { Fragment, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Send,
@@ -302,20 +303,7 @@ export function InvestigationCenterArea({
         </div>
 
         <div className="inv-header-actions">
-          <button
-            type="button"
-            className="inv-head-btn"
-            onClick={() => onOpenDrawer("task_config")}
-          >
-            <span>会话配置</span>
-          </button>
-          <button
-            type="button"
-            className="inv-head-btn"
-            onClick={() => onOpenDrawer("ruleset")}
-          >
-            <span>引用审核规则</span>
-          </button>
+          <InvestigationAccountTools />
         </div>
       </header>
 

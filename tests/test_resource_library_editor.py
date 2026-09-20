@@ -12,6 +12,7 @@ from test_resource_lifecycle import service, lexicon, P
 from backend.investigation_creation.principal import LocalPrincipalProvider, Principal
 from backend.resource_management.api import create_resource_router
 from backend.resource_management.contracts import ResourceError
+from backend.resource_management.service import ResourceManagementService
 from backend.rulesets.compiler import compile_ruleset_content
 from backend.rulesets.contracts import RuleSetContent
 from backend.rulesets.store import RuleSetStore
@@ -91,6 +92,49 @@ def test_lexicon_editor_preserves_disabled_entries_description_variants_and_tomb
         assert conn.execute('SELECT COUNT(*) FROM lexicon_keywords WHERE category_id=?', ('editor-resource',)).fetchone()[0] == 0
     with pytest.raises(ResourceError):
         put(service, 'lexicon', body, 0, 'resurrect')
+
+
+def test_shared_lexicon_formal_writes_require_admin_when_enabled(service):
+    guarded = ResourceManagementService(
+        service.app,
+        shared_lexicon_writes_require_admin=True,
+    )
+    ordinary = Principal('ordinary-user')
+    ordinary_context = {'session_id': 'ordinary-session', 'principal': ordinary}
+    edit = guarded.create_lexicon(lexicon(), **ordinary_context)
+
+    with pytest.raises(ResourceError) as error:
+        guarded.save(
+            edit['edit_id'],
+            edit['version'],
+            'new',
+            'ordinary-save',
+            **ordinary_context,
+        )
+    assert error.value.code == 'RESOURCE_FORBIDDEN'
+
+    with pytest.raises(ResourceError) as error:
+        guarded.save_library(
+            'lexicon',
+            'ordinary-direct-write',
+            lexicon(),
+            0,
+            'ordinary-direct-save',
+            principal=ordinary,
+        )
+    assert error.value.code == 'RESOURCE_FORBIDDEN'
+
+    admin = Principal('administrator', role='admin')
+    admin_context = {'session_id': 'admin-session', 'principal': admin}
+    admin_edit = guarded.create_lexicon(lexicon(), **admin_context)
+    saved = guarded.save(
+        admin_edit['edit_id'],
+        admin_edit['version'],
+        'new',
+        'admin-save',
+        **admin_context,
+    )
+    assert saved['status'] == 'saved'
 
 
 def test_validation_and_owner_failures_do_not_change_published_rules(service, client):

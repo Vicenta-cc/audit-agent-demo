@@ -7,6 +7,7 @@ import re
 import shutil
 import shlex
 import threading
+from contextlib import nullcontext
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from time import perf_counter, time_ns
@@ -50,6 +51,24 @@ _analysis_locks: dict[str, threading.RLock] = {}
 def _analysis_lock_for(job_id: str) -> threading.RLock:
     with _analysis_locks_guard:
         return _analysis_locks.setdefault(job_id, threading.RLock())
+
+
+def _authorized_crawler_account_ids(job_id: str) -> frozenset[str] | None:
+    """Return the task owner's private accounts, or None when auth is disabled."""
+    if settings.app_auth_mode != "required":
+        return None
+    job = job_store.get(job_id) or {}
+    owner_user_id = str(job.get("owner_user_id") or "").strip()
+    if not owner_user_id:
+        return frozenset()
+    from backend.application_auth.store import AuthStore
+
+    store = AuthStore(
+        settings.app_auth_db,
+        default_validity_days=settings.app_account_validity_days,
+        activation_mode=settings.app_account_activation_mode,
+    )
+    return store.owned_crawler_account_ids(owner_user_id)
 
 AUDIO_URL_EXTENSIONS = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
 AUDIO_FILE_SIGNATURES = (
@@ -157,6 +176,12 @@ class AuditPipeline:
         return configuration
 
     def run(self, request, crawl_epoch: int | None = None) -> None:
+        if settings.app_auth_mode == "required":
+            from backend.task_admission.execution import assert_execution, current_execution
+            assert_execution(self.job_id)
+        from backend.task_admission.execution import current_execution
+        admission_execution = current_execution()
+        self._admission_execution = admission_execution
         crawl_epoch_is_current = lambda: True
         crawler_account_id = ""
         try:
@@ -169,7 +194,15 @@ class AuditPipeline:
             )
 
             def control() -> dict:
-                return job_store.control(self.job_id)
+                result = job_store.control(self.job_id)
+                if settings.app_auth_mode == "required":
+                    from backend.task_admission.execution import assert_execution
+                    from backend.task_admission.store import AdmissionError
+                    try:
+                        assert_execution(self.job_id, admission_execution)
+                    except AdmissionError:
+                        result.update(crawl_stop_requested=True,analysis_stop_requested=True,stop_all_requested=True)
+                return result
 
             def crawl_epoch_is_current() -> bool:
                 return int(control().get("crawl_epoch") or 0) == active_crawl_epoch
@@ -638,14 +671,26 @@ class AuditPipeline:
 
                 crawl_returned = False
                 try:
-                    with _crawler_lock:
+                    with (_crawler_lock if settings.app_auth_mode != "required" else nullcontext()):
+                        from backend.task_admission.resources import account_lease, selected_account
                         execution_account = control().get("execution_account") or {}
                         preferred_account_id = str(
-                            execution_account.get("id")
+                            selected_account()
+                            or execution_account.get("id")
                             or getattr(request, "crawler_account_id", "")
                             or ""
                         ).strip()
                         candidates = crawler_account_store.available_accounts(request.platform)
+                        authorized_account_ids = _authorized_crawler_account_ids(
+                            self.job_id
+                        )
+                        if authorized_account_ids is not None:
+                            candidates = [
+                                item
+                                for item in candidates
+                                if str(item.get("id") or "")
+                                in authorized_account_ids
+                            ]
                         candidates.sort(
                             key=lambda item: 0 if str(item.get("id")) == preferred_account_id else 1
                         )
@@ -662,6 +707,10 @@ class AuditPipeline:
                                     "crawler_account_verification_required: 当前没有结束冷却的可用账号。"
                                 )
                             raise CrawlerAuthenticationError("当前没有可用采集账号，请重新登录")
+                        if not candidates and settings.app_auth_mode == "required":
+                            raise CrawlerAuthenticationError(
+                                "当前没有已授权且可用的采集账号，请联系管理员"
+                            )
                         if not candidates:
                             candidates = [None]
 
@@ -680,6 +729,10 @@ class AuditPipeline:
                             # payload. Keep legacy Job fields for existing callers.
                             if not crawler_account_id or not account:
                                 return
+                            if admission_execution is not None:
+                                admission_store, admission_task, admission_token = admission_execution
+                                with admission_store.connect() as db:
+                                    db.execute("UPDATE task_admissions SET resource_account_id=? WHERE task_id=? AND execution_token=? AND state='RESERVED'", (crawler_account_id, admission_task, admission_token))
                             identity = {"id": crawler_account_id,
                                         "display_name": str(account.get("display_name") or crawler_account_id)}
                             job_store.update_control(self.job_id, execution_account=identity)
@@ -776,73 +829,87 @@ class AuditPipeline:
                                 break
                             account = candidate
                             crawler_account_id = str((candidate or {}).get("id") or "")
-                            if crawler_account_id:
-                                try:
-                                    account_auth_state = auth_state_cipher.decrypt(
-                                        crawler_account_store.get_auth_state_ciphertext(crawler_account_id)
-                                    )
-                                except Exception as exc:
-                                    crawler_account_store.mark_expired(crawler_account_id, str(exc))
-                                    last_account_error = CrawlerAuthenticationError("登录态无法读取，请重新登录")
-                                    job_store.log(self.job_id, "采集账号登录态无法读取，继续尝试账号池中的下一账号")
+                            with account_lease(request.platform, crawler_account_id) as account_acquired:
+                                if not account_acquired:
                                     continue
-                                record_execution_account()
-                                if not self.authoritative_m3:
+                                if crawler_account_id and crawler_account_id not in {
+                                    item["id"] for item in crawler_account_store.available_accounts(request.platform)
+                                }:
+                                    # Another task may have cooled or expired this
+                                    # account since our candidate snapshot.
+                                    continue
+                                # Selection and use share the lease with login and
+                                # maintenance; grants are checked again at execution.
+                                allowed = _authorized_crawler_account_ids(self.job_id)
+                                if allowed is not None and crawler_account_id not in allowed:
+                                    continue
+                                if crawler_account_id:
+                                    try:
+                                        account_auth_state = auth_state_cipher.decrypt(
+                                            crawler_account_store.get_auth_state_ciphertext(crawler_account_id)
+                                        )
+                                    except Exception as exc:
+                                        crawler_account_store.mark_expired(crawler_account_id, str(exc))
+                                        last_account_error = CrawlerAuthenticationError("登录态无法读取，请重新登录")
+                                        job_store.log(self.job_id, "采集账号登录态无法读取，继续尝试账号池中的下一账号")
+                                        continue
+                                    record_execution_account()
+                                    if not self.authoritative_m3:
+                                        job_store.log(
+                                            self.job_id,
+                                            f"执行账号：{account.get('display_name') or crawler_account_id}",
+                                        )
+                                else:
+                                    account_auth_state = None
+
+                                save_root = (
+                                    crawl_dir
+                                    if candidate_index == 0
+                                    else crawl_dir / f"rotation-{crawler_account_id or candidate_index}"
+                                )
+                                try:
+                                    candidate_output = run_with_current_account(save_root)
+                                except CrawlerVerificationError as exc:
+                                    last_account_error = exc
+                                    if crawler_account_id:
+                                        AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down(
+                                            crawler_account_id, reason="verify", cooldown_seconds=300
+                                        )
+                                    remaining = len(candidates) - candidate_index - 1
                                     job_store.log(
                                         self.job_id,
-                                        f"执行账号：{account.get('display_name') or crawler_account_id}",
+                                        "账号触发平台验证，已进入冷却；"
+                                        + (f"继续尝试剩余 {remaining} 个可用账号" if remaining else "本轮账号池已耗尽"),
                                     )
-                            else:
-                                account_auth_state = None
+                                    continue
+                                except CrawlerAuthenticationError as exc:
+                                    last_account_error = exc
+                                    if crawler_account_id:
+                                        crawler_account_store.mark_expired(crawler_account_id, str(exc))
+                                    remaining = len(candidates) - candidate_index - 1
+                                    job_store.log(
+                                        self.job_id,
+                                        "账号登录态已失效；"
+                                        + (f"继续尝试剩余 {remaining} 个可用账号" if remaining else "本轮账号池已耗尽"),
+                                    )
+                                    continue
 
-                            save_root = (
-                                crawl_dir
-                                if candidate_index == 0
-                                else crawl_dir / f"rotation-{crawler_account_id or candidate_index}"
-                            )
-                            try:
-                                candidate_output = run_with_current_account(save_root)
-                            except CrawlerVerificationError as exc:
-                                last_account_error = exc
-                                if crawler_account_id:
+                                if (
+                                    request.crawl_mode == "search"
+                                    and not candidate_output.contents
+                                    and crawler_account_id
+                                    and not crawl_stop_requested()
+                                    and not empty_recheck_used
+                                    and candidate_index + 1 < len(candidates)
+                                ):
+                                    empty_recheck_used = True
                                     AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down(
-                                        crawler_account_id, reason="verify", cooldown_seconds=300
+                                        crawler_account_id, reason="empty_search", cooldown_seconds=300
                                     )
-                                remaining = len(candidates) - candidate_index - 1
-                                job_store.log(
-                                    self.job_id,
-                                    "账号触发平台验证，已进入冷却；"
-                                    + (f"继续尝试剩余 {remaining} 个可用账号" if remaining else "本轮账号池已耗尽"),
-                                )
-                                continue
-                            except CrawlerAuthenticationError as exc:
-                                last_account_error = exc
-                                if crawler_account_id:
-                                    crawler_account_store.mark_expired(crawler_account_id, str(exc))
-                                remaining = len(candidates) - candidate_index - 1
-                                job_store.log(
-                                    self.job_id,
-                                    "账号登录态已失效；"
-                                    + (f"继续尝试剩余 {remaining} 个可用账号" if remaining else "本轮账号池已耗尽"),
-                                )
-                                continue
-
-                            if (
-                                request.crawl_mode == "search"
-                                and not candidate_output.contents
-                                and crawler_account_id
-                                and not crawl_stop_requested()
-                                and not empty_recheck_used
-                                and candidate_index + 1 < len(candidates)
-                            ):
-                                empty_recheck_used = True
-                                AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down(
-                                    crawler_account_id, reason="empty_search", cooldown_seconds=300
-                                )
-                                job_store.log(self.job_id, "搜索结果为空，使用账号池中的下一账号复核")
-                                continue
-                            output = candidate_output
-                            break
+                                    job_store.log(self.job_id, "搜索结果为空，使用账号池中的下一账号复核")
+                                    continue
+                                output = candidate_output
+                                break
 
                         if output is None:
                             if crawl_stop_requested():
@@ -1310,6 +1377,11 @@ class AuditPipeline:
             raise AuditProviderCallError(provider_failure)
 
     def resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5) -> None:
+        if settings.app_auth_mode == "required":
+            from backend.task_admission.execution import assert_execution
+            assert_execution(self.job_id)
+            from backend.task_admission.execution import current_execution
+            self._admission_execution = current_execution()
         with _analysis_lock_for(self.job_id):
             self._resume_pending_analysis(analyze_limit, analysis_batch_size)
 
@@ -1361,6 +1433,9 @@ class AuditPipeline:
             job_store.log(self.job_id, f"继续分析开始：待处理 {len(refs)} 条")
             batch_size = max(1, analysis_batch_size)
             for batch_start in range(0, len(refs), batch_size):
+                if settings.app_auth_mode == "required":
+                    from backend.task_admission.execution import assert_execution
+                    assert_execution(self.job_id)
                 current_control = job_store.control(self.job_id)
                 if current_control.get("stop_all_requested") or current_control.get("analysis_stop_requested") or current_control.get("analysis_paused"):
                     break
@@ -2109,6 +2184,19 @@ class AuditPipeline:
         return False
 
     def _analyze_subject(self, subject: AuditSubject) -> dict:
+        from backend.task_admission.resources import analysis_capacity
+        with analysis_capacity(self._capacity_stop_requested) if settings.app_auth_mode == "required" else nullcontext():
+            return self._analyze_subject_with_capacity(subject)
+
+    def _capacity_stop_requested(self):
+        execution = getattr(self, "_admission_execution", None)
+        if execution:
+            from backend.task_admission.execution import assert_execution
+            assert_execution(self.job_id, execution)
+        control = job_store.control(self.job_id)
+        return bool(control.get("stop_all_requested") or control.get("analysis_stop_requested") or control.get("analysis_paused"))
+
+    def _analyze_subject_with_capacity(self, subject: AuditSubject) -> dict:
         authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
         note_dir = settings.outputs_dir / self.job_id / "assets" / subject.note_id
         started_at = perf_counter()

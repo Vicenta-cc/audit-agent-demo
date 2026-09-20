@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+// These page fixtures exercise legacy mode; authentication has separate coverage.
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/auth/config", route => route.fulfill({ json: { enabled: false } }));
+});
+
 test("interactive login keeps owner token, scales pointer input, accepts text and cancels", async ({ page }) => {
   const operations: Record<string, unknown>[] = [];
   const tokens: string[] = [];

@@ -1,11 +1,15 @@
 from hashlib import sha256
+import json
 import sqlite3
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
-from backend.hermes_runtime.report_snapshot import published_report_snapshot
+from backend.hermes_runtime.report_snapshot import (
+    delete_published_report_snapshots,
+    published_report_snapshot,
+)
 from backend.hermes_runtime.adapter import HermesRuntimeBinding
 
 
@@ -45,6 +49,51 @@ def test_cached_snapshot_tampering_is_rejected(tmp_path):
         out.write(b'tampered')
     with pytest.raises(RuntimeError, match='SHA-256 mismatch'):
         published_report_snapshot(source, **args)
+
+
+def test_snapshot_cleanup_is_scoped_to_session_and_upgrades_old_manifest(tmp_path):
+    source, live = live_database(tmp_path)
+    live.close()
+    ledger = tmp_path / "ledger.sqlite3"
+    a_snapshot, _ = published_report_snapshot(
+        source,
+        ledger_path=ledger,
+        session_id="session-a",
+        identities=(("report-a", "content-a", "snapshot-a"),),
+    )
+    b_snapshot, _ = published_report_snapshot(
+        source,
+        ledger_path=ledger,
+        session_id="session-b",
+        identities=(("report-b", "content-b", "snapshot-b"),),
+    )
+    manifests = list((tmp_path / "report-snapshots").glob("*.json"))
+    a_manifest = next(
+        item for item in manifests
+        if json.loads(item.read_text())["session_id"] == "session-a"
+    )
+    record = json.loads(a_manifest.read_text())
+    a_manifest.write_text(json.dumps({"sha256": record["sha256"]}))
+
+    # Reuse upgrades a manifest written by the pre-isolation implementation.
+    assert published_report_snapshot(
+        source,
+        ledger_path=ledger,
+        session_id="session-a",
+        identities=(("report-a", "content-a", "snapshot-a"),),
+    )[0] == a_snapshot
+    assert json.loads(a_manifest.read_text())["session_id"] == "session-a"
+
+    delete_published_report_snapshots(
+        ledger, session_ids=frozenset({"session-a"})
+    )
+    assert not a_snapshot.exists()
+    assert not a_manifest.exists()
+    assert b_snapshot.exists()
+    assert any(
+        json.loads(item.read_text()).get("session_id") == "session-b"
+        for item in (tmp_path / "report-snapshots").glob("*.json")
+    )
 
 
 def test_binding_uses_one_snapshot_for_all_reports_during_worker_write(tmp_path, monkeypatch):

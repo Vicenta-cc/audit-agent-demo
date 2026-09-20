@@ -1529,7 +1529,26 @@ class ReportStore:
                 ),
             )
 
-    def publish_version(
+    def publish_version(self, **kwargs) -> dict[str, Any]:
+        if settings.app_auth_mode != "required":
+            return self._publish_version(**kwargs)
+        from backend.task_admission.execution import current_execution
+        from backend.task_admission.store import AdmissionError
+        version = self.get_version(kwargs["report_version_id"])
+        if version and version["status"] == "published":
+            return version
+        execution = current_execution()
+        if execution is None or version is None:
+            raise AdmissionError("报告发布必须由已准入的执行任务完成。", code="PUBLICATION_FENCED")
+        admission, task_id, token = execution
+        report = self.get_report(version["report_id"])
+        row = admission.for_task(task_id)
+        if not report or not row or report["task_id"] != row["job_id"]:
+            raise AdmissionError("报告与当前任务不匹配。", code="PUBLICATION_FENCED")
+        with admission.publication(report["task_id"], kwargs["report_version_id"], token):
+            return self._publish_version(**kwargs)
+
+    def _publish_version(
         self,
         *,
         report_version_id: str,

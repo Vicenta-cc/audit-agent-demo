@@ -609,10 +609,12 @@ class InvestigationStore:
         context: PublishedReportContext,
         *,
         anchor_key: str = "",
+        owner_principal: str = "",
     ) -> InvestigationSession:
         now = utc_now()
         session_id = f"investigation-session:{uuid4().hex}"
         normalized_anchor = str(anchor_key or "").strip()
+        normalized_owner = str(owner_principal or "").strip()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             if connection.execute("SELECT 1 FROM deleted_report_versions WHERE report_version_id=?", (context.report_version_id,)).fetchone():
@@ -646,6 +648,10 @@ class InvestigationStore:
                     raise ValueError(
                         "investigation Session anchor cannot be rebound to another report scope"
                     )
+                if normalized_owner and str(existing["owner_principal"] or "") != normalized_owner:
+                    raise ValueError(
+                        "investigation Session anchor cannot be rebound across Principal"
+                    )
                 session_id = str(existing["id"])
             else:
                 connection.execute(
@@ -654,10 +660,11 @@ class InvestigationStore:
                         id, scope_type, owner_principal, task_id, report_id,
                         report_version_id, source_snapshot_id,
                         snapshot_hash, anchor_key, status, created_at, updated_at
-                    ) VALUES (?, 'report', '', ?, ?, ?, ?, ?, ?, 'active', ?, ?)
+                    ) VALUES (?, 'report', ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)
                     """,
                     (
                         session_id,
+                        normalized_owner,
                         context.task_id,
                         context.report_id,
                         context.report_version_id,

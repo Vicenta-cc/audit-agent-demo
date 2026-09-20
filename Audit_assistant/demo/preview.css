@@ -1,0 +1,11 @@
+/* Demo toolbar only. Product components retain their original styles. */
+.demo-shell { height: 100vh; display: flex; flex-direction: column; }
+.demo-shell > .inv-workspace-root { height: auto; flex: 1; min-height: 0; }
+.demo-shell .inv-center-area { height: 100%; }
+.demo-toolbar { flex: none; padding: 12px 20px; background: #eef4ff; border-bottom: 1px solid #c8d8f5; color: #243a60; font-size: 12px; }
+.demo-toolbar > div, .demo-toolbar nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.demo-toolbar strong { font-size: 14px; }
+.demo-toolbar nav { margin-top: 10px; gap: 6px; }
+.demo-toolbar button { background: white; color: #243a60; border: 1px solid #c8d8f5; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+.demo-toolbar button:hover { background: #dce9ff; }
+.demo-toolbar p { margin: 8px 0 0; }

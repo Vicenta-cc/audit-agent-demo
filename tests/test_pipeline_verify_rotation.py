@@ -29,7 +29,8 @@ class AlwaysVerifyCrawler:
         raise CrawlerVerificationError('simulated verify')
 
 @pytest.mark.parametrize('authoritative', [False, True])
-def test_pipeline_verify_rotates_account_and_keeps_ingested_content(tmp_path, monkeypatch, authoritative):
+@pytest.mark.parametrize('alternate_cools', [False, True])
+def test_pipeline_verify_rotates_account_and_keeps_ingested_content(tmp_path, monkeypatch, authoritative, alternate_cools):
     jobs=JobStore(tmp_path/'jobs.sqlite3'); accounts=CrawlerAccountStore(tmp_path/'accounts.sqlite3')
     ingestion=IngestionStore(tmp_path/'ingestion.sqlite3'); results=AuditResultStore(tmp_path/'ingestion.sqlite3')
     cipher=AuthStateCipher(Fernet.generate_key())
@@ -41,7 +42,20 @@ def test_pipeline_verify_rotates_account_and_keeps_ingested_content(tmp_path, mo
     monkeypatch.setattr(pipeline_module,'job_store',jobs); monkeypatch.setattr(pipeline_module,'crawler_account_store',accounts); monkeypatch.setattr(pipeline_module,'auth_state_cipher',cipher)
     monkeypatch.setattr(pipeline_module.settings,'outputs_dir',tmp_path/'outputs'); monkeypatch.setattr(pipeline_module.settings,'auto_analyze_crawled_content',False)
     pipeline=AuditPipeline.__new__(AuditPipeline); pipeline.job_id=job_id; pipeline.crawler=VerifyThenSuccessCrawler(); pipeline.ingestion=ingestion; pipeline.audit_results=results; pipeline.qwen=SimpleNamespace(provider_failure=''); pipeline.prompt_profile_snapshot={}; pipeline.audit_config_revision_id=''; pipeline.rule_snapshot={}; pipeline.authoritative_m3=False
+    if alternate_cools:
+        from datetime import datetime, timedelta
+        original = pipeline.crawler.run_search
+        def concurrent_cooldown(**kwargs):
+            accounts.mark_cooldown(second['id'], 'another task triggered verification',
+                (datetime.now() + timedelta(minutes=5)).isoformat(), failure_kind='verify')
+            return original(**kwargs)
+        monkeypatch.setattr(pipeline.crawler, 'run_search', concurrent_cooldown)
     pipeline.run(SimpleNamespace(**config, _authoritative_m3_contract=authoritative))
+    if alternate_cools:
+        assert len(pipeline.crawler.calls) == 1
+        assert jobs.get(job_id)['status'] == 'failed'
+        assert ingestion.stats_for_task(job_id)['ingested_count'] == 0
+        return
     assert len(pipeline.crawler.calls)==2
     assert pipeline.crawler.calls[0]['auth_state']=={'account':'first'}; assert pipeline.crawler.calls[1]['auth_state']=={'account':'second'}
     assert pipeline.crawler.calls[1]['resume_keyword'] == config['keyword']

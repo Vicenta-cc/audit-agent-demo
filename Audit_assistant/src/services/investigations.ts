@@ -220,6 +220,10 @@ export function waitForTurn(
       pollTimer = window.setTimeout(poll, 1_500);
     };
 
+    source.addEventListener("auth_expired", () => {
+      fail(new Error("登录已失效，请重新登录。"));
+      window.dispatchEvent?.(new CustomEvent("application-auth-expired", { detail: "AUTHENTICATION_EXPIRED" }));
+    });
     source.addEventListener("turn", handleEvent as EventListener);
     source.addEventListener("activity", handleActivity as EventListener);
     source.addEventListener("answer_delta", handleAnswerDelta as EventListener);

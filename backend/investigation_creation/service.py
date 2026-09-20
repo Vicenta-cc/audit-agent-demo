@@ -52,18 +52,27 @@ class InvestigationCreationService:
         configuration_resolver: ConfigurationResolver,
         resource_service: ResourceService | None = None,
         run_projector: RunProjector | None = None,
+        shared_lexicon_writes_require_admin: bool = False,
     ) -> None:
         self.store = store
         self.configuration_resolver = configuration_resolver
         self.resource_service = resource_service
         self.run_projector = run_projector or EmptyRunProjector()
+        self.shared_lexicon_writes_require_admin = bool(
+            shared_lexicon_writes_require_admin
+        )
         self.conversation_store = None
 
     @property
     def resource_management(self):
         from backend.resource_management.service import ResourceManagementService
         if not hasattr(self, '_resource_management'):
-            self._resource_management = ResourceManagementService(self)
+            self._resource_management = ResourceManagementService(
+                self,
+                shared_lexicon_writes_require_admin=(
+                    self.shared_lexicon_writes_require_admin
+                ),
+            )
         return self._resource_management
 
     def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str, turn_id: str,
@@ -433,6 +442,13 @@ class InvestigationCreationService:
             principal=principal.id,
         )
         projected: dict[str, Any] = self.run_projector.project(run)
+        from backend.task_admission.presentation import admission_actions
+        admission = self.store.admission.for_task(run.id)
+        projected["available_actions"] = admission_actions(
+            projected.get("available_actions") or {}, admission
+        )
+        if admission and admission["state"] == "RELEASED" and admission["end_requested_at"]:
+            projected.update(crawl_status="stopped", analysis_status="stopped", report_status="cancelled")
         return InvestigationRunProjection(
             run_id=run.id,
             draft_id=run.draft_id,

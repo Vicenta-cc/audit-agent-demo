@@ -15,12 +15,46 @@ def environment_flag(name: str, *, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true"}
 
 
+def parse_cors_allow_origins(value: str, *, auth_mode: str) -> list[str]:
+    origins = [origin.strip() for origin in str(value).split(",") if origin.strip()]
+    if auth_mode == "required" and "*" in origins:
+        raise ValueError(
+            "CORS_ALLOW_ORIGINS cannot contain * when APP_AUTH_MODE=required"
+        )
+    return origins
+
+
 class Settings:
     root_dir = ROOT
     data_dir = Path(os.getenv("XHS_AUDIT_DATA_DIR", str(ROOT / "data"))).expanduser()
     outputs_dir = Path(
         os.getenv("XHS_AUDIT_OUTPUTS_DIR", str(ROOT / "outputs"))
     ).expanduser()
+    app_auth_mode = os.getenv("APP_AUTH_MODE", "required").strip().lower()
+    if app_auth_mode not in {"required", "disabled"}:
+        raise ValueError("APP_AUTH_MODE must be required or disabled")
+    _app_auth_db_value = os.getenv("APP_AUTH_DB", "").strip()
+    app_auth_db = Path(
+        _app_auth_db_value or str(data_dir / "investigation_creation.sqlite3")
+    ).expanduser()
+    app_account_validity_days = max(
+        1, int(os.getenv("APP_ACCOUNT_VALIDITY_DAYS", "7"))
+    )
+    app_account_activation_mode = os.getenv(
+        "APP_ACCOUNT_ACTIVATION_MODE", "first_login"
+    ).strip().lower()
+    app_auth_cookie_name = (
+        os.getenv("APP_AUTH_COOKIE_NAME", "xhs_audit_session").strip()
+        or "xhs_audit_session"
+    )
+    app_auth_cookie_secure = environment_flag(
+        "APP_AUTH_COOKIE_SECURE", default=True
+    )
+    app_auth_cookie_samesite = os.getenv(
+        "APP_AUTH_COOKIE_SAMESITE", "lax"
+    ).strip().lower()
+    if app_auth_cookie_samesite not in {"lax", "strict", "none"}:
+        raise ValueError("APP_AUTH_COOKIE_SAMESITE must be lax, strict, or none")
 
     dashscope_api_key = os.getenv("DASHSCOPE_API_KEY", "")
     dashscope_base_url = os.getenv(
@@ -192,17 +226,24 @@ class Settings:
     batch_ingestion_enabled = os.getenv("BATCH_INGESTION_ENABLED", "true").lower() == "true"
     batch_size = int(os.getenv("BATCH_SIZE", "20"))
     batch_flush_seconds = float(os.getenv("BATCH_FLUSH_SECONDS", "30"))
-    cors_allow_origins = [
-        origin.strip()
-        for origin in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",")
-        if origin.strip()
-    ]
+    _cors_allow_origins_value = os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "" if app_auth_mode == "required" else "*",
+    )
+    cors_allow_origins = parse_cors_allow_origins(
+        _cors_allow_origins_value,
+        auth_mode=app_auth_mode,
+    )
 
     # Keep the dependency relocatable. Production deployments must set
     # MEDIACRAWLER_DIR; the repository-local default is only a safe placeholder.
     media_crawler_dir = Path(
         os.getenv("MEDIACRAWLER_DIR", str(ROOT / "external" / "MediaCrawler"))
     ).expanduser()
+    task_resource_lock_dir = Path(os.getenv("TASK_RESOURCE_LOCK_DIR", str(data_dir / "resource-locks"))).expanduser().resolve()
+    task_execution_capacity = max(1, int(os.getenv("TASK_EXECUTION_CAPACITY", "2")))
+    task_analysis_capacity = max(1, int(os.getenv("TASK_ANALYSIS_CAPACITY", "2")))
+    task_worker_processes = max(1, int(os.getenv("TASK_WORKER_PROCESSES", "2")))
     request_scheduler_db = Path(os.getenv("REQUEST_SCHEDULER_DB", str(data_dir / "request_scheduler.sqlite3"))).expanduser().resolve()
     crawler_content_pacing_enabled = os.getenv("CRAWLER_CONTENT_PACING_ENABLED", "true").lower() != "false"
     request_min_interval = float(os.getenv("REQUEST_MIN_INTERVAL", "2"))

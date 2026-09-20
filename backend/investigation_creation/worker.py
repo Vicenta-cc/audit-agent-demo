@@ -62,30 +62,53 @@ class InvestigationWorker:
             execution_adapter.creation_store = store
         self.report_adapter = report_adapter
         self.session_adapter = session_adapter
+        from backend.audit_agent.config import settings
+        self.execution_capacity = settings.task_execution_capacity
         self.worker_id = worker_id or f"{socket.gethostname()}:{uuid4().hex[:8]}"
         self.lease_timeout_seconds = max(1, int(lease_timeout_seconds))
         self.heartbeat_interval_seconds = max(0.05, float(heartbeat_interval_seconds))
         self.lifecycle_hook = lifecycle_hook
 
     def run_once(self) -> InvestigationRun | None:
+        if not self.store.admission.enabled:
+            return self._run_once()
+        from backend.task_admission.scheduler import dispatch
+        return dispatch(self)
+
+    def _run_once(self, task_id=None) -> InvestigationRun | None:
         run = self.store.claim_next(
             self.worker_id,
             lease_timeout_seconds=self.lease_timeout_seconds,
+            task_id=task_id,
         )
         if run is None:
             return None
         try:
-            if run.status == RunStatus.REPORT_GENERATING:
-                return self._finish_report(run, allow_generation=False)
-            if run.recovery_required:
-                return self._recover_execution(run)
-            return self._execute_claimed_run(run)
+            from contextlib import nullcontext
+            from backend.task_admission.execution import execution_context
+            from backend.task_admission.store import AdmissionError
+            admission = self.store.admission
+            if admission.enabled:
+                try:
+                    admission.start(run.id, run.claim_token)
+                except AdmissionError as exc:
+                    return self.store.mark_failed(run.id,run.claim_token,error_code=exc.code,error_message=str(exc))
+            with execution_context(admission,run.id,run.claim_token) if admission.enabled else nullcontext():
+                if run.status == RunStatus.REPORT_GENERATING:
+                    return self._finish_report(run, allow_generation=False)
+                if run.recovery_required:
+                    return self._recover_execution(run)
+                return self._execute_claimed_run(run)
         except LeaseLostError:
             return self.store.get_run_for_worker(run.id)
 
-    def run_forever(self, *, poll_seconds: float = 1.0) -> None:
-        while True:
-            completed = self.run_once()
+    def run_forever(self, *, poll_seconds: float = 1.0, stop_event=None) -> None:
+        while stop_event is None or not stop_event.is_set():
+            try:
+                completed = self.run_once()
+            except Exception:
+                logger.exception("Task worker retained durable state after an execution error")
+                completed = None
             if completed is None:
                 time.sleep(max(0.05, poll_seconds))
 
@@ -152,6 +175,8 @@ class InvestigationWorker:
                     error_message=str(exc)
                     or "AuditPipeline execution result is unknown.",
                 )
+            if self.store.admission.enabled:
+                self.store.admission.system_fault(run.id, run.claim_token, "job_creation_failed")
             return self.store.mark_failed(
                 run.id,
                 run.claim_token,
@@ -207,6 +232,10 @@ class InvestigationWorker:
         *,
         job_state: dict[str, Any] | None = None,
     ) -> InvestigationRun:
+        if self.store.admission.enabled:
+            row = self.store.admission.for_task(run.id)
+            if row and row["decision"] == "CANCELLED":
+                return self.store.mark_failed(run.id,run.claim_token,error_code="task_cancelled",error_message="任务已取消。")
         failure = self._verify_job_or_fail(run)
         if failure is not None:
             return failure
@@ -390,7 +419,7 @@ class InvestigationWorker:
         with self._lease(run) as lease:
             lease.assert_owned()
             report_session_id = self.session_adapter.ensure_session(
-                run.id, report_version_id
+                run.id, report_version_id, owner_principal=run.owner_principal
             )
             lease.assert_owned()
         self._notify("after_session_created", run, report_version_id)
@@ -715,17 +744,78 @@ def build_worker() -> InvestigationWorker:
     )
 
 
+def _serve_process(poll_seconds, stop_event):
+    import signal
+    from types import SimpleNamespace
+
+    # Service-manager group signals must drain the same way as parent-only ones.
+    # Never acquire multiprocessing Event locks from a signal handler: the
+    # interrupted thread may already hold that same non-reentrant lock.
+    signalled = [False]
+    def request_stop(*_):
+        signalled[0] = True
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, request_stop)
+    logging.basicConfig(level=logging.INFO)
+    build_worker().run_forever(
+        poll_seconds=poll_seconds,
+        stop_event=SimpleNamespace(is_set=lambda: signalled[0] or stop_event.is_set()),
+    )
+
+
+def supervise_workers(count, poll_seconds):
+    import multiprocessing
+    import signal
+
+    context = multiprocessing.get_context("spawn")
+    stopped = context.Event()
+    signalled = [False]
+    def request_stop(*_):
+        signalled[0] = True
+    prior = {sig: signal.signal(sig, request_stop)
+             for sig in (signal.SIGINT, signal.SIGTERM)}
+    children = []
+
+    def spawn():
+        process = context.Process(target=_serve_process, args=(poll_seconds, stopped))
+        process.start()
+        return process
+
+    try:
+        children = [spawn() for _ in range(count)]
+        while not signalled[0] and not stopped.wait(0.5):
+            for index, process in enumerate(children):
+                if not process.is_alive():
+                    process.join()
+                    logger.warning("Task worker exited (%s); replacing process", process.exitcode)
+                    children[index] = spawn()
+    finally:
+        stopped.set()
+        # Drain accepted work. Forced service-manager termination is protected
+        # separately by inherited task/account/capacity file descriptors.
+        for process in children:
+            process.join()
+        for sig, handler in prior.items():
+            signal.signal(sig, handler)
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Hermes M3 Investigation worker")
-    parser.add_argument("--once", action="store_true", help="process at most one Run")
+    from backend.audit_agent.config import settings
+    parser = argparse.ArgumentParser(description="Durable multi-user task worker")
+    parser.add_argument("--once", action="store_true", help="process at most one task")
     parser.add_argument("--poll-seconds", type=float, default=1.0)
+    parser.add_argument("--workers", type=int, default=None)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
-    worker = build_worker()
     if args.once:
-        worker.run_once()
+        build_worker().run_once()
     else:
-        worker.run_forever(poll_seconds=args.poll_seconds)
+        count = args.workers if args.workers is not None else (
+            settings.task_worker_processes if settings.app_auth_mode == "required" else 1
+        )
+        if count < 1:
+            parser.error("--workers must be positive")
+        supervise_workers(count, args.poll_seconds)
 
 
 if __name__ == "__main__":

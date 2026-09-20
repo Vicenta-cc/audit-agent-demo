@@ -224,6 +224,9 @@ export interface RawJob {
   crawl_status?: string;
   analysis_status?: string;
   available_actions?: {
+    end_task?: boolean;
+    ending?: boolean;
+    ended?: boolean;
     pause_crawl?: boolean;
     resume_crawl?: boolean;
     pause_analysis?: boolean;

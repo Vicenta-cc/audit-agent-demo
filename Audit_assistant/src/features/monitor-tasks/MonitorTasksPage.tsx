@@ -9,6 +9,7 @@ import {
   useRestoreListScroll,
   writeDefaultedParam
 } from "../../app/listNavigation";
+import { TaskQuota } from "../../components/feedback/TaskQuota";
 import { Toast } from "../../components/feedback/Toast";
 import { EmptyState } from "../../components/feedback/EmptyState";
 import { LoadingState } from "../../components/feedback/LoadingState";
@@ -62,6 +63,8 @@ export function MonitorTasksPage() {
   const [initialCache] = useState(() => readCachedJobsSnapshot());
   const [snapshot, setSnapshot] = useState<JobsSnapshot>(initialCache?.snapshot ?? defaultSnapshot);
   const [loading, setLoading] = useState(!initialCache);
+  const [endTarget, setEndTarget] = useState<MonitorTask | null>(null);
+  const [endingTask, setEndingTask] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -191,8 +194,9 @@ export function MonitorTasksPage() {
 
   const handleCreate = () => navigate("/tasks/new");
 
-  const handleControl = async (task: MonitorTask, action: string, label: string) => {
+  const handleControl = async (task: MonitorTask, action: string, label: string, confirmed = false) => {
     setOpenMenuId(null);
+    if (action === "stop_all" && !confirmed) { setEndTarget(task); return; }
     try {
       await controlJob(task.id, action);
       showToast(`${label}已提交`);
@@ -289,6 +293,16 @@ export function MonitorTasksPage() {
         onClose={() => setSelectedTask(null)}
         onControl={handleControl}
       />
+      <TaskQuota />
+      <ConfirmDialog open={Boolean(endTarget)} title="结束整个任务？"
+        description="结束后无法继续此任务，已扣次数不返还，已采集的数据和结果保留。后台停止后可新建任务或删除会话。"
+        confirmText={endingTask ? "提交中…" : "确认结束任务"}
+        onCancel={() => { if (!endingTask) setEndTarget(null); }}
+        onConfirm={() => {
+          if (!endTarget || endingTask) return;
+          setEndingTask(true);
+          void handleControl(endTarget, "stop_all", "结束任务", true).finally(() => { setEndingTask(false); setEndTarget(null); });
+        }} />
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         title="删除任务"

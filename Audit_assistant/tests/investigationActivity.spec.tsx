@@ -237,7 +237,8 @@ test("creation activity and answer draft grow in the same pending assistant card
     const host = document.createElement("div");
     document.body.replaceChildren(host);
     const noop = () => {};
-    createRoot(host).render(React.createElement(InvestigationCenterArea, {
+    const { mountPresentation } = await load("/tests/presentationMount.tsx");
+    mountPresentation(host, React.createElement(InvestigationCenterArea, {
       session,
       isSendingMessage: true,
       isSidebarCollapsed: true,

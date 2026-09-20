@@ -3,19 +3,48 @@ import type { InvestigationRunProjection } from "../../types/investigationCreati
 
 export interface InvestigationRunViewState {
   phase: AgentExecutionPhase;
-  terminal: "published" | "failed" | "interrupted" | "paused" | null;
+  terminal: "published" | "failed" | "interrupted" | "paused" | "ended" | "completed" | null;
   label: string;
   step: 1 | 2 | 3 | 4;
   activity: "queued" | "running" | "stopped" | "completed";
 }
 
+// Presentation only: admission/worker state remains the authority for releasing a task.
+export function runOutcomePresentation(run: InvestigationRunProjection) {
+  const view = mapInvestigationRunState(run);
+  if (run.available_actions?.ending) return { tone: "running", label: "正在结束" };
+  if (view.terminal === "ended") return { tone: "neutral", label: "已结束" };
+  const completed = run.status === "AUDIT_COMPLETED" || run.status === "PUBLISHED";
+  const failedCount = Number(run.task_stats?.failed_analysis_count) || 0;
+  if (view.terminal === "failed" || (completed && failedCount > 0 && Number(run.task_stats?.completed_analysis_count) === 0)) {
+    return { tone: "error", label: "执行失败" };
+  }
+  if (completed) return failedCount > 0 || run.analysis_status === "partial"
+    ? { tone: "warning", label: "已完成，部分失败" }
+    : { tone: "done", label: "已完成" };
+  if (view.terminal === "paused" || (view.terminal === "interrupted" && [run.crawl_status, run.analysis_status].some(status => status === "paused" || status === "stopped"))) {
+    return { tone: "neutral", label: "已暂停" };
+  }
+  if (view.terminal === "interrupted") return { tone: "warning", label: "已中断" };
+  return { tone: view.activity === "queued" ? "queued" : "running", label: view.activity === "queued" ? "等待中" : "进行中" };
+}
+
 export function mapInvestigationRunState(
   run: InvestigationRunProjection
 ): InvestigationRunViewState {
+  if (run.available_actions?.ending) {
+    return { phase: "audit_working", terminal: null, label: "正在结束，等待后台停止", step: inferStoppedStep(run), activity: "running" };
+  }
+  if (run.available_actions?.ended && run.error_code === "cancelled") {
+    return { phase: "audit_working", terminal: "ended", label: "任务已结束", step: inferStoppedStep(run), activity: "stopped" };
+  }
   const crawlActive = ["queued", "running", "pausing"].includes(run.crawl_status);
   const analysisActive = ["queued", "running", "pausing"].includes(run.analysis_status);
   if (run.status === "AUDIT_COMPLETED") {
-    return { phase: "audit_completed", terminal: null, label: run.analysis_status === "partial" ? "处理结束，部分帖子审核失败" : "审核完成", step: 3, activity: "completed" };
+    if (Number(run.task_stats?.failed_analysis_count) > 0 && Number(run.task_stats?.completed_analysis_count) === 0) {
+      return { phase: "audit_completed", terminal: "completed", label: "处理结束，帖子审核失败，未生成报告", step: 3, activity: "completed" };
+    }
+    return { phase: "audit_completed", terminal: "completed", label: run.analysis_status === "partial" ? "处理结束，部分帖子审核失败" : "审核完成", step: 3, activity: "completed" };
   }
   if (run.status === "PUBLISHED") {
     return { phase: "completed", terminal: "published", label: "报告已发布", step: 4, activity: "completed" };
@@ -60,4 +89,17 @@ function inferStoppedStep(run: InvestigationRunProjection): 1 | 2 | 3 | 4 {
   if (run.report_status && !["pending", "not_started", "unknown"].includes(run.report_status)) return 4;
   if (["running", "paused", "completed", "failed", "stopped"].includes(run.analysis_status)) return 2;
   return 1;
+}
+
+// A pause stops polling only while no end request is being reconciled.
+export function shouldPollInvestigationRun(run: InvestigationRunProjection): boolean {
+  if (run.available_actions?.ending) return true;
+  if (["AUDIT_COMPLETED", "PUBLISHED", "FAILED"].includes(run.status)) {
+    return Boolean(run.available_actions?.end_task);
+  }
+  if (run.status === "INTERRUPTED") {
+    return ["queued", "running", "pausing"].includes(run.crawl_status)
+      || ["queued", "running", "pausing"].includes(run.analysis_status);
+  }
+  return true;
 }

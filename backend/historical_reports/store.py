@@ -142,6 +142,13 @@ class HistoricalReportWorkspaceStore:
             ).fetchall()
         return tuple(self._decode(row) for row in rows)
 
+    def list_all(self) -> tuple[dict[str, Any], ...]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM historical_report_workspaces ORDER BY id"
+            ).fetchall()
+        return tuple(self._decode(row) for row in rows)
+
     def is_deleted(self, workspace_id: str) -> bool:
         with self._connect() as connection:
             return connection.execute("SELECT 1 FROM deleted_workspaces WHERE id=?", (workspace_id,)).fetchone() is not None
@@ -154,6 +161,16 @@ class HistoricalReportWorkspaceStore:
                 WHERE id = ? AND principal_id = ?
                 """,
                 (workspace_id, principal_id),
+            ).fetchone()
+        if row is None:
+            raise KeyError(workspace_id)
+        return self._decode(row)
+
+    def get_any(self, workspace_id: str) -> dict[str, Any]:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM historical_report_workspaces WHERE id = ?",
+                (workspace_id,),
             ).fetchone()
         if row is None:
             raise KeyError(workspace_id)
