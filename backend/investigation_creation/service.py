@@ -52,18 +52,27 @@ class InvestigationCreationService:
         configuration_resolver: ConfigurationResolver,
         resource_service: ResourceService | None = None,
         run_projector: RunProjector | None = None,
+        shared_lexicon_writes_require_admin: bool = False,
     ) -> None:
         self.store = store
         self.configuration_resolver = configuration_resolver
         self.resource_service = resource_service
         self.run_projector = run_projector or EmptyRunProjector()
+        self.shared_lexicon_writes_require_admin = bool(
+            shared_lexicon_writes_require_admin
+        )
         self.conversation_store = None
 
     @property
     def resource_management(self):
         from backend.resource_management.service import ResourceManagementService
         if not hasattr(self, '_resource_management'):
-            self._resource_management = ResourceManagementService(self)
+            self._resource_management = ResourceManagementService(
+                self,
+                shared_lexicon_writes_require_admin=(
+                    self.shared_lexicon_writes_require_admin
+                ),
+            )
         return self._resource_management
 
     def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str, turn_id: str,

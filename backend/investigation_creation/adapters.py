@@ -56,12 +56,14 @@ class InvestigationConfigurationResolver:
         crawler_account_store: CrawlerAccountStore | None = None,
         ruleset_service: RuleSetService | None = None,
         principal_provider: Callable[[], Any] | None = None,
+        crawler_account_authorizer: Callable[[Any, str], bool] | None = None,
     ) -> None:
         self.lexicon_store = lexicon_store or LexiconStore()
         self.policy_store = policy_store or AuditPolicyStore()
         self.crawler_account_store = crawler_account_store or CrawlerAccountStore()
         self.ruleset_service = ruleset_service
         self.principal_provider = principal_provider
+        self.crawler_account_authorizer = crawler_account_authorizer
 
     def resolve(
         self,
@@ -207,6 +209,20 @@ class InvestigationConfigurationResolver:
                 )
             if account.get("status") != "active" or not account.get("has_auth_state"):
                 raise ConfigurationValidationError("crawler account is not ready")
+            resolved_principal = (
+                principal
+                if principal is not None
+                else self.principal_provider()
+                if self.principal_provider is not None
+                else None
+            )
+            if self.crawler_account_authorizer is not None and (
+                resolved_principal is None
+                or not self.crawler_account_authorizer(
+                    resolved_principal, crawler_account_id
+                )
+            ):
+                raise ConfigurationValidationError("crawler account not found")
             crawler_account_display_name = str(account.get("display_name") or "")
 
         run_crawler = collection.run_crawler
@@ -338,6 +354,10 @@ class InvestigationConfigurationResolver:
                 )
             if account.get("status") != "active" or not account.get("has_auth_state"):
                 raise ConfigurationValidationError("crawler account is not ready")
+            if self.crawler_account_authorizer is not None and not self.crawler_account_authorizer(
+                principal, crawler_account_id
+            ):
+                raise ConfigurationValidationError("crawler account not found")
             crawler_account_display_name = str(account.get("display_name") or "")
 
         rule_snapshot = dict(compiled["rule_snapshot"])
@@ -508,6 +528,7 @@ class AuditPipelineExecutionAdapter:
             try:
                 self.job_store.create(
                     job_id=job_id,
+                    owner_user_id=run.owner_principal,
                     auto_analyze=frozen_task_config["auto_analyze"],
                     requested_config=requested_config,
                     effective_config=frozen_task_config,

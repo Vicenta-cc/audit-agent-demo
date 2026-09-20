@@ -665,6 +665,7 @@ class InvestigationCreationConversationService:
         agent_factory: Callable[..., Any] | None = None,
         fake_runtime: bool = False,
         hermes_state_dir: Path | None = None,
+        principal_resolver: Callable[[str], Principal] | None = None,
     ) -> None:
         self.tool_service = tool_service
         self.store = store or InvestigationStore()
@@ -672,6 +673,7 @@ class InvestigationCreationConversationService:
         self.runtime_binding = runtime_binding or HermesRuntimeBinding()
         self.agent_factory = agent_factory
         self.fake_runtime = bool(fake_runtime)
+        self.principal_resolver = principal_resolver
         self.hermes_state_dir = (
             hermes_state_dir or settings.data_dir / "hermes-investigation-creation"
         ).resolve()
@@ -746,6 +748,8 @@ class InvestigationCreationConversationService:
         session = self.store.get_session(session_id)
         if session.scope_type != "creation" or not session.owner_principal:
             raise InvestigationSessionNotFoundError("creation Session was not found")
+        if self.principal_resolver is not None:
+            return self.principal_resolver(session.owner_principal)
         return Principal(session.owner_principal)
 
     def accept_message(

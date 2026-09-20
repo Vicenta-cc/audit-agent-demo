@@ -13,6 +13,9 @@ for _variable, _directory in {
 }.items():
     os.environ[_variable] = str(_storage_root / _directory)
 
+os.environ.setdefault("APP_AUTH_MODE", "disabled")
+os.environ.setdefault("APP_AUTH_COOKIE_SECURE", "false")
+
 
 import pytest
 

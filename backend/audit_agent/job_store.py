@@ -20,6 +20,8 @@ DEFAULT_CONTROL = {
     "failure": {},
 }
 
+LEGACY_OWNER_ID = "legacy-unassigned"
+
 RECOVERABLE_STATUSES = {
     "queued",
     "running",
@@ -54,6 +56,7 @@ JSON_OBJECT_FIELDS = {
 
 JOB_SUMMARY_COLUMNS = ", ".join((
     "id",
+    "owner_user_id",
     "status",
     "crawl_status",
     "analysis_status",
@@ -118,6 +121,7 @@ class JobStore:
                 """
                 CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
+                    owner_user_id TEXT NOT NULL DEFAULT 'legacy-unassigned',
                     status TEXT NOT NULL,
                     crawl_status TEXT NOT NULL DEFAULT 'pending',
                     analysis_status TEXT NOT NULL DEFAULT 'pending',
@@ -179,9 +183,12 @@ class JobStore:
 
                 CREATE INDEX IF NOT EXISTS idx_job_logs_job_id ON job_logs(job_id, id);
                 CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at);
+                CREATE INDEX IF NOT EXISTS idx_jobs_owner_updated
+                ON jobs(owner_user_id, updated_at);
 
                 CREATE TABLE IF NOT EXISTS monitored_users (
                     id TEXT PRIMARY KEY,
+                    owner_user_id TEXT NOT NULL DEFAULT 'legacy-unassigned',
                     platform TEXT NOT NULL,
                     stable_key TEXT NOT NULL,
                     display_name TEXT,
@@ -192,11 +199,12 @@ class JobStore:
                     author_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    UNIQUE(platform, stable_key)
+                    UNIQUE(owner_user_id, platform, stable_key)
                 );
 
                 CREATE TABLE IF NOT EXISTS suspected_related_accounts (
                     id TEXT PRIMARY KEY,
+                    owner_user_id TEXT NOT NULL DEFAULT 'legacy-unassigned',
                     monitored_user_id TEXT NOT NULL,
                     platform TEXT NOT NULL,
                     stable_key TEXT NOT NULL,
@@ -226,6 +234,15 @@ class JobStore:
                 """
             )
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+            if "owner_user_id" not in columns:
+                conn.execute(
+                    "ALTER TABLE jobs ADD COLUMN owner_user_id "
+                    "TEXT NOT NULL DEFAULT 'legacy-unassigned'"
+                )
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_jobs_owner_updated "
+                    "ON jobs(owner_user_id, updated_at)"
+                )
             if "archived" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
             if "prompt_profile_snapshot" not in columns:
@@ -267,6 +284,8 @@ class JobStore:
                 # must be derived from their mode, keyword count and max_notes.
                 conn.execute("ALTER TABLE jobs ADD COLUMN max_total_notes INTEGER NOT NULL DEFAULT 0")
 
+            self._migrate_monitored_user_ownership(conn)
+
             log_columns = {row["name"] for row in conn.execute("PRAGMA table_info(job_logs)").fetchall()}
             if "stage" not in log_columns:
                 conn.execute("ALTER TABLE job_logs ADD COLUMN stage TEXT NOT NULL DEFAULT 'pipeline'")
@@ -293,12 +312,85 @@ class JobStore:
                 if column not in related_columns:
                     conn.execute(f"ALTER TABLE suspected_related_accounts ADD COLUMN {column} {definition}")
 
+    @staticmethod
+    def _migrate_monitored_user_ownership(conn: sqlite3.Connection) -> None:
+        """Make focus-user identity tenant scoped while preserving legacy rows."""
+        monitored_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(monitored_users)").fetchall()
+        }
+        if "owner_user_id" not in monitored_columns:
+            conn.executescript(
+                """
+                ALTER TABLE monitored_users RENAME TO monitored_users_legacy_owner;
+                CREATE TABLE monitored_users (
+                    id TEXT PRIMARY KEY,
+                    owner_user_id TEXT NOT NULL DEFAULT 'legacy-unassigned',
+                    platform TEXT NOT NULL,
+                    stable_key TEXT NOT NULL,
+                    display_name TEXT,
+                    profile_url TEXT,
+                    raw_identity TEXT,
+                    source_audit_result_id INTEGER,
+                    source_job_id TEXT,
+                    author_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(owner_user_id, platform, stable_key)
+                );
+                INSERT INTO monitored_users (
+                    id, owner_user_id, platform, stable_key, display_name,
+                    profile_url, raw_identity, source_audit_result_id,
+                    source_job_id, author_json, created_at, updated_at
+                )
+                SELECT id, 'legacy-unassigned', platform, stable_key,
+                       display_name, profile_url, raw_identity,
+                       source_audit_result_id, source_job_id, author_json,
+                       created_at, updated_at
+                FROM monitored_users_legacy_owner;
+                DROP TABLE monitored_users_legacy_owner;
+                """
+            )
+        related_columns = {
+            row["name"]
+            for row in conn.execute(
+                "PRAGMA table_info(suspected_related_accounts)"
+            ).fetchall()
+        }
+        if "owner_user_id" not in related_columns:
+            conn.execute(
+                "ALTER TABLE suspected_related_accounts ADD COLUMN "
+                "owner_user_id TEXT NOT NULL DEFAULT 'legacy-unassigned'"
+            )
+        conn.execute(
+            """
+            UPDATE suspected_related_accounts
+            SET owner_user_id = COALESCE(
+                (SELECT m.owner_user_id FROM monitored_users m
+                 WHERE m.id = suspected_related_accounts.monitored_user_id),
+                'legacy-unassigned'
+            )
+            WHERE owner_user_id = 'legacy-unassigned'
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_monitored_users_owner_updated "
+            "ON monitored_users(owner_user_id, updated_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_related_accounts_owner_user "
+            "ON suspected_related_accounts(owner_user_id, monitored_user_id)"
+        )
+
     def create(self, *, job_id: str | None = None, **kwargs) -> dict:
         with self._lock, self._connect() as conn:
             now = datetime.now().isoformat(timespec="seconds")
             resolved_job_id = str(job_id or "").strip() or uuid4().hex[:12]
             job = {
                 "id": resolved_job_id,
+                "owner_user_id": str(
+                    kwargs.pop("owner_user_id", "") or LEGACY_OWNER_ID
+                ).strip(),
                 "status": "queued",
                 "crawl_status": "queued" if kwargs.get("run_crawler") else "skipped",
                 "analysis_status": (
@@ -316,7 +408,7 @@ class JobStore:
             conn.execute(
                 """
                 INSERT INTO jobs (
-                    id, status, crawl_status, analysis_status, platform, crawler_account_id, crawler_account_display_name,
+                    id, owner_user_id, status, crawl_status, analysis_status, platform, crawler_account_id, crawler_account_display_name,
                     display_name, crawl_mode, keyword, keyword_source, lexicon_category,
                     library_ids, capabilities, scoring_template, rule_snapshot,
                     lexicon_keywords, prompt_profile_snapshot, current_audit_config_revision_id,
@@ -327,10 +419,11 @@ class JobStore:
                     requested_config, effective_config, items, control,
                     error, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job["id"],
+                    job["owner_user_id"],
                     job["status"],
                     job["crawl_status"],
                     job["analysis_status"],
@@ -403,27 +496,87 @@ class JobStore:
             row = conn.execute("SELECT 1 FROM jobs WHERE id = ?", (job_id,)).fetchone()
             return row is not None
 
-    def list(self, include_archived: bool = False) -> list[dict]:
+    def list(
+        self,
+        include_archived: bool = False,
+        *,
+        owner_user_id: str | None = None,
+        granted_job_ids: tuple[str, ...] = (),
+    ) -> list[dict]:
         with self._lock, self._connect() as conn:
-            where = "" if include_archived else "WHERE archived = 0"
-            rows = conn.execute(f"SELECT * FROM jobs {where} ORDER BY created_at DESC").fetchall()
+            predicates = []
+            parameters: list[object] = []
+            if not include_archived:
+                predicates.append("archived = 0")
+            if owner_user_id is not None:
+                granted = tuple(str(item) for item in granted_job_ids if str(item))
+                if granted:
+                    placeholders = ",".join("?" for _ in granted)
+                    predicates.append(
+                        f"(owner_user_id = ? OR id IN ({placeholders}))"
+                    )
+                    parameters.extend((owner_user_id, *granted))
+                else:
+                    predicates.append("owner_user_id = ?")
+                    parameters.append(owner_user_id)
+            where = f"WHERE {' AND '.join(predicates)}" if predicates else ""
+            rows = conn.execute(
+                f"SELECT * FROM jobs {where} ORDER BY created_at DESC",
+                parameters,
+            ).fetchall()
             return [self._row_to_job(conn, row) for row in rows]
 
-    def list_summaries(self, include_archived: bool = False, *, log_limit: int = 8) -> list[dict]:
+    def list_summaries(
+        self,
+        include_archived: bool = False,
+        *,
+        log_limit: int = 8,
+        owner_user_id: str | None = None,
+        granted_job_ids: tuple[str, ...] = (),
+    ) -> list[dict]:
         with self._lock, self._connect() as conn:
-            where = "" if include_archived else "WHERE archived = 0"
+            predicates = []
+            parameters: list[object] = []
+            if not include_archived:
+                predicates.append("archived = 0")
+            if owner_user_id is not None:
+                granted = tuple(str(item) for item in granted_job_ids if str(item))
+                if granted:
+                    placeholders = ",".join("?" for _ in granted)
+                    predicates.append(
+                        f"(owner_user_id = ? OR id IN ({placeholders}))"
+                    )
+                    parameters.extend((owner_user_id, *granted))
+                else:
+                    predicates.append("owner_user_id = ?")
+                    parameters.append(owner_user_id)
+            where = f"WHERE {' AND '.join(predicates)}" if predicates else ""
             rows = conn.execute(
-                f"SELECT {JOB_SUMMARY_COLUMNS} FROM jobs {where} ORDER BY created_at DESC"
+                f"SELECT {JOB_SUMMARY_COLUMNS} FROM jobs {where} ORDER BY created_at DESC",
+                parameters,
             ).fetchall()
             return [self._row_to_job(conn, row, log_limit=log_limit) for row in rows]
 
-    def list_policy_references(self) -> list[dict]:
+    def list_policy_references(
+        self,
+        *,
+        owner_user_id: str | None = None,
+        granted_job_ids: tuple[str, ...] = (),
+    ) -> list[dict]:
         """Return the small job projection used by the configuration center."""
         with self._lock, self._connect() as conn:
+            granted = tuple(str(item) for item in granted_job_ids if str(item))
+            grant_sql = ""
+            parameters: list[object] = [owner_user_id, owner_user_id]
+            if owner_user_id is not None and granted:
+                placeholders = ",".join("?" for _ in granted)
+                grant_sql = f" OR j.id IN ({placeholders})"
+                parameters.extend(granted)
             rows = conn.execute(
-                """
+                f"""
                 SELECT
                     j.id,
+                    j.owner_user_id,
                     j.display_name,
                     j.keyword,
                     j.input_filename,
@@ -435,8 +588,10 @@ class JobStore:
                 LEFT JOIN task_audit_config_revisions r
                     ON r.id = j.current_audit_config_revision_id
                 WHERE j.archived = 0
+                  AND (? IS NULL OR j.owner_user_id = ?{grant_sql})
                 ORDER BY j.created_at DESC
-                """
+                """,
+                parameters,
             ).fetchall()
             return [dict(row) for row in rows]
 
@@ -642,7 +797,12 @@ class JobStore:
                 recovered += 1
             return recovered
 
-    def upsert_monitored_user_from_audit_result(self, audit_result: dict) -> dict:
+    def upsert_monitored_user_from_audit_result(
+        self, audit_result: dict, *, owner_user_id: str = LEGACY_OWNER_ID
+    ) -> dict:
+        owner = str(owner_user_id or "").strip()
+        if not owner:
+            raise ValueError("owner_user_id is required")
         author = audit_result.get("author") if isinstance(audit_result.get("author"), dict) else {}
         platform = self._normalize_platform_label(
             self._first_text(audit_result.get("platform"), author.get("platform"))
@@ -686,6 +846,7 @@ class JobStore:
         with self._lock, self._connect() as conn:
             monitored_id = self._upsert_monitored_user(
                 conn,
+                owner_user_id=owner,
                 platform=platform,
                 stable_key=stable_key,
                 display_name=display_name,
@@ -705,7 +866,11 @@ class JobStore:
         analysis_job_id: str,
         relation_context: dict,
         parent_audit_result: dict,
+        owner_user_id: str = LEGACY_OWNER_ID,
     ) -> dict:
+        owner = str(owner_user_id or "").strip()
+        if not owner:
+            raise ValueError("owner_user_id is required")
         if (relation_context or {}).get("source") != "comment_user_analysis":
             return {}
 
@@ -792,6 +957,7 @@ class JobStore:
         with self._lock, self._connect() as conn:
             monitored_id = self._upsert_monitored_user(
                 conn,
+                owner_user_id=owner,
                 platform=parent_platform,
                 stable_key=parent_stable_key,
                 display_name=parent_display_name,
@@ -804,6 +970,7 @@ class JobStore:
             )
             related_id = self._upsert_related_account(
                 conn,
+                owner_user_id=owner,
                 monitored_user_id=monitored_id,
                 platform=suspect_platform,
                 stable_key=suspect_stable_key,
@@ -824,14 +991,18 @@ class JobStore:
                 "related_account_id": related_id,
             }
 
-    def list_monitored_users(self) -> list[dict]:
+    def list_monitored_users(
+        self, *, owner_user_id: str | None = None
+    ) -> list[dict]:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 """
                 SELECT *
                 FROM monitored_users
+                WHERE (? IS NULL OR owner_user_id = ?)
                 ORDER BY updated_at DESC, created_at DESC
-                """
+                """,
+                (owner_user_id, owner_user_id),
             ).fetchall()
             return [self._row_to_monitored_user(conn, row) for row in rows]
 
@@ -839,6 +1010,7 @@ class JobStore:
         self,
         conn: sqlite3.Connection,
         *,
+        owner_user_id: str,
         platform: str,
         stable_key: str,
         display_name: str,
@@ -850,8 +1022,9 @@ class JobStore:
         now: str,
     ) -> str:
         row = conn.execute(
-            "SELECT id FROM monitored_users WHERE platform = ? AND stable_key = ?",
-            (platform, stable_key),
+            "SELECT id FROM monitored_users "
+            "WHERE owner_user_id = ? AND platform = ? AND stable_key = ?",
+            (owner_user_id, platform, stable_key),
         ).fetchone()
         if row:
             monitored_id = row["id"]
@@ -884,13 +1057,14 @@ class JobStore:
         conn.execute(
             """
             INSERT INTO monitored_users (
-                id, platform, stable_key, display_name, profile_url, raw_identity,
+                id, owner_user_id, platform, stable_key, display_name, profile_url, raw_identity,
                 source_audit_result_id, source_job_id, author_json, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 monitored_id,
+                owner_user_id,
                 platform,
                 stable_key,
                 display_name,
@@ -909,6 +1083,7 @@ class JobStore:
         self,
         conn: sqlite3.Connection,
         *,
+        owner_user_id: str,
         monitored_user_id: str,
         platform: str,
         stable_key: str,
@@ -976,15 +1151,16 @@ class JobStore:
         conn.execute(
             """
             INSERT INTO suspected_related_accounts (
-                id, monitored_user_id, platform, stable_key, display_name, profile_url,
+                id, owner_user_id, monitored_user_id, platform, stable_key, display_name, profile_url,
                 raw_identity, source_comment_id, source_comment_text, source_risk_content,
                 source_audit_result_id, source_job_id, analysis_job_id, analysis_status,
                 created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 related_id,
+                owner_user_id,
                 monitored_user_id,
                 platform,
                 stable_key,

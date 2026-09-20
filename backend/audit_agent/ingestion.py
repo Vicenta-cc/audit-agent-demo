@@ -234,6 +234,8 @@ class AuditResultStore:
         keyword: str = "",
         sort: str = "id",
         compact: bool = False,
+        owner_user_id: str | None = None,
+        granted_job_ids: tuple[str, ...] = (),
     ) -> dict:
         limit = min(max(int(limit or 500), 1), 1000)
         offset = max(int(offset or 0), 0)
@@ -271,6 +273,28 @@ class AuditResultStore:
                     "WHERE jobs.id = audit_results.job_id AND jobs.archived = 1"
                     ")"
                 )
+                if owner_user_id is not None:
+                    granted = tuple(
+                        str(item) for item in granted_job_ids if str(item)
+                    )
+                    if granted:
+                        placeholders = ",".join("?" for _ in granted)
+                        where.append(
+                            "EXISTS (SELECT 1 FROM jobs "
+                            "WHERE jobs.id = audit_results.job_id "
+                            f"AND (jobs.owner_user_id = ? OR jobs.id IN ({placeholders})))"
+                        )
+                        params.extend((owner_user_id, *granted))
+                    else:
+                        where.append(
+                            "EXISTS (SELECT 1 FROM jobs "
+                            "WHERE jobs.id = audit_results.job_id "
+                            "AND jobs.owner_user_id = ?)"
+                        )
+                        params.append(owner_user_id)
+            elif owner_user_id is not None:
+                # Ownership cannot be proven when the jobs table is absent.
+                where.append("0 = 1")
             where_sql = " AND ".join(where) if where else "1 = 1"
             total_row = conn.execute(
                 f"SELECT COUNT(*) AS count FROM audit_results WHERE {where_sql}",
@@ -291,9 +315,16 @@ class AuditResultStore:
             "total": int(total_row["count"] or 0) if total_row else 0,
         }
 
-    def get_result(self, result_id: int) -> dict | None:
+    def get_result(
+        self,
+        result_id: int,
+        *,
+        owner_user_id: str | None = None,
+        granted_job_ids: tuple[str, ...] = (),
+    ) -> dict | None:
         with self._lock, self._connect() as conn:
             archived_filter = ""
+            parameters: list[object] = [result_id]
             if self._has_jobs_table(conn):
                 archived_filter = (
                     " AND NOT EXISTS ("
@@ -301,9 +332,30 @@ class AuditResultStore:
                     "WHERE jobs.id = audit_results.job_id AND jobs.archived = 1"
                     ")"
                 )
+                if owner_user_id is not None:
+                    granted = tuple(
+                        str(item) for item in granted_job_ids if str(item)
+                    )
+                    if granted:
+                        placeholders = ",".join("?" for _ in granted)
+                        archived_filter += (
+                            " AND EXISTS (SELECT 1 FROM jobs "
+                            "WHERE jobs.id = audit_results.job_id "
+                            f"AND (jobs.owner_user_id = ? OR jobs.id IN ({placeholders})))"
+                        )
+                        parameters.extend((owner_user_id, *granted))
+                    else:
+                        archived_filter += (
+                            " AND EXISTS (SELECT 1 FROM jobs "
+                            "WHERE jobs.id = audit_results.job_id "
+                            "AND jobs.owner_user_id = ?)"
+                        )
+                        parameters.append(owner_user_id)
+            elif owner_user_id is not None:
+                archived_filter += " AND 0 = 1"
             row = conn.execute(
                 f"SELECT * FROM audit_results WHERE id = ?{archived_filter}",
-                (result_id,),
+                parameters,
             ).fetchone()
             return self._row_to_item(row) if row else None
 
@@ -331,10 +383,13 @@ class AuditResultStore:
         status: str,
         note: str = "",
         reviewer: str = "",
+        owner_user_id: str | None = None,
+        granted_job_ids: tuple[str, ...] = (),
     ) -> dict:
         now = utc_now()
         with self._lock, self._connect() as conn:
             archived_filter = ""
+            parameters: list[object] = [result_id]
             if self._has_jobs_table(conn):
                 archived_filter = (
                     " AND NOT EXISTS ("
@@ -342,9 +397,30 @@ class AuditResultStore:
                     "WHERE jobs.id = audit_results.job_id AND jobs.archived = 1"
                     ")"
                 )
+                if owner_user_id is not None:
+                    granted = tuple(
+                        str(item) for item in granted_job_ids if str(item)
+                    )
+                    if granted:
+                        placeholders = ",".join("?" for _ in granted)
+                        archived_filter += (
+                            " AND EXISTS (SELECT 1 FROM jobs "
+                            "WHERE jobs.id = audit_results.job_id "
+                            f"AND (jobs.owner_user_id = ? OR jobs.id IN ({placeholders})))"
+                        )
+                        parameters.extend((owner_user_id, *granted))
+                    else:
+                        archived_filter += (
+                            " AND EXISTS (SELECT 1 FROM jobs "
+                            "WHERE jobs.id = audit_results.job_id "
+                            "AND jobs.owner_user_id = ?)"
+                        )
+                        parameters.append(owner_user_id)
+            elif owner_user_id is not None:
+                archived_filter += " AND 0 = 1"
             row = conn.execute(
                 f"SELECT * FROM audit_results WHERE id = ?{archived_filter}",
-                (result_id,),
+                parameters,
             ).fetchone()
             if not row:
                 raise KeyError(result_id)

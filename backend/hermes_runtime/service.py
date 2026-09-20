@@ -130,9 +130,14 @@ class HermesInvestigationAgentService:
         report_version_id: str,
         *,
         anchor_key: str = "",
+        owner_principal: str = "",
     ) -> InvestigationSession:
         context = self.report_facade.get_published_report_context(report_version_id)
-        return self.store.create_session(context, anchor_key=anchor_key)
+        return self.store.create_session(
+            context,
+            anchor_key=anchor_key,
+            owner_principal=owner_principal,
+        )
 
     def close_session(self, session_id: str) -> InvestigationSession:
         session = self.store.close_session(session_id)

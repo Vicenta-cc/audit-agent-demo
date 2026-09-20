@@ -42,6 +42,13 @@ def published_report_snapshot(
             snapshot = directory / f"{key}-{digest}.sqlite3"
             if _file_digest(snapshot) != digest:
                 raise RuntimeError("published report snapshot SHA-256 mismatch")
+            # Older manifests predate session-scoped deletion. Enrich them on
+            # first reuse so a later workspace deletion can remove only this
+            # session's immutable image without disturbing other sessions.
+            if record.get("session_id") != session_id:
+                if record.get("session_id"):
+                    raise RuntimeError("published report snapshot Session mismatch")
+                _write_manifest(manifest, {"sha256": digest, "session_id": session_id})
             return snapshot, digest
         fd, temporary = tempfile.mkstemp(dir=directory, suffix=".sqlite3")
         os.close(fd)
@@ -55,15 +62,56 @@ def published_report_snapshot(
             temporary_path.chmod(0o400)
             os.replace(temporary_path, snapshot)
             # Publish the manifest only after its immutable database is complete.
-            fd, pending = tempfile.mkstemp(dir=directory, suffix=".json")
-            try:
-                with os.fdopen(fd, "w") as output:
-                    json.dump({"sha256": digest}, output)
-                    output.flush()
-                    os.fsync(output.fileno())
-                os.replace(pending, manifest)
-            finally:
-                Path(pending).unlink(missing_ok=True)
+            _write_manifest(
+                manifest, {"sha256": digest, "session_id": session_id}
+            )
             return snapshot, digest
         finally:
             temporary_path.unlink(missing_ok=True)
+
+
+def delete_published_report_snapshots(
+    ledger_path: Path, *, session_ids: set[str] | frozenset[str]
+) -> None:
+    """Delete only immutable report snapshots owned by the given sessions."""
+
+    targets = {str(value).strip() for value in session_ids if str(value).strip()}
+    if not targets:
+        return
+    directory = ledger_path.parent / "report-snapshots"
+    if not directory.exists():
+        return
+    for manifest in tuple(directory.glob("*.json")):
+        key = manifest.stem
+        lock_path = directory / f"{key}.lock"
+        remove_lock = False
+        with lock_path.open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if not manifest.exists():
+                continue
+            record = json.loads(manifest.read_text())
+            if str(record.get("session_id") or "") not in targets:
+                continue
+            digest = str(record.get("sha256") or "")
+            manifest.unlink()
+            if digest:
+                (directory / f"{key}-{digest}.sqlite3").unlink(missing_ok=True)
+            remove_lock = True
+        if remove_lock:
+            lock_path.unlink(missing_ok=True)
+    try:
+        directory.rmdir()
+    except OSError:
+        pass
+
+
+def _write_manifest(path: Path, record: dict[str, str]) -> None:
+    fd, pending = tempfile.mkstemp(dir=path.parent, suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as output:
+            json.dump(record, output)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(pending, path)
+    finally:
+        Path(pending).unlink(missing_ok=True)

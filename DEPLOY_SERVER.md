@@ -79,7 +79,8 @@ QWEN_VL_MODEL=qwen3-vl-8b
 QWEN_USE_RESPONSE_FORMAT=false
 VL_IMAGE_MAX_SIDE=1024
 VL_IMAGE_QUALITY=75
-CORS_ALLOW_ORIGINS=*
+# Leave empty for same-origin hosting, or list the exact HTTPS frontend origin.
+CORS_ALLOW_ORIGINS=
 MEDIACRAWLER_DIR=/root/MediaCrawler
 MAX_IMAGES_PER_NOTE=4
 MAX_VIDEO_FRAMES=6

@@ -51,6 +51,29 @@ def _analysis_lock_for(job_id: str) -> threading.RLock:
     with _analysis_locks_guard:
         return _analysis_locks.setdefault(job_id, threading.RLock())
 
+
+def _authorized_crawler_account_ids(job_id: str) -> frozenset[str] | None:
+    """Return the live account grant pool, or None when auth is disabled/admin."""
+    if settings.app_auth_mode != "required":
+        return None
+    job = job_store.get(job_id) or {}
+    owner_user_id = str(job.get("owner_user_id") or "").strip()
+    if not owner_user_id:
+        return frozenset()
+    from backend.application_auth.store import AuthStore
+
+    store = AuthStore(
+        settings.app_auth_db,
+        default_validity_days=settings.app_account_validity_days,
+        activation_mode=settings.app_account_activation_mode,
+    )
+    user = store.get_user(owner_user_id)
+    if user and user.get("role") == "admin":
+        return None
+    return store.granted_resource_ids(
+        owner_user_id, "crawler-account", "use"
+    )
+
 AUDIO_URL_EXTENSIONS = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
 AUDIO_FILE_SIGNATURES = (
     b"ID3",
@@ -646,6 +669,16 @@ class AuditPipeline:
                             or ""
                         ).strip()
                         candidates = crawler_account_store.available_accounts(request.platform)
+                        authorized_account_ids = _authorized_crawler_account_ids(
+                            self.job_id
+                        )
+                        if authorized_account_ids is not None:
+                            candidates = [
+                                item
+                                for item in candidates
+                                if str(item.get("id") or "")
+                                in authorized_account_ids
+                            ]
                         candidates.sort(
                             key=lambda item: 0 if str(item.get("id")) == preferred_account_id else 1
                         )
@@ -662,6 +695,10 @@ class AuditPipeline:
                                     "crawler_account_verification_required: 当前没有结束冷却的可用账号。"
                                 )
                             raise CrawlerAuthenticationError("当前没有可用采集账号，请重新登录")
+                        if not candidates and settings.app_auth_mode == "required":
+                            raise CrawlerAuthenticationError(
+                                "当前没有已授权且可用的采集账号，请联系管理员"
+                            )
                         if not candidates:
                             candidates = [None]
 

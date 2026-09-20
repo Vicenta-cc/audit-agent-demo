@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import re
 import sqlite3
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 import unicodedata
 
 from backend.audit_agent.config import settings
@@ -88,6 +88,7 @@ class InvestigationResourceService:
         ruleset_service: RuleSetService,
         configuration_resolver: Any,
         crawler_account_store: CrawlerAccountStore | None = None,
+        crawler_account_authorizer: Callable[[Principal, str], bool] | None = None,
     ) -> None:
         self.lexicon_store = lexicon_store
         self.ruleset_service = ruleset_service
@@ -96,6 +97,7 @@ class InvestigationResourceService:
             crawler_account_store
             or configuration_resolver.crawler_account_store
         )
+        self.crawler_account_authorizer = crawler_account_authorizer
         resource_paths = {
             Path(path).expanduser().resolve()
             for path in (
@@ -348,6 +350,7 @@ class InvestigationResourceService:
             blockers.extend(resolution.editable_blockers)
         available_accounts = self._available_crawler_accounts(
             effective_configuration.platform.value,
+            principal=principal,
             connection=resource_connection,
         )
         if not available_accounts:
@@ -400,8 +403,6 @@ class InvestigationResourceService:
             parameters.max_total_notes,
             parameters.max_notes * max(1, len(resolved_terms)),
         )
-        if parameters.crawler_account_id and not any(a["id"] == parameters.crawler_account_id for a in available_accounts):
-            blockers.append(self._blocker("collection_service_unavailable", "所选采集账号当前不可用，请重新选择。"))
         blockers = self._dedupe_blockers(blockers)
         return ConfirmationPreview(
             task_settings_revision=settings_revision,
@@ -708,6 +709,7 @@ class InvestigationResourceService:
         configuration = resolution.normalized_configuration
         available_accounts = self._available_crawler_accounts(
             configuration.platform.value,
+            principal=principal,
             connection=resource_connection,
         )
         if not available_accounts:
@@ -717,9 +719,18 @@ class InvestigationResourceService:
             )
         configuration, _ = self.task_configuration(configuration, resource_connection)
         parameters = effective_task_parameters(configuration)
-        selected_account = next((a for a in available_accounts if a["id"] == parameters.crawler_account_id), None) if parameters.crawler_account_id else available_accounts[0]
-        if selected_account is None:
-            raise ConfigurationValidationError("所选采集账号当前不可用，请重新选择。", code="collection_service_unavailable")
+        selected_account = (
+            next(
+                (
+                    account
+                    for account in available_accounts
+                    if account["id"] == parameters.crawler_account_id
+                ),
+                None,
+            )
+            if parameters.crawler_account_id
+            else None
+        ) or available_accounts[0]
         mode = configuration.investigation.mode
         collection: dict[str, Any]
         if mode == "search":
@@ -1138,6 +1149,7 @@ class InvestigationResourceService:
         self,
         platform: str,
         *,
+        principal: Principal | None = None,
         connection: sqlite3.Connection | None = None,
     ) -> list[dict[str, Any]]:
         available = [
@@ -1149,6 +1161,15 @@ class InvestigationResourceService:
             if account["status"] == "active"
             and account["has_auth_state"]
             and not account_is_cooling_down(account)
+            and (
+                self.crawler_account_authorizer is None
+                or (
+                    principal is not None
+                    and self.crawler_account_authorizer(
+                        principal, str(account["id"])
+                    )
+                )
+            )
         ]
         return sorted(available, key=lambda account: str(account["id"]))
 

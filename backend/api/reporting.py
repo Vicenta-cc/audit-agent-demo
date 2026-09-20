@@ -35,6 +35,7 @@ def create_reporting_router(
     m3_run_store: object | None = None,
     historical_report_service: object | None = None,
     outputs_dir: Path | None = None,
+    auth_service: object | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["reports"])
     structured_runtime = runtime or R31ReportRuntime(store)
@@ -57,6 +58,7 @@ def create_reporting_router(
                 principal,
                 report_version_id=str(version["id"]),
                 task_id=task_id,
+                auth_service=auth_service,
             )
         )
         items = tuple(_summary_response(item, task_id=task_id) for item in versions)
@@ -81,6 +83,7 @@ def create_reporting_router(
             principal,
             report_version_id=report_version_id,
             task_id=task_id,
+            auth_service=auth_service,
         ):
             raise HTTPException(status_code=404, detail="Published report version not found")
         return published_report_detail_response(
@@ -99,6 +102,7 @@ def create_reporting_router(
             principal,
             report_version_id=report_version_id,
             task_id=task_id,
+            auth_service=auth_service,
         ):
             raise HTTPException(status_code=404, detail="Published report version not found")
         try:
@@ -118,6 +122,7 @@ def create_reporting_router(
             principal,
             report_version_id=report_version_id,
             task_id=task_id,
+            auth_service=auth_service,
         ):
             raise HTTPException(status_code=404, detail="Published report version not found")
 
@@ -354,13 +359,28 @@ def can_read_m3_report(
     *,
     report_version_id: str,
     task_id: str,
+    auth_service: object | None = None,
 ) -> bool:
-    if run_store is None:
+    if auth_service is not None and principal.is_admin:
         return True
+    if run_store is None:
+        return auth_service is None or bool(
+            auth_service.store.has_grant(
+                principal.id, "report-version", report_version_id, "read"
+            )
+        )
     owners = run_store.owner_principals_for_report(
         report_version_id=report_version_id, task_id=task_id
     )
-    return not owners or owners == frozenset({principal.id})
+    if principal.id in owners:
+        return True
+    if auth_service is None:
+        return not owners
+    return bool(
+        auth_service.store.has_grant(
+            principal.id, "report-version", report_version_id, "read"
+        )
+    )
 
 
 def _summary_response(

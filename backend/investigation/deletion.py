@@ -15,6 +15,7 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from backend.hermes_runtime.adapter import session_runtime_home
+from backend.hermes_runtime.report_snapshot import delete_published_report_snapshots
 
 
 def _ids(value, key):
@@ -192,8 +193,7 @@ class WorkspaceDeletionService:
     def _clear_runtime(self, session_ids, reports_deleted):
         for service in (self.conversations, self.report_service):
             with service._agent_lock:
-                targets = set(service._agents) if reports_deleted and service is self.report_service else session_ids
-                for session_id in targets:
+                for session_id in session_ids:
                     agent = service._agents.pop(session_id, None)
                     if agent and callable(getattr(agent, "close", None)):
                         agent.close()
@@ -211,8 +211,11 @@ class WorkspaceDeletionService:
                     shutil.rmtree(directory)
                 for suffix in (".sqlite3", ".sqlite3-wal", ".sqlite3-shm"):
                     (root / f"{session_id}{suffix}").unlink(missing_ok=True)
-            if reports_deleted and (root / "report-snapshots").exists():
-                shutil.rmtree(root / "report-snapshots")
+            if reports_deleted and service is self.report_service:
+                delete_published_report_snapshots(
+                    root / "snapshot-cleanup-ledger.sqlite3",
+                    session_ids=frozenset(session_ids),
+                )
 
 
 def create_workspace_deletion_router(service, principal_provider):

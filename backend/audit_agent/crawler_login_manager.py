@@ -51,6 +51,7 @@ class LoginSession:
     process: subprocess.Popen[str] | None = field(default=None, repr=False)
     diagnostic_file: TextIO | None = field(default=None, repr=False)
     interactive: bool = False
+    owner_user_id: str = field(default="", repr=False)
     owner_token: str = field(default="", repr=False)
     frame: bytes = field(default=b"", repr=False)
     frame_sequence: int = 0
@@ -98,12 +99,31 @@ class CrawlerAccountLoginManager:
         self._lock = threading.RLock()
         self._start_lock = threading.Lock()
 
-    def start(self, account: dict, owner_token: str = "") -> dict:
+    def start(
+        self,
+        account: dict,
+        owner_token: str = "",
+        *,
+        owner_user_id: str = "",
+        owner_is_admin: bool = False,
+    ) -> dict:
         # Serialize check + spawn; concurrent POSTs must not launch two browsers.
         with self._start_lock:
-            return self._start(account, owner_token)
+            return self._start(
+                account,
+                owner_token,
+                owner_user_id=owner_user_id,
+                owner_is_admin=owner_is_admin,
+            )
 
-    def _start(self, account: dict, owner_token: str) -> dict:
+    def _start(
+        self,
+        account: dict,
+        owner_token: str,
+        *,
+        owner_user_id: str,
+        owner_is_admin: bool,
+    ) -> dict:
         interactive = account["platform"] == "dy" and settings.crawler_login_interactive
         if interactive and not (32 <= len(owner_token) <= 128):
             raise PermissionError("请刷新页面后重新打开登录窗口")
@@ -121,7 +141,12 @@ class CrawlerAccountLoginManager:
                 if session.status not in ACTIVE_LOGIN_STATUSES:
                     continue
                 if session.account_id == account["id"]:
-                    self._check_owner(session, owner_token)
+                    self._check_owner(
+                        session,
+                        owner_token,
+                        owner_user_id=owner_user_id,
+                        owner_is_admin=owner_is_admin,
+                    )
                     return session.public()
                 raise ValueError("已有账号正在登录，请先完成或关闭当前登录窗口")
 
@@ -136,6 +161,7 @@ class CrawlerAccountLoginManager:
             updated_at=_iso(now),
             expires_at=_iso(now + timedelta(seconds=timeout)),
             interactive=interactive,
+            owner_user_id=str(owner_user_id or "").strip(),
             owner_token=owner_token if interactive else "",
         )
         command = [
@@ -204,30 +230,81 @@ class CrawlerAccountLoginManager:
         return session.public()
 
     @staticmethod
-    def _check_owner(session: LoginSession, owner_token: str) -> None:
+    def _check_owner(
+        session: LoginSession,
+        owner_token: str,
+        *,
+        owner_user_id: str = "",
+        owner_is_admin: bool = False,
+    ) -> None:
+        caller = str(owner_user_id or "").strip()
+        if (
+            session.owner_user_id
+            and caller != session.owner_user_id
+            and not owner_is_admin
+        ):
+            raise PermissionError("该登录窗口属于另一个应用用户")
         if session.interactive and (not owner_token or not secrets.compare_digest(session.owner_token, owner_token)):
             raise PermissionError("该登录窗口属于另一个浏览器会话")
 
-    def get(self, session_id: str, owner_token: str = "") -> dict | None:
+    def get(
+        self,
+        session_id: str,
+        owner_token: str = "",
+        *,
+        owner_user_id: str = "",
+        owner_is_admin: bool = False,
+    ) -> dict | None:
         with self._lock:
             session = self._sessions.get(session_id)
             if session:
-                self._check_owner(session, owner_token)
+                self._check_owner(
+                    session,
+                    owner_token,
+                    owner_user_id=owner_user_id,
+                    owner_is_admin=owner_is_admin,
+                )
         self._expire_if_needed(session_id)
         with self._lock:
             session = self._sessions.get(session_id)
             return session.public() if session else None
 
-    def get_frame(self, session_id: str, owner_token: str, after: int = 0) -> tuple[bytes, int]:
-        self.get(session_id, owner_token)
+    def get_frame(
+        self,
+        session_id: str,
+        owner_token: str,
+        after: int = 0,
+        *,
+        owner_user_id: str = "",
+        owner_is_admin: bool = False,
+    ) -> tuple[bytes, int]:
+        self.get(
+            session_id,
+            owner_token,
+            owner_user_id=owner_user_id,
+            owner_is_admin=owner_is_admin,
+        )
         with self._lock:
             session = self._sessions.get(session_id)
             if not session or not session.interactive or session.status not in ACTIVE_LOGIN_STATUSES:
                 raise ValueError("登录窗口已结束")
             return (session.frame if session.frame_sequence > after else b"", session.frame_sequence)
 
-    def send_input(self, session_id: str, owner_token: str, event: dict) -> None:
-        self.get(session_id, owner_token)
+    def send_input(
+        self,
+        session_id: str,
+        owner_token: str,
+        event: dict,
+        *,
+        owner_user_id: str = "",
+        owner_is_admin: bool = False,
+    ) -> None:
+        self.get(
+            session_id,
+            owner_token,
+            owner_user_id=owner_user_id,
+            owner_is_admin=owner_is_admin,
+        )
         command = validate_login_input(event)
         with self._lock:
             session = self._sessions.get(session_id)
@@ -269,13 +346,26 @@ class CrawlerAccountLoginManager:
         self.store.mark_expired(account_id, session.error)
         self._stop_process(process)
 
-    def cancel(self, session_id: str, owner_token: str = "", *, internal: bool = False) -> bool:
+    def cancel(
+        self,
+        session_id: str,
+        owner_token: str = "",
+        *,
+        internal: bool = False,
+        owner_user_id: str = "",
+        owner_is_admin: bool = False,
+    ) -> bool:
         with self._lock:
             session = self._sessions.get(session_id)
             if not session:
                 return False
             if not internal:
-                self._check_owner(session, owner_token)
+                self._check_owner(
+                    session,
+                    owner_token,
+                    owner_user_id=owner_user_id,
+                    owner_is_admin=owner_is_admin,
+                )
             if session.status in TERMINAL_LOGIN_STATUSES:
                 return True
             session.status = "cancelled"

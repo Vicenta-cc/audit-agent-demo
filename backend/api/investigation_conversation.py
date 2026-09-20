@@ -66,6 +66,7 @@ def create_investigation_conversation_router(
     report_service: Any | None = None,
     report_executor: Any | None = None,
     report_store: Any | None = None,
+    bind_report_session_owner: bool = False,
 ) -> APIRouter:
     router = APIRouter(tags=["investigation-creation-conversation"])
     provide_principal = principal_provider or LocalPrincipalProvider()
@@ -287,9 +288,14 @@ def create_investigation_conversation_router(
             run = service.authorize_report_handoff(
                 workspace_session_id, run_id, principal=principal
             )
+            session_arguments = {
+                "anchor_key": f"m3-run:{run.run_id}",
+            }
+            if bind_report_session_owner:
+                session_arguments["owner_principal"] = principal.id
             report_session = report_service.create_session(
                 run.report_version_id,
-                anchor_key=f"m3-run:{run.run_id}",
+                **session_arguments,
             )
             turn = report_executor.accept_turn(
                 report_session.id,
