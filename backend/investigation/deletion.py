@@ -6,7 +6,7 @@ Archive imports retain only an ID tombstone so restart cannot resurrect a report
 """
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import closing, ExitStack
 import json
 from pathlib import Path
 import shutil
@@ -39,7 +39,7 @@ class WorkspaceDeletionService:
 
     def delete(self, workspace_id: str, *, principal_id: str, historical: bool = False):
         # Registration uses the same lock as deletion, including its archive import.
-        with self.historical._registration_lock, closing(sqlite3.connect(
+        with ExitStack() as fences, self.historical._registration_lock, closing(sqlite3.connect(
             self.conversations.store.db_path, timeout=30
         )) as db:
             db.row_factory = sqlite3.Row
@@ -94,11 +94,16 @@ class WorkspaceDeletionService:
                         if row["id"] in run_ids or row["draft_id"] in draft_ids:
                             if row["owner_principal"] != principal_id:
                                 raise HTTPException(409, "会话关联了其他用户的任务，无法删除。")
-                            if row["status"] in {"QUEUED", "RUNNING", "AUDIT_COMPLETED", "REPORT_GENERATING"}:
-                                raise HTTPException(409, "任务正在执行，请等待任务结束后再删除会话。")
+                            from backend.task_admission.execution import execution_lock
+                            if not fences.enter_context(execution_lock(self.creation_store.db_path, row["id"])):
+                                raise HTTPException(409, "后台尚未停止，请稍后再删除会话。")
+                            if row["status"] not in {"PUBLISHED", "FAILED", "AUDIT_COMPLETED"}:
+                                raise HTTPException(409, "任务尚未结束；暂停后仍可继续，请先结束整个任务。")
+                            if row["status"] == "AUDIT_COMPLETED":
+                                self._check_drained(row)
                             active_admission = db.execute("SELECT 1 FROM creation.task_admissions WHERE task_id=? AND state='RESERVED'",(row["id"],)).fetchone()
                             if active_admission:
-                                raise HTTPException(409,"请先取消任务，等待执行停止后再删除会话。")
+                                raise HTTPException(409,"请先结束任务，等待执行停止后再删除会话。")
                             run_ids.add(row["id"])
                             draft_ids.add(row["draft_id"])
                             if row["report_version_id"]:
@@ -171,6 +176,20 @@ class WorkspaceDeletionService:
                 db.executemany("INSERT OR IGNORE INTO deleted_report_versions VALUES (?)", ((version_id,) for version_id in version_ids))
                 db.execute("INSERT INTO history.deleted_workspaces(id,principal_id) VALUES (?,?)", (workspace_id, principal_id))
 
+    def _check_drained(self, run):
+        # Use the actual injected projector; never open a different default DB.
+        service = getattr(getattr(self.conversations, "tool_service", None), "application_service", None)
+        projector = getattr(service, "run_projector", None)
+        ingestion = getattr(projector, "ingestion_store", None)
+        jobs = getattr(projector, "job_store", None)
+        if not run["job_id"] or ingestion is None or jobs is None:
+            raise HTTPException(409, "任务结束状态尚未核实，请联系管理员。")
+        stats = ingestion.stats_for_task(run["job_id"])
+        job = jobs.get(run["job_id"])
+        queued = stats.get("queued_analysis_count", max(0, stats.get("pending_analysis_count", 0) - stats.get("failed_analysis_count", 0)))
+        if not job or job.get("status") not in {"completed", "failed", "stopped"} or queued or stats.get("analyzing_count"):
+            raise HTTPException(409, "任务仍有待处理内容，请先结束整个任务。")
+
     @staticmethod
     def _values(db, schema, table, column, selector, values):
         if not values or not db.execute(f"SELECT 1 FROM {schema}.sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
@@ -186,7 +205,7 @@ class WorkspaceDeletionService:
     def _erase_columns(self, db, schema, prefix, selectors):
         tables = [row[0] for row in db.execute(f"SELECT name FROM {schema}.sqlite_master WHERE type='table'")]
         for table in tables:
-            if not table.startswith(prefix):
+            if table in {"task_admissions", "task_admission_commands"} or not table.startswith(prefix):
                 continue
             columns = {row[1] for row in db.execute(f'PRAGMA {schema}.table_info("{table}")')}
             for column, values in selectors.items():

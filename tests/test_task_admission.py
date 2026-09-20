@@ -173,7 +173,7 @@ def test_cancel_pause_do_not_release_until_execution_stopped(stack):
         store.settle(row["task_id"])
     store.settle(row["task_id"], stopped=True)
     store.settle(row["task_id"], stopped=True)
-    assert store.summary(a)["remaining"] == 3
+    assert store.summary(a)["remaining"] == 2
     with pytest.raises(AdmissionError):
         with store.publication("job:one", "late-report", "old-worker"):
             pytest.fail("cancelled publisher ran")
@@ -257,7 +257,7 @@ def test_worker_success_failure_pause_and_queued_cancel(stack):
         creation, FakeExecutionAdapter({"status": "failed", "error": "failure"})
     )
     assert worker.run_once().status == RunStatus.FAILED
-    assert creation.admission.summary(a)["remaining"] == 2
+    assert creation.admission.summary(a)["remaining"] == 1
     run = make_run(creation, a, "paused")
     worker = worker_for(creation, FakeExecutionAdapter({"status": "crawl_paused"}))
     assert worker.run_once().status == RunStatus.INTERRUPTED
@@ -269,15 +269,19 @@ def test_worker_success_failure_pause_and_queued_cancel(stack):
     )
     worker.run_once()
     assert creation.admission.summary(a)["reserved"] == 0
-    run = make_run(creation, a, "queued-cancel")
-    creation.admission.cancel(run.id, a)
+    assert creation.admission.summary(a)["remaining"] == 0
+    with pytest.raises(AdmissionError):
+        make_run(creation, a, "fourth")
+    b = stack[2][1]
+    run = make_run(creation, b, "queued-cancel")
+    creation.admission.cancel(run.id, b)
     worker = worker_for(creation)
     assert worker.run_once() is None
     assert worker.execution_adapter.pipeline_calls == 0
-    assert creation.admission.summary(a)["remaining"] == 2
+    assert creation.admission.summary(b)["remaining"] == 2
 
 
-def test_resume_retains_or_readmits_and_replays_same_command(stack):
+def test_resume_retains_charge_and_terminal_task_cannot_reopen(stack):
     creation, _, (a, _) = stack
     store = creation.admission
     row = enqueue(store, a)
@@ -292,9 +296,11 @@ def test_resume_retains_or_readmits_and_replays_same_command(stack):
     with pytest.raises(AdmissionError):
         enqueue_resume(store, job, owner=a, action="resume_analysis", key="resume")
     store.settle(row["task_id"], stopped=True)
-    new = enqueue_resume(store, job, owner=a, action="resume_crawl", key="retry")
-    assert new["id"] != row["id"]
-    assert store.summary(a)["reserved"] == 1
+    with pytest.raises(AdmissionError) as error:
+        enqueue_resume(store, job, owner=a, action="resume_crawl", key="retry")
+    assert error.value.code == "TASK_ALREADY_ENDED"
+    assert store.summary(a)["reserved"] == 0
+    assert store.summary(a)["used"] == 1
     with pytest.raises(AdmissionError):
         enqueue_resume(
             store, job, owner=a, action="resume_analysis", key="expand", analyze_limit=3
@@ -563,9 +569,13 @@ def test_report_store_publication_gate_precedes_any_report_write(stack, monkeypa
     assert not writes
 
 
-def test_report_retry_readmits_but_reuses_collected_data_and_report_identity(stack):
+def test_legacy_report_v1_retry_remains_versioned_and_reuses_data(stack):
     creation, _, (a, _) = stack
     run = make_run(creation, a, "retry-report")
+    with creation.admission.connect() as db:
+        db.execute(
+            "UPDATE task_admissions SET quota_policy='report_v1',charge_state='LEGACY',collection_phase='UNKNOWN'"
+        )
     reports = FakeReportAdapter()
     reports.after_started = lambda: (_ for _ in ()).throw(
         RuntimeError("provider failed")
@@ -642,7 +652,7 @@ def test_real_report_publish_intent_recovery_completes_or_releases(stack):
         assert locked
         reconcile(worker)
     assert creation.admission.summary(a)["completed"] == 1
-    assert creation.admission.summary(a)["remaining"] == 2
+    assert creation.admission.summary(a)["remaining"] == 1
 
 
 def test_recovery_release_cannot_overwrite_a_resume(stack):
@@ -708,3 +718,237 @@ def test_cancellation_projects_stop_before_releasing_transaction(stack):
     assert result["decision"] == "CANCELLED"
     assert result["state"] == "RESERVED"
     assert admission.summary(a)["remaining"] == 2
+
+
+@pytest.mark.parametrize(
+    "started,cancelled,system_fault,refunded",
+    [
+        (False, False, True, True),
+        (False, True, True, False),
+        (True, False, True, False),
+        (False, False, False, False),
+    ],
+)
+def test_charge_refund_requires_positive_system_fault_and_stop_proof(
+    stack, started, cancelled, system_fault, refunded
+):
+    from backend.task_admission.recovery import reconcile
+
+    creation, _, (a, b) = stack
+    store = creation.admission
+    row = enqueue(store, a)
+    other = enqueue(store, b, "other")
+    store.start(row["task_id"], "worker")
+    if started:
+        store.collection_launch(row["task_id"], "worker")
+    if system_fault:
+        store.system_fault(row["task_id"], "worker", "fixture_system_fault")
+    if cancelled:
+        store.cancel(row["task_id"], a)
+    else:
+        store.hold(row["task_id"], "failed_pending_stop")
+    worker = worker_for(creation)
+    with execution_lock(creation.db_path, row["task_id"]):
+        reconcile(worker)
+        assert store.summary(a)["used"] == 1
+        assert store.summary(a)["active_task"] is not None
+    reconcile(worker)
+    reconcile(worker)
+    assert store.summary(a)["used"] == (0 if refunded else 1)
+    assert store.summary(a)["refunded"] == int(refunded)
+    assert store.summary(a)["active_task"] is None
+    assert store.for_task(other["task_id"])["state"] == "RESERVED"
+
+
+def test_synchronous_first_spawn_failure_refunds_but_later_spawn_failure_does_not(
+    stack, monkeypatch
+):
+    from backend.task_admission.execution import execution_context, launch_crawler
+
+    creation, _, (a, b) = stack
+    store = creation.admission
+
+    def reject(*args, **kwargs):
+        raise OSError("fixture: no process created")
+
+    monkeypatch.setattr(subprocess, "Popen", reject)
+    for owner, previous_launch in ((a, False), (b, True)):
+        row = enqueue(store, owner, owner)
+        store.start(row["task_id"], "worker")
+        if previous_launch:
+            store.collection_launch(row["task_id"], "worker")
+        with execution_context(store, row["task_id"], "worker"):
+            with pytest.raises(OSError):
+                launch_crawler(["fixture-command"])
+        assert store.summary(owner)["used"] == 1  # not refunded before stopped
+        store.settle(row["task_id"], stopped=True)
+        assert store.summary(owner)["used"] == int(previous_launch)
+
+
+def test_cross_day_refund_belongs_to_original_charge_date(stack):
+    creation, _, (a, _) = stack
+    store = creation.admission
+    now = datetime(2026, 9, 20, 15, 59, tzinfo=timezone.utc)
+    store.clock = lambda: now
+    row = enqueue(store, a)
+    store.start(row["task_id"], "worker")
+    store.system_fault(row["task_id"], "worker", "job_creation_failed")
+    now += timedelta(minutes=2)
+    store.settle(row["task_id"], stopped=True)
+    assert store.summary(a)["remaining"] == 3
+    assert store.summary(a)["refunded"] == 0
+    refunded = store.for_task(row["task_id"])
+    assert refunded["day"] == "2026-09-20"
+    assert refunded["charge_state"] == "REFUNDED"
+
+
+def test_manual_report_recovery_cannot_reopen_new_policy_terminal_task(stack):
+    creation, _, (a, _) = stack
+    run = make_run(creation, a, "report-failure-v2")
+    reports = FakeReportAdapter()
+    reports.after_started = lambda: (_ for _ in ()).throw(
+        RuntimeError("provider failed")
+    )
+    worker_for(creation, reports=reports).run_once()
+    row = creation.admission.for_task(run.id)
+    assert row["state"] == "RELEASED"
+    assert row["charge_state"] == "CHARGED"
+    job = {"id": row["job_id"], "owner_user_id": a, "analyze_limit": 1}
+    for action in (
+        "resume_crawl",
+        "resume_analysis",
+        "backfill_analysis",
+        "resume_report",
+    ):
+        with pytest.raises(AdmissionError) as exc:
+            enqueue_resume(creation.admission, job, owner=a, action=action, key=action)
+        assert exc.value.code == "TASK_ALREADY_ENDED"
+    assert creation.admission.summary(a)["used"] == 1
+
+
+def test_job_creation_system_failure_refunds_after_reconciliation(stack):
+    creation, _, (a, _) = stack
+    run = make_run(creation, a, "materialize-failure")
+    execution = FakeExecutionAdapter()
+    execution.ensure_job = lambda run: (_ for _ in ()).throw(
+        OSError("fixture disk full")
+    )
+    worker_for(creation, execution).run_once()
+    row = creation.admission.for_task(run.id)
+    assert row["state"] == "RELEASED"
+    assert row["charge_state"] == "REFUNDED"
+    assert execution.pipeline_calls == 0
+
+
+def test_quota_migration_keeps_old_records_explicitly_versioned(stack):
+    from backend.task_admission.store import AdmissionStore
+
+    creation, _, (a, b) = stack
+    store = creation.admission
+    row = enqueue(store, a)
+    store.settle(row["task_id"], stopped=True)
+    # Recreate the exact pre-v2 schema by dropping only the additive fields.
+    with store.connect() as db:
+        for name in (
+            "quota_policy",
+            "charge_state",
+            "collection_phase",
+            "system_failure",
+            "end_requested_at",
+        ):
+            db.execute(f"ALTER TABLE task_admissions DROP COLUMN {name}")
+    upgraded = AdmissionStore(store.db_path, auth_db=store.auth_db, enabled=True)
+    old = upgraded.for_task(row["task_id"])
+    assert (old["quota_policy"], old["charge_state"], old["collection_phase"]) == (
+        "report_v1",
+        "LEGACY",
+        "UNKNOWN",
+    )
+    assert upgraded.summary(a)["remaining"] == 3
+    assert upgraded.summary(a)["legacy_record_count"] == 1
+    new = enqueue(upgraded, b, "new-policy")
+    assert (new["quota_policy"], new["charge_state"]) == ("accepted_v2", "CHARGED")
+
+
+def test_paused_cross_day_resume_reuses_original_charge(stack):
+    creation, _, (a, _) = stack
+    admission = creation.admission
+    now = datetime(2026, 9, 20, 15, 59, tzinfo=timezone.utc)
+    admission.clock = lambda: now
+    row = enqueue(admission, a)
+    admission.hold(row["task_id"], "paused")
+    now += timedelta(minutes=2)
+    resumed = enqueue_resume(admission, {"id": row["job_id"], "owner_user_id": a}, owner=a,
+                             action="resume_analysis", key="next-day-resume")
+    assert resumed["id"] == row["id"]
+    assert resumed["day"] == "2026-09-20"
+    assert admission.summary(a)["used"] == 0
+    assert admission.summary(a)["active_task"] is not None
+    with admission.connect() as db:
+        assert db.execute("SELECT count(*) FROM task_admissions WHERE charge_state='CHARGED'").fetchone()[0] == 1
+
+
+def test_end_api_waits_for_execution_and_disables_resume_before_delete(stack, tmp_path, monkeypatch):
+    from backend.application_auth.service import ApplicationAuthService
+    from backend.audit_agent.job_store import JobStore
+    from backend.audit_agent.ingestion import IngestionStore
+    from backend.investigation_creation.principal import Principal
+    from backend.task_admission.recovery import reconcile
+    from fastapi import BackgroundTasks, HTTPException
+
+    creation, auth, (a, _) = stack
+    jobs = JobStore(tmp_path / "jobs.sqlite3")
+    ingestion = IngestionStore(tmp_path / "jobs.sqlite3")
+    row = enqueue(creation.admission, a)
+    jobs.create(job_id=row["job_id"], owner_user_id=a, platform="dy", status="analysis_paused",
+                crawl_status="completed", analysis_status="paused")
+    monkeypatch.setattr(main, "job_store", jobs)
+    monkeypatch.setattr(main, "ingestion_store", ingestion)
+    monkeypatch.setattr(main, "investigation_creation_store", creation)
+    monkeypatch.setattr(main, "auth_store", auth)
+    monkeypatch.setattr(main, "auth_service", ApplicationAuthService(auth))
+    monkeypatch.setattr(main, "audit_result_store", SimpleNamespace(delete_for_job=lambda _: 0))
+    principal = Principal(a)
+    assert main.enrich_job(jobs.get(row["job_id"]))["available_actions"]["end_task"]
+    with pytest.raises(HTTPException):
+        main.delete_job(row["job_id"], principal)
+    assert main.cancel_admitted_task(row["task_id"], principal)["state"] == "RESERVED"
+    assert main.enrich_job(jobs.get(row["job_id"]))["available_actions"]["ending"]
+    worker = worker_for(creation, SimpleNamespace(job_store=jobs))
+    with execution_lock(creation.db_path, row["task_id"]):
+        reconcile(worker)
+        with pytest.raises(HTTPException):
+            main.delete_job(row["job_id"], principal)
+    reconcile(worker)
+    ended = main.enrich_job(jobs.get(row["job_id"]))
+    assert ended["available_actions"]["ended"]
+    assert ended["analysis_status"] == "stopped"
+    assert not ended["available_actions"].get("resume_analysis")
+    with pytest.raises(AdmissionError):
+        main.control_job(row["job_id"], main.JobControlRequest(action="resume_analysis"), BackgroundTasks(), principal, idempotency_key="late")
+    assert main.delete_job(row["job_id"], principal)["ok"]
+    assert creation.admission.summary(a)["used"] == 1
+
+
+def test_crawler_preparation_io_fault_refunds_only_before_any_spawn(stack, tmp_path, monkeypatch):
+    from backend.audit_agent.crawler_adapter import MediaCrawlerAdapter
+    from backend.task_admission.execution import execution_context
+    creation, _, (a, b) = stack
+    store = creation.admission
+    monkeypatch.setattr(settings, "crawler_browser_profile_root", tmp_path / "profiles")
+    monkeypatch.setattr(settings, "task_resource_lock_dir", tmp_path / "locks")
+    # A file where a directory is required causes a real pre-spawn OS failure.
+    blocked_output = tmp_path / "output-is-file"
+    blocked_output.write_text("fixture")
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: pytest.fail("must not spawn"))
+    adapter = MediaCrawlerAdapter(tmp_path)
+    for owner, previous in ((a, False), (b, True)):
+        row = enqueue(store, owner, owner)
+        store.start(row["task_id"], "worker")
+        if previous:
+            store.collection_launch(row["task_id"], "worker")
+        with execution_context(store, row["task_id"], "worker"):
+            with pytest.raises(OSError):
+                adapter._run_command(["fixture"], blocked_output, "dy", 1, None, None, account_id="fixture-account")
+        store.settle(row["task_id"], stopped=True)
+        assert store.summary(owner)["used"] == int(previous)

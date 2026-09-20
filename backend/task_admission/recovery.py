@@ -141,9 +141,11 @@ def release_stopped(worker, row, reason, *, failed_publication=False):
             )
         if row["kind"] == "investigation":
             db.execute(
-                "UPDATE investigation_runs SET status='FAILED',error_code=?,error_message=?,claim_token='',heartbeat_at='' WHERE id=? AND status!='PUBLISHED'",
-                (reason, "任务已终止。", row["task_id"]),
+                "UPDATE investigation_runs SET status='FAILED',error_code=?,error_message=?,claim_token='',heartbeat_at='',claimed_by='',claimed_at='',recovery_required=0,completed_at=?,updated_at=? WHERE id=? AND status!='PUBLISHED'",
+                (reason, "任务已终止。", admission.now(), admission.now(), row["task_id"]),
             )
+        fresh = db.execute("SELECT * FROM task_admissions WHERE id=?", (row["id"],)).fetchone()
+        admission.finish_charge(db, fresh)
         db.execute(
             "UPDATE task_admissions SET state='RELEASED',decision='CANCELLED',queue_state='DONE',execution_token='',reason=?,updated_at=? WHERE id=?",
             (reason, admission.now(), row["id"]),

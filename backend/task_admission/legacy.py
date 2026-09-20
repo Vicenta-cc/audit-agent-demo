@@ -108,6 +108,8 @@ def enqueue_resume(admission, job, *, owner, action, key, analyze_limit=0):
             raise AdmissionError(
                 "任务已有成功报告，请创建新任务。", code="TASK_ALREADY_SUCCEEDED"
             )
+        if row and row["quota_policy"] == "accepted_v2" and row["state"] != "RESERVED":
+            raise AdmissionError("任务已结束，请在新对话发起新调查。", code="TASK_ALREADY_ENDED")
         if row and row["state"] == "RESERVED":
             if row["decision"] != "OPEN":
                 raise AdmissionError("任务正在取消或发布，不能恢复。")
@@ -175,11 +177,14 @@ def dispatch_one(worker, task_id=None):
                 job = adapter.job_store.get(row["job_id"])
             else:
                 job = materialize(row, adapter.job_store, adapter.revision_store)
-        except Exception as exc:
-            logger.exception("Job materialization retained admission %s", row["id"])
-            admission.hold(row["task_id"], str(exc))
+        except Exception:
+            logger.exception("Job materialization failed for admission %s", row["id"])
+            admission.system_fault(row["task_id"], token, "job_creation_failed")
+            from .recovery import release_stopped
+            release_stopped(worker, admission.for_task(row["task_id"]), "job_creation_failed")
             return row
         if job is None:
+            admission.system_fault(row["task_id"], token, "job_missing")
             admission.settle(row["task_id"], stopped=True, reason="job_missing")
             return row
         try:
@@ -298,7 +303,10 @@ def finish_legacy(worker, row, token):
         admission.hold(row["task_id"], "paused_or_result_unknown")
         return
     stats = job.get("task_stats") or {}
-    if int(stats.get("pending_analysis_count") or 0) or int(
+    queued = stats.get("queued_analysis_count")
+    if queued is None:
+        queued = max(0, int(stats.get("pending_analysis_count") or 0) - int(stats.get("failed_analysis_count") or 0))
+    if int(queued) or int(
         stats.get("analyzing_count") or 0
     ):
         admission.hold(row["task_id"], "analysis_pending")

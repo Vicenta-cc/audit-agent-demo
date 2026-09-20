@@ -102,3 +102,11 @@ test("M3 source provenance exposes the stored original post without accepting un
   expect(normalizePublicSourceUrl("javascript:alert(1)")).toBe("");
   expect(normalizePublicSourceUrl("not a url")).toBe("");
 });
+
+test("failed posts are separate from queued posts, including old payloads", () => {
+  const run = { task_stats: { pending_analysis_count: 1, failed_analysis_count: 1, completed_analysis_count: 4 } } as InvestigationRunProjection;
+  expect(buildRunProgressItems(run)).toContainEqual({ label: "待分析", value: 0 });
+  expect(buildRunProgressItems(run)).toContainEqual({ label: "审核失败", value: 1 });
+  run.task_stats.queued_analysis_count = 2;
+  expect(buildRunProgressItems(run)).toContainEqual({ label: "待分析", value: 2 });
+});

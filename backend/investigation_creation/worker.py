@@ -175,6 +175,8 @@ class InvestigationWorker:
                     error_message=str(exc)
                     or "AuditPipeline execution result is unknown.",
                 )
+            if self.store.admission.enabled:
+                self.store.admission.system_fault(run.id, run.claim_token, "job_creation_failed")
             return self.store.mark_failed(
                 run.id,
                 run.claim_token,

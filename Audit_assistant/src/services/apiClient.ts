@@ -181,5 +181,9 @@ async function apiRequestOnce<T>(path: string, options: RequestInit = {}): Promi
     return {} as T;
   }
 
-  return (await response.json()) as T;
+  const result = (await response.json()) as T;
+  if (method === "POST" && (path.endsWith("/confirm-and-queue") || path === "/api/jobs" || /\/api\/tasks\/[^/]+\/cancel$/.test(path))) {
+    window.dispatchEvent?.(new Event("task-quota-changed"));
+  }
+  return result;
 }

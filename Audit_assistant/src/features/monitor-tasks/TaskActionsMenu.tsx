@@ -79,6 +79,8 @@ export function TaskActionsMenu({
         <Play size={15} />
         继续分析
       </button>
+      {actions.end_task || actions.ending ? <button type="button" disabled={!actions.end_task}
+        onClick={() => void onControl(task, "stop_all", "结束任务")}><Square size={14} />{actions.ending ? "正在结束…" : "结束任务"}</button> : null}
       <button type="button" className="is-danger" disabled={!actions.delete_job} onClick={() => onDelete(task)}>
         <Trash2 size={15} />
         删除任务

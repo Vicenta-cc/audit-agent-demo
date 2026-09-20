@@ -1151,7 +1151,11 @@ def enrich_job(job: dict) -> dict:
         # Keep the UI control in sync with the endpoint guard. A fresh GET will
         # reopen it when cooldown expires or a login refresh clears cooldown.
         actions["resume_crawl"] = False
-    enriched["available_actions"] = actions
+    from backend.task_admission.presentation import admission_actions
+    admission = investigation_creation_store.admission.for_task(job["id"]) if _authz_enabled() else None
+    enriched["available_actions"] = admission_actions(actions, admission)
+    if admission and admission["state"] == "RELEASED" and admission["end_requested_at"]:
+        enriched.update(crawl_status="stopped", analysis_status="stopped")
     revision_id = str(enriched.get("current_audit_config_revision_id") or "")
     if revision_id:
         revision = audit_config_revision_store.get(revision_id)
@@ -2497,6 +2501,11 @@ def control_job(
 
     if _authz_enabled():
         admission = investigation_creation_store.admission
+        row = admission.for_task(job_id)
+        if row and row["quota_policy"] == "accepted_v2" and request.action != "stop_all" and (
+            row["state"] != "RESERVED" or row["decision"] != "OPEN"
+        ):
+            raise AdmissionError("任务已结束或正在结束，不能继续操作。", code="TASK_ALREADY_ENDED")
         if request.action in {"resume_crawl","resume_analysis","backfill_analysis"}:
             from backend.task_admission.legacy import enqueue_resume, replay_resume
             if isinstance(idempotency_key,str) and replay_resume(admission,job_id,owner=principal.id,
@@ -2653,23 +2662,33 @@ def delete_job(
     job_id: str, principal: Principal = Depends(principal_provider)
 ):
     job = _require_job(job_id, principal, permission="manage")
-    if _authz_enabled():
-        row = investigation_creation_store.admission.for_task(job_id)
-        if row and row["state"] == "RESERVED":
-            raise HTTPException(409,detail="请先取消任务，等待执行停止后再删除。")
-    job_store.update_control(
-        job_id,
-        crawl_stop_requested=True,
-        analysis_paused=False,
-        analysis_stop_requested=True,
-        stop_all_requested=True,
-    )
-    if job.get("status") not in {"completed", "failed", "stopped", "interrupted"}:
-        job_store.update(job_id, status="stopping")
-    job_store.log(job_id, "收到控制指令：删除任务及关联分析帖子")
-    job_store.archive(job_id)
-    deleted_result_count = audit_result_store.delete_for_job(job_id)
-    return {"ok": True, "id": job_id, "deleted_result_count": deleted_result_count}
+    from contextlib import ExitStack
+    from backend.task_admission.execution import execution_lock
+    with ExitStack() as guards:
+        if _authz_enabled():
+            admission = investigation_creation_store.admission
+            db = guards.enter_context(admission.connect())
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM task_admissions WHERE job_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1", (job_id,)).fetchone()
+            task_id = row["task_id"] if row else "legacy:" + job_id
+            if not guards.enter_context(execution_lock(admission.db_path, task_id)):
+                raise HTTPException(409, detail="后台尚未停止，请稍后再删除。")
+            if row and row["state"] == "RESERVED":
+                raise HTTPException(409, detail="请先结束整个任务，等待后台停止后再删除。")
+            if not row:
+                job = job_store.get(job_id)
+                stats = ingestion_store.stats_for_task(job_id)
+                if job.get("status") not in {"completed", "failed"} or stats.get("analyzing_count") or stats.get("queued_analysis_count"):
+                    raise HTTPException(409, detail="历史任务结束状态尚未核实，请联系管理员。")
+        else:
+            job_store.update_control(job_id, crawl_stop_requested=True, analysis_paused=False,
+                                     analysis_stop_requested=True, stop_all_requested=True)
+            if job.get("status") not in {"completed", "failed", "stopped", "interrupted"}:
+                job_store.update(job_id, status="stopping")
+        job_store.log(job_id, "收到控制指令：删除任务及关联分析帖子")
+        job_store.archive(job_id)
+        deleted_result_count = audit_result_store.delete_for_job(job_id)
+        return {"ok": True, "id": job_id, "deleted_result_count": deleted_result_count}
 
 
 @app.get("/api/jobs/{job_id}/items")
@@ -2816,7 +2835,7 @@ async def admission_error_handler(request: Request, exc):
 
 @app.get("/api/me/task-quota")
 def current_task_quota(principal: Principal = Depends(principal_provider)):
-    return investigation_creation_store.admission.summary(principal.id)
+    return {**investigation_creation_store.admission.summary(principal.id), "enabled": _authz_enabled()}
 
 
 def _signal_admission_stop(row):

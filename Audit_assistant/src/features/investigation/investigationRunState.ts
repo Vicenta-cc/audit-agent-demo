@@ -3,7 +3,7 @@ import type { InvestigationRunProjection } from "../../types/investigationCreati
 
 export interface InvestigationRunViewState {
   phase: AgentExecutionPhase;
-  terminal: "published" | "failed" | "interrupted" | "paused" | null;
+  terminal: "published" | "failed" | "interrupted" | "paused" | "ended" | "completed" | null;
   label: string;
   step: 1 | 2 | 3 | 4;
   activity: "queued" | "running" | "stopped" | "completed";
@@ -12,10 +12,19 @@ export interface InvestigationRunViewState {
 export function mapInvestigationRunState(
   run: InvestigationRunProjection
 ): InvestigationRunViewState {
+  if (run.available_actions?.ending) {
+    return { phase: "audit_working", terminal: null, label: "正在结束，等待后台停止", step: inferStoppedStep(run), activity: "running" };
+  }
+  if (run.available_actions?.ended && run.error_code === "cancelled") {
+    return { phase: "audit_working", terminal: "ended", label: "任务已结束", step: inferStoppedStep(run), activity: "stopped" };
+  }
   const crawlActive = ["queued", "running", "pausing"].includes(run.crawl_status);
   const analysisActive = ["queued", "running", "pausing"].includes(run.analysis_status);
   if (run.status === "AUDIT_COMPLETED") {
-    return { phase: "audit_completed", terminal: null, label: run.analysis_status === "partial" ? "处理结束，部分帖子审核失败" : "审核完成", step: 3, activity: "completed" };
+    if (Number(run.task_stats?.failed_analysis_count) > 0 && Number(run.task_stats?.completed_analysis_count) === 0) {
+      return { phase: "audit_completed", terminal: "completed", label: "处理结束，帖子审核失败，未生成报告", step: 3, activity: "completed" };
+    }
+    return { phase: "audit_completed", terminal: "completed", label: run.analysis_status === "partial" ? "处理结束，部分帖子审核失败" : "审核完成", step: 3, activity: "completed" };
   }
   if (run.status === "PUBLISHED") {
     return { phase: "completed", terminal: "published", label: "报告已发布", step: 4, activity: "completed" };
@@ -60,4 +69,17 @@ function inferStoppedStep(run: InvestigationRunProjection): 1 | 2 | 3 | 4 {
   if (run.report_status && !["pending", "not_started", "unknown"].includes(run.report_status)) return 4;
   if (["running", "paused", "completed", "failed", "stopped"].includes(run.analysis_status)) return 2;
   return 1;
+}
+
+// A pause stops polling only while no end request is being reconciled.
+export function shouldPollInvestigationRun(run: InvestigationRunProjection): boolean {
+  if (run.available_actions?.ending) return true;
+  if (["AUDIT_COMPLETED", "PUBLISHED", "FAILED"].includes(run.status)) {
+    return Boolean(run.available_actions?.end_task);
+  }
+  if (run.status === "INTERRUPTED") {
+    return ["queued", "running", "pausing"].includes(run.crawl_status)
+      || ["queued", "running", "pausing"].includes(run.analysis_status);
+  }
+  return true;
 }

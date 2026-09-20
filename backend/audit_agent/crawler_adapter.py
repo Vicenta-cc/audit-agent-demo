@@ -358,11 +358,21 @@ class MediaCrawlerAdapter:
                 )
                 acquired = legacy_acquired and leases.enter_context(account_lease(platform, account_id))
                 if acquired:
-                    return self._run_command_locked(
-                        command, save_root, platform, max_notes, progress_callback,
-                        content_callback, stop_checker, auth_state, started_callback,
-                        checkpoint_callback, account_id,
-                    )
+                    try:
+                        return self._run_command_locked(
+                            command, save_root, platform, max_notes, progress_callback,
+                            content_callback, stop_checker, auth_state, started_callback,
+                            checkpoint_callback, account_id,
+                        )
+                    except OSError:
+                        # Preparation I/O can fail before spawn (e.g. log directory).
+                        # This never retracts a prior launch barrier.
+                        from backend.task_admission.execution import current_execution
+                        execution = current_execution()
+                        if execution:
+                            store, task_id, token = execution
+                            store.system_fault(task_id, token, "crawler_io_failed")
+                        raise
             sleep(0.1)
 
     def _run_command_locked(
@@ -390,8 +400,8 @@ class MediaCrawlerAdapter:
         with stdout_path.open("w", encoding="utf-8", errors="replace") as stdout_file, stderr_path.open(
             "w", encoding="utf-8", errors="replace"
         ) as stderr_file:
-            from backend.task_admission.execution import crawler_fds
-            completed = subprocess.Popen(
+            from backend.task_admission.execution import crawler_fds, launch_crawler
+            completed = launch_crawler(
                 command,
                 pass_fds=crawler_fds(),
                 cwd=self.media_crawler_dir,

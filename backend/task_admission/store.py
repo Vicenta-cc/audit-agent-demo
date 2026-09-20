@@ -29,7 +29,7 @@ class AdmissionStore:
     """One control DB transaction owns quota, user slot and dispatch intent.
 
     No foreign keys to deletable business records: the ledger survives erasure.
-    A RESERVED row owns both the daily quota and the user's unfinished slot.
+    RESERVED tracks the unfinished slot. charge_state independently tracks billing.
     """
 
     def __init__(self, db_path=None, *, auth_db=None, clock=None, enabled=None):
@@ -83,7 +83,86 @@ class AdmissionStore:
             columns = {r[1] for r in db.execute("PRAGMA table_info(task_admissions)")}
             for column in ("waiting_reason", "resource_account_id"):
                 if column not in columns:
-                    db.execute(f"ALTER TABLE task_admissions ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+                    db.execute(
+                        f"ALTER TABLE task_admissions ADD COLUMN {column} TEXT NOT NULL DEFAULT ''"
+                    )
+
+        # Existing rows retain report-v1 semantics; never reinterpret history.
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            columns = {r[1] for r in db.execute("PRAGMA table_info(task_admissions)")}
+            additions = {
+                "quota_policy": "TEXT NOT NULL DEFAULT 'report_v1'",
+                "charge_state": "TEXT NOT NULL DEFAULT 'LEGACY'",
+                "collection_phase": "TEXT NOT NULL DEFAULT 'UNKNOWN'",
+                "system_failure": "TEXT NOT NULL DEFAULT ''",
+                "end_requested_at": "TEXT NOT NULL DEFAULT ''",
+            }
+            for column, declaration in additions.items():
+                if column not in columns:
+                    db.execute(
+                        f"ALTER TABLE task_admissions ADD COLUMN {column} {declaration}"
+                    )
+
+    @staticmethod
+    def charge_predicate():
+        return "(charge_state='CHARGED' OR (quota_policy='report_v1' AND state IN ('RESERVED','SUCCEEDED')))"
+
+    @staticmethod
+    def finish_charge(db, row):
+        # Caller must prove execution stopped. Only positive pre-launch system
+        # fault evidence permits a refund; cancellation and ambiguity never do.
+        if (
+            row["quota_policy"] == "accepted_v2"
+            and row["charge_state"] == "CHARGED"
+            and row["collection_phase"] == "NOT_STARTED"
+            and row["system_failure"]
+            and not row["end_requested_at"]
+        ):
+            db.execute(
+                "UPDATE task_admissions SET charge_state='REFUNDED' WHERE id=?",
+                (row["id"],),
+            )
+
+    def collection_launch(self, task_id, token):
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT * FROM task_admissions WHERE task_id=? AND state='RESERVED'",
+                (task_id,),
+            ).fetchone()
+            if not row or row["execution_token"] != token or row["decision"] != "OPEN":
+                raise AdmissionError(
+                    "任务已结束，不能启动采集。", code="EXECUTION_FENCED"
+                )
+            self.validate_user(db, row["owner_id"], row["resource_account_id"])
+            first = row["collection_phase"] == "NOT_STARTED"
+            db.execute(
+                "UPDATE task_admissions SET collection_phase='MAY_HAVE_STARTED',updated_at=? WHERE id=?",
+                (self.now(), row["id"]),
+            )
+            return first
+
+    def system_fault(self, task_id, token, reason, *, launch_rejected=False):
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT * FROM task_admissions WHERE task_id=? AND state='RESERVED' AND execution_token=?",
+                (task_id, token),
+            ).fetchone()
+            if not row:
+                return
+            if launch_rejected:
+                # Only Popen's synchronous failure, before a child exists, may
+                # retract the first launch barrier. Never clear an earlier run.
+                db.execute(
+                    "UPDATE task_admissions SET collection_phase='NOT_STARTED' WHERE id=?",
+                    (row["id"],),
+                )
+            db.execute(
+                "UPDATE task_admissions SET system_failure=?,updated_at=? WHERE id=?",
+                (reason, self.now(), row["id"]),
+            )
 
     def connect(self):
         db = sqlite3.connect(self.db_path, timeout=30)
@@ -145,22 +224,23 @@ class AdmissionStore:
         ).fetchone()
         if active:
             raise AdmissionError(
-                "已有任务处理中，请完成或取消后再提交。",
+                "已有未完成任务，请完成或结束整个任务后再提交。",
                 code="USER_TASK_LIMIT",
                 details=dict(active),
             )
         day = self.clock().astimezone(ZoneInfo("Asia/Shanghai")).date().isoformat()
         count = db.execute(
-            "SELECT count(*) FROM task_admissions WHERE owner_id=? AND day=? AND state IN ('RESERVED','SUCCEEDED')",
+            "SELECT count(*) FROM task_admissions WHERE owner_id=? AND day=? AND "
+            + self.charge_predicate(),
             (owner, day),
         ).fetchone()[0]
         if count >= 3:
-            raise AdmissionError("今日三个报告名额已用完。", code="DAILY_REPORT_LIMIT")
+            raise AdmissionError("今日三次任务额度已用完。", code="DAILY_REPORT_LIMIT")
         ident, now = uuid4().hex, self.now()
         db.execute(
             """INSERT INTO task_admissions
-            (id,owner_id,task_id,job_id,kind,day,state,request_key,fingerprint,payload_json,created_at,updated_at)
-            VALUES (?,?,?,?,?,?,'RESERVED',?,?,?,?,?)""",
+            (id,owner_id,task_id,job_id,kind,day,state,request_key,fingerprint,payload_json,created_at,updated_at,quota_policy,charge_state,collection_phase)
+            VALUES (?,?,?,?,?,?,'RESERVED',?,?,?,?,?,'accepted_v2','CHARGED',?)""",
             (
                 ident,
                 owner,
@@ -173,6 +253,7 @@ class AdmissionStore:
                 json.dumps(payload, ensure_ascii=False),
                 now,
                 now,
+                "UNKNOWN" if payload.get("resume_action") else "NOT_STARTED",
             ),
         )
         return dict(
@@ -216,6 +297,19 @@ class AdmissionStore:
                     (owner, day),
                 ).fetchall()
             )
+            charged = db.execute(
+                "SELECT count(*) FROM task_admissions WHERE owner_id=? AND day=? AND "
+                + self.charge_predicate(),
+                (owner, day),
+            ).fetchone()[0]
+            legacy = db.execute(
+                "SELECT count(*) FROM task_admissions WHERE owner_id=? AND day=? AND quota_policy='report_v1'",
+                (owner, day),
+            ).fetchone()[0]
+            refunded = db.execute(
+                "SELECT count(*) FROM task_admissions WHERE owner_id=? AND day=? AND charge_state='REFUNDED'",
+                (owner, day),
+            ).fetchone()[0]
             active = db.execute(
                 "SELECT task_id,job_id,queue_state,decision,day,waiting_reason,resource_account_id FROM task_admissions WHERE owner_id=? AND state='RESERVED'",
                 (owner,),
@@ -227,7 +321,12 @@ class AdmissionStore:
             limit=3,
             completed=used,
             reserved=reserved,
-            remaining=max(0, 3 - used - reserved),
+            used=charged,
+            in_progress=reserved,
+            refunded=refunded,
+            quota_policy="accepted_v2",
+            legacy_record_count=legacy,
+            remaining=max(0, 3 - charged),
             reset_at=reset.isoformat(),
             active_task=dict(active) if active else None,
         )
@@ -253,8 +352,8 @@ class AdmissionStore:
             # Never free a slot here, including queued tasks. The worker proves
             # no surviving execution exists under the execution lock first.
             db.execute(
-                "UPDATE task_admissions SET decision='CANCELLED',updated_at=? WHERE id=?",
-                (self.now(), row["id"]),
+                "UPDATE task_admissions SET decision='CANCELLED',end_requested_at=?,updated_at=? WHERE id=?",
+                (self.now(), self.now(), row["id"]),
             )
             return dict(
                 db.execute(
@@ -274,7 +373,9 @@ class AdmissionStore:
             self.validate_user(
                 db,
                 row["owner_id"],
-                row["resource_account_id"] or json.loads(row["payload_json"]).get("crawler_account_id") or "",
+                row["resource_account_id"]
+                or json.loads(row["payload_json"]).get("crawler_account_id")
+                or "",
             )
             if row["decision"] == "CANCELLED":
                 raise AdmissionError("任务已取消。", code="TASK_CANCELLED")
@@ -325,6 +426,7 @@ class AdmissionStore:
                 if not stopped or row["decision"] in ("PUBLISHING", "PUBLISHED"):
                     raise AdmissionError("执行或发布结果尚未核实，继续保留名额。")
                 state, decision = "RELEASED", "CANCELLED"
+                self.finish_charge(db, row)
             db.execute(
                 "UPDATE task_admissions SET state=?,decision=?,queue_state='DONE',report_version_id=?,reason=?,updated_at=? WHERE id=?",
                 (state, decision, report_id, reason, self.now(), row["id"]),

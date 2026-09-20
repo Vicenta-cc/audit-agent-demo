@@ -56,3 +56,22 @@ def assert_execution(job_id, execution=None):
         raise AdmissionError("任务已结束或执行权失效。", code="EXECUTION_FENCED")
     with store.connect() as db:
         store.validate_user(db, row["owner_id"], row.get("resource_account_id") or "")
+
+
+def launch_crawler(command, **kwargs):
+    """Persist uncertainty BEFORE spawn; only synchronous no-child failure retracts it."""
+    import subprocess
+
+    execution = current_execution()
+    first = False
+    if execution:
+        store, task_id, token = execution
+        first = store.collection_launch(task_id, token)
+    try:
+        return subprocess.Popen(command, **kwargs)
+    except OSError:
+        if execution:
+            store.system_fault(
+                task_id, token, "crawler_spawn_failed", launch_rejected=first
+            )
+        raise

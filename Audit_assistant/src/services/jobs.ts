@@ -495,3 +495,7 @@ function toNumber(value: unknown) {
   const number = Number(value || 0);
   return Number.isFinite(number) ? number : 0;
 }
+
+export function endTask(taskId: string) {
+  return apiRequest<{ state: string; decision: string }>(`/api/tasks/${encodeURIComponent(taskId)}/cancel`, { method: "POST" });
+}

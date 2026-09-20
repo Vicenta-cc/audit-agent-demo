@@ -50,8 +50,8 @@ import {
   clearHistoricalPendingTurn,
   storeHistoricalPendingTurn
 } from "./historicalReportPending";
-import { mapInvestigationRunState } from "./investigationRunState";
-import { buildConfirmationIdempotencyKey } from "./confirmationView";
+import { mapInvestigationRunState, shouldPollInvestigationRun } from "./investigationRunState";
+import { buildConfirmationIdempotencyKey, isTaskAdmissionRejection } from "./confirmationView";
 import {
   activityTimelineMessage,
   activityTimelineMessages,
@@ -1621,13 +1621,11 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           );
           return;
         }
-        if (run.status === "AUDIT_COMPLETED") {
+        if (run.status === "AUDIT_COMPLETED" && !shouldPollInvestigationRun(run)) {
           runPollTimersRef.current.delete(uiSessionId);
           return;
         }
-        const crawlActive = ["queued", "running", "pausing"].includes(run.crawl_status);
-        const analysisActive = ["queued", "running", "pausing"].includes(run.analysis_status);
-        if (run.status === "FAILED" || (run.status === "INTERRUPTED" && !crawlActive && !analysisActive)) {
+        if (!shouldPollInvestigationRun(run)) {
           runPollTimersRef.current.delete(uiSessionId);
           return;
         }
@@ -1705,7 +1703,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         run.run_id
       );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
+      if (error instanceof ApiError && error.status === 409 && !isTaskAdmissionRejection(error.code)) {
         const [currentDraft, currentPreview] = await Promise.all([
           getInvestigationDraft(draft.id),
           getConfirmationPreview(draft.id)
@@ -1751,12 +1749,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       if (
         !binding
         || !run
-        || ["AUDIT_COMPLETED", "PUBLISHED", "FAILED"].includes(run.status)
-        || (
-          run.status === "INTERRUPTED"
-          && !["queued", "running", "pausing"].includes(run.crawl_status)
-          && !["queued", "running", "pausing"].includes(run.analysis_status)
-        )
+        || !shouldPollInvestigationRun(run)
         || runPollTimersRef.current.has(session.id)
       ) return;
       pollCreationRun(

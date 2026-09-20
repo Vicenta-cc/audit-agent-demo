@@ -442,6 +442,13 @@ class InvestigationCreationService:
             principal=principal.id,
         )
         projected: dict[str, Any] = self.run_projector.project(run)
+        from backend.task_admission.presentation import admission_actions
+        admission = self.store.admission.for_task(run.id)
+        projected["available_actions"] = admission_actions(
+            projected.get("available_actions") or {}, admission
+        )
+        if admission and admission["state"] == "RELEASED" and admission["end_requested_at"]:
+            projected.update(crawl_status="stopped", analysis_status="stopped", report_status="cancelled")
         return InvestigationRunProjection(
             run_id=run.id,
             draft_id=run.draft_id,

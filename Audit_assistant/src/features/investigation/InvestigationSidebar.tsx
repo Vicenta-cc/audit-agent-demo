@@ -1,3 +1,4 @@
+import { TaskQuota } from "../../components/feedback/TaskQuota";
 import { useState } from "react";
 import {
   Plus,
@@ -224,6 +225,7 @@ export function InvestigationSidebar({
       </div>
 
       {/* Footer */}
+      {!isCollapsed ? <div className="inv-sidebar-footer"><TaskQuota /></div> : null}
       <div className="inv-sidebar-footer">
         <button type="button" className="inv-collapse-btn" onClick={onToggleCollapse}>
           <PanelLeftClose size={15} />
