@@ -1,0 +1,15 @@
+[Unit]
+Description=Private edge relay for isolated XHS Audit R2
+After=docker.service xhs-audit-r2-abc.service
+Requires=docker.service xhs-audit-r2-abc.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /mnt/datadisk0/xhs-audit-agent-r2-abc/edge_relay.py
+Restart=on-failure
+RestartSec=2
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

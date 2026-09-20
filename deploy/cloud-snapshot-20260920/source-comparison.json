@@ -1,0 +1,12 @@
+{
+  "application": {
+    "commit": "509d922af4d23dec9d488e7f1e3b95042b0c4bf1",
+    "tracked_files_verified": 888,
+    "mismatches": []
+  },
+  "crawler": {
+    "commit": "efafe3186400b1020955c6acfdc201235b84a2d8",
+    "tracked_files_verified": 287,
+    "mismatches": []
+  }
+}

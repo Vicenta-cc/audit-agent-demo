@@ -1,0 +1,81 @@
+{
+  "captured_at_utc": "2026-09-20T07:23:39.012056+00:00",
+  "files": [
+    {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/candidate-runtime.sh",
+      "sha256": "8493415052131532cd387fd035326aa0290e7d45b344851986d2f5f683370d67",
+      "matches_existing_archive": true,
+      "repository_file": "deploy/r2-frozen-20260918/candidate-runtime.sh"
+    },
+    {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/candidate_runtime.py",
+      "sha256": "bf7904dc2777ad48c0a43873e285775421ab4a7636e5964de78ff0d0e1bea1f9",
+      "matches_existing_archive": true,
+      "repository_file": "deploy/r2-frozen-20260918/candidate_runtime.py"
+    },
+    {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/runtime.json",
+      "sha256": "fad8ff89274e6ccea2ba60585edd6720bbcd13e8bd9d0b5de0188c2bf8027365",
+      "matches_existing_archive": true,
+      "repository_file": "deploy/r2-frozen-20260918/runtime.json.example"
+    },
+    {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/runtime-support/serve.py",
+      "sha256": "cf1de607fef0656c774f81de3f46d29372b808eb1778bebbb6d05f673e581fbe",
+      "matches_existing_archive": true,
+      "repository_file": "deploy/r2-frozen-20260918/runtime-support/serve.py"
+    },
+    {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/runtime-support/worker.py",
+      "sha256": "a50737899a2469bbf7b2787e3f8ac315ba49248781ded5a4fa9dafad399fdc2e",
+      "matches_existing_archive": true,
+      "repository_file": "deploy/r2-frozen-20260918/runtime-support/worker.py"
+    },
+    {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/runtime-support/frontend.py",
+      "sha256": "d5f160352f893941be77c0c15f2fe175bba318c4fd6251eb88d146ea121d8592",
+      "matches_existing_archive": true,
+      "repository_file": "deploy/r2-frozen-20260918/runtime-support/frontend.py"
+    },
+    {
+      "source": "/etc/systemd/system/xhs-audit-r2-abc.service",
+      "sha256": "9bee80c6e36ce0fcdef625e7362d926630caaae2fe2fa7e2134f3b40f41d6c35",
+      "matches_existing_archive": true,
+      "repository_file": "deploy/r2-frozen-20260918/systemd/xhs-audit-r2-abc.service"
+    },
+    {
+      "source": "/etc/systemd/system/xhs-audit-r2-abc.service.d/20-coder-asr.conf",
+      "sha256": "4c5dfc01559218833a6d19489c6f5bb167a1327d63206cd8da627833b2fac5d3",
+      "matches_existing_archive": true,
+      "repository_file": "deploy/r2-frozen-20260918/systemd/20-coder-asr.conf"
+    },
+    {
+      "source": "/etc/systemd/system/xhs-audit-r2-abc.service.d/10-cloakbrowser.conf",
+      "sha256": "d4149db2ee246f26cc0c34152973d603a2258b62195bb94610989ecbe6dd5b96",
+      "matches_existing_archive": true,
+      "repository_file": "deploy/r2-frozen-20260918/systemd/10-cloakbrowser.conf"
+    },
+    {
+      "source": "/mnt/datadisk0/xhs-audit-agent-r2-abc/edge_relay.py",
+      "sha256": "49f008613a0defd47952cb77ef5452f20210d4a5d74c3fe8f3bb391501906bf5",
+      "repository_file": "deploy/cloud-snapshot-20260920/edge/edge_relay.py"
+    },
+    {
+      "source": "/etc/systemd/system/xhs-audit-r2-edge-relay.service",
+      "sha256": "8c96c90b36c3d09dc5356b023a1ba6177341c8706fe3aa728c1a43149fded7cd",
+      "repository_file": "deploy/cloud-snapshot-20260920/systemd/xhs-audit-r2-edge-relay.service"
+    },
+    {
+      "source": "/etc/systemd/system/xhs-audit-r2-coder-asr.service",
+      "sha256": "1c7ed3bf9255662b9449bf4cadb464105ec84d37f151ef4f973376a40c1087e9",
+      "repository_file": "deploy/cloud-snapshot-20260920/systemd/xhs-audit-r2-coder-asr.service"
+    },
+    {
+      "source": "/mnt/datadisk0/edge-proxy/nginx.conf",
+      "source_sha256": "1fb1a0d4bba7cc945cad341d8ac19975a4cf79e2373a155475eebcc5704c26e3",
+      "repository_file": "deploy/cloud-snapshot-20260920/edge/content-audit.nginx.conf",
+      "sha256": "fdcb40216f96ee32147fecda4aaeadf6b85fb67eed0adfe969021731f6e58e5d",
+      "transformation": "Extract only server blocks for content-audit.guixucloud.cn; other sites excluded"
+    }
+  ]
+}
