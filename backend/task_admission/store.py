@@ -274,13 +274,12 @@ class AdmissionStore:
         ).fetchone()
         return str(row[0] or "private") if row else ""
 
-        return user
-
     def reserve(
         self, db, *, owner, task_id, kind, key, payload, job_id="", request_hash=None
     ):
         digest = request_hash or fingerprint(payload)
-        user = self.validate_user(db, owner, payload.get("crawler_account_id") or "")
+        self.validate_user(db, owner, payload.get("crawler_account_id") or "")
+        user = self.user_record(db, owner)
         unlimited = user is not None and user["role"] == "admin"
         previous = db.execute(
             "SELECT * FROM task_admissions WHERE owner_id=? AND request_key=?",
