@@ -15,6 +15,7 @@ from time import perf_counter, time_ns
 import requests
 
 from .auth_state_cipher import auth_state_cipher
+from .asr_chunks import ASROutOfMemoryError, is_asr_oom
 from .asset_utils import download_url_with_error, safe_filename_from_url, split_csv_urls
 from .config import settings
 from .crawler_account_store import crawler_account_store
@@ -54,7 +55,7 @@ def _analysis_lock_for(job_id: str) -> threading.RLock:
 
 
 def _authorized_crawler_account_ids(job_id: str) -> frozenset[str] | None:
-    """Return the task owner's private accounts, or None when auth is disabled."""
+    """Return public accounts plus the task owner's private accounts."""
     if settings.app_auth_mode != "required":
         return None
     job = job_store.get(job_id) or {}
@@ -68,7 +69,13 @@ def _authorized_crawler_account_ids(job_id: str) -> frozenset[str] | None:
         default_validity_days=settings.app_account_validity_days,
         activation_mode=settings.app_account_activation_mode,
     )
-    return store.owned_crawler_account_ids(owner_user_id)
+    private_ids = store.owned_crawler_account_ids(owner_user_id)
+    public_ids = frozenset(
+        str(account["id"])
+        for account in crawler_account_store.list()
+        if str(account.get("access_scope") or "private") == "public"
+    )
+    return private_ids | public_ids
 
 AUDIO_URL_EXTENSIONS = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
 AUDIO_FILE_SIGNATURES = (
@@ -534,7 +541,6 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
-                            self._consecutive_provider_failures = 0
                             results.append(persisted or result)
                         except Exception as exc:
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
@@ -603,7 +609,6 @@ class AuditPipeline:
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
                             analyzed_ids.add(subject.note_id)
                             continue
-                        self._consecutive_provider_failures = 0
                         results.append(persisted or result)
                         job_store.update(self.job_id, items=results)
                         job_store.log(self.job_id, f"边抓边分析完成：{subject.note_id}")
@@ -1135,7 +1140,6 @@ class AuditPipeline:
                         self._record_subject_failure(output.platform, subject_key, subject, exc)
                         analyzed_ids.add(subject.note_id)
                         continue
-                    self._consecutive_provider_failures = 0
                     results.append(persisted or result)
                     analyzed_ids.add(subject.note_id)
                     job_store.update(self.job_id, items=results)
@@ -1320,14 +1324,26 @@ class AuditPipeline:
         # Preserve error types/status only: raw network errors can contain credentials.
         statuses = [e.response.status_code for e in chain
                     if isinstance(e, requests.HTTPError) and e.response is not None]
-        fatal_provider = (provider_failure and any(code in {401, 402, 403} for code in statuses)) or any(
-            isinstance(e, AuditProviderUnavailableError) for e in chain)
-        count = getattr(self, "_consecutive_provider_failures", 0) + 1 if provider_failure else 0
-        self._consecutive_provider_failures = count
+        # Per-post failures never issue user controls or impose a failure-count
+        # circuit breaker. Drain the selected posts so valid results can report.
+        messages = [str(e).lower() for e in chain]
+        messages.extend(e.response.text.lower() for e in chain
+                        if isinstance(e, requests.HTTPError) and e.response is not None)
+        oom = any(isinstance(e, ASROutOfMemoryError) or is_asr_oom(e) for e in chain) or any(is_asr_oom(m) for m in messages)
+        content_blocked = any("data_inspection_failed" in m for m in messages)
         self._begin_subject_audit()
         folder = settings.outputs_dir / self.job_id / "post_failures"
         folder.mkdir(parents=True, exist_ok=True)
-        if statuses:
+        if oom:
+            reason = "语音转写 GPU 显存不足，当前帖子未完成审核"
+            error_code = "asr_gpu_out_of_memory"
+        elif content_blocked:
+            reason = "模型供应商内容安全检查拦截，本帖审核未完成，不代表已判定违规"
+            error_code = "audit_content_blocked"
+        elif any(isinstance(e, AuditProviderUnavailableError) for e in chain):
+            reason = "审核服务未配置或不可用，当前帖子未完成审核"
+            error_code = "audit_provider_unavailable"
+        elif statuses:
             reason = f"审核接口返回 HTTP {statuses[-1]}"
             error_code = f"audit_http_{statuses[-1]}"
         elif any(isinstance(e, (QwenTimeoutError, requests.Timeout, TimeoutError)) for e in chain):
@@ -1343,30 +1359,19 @@ class AuditPipeline:
                   "error_code": error_code,
                   "stage": getattr(self, "_current_audit_stage", "post_audit"),
                   "error_type": type(exc).__name__, "cause_types": [type(e).__name__ for e in chain],
-                  "http_statuses": statuses, "consecutive_provider_failures": count,
-                  "action": "stop_analysis_only" if fatal_provider or count >= 3 else "skip_post"}
+                  "http_statuses": statuses, "action": "skip_post"}
         (folder / f"{subject.note_id}-{time_ns()}.json").write_text(
             json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
         job_store.log(
             self.job_id,
-            f"笔记 {subject.note_id}：审核失败（{type(exc).__name__}），已记录并跳过",
+            f"笔记 {subject.note_id}：{reason}；已记录并跳过",
             level="error",
             reason=reason,
             error_code=error_code,
-            retryable=bool(provider_failure and not fatal_provider and count < 3),
+            retryable=bool(provider_failure and not oom and not content_blocked
+                           and not any(code in {401, 402, 403} for code in statuses)),
             action=record["action"],
         )
-        if fatal_provider or count >= 3:
-            job_store.update_control(self.job_id, analysis_stop_requested=True)
-            job_store.log(
-                self.job_id,
-                "审核服务不可用或连续三帖调用失败，仅停止审核；采集继续，待审核内容保留",
-                level="error",
-                reason="审核服务不可用或连续失败已达到停止阈值",
-                error_code="analysis_provider_failure_threshold",
-                retryable=True,
-                action="stop_analysis_only",
-            )
 
     def _assert_authoritative_provider_healthy(self) -> None:
         if not getattr(self, "authoritative_m3", False):
@@ -1490,7 +1495,6 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
-                            self._consecutive_provider_failures = 0
                             results.append(persisted or result)
                             job_store.update(self.job_id, items=results)
                         except Exception as exc:

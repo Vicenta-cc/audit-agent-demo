@@ -241,9 +241,9 @@ class Settings:
         os.getenv("MEDIACRAWLER_DIR", str(ROOT / "external" / "MediaCrawler"))
     ).expanduser()
     task_resource_lock_dir = Path(os.getenv("TASK_RESOURCE_LOCK_DIR", str(data_dir / "resource-locks"))).expanduser().resolve()
-    task_execution_capacity = max(1, int(os.getenv("TASK_EXECUTION_CAPACITY", "2")))
-    task_analysis_capacity = max(1, int(os.getenv("TASK_ANALYSIS_CAPACITY", "2")))
-    task_worker_processes = max(1, int(os.getenv("TASK_WORKER_PROCESSES", "2")))
+    task_execution_capacity = max(1, int(os.getenv("TASK_EXECUTION_CAPACITY", "3")))
+    task_analysis_capacity = max(1, int(os.getenv("TASK_ANALYSIS_CAPACITY", "3")))
+    task_worker_processes = max(1, int(os.getenv("TASK_WORKER_PROCESSES", "3")))
     request_scheduler_db = Path(os.getenv("REQUEST_SCHEDULER_DB", str(data_dir / "request_scheduler.sqlite3"))).expanduser().resolve()
     crawler_content_pacing_enabled = os.getenv("CRAWLER_CONTENT_PACING_ENABLED", "true").lower() != "false"
     request_min_interval = float(os.getenv("REQUEST_MIN_INTERVAL", "2"))
@@ -310,6 +310,12 @@ class Settings:
     whisper_compute_type = asr_compute_type
     whisper_cpu_fallback = os.getenv("WHISPER_CPU_FALLBACK", "true").lower() == "true"
     dolphin_model = os.getenv("DOLPHIN_MODEL", "small")
+    # Bound individual ASR requests even when the remote server is an older build.
+    # Dolphin attention memory grows sharply with audio length. Keep the
+    # default conservative on the observed H20 deployment; operators can
+    # raise it after measuring free VRAM on their own worker.
+    asr_chunk_seconds = max(15, min(300, int(os.getenv("ASR_CHUNK_SECONDS", "120"))))
+    asr_chunk_overlap_seconds = max(0, min(5, int(os.getenv("ASR_CHUNK_OVERLAP_SECONDS", "5"))))
     dolphin_model_dir = os.getenv("DOLPHIN_MODEL_DIR", "")
     dolphin_lang_sym = os.getenv("DOLPHIN_LANG_SYM", asr_language or "auto")
     dolphin_region_sym = os.getenv("DOLPHIN_REGION_SYM", "CN")

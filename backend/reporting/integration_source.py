@@ -325,6 +325,12 @@ class CanonicalReportSource:
 
     @staticmethod
     def _public_failure_reason(error_code: str) -> str:
+        if error_code == "asr_gpu_out_of_memory":
+            return "语音转写 GPU 显存不足，帖子审核未完成"
+        if error_code == "audit_content_blocked":
+            return "模型供应商内容安全检查拦截，审核未完成，不代表已判定违规"
+        if error_code == "audit_provider_unavailable":
+            return "审核服务未配置或不可用"
         if error_code == "fusion_contract_invalid":
             return "审核结果未通过证据或格式校验"
         if error_code == "audit_timeout":

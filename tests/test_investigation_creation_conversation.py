@@ -773,10 +773,10 @@ def test_fake_runtime_activity_stream_preserves_turn_replay_idempotency(
     activities = [event for event in events if event["event_type"] == "activity"]
 
     assert [(event["label"], event["status"]) for event in activities] == [
-        ("查询可用平台、审核规则和黑话库", "running"),
-        ("查询可用平台、审核规则和黑话库", "succeeded"),
-        ("查询可用平台、审核规则和黑话库", "running"),
-        ("查询可用平台、审核规则和黑话库", "succeeded"),
+        ("查询可用平台与审核资源", "running"),
+        ("查询可用平台与审核资源", "succeeded"),
+        ("读取所选黑话库词条", "running"),
+        ("读取所选黑话库词条", "succeeded"),
         ("创建任务配置草案", "running"),
         ("创建任务配置草案", "succeeded"),
     ]

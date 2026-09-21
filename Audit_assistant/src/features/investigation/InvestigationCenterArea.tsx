@@ -33,6 +33,7 @@ import {
   shouldShowHistoricalPending
 } from "./historicalReportPresentation";
 import { InvestigationActivityTimeline } from "./InvestigationActivityTimeline";
+import { creationPendingLabel } from "./creationPendingPresentation";
 import { platformOptionsList } from "../../mocks/investigationMocks";
 
 interface InvestigationCenterAreaProps {
@@ -838,13 +839,4 @@ export function InvestigationCenterArea({
       </div>
     </main>
   );
-}
-
-function creationPendingLabel(stage?: InvestigationTurnStage) {
-  if (stage === "accepted") return "已接收，等待开始处理";
-  if (stage === "planning") return "正在理解调查目标";
-  if (stage === "preparing_sources") return "正在查询可用研判资源";
-  if (stage === "acquiring_source") return "正在等待 Tool 和后端返回";
-  if (stage === "answering") return "正在整理调查方案";
-  return "正在思考";
 }

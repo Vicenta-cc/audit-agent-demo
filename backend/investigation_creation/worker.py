@@ -735,7 +735,9 @@ class _LeaseHeartbeat(AbstractContextManager["_LeaseHeartbeat"]):
 
 
 def build_worker() -> InvestigationWorker:
-    store = InvestigationCreationStore()
+    from backend.audit_agent.crawler_account_store import crawler_account_store
+
+    store = InvestigationCreationStore(account_db=crawler_account_store.db_path)
     return InvestigationWorker(
         store,
         execution_adapter=AuditPipelineExecutionAdapter(),

@@ -117,6 +117,49 @@ def test_projection_uses_only_fixed_public_copy_and_hashed_identifiers():
     ) is None
 
 
+def test_options_activity_copy_distinguishes_catalog_and_selected_lexicon_terms():
+    catalog = public_activity_event(
+        turn_id="investigation-turn:options",
+        tool_call_id="tool-call:catalog",
+        tool_name="query_investigation_options",
+        phase="completed",
+        arguments={"platform": "dy", "mode": "search"},
+        result={"status": "ok", "data": {}},
+    )
+    terms = public_activity_event(
+        turn_id="investigation-turn:options",
+        tool_call_id="tool-call:terms",
+        tool_name="query_investigation_options",
+        phase="completed",
+        arguments={
+            "platform": "dy",
+            "mode": "search",
+            "include_lexicon_terms_for_ids": ["hate", "minority"],
+        },
+        result={"status": "ok", "data": {}},
+    )
+    ruleset = public_activity_event(
+        turn_id="investigation-turn:options",
+        tool_call_id="tool-call:ruleset",
+        tool_name="query_investigation_options",
+        phase="completed",
+        arguments={
+            "platform": "dy",
+            "mode": "search",
+            "include_ruleset_details_for_revision_ids": ["ruleset-revision:1"],
+        },
+        result={"status": "ok", "data": {}},
+    )
+
+    assert catalog is not None and terms is not None and ruleset is not None
+    assert catalog[0]["label"] == "查询可用平台与审核资源"
+    assert catalog[0]["summary"] == "已读取可用平台与审核资源。"
+    assert terms[0]["label"] == "读取所选黑话库词条"
+    assert terms[0]["summary"] == "已读取所选黑话库词条。"
+    assert ruleset[0]["label"] == "读取所选审核规则详情"
+    assert ruleset[0]["summary"] == "已读取所选审核规则详情。"
+
+
 def test_emitter_is_durable_idempotent_and_interrupts_unfinished_activity(tmp_path):
     store = InvestigationStore(tmp_path / "investigation.sqlite3")
     session = store.create_session(_report_context())

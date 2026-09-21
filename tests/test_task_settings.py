@@ -1,7 +1,23 @@
 import pytest
 from pydantic import ValidationError
 
+from backend.audit_agent.config import settings
 from backend.audit_agent.task_settings import TaskSettingsStore, TaskSettingsConflict
+
+
+def test_unsaved_settings_match_service_execution_defaults(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "m3_posts_per_keyword", 4)
+    monkeypatch.setattr(settings, "m3_comments_per_post", 123)
+    monkeypatch.setattr(settings, "m3_analyze_limit", 4)
+
+    current = TaskSettingsStore(tmp_path / "audit.sqlite3").get()
+
+    assert current["revision"] == 0
+    assert current["parameters"]["max_notes"] == 4
+    assert current["parameters"]["max_total_notes"] == 5
+    assert current["parameters"]["max_comments"] == 123
+    assert current["parameters"]["max_items_per_minute"] == 5
+    assert current["parameters"]["analysis_batch_size"] == 5
 
 
 def test_settings_persist_and_reject_stale_writes(tmp_path):

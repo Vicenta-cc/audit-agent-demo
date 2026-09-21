@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -34,6 +35,58 @@ class CrawlerAccountStoreTest(unittest.TestCase):
         self.assertEqual(updated["status"], "disabled")
         self.assertTrue(self.store.delete(account["id"]))
         self.assertIsNone(self.store.get(account["id"]))
+
+    def test_existing_accounts_migrate_to_private_scope(self):
+        legacy_path = Path(self.temp_dir.name) / "legacy.sqlite3"
+        with sqlite3.connect(legacy_path) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE crawler_accounts (
+                    id TEXT PRIMARY KEY,
+                    platform TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    platform_account_id TEXT,
+                    status TEXT NOT NULL DEFAULT 'login_required',
+                    last_validated_at TEXT,
+                    last_used_at TEXT,
+                    last_error TEXT,
+                    cooldown_until TEXT,
+                    failure_kind TEXT,
+                    auth_state_ciphertext TEXT,
+                    auth_state_updated_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                INSERT INTO crawler_accounts (
+                    id, platform, display_name, status, created_at, updated_at
+                ) VALUES (
+                    'legacy-account', 'dy', '旧账号', 'login_required',
+                    '2026-09-20T00:00:00', '2026-09-20T00:00:00'
+                );
+                """
+            )
+
+        migrated = CrawlerAccountStore(legacy_path)
+
+        self.assertEqual(migrated.get("legacy-account")["access_scope"], "private")
+
+    def test_available_accounts_prioritize_public_scope(self):
+        private = self.store.create(
+            platform="dy",
+            display_name="私有账号",
+            access_scope="private",
+        )
+        public = self.store.create(
+            platform="dy",
+            display_name="公共账号",
+            access_scope="public",
+        )
+        self.store.save_auth_state(private["id"], "private-state")
+        self.store.save_auth_state(public["id"], "public-state")
+
+        available = self.store.available_accounts("dy")
+
+        self.assertEqual([item["id"] for item in available], [public["id"], private["id"]])
 
     def test_rejects_duplicate_platform_account_id(self):
         self.store.create(

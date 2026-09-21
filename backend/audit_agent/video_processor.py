@@ -9,6 +9,7 @@ from pathlib import Path
 from time import perf_counter
 
 from .config import settings
+from .asr_chunks import transcribe_in_chunks
 from .remote_inference import RemoteInferenceClient
 
 cv2 = None
@@ -197,6 +198,13 @@ class DemoAudioProcessor:
         return result
 
     def _transcribe_dolphin(self, audio_path: Path) -> dict:
+        return transcribe_in_chunks(
+            audio_path, self._transcribe_dolphin_chunk,
+            max_seconds=settings.asr_chunk_seconds,
+            overlap_seconds=settings.asr_chunk_overlap_seconds,
+        )
+
+    def _transcribe_dolphin_chunk(self, audio_path: Path) -> dict:
         try:
             import dolphin
             import torch
@@ -353,6 +361,7 @@ class DemoAudioProcessor:
                 "start": segment_words[0]["start"],
                 "end": segment_words[-1]["end"],
                 "text": segment_text,
+                "words": segment_words,
             })
             current.clear()
 

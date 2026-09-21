@@ -1,10 +1,20 @@
 from pathlib import Path
 from unittest.mock import Mock, patch
+import wave
 
 import pytest
 import requests
 
 from backend.audit_agent.remote_inference import RemoteInferenceClient
+
+
+@pytest.fixture
+def audio_path(tmp_path):
+    path = tmp_path / "audio.wav"
+    with wave.open(str(path), "wb") as output:
+        output.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+        output.writeframes(b"\x00\x00" * 16000)
+    return path
 
 
 def client() -> RemoteInferenceClient:
@@ -27,9 +37,7 @@ def response(status_code: int, payload: dict | None = None) -> Mock:
     return result
 
 
-def test_transcribe_retries_connection_error_and_reopens_audio(tmp_path: Path) -> None:
-    audio_path = tmp_path / "audio.wav"
-    audio_path.write_bytes(b"audio-data")
+def test_transcribe_retries_connection_error_and_reopens_audio(audio_path: Path) -> None:
     successful = response(200, {"text": "ok", "segments": []})
     observed_audio = []
 
@@ -45,13 +53,11 @@ def test_transcribe_retries_connection_error_and_reopens_audio(tmp_path: Path) -
         result = client().transcribe(audio_path)
 
     assert result == {"text": "ok", "segments": []}
-    assert observed_audio == [b"audio-data", b"audio-data"]
+    assert observed_audio == [audio_path.read_bytes(), audio_path.read_bytes()]
     sleep.assert_called_once_with(0.25)
 
 
-def test_transcribe_retries_retryable_http_status(tmp_path: Path) -> None:
-    audio_path = tmp_path / "audio.wav"
-    audio_path.write_bytes(b"audio-data")
+def test_transcribe_retries_retryable_http_status(audio_path: Path) -> None:
 
     with patch(
         "backend.audit_agent.remote_inference.requests.post",
@@ -63,9 +69,7 @@ def test_transcribe_retries_retryable_http_status(tmp_path: Path) -> None:
     sleep.assert_called_once_with(0.25)
 
 
-def test_transcribe_does_not_retry_non_retryable_http_status(tmp_path: Path) -> None:
-    audio_path = tmp_path / "audio.wav"
-    audio_path.write_bytes(b"audio-data")
+def test_transcribe_does_not_retry_non_retryable_http_status(audio_path: Path) -> None:
 
     with patch(
         "backend.audit_agent.remote_inference.requests.post",
@@ -78,9 +82,7 @@ def test_transcribe_does_not_retry_non_retryable_http_status(tmp_path: Path) -> 
     sleep.assert_not_called()
 
 
-def test_transcribe_raises_after_bounded_connection_retries(tmp_path: Path) -> None:
-    audio_path = tmp_path / "audio.wav"
-    audio_path.write_bytes(b"audio-data")
+def test_transcribe_raises_after_bounded_connection_retries(audio_path: Path) -> None:
 
     with patch(
         "backend.audit_agent.remote_inference.requests.post",
@@ -91,3 +93,15 @@ def test_transcribe_raises_after_bounded_connection_retries(tmp_path: Path) -> N
 
     assert post.call_count == 3
     assert [call.args[0] for call in sleep.call_args_list] == [0.25, 0.5]
+
+
+@pytest.mark.parametrize('status,body', [(500, 'torch.cuda.OutOfMemoryError: CUDA out of memory'),
+                                       (422, '{"detail":{"code":"asr_gpu_out_of_memory","retryable":false}}')])
+def test_oom_does_not_repeat_the_same_request(audio_path, status, body):
+    from backend.audit_agent.asr_chunks import ASROutOfMemoryError
+    failed = response(status); failed.text = body
+    with patch('backend.audit_agent.remote_inference.requests.post', return_value=failed) as post, patch('backend.audit_agent.remote_inference.time.sleep') as sleep:
+        with pytest.raises(ASROutOfMemoryError):
+            client().transcribe(audio_path)
+    post.assert_called_once()
+    sleep.assert_not_called()

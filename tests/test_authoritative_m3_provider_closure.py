@@ -629,7 +629,7 @@ def test_authoritative_video_missing_asr_configuration_is_unavailable(
         ),
     )
 
-    assert job["status"] == "analysis_stopped"
+    assert job["status"] == "completed"
     assert stats["failed_analysis_count"] == 1
     assert result_page["total"] == 0
     assert stats["completed_analysis_count"] == 0
@@ -657,7 +657,7 @@ def test_visual_configuration_comes_from_selected_content_modality(
         configure_vision=False,
     )
 
-    assert job["status"] == "analysis_stopped"
+    assert job["status"] == "completed"
     assert stats["failed_analysis_count"] == 1
     assert result_page["total"] == 0
     assert stats["completed_analysis_count"] == 0

@@ -44,7 +44,7 @@ PUBLIC_TOOL_ACTIVITIES: dict[str, PublicActivitySpec] = {
     ),
     # Investigation creation tools.
     "query_investigation_options": PublicActivitySpec(
-        "查询可用平台、审核规则和黑话库", "已读取可用平台、审核规则和黑话库。"
+        "查询可用平台与审核资源", "已读取可用平台与审核资源。"
     ),
     "create_ruleset_proposal": PublicActivitySpec(
         "生成审核规则草案", "审核规则草案已生成，尚未正式保存。"
@@ -110,6 +110,7 @@ def public_activity_event(
     tool_name: str,
     phase: str,
     result: Any = None,
+    arguments: Any = None,
 ) -> tuple[dict[str, Any], str] | None:
     spec = PUBLIC_TOOL_ACTIVITIES.get(str(tool_name or ""))
     if spec is None or not str(turn_id or "") or not str(tool_call_id or ""):
@@ -127,10 +128,34 @@ def public_activity_event(
         summary = "该步骤因本轮执行中断而停止。"
     else:
         raise ValueError("invalid public activity phase")
+    label = spec.label
+    succeeded_summary = spec.succeeded_summary
+    if tool_name == "query_investigation_options":
+        query_arguments = arguments if isinstance(arguments, dict) else {}
+        reads_lexicon_terms = bool(
+            query_arguments.get("include_lexicon_terms_for_ids")
+        )
+        reads_ruleset_details = bool(
+            query_arguments.get("include_ruleset_details_for_revision_ids")
+        )
+        if reads_lexicon_terms and reads_ruleset_details:
+            label = "读取所选审核资源详情"
+            succeeded_summary = "已读取所选审核资源详情。"
+        elif reads_lexicon_terms:
+            label = "读取所选黑话库词条"
+            succeeded_summary = "已读取所选黑话库词条。"
+        elif reads_ruleset_details:
+            label = "读取所选审核规则详情"
+            succeeded_summary = "已读取所选审核规则详情。"
+        else:
+            label = "查询可用平台与审核资源"
+            succeeded_summary = "已读取可用平台与审核资源。"
+    if phase == "completed" and status == "succeeded":
+        summary = succeeded_summary
     payload = {
         "activity_id": activity_id,
         "status": status,
-        "label": spec.label,
+        "label": label,
         "summary": summary,
         "result_count": None,
     }
@@ -153,20 +178,20 @@ class PublicActivityEmitter:
         self.enabled = enabled
         self._lock = RLock()
         self._turns_by_session: dict[str, list[str]] = {}
-        self._active_calls: dict[str, dict[str, str]] = {}
+        self._active_calls: dict[str, dict[str, tuple[str, Any]]] = {}
 
     def agent_callbacks(self, session_id: str) -> dict[str, Callable[..., None]]:
         if not self.enabled():
             return {}
         return {
             "tool_start_callback": (
-                lambda tool_call_id, tool_name, _arguments: self.tool_started(
-                    session_id, tool_call_id, tool_name
+                lambda tool_call_id, tool_name, arguments: self.tool_started(
+                    session_id, tool_call_id, tool_name, arguments
                 )
             ),
             "tool_complete_callback": (
-                lambda tool_call_id, tool_name, _arguments, result: self.tool_completed(
-                    session_id, tool_call_id, tool_name, result
+                lambda tool_call_id, tool_name, arguments, result: self.tool_completed(
+                    session_id, tool_call_id, tool_name, result, arguments
                 )
             ),
         }
@@ -196,7 +221,13 @@ class PublicActivityEmitter:
                 if not bound_turns:
                     self._turns_by_session.pop(session_id, None)
 
-    def tool_started(self, session_id: str, tool_call_id: str, tool_name: str) -> None:
+    def tool_started(
+        self,
+        session_id: str,
+        tool_call_id: str,
+        tool_name: str,
+        arguments: Any = None,
+    ) -> None:
         turn_id = self._active_turn(session_id)
         if not turn_id or tool_name not in PUBLIC_TOOL_ACTIVITIES:
             return
@@ -205,13 +236,18 @@ class PublicActivityEmitter:
             tool_call_id=str(tool_call_id or ""),
             tool_name=tool_name,
             phase="started",
+            arguments=arguments,
         )
         if projected is None or not self._append(turn_id, projected):
             return
         with self._lock:
-            self._active_calls.setdefault(turn_id, {})[
-                str(tool_call_id or "")
-            ] = tool_name
+            calls = self._active_calls.setdefault(turn_id, {})
+            normalized_call_id = str(tool_call_id or "")
+            previous = calls.get(normalized_call_id)
+            calls[normalized_call_id] = (
+                tool_name,
+                arguments if arguments is not None else previous[1] if previous else None,
+            )
 
     def tool_completed(
         self,
@@ -219,6 +255,7 @@ class PublicActivityEmitter:
         tool_call_id: str,
         tool_name: str,
         result: Any,
+        arguments: Any = None,
     ) -> None:
         turn_id = self._active_turn(session_id)
         if not turn_id or tool_name not in PUBLIC_TOOL_ACTIVITIES:
@@ -239,6 +276,7 @@ class PublicActivityEmitter:
                 tool_call_id=normalized_call_id,
                 tool_name=tool_name,
                 phase="started",
+                arguments=arguments,
             )
             if started is not None:
                 self._append(turn_id, started)
@@ -248,6 +286,7 @@ class PublicActivityEmitter:
             tool_name=tool_name,
             phase="completed",
             result=result,
+            arguments=arguments,
         )
         if projected is not None:
             self._append(turn_id, projected)
@@ -264,12 +303,13 @@ class PublicActivityEmitter:
     def _interrupt_active_calls(self, turn_id: str) -> None:
         with self._lock:
             active = tuple(self._active_calls.pop(turn_id, {}).items())
-        for tool_call_id, tool_name in active:
+        for tool_call_id, (tool_name, arguments) in active:
             projected = public_activity_event(
                 turn_id=turn_id,
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
                 phase="interrupted",
+                arguments=arguments,
             )
             if projected is not None:
                 self._append(turn_id, projected)

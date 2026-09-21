@@ -11,6 +11,17 @@ class TaskSettingsConflict(ValueError):
     pass
 
 
+def default_task_parameters() -> InvestigationTaskParameters:
+    """Return the same unsaved defaults used by preview and execution."""
+    return InvestigationTaskParameters(
+        max_notes=min(5, max(1, int(settings.m3_posts_per_keyword))),
+        max_comments=min(1000, max(0, int(settings.m3_comments_per_post))),
+        max_items_per_minute=5,
+        analyze_limit=max(1, int(settings.m3_analyze_limit)),
+        analysis_batch_size=5,
+    )
+
+
 def effective_parameters(requested):
     requested = InvestigationTaskParameters.model_validate(requested)
     max_total_notes = min(requested.max_total_notes, 5)
@@ -39,8 +50,13 @@ class TaskSettingsStore:
             with sqlite3.connect(self.db_path) as owned:
                 return self.get(owned)
         row = connection.execute("SELECT revision, parameters FROM task_settings WHERE id=1").fetchone()
+        parameters = (
+            json.loads(row[1])
+            if row
+            else default_task_parameters().model_dump(mode="json")
+        )
         return {"revision": int(row[0]) if row else 0,
-                "parameters": InvestigationTaskParameters.model_validate(json.loads(row[1]) if row else {}).model_dump(mode="json")}
+                "parameters": InvestigationTaskParameters.model_validate(parameters).model_dump(mode="json")}
 
     def save(self, parameters, expected_revision):
         parameters = InvestigationTaskParameters.model_validate(parameters).model_dump(mode="json")

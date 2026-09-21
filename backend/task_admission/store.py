@@ -32,11 +32,20 @@ class AdmissionStore:
     RESERVED tracks the unfinished slot. charge_state independently tracks billing.
     """
 
-    def __init__(self, db_path=None, *, auth_db=None, clock=None, enabled=None):
+    def __init__(
+        self,
+        db_path=None,
+        *,
+        auth_db=None,
+        account_db=None,
+        clock=None,
+        enabled=None,
+    ):
         self.db_path = Path(
             db_path or settings.data_dir / "investigation_creation.sqlite3"
         ).resolve()
         self.auth_db = Path(auth_db or settings.app_auth_db).resolve()
+        self.account_db = Path(account_db or self.db_path).resolve()
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.enabled = (
             settings.app_auth_mode == "required" if enabled is None else enabled
@@ -164,12 +173,27 @@ class AdmissionStore:
                 (reason, self.now(), row["id"]),
             )
 
-    def connect(self):
+    def connect(self, *, attach_account_db=False):
+        # The crawler-account database is an authorization input, not part of
+        # the quota/slot write transaction. Attaching it here makes SQLite's
+        # BEGIN IMMEDIATE lock the JobStore database and can deadlock callbacks
+        # that project cancellation or recovery state. _crawler_account_scope
+        # performs a separate read when the database is not attached.
         db = sqlite3.connect(self.db_path, timeout=30)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA busy_timeout=30000")
         if self.enabled and self.auth_db != self.db_path:
             db.execute("ATTACH DATABASE ? AS admission_auth", (str(self.auth_db),))
+        if (
+            attach_account_db
+            and
+            self.enabled
+            and self.account_db != self.db_path
+            and self.account_db != self.auth_db
+        ):
+            db.execute(
+                "ATTACH DATABASE ? AS admission_accounts", (str(self.account_db),)
+            )
         return db
 
     def now(self):
@@ -177,7 +201,7 @@ class AdmissionStore:
 
     def validate_user(self, db, owner, account_id=""):
         if not self.enabled:
-            return
+            return ""
         schema = "main" if self.auth_db == self.db_path else "admission_auth"
         user = db.execute(
             f"SELECT * FROM {schema}.app_users WHERE id=?", (owner,)
@@ -199,10 +223,50 @@ class AdmissionStore:
                 WHERE owner_user_id=? AND account_id=?""",
                 (owner, account_id),
             ).fetchone()
-            if grant is None:
-                raise AdmissionError(
-                    "只能使用自己的采集账号。", code="CRAWLER_ACCOUNT_FORBIDDEN"
-                )
+            if grant is not None:
+                return "private"
+            if self._crawler_account_scope(db, account_id) == "public":
+                return "public"
+            raise AdmissionError(
+                "只能使用公共采集账号或自己的私有采集账号。",
+                code="CRAWLER_ACCOUNT_FORBIDDEN",
+            )
+        return ""
+
+    def _crawler_account_scope(self, db, account_id: str) -> str:
+        if self.account_db == self.db_path:
+            schema = "main"
+        elif self.account_db == self.auth_db:
+            schema = "main" if self.auth_db == self.db_path else "admission_auth"
+        else:
+            schema = "admission_accounts"
+        attached = {str(row[1]) for row in db.execute("PRAGMA database_list")}
+        if schema not in attached:
+            # Investigation confirmation owns a wider transaction and passes
+            # its connection into AdmissionStore.reserve(). That connection
+            # attaches the auth database, but intentionally does not know the
+            # independently configured crawler-account database. Read only the
+            # account scope here; dispatch revalidates eligibility and ownership
+            # after acquiring the execution/account leases.
+            if schema != "admission_accounts":
+                return ""
+            with sqlite3.connect(self.account_db) as account_db:
+                row = account_db.execute(
+                    "SELECT access_scope FROM crawler_accounts WHERE id=?",
+                    (account_id,),
+                ).fetchone()
+            return str(row[0] or "private") if row else ""
+        exists = db.execute(
+            f"SELECT 1 FROM {schema}.sqlite_master "
+            "WHERE type='table' AND name='crawler_accounts'"
+        ).fetchone()
+        if not exists:
+            return ""
+        row = db.execute(
+            f"SELECT access_scope FROM {schema}.crawler_accounts WHERE id=?",
+            (account_id,),
+        ).fetchone()
+        return str(row[0] or "private") if row else ""
 
     def reserve(
         self, db, *, owner, task_id, kind, key, payload, job_id="", request_hash=None
@@ -333,7 +397,11 @@ class AdmissionStore:
         )
 
     def cancel(self, task_id, owner, *, on_cancel=None):
-        with self.connect() as db:
+        # Cancellation updates the Job projection in on_cancel(). Do not attach
+        # the independently configured account database to this write
+        # transaction: BEGIN IMMEDIATE would lock that database too and make the
+        # callback deadlock against its own JobStore connection.
+        with self.connect(attach_account_db=False) as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(
                 "SELECT * FROM task_admissions WHERE (task_id=? OR job_id=?) AND owner_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1",

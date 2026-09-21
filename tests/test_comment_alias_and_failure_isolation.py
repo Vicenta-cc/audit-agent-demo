@@ -70,8 +70,8 @@ def test_compensation_remaps_only_missing_comment_and_preserves_judgement(tmp_pa
     assert list((tmp_path/'alias-test/comment_audit_failures').glob('*.json'))
 
 
-@pytest.mark.parametrize('mode', ['one_bad_post', 'provider_down', 'authentication', 'last_bad_post', 'media_authentication'])
-def test_collection_continues_while_analysis_skips_or_stops(tmp_path, monkeypatch, mode):
+@pytest.mark.parametrize('mode', ['one_bad_post', 'provider_down', 'authentication', 'last_bad_post', 'media_authentication', 'two_success_three_failures', 'three_failures_then_success'])
+def test_collection_and_analysis_drain_despite_post_failures(tmp_path, monkeypatch, mode):
     jobs = JobStore(tmp_path/'audit.sqlite3'); ingestion = IngestionStore(tmp_path/'audit.sqlite3')
     monkeypatch.setattr(module, 'job_store', jobs)
     monkeypatch.setattr(module.settings, 'outputs_dir', tmp_path/'outputs')
@@ -96,6 +96,15 @@ def test_collection_continues_while_analysis_skips_or_stops(tmp_path, monkeypatc
     p._record_subject_failure = record
     def audit(s):
         seen.append(s.note_id)
+        if mode in {'two_success_three_failures', 'three_failures_then_success'}:
+            failed_ids = ['3', '4', '5'] if mode == 'two_success_three_failures' else ['1', '2', '3']
+            if s.note_id in failed_ids:
+                p.qwen.provider_failure = 'provider failed'
+                if s.note_id != failed_ids[-1]:
+                    raise AuditProviderCallError('ASR failed') from RuntimeError('CUDA out of memory')
+                response = requests.Response(); response.status_code = 400
+                response._content = b'{"code":"data_inspection_failed"}'
+                raise AuditProviderCallError('fusion failed') from requests.HTTPError(response=response)
         if mode=='provider_down':
             p.qwen.provider_failure='timeout'
             raise QwenTimeoutError('timeout after one retry')
@@ -115,11 +124,11 @@ def test_collection_continues_while_analysis_skips_or_stops(tmp_path, monkeypatc
             assert not kwargs['stop_checker']()
             item={'note_id':str(i),'title':'post'};items.append(item);collected.append(str(i))
             kwargs['content_callback']([item], [])
-            boundary = {'authentication': 1, 'provider_down': 3, 'last_bad_post': 5}.get(mode, 2)
+            boundary = {'authentication': 1, 'provider_down': 3, 'last_bad_post': 5, 'two_success_three_failures': 5, 'three_failures_then_success': 3}.get(mode, 2)
             if i == boundary:
                 assert failure_recorded.wait(5), 'Analysis must fail before the crawler continues'
                 if mode in {'authentication', 'provider_down'}:
-                    assert jobs.control(p.job_id)['analysis_stop_requested']
+                    assert not jobs.control(p.job_id)['analysis_stop_requested']
                     assert not kwargs['stop_checker']()
         return CrawlOutput(platform='xhs',contents=items,comments=[],output_dir=tmp_path/'crawler',command=[])
     p.crawler=SimpleNamespace(run_search=crawl)
@@ -137,16 +146,22 @@ def test_collection_continues_while_analysis_skips_or_stops(tmp_path, monkeypatc
     assert not jobs.control(p.job_id)['stop_all_requested']
     assert not jobs.control(p.job_id)['crawl_stop_requested']
     assert stats['ingested_count']==5
+    assert seen == collected
+    assert job['status'] == 'completed'
+    assert not jobs.control(p.job_id)['analysis_stop_requested']
+    assert stats['queued_analysis_count'] == 0
     if mode in {'one_bad_post','last_bad_post','media_authentication'}:
         assert seen==collected
         assert job['status']=='completed'
         assert stats['completed_analysis_count']==4 and stats['failed_analysis_count']==1
+    elif mode in {'two_success_three_failures', 'three_failures_then_success'}:
+        assert stats['completed_analysis_count'] == 2
+        assert stats['failed_analysis_count'] == 3
+        records = [json.loads(path.read_text()) for path in (tmp_path/'outputs/isolation/post_failures').glob('*.json')]
+        assert sorted(record['error_code'] for record in records) == ['asr_gpu_out_of_memory', 'asr_gpu_out_of_memory', 'audit_content_blocked']
     else:
-        attempts=3 if mode=='provider_down' else 1
-        assert len(seen)==attempts
-        assert job['status']=='analysis_stopped'
-        assert stats['failed_analysis_count']==attempts
-        assert stats['queued_analysis_count']==5-attempts
+        assert stats['failed_analysis_count'] == 5
+        assert stats['completed_analysis_count'] == 0
     assert list((tmp_path/'outputs/isolation/post_failures').glob('*.json'))
 
 

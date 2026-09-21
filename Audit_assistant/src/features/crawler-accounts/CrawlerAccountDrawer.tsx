@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
-import { UserPlus, X } from "lucide-react";
+import { UserPlus, UserRound, UsersRound, X } from "lucide-react";
 import { Button } from "../../components/common/Button";
 import { IconButton } from "../../components/common/IconButton";
 import type {
   CrawlerAccount,
+  CrawlerAccountAccessScope,
   CrawlerAccountInput,
   CrawlerAccountPlatform
 } from "../../types/crawlerAccounts";
@@ -18,6 +19,7 @@ interface CrawlerAccountDrawerProps {
   open: boolean;
   account: CrawlerAccount | null;
   submitting: boolean;
+  allowPublicAccounts?: boolean;
   onClose: () => void;
   onSubmit: (input: CrawlerAccountInput) => Promise<void>;
 }
@@ -26,12 +28,14 @@ export function CrawlerAccountDrawer({
   open,
   account,
   submitting,
+  allowPublicAccounts = false,
   onClose,
   onSubmit
 }: CrawlerAccountDrawerProps) {
   const [platform, setPlatform] = useState<CrawlerAccountPlatform>("xhs");
   const [displayName, setDisplayName] = useState("");
   const [platformAccountId, setPlatformAccountId] = useState("");
+  const [accessScope, setAccessScope] = useState<CrawlerAccountAccessScope>("private");
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -39,6 +43,7 @@ export function CrawlerAccountDrawer({
     setPlatform(account?.platform || "xhs");
     setDisplayName(account?.displayName || "");
     setPlatformAccountId(account?.platformAccountId || "");
+    setAccessScope(account?.accessScope || "private");
     setFormError("");
   }, [account, open]);
 
@@ -55,7 +60,8 @@ export function CrawlerAccountDrawer({
       await onSubmit({
         platform,
         displayName: displayName.trim(),
-        platformAccountId: platformAccountId.trim()
+        platformAccountId: platformAccountId.trim(),
+        accessScope
       });
     } catch (error) {
       setFormError(readApiError(error));
@@ -102,6 +108,44 @@ export function CrawlerAccountDrawer({
                 ))}
               </select>
             </label>
+
+            {!account && allowPublicAccounts ? (
+              <fieldset className="crawler-account-scope-picker">
+                <legend>账号池归属</legend>
+                <label className={accessScope === "public" ? "is-selected" : ""}>
+                  <input
+                    type="radio"
+                    name="crawler-account-access-scope"
+                    value="public"
+                    checked={accessScope === "public"}
+                    onChange={(event) => setAccessScope(event.target.value as CrawlerAccountAccessScope)}
+                  />
+                  <span className="crawler-account-scope-picker-icon" aria-hidden="true">
+                    <UsersRound size={18} />
+                  </span>
+                  <span>
+                    <strong>公共账号池</strong>
+                    <small>所有用户任务可调度，系统优先使用</small>
+                  </span>
+                </label>
+                <label className={accessScope === "private" ? "is-selected" : ""}>
+                  <input
+                    type="radio"
+                    name="crawler-account-access-scope"
+                    value="private"
+                    checked={accessScope === "private"}
+                    onChange={(event) => setAccessScope(event.target.value as CrawlerAccountAccessScope)}
+                  />
+                  <span className="crawler-account-scope-picker-icon" aria-hidden="true">
+                    <UserRound size={18} />
+                  </span>
+                  <span>
+                    <strong>我的私有账号池</strong>
+                    <small>仅当前管理员自己的任务可使用</small>
+                  </span>
+                </label>
+              </fieldset>
+            ) : null}
 
             <label className="crawler-account-field">
               <span>账号名称</span>

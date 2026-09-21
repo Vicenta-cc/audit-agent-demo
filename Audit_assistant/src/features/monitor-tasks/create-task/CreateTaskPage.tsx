@@ -170,11 +170,9 @@ export function CreateTaskPage() {
     if (!requiresExecutionSettings) return;
     setDraft((current) => {
       const selectedIsAvailable = availableAccounts.some((account) => account.id === current.crawlerAccountId);
-      const nextAccountId = selectedIsAvailable
+      const nextAccountId = !current.crawlerAccountId || selectedIsAvailable
         ? current.crawlerAccountId
-        : availableAccounts.length === 1
-          ? availableAccounts[0].id
-          : "";
+        : "";
       return nextAccountId === current.crawlerAccountId
         ? current
         : { ...current, crawlerAccountId: nextAccountId };
@@ -254,7 +252,7 @@ export function CreateTaskPage() {
           keyword: "",
           keyword_source: "lexicon",
           creator_url: draft.type === "user" ? draft.creatorUrl.trim() : undefined,
-          crawler_account_id: draft.crawlerAccountId,
+          crawler_account_id: draft.crawlerAccountId || undefined,
           max_comments: 100,
           max_concurrency: 3,
           max_items_per_minute: draft.maxItemsPerMinute,
@@ -438,18 +436,32 @@ export function CreateTaskPage() {
                   <span aria-hidden="true"><Gauge size={18} /></span>
                   <div>
                     <h2 id="execution-heading">执行设置</h2>
-                    <p>选择本次任务使用的采集账号与主内容抓取频率。</p>
+                    <p>默认由系统按“公共账号优先、本人私有账号兜底”自动调度。</p>
                   </div>
                 </div>
 
                 <div className="create-execution-field-header">
-                  <label>采集账号</label>
+                  <label>私有兜底账号（可选）</label>
                   <button type="button" onClick={() => navigate("/crawler-accounts")}>
                     管理账号<ExternalLink size={13} />
                   </button>
                 </div>
                 {platformAccounts.length ? (
                   <div className="create-account-list" role="radiogroup" aria-label={`${selectedPlatformLabel}采集账号`}>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={!draft.crawlerAccountId}
+                      className={`create-account-option${!draft.crawlerAccountId ? " is-selected" : ""}`}
+                      onClick={() => updateDraft({ crawlerAccountId: "" })}
+                    >
+                      <span className="create-account-radio" aria-hidden="true" />
+                      <span className="create-account-copy">
+                        <strong>自动调度</strong>
+                        <small>公共账号优先；公共池繁忙时自动使用私有账号</small>
+                      </span>
+                      <span className="create-account-status is-active">推荐</span>
+                    </button>
                     {platformAccounts.map((account) => {
                       const available = isAccountAvailable(account);
                       const selected = draft.crawlerAccountId === account.id;
@@ -478,8 +490,8 @@ export function CreateTaskPage() {
                   </div>
                 ) : (
                   <div className="create-account-empty">
-                    <strong>暂无所选平台账号</strong>
-                    <span>前往采集账号页添加并完成登录。</span>
+                    <strong>将使用公共账号池自动调度</strong>
+                    <span>公共池繁忙时，可前往采集账号页添加自己的备用账号。</span>
                   </div>
                 )}
 
@@ -704,6 +716,7 @@ function validateDraft(
   if (draft.type !== "video" && !draft.platforms.length) return "至少选择一个采集平台。";
   if (
     (draft.type === "platform" || draft.type === "user")
+    && draft.crawlerAccountId
     && (!account || !draft.platforms.includes(account.platform) || !isAccountAvailable(account))
   ) {
     return "请选择一个当前可用的采集账号。";

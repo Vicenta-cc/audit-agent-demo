@@ -11,7 +11,7 @@ export function activeTaskMessage(task: ActiveTask) {
   const reasons: Record<string, string> = {
     system_capacity: "正在排队：执行位置暂满。",
     account_busy: "正在排队：采集账号正在被使用。",
-    no_available_authorized_account: "正在等待可用的个人采集账号，请在采集账号页面添加账号或重新扫码登录。"
+    no_available_authorized_account: "正在等待可用采集账号；请等待公共池空闲，或添加、重新扫码登录自己的私有账号。"
   };
   if (task.waiting_reason && reasons[task.waiting_reason]) return reasons[task.waiting_reason];
   return task.queue_state === "QUEUED" ? "任务已接受，正在等待执行。" : "当前任务尚未结束。";

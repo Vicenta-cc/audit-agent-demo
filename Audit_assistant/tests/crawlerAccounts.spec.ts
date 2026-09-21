@@ -4,17 +4,25 @@ import {
   cancelCrawlerAccountLoginSession,
   createCrawlerAccount,
   deleteCrawlerAccount,
+  fetchCrawlerAccountOverview,
   fetchCrawlerAccountLoginSession,
   fetchCrawlerAccounts,
   startCrawlerAccountLogin,
   updateCrawlerAccount
 } from "../src/services/crawlerAccounts";
 
-const apiAccount = (id: string, displayName: string) => ({
+const apiAccount = (
+  id: string,
+  displayName: string,
+  accessScope: "private" | "public" = "private",
+  canManage = true
+) => ({
   id,
   platform: "xhs" as const,
   display_name: displayName,
   platform_account_id: `${id}-platform`,
+  access_scope: accessScope,
+  can_manage: canManage,
   status: "active" as const,
   last_validated_at: "2026-08-31T00:00:00Z",
   last_used_at: "2026-08-31T00:01:00Z",
@@ -64,6 +72,64 @@ test("maps exactly two real API accounts", async () => {
   expect(accounts.map((account) => account.id)).toEqual(["account-real-1", "account-real-2"]);
 });
 
+test("maps public pool summary without exposing account details through the summary", async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    items: [apiAccount("private-one", "我的私有账号")],
+    shared_pool: {
+      total: 3,
+      ready: 1,
+      busy: 1,
+      unavailable: 1,
+      by_platform: {
+        dy: { total: 3, ready: 1, busy: 1, unavailable: 1 }
+      }
+    }
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+
+  const overview = await fetchCrawlerAccountOverview();
+
+  expect(overview.accounts).toHaveLength(1);
+  expect(overview.accounts[0]).toMatchObject({
+    id: "private-one",
+    accessScope: "private",
+    canManage: true
+  });
+  expect(overview.sharedPool).toEqual({
+    total: 3,
+    ready: 1,
+    busy: 1,
+    unavailable: 1,
+    byPlatform: {
+      dy: { total: 3, ready: 1, busy: 1, unavailable: 1 }
+    }
+  });
+  expect(JSON.stringify(overview.sharedPool)).not.toContain("private-one");
+});
+
+test("admin public account creation sends the explicit access scope", async () => {
+  let requestBody: Record<string, unknown> | undefined;
+  globalThis.fetch = async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body || "{}"));
+    return new Response(JSON.stringify({
+      item: apiAccount("public-one", "公共采集账号", "public", true)
+    }), { status: 201, headers: { "Content-Type": "application/json" } });
+  };
+
+  const account = await createCrawlerAccount({
+    platform: "xhs",
+    displayName: "公共采集账号",
+    platformAccountId: "",
+    accessScope: "public"
+  });
+
+  expect(requestBody).toMatchObject({
+    platform: "xhs",
+    display_name: "公共采集账号",
+    access_scope: "public"
+  });
+  expect(account.accessScope).toBe("public");
+});
+
 test("an empty API list remains empty and authoritative sources contain no account fallback", async () => {
   globalThis.fetch = async () => new Response(JSON.stringify({ items: [] }), {
     status: 200,
@@ -97,7 +163,7 @@ test("create update and delete failures cannot mutate a local fallback", async (
     headers: { "Content-Type": "application/json" }
   });
   await expect(createCrawlerAccount({
-    platform: "xhs", displayName: "不得伪造", platformAccountId: ""
+    platform: "xhs", displayName: "不得伪造", platformAccountId: "", accessScope: "private"
   })).rejects.toThrow("write rejected");
   await expect(updateCrawlerAccount("account-real-1", {
     displayName: "不得本地更新"

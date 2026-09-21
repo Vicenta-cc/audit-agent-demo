@@ -1,17 +1,46 @@
 import type { ChatMessage } from "../../types/investigation";
 import type { InvestigationActivityEvent } from "../../types/investigations";
 
+const legacyOptionsLabel = "查询可用平台、审核规则和黑话库";
+
+function normalizeLegacyOptionActivities(events: InvestigationActivityEvent[]) {
+  let optionQueryIndex = 0;
+  return events.map((event) => {
+    if (event.label !== legacyOptionsLabel) return event;
+    optionQueryIndex += 1;
+    return optionQueryIndex === 1
+      ? {
+        ...event,
+        label: "查询可用平台与审核资源",
+        summary: event.status === "succeeded" ? "已读取可用平台与审核资源。" : event.summary
+      }
+      : {
+        ...event,
+        label: "读取所选审核资源详情",
+        summary: event.status === "succeeded" ? "已读取所选审核资源详情。" : event.summary
+      };
+  });
+}
+
 export function mergeInvestigationActivityEvent(
   events: InvestigationActivityEvent[] | undefined,
   incoming: InvestigationActivityEvent
 ) {
   const current = events || [];
-  const existingIndex = current.findIndex(
+  const visible = incoming.status === "succeeded"
+    ? current.filter((event) => !(
+      event.label === incoming.label
+      && event.activity_id !== incoming.activity_id
+      && event.sequence < incoming.sequence
+      && (event.status === "failed" || event.status === "interrupted")
+    ))
+    : current;
+  const existingIndex = visible.findIndex(
     (event) => event.activity_id === incoming.activity_id
   );
-  if (existingIndex < 0) return [...current, incoming];
-  if (current[existingIndex].sequence >= incoming.sequence) return current;
-  return current.map((event, index) => index === existingIndex ? incoming : event);
+  if (existingIndex < 0) return [...visible, incoming];
+  if (visible[existingIndex].sequence >= incoming.sequence) return visible;
+  return visible.map((event, index) => index === existingIndex ? incoming : event);
 }
 
 export function activityTimelineMessage(
@@ -41,12 +70,12 @@ export function activityEventsForTurn(
   events: InvestigationActivityEvent[] | undefined,
   turnId: string
 ) {
-  return (events || [])
+  return normalizeLegacyOptionActivities((events || [])
     .filter((event) => event.turn_id === turnId)
     .reduce<InvestigationActivityEvent[]>(
       (merged, event) => mergeInvestigationActivityEvent(merged, event),
       []
-    );
+    ));
 }
 
 export function restoreActivityTimelines(

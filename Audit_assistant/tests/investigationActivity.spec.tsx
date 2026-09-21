@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  activityEventsForTurn,
   activityTimelineSummary,
   insertActivityTimelineBeforeLatestAssistant,
   mergeInvestigationActivityEvent
@@ -8,6 +9,7 @@ import {
   applyInvestigationAnswerReset,
   mergeInvestigationAnswerDelta
 } from "../src/features/investigation/investigationAnswer";
+import { creationPendingLabel } from "../src/features/investigation/creationPendingPresentation";
 import type { InvestigationActivityEvent } from "../src/types/investigations";
 
 function activity(
@@ -45,6 +47,77 @@ test("activity updates replace the matching public step without reordering it", 
   expect(final.map((event) => event.label)).toEqual(["读取报告概览", "读取帖子详情"]);
   expect(final[0].status).toBe("succeeded");
   expect(mergeInvestigationActivityEvent(final, started)).toBe(final);
+});
+
+test("a successful retry replaces an older failed card for the same public step", () => {
+  const failed = activity(2, "failed", {
+    activity_id: "public-activity:" + "d".repeat(32),
+    label: "生成审核规则草案",
+    summary: "该步骤未完成。"
+  });
+  const unrelated = activity(3, "succeeded", {
+    activity_id: "public-activity:" + "e".repeat(32),
+    label: "查询可用平台与审核资源",
+    summary: "已读取可用平台与审核资源。"
+  });
+  const succeeded = activity(4, "succeeded", {
+    activity_id: "public-activity:" + "f".repeat(32),
+    label: "生成审核规则草案",
+    summary: "审核规则草案已生成，尚未正式保存。"
+  });
+
+  const merged = [failed, unrelated, succeeded].reduce(
+    (events, event) => mergeInvestigationActivityEvent(events, event),
+    [] as InvestigationActivityEvent[]
+  );
+
+  expect(merged.map((event) => [event.label, event.status])).toEqual([
+    ["查询可用平台与审核资源", "succeeded"],
+    ["生成审核规则草案", "succeeded"]
+  ]);
+  expect(activityEventsForTurn([failed, unrelated, succeeded], failed.turn_id))
+    .toEqual(merged);
+});
+
+test("separately named option queries remain separate public steps", () => {
+  const catalog = activity(2, "succeeded", {
+    activity_id: "public-activity:" + "1".repeat(32),
+    label: "查询可用平台与审核资源"
+  });
+  const terms = activity(3, "succeeded", {
+    activity_id: "public-activity:" + "2".repeat(32),
+    label: "读取所选黑话库词条"
+  });
+
+  const merged = mergeInvestigationActivityEvent(
+    mergeInvestigationActivityEvent([], catalog),
+    terms
+  );
+  expect(merged.map((event) => event.label)).toEqual([
+    "查询可用平台与审核资源",
+    "读取所选黑话库词条"
+  ]);
+});
+
+test("legacy duplicated option copy is clarified during workspace recovery", () => {
+  const first = activity(2, "succeeded", {
+    activity_id: "public-activity:" + "3".repeat(32),
+    label: "查询可用平台、审核规则和黑话库",
+    summary: "已读取可用平台、审核规则和黑话库。"
+  });
+  const second = activity(3, "succeeded", {
+    activity_id: "public-activity:" + "4".repeat(32),
+    label: "查询可用平台、审核规则和黑话库",
+    summary: "已读取可用平台、审核规则和黑话库。"
+  });
+
+  expect(activityEventsForTurn([first, second], first.turn_id).map((event) => [
+    event.label,
+    event.summary
+  ])).toEqual([
+    ["查询可用平台与审核资源", "已读取可用平台与审核资源。"],
+    ["读取所选审核资源详情", "已读取所选审核资源详情。"]
+  ]);
 });
 
 test("completed activity timeline is inserted immediately before the answer", () => {
@@ -175,6 +248,20 @@ test("active activity timeline is expanded, live and collapsible in the browser"
   await expect(timeline.getByRole("list")).toHaveCount(0);
 });
 
+test("creation pending labels stay neutral for greetings and ordinary questions", () => {
+  expect({
+    planning: creationPendingLabel("planning"),
+    preparing: creationPendingLabel("preparing_sources"),
+    acquiring: creationPendingLabel("acquiring_source"),
+    answering: creationPendingLabel("answering")
+  }).toEqual({
+    planning: "正在理解你的问题",
+    preparing: "正在准备所需资料",
+    acquiring: "正在等待相关信息返回",
+    answering: "正在整理回答"
+  });
+});
+
 test("creation activity and answer draft grow in the same pending assistant card", async ({ page }) => {
   await page.route("**/api/**", (route) => route.fulfill({ json: { items: [] } }));
   await page.goto("/");
@@ -223,8 +310,8 @@ test("creation activity and answer draft grow in the same pending assistant card
         occurred_at: "2026-09-17T00:00:01Z",
         activity_id: "public-activity:" + "b".repeat(32),
         status: "succeeded",
-        label: "查询可用平台、审核规则和黑话库",
-        summary: "已读取可用平台、审核规则和黑话库。",
+        label: "查询可用平台与审核资源",
+        summary: "已读取可用平台与审核资源。",
         result_count: null
       }],
       creation_answer_draft: {
@@ -260,6 +347,6 @@ test("creation activity and answer draft grow in the same pending assistant card
   await expect(pending).toHaveText("调查方案正在生成，尚未启动任务。");
   await expect(pending.locator("i")).toHaveCount(1);
   await expect(page.getByRole("region", { name: "调用过程" }))
-    .toContainText("查询可用平台、审核规则和黑话库");
+    .toContainText("查询可用平台与审核资源");
   await expect(page.locator(".inv-creation-pending")).toHaveCount(1);
 });

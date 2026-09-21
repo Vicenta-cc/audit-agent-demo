@@ -552,6 +552,13 @@ class AuthStore:
                 "SELECT account_id FROM crawler_account_owners WHERE owner_user_id=?", (user_id,)
             ).fetchall())
 
+    def unregister_crawler_account(self, account_id: str) -> None:
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                "DELETE FROM crawler_account_owners WHERE account_id=?",
+                (_required_text(account_id, "account_id"),),
+            )
+
     def grant_resource(
         self,
         *,

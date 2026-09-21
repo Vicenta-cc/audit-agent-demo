@@ -73,7 +73,7 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
       </select></label>
       {accountError ? <p role="alert">{accountError}</p> : null}
       <div className="investigation-parameter-grid">
-        {numeric("max_notes", preview.mode === "search" ? "每个关键词采集上限" : "本任务采集上限", 1, 5, "条", "默认 1 条")}
+        {numeric("max_notes", preview.mode === "search" ? "每个关键词采集上限" : "本任务采集上限", 1, 5, "条", "单任务仍受总采集上限约束")}
         {numeric("max_total_notes", "单任务总采集上限", 1, 5, "条", "达到后停止后续关键词")}
         {numeric("start_page", "起始页", 1, 10000, "页", "默认第 1 页；恢复使用检查点")}
       </div>
@@ -89,13 +89,13 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
     </fieldset>
     <fieldset disabled={saving || disabled}><legend>抓帖速度</legend>
       <div className="investigation-parameter-grid">
-        {numeric("max_items_per_minute", "帖子抓取速度", 1, 5, "条/分钟", "默认 1；不等同于评论抓取速度")}
+        {numeric("max_items_per_minute", "帖子抓取速度", 1, 5, "条/分钟", "不等同于评论抓取速度")}
         {numeric("max_concurrency", "采集并发", 1, 3, "个", "默认 1；受服务端上限约束")}
       </div>
     </fieldset>
     <fieldset disabled={saving || disabled}><legend>分析设置</legend>
       <div className="investigation-parameter-grid">
-        {numeric("analysis_batch_size", "分析批次", 1, 20, "条/批", "默认 1；内容完成后响应暂停/停止")}
+        {numeric("analysis_batch_size", "分析批次", 1, 20, "条/批", "内容完成后响应暂停/停止")}
       </div>
       <small>实际采集并入库的内容会全部自动审核；审核数量不再单独设置。管理员限速、凭据和浏览器配置由服务端管理。</small>
     </fieldset>

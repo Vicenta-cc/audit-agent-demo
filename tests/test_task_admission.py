@@ -310,12 +310,12 @@ def test_resume_retains_charge_and_terminal_task_cannot_reopen(stack):
         )
 
 
-@pytest.mark.parametrize("completed", [0, 1])
+@pytest.mark.parametrize("completed", [0, 2])
 def test_natural_post_failures_release_slot_without_user_end(stack, completed):
     creation, _, (owner, _) = stack
     run = make_run(creation, owner, "natural-result")
-    final = FakeExecutionAdapter.completed_state(ingested=2, pending=2-completed, completed=completed)
-    final["task_stats"]["failed_analysis_count"] = 2-completed
+    final = FakeExecutionAdapter.completed_state(ingested=5, pending=5-completed, completed=completed)
+    final["task_stats"]["failed_analysis_count"] = 5-completed
     if not completed:
         final["audit_results"] = []
     reports = FakeReportAdapter()
