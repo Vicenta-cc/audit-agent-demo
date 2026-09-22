@@ -1897,6 +1897,8 @@ class AuditPipeline:
         """Per keyword: text-only candidates → score → pick one → detail collect into save_root."""
         platform = str(getattr(request, "platform", "") or "")
         terms = list(dict.fromkeys(t.strip() for t in str(getattr(request, "keyword", "") or "").split(",") if t.strip()))
+        if not terms:
+            raise ValueError("at least one search keyword is required")
         engine = self._triage_engine_instance()
         category = str(getattr(request, "lexicon_category", "") or "")
         lexicon_terms = engine.terms_for(
@@ -1910,6 +1912,8 @@ class AuditPipeline:
         if collected:
             job_store.log(self.job_id, f"恢复采集：{len(collected)} 个词已在之前的采集中选定，跳过")
         crawler_started = False
+        visited = 0
+        last_command: list[str] = []
         for index, keyword in enumerate(terms, start=1):
             if stop_checker and stop_checker():
                 break
@@ -1924,6 +1928,7 @@ class AuditPipeline:
                 job_store.log(self.job_id,
                               f"已达本任务采集上限 {max_total_notes} 条，以下词未搜索：{', '.join(remaining)}")
                 break
+            visited += 1
             candidate_root = save_root / "candidates" / self._keyword_slug(index, keyword)
             job_store.log(self.job_id, f"初筛候选采集：{keyword}，目标 {settings.triage_candidates_per_keyword} 条")
             try:
@@ -1967,16 +1972,21 @@ class AuditPipeline:
                                                f"排除重复或已审 {excluded} 条，换下一个词")
                     continue
                 job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}（{strategy}，{selected.band}，分 {selected.score}）：{selected.reason}")
+                # run_detail 内部只会报 1/1，外层进度条要看到"第几个词/共几个词"
+                keyword_progress = ((lambda _done, _total, _index=index: progress_callback(_index, len(terms)))
+                                    if progress_callback else None)
                 detail_output = self.crawler.run_detail(
                     platform, selected.content_key, source_keyword=keyword,
                     max_comments=int(getattr(request, "max_comments", 300) or 300), max_concurrency=crawler_concurrency,
                     max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
                     get_sub_comment=bool(getattr(request, "get_sub_comment", False)), save_root=save_root,
-                    progress_callback=progress_callback, content_callback=content_callback, stream_items=stream_items,
+                    progress_callback=keyword_progress, content_callback=content_callback, stream_items=stream_items,
                     stop_checker=stop_checker, auth_state=account_auth_state, started_callback=None,
                     account_id=crawler_account_id, collect_comments=bool(getattr(request, "collect_comments", True)),
                     collect_media=bool(getattr(request, "collect_media", True)),
                 )
+                if detail_output.command:
+                    last_command = list(detail_output.command)
                 if detail_output.contents:
                     selected_by_key[selected.content_key] = keyword
                     mark_candidates_collected(candidate_root)
@@ -1994,7 +2004,9 @@ class AuditPipeline:
         # 重新读盘拿到的是爬虫原始行：抖音 detail 模式不写 source_keyword，按选中它的词补回（R7）
         output.contents = [item | {"source_keyword": selected_by_key[key]} for item in output.contents
                            if (key := content_identity(item, platform)) in selected_by_key]
-        job_store.log(self.job_id, f"初筛完成：{len(terms)} 个词，选中 {len(selected_by_key)} 条进入精审")
+        # 诊断行 "MediaCrawler command:" 读的是 output.command，逐词模式下补上最后一次精采命令
+        output.command = last_command or ["triage-select", str(len(terms)), "keywords"]
+        job_store.log(self.job_id, f"初筛完成：{visited} 个词，选中 {len(selected_by_key)} 条进入精审")
         return output
 
     def _mark_subject_skipped(self, platform: str, content_key: str, subject: AuditSubject) -> None:

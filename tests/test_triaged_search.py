@@ -34,7 +34,8 @@ class FakeCrawler:
         comments = self.comments_by_word.get(keyword, [])
         return CrawlOutput(platform=platform, contents=items, comments=comments, output_dir=Path(save_root))
 
-    def run_detail(self, platform, content_id, *, source_keyword, content_callback=None, save_root=None, **kwargs):
+    def run_detail(self, platform, content_id, *, source_keyword, content_callback=None, save_root=None,
+                   progress_callback=None, **kwargs):
         if source_keyword in self.detail_exceptions:
             raise self.detail_exceptions[source_keyword]
         if content_id in self.detail_fail_once:
@@ -44,10 +45,13 @@ class FakeCrawler:
             self.detail_empty_once.discard(content_id)
             return CrawlOutput(platform=platform, contents=[], comments=[], output_dir=Path(save_root))
         self.detail_calls.append((source_keyword, content_id))
+        if progress_callback:
+            progress_callback(1, 1)                 # 真实 run_detail 只会报 1/1
         item = {"aweme_id": content_id, "desc": "full", "source_keyword": source_keyword}
         if content_callback:
             content_callback([item], [])
-        return CrawlOutput(platform=platform, contents=[item], comments=[], output_dir=Path(save_root))
+        return CrawlOutput(platform=platform, contents=[item], comments=[], output_dir=Path(save_root),
+                           command=["python", "main.py", "--specified_id", content_id])
 
     def _load_platform_output(self, save_root, platform):
         # 抖音 detail 模式写盘时 source_keyword 为空，重新读盘拿不到词：这里保持同样的诚实行为
@@ -384,3 +388,55 @@ def test_rotated_sweep_reads_collected_markers_from_both_account_directories(tmp
     assert [call["keyword"] for call in crawler.search_calls] == ["词C"]
     assert crawler.detail_calls == [("词C", "c1")]
     assert [(c["aweme_id"], c["source_keyword"]) for c in output.contents] == [("c1", "词C")]
+
+
+def test_sweep_reports_keyword_progress_command_and_visited_count(tmp_path: Path, monkeypatch):
+    logs: list[str] = []
+    progress: list[tuple[int, int]] = []
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda job_id, message, *a, **k: logs.append(message))
+    crawler = FakeCrawler({"词A": [("a1", "今晚上分")], "词B": [("b1", "今晚上分")], "词C": [("c1", "今晚上分")]})
+    pipeline = _new_pipeline("job-progress", crawler, FakeIngestion(analyzed=set()), FakeEngine())
+    output = pipeline._run_triaged_search(
+        request=_base_request(keyword="词A,词B,词C"), save_root=tmp_path, start_page=1, max_total_notes=10,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: len(crawler.detail_calls) >= 2,      # 采到两条后要求停止
+        started_callback=None, progress_callback=lambda done, total: progress.append((done, total)),
+    )
+    assert progress == [(1, 3), (2, 3)]                            # 外层看到的是第几个词，不是 run_detail 的 1/1
+    assert output.command == ["python", "main.py", "--specified_id", "b1"]
+    assert any("初筛完成：2 个词，选中 2 条进入精审" in message for message in logs)   # 停止后的词不计入
+
+
+def test_sweep_without_any_detail_run_still_reports_a_command(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
+    crawler = FakeCrawler({"词A": []})
+    pipeline = _new_pipeline("job-nocmd", crawler, FakeIngestion(analyzed=set()), FakeEngine())
+    output = pipeline._run_triaged_search(
+        request=_base_request(keyword="词A"), save_root=tmp_path, start_page=1, max_total_notes=10,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    assert output.command == ["triage-select", "1", "keywords"]
+
+
+def test_zero_keywords_fails_like_run_search(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
+    crawler = FakeCrawler({})
+    pipeline = _new_pipeline("job-empty-keyword", crawler, FakeIngestion(analyzed=set()), FakeEngine())
+    with pytest.raises(ValueError, match="at least one search keyword is required"):
+        pipeline._run_triaged_search(
+            request=_base_request(keyword=" , "), save_root=tmp_path, start_page=1, max_total_notes=10,
+            crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+            content_callback=lambda c, m: None, stream_items=True,
+            stop_checker=lambda: False, started_callback=None, progress_callback=None,
+        )
+    assert crawler.search_calls == []
