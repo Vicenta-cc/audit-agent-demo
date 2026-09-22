@@ -8,7 +8,8 @@ from types import SimpleNamespace
 import pytest
 
 import backend.audit_agent.pipeline as pipeline_module
-from backend.audit_agent.crawler_adapter import CrawlerVerificationError, CrawlOutput
+from backend.audit_agent.crawler_adapter import (CrawlerCollectionIncompleteError,
+                                                 CrawlerVerificationError, CrawlOutput)
 from backend.audit_agent.triage import CandidateScore, mark_candidates_collected, write_candidates_file
 
 
@@ -227,6 +228,21 @@ def test_per_keyword_exception_is_isolated_but_account_errors_propagate(tmp_path
             content_callback=lambda c, m: None, stream_items=True,
             stop_checker=lambda: False, started_callback=None, progress_callback=None,
         )
+
+    # 精采不完整与 TRIAGE_MODE=off 一致：整个任务失败，而不是把已入库的半条内容当作"本词无产出"
+    crawler_incomplete = FakeCrawler(
+        {"词A": [("a1", "今晚上分")], "词B": [("b1", "今晚上分")]},
+        detail_exceptions={"词A": CrawlerCollectionIncompleteError("douyin/collection_status")},
+    )
+    pipeline_incomplete = _new_pipeline("job-incomplete", crawler_incomplete, FakeIngestion(analyzed=set()), FakeEngine())
+    with pytest.raises(CrawlerCollectionIncompleteError):
+        pipeline_incomplete._run_triaged_search(
+            request=_base_request(keyword="词A,词B"), save_root=tmp_path / "incomplete", start_page=1,
+            max_total_notes=10, crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+            content_callback=lambda c, m: None, stream_items=True,
+            stop_checker=lambda: False, started_callback=None, progress_callback=None,
+        )
+    assert crawler_incomplete.detail_calls == []        # 后面的词不再继续
 
 
 def test_comments_grouped_by_platform_aware_content_identity(tmp_path: Path, monkeypatch):

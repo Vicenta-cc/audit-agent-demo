@@ -25,6 +25,7 @@ from .crawler_adapter import (
     PLATFORM_DATA_DIRS,
     VIDEO_EXTENSIONS,
     CrawlerAuthenticationError,
+    CrawlerCollectionIncompleteError,
     CrawlOutput,
     CrawlerVerificationError,
     CrawlerRateLimitError,
@@ -1981,7 +1982,10 @@ class AuditPipeline:
                     mark_candidates_collected(candidate_root)
                 else:
                     job_store.log(self.job_id, f"词「{keyword}」精采未返回内容：{selected.content_key}，本词无产出")
-            except (CrawlerVerificationError, CrawlerAuthenticationError, CrawlerRateLimitError):
+            # 精采不完整沿用 off 模式：整任务失败并提示查看 collection_status，
+            # 否则流式入库已经写进 DB 的内容会被当成"本词无产出"
+            except (CrawlerVerificationError, CrawlerAuthenticationError, CrawlerRateLimitError,
+                    CrawlerCollectionIncompleteError):
                 raise
             except Exception as exc:
                 job_store.log(self.job_id, f"词「{keyword}」采集或初筛失败：{exc}，跳过该词")
