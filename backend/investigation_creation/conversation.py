@@ -6,7 +6,7 @@ import re
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from threading import RLock
+from threading import Event, RLock, Thread
 from typing import Any, Callable, Literal
 from urllib.parse import urlsplit
 
@@ -48,6 +48,12 @@ from .errors import (
 from .principal import Principal
 from .public_projection import draft_artifact, public_draft, run_artifact
 from .public_answer import redact_creation_internal_references
+from .resource_authoring import (
+    CompanyResourceAuthoringClient,
+    ResourceAuthoringError,
+    ResourceKind,
+    resource_generation_kinds,
+)
 from .tools import (
     HermesToolExecutionIdentity,
     InvestigationCreationToolService,
@@ -63,6 +69,24 @@ PUBLISHED_SESSION_NOTICE = (
 
 logger = logging.getLogger(__name__)
 
+RESOURCE_AUTHORING_FEEDBACK: dict[ResourceKind, tuple[str, ...]] = {
+    "lexicon": (
+        "正在生成黑话库，并筛选约 5 个最有价值的实际搜索变体。",
+        "正在检查每个候选词能否独立用于平台搜索。",
+        "正在剔除宽泛生活词和低价值引流词。",
+        "正在校验主题主词与变体归属，请稍候。",
+        "生成耗时较长，请求仍在处理中。",
+    ),
+    "ruleset": (
+        "正在生成审核规则，并整理风险类型与命中边界。",
+        "正在核对命中条件与研判说明是否一致。",
+        "正在检查强豁免和正常内容保护边界。",
+        "正在校验规则阶段与结构，请稍候。",
+        "生成耗时较长，请求仍在处理中。",
+    ),
+}
+RESOURCE_AUTHORING_FEEDBACK_DELAYS = (15.0, 25.0, 30.0, 30.0)
+
 CREATION_SYSTEM_PROMPT = """You are the investigation configuration and resource assistant for a
 content-audit platform. Application appends the complete authoritative 审核规则 Proposal snapshot
 to the public assistant message after successful Proposal creation or update. Your natural-language
@@ -70,7 +94,7 @@ response may explain the design or changes; it is not the authoritative rule pre
 你的产品身份固定为“研判助手”。不要自称 Hermes、Hermes Agent，不能向用户透露底层代理框架、
 模型运行时、供应商实现或产品改造来源。用户只是在打招呼（例如 hello、你好）时，简短回应并说明
 你可以协助配置调查、查询审核规则与黑话库、跟进调查报告，不要擅自创建调查草稿或调用资源工具。
-用户界面与回复统一使用“审核规则”和“黑话库”两个资源名称；理解用户旧称，但回复、标题和生成说明只用新名称。黑话库仍包含用于平台搜索和内容召回的词条，不仅限于隐语；不因改名改变搜索词生成标准、临时资源边界或采用流程。用户明确“搜索主词 X”“只用 X”，或用自然语序说“想抓一条抖音 X”“抖音抓 N 条 X”“在抖音搜索 N 条 X”时，即使 X 没有引号，也必须剥离意图词、平台名、数量和“抓取/报告”等动作词，把剩余的用户原文 X 作为本次临时词库唯一启用主词。例如“想抓一条抖音 bc料”的平台是抖音、数量是一条、唯一搜索主词是 bc料。保留 X 的原始大小写、字母数字、符号和简写，不把短词或黑话改写成解释性词语，也不要自行扩展相关主词、变体或标签。可以把“博彩”等领域解释用于调查标题和审核规则匹配，但必须明确说明实际搜索主词仍是用户原文。临时词库只写入当前调查 Draft 供本次任务使用，不正式保存到黑话库数据库。
+用户界面与回复统一使用“审核规则”和“黑话库”两个资源名称；理解用户旧称，但回复、标题和生成说明只用新名称。黑话库的主词用于表达主题，启用变体词是优先的实际平台搜索词；某个主词没有启用变体时，才兼容性地回退使用该主词。任务卡只展示实际搜索词摘要；关键词修改在结构化 Drawer 中按“主题主词→变体词”完成。用户明确“搜索主词 X”“只用 X”，或用自然语序说“想抓一条抖音 X”“抖音抓 N 条 X”“在抖音搜索 N 条 X”时，即使 X 没有引号，也必须剥离意图词、平台名、数量和“抓取/报告”等动作词，把剩余的用户原文 X 作为本次唯一实际搜索词。例如“想抓一条抖音 bc料”的平台是抖音、数量是一条、唯一实际搜索词是 bc料。保留 X 的原始大小写、字母数字、符号和简写，不把短词或黑话改写成解释性词语，也不要自行增加其他主词、变体或标签。若建立完整词库，可以把 X 作为某个主题主词下的启用变体，但 search_terms 必须仍严格只有 X。可以把“博彩”等领域解释用于调查标题和审核规则匹配，但必须明确说明实际搜索词仍是用户原文。临时词库只写入当前调查 Draft 供本次任务使用，不正式保存到黑话库数据库。
 
 Conversation is primary. Use only the investigation creation tools
 exposed in this mode, choosing and combining them according to the user's current intent. There is
@@ -108,8 +132,9 @@ not require explicit confirmation of every editable or defaultable field. Derive
 from the objective; preserve any available platform the user explicitly selected, or otherwise
 choose one reasonable available platform from the available resource context. Select the clearly
 matching published 审核规则已发布版本 directly as the Judgement resource and independently select a
-clearly matching available real recall 黑话库. When enabled_main_terms for that existing 黑话库
-are available in the conversation context, that authoritative term snapshot is the recall
+clearly matching available real recall 黑话库. When the actual enabled search-term snapshot for that
+existing 黑话库 is available in the conversation context (the legacy tool field may still be named
+enabled_main_terms), that authoritative term snapshot is the recall
 configuration; do not ask the user to enter separate search keywords before creating the Draft. The
 user can review and edit these recommended values on the Draft afterward.
 
@@ -120,7 +145,7 @@ In particular, an explicit request not to collect media must set collect_media=f
 that such a choice cannot be represented. Omit task_parameters only when the user did not specify
 per-run execution choices. crawler_account_id remains application-managed and must not be supplied.
 
-Judge recall suitability from the actual enabled main terms, not the lexicon title, risk label,
+Judge recall suitability from the actual enabled search terms, not the lexicon title, risk label,
 or the fact that its domain matches the Judgement rules. Ask whether searching those exact terms
 will discover the user's requested subject. Generic risk labels such as "群体攻击", "驱逐", or
 "排斥" alone do not target a specific discussion such as 维汉婚恋; a matching ethnic audit ruleset
@@ -136,10 +161,12 @@ must not carry search terms, source 黑话库, or recall plans, and must resolve
 For a search Draft, select a matching published 审核规则已发布版本 and prefer an independently available
 real recall 黑话库 when it is sufficiently suitable. When its terms need to be discovered, query that 黑话库 with
 include_lexicon_terms_for_ids. Save existing_lexicon with its ID,
-expected_runtime_content_hash, and the returned enabled_main_terms snapshot. Never expand variants,
-tag entries, query type, or order into crawler terms. When the user explicitly changes the
-main terms, use update_investigation_draft to replace existing_lexicon with temporary_terms containing
-exactly the user's edited terms and the source 黑话库 ID.
+expected_runtime_content_hash, and the returned actual search-term snapshot. The legacy
+enabled_main_terms field already contains the server-projected variant-first search terms; do not
+replace them with theme main terms or tag entries. When the user explicitly changes the
+search terms, use update_investigation_draft to replace existing_lexicon with temporary_terms containing
+the complete lexicon_content edited in the Drawer, its exact variant-first terms projection, and the
+source 黑话库 ID. Never flatten a structured Drawer edit and discard theme-to-variant relationships.
 
 If no sufficiently suitable existing 黑话库 is available, inspect the full conversation for
 authorization to generate missing Recall. Without that authorization, explain the Recall resource
@@ -152,21 +179,31 @@ For this branch, use a brief reply such as: "当前没有找到足够合适的�
 list, examples, a proposed configuration, or a Draft to that reply.
 If the user already authorized generation (for example, "没有合适词库就帮我生成这次搜索词" or
 "没有的话你自己补"), and investigation intent and a valid published Judgement 审核规则 are present,
-generate focused temporary canonical search terms and create the Draft in the same turn only when
+generate a structured temporary lexicon and create the Draft in the same turn only when
 using that valid published Judgement. Store terms in configuration.investigation.recall_plan with
-strategy=temporary_terms and source_lexicon_ids as real referenced 黑话库 IDs, or [].
+strategy=temporary_terms, source_lexicon_ids as real referenced 黑话库 IDs or [], and lexicon_content
+containing stable main/variant entry IDs. Every enabled theme main must have at least one enabled
+variant; terms must exactly equal the variant-first search projection from lexicon_content. The main
+entries express semantic themes and the variants contain the real platform queries.
 When temporary 审核规则 and search terms are generated together, this takes priority: create the
 审核规则 Proposal, then show its 审核规则 and the complete search-term list, and END this turn.
 Do not call create_investigation_draft, update_investigation_draft or use_ruleset_proposal in that
 generation turn. Generating or displaying temporary terms does not require a Draft. Wait for a
 LATER explicit adoption; then use_ruleset_proposal creates the Draft with the displayed terms.
 Do not ask again for permission to generate terms that the user already requested.
-Generate concrete platform search queries for the user's actual discovery goal. For discussion
-research, combine the subject with relevant everyday topics; a recalled post need not be risky.
-Use deliberate common subject names where helpful, avoid obvious duplicates and padding, and
-keep the list focused. Each generated Chinese query is natural continuous text with no whitespace,
-plus signs, commas or Boolean separators; each list item is one complete query. Keep search
-queries separate from risk conditions. Do not generate tags, query_type or variant objects.
+Generate concrete platform search queries for the user's actual discovery goal. Temporary terms are
+the flattened equivalent of lexicon variants: prioritize expressions that real posts are likely to
+use, rather than explicit risk-category labels. Black/grey-market content often hides behind homophones,
+pinyin or letter abbreviations; ordinary-life scene disguises whose surrounding context implies an
+ambiguous or transactional offer; and diversion hooks such as “主页看”“扣1”“同城私”“加V”. Do not copy
+these examples mechanically, and do not use broad generic hooks alone when they would create mostly
+noise; make the set domain-relevant and plausible for the selected platform. For discussion research,
+combine the subject with relevant everyday topics; a recalled post need not itself be risky. Avoid
+obvious duplicates, padding, and over-explicit phrases that sellers are unlikely to publish. Each
+generated Chinese query is natural continuous text with no whitespace, plus signs, commas or Boolean
+separators; each list item is one complete query. Keep search queries separate from risk conditions.
+This temporary flat path does not create tag, query_type, main/variant objects; a complete generated
+黑话库 uses create_lexicon_edit and should contain theme mains plus many concrete variants.
 Preserve exact authoritative resource terms and explicit user edits. Before Draft adoption,
 show proposed temporary terms in the conversation and preserve that list when later binding.
 source_lexicon_ids are provenance references only; they do not contribute search terms or variants.
@@ -203,6 +240,11 @@ the formal library again merely because the user approved a temporary Proposal. 
 require clarification. A stale presentation requires a new full presentation and later approval.
 Do not retry use with a newly displayed snapshot in the same user turn. On Draft revision conflict,
 read the latest Draft and assess changes; do not blindly replace expected_revision and force a retry.
+When the user asks to save the current Draft keywords as a formal 黑话库, first read the latest Draft.
+If temporary_terms.lexicon_content exists, pass that exact content unchanged to create_lexicon_edit and
+then save_resource. Do not reconstruct, regroup, rename, or add terms from conversation memory. If the
+latest Draft still has only legacy flat terms, explain that it must first be structured and confirmed in
+the Drawer. Saving a lexicon never mutates the Draft and never changes an already-started task.
 For re-presentation, get the current Proposal and update it with unchanged content/expected_version.
 Temporary Drafts use the same Preview/Confirm flow as formal Drafts, subject to fresh Application
 readiness validation. Adoption alone never starts execution. Execution requires a separate explicit
@@ -671,6 +713,7 @@ class InvestigationCreationConversationService:
         fake_runtime: bool = False,
         hermes_state_dir: Path | None = None,
         principal_resolver: Callable[[str], Principal] | None = None,
+        resource_authoring_client: CompanyResourceAuthoringClient | None = None,
     ) -> None:
         self.tool_service = tool_service
         self.store = store or InvestigationStore()
@@ -679,6 +722,9 @@ class InvestigationCreationConversationService:
         self.agent_factory = agent_factory
         self.fake_runtime = bool(fake_runtime)
         self.principal_resolver = principal_resolver
+        self.resource_authoring_client = (
+            resource_authoring_client or CompanyResourceAuthoringClient()
+        )
         self.hermes_state_dir = (
             hermes_state_dir or settings.data_dir / "hermes-investigation-creation"
         ).resolve()
@@ -1182,7 +1228,16 @@ class InvestigationCreationConversationService:
                 public_streams.enter_context(
                     self._answer_streamer.bind_turn(session.id, turn.id)
                 )
-                if self.fake_runtime:
+                authoring_kinds = resource_generation_kinds(user_message)
+                if authoring_kinds and self.resource_authoring_client.enabled:
+                    result = self._run_resource_authoring_turn(
+                        turn,
+                        kinds=authoring_kinds,
+                        user_message=user_message,
+                        history=history,
+                        principal=principal,
+                    )
+                elif self.fake_runtime:
                     agent = self._agent(session.id)
                     result = agent.run_conversation(
                         user_message,
@@ -1211,12 +1266,14 @@ class InvestigationCreationConversationService:
                 self._answer_streamer.interrupt(turn.id)
                 self.store.fail_turn(
                     turn.id,
-                    error_code="hermes_execution_failed",
+                    error_code=str(
+                        result.get("error_code") or "hermes_execution_failed"
+                    ),
                     safe_message=(
                         str(result.get("final_response") or "").strip()
                         or "调查方案生成暂时无法完成。"
                     ) + ("\n" + self._binding_failure_notice(turn) if self._binding_failure_notice(turn) else ""),
-                    retryable=False,
+                    retryable=bool(result.get("retryable", False)),
                 )
                 self._answer_streamer.release(turn.id)
                 return self.store.turn_result(turn.id)
@@ -1243,6 +1300,177 @@ class InvestigationCreationConversationService:
             raise RuntimeError("Hermes creation Turn ended with an unknown outcome") from exc
         finally:
             self.tool_service.end_conversation_turn(session.id)
+
+    def _run_resource_authoring_turn(
+        self,
+        turn: InvestigationTurn,
+        *,
+        kinds: tuple[ResourceKind, ...],
+        user_message: str,
+        history: list[dict[str, Any]] | None,
+        principal: Principal,
+    ) -> dict[str, Any]:
+        messages: list[dict[str, Any]] = [
+            *(history or []),
+            {"role": "user", "content": user_message},
+        ]
+        authored: list[tuple[ResourceKind, dict[str, Any]]] = []
+        usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        try:
+            for kind in kinds:
+                feedback_stop, feedback_thread = self._start_resource_feedback(
+                    turn.session_id, kind
+                )
+                try:
+                    generated = self.resource_authoring_client.generate(
+                        kind,
+                        user_request=user_message,
+                    )
+                finally:
+                    feedback_stop.set()
+                    feedback_thread.join(timeout=0.2)
+                self._answer_streamer.stream_delta(
+                    turn.session_id,
+                    (
+                        "黑话库结构已生成并通过校验，正在建立可编辑副本。\n"
+                        if kind == "lexicon"
+                        else "审核规则结构已生成并通过校验，正在建立候选方案。\n"
+                    ),
+                )
+                authored.append((kind, generated.content))
+                for key in usage:
+                    usage[key] += int(generated.usage.get(key) or 0)
+        except ResourceAuthoringError as exc:
+            return {
+                "completed": False,
+                "failed": True,
+                "interrupted": False,
+                "final_response": exc.safe_message,
+                "messages": messages,
+                "turn_exit_reason": f"resource_authoring_{exc.kind}",
+                "error_code": f"resource_authoring_{exc.kind}",
+                "retryable": exc.retryable,
+                "api_calls": max(1, len(authored) + 1),
+                **usage,
+            }
+
+        completed_kinds: list[ResourceKind] = []
+        for index, (kind, content) in enumerate(authored, start=1):
+            tool_name = (
+                "create_ruleset_proposal"
+                if kind == "ruleset"
+                else "create_lexicon_edit"
+            )
+            arguments = {"content": content}
+            call_id = f"{turn.id}:resource-authoring:{index}:{kind}"
+            envelope = self.tool_service.execute_with_identity(
+                tool_name,
+                arguments,
+                principal=principal,
+                identity=HermesToolExecutionIdentity.require(
+                    session_id=turn.session_id,
+                    turn_id=turn.id,
+                    tool_call_id=call_id,
+                ),
+            )
+            self._activity_emitter.tool_completed(
+                turn.session_id,
+                call_id,
+                tool_name,
+                envelope,
+                arguments,
+            )
+            messages.extend(
+                [
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": tool_name,
+                                    "arguments": arguments,
+                                },
+                            }
+                        ],
+                    },
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": tool_name,
+                        "content": json.dumps(
+                            envelope, ensure_ascii=False, sort_keys=True
+                        ),
+                    },
+                ]
+            )
+            if envelope.get("status") != "ok":
+                error = envelope.get("error") or {}
+                return {
+                    "completed": False,
+                    "failed": True,
+                    "interrupted": False,
+                    "final_response": str(
+                        error.get("message") or "资源生成结果暂时无法保存。"
+                    ),
+                    "messages": messages,
+                    "turn_exit_reason": "resource_authoring_tool_failed",
+                    "error_code": str(
+                        error.get("code") or "resource_authoring_tool_failed"
+                    ),
+                    "retryable": bool(error.get("retryable", False)),
+                    "api_calls": len(authored),
+                    **usage,
+                }
+            completed_kinds.append(kind)
+
+        if completed_kinds == ["ruleset"]:
+            answer = "审核规则候选方案已生成，请查看完整规则后再决定是否采用或保存。"
+        elif completed_kinds == ["lexicon"]:
+            answer = "黑话库编辑副本已生成，可在右侧 Drawer 中查看、修改或保存。"
+        else:
+            answer = (
+                "审核规则候选方案和黑话库编辑副本已生成，请查看完整内容后再决定是否采用或保存。"
+            )
+        messages.append({"role": "assistant", "content": answer})
+        return {
+            "completed": True,
+            "failed": False,
+            "interrupted": False,
+            "final_response": answer,
+            "messages": messages,
+            "turn_exit_reason": "resource_authoring_completed",
+            "api_calls": len(authored),
+            **usage,
+        }
+
+    def _start_resource_feedback(
+        self,
+        session_id: str,
+        kind: ResourceKind,
+    ) -> tuple[Event, Thread]:
+        messages = RESOURCE_AUTHORING_FEEDBACK[kind]
+        self._answer_streamer.stream_delta(session_id, messages[0] + "\n")
+        stop = Event()
+
+        def emit_later() -> None:
+            for delay, message in zip(
+                RESOURCE_AUTHORING_FEEDBACK_DELAYS,
+                messages[1:],
+            ):
+                if stop.wait(delay):
+                    return
+                self._answer_streamer.stream_delta(session_id, message + "\n")
+
+        thread = Thread(
+            target=emit_later,
+            name=f"resource-authoring-feedback-{kind}",
+            daemon=True,
+        )
+        thread.start()
+        return stop, thread
 
     def _presentation_context_for_turn(self, turn: InvestigationTurn) -> list[dict]:
         from .approval import published_presentations

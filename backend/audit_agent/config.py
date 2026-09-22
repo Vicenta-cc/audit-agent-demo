@@ -62,6 +62,33 @@ class Settings:
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     ).rstrip("/")
     qwen_text_model = os.getenv("QWEN_TEXT_MODEL", "qwen3.7-plus")
+    resource_authoring_api_key = os.getenv("RESOURCE_AUTHORING_API_KEY", "")
+    resource_authoring_base_url = os.getenv(
+        "RESOURCE_AUTHORING_BASE_URL", "https://api.qhose.net/v1"
+    ).strip().rstrip("/")
+    resource_authoring_model = os.getenv(
+        "RESOURCE_AUTHORING_MODEL", "gpt-5.6-sol"
+    ).strip()
+    resource_authoring_reasoning_effort = os.getenv(
+        "RESOURCE_AUTHORING_REASONING_EFFORT", "none"
+    ).strip().lower()
+    if resource_authoring_reasoning_effort not in {
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+    }:
+        raise ValueError(
+            "RESOURCE_AUTHORING_REASONING_EFFORT must be none, minimal, low, medium, high, or xhigh"
+        )
+    resource_authoring_timeout_seconds = max(
+        1.0, float(os.getenv("RESOURCE_AUTHORING_TIMEOUT_SECONDS", "120"))
+    )
+    resource_authoring_max_output_tokens = max(
+        1_000, int(os.getenv("RESOURCE_AUTHORING_MAX_OUTPUT_TOKENS", "16000"))
+    )
     hermes_authorized_report_version_ids = tuple(
         item.strip()
         for item in os.getenv("HERMES_AUTHORIZED_REPORT_VERSION_IDS", "").split(",")

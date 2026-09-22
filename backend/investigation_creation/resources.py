@@ -14,6 +14,8 @@ from backend.audit_agent.crawler_account_store import (
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
 from backend.audit_agent.crawler_adapter import SUPPORTED_PLATFORMS
 from backend.audit_agent.lexicon_store import LexiconStore
+from backend.resource_management.contracts import LexiconContent
+from backend.resource_management.lexicon_versions import content as stored_lexicon_content
 from backend.rulesets.compiler import content_hash as ruleset_content_hash
 from backend.rulesets.contracts import RuleSetContent
 from backend.rulesets.service import RuleSetService
@@ -109,6 +111,21 @@ class InvestigationResourceService:
             configuration = configuration.model_copy(update={
                 "task_parameters": InvestigationTaskParameters.model_validate(saved["parameters"])})
         return configuration, saved["revision"]
+
+    def lexicon_editor_content(
+        self,
+        category_id: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> LexiconContent:
+        if connection is not None:
+            return LexiconContent.model_validate(
+                stored_lexicon_content(connection, category_id)
+            )
+        with self.lexicon_store._connect() as conn:
+            return LexiconContent.model_validate(
+                stored_lexicon_content(conn, category_id)
+            )
 
     @contextmanager
     def confirmation_fence(self) -> Iterator[sqlite3.Connection]:
@@ -375,6 +392,14 @@ class InvestigationResourceService:
                         else len(plan.enabled_main_terms)
                     ),
                     enabled_main_terms=list(plan.enabled_main_terms),
+                    lexicon_content=(
+                        self.lexicon_editor_content(
+                            plan.lexicon_id,
+                            connection=resource_connection,
+                        )
+                        if resolution is not None
+                        else None
+                    ),
                 )
             else:
                 resolved_terms = list(plan.terms)
@@ -382,6 +407,7 @@ class InvestigationResourceService:
                     strategy="temporary_terms",
                     temporary_terms=list(plan.terms),
                     source_lexicon_ids=list(plan.source_lexicon_ids),
+                    lexicon_content=plan.lexicon_content,
                 )
         else:
             creator_url = effective_configuration.investigation.creator_url
@@ -988,7 +1014,7 @@ class InvestigationResourceService:
         category = category or self.lexicon_store.get_category(
             category_id, connection=resource_connection
         )
-        terms = self.lexicon_store.enabled_main_terms(
+        terms = self.lexicon_store.enabled_search_terms(
             category_id, connection=resource_connection
         )
         returned_terms = (

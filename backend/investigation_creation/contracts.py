@@ -19,6 +19,7 @@ from pydantic import (
 )
 
 from backend.audit_agent.creator_url import validate_creator_url
+from backend.resource_management.contracts import LexiconContent
 from backend.rulesets.contracts import ApplicationStage, RiskLevel, RuleSetContent
 
 
@@ -129,6 +130,10 @@ class TemporaryTermsRecallPlan(StrictModel):
     strategy: Literal["temporary_terms"]
     terms: list[StrictStr] = Field(default_factory=list, max_length=100)
     source_lexicon_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
+    lexicon_content: LexiconContent | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @field_validator("source_lexicon_ids")
     @classmethod
@@ -161,6 +166,33 @@ class TemporaryTermsRecallPlan(StrictModel):
                 seen.add(text)
                 normalized.append(text)
         return normalized
+
+    @model_validator(mode="after")
+    def structured_lexicon_matches_search_terms(self) -> "TemporaryTermsRecallPlan":
+        if self.lexicon_content is None:
+            return self
+        projected = self.lexicon_content.search_terms()
+        if not projected:
+            raise ValueError("structured temporary lexicon must project at least one search term")
+        if projected != list(self.terms):
+            raise ValueError(
+                "temporary terms must exactly match the structured lexicon search projection"
+            )
+        enabled_variants = {
+            entry.parent_id
+            for entry in self.lexicon_content.entries
+            if entry.kind == "variant" and entry.enabled
+        }
+        missing = [
+            entry.id
+            for entry in self.lexicon_content.entries
+            if entry.kind == "main" and entry.enabled and entry.id not in enabled_variants
+        ]
+        if missing:
+            raise ValueError(
+                "each enabled structured theme must contain at least one enabled variant"
+            )
+        return self
 
 
 RecallPlan = Annotated[
@@ -640,6 +672,10 @@ class RecallPlanPreview(StrictModel):
     enabled_main_terms: list[StrictStr] = Field(default_factory=list)
     temporary_terms: list[StrictStr] = Field(default_factory=list)
     source_lexicon_ids: list[StrictStr] = Field(default_factory=list)
+    lexicon_content: LexiconContent | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
 
 class CrawlerAccountConfirmedState(StrictModel):
@@ -766,7 +802,7 @@ class ConfirmedRecallPlanSnapshot(StrictModel):
             if not self.lexicon_id or not self.runtime_content_hash:
                 raise ValueError("existing_lexicon snapshot requires id and hash")
             if not self.enabled_main_terms:
-                raise ValueError("existing_lexicon snapshot requires enabled main terms")
+                raise ValueError("existing_lexicon snapshot requires enabled search terms")
             if self.temporary_terms:
                 raise ValueError("existing_lexicon snapshot cannot contain temporary terms")
         else:

@@ -53,7 +53,7 @@ export function ResourceContentView({content,onChange}:{content:ResourceContent;
     <label>名称<input value={content.title ?? content.name ?? ''} readOnly={!onChange} onChange={e=>set(content.entries?{title:e.target.value}:{name:e.target.value})}/></label>
     {content.entries ? <>
       <label>词库说明<input value={content.risk_label||''} readOnly={!onChange} onChange={e=>set({risk_label:e.target.value})}/></label>
-      <p className="resource-hint">任务只搜索启用的主词；变体和标签保留在词库中。</p>
+      <p className="resource-hint">任务优先搜索启用的变体词；没有启用变体时回退主词，标签不参与搜索。</p>
       {content.entries.filter(e=>e.kind!=='variant').map(entry=><div className="resource-entry" key={entry.id}>
         <label>{entry.kind==='tag'?'标签':'主词'}<input value={entry.term} readOnly={!onChange} onChange={e=>updateEntry(entry.id,{term:e.target.value})}/></label>
         <label className="resource-check"><input type="checkbox" checked={entry.enabled} disabled={!onChange} onChange={e=>updateEntry(entry.id,{enabled:e.target.checked})}/>启用</label>
@@ -114,7 +114,7 @@ export function ResourceEditCard({session,edit,onRefresh,onUse}:{session:string;
       <button disabled={busy} onClick={()=>void apply('copy')}>另存一份</button>
       {onUse&&<button disabled={busy||changed} onClick={()=>onUse(edit)}>用于任务</button>}
     </div>
-    {edit.search_terms&&<p className="resource-hint">实际搜索主词：{edit.search_terms.join('、')||'暂无启用主词'}</p>}
+    {edit.search_terms&&<p className="resource-hint">实际搜索词：{edit.search_terms.join('、')||'暂无实际搜索词'}</p>}
   </details>;
 }
 

@@ -2156,7 +2156,7 @@ def test_explicit_missing_lexicon_remains_unavailable(m3_stack: dict):
     assert not options.recall_lexicons[0].available
 
 
-def test_lexicon_options_only_return_enabled_main_terms(m3_stack: dict):
+def test_lexicon_options_return_variant_first_search_terms(m3_stack: dict):
     category = m3_stack["lexicons"].upsert_category(
         category_id="collection-safe",
         title="Collection safe",
@@ -2197,12 +2197,12 @@ def test_lexicon_options_only_return_enabled_main_terms(m3_stack: dict):
         principal=_principal(m3_stack),
     )
     lexicon = options.recall_lexicons[0]
-    assert lexicon.enabled_main_terms == ["alpha"]
+    assert lexicon.enabled_main_terms == ["alpha-variant"]
     assert lexicon.enabled_main_term_count == 2
     assert lexicon.enabled_main_terms_returned == 1
     assert lexicon.terms_truncated
     serialized = json.dumps(lexicon.model_dump(mode="json"), ensure_ascii=False)
-    assert "alpha-variant" not in serialized
+    assert "alpha-variant" in serialized
     assert "tag-only" not in serialized
     assert "disabled" not in serialized
 
@@ -2379,7 +2379,7 @@ def test_existing_lexicon_snapshot_and_explicit_term_edit_are_revisioned(
         entries=[
             {
                 "main_term": "enabled-main",
-                "variants": ["variant-must-not-crawl"],
+                "variants": ["variant-should-crawl"],
                 "query_type": "keyword",
                 "enabled": True,
             },
@@ -2407,7 +2407,7 @@ def test_existing_lexicon_snapshot_and_explicit_term_edit_are_revisioned(
     saved_plan = draft.configuration.investigation.recall_plan
     assert saved_plan.strategy == "existing_lexicon"
     assert saved_plan.expected_runtime_content_hash == runtime_hash
-    assert saved_plan.enabled_main_terms == ["enabled-main"]
+    assert saved_plan.enabled_main_terms == ["variant-should-crawl"]
 
     temporary_configuration = draft.configuration.model_dump(mode="json")
     temporary_configuration["investigation"]["recall_plan"] = {
@@ -2441,7 +2441,7 @@ def test_existing_lexicon_snapshot_and_explicit_term_edit_are_revisioned(
     assert [row[0] for row in revisions] == [1, 2]
     first_plan = json.loads(revisions[0][1])["investigation"]["recall_plan"]
     second_plan = json.loads(revisions[1][1])["investigation"]["recall_plan"]
-    assert first_plan["enabled_main_terms"] == ["enabled-main"]
+    assert first_plan["enabled_main_terms"] == ["variant-should-crawl"]
     assert first_plan["expected_runtime_content_hash"] == runtime_hash
     assert second_plan["terms"] == ["user-edited-main"]
 
@@ -2884,8 +2884,8 @@ def test_existing_lexicon_snapshot_is_clean_frozen_and_server_limited(m3_stack: 
     )
     snapshot = run.confirmed_configuration
     assert snapshot["schema_version"] == "investigation-run-config-v4"
-    assert snapshot["resolved_search_terms"] == ["first", "second"]
-    assert snapshot["recall_plan"]["enabled_main_terms"] == ["first", "second"]
+    assert snapshot["resolved_search_terms"] == ["variant", "second"]
+    assert snapshot["recall_plan"]["enabled_main_terms"] == ["variant", "second"]
     assert snapshot["recall_plan"]["runtime_content_hash"] == runtime_hash
     assert snapshot["max_notes"] == 1
     assert snapshot["execution"]["max_notes"] == 1
@@ -2897,13 +2897,13 @@ def test_existing_lexicon_snapshot_is_clean_frozen_and_server_limited(m3_stack: 
     assert snapshot["confirmed_by"] == _principal(m3_stack).id
     assert snapshot["confirmed_at"]
     assert snapshot["config_hash"]
-    assert "variant" not in json.dumps(snapshot, ensure_ascii=False)
+    assert "variant" in json.dumps(snapshot, ensure_ascii=False)
 
     m3_stack["lexicons"].add_keyword(
         category_id="freeze-safe", keyword="later", enabled=True
     )
     stored = m3_stack["store"].get_run(run.id, principal=_principal(m3_stack).id)
-    assert stored.confirmed_configuration["resolved_search_terms"] == ["first", "second"]
+    assert stored.confirmed_configuration["resolved_search_terms"] == ["variant", "second"]
     replay = m3_stack["service"].confirm_and_queue(
         ConfirmAndQueueCommand(
             draft_id=draft.id,
@@ -3592,3 +3592,101 @@ def test_t1_typed_terms_keep_existing_count_and_strict_schema():
     ):
         with pytest.raises(ValidationError):
             TemporaryTermsRecallPlan(strategy="temporary_terms", **payload)
+
+
+def _structured_lexicon_content():
+    return {
+        "title": "色情服务隐晦召回",
+        "risk_label": "色情服务",
+        "description": "主题用于归类，启用变体用于实际搜索。",
+        "entries": [
+            {
+                "id": "theme-adult-service",
+                "term": "色情服务",
+                "kind": "main",
+                "parent_id": "",
+                "enabled": True,
+                "platform": "全平台",
+                "match_type": "黑话词",
+                "risk_level": "中",
+                "note": "",
+            },
+            {
+                "id": "variant-non-green",
+                "term": "非绿地陪",
+                "kind": "variant",
+                "parent_id": "theme-adult-service",
+                "enabled": True,
+                "platform": "全平台",
+                "match_type": "黑话词",
+                "risk_level": "中",
+                "note": "",
+            },
+            {
+                "id": "variant-card-check",
+                "term": "门槛验牌",
+                "kind": "variant",
+                "parent_id": "theme-adult-service",
+                "enabled": True,
+                "platform": "全平台",
+                "match_type": "黑话词",
+                "risk_level": "中",
+                "note": "",
+            },
+        ],
+    }
+
+
+def test_structured_temporary_lexicon_is_revisioned_previewed_and_saved(m3_stack):
+    content = _structured_lexicon_content()
+    configuration = _temporary_configuration(
+        m3_stack, ["非绿地陪", "门槛验牌"]
+    )
+    configuration["investigation"]["recall_plan"]["lexicon_content"] = content
+    draft = _create_draft(m3_stack, configuration)
+
+    preview = m3_stack["service"].get_confirmation_preview(
+        draft.id, principal=_principal(m3_stack)
+    )
+    assert preview.resolved_search_terms == ["非绿地陪", "门槛验牌"]
+    assert preview.recall_plan.lexicon_content is not None
+    assert preview.recall_plan.lexicon_content.entries[1].parent_id == "theme-adult-service"
+
+    saved = m3_stack["service"].save_draft_lexicon(
+        draft.id,
+        expected_revision=draft.current_revision,
+        operation_id="save-structured-draft-lexicon",
+        principal=_principal(m3_stack),
+    )
+    assert saved["status"] == "saved"
+    assert m3_stack["lexicons"].enabled_search_terms(saved["resource_id"]) == [
+        "非绿地陪",
+        "门槛验牌",
+    ]
+    retried = m3_stack["service"].save_draft_lexicon(
+        draft.id,
+        expected_revision=draft.current_revision,
+        operation_id="save-structured-draft-lexicon",
+        principal=_principal(m3_stack),
+    )
+    assert retried == saved
+
+
+def test_structured_temporary_lexicon_rejects_projection_drift_and_empty_theme():
+    from backend.investigation_creation.contracts import TemporaryTermsRecallPlan
+
+    content = _structured_lexicon_content()
+    with pytest.raises(ValidationError, match="exactly match"):
+        TemporaryTermsRecallPlan(
+            strategy="temporary_terms",
+            terms=["色情服务"],
+            lexicon_content=content,
+        )
+
+    content["entries"] = [content["entries"][0]]
+    with pytest.raises(ValidationError, match="at least one enabled variant"):
+        TemporaryTermsRecallPlan(
+            strategy="temporary_terms",
+            terms=["色情服务"],
+            lexicon_content=content,
+        )

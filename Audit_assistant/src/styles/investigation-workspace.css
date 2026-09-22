@@ -4029,6 +4029,247 @@
   gap: 16px;
 }
 
+.keyword-structure-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.keyword-structure-warning,
+.keyword-structure-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.keyword-structure-warning {
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.keyword-structure-success {
+  color: #166534;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.keyword-structure-meta {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.keyword-structure-meta input,
+.keyword-theme-heading input,
+.keyword-variant-row > input,
+.keyword-variant-row select {
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #0f172a;
+  background: #ffffff;
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.keyword-structure-meta input:focus,
+.keyword-theme-heading input:focus,
+.keyword-variant-row > input:focus,
+.keyword-variant-row select:focus {
+  border-color: #4f83df;
+  box-shadow: 0 0 0 3px rgba(79, 131, 223, 0.12);
+}
+
+.keyword-structure-summary {
+  display: flex;
+  gap: 8px;
+}
+
+.keyword-structure-summary span,
+.keyword-search-preview span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #315f9f;
+  background: #eaf2ff;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.keyword-theme-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.keyword-theme-card {
+  padding: 12px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.keyword-theme-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.keyword-theme-heading > label:first-child {
+  display: grid;
+  gap: 5px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.keyword-theme-heading button,
+.keyword-variant-row button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #b91c1c;
+  background: #fff7f7;
+}
+
+.keyword-enabled-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #475569;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.keyword-variant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.keyword-variant-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 108px auto auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.keyword-add-action,
+.keyword-add-theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 31px;
+  padding: 0 10px;
+  border: 1px dashed #9db8df;
+  border-radius: 6px;
+  color: #315f9f;
+  background: #f5f8ff;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.keyword-add-action {
+  margin-top: 9px;
+}
+
+.keyword-search-preview {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 12px;
+}
+
+.keyword-search-preview > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.keyword-structure-errors {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 7px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.keyword-structure-errors p {
+  margin: 0;
+}
+
+.keyword-structure-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.keyword-structure-footnote,
+.keyword-preserved-tags {
+  margin: 0;
+  color: #64748b;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.task-final-term-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-final-term-summary button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid #bfd2f7;
+  border-radius: 6px;
+  color: #2563eb;
+  background: #f5f8ff;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+@media (max-width: 540px) {
+  .keyword-theme-heading,
+  .keyword-variant-row {
+    grid-template-columns: 1fr;
+  }
+
+  .keyword-theme-heading button,
+  .keyword-variant-row button {
+    width: 100%;
+  }
+}
+
 /* KNOWLEDGE RESOURCE CENTER PAGE STYLES */
 .kc-page-root {
   display: flex;

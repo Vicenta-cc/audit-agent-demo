@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("suggestion Draft allows direct main-term editing before task configuration is generated", async ({ page }) => {
+test("suggestion Draft opens the structured keyword drawer instead of editing inline", async ({ page }) => {
   await page.route("**/api/**", route => route.fulfill({ json: { items: [] } }));
   await page.goto("/");
   await page.evaluate(async () => {
@@ -10,12 +10,12 @@ test("suggestion Draft allows direct main-term editing before task configuration
     const { TaskSuggestionCard } = await load(
       "/src/features/investigation/TaskSuggestionCard.tsx"
     );
-    const events: string[][] = [];
+    const events: string[] = [];
     Object.assign(window, { keywordEditingTest: { events } });
     const host = document.createElement("div");
     document.body.replaceChildren(host);
     createRoot(host).render(React.createElement(TaskSuggestionCard, {
-      assistantContent: "已将实际搜索主词识别为用户原文“bc料”。",
+      assistantContent: "已将实际搜索词识别为用户原文“bc料”。",
       shouldStream: false,
       showSuggestionCard: true,
       onStreamingComplete: () => {},
@@ -47,7 +47,7 @@ test("suggestion Draft allows direct main-term editing before task configuration
       platformOptions: [{ code: "dy", label: "抖音", available: true }],
       isReadOnly: false,
       onUpdatePlatforms: () => {},
-      onUpdateSearchTerms: async (terms: string[]) => { events.push(terms); },
+      onOpenKeywordEditor: () => { events.push("open-keyword-editor"); },
       onGenerateConfig: () => {},
       onOpenAnalysisPlan: () => {}
     }));
@@ -55,15 +55,11 @@ test("suggestion Draft allows direct main-term editing before task configuration
 
   const card = page.getByRole("region", { name: "任务建议卡片" });
   await expect(card.getByText("bc料", { exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "编辑主词" }).click();
-  const editor = card.getByRole("textbox", { name: "编辑召回词" });
-  await editor.fill("bc料、bc内幕");
-  await page.screenshot({ path: "/tmp/xhs-task-suggestion-keyword-edit-20260921.png", fullPage: true });
-  await expect(card.getByText("仅修改当前 Draft，不保存到黑话库。", { exact: true })).toBeVisible();
-  await card.getByRole("button", { name: "应用到本次任务" }).click();
+  await expect(card.getByRole("textbox")).toHaveCount(0);
+  await card.getByRole("button", { name: "编辑主题与变体" }).click();
   await expect.poll(() => page.evaluate(() => (
-    window as unknown as { keywordEditingTest: { events: string[][] } }
-  ).keywordEditingTest.events)).toEqual([["bc料", "bc内幕"]]);
+    window as unknown as { keywordEditingTest: { events: string[] } }
+  ).keywordEditingTest.events)).toEqual(["open-keyword-editor"]);
 });
 
 test("started task explains that its search terms are frozen", async ({ page }) => {
@@ -111,7 +107,7 @@ test("started task explains that its search terms are frozen", async ({ page }) 
       platformOptions: [{ code: "dy", label: "抖音", available: true }],
       isReadOnly: true,
       onUpdatePlatforms: () => {},
-      onUpdateSearchTerms: async () => {},
+      onOpenKeywordEditor: () => {},
       onGenerateConfig: () => {},
       onOpenAnalysisPlan: () => {}
     }));
@@ -119,10 +115,10 @@ test("started task explains that its search terms are frozen", async ({ page }) 
 
   const card = page.getByRole("region", { name: "任务建议卡片" });
   await expect(card.getByText("任务已启动，搜索词已冻结；如需修改，请新建调查。", { exact: true })).toBeVisible();
-  await expect(card.getByRole("button", { name: "编辑主词" })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "编辑主题与变体" })).toHaveCount(0);
 });
 
-test("final Draft only enables start after the edited search terms are persisted", async ({ page }) => {
+test("final Draft delegates keyword editing to the structured drawer", async ({ page }) => {
   await page.route("**/api/**", route => route.fulfill({ json: { items: [] } }));
   await page.goto("/");
   await page.evaluate(async () => {
@@ -137,16 +133,13 @@ test("final Draft only enables start after the edited search terms are persisted
     const host = document.createElement("div");
     document.body.replaceChildren(host);
 
-    function Harness() {
-      const [terms, setTerms] = React.useState(["bc料"]);
-      const saveAttempt = React.useRef(0);
-      return React.createElement(TaskConfirmationCard, {
+    createRoot(host).render(React.createElement(TaskConfirmationCard, {
         draft: {
           taskName: "抖音 bc料抓取 1 条",
           taskType: "平台话题采集",
           subject: "bc料",
           platforms: ["dy"],
-          keywords: terms,
+          keywords: ["bc料"],
           matchedRuleSet: "赌博博彩风险规则集",
           ruleSetDescription: "已选择发布版本。",
           status: "等待确认",
@@ -157,9 +150,9 @@ test("final Draft only enables start after the edited search terms are persisted
           title: "抖音 bc料抓取 1 条",
           objective: "采集并审核 bc料相关内容",
           platform: "dy",
-          resolved_search_terms: terms,
+          resolved_search_terms: ["bc料"],
           creator_url: "",
-          recall_plan: { strategy: "temporary_terms", terms, source_lexicon_ids: [] },
+          recall_plan: { strategy: "temporary_terms", terms: ["bc料"], source_lexicon_ids: [] },
           ruleset_revision: { id: "ruleset-1", name: "赌博博彩风险规则集", version: 2, content_hash: "a".repeat(64), enabled_rule_count: 7 },
           temporary_ruleset: null,
           max_notes: 1,
@@ -168,40 +161,80 @@ test("final Draft only enables start after the edited search terms are persisted
         },
         onOpenConfig: () => events.push("open-config"),
         onStartExecution: () => events.push("start"),
-        onUpdateSearchTerms: async (nextTerms: string[]) => {
-          saveAttempt.current += 1;
-          events.push(["save", saveAttempt.current, nextTerms]);
-          if (saveAttempt.current === 1) return false;
-          setTerms(nextTerms);
-          return true;
-        }
-      });
-    }
-
-    createRoot(host).render(React.createElement(Harness));
+        onOpenKeywordEditor: () => events.push("open-keyword-editor")
+      }));
   });
 
   const card = page.getByRole("region", { name: "最终任务确认卡" });
-  const editor = card.getByRole("textbox", { name: "最终搜索词" });
   const start = card.getByRole("button", { name: "确认并开始调查" });
-  await editor.fill("bc料、bc内幕");
-  await expect(start).toBeDisabled();
-  await expect(card.getByText("搜索词已修改，请先应用到本次任务；不会保存到黑话库。", { exact: true })).toBeVisible();
-
-  await card.getByRole("button", { name: "应用到本次任务" }).click();
-  await expect(start).toBeDisabled();
-
-  await card.getByRole("button", { name: "应用到本次任务" }).click();
   await expect(start).toBeEnabled();
-  await expect(card.getByText("已应用到当前 Draft，可以确认并开始调查；不会保存到黑话库。", { exact: true })).toBeVisible();
+  await expect(card.getByRole("textbox")).toHaveCount(0);
+  await card.getByRole("button", { name: "编辑主题与变体" }).click();
   await start.click();
   await card.getByRole("button", { name: "查看完整配置" }).click();
   await expect.poll(() => page.evaluate(() => (
     window as unknown as { finalDraftEditingTest: { events: unknown[] } }
   ).finalDraftEditingTest.events)).toEqual([
-    ["save", 1, ["bc料", "bc内幕"]],
-    ["save", 2, ["bc料", "bc内幕"]],
+    "open-keyword-editor",
     "start",
     "open-config"
   ]);
+});
+
+test("structured keyword drawer preserves theme bindings and projects enabled variants", async ({ page }) => {
+  await page.route("**/api/**", route => route.fulfill({ json: { items: [] } }));
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const load = (path: string) => import(path);
+    const React = (await load("/node_modules/.vite/deps/react.js")).default;
+    const { createRoot } = (await load("/node_modules/.vite/deps/react-dom_client.js")).default;
+    const { InvestigationKeywordEditor } = await load(
+      "/src/features/investigation/InvestigationKeywordEditor.tsx"
+    );
+    const events: unknown[] = [];
+    Object.assign(window, { structuredKeywordTest: { events } });
+    const host = document.createElement("div");
+    document.body.replaceChildren(host);
+    createRoot(host).render(React.createElement(InvestigationKeywordEditor, {
+      draft: {
+        taskName: "色情服务调查",
+        taskType: "平台话题采集",
+        subject: "色情服务",
+        platforms: ["dy"],
+        keywords: ["非绿地陪"],
+        matchedRuleSet: "色情引流规则",
+        ruleSetDescription: "已选择发布版本。",
+        status: "等待确认",
+        confirmed: false
+      },
+      content: {
+        title: "色情服务黑话库",
+        risk_label: "色情服务",
+        entries: [
+          { id: "theme-1", term: "色情服务", kind: "main", parent_id: "", enabled: true, platform: "全平台", match_type: "黑话词", risk_level: "中", note: "" },
+          { id: "variant-1", term: "非绿地陪", kind: "variant", parent_id: "theme-1", enabled: true, platform: "全平台", match_type: "黑话词", risk_level: "中", note: "" }
+        ]
+      },
+      fallbackTerms: ["非绿地陪"],
+      canEdit: true,
+      canSave: true,
+      canPublish: true,
+      onApply: async (content: unknown) => { events.push(["apply", content]); return true; },
+      onSave: async (content: unknown) => { events.push(["save", content]); return { resourceId: "custom-1" }; }
+    }));
+  });
+
+  await expect(page.getByRole("textbox", { name: "主题主词" })).toHaveValue("色情服务");
+  await page.getByRole("textbox", { name: "变体搜索词" }).fill("门槛验牌");
+  await expect(page.getByText("门槛验牌", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "应用到本次任务" }).click();
+  await expect(page.getByText("已应用到当前 Draft，实际搜索词已按启用变体更新。", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "保存为共享黑话库" }).click();
+  await expect(page.getByText(/已保存为正式黑话库/)).toBeVisible();
+  const events = await page.evaluate(() => (
+    window as unknown as { structuredKeywordTest: { events: unknown[] } }
+  ).structuredKeywordTest.events);
+  expect(events).toHaveLength(2);
+  expect(JSON.stringify(events)).toContain('"parent_id":"theme-1"');
+  expect(JSON.stringify(events)).toContain('"term":"门槛验牌"');
 });

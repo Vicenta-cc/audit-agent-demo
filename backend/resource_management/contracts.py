@@ -70,7 +70,25 @@ class LexiconContent(StrictModel):
         return body
 
     def search_terms(self) -> list[str]:
-        return list(dict.fromkeys(e.term for e in self.entries if e.kind == 'main' and e.enabled))
+        by_parent: dict[str, list[LexiconEntry]] = {}
+        for entry in self.entries:
+            if entry.kind == 'variant' and entry.enabled:
+                by_parent.setdefault(entry.parent_id, []).append(entry)
+
+        terms: list[str] = []
+        seen: set[str] = set()
+        for entry in self.entries:
+            if entry.kind != 'main' or not entry.enabled:
+                continue
+            # A main entry describes the topic. Its enabled variants are the
+            # concrete platform queries; legacy topics without variants keep
+            # their main term as a compatibility fallback.
+            candidates = by_parent.get(entry.id) or [entry]
+            for candidate in candidates:
+                if candidate.term not in seen:
+                    seen.add(candidate.term)
+                    terms.append(candidate.term)
+        return terms
 
 
 class ReadResourceInput(StrictModel):

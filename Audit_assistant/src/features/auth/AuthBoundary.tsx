@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "../../components/common/Button";
 import { ApiError, apiRequest, clearAuthenticationState } from "../../services/apiClient";
 import { bootstrapAuthentication, login, logout, type ApplicationUser } from "../../services/auth";
@@ -14,6 +14,8 @@ export function accountDate(value: string | null) {
 }
 
 export function AuthBoundary({ children }: { children: ReactNode }) {
+  const routeLocation = useLocation();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<"loading" | "disabled" | "required" | "error">("loading");
   const [user, setUser] = useState<ApplicationUser | null>(null);
   const [checking, setChecking] = useState(true);
@@ -109,6 +111,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
       const result = await login(username.trim(), password, controller.signal);
       if (version !== generation.current) { clearAuthenticationState(); return; }
       announce(); setUser(result); setPassword("");
+      if (result.role !== "admin" && routeLocation.pathname.startsWith("/admin/")) navigate("/investigation", { replace: true });
     } catch (error) {
       if (version === generation.current) setNotice(error instanceof ApiError && error.code === "ACCOUNT_EXPIRED" ? "账号已到期，请联系管理员续期后重新登录。" : error instanceof ApiError && error.status === 401 ? "账号或密码不正确，或账号已被禁用。" : "登录失败，请检查网络后重试。");
     } finally { setBusy(false); }
@@ -120,7 +123,10 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     setChecking(true);
     try { await logout(); invalidate("已退出登录。"); announce(); }
     catch { invalidate("退出请求未确认，请检查网络后重新登录。"); announce(); }
-    finally { setBusy(false); }
+    finally {
+      navigate("/investigation", { replace: true });
+      setBusy(false);
+    }
   };
   if (mode === "disabled") return <>{children}</>;
   if (mode === "error") return <main className="auth-screen"><section className="auth-card"><h1>暂时无法连接工作台</h1><p>无法核对登录配置，请检查服务或网络后重试。</p><Button onClick={() => location.reload()}>重新连接</Button></section></main>;

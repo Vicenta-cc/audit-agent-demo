@@ -744,16 +744,110 @@ class LexiconStore:
         return [str(row["keyword"]) for row in rows]
 
     def enabled_search_keywords(self, category_id: str) -> list[str]:
-        with self._lock, self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT keyword FROM lexicon_keywords
-                WHERE category_id = ? AND enabled = 1 AND match_type = '平台搜索词'
-                ORDER BY id ASC
-                """,
-                (category_id,),
-            ).fetchall()
-        return [str(row["keyword"]) for row in rows]
+        """Backward-compatible name for the runtime search projection."""
+
+        return self.enabled_search_terms(category_id)
+
+    def enabled_search_terms(
+        self,
+        category_id: str,
+        *,
+        connection: sqlite3.Connection | None = None,
+    ) -> list[str]:
+        """Return enabled variants per topic, falling back to legacy main terms."""
+
+        if connection is not None:
+            rows = self._enabled_search_term_rows(connection, category_id)
+        else:
+            with self._lock, self._connect() as conn:
+                rows = self._enabled_search_term_rows(conn, category_id)
+
+        enabled_mains: list[sqlite3.Row] = []
+        enabled_main_ids: set[str] = set()
+        enabled_main_terms: set[str] = set()
+        variant_rows: list[tuple[sqlite3.Row, str, str]] = []
+
+        for row in rows:
+            entry_kind = str(row["entry_kind"] or "").strip().lower()
+            parent_id = str(row["parent_entry_id"] or "").strip()
+            match_type = str(row["match_type"] or "").strip().lower()
+            variant_of = ""
+            note = str(row["note"] or "").strip()
+            if note:
+                try:
+                    metadata = json.loads(note)
+                except (TypeError, json.JSONDecodeError):
+                    metadata = {}
+                if isinstance(metadata, dict):
+                    variant_of = str(metadata.get("variant_of") or "").strip()
+
+            is_tag = entry_kind == "tag" or (
+                not entry_kind and match_type in {"平台标签", "tag"}
+            )
+            is_variant = entry_kind == "variant" or bool(parent_id) or bool(variant_of)
+            if is_tag:
+                continue
+            if is_variant:
+                if row["enabled"]:
+                    variant_rows.append((row, parent_id, variant_of))
+                continue
+            if not row["enabled"]:
+                continue
+            enabled_mains.append(row)
+            entry_id = str(row["entry_id"] or "").strip()
+            term = str(row["keyword"] or "").strip()
+            if entry_id:
+                enabled_main_ids.add(entry_id)
+            if term:
+                enabled_main_terms.add(term)
+
+        variants_by_parent_id: dict[str, list[str]] = {}
+        variants_by_parent_term: dict[str, list[str]] = {}
+        for row, parent_id, variant_of in variant_rows:
+            term = str(row["keyword"] or "").strip()
+            if not term:
+                continue
+            if parent_id and parent_id in enabled_main_ids:
+                variants_by_parent_id.setdefault(parent_id, []).append(term)
+            elif variant_of and variant_of in enabled_main_terms:
+                variants_by_parent_term.setdefault(variant_of, []).append(term)
+
+        terms: list[str] = []
+        seen: set[str] = set()
+        for row in enabled_mains:
+            entry_id = str(row["entry_id"] or "").strip()
+            main_term = str(row["keyword"] or "").strip()
+            candidates = (
+                variants_by_parent_id.get(entry_id)
+                or variants_by_parent_term.get(main_term)
+                or [main_term]
+            )
+            for term in candidates:
+                if term and term not in seen:
+                    seen.add(term)
+                    terms.append(term)
+        return terms
+
+    @staticmethod
+    def _enabled_search_term_rows(
+        connection: sqlite3.Connection, category_id: str
+    ) -> list[sqlite3.Row]:
+        category = connection.execute(
+            "SELECT id FROM lexicon_categories WHERE id = ?",
+            (category_id,),
+        ).fetchone()
+        if category is None:
+            raise KeyError(category_id)
+        return connection.execute(
+            """
+            SELECT keyword, match_type, note, entry_id, entry_kind,
+                   parent_entry_id, enabled
+            FROM lexicon_keywords
+            WHERE category_id = ?
+            ORDER BY id ASC
+            """,
+            (category_id,),
+        ).fetchall()
 
     def enabled_main_terms(
         self,
@@ -817,7 +911,7 @@ class LexiconStore:
         *,
         connection: sqlite3.Connection | None = None,
     ) -> str:
-        terms = self.enabled_main_terms(category_id, connection=connection)
+        terms = self.enabled_search_terms(category_id, connection=connection)
         payload = json.dumps(
             {"category_id": category_id, "enabled_main_terms": terms},
             ensure_ascii=False,
