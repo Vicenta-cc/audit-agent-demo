@@ -409,7 +409,7 @@ def test_sweep_reports_keyword_progress_command_and_visited_count(tmp_path: Path
     )
     assert progress == [(1, 3), (2, 3)]                            # 外层看到的是第几个词，不是 run_detail 的 1/1
     assert output.command == ["python", "main.py", "--specified_id", "b1"]
-    assert any("初筛完成：2 个词，选中 2 条进入精审" in message for message in logs)   # 停止后的词不计入
+    assert any("初筛完成：2 个词，选中 2 条，本次精采 2 条进入精审" in message for message in logs)   # 停止后的词不计入
 
 
 def test_sweep_without_any_detail_run_still_reports_a_command(tmp_path: Path, monkeypatch):

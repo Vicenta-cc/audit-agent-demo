@@ -2006,7 +2006,7 @@ class AuditPipeline:
                            if (key := content_identity(item, platform)) in selected_by_key]
         # 诊断行 "MediaCrawler command:" 读的是 output.command，逐词模式下补上最后一次精采命令
         output.command = last_command or ["triage-select", str(len(terms)), "keywords"]
-        job_store.log(self.job_id, f"初筛完成：{visited} 个词，选中 {len(selected_by_key)} 条进入精审")
+        job_store.log(self.job_id, f"初筛完成：{visited} 个词，选中 {len(selected_by_key)} 条，本次精采 {len(output.contents)} 条进入精审")
         return output
 
     def _mark_subject_skipped(self, platform: str, content_key: str, subject: AuditSubject) -> None:
