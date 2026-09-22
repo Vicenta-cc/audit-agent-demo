@@ -92,6 +92,7 @@ class MediaCrawlerAdapter:
         max_items_per_minute: int,
         get_sub_comment: bool,
         save_root: Path,
+        search_sort: str = "general",
         progress_callback: ProgressCallback | None = None,
         content_callback: ContentCallback | None = None,
         stream_items: bool = False,
@@ -197,6 +198,8 @@ class MediaCrawlerAdapter:
                 "--save_data_path",
                 str(save_root),
             ]
+            if platform == "dy":
+                command.extend(["--dy_search_sort", search_sort])
             if skip_content_ids_file:
                 command.extend(["--skip_aweme_ids_file", str(skip_content_ids_file)])
             if reusable_content_db:

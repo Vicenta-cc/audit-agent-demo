@@ -49,12 +49,17 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
       disabled={inactive} onChange={event => change(key, event.target.checked)} />{label}</label>
   );
   const effective = preview.effective_parameters;
+  const searchSortLabel = (value?: InvestigationTaskParameters["search_sort"]) => ({
+    general: "综合排序",
+    most_liked: "最多点赞",
+    latest: "最新发布"
+  }[value || "general"]);
   const keywordCount = Math.max(1, preview.resolved_search_terms.length);
   const plannedCount = Math.min(values.max_total_notes, values.max_notes * keywordCount);
   return <form className="investigation-parameters" aria-label="采集与分析参数" onSubmit={async event => {
     event.preventDefault(); setSaving(true); setError("");
     try {
-      await onSave({ ...values, auto_analyze: true, analyze_limit: values.max_total_notes });
+      await onSave({ ...values, search_sort: values.search_sort || "general", auto_analyze: true, analyze_limit: values.max_total_notes });
       setDirty(false); onDirty(false);
     }
     catch (reason) { setError(reason instanceof Error ? reason.message : "参数保存失败"); }
@@ -71,6 +76,16 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
           {account.displayName}{account.status !== "active" || !account.hasAuthState ? "（不可用）" : ""}
         </option>)}
       </select></label>
+      {preview.mode === "search" && preview.platform === "dy" ? (
+        <label className="investigation-parameter-field"><span>抖音搜索排序</span><select
+          aria-label="抖音搜索排序"
+          value={values.search_sort || "general"}
+          onChange={event => change("search_sort", event.target.value as NonNullable<InvestigationTaskParameters["search_sort"]>)}>
+          <option value="general">综合排序</option>
+          <option value="most_liked">最多点赞</option>
+          <option value="latest">最新发布</option>
+        </select><small>仅对抖音关键词搜索生效；任务启动后使用确认时的排序快照。</small></label>
+      ) : null}
       {accountError ? <p role="alert">{accountError}</p> : null}
       <div className="investigation-parameter-grid">
         {numeric("max_notes", preview.mode === "search" ? "每个关键词采集上限" : "本任务采集上限", 1, 5, "条", "单任务仍受总采集上限约束")}
@@ -103,6 +118,7 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
       已保存生效值：采集上限 {effective.max_notes} 条{preview.mode === "search" ? "/词" : "/任务"}，单任务最多 {effective.max_total_notes} 条{globalSettings ? "" : `，本次预计最多 ${preview.estimated_max_contents} 条`}；
       评论 {effective.max_comments} 条/帖，{effective.get_sub_comment ? "含二级评论" : "仅一级评论"}；
       图片与视频{effective.collect_media ? "采集并审核" : "不采集、不审核"}；
+      {preview.mode === "search" && preview.platform === "dy" ? `抖音搜索${searchSortLabel(effective.search_sort)}；` : ""}
       {effective.max_items_per_minute} 条/分钟，并发 {effective.max_concurrency}；
       实际采集内容全部自动审核，每批 {effective.analysis_batch_size} 条。
     </p> : null}

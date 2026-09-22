@@ -43,7 +43,7 @@ interface InvestigationCenterAreaProps {
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onUpdateDraftKeywords: (keywords: string[]) => void;
-  onUpdateCreationSearchTerms: (keywords: string[]) => Promise<void>;
+  onUpdateCreationSearchTerms: (keywords: string[]) => Promise<boolean | void>;
   onRunControlAccepted: () => void;
   onUpdateDraftPlatforms: (platforms: PlatformCode[]) => void;
   onGenerateTaskConfig: (proposalMessageId: string) => void;
@@ -449,7 +449,7 @@ export function InvestigationCenterArea({
                   <TaskConfirmationCard
                     key={msg.id}
                     draft={session.draft}
-                    onModifyConfig={() => onOpenDrawer("task_config")}
+                    onOpenConfig={() => onOpenDrawer("task_config")}
                     onStartExecution={onStartAgentExecution}
                     preview={session.creationBinding?.confirmationPreview}
                     onUpdateSearchTerms={session.creationBinding ? onUpdateCreationSearchTerms : undefined}

@@ -46,6 +46,9 @@ _LOCAL_PATH = re.compile(
     r"(?i)(?:/Users|/home|/var|/tmp)/[^\s`\"'<>]{2,512}"
 )
 _PARENTHESIZED_ID = re.compile(r"[（(]\s*id\s*=\s*[^）)\r\n]{1,256}[）)]", re.I)
+_INTERNAL_RUNTIME_BRAND = re.compile(
+    r"(?i)\bHermes(?:\s+Agent|助手)?(?:\s+v?\d+(?:\.\d+)*)?\b"
+)
 
 _PUBLIC_TERMS = (
     (re.compile(r"\bcomment_audit\b", re.I), "评论研判"),
@@ -71,6 +74,8 @@ def redact_creation_internal_references(value: str) -> tuple[str, bool]:
     redacted = _LOCAL_PATH.sub("内部路径已隐藏", redacted)
     redacted = _PARENTHESIZED_ID.sub("", redacted)
     redacted = _INTERNAL_FIELD.sub("内部字段", redacted)
+    redacted = _INTERNAL_RUNTIME_BRAND.sub("研判助手", redacted)
+    redacted = re.sub(r"(?<=我是)\s+(?=研判助手)", "", redacted)
     for pattern, replacement in _PUBLIC_TERMS:
         redacted = pattern.sub(replacement, redacted)
     return redacted, redacted != original

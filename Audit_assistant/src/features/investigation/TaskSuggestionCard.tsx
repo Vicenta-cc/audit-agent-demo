@@ -41,7 +41,7 @@ interface TaskSuggestionCardProps {
   platformOptions?: Array<{ code: PlatformCode; label: string; available?: boolean }>;
   isReadOnly: boolean;
   onUpdatePlatforms: (platforms: PlatformCode[]) => void;
-  onUpdateSearchTerms?: (terms: string[]) => Promise<void> | void;
+  onUpdateSearchTerms?: (terms: string[]) => Promise<boolean | void> | boolean | void;
   onGenerateConfig: () => void;
   onOpenAnalysisPlan: () => void;
   error?: string;
@@ -117,8 +117,8 @@ export function TaskSuggestionCard({
     if (!onUpdateSearchTerms) return;
     setIsSavingKeywords(true);
     try {
-      await onUpdateSearchTerms(parseInvestigationSearchTerms(keywordDraft));
-      setIsEditingKeywords(false);
+      const saved = await onUpdateSearchTerms(parseInvestigationSearchTerms(keywordDraft));
+      if (saved !== false) setIsEditingKeywords(false);
     } finally {
       setIsSavingKeywords(false);
     }
@@ -204,9 +204,10 @@ export function TaskSuggestionCard({
                       disabled={isSavingKeywords || parsedKeywordDraft.length === 0}
                     >
                       <Save size={13} aria-hidden="true" />
-                      {isSavingKeywords ? "保存中" : "保存召回词"}
+                      {isSavingKeywords ? "应用中" : "应用到本次任务"}
                     </button>
                   </div>
+                  <p className="task-suggestion-editor-note">仅修改当前 Draft，不保存到黑话库。</p>
                 </div>
               ) : (
                 <>
@@ -219,12 +220,15 @@ export function TaskSuggestionCard({
                         ? preview.creator_url
                         : keywordsText || "暂未生成可用召回词"}
                     </p>
-                    {preview?.mode !== "creator" && onUpdateSearchTerms && !isReadOnly ? (
-                      <button type="button" className="task-suggestion-text-action" onClick={() => setIsEditingKeywords(true)}>
-                        <Edit3 size={13} aria-hidden="true" /> 编辑
+                    {preview?.mode !== "creator" && onUpdateSearchTerms && !isReadOnly && !draft.confirmed ? (
+                      <button type="button" className="task-suggestion-text-action task-suggestion-edit-terms" onClick={() => setIsEditingKeywords(true)}>
+                        <Edit3 size={13} aria-hidden="true" /> 编辑主词
                       </button>
                     ) : null}
                   </div>
+                  {preview?.mode !== "creator" && draft.confirmed ? (
+                    <p className="task-suggestion-locked-note">任务已启动，搜索词已冻结；如需修改，请新建调查。</p>
+                  ) : null}
                   {isKeywordsOverflowing ? (
                     <button
                       type="button"
@@ -256,7 +260,7 @@ export function TaskSuggestionCard({
                   className="task-suggestion-text-action"
                   onClick={onOpenAnalysisPlan}
                 >
-                  查看或调整
+                  查看规则详情
                 </button>
               </div>
               <p className="task-suggestion-help">

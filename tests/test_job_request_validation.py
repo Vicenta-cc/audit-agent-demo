@@ -52,6 +52,7 @@ class JobRequestValidationTest(unittest.TestCase):
         jobs = JobStore(self.store.db_path)
         settings_store = TaskSettingsStore(self.store.db_path)
         settings_store.save({'max_notes': 2, 'max_comments': 1, 'analyze_limit': 2,
+                             'search_sort': 'most_liked',
                              'analysis_batch_size': 1, 'max_items_per_minute': 1}, 0)
         account = self.store.create(platform='dy', display_name='available')
         self.store.save_auth_state(account['id'], 'encrypted-state')
@@ -68,6 +69,8 @@ class JobRequestValidationTest(unittest.TestCase):
         self.assertEqual(job['max_notes'], 2)
         self.assertEqual(job['crawler_account_id'], account['id'])
         self.assertEqual(job['effective_config']['max_comments'], 1)
+        self.assertEqual(job['search_sort'], 'most_liked')
+        self.assertEqual(job['effective_config']['search_sort'], 'most_liked')
         self.assertEqual(len(background.tasks), 1)
         settings_store.save({'max_notes': 1}, 1)
         self.assertEqual(jobs.get(job['id'])['max_notes'], 2)

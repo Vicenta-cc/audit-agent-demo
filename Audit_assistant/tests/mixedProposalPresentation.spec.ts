@@ -73,7 +73,7 @@ for (const width of [1280, 390]) {
           await expect(card.getByRole("button", { name: "确认并开始调查" })).toBeDisabled();
           await expect(card.getByText("本次使用临时规则，暂不支持启动调查。", { exact: true })).toBeVisible();
           await card.getByRole("textbox", { name: "最终搜索词" }).fill("招聘收费");
-          await card.getByRole("button", { name: "保存搜索词" }).click();
+          await card.getByRole("button", { name: "应用到本次任务" }).click();
           expect(await events(page)).toEqual([["update", ["招聘收费"]]]);
         } else {
           await card.getByRole("button", { name: "抖音", exact: true }).click();
@@ -111,16 +111,16 @@ for (const stage of ["suggestion", "confirmation"] as const) {
         expect(await page.evaluate(() => (window as unknown as { mixedTest: { messageIds: string[] } }).mixedTest.messageIds)).toEqual(["actual-answer"]);
         if (stage === "suggestion") {
           await card.getByRole("button", { name: "抖音", exact: true }).click();
-          await card.getByRole("button", { name: "查看或调整" }).click();
-          await card.getByRole("button", { name: "编辑", exact: true }).click();
+          await card.getByRole("button", { name: "查看规则详情" }).click();
+          await card.getByRole("button", { name: "编辑主词", exact: true }).click();
           await card.getByRole("textbox", { name: "编辑召回词" }).fill("招聘诈骗");
-          await card.getByRole("button", { name: "保存召回词" }).click();
+          await card.getByRole("button", { name: "应用到本次任务" }).click();
           await card.getByRole("button", { name: "生成任务配置" }).click();
           expect(await events(page)).toEqual([["platform", ["dy"]], ["drawer", "ruleset"], ["update", ["招聘诈骗"]], ["generate", "actual-answer"]]);
         } else {
           await card.getByRole("textbox", { name: "最终搜索词" }).fill("招聘诈骗");
-          await card.getByRole("button", { name: "保存搜索词" }).click();
-          await card.getByRole("button", { name: "修改配置" }).click();
+          await card.getByRole("button", { name: "应用到本次任务" }).click();
+          await card.getByRole("button", { name: "查看完整配置" }).click();
           await card.getByRole("button", { name: "确认并开始调查" }).click();
           expect(await events(page)).toEqual([["update", ["招聘诈骗"]], ["drawer", "task_config"], ["confirm"]]);
         }

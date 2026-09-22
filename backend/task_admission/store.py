@@ -274,14 +274,13 @@ class AdmissionStore:
         ).fetchone()
         return str(row[0] or "private") if row else ""
 
-        return user
-
     def reserve(
         self, db, *, owner, task_id, kind, key, payload, job_id="", request_hash=None
     ):
         digest = request_hash or fingerprint(payload)
-        user = self.validate_user(db, owner, payload.get("crawler_account_id") or "")
-        unlimited = user is not None and user["role"] == "admin"
+        self.validate_user(db, owner, payload.get("crawler_account_id") or "")
+        user = self.user_record(db, owner)
+        unlimited = bool(user) and user["role"] == "admin"
         previous = db.execute(
             "SELECT * FROM task_admissions WHERE owner_id=? AND request_key=?",
             (owner, key),
@@ -366,7 +365,7 @@ class AdmissionStore:
         )
         with self.connect() as db:
             user = self.user_record(db, owner)
-            unlimited = user is not None and user["role"] == "admin"
+            unlimited = bool(user) and user["role"] == "admin"
             counts = dict(
                 db.execute(
                     "SELECT state,count(*) FROM task_admissions WHERE owner_id=? AND day=? GROUP BY state",

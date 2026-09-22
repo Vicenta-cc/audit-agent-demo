@@ -38,6 +38,9 @@ _INTERNAL_ACCOUNT_VALUES = (
     re.compile(r"(?i)[`]?account-entry-[0-9a-f]{16,64}[`]?"),
 )
 _INTERNAL_ACCOUNT_FIELD = re.compile(r"(?i)\b(?:internal_)?account_ref\b")
+_INTERNAL_RUNTIME_BRAND = re.compile(
+    r"(?i)\bHermes(?:\s+Agent|助手)?(?:\s+v?\d+(?:\.\d+)*)?\b"
+)
 
 
 logger = logging.getLogger(__name__)
@@ -51,6 +54,8 @@ def redact_internal_account_references(value: str) -> tuple[str, bool]:
     for pattern in _INTERNAL_ACCOUNT_VALUES:
         redacted = pattern.sub("内部账号引用已隐藏", redacted)
     redacted = _INTERNAL_ACCOUNT_FIELD.sub("内部账号引用", redacted)
+    redacted = _INTERNAL_RUNTIME_BRAND.sub("研判助手", redacted)
+    redacted = re.sub(r"(?<=我是)\s+(?=研判助手)", "", redacted)
     return redacted, redacted != original
 
 

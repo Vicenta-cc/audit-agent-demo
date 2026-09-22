@@ -231,6 +231,31 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
         self.assertEqual(command[command.index("--lt") + 1], "cookie")
         self.assertNotIn("plain-cookie-secret", " ".join(command))
 
+    def test_douyin_search_sort_is_passed_to_crawler(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = RecordingAdapter(Path(temp_dir))
+            output = adapter.run_search(
+                platform="dy", keyword="测试", start_page=0, max_notes=1,
+                max_comments=0, max_concurrency=1, max_items_per_minute=5,
+                search_sort="latest", get_sub_comment=False,
+                save_root=Path(temp_dir) / "output",
+            )
+
+        command = output.command
+        self.assertEqual(command[command.index("--dy_search_sort") + 1], "latest")
+
+    def test_non_douyin_search_does_not_receive_douyin_sort_option(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = RecordingAdapter(Path(temp_dir))
+            output = adapter.run_search(
+                platform="xhs", keyword="测试", start_page=1, max_notes=1,
+                max_comments=0, max_concurrency=1, max_items_per_minute=5,
+                search_sort="most_liked", get_sub_comment=False,
+                save_root=Path(temp_dir) / "output",
+            )
+
+        self.assertNotIn("--dy_search_sort", output.command)
+
     def test_task_can_disable_comments_and_media_without_exposing_deployment_options(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             adapter = RecordingAdapter(Path(temp_dir))

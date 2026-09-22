@@ -69,6 +69,16 @@ def _latest_revision_text(events: list[dict]) -> str:
     return text
 
 
+def test_report_answer_filter_hides_internal_runtime_brand():
+    public, changed = redact_internal_account_references(
+        "你好！我是 Hermes Agent 0.20.4，可以协助解读报告。"
+    )
+
+    assert changed is True
+    assert public == "你好！我是研判助手，可以协助解读报告。"
+    assert "Hermes" not in public
+
+
 def test_streamer_buffers_sanitizes_and_reconciles_final_answer(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "answer_stream_enabled", True)
     store = InvestigationStore(tmp_path / "answer.sqlite3")

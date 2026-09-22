@@ -78,6 +78,7 @@ export interface InvestigationDraftSuggestion {
 
 export interface InvestigationTaskParameters {
   crawler_account_id?: string | null;
+  search_sort?: "general" | "most_liked" | "latest";
   start_page: number;
   max_notes: number;
   max_total_notes: number;

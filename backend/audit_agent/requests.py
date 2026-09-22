@@ -1,5 +1,7 @@
 """Validated frozen request contracts shared by API and durable workers."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, StrictBool, StrictInt
 
 
@@ -8,6 +10,7 @@ class CrawlRequest(BaseModel):
     display_name: str = ""
     crawl_mode: str = "search"
     keyword: str = "泳装"
+    search_sort: Literal["general", "most_liked", "latest"] = "general"
     keyword_source: str = "keyword"
     lexicon_category: str = ""
     library_ids: list[str] = Field(default_factory=list)
@@ -48,7 +51,7 @@ def crawl_request_from_job(job: dict) -> CrawlRequest:
         if name in job and job[name] is not None
     }
     effective_config = dict(job.get("effective_config") or {})
-    for name in ("collect_comments", "collect_media"):
+    for name in ("collect_comments", "collect_media", "search_sort"):
         if name not in payload and name in effective_config:
             payload[name] = effective_config[name]
     return CrawlRequest(**payload)

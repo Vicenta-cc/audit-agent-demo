@@ -63,12 +63,12 @@ export function InvestigationContextDrawer({
 
   const getTitle = () => {
     switch (type) {
-      case "task_config": return "任务高级配置";
+      case "task_config": return "任务配置详情";
       case "report": return "完整研判报告目录";
       case "evidence": return "原始与多媒体证据链";
       case "key_users": return "重点作者候选列表";
       case "agent_logs": return "4 名 Agent 协同执行日志";
-      case "ruleset": return "审核规则配置";
+      case "ruleset": return "审核规则详情";
       default: return "上下文详情";
     }
   };

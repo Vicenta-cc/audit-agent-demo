@@ -484,8 +484,6 @@ class RuleSetCompilerTests(unittest.TestCase):
             {
                 "segment_summary",
                 "segment_score",
-                "risk_library_id",
-                "risk_library_label",
                 "visual_risks",
                 "ocr_risks",
                 "asr_risks",
@@ -600,8 +598,6 @@ class RuleSetCompilerTests(unittest.TestCase):
         for field in (
             "segment_summary",
             "segment_score",
-            "risk_library_id",
-            "risk_library_label",
             "visual_risks",
             "ocr_risks",
             "asr_risks",
@@ -2207,6 +2203,109 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
         self.assertEqual(pipeline.qwen.calls, 2)
         self.assertEqual(result["evidence_items"][0]["rule_id"], "gambling.platform_entry_and_funding")
 
+    def test_fusion_wire_codes_separate_rule_and_exemption_namespaces(self) -> None:
+        pipeline = bare_v2_pipeline(self.compiled)
+        codebook = pipeline._fusion_wire_codebook()
+        rule_code = next(
+            code
+            for code, rule_id in codebook["rule_codes"].items()
+            if rule_id == "gambling.multimodal_closed_loop"
+        )
+        other_rule_code = next(
+            code
+            for code, rule_id in codebook["rule_codes"].items()
+            if rule_id == "gambling.platform_entry_and_funding"
+        )
+        exemption_code = next(
+            code
+            for code, exemption_id in codebook["exemption_codes"].items()
+            if exemption_id == "gambling.rule.multimodal.warning"
+        )
+        rendered = pipeline._render_fusion_wire_template(
+            pipeline.prompt_profile_snapshot["fusion_prompt_template"],
+            codebook,
+        )
+        self.assertIn('"rule_id":"本次正式规则短码，例如FR01"', rendered)
+        self.assertIn(rule_code, rendered)
+        self.assertIn(exemption_code, rendered)
+        for stable_id in (
+            list(codebook["rule_codes"].values())
+            + list(codebook["exemption_codes"].values())
+        ):
+            self.assertNotIn(stable_id, rendered)
+
+        encoded = pipeline._encode_fusion_payload_ids(
+            {
+                "evidence_catalog": [
+                    {
+                        "rule_id": "gambling.multimodal_closed_loop",
+                        "matched_exemption_ids": [
+                            "gambling.rule.multimodal.warning"
+                        ],
+                    }
+                ],
+                "comment_stats": {
+                    "rule_counts": {"gambling.multimodal_closed_loop": 1}
+                },
+            },
+            codebook,
+        )
+        self.assertEqual(encoded["evidence_catalog"][0]["rule_id"], rule_code)
+        self.assertEqual(
+            encoded["evidence_catalog"][0]["matched_exemption_ids"],
+            [exemption_code],
+        )
+        self.assertEqual(
+            encoded["comment_stats"]["rule_counts"],
+            {rule_code: 1},
+        )
+
+        decoded = pipeline._decode_fusion_wire_codes(
+            {
+                "rule_matches": [
+                    {
+                        "rule_id": rule_code,
+                        "evidence_ids": ["image:1"],
+                        "matched_exemption_ids": [exemption_code],
+                    }
+                ]
+            },
+            codebook,
+        )
+        self.assertEqual(
+            decoded["rule_matches"][0]["rule_id"],
+            "gambling.multimodal_closed_loop",
+        )
+        self.assertEqual(
+            decoded["rule_matches"][0]["matched_exemption_ids"],
+            ["gambling.rule.multimodal.warning"],
+        )
+
+        with self.assertRaisesRegex(
+            FusionAuditContractError, "rule_id uses an exemption code"
+        ):
+            pipeline._decode_fusion_wire_codes(
+                {
+                    "rule_matches": [
+                        {"rule_id": exemption_code, "evidence_ids": ["image:1"]}
+                    ]
+                },
+                codebook,
+            )
+        with self.assertRaisesRegex(FusionAuditContractError, "is not allowed"):
+            pipeline._decode_fusion_wire_codes(
+                {
+                    "rule_matches": [
+                        {
+                            "rule_id": other_rule_code,
+                            "evidence_ids": ["image:1"],
+                            "matched_exemption_ids": [exemption_code],
+                        }
+                    ]
+                },
+                codebook,
+            )
+
     def test_structured_exemption_applies_only_for_valid_frozen_id(self) -> None:
         pipeline = bare_v2_pipeline(self.compiled)
         evidence_index = {
@@ -2401,6 +2500,28 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
             ],
             ["gambling.exemption.news_and_education"],
         )
+
+    def test_v2_video_provider_library_identity_is_backend_owned(self) -> None:
+        pipeline = bare_v2_pipeline(self.compiled)
+        raw = {
+            "segment_summary": "未发现明确风险",
+            "segment_score": 0,
+            "visual_risks": [],
+            "ocr_risks": [],
+            "asr_risks": [],
+        }
+        validated = pipeline._validated_authoritative_visual_response(
+            raw,
+            response_contract="video_segment",
+            backend_library_identity={
+                "id": "gambling",
+                "title": "赌博博彩风险",
+            },
+        )
+        self.assertEqual(validated["risk_library_id"], "gambling")
+        self.assertEqual(validated["risk_library_label"], "赌博博彩风险")
+        self.assertNotIn("risk_library_id", raw)
+        self.assertNotIn("risk_library_label", raw)
 
     def test_contact_sheet_contract_rejects_missing_level_rule_and_frame(self) -> None:
         pipeline = bare_v2_pipeline(self.compiled)
@@ -2611,7 +2732,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
             v2_fixed,
             {
                 "image_evidence": 1840,
-                "video_frame_evidence": 2251,
+                "video_frame_evidence": 2258,
                 "comment_audit": 2733,
                 "fusion_audit": 2297,
             },
@@ -2640,6 +2761,36 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                 # This fixture's comment is absent from the evidence catalog.
                 self.assertEqual(payloads["v2"]["fusion_audit"][key], [])
                 self.assertEqual(len(payloads["v1"]["fusion_audit"][key]), 1)
+                continue
+            if key == "evidence_catalog":
+                expected_code = next(
+                    code
+                    for code, rule_id in v2._fusion_wire_codebook()["rule_codes"].items()
+                    if rule_id == "gambling.platform_entry_and_funding"
+                )
+                self.assertEqual(
+                    payloads["v2"]["fusion_audit"][key][0]["rule_id"],
+                    expected_code,
+                )
+                self.assertNotIn(
+                    "gambling.platform_entry_and_funding",
+                    canonical_json(payloads["v2"]["fusion_audit"][key]),
+                )
+                continue
+            if key == "comment_stats":
+                expected_code = next(
+                    code
+                    for code, rule_id in v2._fusion_wire_codebook()["rule_codes"].items()
+                    if rule_id == "gambling.comment_organized_participation"
+                )
+                self.assertEqual(
+                    payloads["v2"]["fusion_audit"][key]["rule_counts"],
+                    {expected_code: 1},
+                )
+                self.assertNotIn(
+                    "gambling.comment_organized_participation",
+                    canonical_json(payloads["v2"]["fusion_audit"][key]),
+                )
                 continue
             self.assertGreaterEqual(
                 len(canonical_json(payloads["v2"]["fusion_audit"][key])),
@@ -2705,7 +2856,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                     "image_evidence": 0,
                     "video_frame_evidence": 532,
                     "comment_audit": 422,
-                    "fusion_audit": 943,
+                    "fusion_audit": 876,
                 },
             },
         )
@@ -2734,9 +2885,9 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                 },
                 "v2": {
                     "image_evidence": {"fixed": 1840, "dynamic": 0, "total": 1840},
-                    "video_frame_evidence": {"fixed": 2251, "dynamic": 532, "total": 2783},
+                    "video_frame_evidence": {"fixed": 2258, "dynamic": 532, "total": 2790},
                     "comment_audit": {"fixed": 2733, "dynamic": 422, "total": 3155},
-                    "fusion_audit": {"fixed": 2297, "dynamic": 943, "total": 3240},
+                    "fusion_audit": {"fixed": 2297, "dynamic": 876, "total": 3173},
                 },
             },
         )
@@ -2859,6 +3010,11 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
         }
         for stage, prompt in long_rendered.items():
             fixed_prompt = v2.prompt_profile_snapshot[fixed_keys[stage]]
+            if stage == "fusion_audit":
+                fixed_prompt = v2._render_fusion_wire_template(
+                    fixed_prompt,
+                    v2._fusion_wire_codebook(),
+                )
             self.assertTrue(prompt.startswith(fixed_prompt))
             self.assertEqual(prompt.count("输入 JSON："), 1)
             self.assertLessEqual(len(prompt), runtime_limits[stage])
@@ -2869,6 +3025,11 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
 
     def test_comment_only_high_risk_keeps_review_attribution_and_metadata(self) -> None:
         pipeline = bare_v2_pipeline(self.compiled)
+        fusion_rule_code = next(
+            code
+            for code, rule_id in pipeline._fusion_wire_codebook()["rule_codes"].items()
+            if rule_id == "gambling.comment_organized_participation"
+        )
         pipeline.qwen = FixedProvider({
             "schema_version": "audit_fusion_v4",
             "content_title": "评论区博彩邀约",
@@ -2884,7 +3045,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
             ],
             "rule_matches": [
                 {
-                    "rule_id": "gambling.comment_organized_participation",
+                    "rule_id": fusion_rule_code,
                     "evidence_ids": ["comment:c1"],
                 }
             ],

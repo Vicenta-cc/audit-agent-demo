@@ -753,7 +753,7 @@ class InvestigationResourceService:
                 "run_crawler": True,
             }
         collection.update({key: getattr(parameters, key) for key in (
-            "start_page", "max_comments", "max_concurrency", "get_sub_comment",
+            "search_sort", "start_page", "max_comments", "max_concurrency", "get_sub_comment",
             "max_items_per_minute", "collect_comments", "collect_media",
         )})
         collection["display_name"] = draft.title
