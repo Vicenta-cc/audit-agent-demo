@@ -481,3 +481,60 @@ def test_candidate_rows_never_reach_the_returned_output(tmp_path: Path, monkeypa
     candidates_output = MediaCrawlerAdapter.__new__(MediaCrawlerAdapter)._load_platform_output(
         tmp_path / "candidates" / "01-词A", "dy")
     assert [c["aweme_id"] for c in candidates_output.contents] == ["cand9"]
+
+
+def _drive_crawl_dispatch(tmp_path: Path, monkeypatch, mode: str) -> list[str]:
+    """跑真正的 run()，在采集调用处用哨兵异常停下来，只看它走了哪个分支。"""
+    from backend.audit_agent.ingestion import AuditResultStore, IngestionStore
+    from backend.audit_agent.job_store import JobStore
+    from backend.audit_agent.requests import CrawlRequest
+
+    calls: list[str] = []
+    job_id = f"job-dispatch-{mode}"
+    store = JobStore(tmp_path / f"jobs-{mode}.sqlite3")
+    store.create(job_id=job_id, platform="dy", start_page=0, max_notes=1)
+    monkeypatch.setattr(pipeline_module, "job_store", store)
+    monkeypatch.setattr(pipeline_module, "crawler_account_store",
+                        SimpleNamespace(available_accounts=lambda platform: []))
+    monkeypatch.setattr(pipeline_module.settings, "app_auth_mode", "off")
+    monkeypatch.setattr(pipeline_module.settings, "outputs_dir", tmp_path / "outputs")
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", mode)
+
+    class DispatchCrawler:
+        def run_search(self, **kwargs):
+            calls.append("run_search")
+            raise RuntimeError("stop-after-dispatch")
+
+        def run_creator(self, **kwargs):
+            calls.append("run_creator")
+            raise RuntimeError("stop-after-dispatch")
+
+    pipeline = pipeline_module.AuditPipeline.__new__(pipeline_module.AuditPipeline)
+    pipeline.job_id = job_id
+    pipeline.crawler = DispatchCrawler()
+    pipeline.ingestion = IngestionStore(tmp_path / f"audit-{mode}.sqlite3")
+    pipeline.audit_results = AuditResultStore(tmp_path / f"audit-{mode}.sqlite3")
+    pipeline.prompt_set = None
+    pipeline.prompt_profile_snapshot = {}
+    pipeline.rule_snapshot = {}
+    pipeline.audit_config_revision_id = ""
+    pipeline.authoritative_m3 = False
+    pipeline._m3_snapshot_validator = lambda: None
+
+    def fake_triaged(**kwargs):
+        calls.append("_run_triaged_search")
+        raise RuntimeError("stop-after-dispatch")
+
+    pipeline._run_triaged_search = fake_triaged
+    pipeline.run(CrawlRequest(platform="dy", keyword="词A,词B", crawl_mode="search", max_notes=1,
+                              max_total_notes=2, max_comments=10, collect_media=False,
+                              auto_analyze=False, analyze_limit=0, run_crawler=True, search_sort="latest"))
+    failure = (store.get(job_id) or {}).get("control", {}).get("failure") or {}
+    assert failure.get("code") == "stop-after-dispatch"      # 确实跑到了采集分支才停
+    return calls
+
+
+def test_off_mode_still_uses_run_search_and_select_mode_uses_the_sweep(tmp_path: Path, monkeypatch):
+    assert _drive_crawl_dispatch(tmp_path, monkeypatch, "off") == ["run_search"]
+    assert _drive_crawl_dispatch(tmp_path, monkeypatch, "select") == ["_run_triaged_search"]
+    assert _drive_crawl_dispatch(tmp_path, monkeypatch, "compare") == ["_run_triaged_search"]
