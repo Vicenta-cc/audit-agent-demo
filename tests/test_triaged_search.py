@@ -113,7 +113,7 @@ def test_selects_one_per_keyword_skipping_duplicates_and_analyzed(tmp_path: Path
                               max_items_per_minute=5, search_sort="latest")
     streamed = []
     output = pipeline._run_triaged_search(
-        request=request, save_root=tmp_path, start_page=1, crawler_concurrency=1, account_auth_state=None,
+        request=request, save_root=tmp_path, start_page=1, max_total_notes=10, crawler_concurrency=1, account_auth_state=None,
         crawler_account_id="acc", content_callback=lambda c, m: streamed.extend(c), stream_items=True,
         stop_checker=lambda: False, started_callback=None, progress_callback=None,
     )
@@ -127,6 +127,33 @@ def test_selects_one_per_keyword_skipping_duplicates_and_analyzed(tmp_path: Path
     assert {c["content_key"] for c in payload["candidates"]} == {"a2", "b1"}
 
 
+def test_task_content_budget_stops_the_sweep_and_names_the_unsearched_keywords(tmp_path: Path, monkeypatch):
+    logs: list[str] = []
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda job_id, message, *a, **k: logs.append(message))
+    crawler = FakeCrawler({
+        "词A": [("a1", "今晚上分")],
+        "词B": [("b1", "今晚上分")],
+        "词C": [("c1", "今晚上分")],
+    })
+    pipeline = _new_pipeline("job-budget", crawler, FakeIngestion(analyzed=set()), FakeEngine())
+    output = pipeline._run_triaged_search(
+        request=_base_request(keyword="词A,词B,词C"), save_root=tmp_path, start_page=1, max_total_notes=2,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    # 本任务上限 2 条：第三个词连候选搜索都不该发生（R8）
+    assert len(crawler.search_calls) == 2
+    assert crawler.detail_calls == [("词A", "a1"), ("词B", "b1")]
+    assert [c["aweme_id"] for c in output.contents] == ["a1", "b1"]
+    budget_logs = [message for message in logs if "采集上限" in message]
+    assert len(budget_logs) == 1 and "词C" in budget_logs[0]
+    assert not (tmp_path / "candidates" / "03-词C").exists()
+
+
 def test_compare_mode_rank1_arm_bypasses_score_gate_but_triage_arm_prefers_score(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(pipeline_module.settings, "triage_mode", "compare")
     monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
@@ -134,7 +161,7 @@ def test_compare_mode_rank1_arm_bypasses_score_gate_but_triage_arm_prefers_score
     monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
     request = _base_request(keyword="词G")
     kwargs = dict(
-        request=request, start_page=1, crawler_concurrency=1, account_auth_state=None,
+        request=request, start_page=1, max_total_notes=10, crawler_concurrency=1, account_auth_state=None,
         crawler_account_id="acc", content_callback=lambda c, m: None, stream_items=True,
         stop_checker=lambda: False, started_callback=None, progress_callback=None,
     )
@@ -175,7 +202,7 @@ def test_per_keyword_exception_is_isolated_but_account_errors_propagate(tmp_path
     )
     pipeline = _new_pipeline("job-isolate", crawler, FakeIngestion(analyzed=set()), FakeEngine())
     output = pipeline._run_triaged_search(
-        request=_base_request(keyword="词A,词B"), save_root=tmp_path, start_page=1, crawler_concurrency=1,
+        request=_base_request(keyword="词A,词B"), save_root=tmp_path, start_page=1, max_total_notes=10, crawler_concurrency=1,
         account_auth_state=None, crawler_account_id="acc", content_callback=lambda c, m: None, stream_items=True,
         stop_checker=lambda: False, started_callback=None, progress_callback=None,
     )
@@ -191,7 +218,7 @@ def test_per_keyword_exception_is_isolated_but_account_errors_propagate(tmp_path
     with pytest.raises(CrawlerVerificationError):
         pipeline_verify._run_triaged_search(
             request=_base_request(keyword="词A"), save_root=tmp_path / "verify", start_page=1,
-            crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+            max_total_notes=10, crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
             content_callback=lambda c, m: None, stream_items=True,
             stop_checker=lambda: False, started_callback=None, progress_callback=None,
         )
@@ -212,7 +239,7 @@ def test_comments_grouped_by_platform_aware_content_identity(tmp_path: Path, mon
     engine = FakeEngine()
     pipeline = _new_pipeline("job-comments", crawler, FakeIngestion(analyzed=set()), engine)
     pipeline._run_triaged_search(
-        request=_base_request(keyword="词A"), save_root=tmp_path, start_page=1, crawler_concurrency=1,
+        request=_base_request(keyword="词A"), save_root=tmp_path, start_page=1, max_total_notes=10, crawler_concurrency=1,
         account_auth_state=None, crawler_account_id="acc", content_callback=lambda c, m: None, stream_items=True,
         stop_checker=lambda: False, started_callback=None, progress_callback=None,
     )
@@ -229,7 +256,7 @@ def test_run_search_contract_for_candidate_sweep(tmp_path: Path, monkeypatch):
     crawler = FakeCrawler({"词A": [("a1", "今晚上分")]})
     pipeline = _new_pipeline("job-contract", crawler, FakeIngestion(analyzed=set()), FakeEngine())
     pipeline._run_triaged_search(
-        request=_base_request(keyword="词A"), save_root=tmp_path, start_page=1, crawler_concurrency=1,
+        request=_base_request(keyword="词A"), save_root=tmp_path, start_page=1, max_total_notes=10, crawler_concurrency=1,
         account_auth_state=None, crawler_account_id="acc", content_callback=lambda c, m: None, stream_items=True,
         stop_checker=lambda: False, started_callback=None, progress_callback=None,
     )
@@ -256,7 +283,7 @@ def test_selected_keys_only_recorded_after_successful_precise_collection(tmp_pat
     pipeline_fail = _new_pipeline("job-fail-once", crawler_fail, FakeIngestion(analyzed=set()), FakeEngine())
     output_fail = pipeline_fail._run_triaged_search(
         request=_base_request(keyword="词A,词B"), save_root=tmp_path / "fail", start_page=1,
-        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        max_total_notes=10, crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
         content_callback=lambda c, m: None, stream_items=True,
         stop_checker=lambda: False, started_callback=None, progress_callback=None,
     )
@@ -274,7 +301,7 @@ def test_selected_keys_only_recorded_after_successful_precise_collection(tmp_pat
     pipeline_empty = _new_pipeline("job-empty-once", crawler_empty, FakeIngestion(analyzed=set()), FakeEngine())
     output_empty = pipeline_empty._run_triaged_search(
         request=_base_request(keyword="词A,词B"), save_root=tmp_path / "empty", start_page=1,
-        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        max_total_notes=10, crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
         content_callback=lambda c, m: None, stream_items=True,
         stop_checker=lambda: False, started_callback=None, progress_callback=None,
     )

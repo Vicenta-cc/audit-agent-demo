@@ -804,6 +804,7 @@ class AuditPipeline:
                                 job_store.log(self.job_id, f"启动逐词十选一采集 {request.platform}: {request.keyword}")
                                 return self._run_triaged_search(
                                     request=request, save_root=save_root, start_page=crawler_start_page,
+                                    max_total_notes=crawl_total_notes,
                                     crawler_concurrency=crawler_concurrency, account_auth_state=account_auth_state,
                                     crawler_account_id=crawler_account_id,
                                     content_callback=enqueue_stream_batch if stream_callback_enabled else None,
@@ -1887,7 +1888,8 @@ class AuditPipeline:
         safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in keyword)[:40] or "kw"
         return f"{index:02d}-{safe}"
 
-    def _run_triaged_search(self, *, request, save_root: Path, start_page: int, crawler_concurrency: int,
+    def _run_triaged_search(self, *, request, save_root: Path, start_page: int, max_total_notes: int,
+                            crawler_concurrency: int,
                             account_auth_state, crawler_account_id: str, content_callback, stream_items: bool,
                             stop_checker, started_callback, progress_callback):
         """Per keyword: text-only candidates → score → pick one → detail collect into save_root."""
@@ -1903,6 +1905,13 @@ class AuditPipeline:
         crawler_started = False
         for index, keyword in enumerate(terms, start=1):
             if stop_checker and stop_checker():
+                break
+            # 本任务采集上限沿用旧路径的 max_total_notes：达到上限就不再搜索后面的词，
+            # 避免采到 analyze_limit 之外、永远排队的内容（R8）。
+            if len(selected_keys) >= max_total_notes:
+                remaining = terms[index - 1:]
+                job_store.log(self.job_id,
+                              f"已达本任务采集上限 {max_total_notes} 条，以下词未搜索：{', '.join(remaining)}")
                 break
             candidate_root = save_root / "candidates" / self._keyword_slug(index, keyword)
             job_store.log(self.job_id, f"初筛候选采集：{keyword}，目标 {settings.triage_candidates_per_keyword} 条")
