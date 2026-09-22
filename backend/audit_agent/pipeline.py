@@ -6932,6 +6932,113 @@ class AuditPipeline:
             return text[:max_chars]
         return text[: max_chars - len(suffix)] + suffix
 
+    def _run_image_audit(
+        self,
+        subject: AuditSubject,
+        image_source: Path | str,
+        *,
+        evidence_id: str,
+    ) -> tuple[dict, list[str]]:
+        """Validate V2 image output, retaining a trace and correcting it once."""
+        authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
+        is_v2 = self._is_ruleset_v2()
+        attempts = 2 if authoritative_m3 and is_v2 else 1
+        base_prompt = self.prompt_set.image_prompt
+        request_prompt = base_prompt
+        allowed_rule_ids = sorted(self._stage_rule_ids("image_evidence"))
+
+        for attempt in range(1, attempts + 1):
+            analysis = self.qwen.analyze_image(
+                image_source,
+                request_prompt,
+                model=settings.qwen_image_audit_model,
+            )
+            try:
+                analysis = (
+                    self._validated_authoritative_visual_response(
+                        analysis, response_contract="image"
+                    )
+                    if authoritative_m3
+                    else dict(analysis or {})
+                )
+                raw_risk_items = analysis.get("risk_items")
+                analysis["risk_items"] = self._filter_stage_risk_items(
+                    raw_risk_items,
+                    "image_evidence",
+                )
+                matched_exemption_ids = self._matched_stage_exemption_ids(
+                    raw_risk_items,
+                    "image_evidence",
+                )
+            except (FusionAuditContractError, AuditProviderCallError) as exc:
+                if not (authoritative_m3 and is_v2):
+                    raise
+                returned_rule_ids = [
+                    str(item.get("rule_id") or item.get("id") or "")
+                    for item in (
+                        analysis.get("risk_items")
+                        if isinstance(analysis, dict)
+                        and isinstance(analysis.get("risk_items"), list)
+                        else []
+                    )
+                    if isinstance(item, dict)
+                ]
+                capture = getattr(self.qwen, "last_raw_response", None)
+                diagnostic = {
+                    "protocol": "image-rule-ids-v1",
+                    "attempt": attempt,
+                    "evidence_id": evidence_id,
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                    "allowed_rule_ids": allowed_rule_ids,
+                    "returned_rule_ids": returned_rule_ids,
+                    "request_prompt": request_prompt,
+                    "raw_provider_response": (
+                        capture() if callable(capture) else None
+                    ),
+                    "parsed_response": analysis,
+                }
+                diagnostic_dir = (
+                    settings.outputs_dir
+                    / self.job_id
+                    / "assets"
+                    / subject.note_id
+                    / "image_failures"
+                )
+                diagnostic_dir.mkdir(parents=True, exist_ok=True)
+                diagnostic_path = (
+                    diagnostic_dir / f"attempt-{attempt}-{time_ns()}.json"
+                )
+                diagnostic_path.write_text(
+                    json.dumps(diagnostic, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                job_store.log(
+                    self.job_id,
+                    f"笔记 {subject.note_id}：图片 {evidence_id} 结构校验失败 "
+                    f"{attempt}/{attempts}，error={exc}，已保存原始响应",
+                )
+                if attempt == attempts:
+                    raise
+                request_prompt = base_prompt + (
+                    "\n上次输出未通过程序校验。请只纠正规则编号或 JSON 字段合同，"
+                    "保留有依据的风险判断；不能以删除已有风险项代替修正规则编号。"
+                    "risk_items[].rule_id 只能从 allowed_rule_ids 中选择，无明确风险时"
+                    "才返回空数组。只输出完整 JSON。\n"
+                    + json.dumps(
+                        {
+                            "error": str(exc),
+                            "returned_rule_ids": returned_rule_ids,
+                            "allowed_rule_ids": allowed_rule_ids,
+                        },
+                        ensure_ascii=False,
+                    )
+                )
+                continue
+            return analysis, matched_exemption_ids
+
+        raise AssertionError("unreachable")
+
     def _analyze_images(self, subject: AuditSubject, image_dir: Path) -> list[dict]:
         authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
         results = []
@@ -6954,26 +7061,10 @@ class AuditPipeline:
             image_path = item["original_path"]
             ocr_fields = self._image_ocr_fields(local_ocr.get(idx) or {})
             try:
-                analysis = self.qwen.analyze_image(
+                analysis, matched_exemption_ids = self._run_image_audit(
+                    subject,
                     analysis_path,
-                    self.prompt_set.image_prompt,
-                    model=settings.qwen_image_audit_model,
-                )
-                analysis = (
-                    self._validated_authoritative_visual_response(
-                        analysis, response_contract="image"
-                    )
-                    if authoritative_m3
-                    else dict(analysis or {})
-                )
-                raw_risk_items = analysis.get("risk_items")
-                analysis["risk_items"] = self._filter_stage_risk_items(
-                    raw_risk_items,
-                    "image_evidence",
-                )
-                matched_exemption_ids = self._matched_stage_exemption_ids(
-                    raw_risk_items,
-                    "image_evidence",
+                    evidence_id=f"image:{idx}",
                 )
                 if matched_exemption_ids:
                     analysis["matched_exemption_ids"] = matched_exemption_ids
@@ -6990,7 +7081,9 @@ class AuditPipeline:
                 })
             except Exception as exc:
                 if authoritative_m3:
-                    if isinstance(exc, AuditProviderCallError):
+                    if isinstance(
+                        exc, (AuditProviderCallError, FusionAuditContractError)
+                    ):
                         raise
                     raise AuditProviderCallError(
                         f"visual Provider failed for local image: {exc}"
@@ -7038,26 +7131,10 @@ class AuditPipeline:
             image_source = item["image_source"]
             ocr_fields = self._image_ocr_fields(remote_ocr.get(idx) or {})
             try:
-                analysis = self.qwen.analyze_image(
+                analysis, matched_exemption_ids = self._run_image_audit(
+                    subject,
                     image_source,
-                    self.prompt_set.image_prompt,
-                    model=settings.qwen_image_audit_model,
-                )
-                analysis = (
-                    self._validated_authoritative_visual_response(
-                        analysis, response_contract="image"
-                    )
-                    if authoritative_m3
-                    else dict(analysis or {})
-                )
-                raw_risk_items = analysis.get("risk_items")
-                analysis["risk_items"] = self._filter_stage_risk_items(
-                    raw_risk_items,
-                    "image_evidence",
-                )
-                matched_exemption_ids = self._matched_stage_exemption_ids(
-                    raw_risk_items,
-                    "image_evidence",
+                    evidence_id=f"image:{idx}",
                 )
                 if matched_exemption_ids:
                     analysis["matched_exemption_ids"] = matched_exemption_ids
@@ -7073,7 +7150,9 @@ class AuditPipeline:
                 })
             except Exception as exc:
                 if authoritative_m3:
-                    if isinstance(exc, AuditProviderCallError):
+                    if isinstance(
+                        exc, (AuditProviderCallError, FusionAuditContractError)
+                    ):
                         raise
                     raise AuditProviderCallError(
                         f"visual Provider failed for remote image: {exc}"

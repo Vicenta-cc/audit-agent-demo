@@ -49,6 +49,20 @@ QWEN_VL_MODEL=qwen3.6-plus
 
 不要把 `.env` 提交到 Git。
 
+如果任务启用视频审核，还必须显式配置 ffmpeg 和 Dolphin。它们不属于
+DashScope/Qwen，也不会因为机器上另一个旧后端已经连上 Dolphin 而自动继承：
+
+```env
+FFMPEG_PATH=/absolute/path/to/ffmpeg
+USE_REMOTE_ASR=true
+REMOTE_ASR_BASE_URL=http://127.0.0.1:19001
+REMOTE_INFERENCE_API_KEY=<和远端 INFERENCE_API_KEY 一致的运行时密钥>
+ASR_ENGINE=dolphin
+```
+
+API 与 worker 必须从同一份 `.env` 或受控 runtime `secrets.env` 启动。真实密钥不得写入
+README、提交记录、构建收据或示例文件。
+
 ## 3. 只启动本地后端
 
 推荐直接用脚本：
@@ -115,6 +129,8 @@ CHECK_REMOTE_ASR=true ./scripts/start-backend.sh
 ```
 
 `CHECK_REMOTE_ASR=true` 会先请求一次远端 `/api/inference/health`，用于确认 URL 和鉴权没问题。
+真实视频任务验收必须使用这个检查，不能只确认 `19001` 端口处于监听状态：端口监听不代表
+Dolphin 模型已加载、鉴权一致或返回合同正确。检查失败时不要启动真实采集任务。
 
 ### 方式 B：ASR 服务只监听服务器本机
 
@@ -292,6 +308,12 @@ curl -X POST \
 `Connection refused`：远端 ASR 没启动，或 SSH 隧道没开。先跑 `/api/inference/health`。
 
 视频任务没有 ASR 文本：检查 ffmpeg 是否安装，任务日志里是否有“音频抽取失败”。
+
+新环境里视频全部立即失败，但旧环境正常：检查新 API 和新 worker 的实际进程环境。最常见原因是
+手动执行裸 `uvicorn` 或 worker 命令时，只注入了 DashScope/DMX Key，漏掉
+`FFMPEG_PATH`、`USE_REMOTE_ASR=true`、`REMOTE_ASR_BASE_URL`、
+`REMOTE_INFERENCE_API_KEY` 和 `ASR_ENGINE=dolphin`。修正环境并重启新 API 与 worker；
+不要把旧服务的进程环境当成全局配置。
 
 端口被占用：换端口启动，例如 `BACKEND_PORT=8010 ./scripts/start-backend.sh`，或先停掉旧服务。
 

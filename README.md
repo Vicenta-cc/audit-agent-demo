@@ -25,8 +25,27 @@ git switch --detach 5873ea7570397f4b6f0c07dcec214e8541d7b2e0
 | --- | --- | --- |
 | 资源生成 | `RESOURCE_GENERATION_API_KEY`、`RESOURCE_GENERATION_BASE_URL`、`RESOURCE_GENERATION_MODEL` | 仅在用户明确要求新生成审核规则、黑话库或关键词时使用；当前接入 DMX。 |
 | 常规运行 | `DASHSCOPE_API_KEY`、`DASHSCOPE_BASE_URL`、`QWEN_TEXT_MODEL` | 调查对话的其他回合、内容审核、报告生成和报告问答；当前使用 DashScope/Qwen。 |
+| 视频语音 | `FFMPEG_PATH`、`USE_REMOTE_ASR`、`REMOTE_ASR_BASE_URL`、`REMOTE_INFERENCE_API_KEY`、`ASR_ENGINE` | 本地 ffmpeg 抽音频，再交给远端 Dolphin；不是 DMX 或 DashScope 的一部分。 |
 
 资源生成阶段缺少自己的 Key 时会明确失败，不会回退并消耗常规 Key。真实 Key 只放在部署环境的 `.env` 或受控 runtime 的 `secrets.env`，禁止提交到 Git。启动前应运行环境检查；检查只报告两组配置是否齐全，不输出 Key。新任务帖子上限只通过 `INVESTIGATION_MAX_POSTS` 调整，当前建议值为 `30`，以后恢复为 `10` 时只改这个变量。
+
+包含视频审核的环境不能只配置两组模型 Key。Dolphin 的最小本地配置如下；`REMOTE_INFERENCE_API_KEY` 必须和远端服务的 `INFERENCE_API_KEY` 一致：
+
+```env
+FFMPEG_PATH=/absolute/path/to/ffmpeg
+USE_REMOTE_ASR=true
+REMOTE_ASR_BASE_URL=http://127.0.0.1:19001
+REMOTE_INFERENCE_API_KEY=<runtime secret only>
+ASR_ENGINE=dolphin
+```
+
+`19001` 可以是 SSH 或 Coder 转发到远端 Dolphin 的本地端口。启动含视频审核的 API 和 worker 前，必须在同一个环境中执行：
+
+```bash
+CHECK_REMOTE_ASR=true ./scripts/start-backend.sh
+```
+
+检查成功会访问 `REMOTE_ASR_BASE_URL/api/inference/health`；失败时不要继续做真实任务验收。API 与 worker 必须读取同一份 ASR 和 ffmpeg 配置，不能假设新进程会继承另一套旧服务的环境变量。完整的直接连接、SSH 隧道和 Coder 转发方式见[后端启动与远程 ASR 接入手册](docs/backend_startup_and_remote_asr.md)。
 
 在配置好的独立环境中，通过以下命令初始化首个管理员（交互输入密码，仓库没有预设正式密码）：
 

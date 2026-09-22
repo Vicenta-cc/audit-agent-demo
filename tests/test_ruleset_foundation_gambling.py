@@ -135,6 +135,25 @@ class SequenceProvider:
         return deepcopy(self.responses[index])
 
 
+class ImageSequenceProvider:
+    def __init__(self, responses: list[dict]) -> None:
+        self.responses = [deepcopy(item) for item in responses]
+        self.calls = 0
+        self.prompts: list[str] = []
+        self.raw_response = None
+
+    def analyze_image(self, _source, prompt: str, **_kwargs) -> dict:
+        self.prompts.append(prompt)
+        index = min(self.calls, len(self.responses) - 1)
+        response = deepcopy(self.responses[index])
+        self.calls += 1
+        self.raw_response = {"test_provider_response": deepcopy(response)}
+        return response
+
+    def last_raw_response(self) -> dict | None:
+        return deepcopy(self.raw_response)
+
+
 class RuleSetCompilerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -1999,6 +2018,133 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                 [{"rule_id": "gambling.platform_entry_and_funding"}],
                 "image_evidence",
             )
+
+    def test_image_contract_retries_invalid_rule_id_and_persists_trace(self) -> None:
+        pipeline = bare_v2_pipeline(self.compiled)
+        pipeline.authoritative_m3 = True
+        pipeline.job_id = "image-contract-retry"
+        allowed_rule_id = sorted(
+            pipeline._stage_rule_ids("image_evidence")
+        )[0]
+        invalid = {
+            "ocr_text": "入口",
+            "visual_summary": "图片展示入口",
+            "benign_context": "",
+            "risk_items": [
+                {
+                    "risk_type": "风险入口",
+                    "evidence": "入口",
+                    "reason": "存在入口",
+                    "severity": "high",
+                    "rule_id": "gambling.not_in_revision",
+                }
+            ],
+        }
+        valid = deepcopy(invalid)
+        valid["risk_items"][0]["rule_id"] = allowed_rule_id
+        pipeline.qwen = ImageSequenceProvider([invalid, valid])
+        subject = AuditSubject(
+            platform="dy",
+            note_id="image-note",
+            url="",
+            title="",
+            desc="",
+            author={},
+            image_urls=[],
+            video_urls=[],
+            comments=[],
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            patch.object(settings, "outputs_dir", Path(temp_dir)),
+            patch("backend.audit_agent.pipeline.job_store.log"),
+        ):
+            result, matched_exemption_ids = pipeline._run_image_audit(
+                subject,
+                Path(temp_dir) / "image.jpg",
+                evidence_id="image:0",
+            )
+            traces = list(
+                (
+                    Path(temp_dir)
+                    / pipeline.job_id
+                    / "assets"
+                    / subject.note_id
+                    / "image_failures"
+                ).glob("*.json")
+            )
+            trace = json.loads(traces[0].read_text(encoding="utf-8"))
+
+        self.assertEqual(pipeline.qwen.calls, 2)
+        self.assertEqual(result["risk_items"][0]["rule_id"], allowed_rule_id)
+        self.assertEqual(matched_exemption_ids, [])
+        self.assertEqual(len(traces), 1)
+        self.assertEqual(trace["error_type"], "FusionAuditContractError")
+        self.assertEqual(
+            trace["returned_rule_ids"], ["gambling.not_in_revision"]
+        )
+        self.assertIn(allowed_rule_id, trace["allowed_rule_ids"])
+        self.assertIn("allowed_rule_ids", pipeline.qwen.prompts[1])
+
+    def test_image_contract_exhaustion_preserves_contract_error(self) -> None:
+        pipeline = bare_v2_pipeline(self.compiled)
+        pipeline.authoritative_m3 = True
+        pipeline.job_id = "image-contract-exhausted"
+        invalid = {
+            "ocr_text": "入口",
+            "visual_summary": "图片展示入口",
+            "benign_context": "",
+            "risk_items": [
+                {
+                    "risk_type": "风险入口",
+                    "evidence": "入口",
+                    "reason": "存在入口",
+                    "severity": "high",
+                    "rule_id": "gambling.not_in_revision",
+                }
+            ],
+        }
+        pipeline.qwen = ImageSequenceProvider([invalid, invalid])
+        subject = AuditSubject(
+            platform="dy",
+            note_id="image-note",
+            url="",
+            title="",
+            desc="",
+            author={},
+            image_urls=[],
+            video_urls=[],
+            comments=[],
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir, patch.object(
+            settings, "outputs_dir", Path(temp_dir)
+        ), patch.object(settings, "ocr_enabled", False), patch(
+            "backend.audit_agent.pipeline.job_store.log"
+        ):
+            image_path = Path(temp_dir) / "source.jpg"
+            image_path.write_bytes(b"test image")
+            subject.local_image_paths = [str(image_path)]
+            with self.assertRaisesRegex(
+                FusionAuditContractError,
+                "image_evidence non-none result has an invalid rule_id",
+            ):
+                pipeline._analyze_images(
+                    subject, Path(temp_dir) / "staged-images"
+                )
+            traces = list(
+                (
+                    Path(temp_dir)
+                    / pipeline.job_id
+                    / "assets"
+                    / subject.note_id
+                    / "image_failures"
+                ).glob("*.json")
+            )
+
+        self.assertEqual(pipeline.qwen.calls, 2)
+        self.assertEqual(len(traces), 2)
 
     def test_comment_actual_level_controls_score_and_requires_legal_rule(self) -> None:
         pipeline = bare_v2_pipeline(self.compiled)

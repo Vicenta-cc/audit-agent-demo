@@ -101,6 +101,9 @@ class QwenClient:
         image_quality: int | None = None,
         enable_thinking: bool | None = None,
     ) -> dict:
+        if not hasattr(self, "_response_capture"):
+            self._response_capture = threading.local()
+        self._response_capture.value = None
         if settings.use_remote_vlm:
             if not self.remote.enabled:
                 raise RuntimeError("USE_REMOTE_VLM=true but REMOTE_INFERENCE_BASE_URL is empty")
