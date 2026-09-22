@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import queue
+import random
 import re
 import shutil
 import shlex
@@ -35,12 +36,14 @@ from .ingestion import AuditResultStore, BatchWriter, IngestionStore, content_id
 from .job_store import job_store
 from .job_state import failure_metadata
 from .knowledge_packages import get_default_knowledge_package
+from .lexicon_store import LexiconStore
 from .models import AuditSubject
 from .ocr_processor import VideoOCRTracker
 from .prompts import get_prompt_set
 from .qwen_client import QwenClient, QwenTimeoutError, QwenProviderError
 from .rule_compiler import DEFAULT_THRESHOLDS, compact_library_policy
 from .translation import TranslationProcessor
+from .triage import TriageEngine, rank_candidates, select_candidate, write_candidates_file
 from .video_processor import DemoAudioProcessor, DemoFrameExtractor
 
 
@@ -792,6 +795,20 @@ class AuditPipeline:
                                     auth_state=account_auth_state,
                                     account_id=crawler_account_id,
                                     started_callback=mark_crawler_started,
+                                )
+                            if (
+                                request.crawl_mode == "search"
+                                and str(getattr(settings, "triage_mode", "off") or "off") in {"select", "compare"}
+                            ):
+                                crawler_start_page, _resume_keyword, _resume_page = latest_resume_parameters()
+                                job_store.log(self.job_id, f"启动逐词十选一采集 {request.platform}: {request.keyword}")
+                                return self._run_triaged_search(
+                                    request=request, save_root=save_root, start_page=crawler_start_page,
+                                    crawler_concurrency=crawler_concurrency, account_auth_state=account_auth_state,
+                                    crawler_account_id=crawler_account_id,
+                                    content_callback=enqueue_stream_batch if stream_callback_enabled else None,
+                                    stream_items=stream_callback_enabled, stop_checker=crawl_stop_requested,
+                                    started_callback=mark_crawler_started, progress_callback=log_crawl_progress,
                                 )
                             if getattr(request, "keyword_source", "keyword") == "lexicon":
                                 job_store.log(
@@ -1854,6 +1871,93 @@ class AuditPipeline:
         if skipped:
             job_store.log(self.job_id, f"分析范围过滤：跳过非图文内容 {skipped} 条")
         return kept
+
+    def _triage_engine_instance(self) -> TriageEngine:
+        engine = getattr(self, "_triage_engine", None)
+        if engine is None:
+            engine = TriageEngine(LexiconStore(), self.qwen, model=settings.triage_model,
+                                  max_comments=settings.triage_candidate_comments,
+                                  request_timeout=settings.triage_request_timeout)
+            self._triage_engine = engine
+        return engine
+
+    @staticmethod
+    def _keyword_slug(index: int, keyword: str) -> str:
+        safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in keyword)[:40] or "kw"
+        return f"{index:02d}-{safe}"
+
+    def _run_triaged_search(self, *, request, save_root: Path, start_page: int, crawler_concurrency: int,
+                            account_auth_state, crawler_account_id: str, content_callback, stream_items: bool,
+                            stop_checker, started_callback, progress_callback):
+        """Per keyword: text-only candidates → score → pick one → detail collect into save_root."""
+        platform = str(getattr(request, "platform", "") or "")
+        terms = list(dict.fromkeys(t.strip() for t in str(getattr(request, "keyword", "") or "").split(",") if t.strip()))
+        engine = self._triage_engine_instance()
+        category = str(getattr(request, "lexicon_category", "") or "")
+        lexicon_terms = engine.terms_for(
+            [category] if category and getattr(request, "keyword_source", "keyword") == "lexicon" else []
+        )
+        mode = str(getattr(settings, "triage_mode", "off") or "off")
+        selected_keys: set[str] = set()
+        crawler_started = False
+        for index, keyword in enumerate(terms, start=1):
+            if stop_checker and stop_checker():
+                break
+            candidate_root = save_root / "candidates" / self._keyword_slug(index, keyword)
+            job_store.log(self.job_id, f"初筛候选采集：{keyword}，目标 {settings.triage_candidates_per_keyword} 条")
+            candidates = self.crawler.run_search(
+                platform=platform, keyword=keyword, start_page=start_page,
+                max_notes=settings.triage_candidates_per_keyword,
+                max_total_notes=settings.triage_candidates_per_keyword,
+                max_comments=settings.triage_candidate_comments, max_concurrency=crawler_concurrency,
+                max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                get_sub_comment=False, collect_comments=True, collect_media=False, save_root=candidate_root,
+                stream_items=False, stop_checker=stop_checker, auth_state=account_auth_state,
+                account_id=crawler_account_id,
+                started_callback=None if crawler_started else started_callback,
+                reusable_content_db=self.ingestion.db_path if platform == "dy" else None,
+                current_task_id=self.job_id,
+                search_sort=str(getattr(request, "search_sort", "general") or "general"),
+            )
+            crawler_started = True
+            comments_by_key: dict[str, list[dict]] = {}
+            for comment in candidates.comments:
+                comments_by_key.setdefault(str(comment.get("aweme_id") or comment.get("note_id") or ""), []).append(comment)
+            scores = []
+            for rank, item in enumerate(candidates.contents, start=1):
+                key = content_identity(item, platform)
+                if key:
+                    scores.append(engine.score(key, rank, item, comments_by_key.get(key, []), lexicon_terms))
+            ranked = rank_candidates(scores)
+            exclude = set(selected_keys) | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked])
+            strategy = "triage"
+            if mode == "compare" and random.random() < 0.5:
+                strategy = "rank1"
+                ranked = sorted(ranked, key=lambda s: s.rank)
+            selected = select_candidate(ranked, exclude_keys=exclude)
+            write_candidates_file(candidate_root, keyword, ranked, selected, strategy)
+            if selected is None:
+                excluded = len(exclude & {s.content_key for s in ranked})
+                positive = sum(1 for s in ranked if s.score > 0)
+                job_store.log(self.job_id, f"词「{keyword}」跳过：候选 {len(scores)} 条，可疑 {positive} 条，"
+                                           f"排除重复或已审 {excluded} 条，换下一个词")
+                continue
+            selected_keys.add(selected.content_key)
+            job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}（{strategy}，{selected.band}，分 {selected.score}）：{selected.reason}")
+            self.crawler.run_detail(
+                platform, selected.content_key, source_keyword=keyword,
+                max_comments=int(getattr(request, "max_comments", 300) or 300), max_concurrency=crawler_concurrency,
+                max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                get_sub_comment=bool(getattr(request, "get_sub_comment", False)), save_root=save_root,
+                progress_callback=progress_callback, content_callback=content_callback, stream_items=stream_items,
+                stop_checker=stop_checker, auth_state=account_auth_state, started_callback=None,
+                account_id=crawler_account_id, collect_comments=bool(getattr(request, "collect_comments", True)),
+                collect_media=bool(getattr(request, "collect_media", True)),
+            )
+        output = self.crawler._load_platform_output(save_root, platform)
+        output.contents = [item for item in output.contents if content_identity(item, platform) in selected_keys]
+        job_store.log(self.job_id, f"初筛完成：{len(terms)} 个词，选中 {len(selected_keys)} 条进入精审")
+        return output
 
     def _mark_subject_skipped(self, platform: str, content_key: str, subject: AuditSubject) -> None:
         if content_key:
