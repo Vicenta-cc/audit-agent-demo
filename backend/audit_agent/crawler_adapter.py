@@ -337,6 +337,78 @@ class MediaCrawlerAdapter:
             account_id=account_id,
         )
 
+    def run_detail(
+        self,
+        platform: str,
+        content_id: str,
+        *,
+        source_keyword: str,
+        max_comments: int,
+        max_concurrency: int,
+        max_items_per_minute: int,
+        get_sub_comment: bool,
+        save_root: Path,
+        progress_callback: ProgressCallback | None = None,
+        content_callback: ContentCallback | None = None,
+        stream_items: bool = False,
+        stop_checker: StopChecker | None = None,
+        auth_state: dict | None = None,
+        started_callback: StartedCallback | None = None,
+        account_id: str = "",
+        collect_comments: bool = True,
+        collect_media: bool = True,
+    ) -> CrawlOutput:
+        """Collect one post by ID with media and full comments; tag rows with the originating keyword."""
+        self._validate_platform(platform)
+        content_id = str(content_id or "").strip()
+        if not content_id:
+            raise ValueError("run_detail requires a content id")
+        effective_max_comments = max_comments if collect_comments else 0
+        command = [
+            *self._base_command(platform),
+            "--platform", platform,
+            "--lt", "cookie" if auth_state else "qrcode",
+            "--type", "detail",
+            "--specified_id", content_id,
+            "--crawler_max_notes_count", "1",
+            "--max_comments_count_singlenotes", str(effective_max_comments),
+            "--max_concurrency_num", str(max_concurrency),
+            "--crawler_max_items_per_minute", str(max_items_per_minute),
+            "--crawler_sleep_sec", str(settings.crawler_sleep_seconds),
+            "--get_comment", "true" if collect_comments else "false",
+            "--get_sub_comment", "true" if collect_comments and get_sub_comment else "false",
+            "--get_media", "true" if collect_media else "false",
+            "--stream_items", "true" if stream_items else "false",
+            "--save_data_option", "jsonl",
+            "--save_data_path", str(save_root),
+        ]
+
+        def only_target(contents: list[dict]) -> list[dict]:
+            selected = []
+            for item in contents:
+                if self._content_identity(item, platform) == content_id:
+                    tagged = dict(item)
+                    tagged["source_keyword"] = source_keyword
+                    selected.append(tagged)
+            return selected
+
+        def relay(contents: list[dict], comments: list[dict]) -> None:
+            if content_callback is None:
+                return
+            targeted = only_target(contents)
+            if targeted:
+                content_callback(targeted, comments)
+
+        output = self._run_command(
+            command=command, save_root=save_root, platform=platform, max_notes=1,
+            progress_callback=progress_callback, content_callback=relay if content_callback else None,
+            stop_checker=stop_checker, auth_state=auth_state, started_callback=started_callback,
+            checkpoint_callback=None, account_id=account_id,
+        )
+        output.contents = only_target(output.contents)
+        output.command = command
+        return output
+
     def _run_command(
         self,
         command: list[str],
