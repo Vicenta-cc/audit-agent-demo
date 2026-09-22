@@ -42,7 +42,6 @@ async function mount(page: Page, stage: "suggestion" | "confirmation", mixed: bo
     mountPresentation(host, React.createElement(InvestigationCenterArea, {
       session, isSendingMessage: false, isSidebarCollapsed: true,
       onToggleSidebar: noop, onUpdateDraftKeywords: noop,
-      onUpdateCreationSearchTerms: async (terms: string[]) => { events.push(["update", terms]); },
       onUpdateDraftPlatforms: (platforms: string[]) => events.push(["platform", platforms]),
       onGenerateTaskConfig: (id: string) => events.push(["generate", id]),
       onStartAgentExecution: () => events.push(["confirm"]),
@@ -72,9 +71,8 @@ for (const width of [1280, 390]) {
         if (stage === "confirmation") {
           await expect(card.getByRole("button", { name: "确认并开始调查" })).toBeDisabled();
           await expect(card.getByText("本次使用临时规则，暂不支持启动调查。", { exact: true })).toBeVisible();
-          await card.getByRole("textbox", { name: "最终搜索词" }).fill("招聘收费");
-          await card.getByRole("button", { name: "应用到本次任务" }).click();
-          expect(await events(page)).toEqual([["update", ["招聘收费"]]]);
+          await card.getByRole("button", { name: "编辑主题与变体" }).click();
+          expect(await events(page)).toEqual([["drawer", "keyword_editor"]]);
         } else {
           await card.getByRole("button", { name: "抖音", exact: true }).click();
           await card.getByRole("button", { name: "生成任务配置" }).click();
@@ -112,17 +110,14 @@ for (const stage of ["suggestion", "confirmation"] as const) {
         if (stage === "suggestion") {
           await card.getByRole("button", { name: "抖音", exact: true }).click();
           await card.getByRole("button", { name: "查看规则详情" }).click();
-          await card.getByRole("button", { name: "编辑主词", exact: true }).click();
-          await card.getByRole("textbox", { name: "编辑召回词" }).fill("招聘诈骗");
-          await card.getByRole("button", { name: "应用到本次任务" }).click();
+          await card.getByRole("button", { name: "编辑主题与变体", exact: true }).click();
           await card.getByRole("button", { name: "生成任务配置" }).click();
-          expect(await events(page)).toEqual([["platform", ["dy"]], ["drawer", "ruleset"], ["update", ["招聘诈骗"]], ["generate", "actual-answer"]]);
+          expect(await events(page)).toEqual([["platform", ["dy"]], ["drawer", "ruleset"], ["drawer", "keyword_editor"], ["generate", "actual-answer"]]);
         } else {
-          await card.getByRole("textbox", { name: "最终搜索词" }).fill("招聘诈骗");
-          await card.getByRole("button", { name: "应用到本次任务" }).click();
+          await card.getByRole("button", { name: "编辑主题与变体" }).click();
           await card.getByRole("button", { name: "查看完整配置" }).click();
           await card.getByRole("button", { name: "确认并开始调查" }).click();
-          expect(await events(page)).toEqual([["update", ["招聘诈骗"]], ["drawer", "task_config"], ["confirm"]]);
+          expect(await events(page)).toEqual([["drawer", "keyword_editor"], ["drawer", "task_config"], ["confirm"]]);
         }
         if (mixed) await page.screenshot({ path: `/tmp/t4a-mixed-${stage}-${phase}.png`, fullPage: true });
       }

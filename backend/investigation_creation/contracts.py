@@ -19,6 +19,8 @@ from pydantic import (
 )
 
 from backend.audit_agent.creator_url import validate_creator_url
+from backend.audit_agent.limits import MAX_SUPPORTED_INVESTIGATION_POSTS
+from backend.resource_management.contracts import LexiconContent
 from backend.rulesets.contracts import ApplicationStage, RiskLevel, RuleSetContent
 
 
@@ -129,6 +131,10 @@ class TemporaryTermsRecallPlan(StrictModel):
     strategy: Literal["temporary_terms"]
     terms: list[StrictStr] = Field(default_factory=list, max_length=100)
     source_lexicon_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
+    lexicon_content: LexiconContent | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
     @field_validator("source_lexicon_ids")
     @classmethod
@@ -161,6 +167,33 @@ class TemporaryTermsRecallPlan(StrictModel):
                 seen.add(text)
                 normalized.append(text)
         return normalized
+
+    @model_validator(mode="after")
+    def structured_lexicon_matches_search_terms(self) -> "TemporaryTermsRecallPlan":
+        if self.lexicon_content is None:
+            return self
+        projected = self.lexicon_content.search_terms()
+        if not projected:
+            raise ValueError("structured temporary lexicon must project at least one search term")
+        if projected != list(self.terms):
+            raise ValueError(
+                "temporary terms must exactly match the structured lexicon search projection"
+            )
+        enabled_variants = {
+            entry.parent_id
+            for entry in self.lexicon_content.entries
+            if entry.kind == "variant" and entry.enabled
+        }
+        missing = [
+            entry.id
+            for entry in self.lexicon_content.entries
+            if entry.kind == "main" and entry.enabled and entry.id not in enabled_variants
+        ]
+        if missing:
+            raise ValueError(
+                "each enabled structured theme must contain at least one enabled variant"
+            )
+        return self
 
 
 RecallPlan = Annotated[
@@ -272,8 +305,12 @@ class InvestigationTaskParameters(StrictModel):
     crawler_account_id: StrictStr | None = None
     search_sort: Literal["general", "most_liked", "latest"] = "general"
     start_page: StrictInt = Field(default=1, ge=1)
-    max_notes: StrictInt = Field(default=1, ge=1, le=5)
-    max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
+    max_notes: StrictInt = Field(
+        default=1, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
+    max_total_notes: StrictInt = Field(
+        default=5, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
     max_comments: StrictInt = Field(default=1, ge=0, le=1000)
     collect_comments: StrictBool = True
     get_sub_comment: StrictBool = False
@@ -334,8 +371,12 @@ class CollectionConfiguration(StrictModel):
     creator_url: StrictStr = ""
     display_name: StrictStr = ""
     start_page: StrictInt = Field(default=1, ge=1)
-    max_notes: StrictInt = Field(default=5, ge=1, le=5)
-    max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
+    max_notes: StrictInt = Field(
+        default=5, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
+    max_total_notes: StrictInt = Field(
+        default=5, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
     max_comments: StrictInt = Field(default=300, ge=0, le=1000)
     max_concurrency: StrictInt = Field(default=1, ge=1, le=3)
     max_items_per_minute: StrictInt = Field(default=5, ge=1, le=5)
@@ -640,6 +681,10 @@ class RecallPlanPreview(StrictModel):
     enabled_main_terms: list[StrictStr] = Field(default_factory=list)
     temporary_terms: list[StrictStr] = Field(default_factory=list)
     source_lexicon_ids: list[StrictStr] = Field(default_factory=list)
+    lexicon_content: LexiconContent | None = Field(
+        default=None,
+        exclude_if=lambda value: value is None,
+    )
 
 
 class CrawlerAccountConfirmedState(StrictModel):
@@ -650,6 +695,11 @@ class CrawlerAccountConfirmedState(StrictModel):
 
 
 class ConfirmationPreview(StrictModel):
+    max_post_limit: StrictInt = Field(
+        default=MAX_SUPPORTED_INVESTIGATION_POSTS,
+        ge=1,
+        le=MAX_SUPPORTED_INVESTIGATION_POSTS,
+    )
     task_settings_revision: int = 0
     requested_parameters: InvestigationTaskParameters | None = None
     effective_parameters: InvestigationTaskParameters | None = None
@@ -666,7 +716,9 @@ class ConfirmationPreview(StrictModel):
     ruleset_revision: RuleSetRevisionSummary | None = None
     temporary_ruleset: TemporaryRuleSetJudgement | None = None
     max_notes: StrictInt = Field(default=1, ge=0)
-    max_posts_per_keyword: StrictInt = Field(default=1, ge=1, le=5)
+    max_posts_per_keyword: StrictInt = Field(
+        default=1, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
     max_comments_per_post: StrictInt = Field(default=300, ge=0, le=1000)
     get_sub_comment: StrictBool = False
     blockers: list[InvestigationBlocker] = Field(default_factory=list)
@@ -694,7 +746,9 @@ class ResolvedExecutionConfiguration(StrictModel):
     auto_analyze: StrictBool | None = None
     collect_comments: StrictBool | None = None
     collect_media: StrictBool | None = None
-    max_total_notes: StrictInt | None = Field(default=None, ge=1, le=5)
+    max_total_notes: StrictInt | None = Field(
+        default=None, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
     search_sort: Literal["general", "most_liked", "latest"] | None = None
 
     @model_serializer(mode="wrap")
@@ -725,7 +779,7 @@ class ResolvedExecutionConfiguration(StrictModel):
     creator_url: StrictStr = ""
     creator_id: StrictStr = ""
     start_page: StrictInt = Field(ge=1)
-    max_notes: StrictInt = Field(ge=1, le=5)
+    max_notes: StrictInt = Field(ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS)
     max_comments: StrictInt = Field(ge=0, le=1000)
     max_concurrency: StrictInt = Field(ge=1, le=3)
     max_items_per_minute: StrictInt = Field(ge=1, le=5)
@@ -766,7 +820,7 @@ class ConfirmedRecallPlanSnapshot(StrictModel):
             if not self.lexicon_id or not self.runtime_content_hash:
                 raise ValueError("existing_lexicon snapshot requires id and hash")
             if not self.enabled_main_terms:
-                raise ValueError("existing_lexicon snapshot requires enabled main terms")
+                raise ValueError("existing_lexicon snapshot requires enabled search terms")
             if self.temporary_terms:
                 raise ValueError("existing_lexicon snapshot cannot contain temporary terms")
         else:
@@ -985,7 +1039,7 @@ class ConfirmedConfigurationSnapshotV4(FrozenRuleSetSource):
     resolved_search_terms: list[StrictStr] = Field(default_factory=list)
     creator_url: StrictStr = ""
     recall_plan: ConfirmedRecallPlanSnapshot | None = None
-    max_notes: StrictInt = Field(ge=1, le=5)
+    max_notes: StrictInt = Field(ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS)
     execution: ResolvedExecutionConfiguration
     config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
     confirmed_by: StrictStr

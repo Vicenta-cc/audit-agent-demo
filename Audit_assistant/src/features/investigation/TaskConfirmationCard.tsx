@@ -1,12 +1,10 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, ExternalLink, FileText, Play, Save, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Edit3, ExternalLink, FileText, Play, ShieldCheck } from "lucide-react";
 import type { TaskDraft } from "../../types/investigation";
 import type { ConfirmationPreview } from "../../types/investigationCreation";
 import {
   buildConfirmationCardView,
   formatConfirmationBlockerMessage,
-  formatCreationErrorMessage,
-  parseInvestigationSearchTerms
+  formatCreationErrorMessage
 } from "./confirmationView";
 
 interface TaskConfirmationCardProps {
@@ -14,7 +12,7 @@ interface TaskConfirmationCardProps {
   onOpenConfig: () => void;
   onStartExecution: () => void;
   preview?: ConfirmationPreview;
-  onUpdateSearchTerms?: (terms: string[]) => Promise<boolean | void>;
+  onOpenKeywordEditor?: () => void;
   isConfirming?: boolean;
   error?: string;
 }
@@ -24,34 +22,11 @@ export function TaskConfirmationCard({
   onOpenConfig,
   onStartExecution,
   preview,
-  onUpdateSearchTerms,
+  onOpenKeywordEditor,
   isConfirming = false,
   error = ""
 }: TaskConfirmationCardProps) {
-  const [searchTerms, setSearchTerms] = useState("");
-  const [savedSearchTerms, setSavedSearchTerms] = useState("");
-  const [isSavingTerms, setIsSavingTerms] = useState(false);
   const view = buildConfirmationCardView(draft, preview);
-  const parsedSearchTerms = parseInvestigationSearchTerms(searchTerms);
-  const normalizedSearchTerms = parsedSearchTerms.join("、");
-
-  useEffect(() => {
-    const resolvedSearchTerms = (preview?.resolved_search_terms || draft.keywords).join("、");
-    setSearchTerms(resolvedSearchTerms);
-    setSavedSearchTerms(resolvedSearchTerms);
-  }, [draft.keywords, preview]);
-
-  const saveTerms = async () => {
-    if (!onUpdateSearchTerms) return;
-    const terms = parseInvestigationSearchTerms(searchTerms);
-    setIsSavingTerms(true);
-    try {
-      const saved = await onUpdateSearchTerms(terms);
-      if (saved !== false) setSavedSearchTerms(terms.join("、"));
-    } finally {
-      setIsSavingTerms(false);
-    }
-  };
 
   return (
     <section className="task-final-confirm-card" aria-label="最终任务确认卡">
@@ -76,31 +51,14 @@ export function TaskConfirmationCard({
         ) : null}
         <div className="task-final-field">
           <span>{preview?.mode === "creator" ? "创作者主页" : "最终搜索词"}</span>
-          {preview?.mode === "search" && onUpdateSearchTerms ? (
-            <div className="task-final-term-editor">
-              <textarea
-                aria-label="最终搜索词"
-                value={searchTerms}
-                onChange={(event) => setSearchTerms(event.target.value)}
-                rows={2}
-              />
-              <button
-                type="button"
-                onClick={() => void saveTerms()}
-                disabled={isSavingTerms || parsedSearchTerms.length === 0}
-              >
-                <Save size={14} aria-hidden="true" />
-                {isSavingTerms ? "应用中" : "应用到本次任务"}
-              </button>
-              <p className="task-final-term-help">
-                {normalizedSearchTerms === savedSearchTerms
-                  ? "已应用到当前 Draft，可以确认并开始调查；不会保存到黑话库。"
-                  : "搜索词已修改，请先应用到本次任务；不会保存到黑话库。"}
-              </p>
-            </div>
-          ) : (
+          <div className="task-final-term-summary">
             <strong>{view.termsOrCreator}</strong>
-          )}
+            {preview?.mode === "search" && onOpenKeywordEditor ? (
+              <button type="button" onClick={onOpenKeywordEditor}>
+                <Edit3 size={14} aria-hidden="true" /> 编辑主题与变体
+              </button>
+            ) : null}
+          </div>
         </div>
         {preview ? (
           <>
@@ -163,7 +121,7 @@ export function TaskConfirmationCard({
           type="button"
           className="mt-button mt-button-primary"
           onClick={onStartExecution}
-          disabled={!view.canConfirm || isConfirming || isSavingTerms || (preview?.mode === "search" && normalizedSearchTerms !== savedSearchTerms)}
+          disabled={!view.canConfirm || isConfirming}
         >
           <Play size={14} aria-hidden="true" />
           {isConfirming ? "确认中" : "确认并开始调查"}

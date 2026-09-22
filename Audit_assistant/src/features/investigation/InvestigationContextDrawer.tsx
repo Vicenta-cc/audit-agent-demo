@@ -1,9 +1,16 @@
 import { X, ShieldCheck, FileText, Search, Users, Sparkles, ArrowRight } from "lucide-react";
 import type { TaskDraft, ReportSummary, EvidenceItem, KeyUserProfile, AuditRuleSet } from "../../types/investigation";
-import type { InvestigationDraftSuggestion } from "../../types/investigationCreation";
+import type {
+  ConfirmationPreview,
+  DraftLexiconContent,
+  InvestigationDraftSuggestion,
+  PublicInvestigationDraft
+} from "../../types/investigationCreation";
+import { InvestigationKeywordEditor } from "./InvestigationKeywordEditor";
 
 export type DrawerType =
   | "task_config"
+  | "keyword_editor"
   | "report"
   | "evidence"
   | "key_users"
@@ -21,6 +28,11 @@ interface InvestigationContextDrawerProps {
   keyUsers?: KeyUserProfile[];
   activeRuleSet?: AuditRuleSet;
   draftSuggestion?: InvestigationDraftSuggestion;
+  creationDraft?: PublicInvestigationDraft;
+  confirmationPreview?: ConfirmationPreview;
+  onApplyLexicon?: (content: DraftLexiconContent) => Promise<boolean | void>;
+  onSaveLexicon?: (content: DraftLexiconContent) => Promise<{ resourceId: string } | false | void>;
+  canPublishLexicon?: boolean;
   onFollowUpUser?: (user: KeyUserProfile) => void;
 }
 
@@ -54,6 +66,11 @@ export function InvestigationContextDrawer({
   keyUsers = [],
   activeRuleSet,
   draftSuggestion,
+  creationDraft,
+  confirmationPreview,
+  onApplyLexicon,
+  onSaveLexicon,
+  canPublishLexicon = true,
   onFollowUpUser
 }: InvestigationContextDrawerProps) {
   if (!isOpen || !type) return null;
@@ -64,6 +81,7 @@ export function InvestigationContextDrawer({
   const getTitle = () => {
     switch (type) {
       case "task_config": return "任务配置详情";
+      case "keyword_editor": return "编辑主题与变体词";
       case "report": return "完整研判报告目录";
       case "evidence": return "原始与多媒体证据链";
       case "key_users": return "重点作者候选列表";
@@ -83,6 +101,23 @@ export function InvestigationContextDrawer({
       </div>
 
       <div className="inv-drawer-body">
+        {type === "keyword_editor" && draft && creationDraft && confirmationPreview && onApplyLexicon && onSaveLexicon ? (
+          <InvestigationKeywordEditor
+            draft={draft}
+            content={confirmationPreview.recall_plan.lexicon_content}
+            fallbackTerms={confirmationPreview.resolved_search_terms}
+            canEdit={!draft.confirmed}
+            canSave={Boolean(
+              creationDraft.configuration.investigation.mode === "search"
+              && creationDraft.configuration.investigation.recall_plan.strategy === "temporary_terms"
+              && creationDraft.configuration.investigation.recall_plan.lexicon_content
+            )}
+            canPublish={canPublishLexicon}
+            onApply={onApplyLexicon}
+            onSave={onSaveLexicon}
+          />
+        ) : null}
+
         {/* TASK CONFIG VIEW */}
         {(type === "task_config" || (type === "ruleset" && draft?.historicalConfiguration?.length)) && draft ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -319,7 +354,7 @@ export function InvestigationContextDrawer({
               {draftSuggestionPlan.recallLexicons.map((lexicon) => (
                 <div key={lexicon.id} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "8px 10px", borderRadius: "6px", marginBottom: "6px", fontSize: "12px" }}>
                   <div style={{ fontWeight: "700", color: "#0f172a" }}>{lexicon.title}</div>
-                  <div style={{ color: "#475569" }}>{lexicon.riskLabel} · 启用主词 {lexicon.enabledMainTermCount} 条</div>
+                  <div style={{ color: "#475569" }}>{lexicon.riskLabel} · 实际搜索词 {lexicon.enabledMainTermCount} 条</div>
                 </div>
               ))}
             </div>

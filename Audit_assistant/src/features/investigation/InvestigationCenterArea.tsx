@@ -43,7 +43,6 @@ interface InvestigationCenterAreaProps {
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onUpdateDraftKeywords: (keywords: string[]) => void;
-  onUpdateCreationSearchTerms: (keywords: string[]) => Promise<boolean | void>;
   onRunControlAccepted: () => void;
   onUpdateDraftPlatforms: (platforms: PlatformCode[]) => void;
   onGenerateTaskConfig: (proposalMessageId: string) => void;
@@ -51,7 +50,7 @@ interface InvestigationCenterAreaProps {
   isConfirmingCreation?: boolean;
   onPhaseChange: (phase: AgentExecutionPhase) => void;
   onSendMessage: (text: string) => void;
-  onOpenDrawer: (type: "task_config" | "report" | "evidence" | "key_users" | "agent_logs" | "ruleset") => void;
+  onOpenDrawer: (type: "task_config" | "keyword_editor" | "report" | "evidence" | "key_users" | "agent_logs" | "ruleset") => void;
   onOpenReportSupport: (target: ReportSupportTarget) => void;
   onExamplePromptSelect: (prompt: string) => void;
 }
@@ -127,7 +126,6 @@ export function InvestigationCenterArea({
   isSidebarCollapsed,
   onToggleSidebar,
   onUpdateDraftKeywords,
-  onUpdateCreationSearchTerms,
   onRunControlAccepted,
   onUpdateDraftPlatforms,
   onGenerateTaskConfig,
@@ -407,9 +405,9 @@ export function InvestigationCenterArea({
                       }))}
                       isReadOnly={msg.proposalData.platformsConfirmed}
                       onUpdatePlatforms={onUpdateDraftPlatforms}
-                      onUpdateSearchTerms={session.creationBinding
-                        ? onUpdateCreationSearchTerms
-                        : async (terms) => onUpdateDraftKeywords(terms)}
+                      onOpenKeywordEditor={session.creationBinding
+                        ? () => onOpenDrawer("keyword_editor")
+                        : undefined}
                       onGenerateConfig={() => onGenerateTaskConfig(msg.id)}
                       onOpenAnalysisPlan={() => onOpenDrawer("ruleset")}
                       error={session.creationBinding?.error}
@@ -452,7 +450,7 @@ export function InvestigationCenterArea({
                     onOpenConfig={() => onOpenDrawer("task_config")}
                     onStartExecution={onStartAgentExecution}
                     preview={session.creationBinding?.confirmationPreview}
-                    onUpdateSearchTerms={session.creationBinding ? onUpdateCreationSearchTerms : undefined}
+                    onOpenKeywordEditor={session.creationBinding ? () => onOpenDrawer("keyword_editor") : undefined}
                     isConfirming={isConfirmingCreation}
                     error={session.creationBinding?.error}
                   />

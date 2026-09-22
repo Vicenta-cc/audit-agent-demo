@@ -24,6 +24,7 @@ class PublicActivitySpec:
 PUBLIC_TOOL_ACTIVITIES: dict[str, PublicActivitySpec] = {
     # Published report A/B/C and unified-report tools.
     "read_report": PublicActivitySpec("读取报告概览", "已读取报告概览。"),
+    "list_report_posts": PublicActivitySpec("读取报告帖子目录", "已读取报告帖子目录。"),
     "list_case_members": PublicActivitySpec("读取报告案例帖子", "已读取报告案例帖子。"),
     "list_category_posts": PublicActivitySpec("读取报告分类帖子", "已读取报告分类帖子。"),
     "list_finding_posts": PublicActivitySpec("读取报告风险帖子", "已读取报告风险帖子。"),

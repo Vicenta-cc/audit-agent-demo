@@ -1,21 +1,51 @@
 # Audit Agent — 多用户候选版本
 
-当前 `main` 已完整合入多用户候选提交 **`5873ea7570397f4b6f0c07dcec214e8541d7b2e0`**，保留原 main 历史及 R2 启动文件归档。当前前端是 **`Audit_assistant`**，配套 MediaCrawler 为 `efafe3186400b1020955c6acfdc201235b84a2d8`。
+当前 `main` 在多用户候选提交 **`5873ea7570397f4b6f0c07dcec214e8541d7b2e0`** 基础上，已继续合入多用户验收修复、可配置 1–30 帖采集与统一报告问答，以及资源生成模型分流；原 main 历史及 R2 启动文件归档均保留。当前前端是 **`Audit_assistant`**，配套 MediaCrawler 为 `efafe3186400b1020955c6acfdc201235b84a2d8`。
 
 本版包含应用账号登录和数据隔离、管理员用户管理、普通账号首次登录起七天有效、私有采集账号、每日三次任务额度、多用户调度与账号资源锁、任务结束流程，以及报告正文展示评论账号 Top 5、抽屉查看全部账号。保留 R2 的流式输出和嵌入式交互登录。
 
-**版本边界：** 本次 main 对应用户指定的 `5873ea7`。管理员无限日额度、最低 8 位密码属于后续提交 `3fe7ebe`，没有包含在这次合并中。`5873ea7` 的管理员仍受每日三次限制，创建/重置密码最低 12 位。云端已运行后续版本；推送 main 不会重新部署或回退云端。
+**版本边界：** `5873ea7` 是初始多用户候选快照；当前 main 包含其后续调查验收与报告能力提交。管理员无限日额度、最低 8 位密码属于另一条后续提交 `3fe7ebe`，当前 main 仍未包含；管理员仍受每日三次限制，创建/重置密码最低 12 位。推送 main 本身不会自动部署或回退任何运行环境。
 
 ## 获取与配置多用户版本
 
 ```bash
 git clone https://github.com/Vicenta-cc/audit-agent-demo.git audit-agent-multi-user
 cd audit-agent-multi-user
-# 精确复现候选源码；若需要本页及历史启动归档，则保留 main。
+# 精确复现初始多用户候选源码；若需要当前能力及历史启动归档，则保留 main。
 git switch --detach 5873ea7570397f4b6f0c07dcec214e8541d7b2e0
 ```
 
 应用与 worker 必须使用同一套明确配置的数据路径和认证数据库。按 `.env.example` 配置 `APP_AUTH_MODE=required`、`APP_AUTH_DB`、Cookie、CORS、任务容量以及采集环境，不能直接把旧 R2 的免登录配置用于公开多用户环境。
+
+### 模型阶段与密钥隔离
+
+新环境必须同时配置两组用途不同的模型变量，不能把一枚 Key 填到另一组变量中：
+
+| 阶段 | 环境变量 | 用途 |
+| --- | --- | --- |
+| 资源生成 | `RESOURCE_GENERATION_API_KEY`、`RESOURCE_GENERATION_BASE_URL`、`RESOURCE_GENERATION_MODEL` | 仅在用户明确要求新生成审核规则、黑话库或关键词时使用；当前接入 DMX。 |
+| 常规运行 | `DASHSCOPE_API_KEY`、`DASHSCOPE_BASE_URL`、`QWEN_TEXT_MODEL` | 调查对话的其他回合、内容审核、报告生成和报告问答；当前使用 DashScope/Qwen。 |
+| 视频语音 | `FFMPEG_PATH`、`USE_REMOTE_ASR`、`REMOTE_ASR_BASE_URL`、`REMOTE_INFERENCE_API_KEY`、`ASR_ENGINE` | 本地 ffmpeg 抽音频，再交给远端 Dolphin；不是 DMX 或 DashScope 的一部分。 |
+
+资源生成阶段缺少自己的 Key 时会明确失败，不会回退并消耗常规 Key。真实 Key 只放在部署环境的 `.env` 或受控 runtime 的 `secrets.env`，禁止提交到 Git。启动前应运行环境检查；检查只报告两组配置是否齐全，不输出 Key。新任务帖子上限只通过 `INVESTIGATION_MAX_POSTS` 调整，当前建议值为 `30`，以后恢复为 `10` 时只改这个变量。
+
+包含视频审核的环境不能只配置两组模型 Key。Dolphin 的最小本地配置如下；`REMOTE_INFERENCE_API_KEY` 必须和远端服务的 `INFERENCE_API_KEY` 一致：
+
+```env
+FFMPEG_PATH=/absolute/path/to/ffmpeg
+USE_REMOTE_ASR=true
+REMOTE_ASR_BASE_URL=http://127.0.0.1:19001
+REMOTE_INFERENCE_API_KEY=<runtime secret only>
+ASR_ENGINE=dolphin
+```
+
+`19001` 可以是 SSH 或 Coder 转发到远端 Dolphin 的本地端口。启动含视频审核的 API 和 worker 前，必须在同一个环境中执行：
+
+```bash
+CHECK_REMOTE_ASR=true ./scripts/start-backend.sh
+```
+
+检查成功会访问 `REMOTE_ASR_BASE_URL/api/inference/health`；失败时不要继续做真实任务验收。API 与 worker 必须读取同一份 ASR 和 ffmpeg 配置，不能假设新进程会继承另一套旧服务的环境变量。完整的直接连接、SSH 隧道和 Coder 转发方式见[后端启动与远程 ASR 接入手册](docs/backend_startup_and_remote_asr.md)。
 
 在配置好的独立环境中，通过以下命令初始化首个管理员（交互输入密码，仓库没有预设正式密码）：
 

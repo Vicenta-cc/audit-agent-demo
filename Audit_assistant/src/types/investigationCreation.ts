@@ -93,6 +93,25 @@ export interface InvestigationTaskParameters {
   analysis_batch_size: number;
 }
 
+export interface DraftLexiconEntry {
+  id: string;
+  term: string;
+  kind: "main" | "variant" | "tag";
+  parent_id: string;
+  enabled: boolean;
+  platform: string;
+  match_type: string;
+  risk_level: string;
+  note: string;
+}
+
+export interface DraftLexiconContent {
+  title: string;
+  risk_label: string;
+  description?: string;
+  entries: DraftLexiconEntry[];
+}
+
 export interface InvestigationDraftConfiguration {
   task_parameters?: InvestigationTaskParameters;
   schema_version: "investigation-draft-config-v4";
@@ -105,6 +124,7 @@ export interface InvestigationDraftConfiguration {
               strategy: "temporary_terms";
               terms: string[];
               source_lexicon_ids: string[];
+              lexicon_content?: DraftLexiconContent | null;
             }
           | {
               strategy: "existing_lexicon";
@@ -136,6 +156,7 @@ export interface PublicInvestigationDraft {
 }
 
 export interface ConfirmationPreview {
+  max_post_limit?: number;
   task_settings_revision?: number;
   requested_parameters?: InvestigationTaskParameters;
   effective_parameters?: InvestigationTaskParameters;
@@ -156,6 +177,7 @@ export interface ConfirmationPreview {
     enabled_main_terms: string[];
     temporary_terms: string[];
     source_lexicon_ids: string[];
+    lexicon_content?: DraftLexiconContent | null;
   };
   ruleset_revision: RuleSetRevisionSummary | null;
   temporary_ruleset?: TemporaryRuleSetJudgement | null;

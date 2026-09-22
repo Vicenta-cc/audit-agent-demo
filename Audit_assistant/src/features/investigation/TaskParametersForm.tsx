@@ -4,13 +4,20 @@ import type { CrawlerAccount } from "../../types/crawlerAccounts";
 import type { ConfirmationPreview, InvestigationTaskParameters } from "../../types/investigationCreation";
 
 export function TaskParametersForm({ preview, onSave, onDirty, disabled = false, globalSettings = false }: {
-  preview: Pick<ConfirmationPreview, "requested_parameters" | "effective_parameters" | "platform" | "mode" | "resolved_search_terms" | "estimated_max_contents">;
+  preview: Pick<ConfirmationPreview, "requested_parameters" | "effective_parameters" | "platform" | "mode" | "resolved_search_terms" | "estimated_max_contents" | "max_post_limit">;
   onSave: (parameters: InvestigationTaskParameters) => Promise<void>;
   onDirty: (dirty: boolean) => void;
   disabled?: boolean;
   globalSettings?: boolean;
 }) {
-  const initial = preview.requested_parameters || preview.effective_parameters;
+  const postLimit = preview.max_post_limit || 5;
+  const unboundedInitial = preview.requested_parameters || preview.effective_parameters;
+  const initial = unboundedInitial ? {
+    ...unboundedInitial,
+    max_notes: Math.min(unboundedInitial.max_notes, postLimit),
+    max_total_notes: Math.min(unboundedInitial.max_total_notes, postLimit),
+    analyze_limit: Math.min(unboundedInitial.analyze_limit, postLimit),
+  } : undefined;
   const [values, setValues] = useState(initial);
   const [accounts, setAccounts] = useState<CrawlerAccount[]>([]);
   const [accountError, setAccountError] = useState("");
@@ -88,8 +95,8 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
       ) : null}
       {accountError ? <p role="alert">{accountError}</p> : null}
       <div className="investigation-parameter-grid">
-        {numeric("max_notes", preview.mode === "search" ? "每个关键词采集上限" : "本任务采集上限", 1, 5, "条", "单任务仍受总采集上限约束")}
-        {numeric("max_total_notes", "单任务总采集上限", 1, 5, "条", "达到后停止后续关键词")}
+        {numeric("max_notes", preview.mode === "search" ? "每个关键词采集上限" : "本任务采集上限", 1, postLimit, "条", "单任务仍受总采集上限约束")}
+        {numeric("max_total_notes", "单任务总采集上限", 1, postLimit, "条", "达到后停止后续关键词")}
         {numeric("start_page", "起始页", 1, 10000, "页", "默认第 1 页；恢复使用检查点")}
       </div>
       <p>{globalSettings ? `关键词任务每词最多 ${values.max_notes} 条，单任务最多 ${values.max_total_notes} 条。` : `${preview.resolved_search_terms.length} 个关键词，预计最多 ${plannedCount} 条；实际采集内容全部自动审核。`}</p>

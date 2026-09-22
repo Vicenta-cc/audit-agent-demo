@@ -77,6 +77,7 @@ def test_lexicon_editor_preserves_disabled_entries_description_variants_and_tomb
     body['entries'][0]['term'] = '新主词'
     changed = put(service, 'lexicon', body, saved['version'], 'update')
     assert service.lexicons.enabled_main_terms('editor-resource') == ['新主词']
+    assert service.lexicons.enabled_search_terms('editor-resource') == ['维族文化']
     assert service.lexicons.get_category('editor-resource')['description'] == '词库说明已保存'
     assert service.read('lexicon', 'editor-resource', principal=P)['content'] == changed['content']
     with pytest.raises(ResourceError):

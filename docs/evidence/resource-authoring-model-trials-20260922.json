@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "recorded_date": "2026-09-22",
+  "baseline": {
+    "tag": "checkpoint/multi-user-resource-authoring-20260922",
+    "commit": "a48ddbb517243b9432fb31424c0da8f4e02972b3"
+  },
+  "decision": {
+    "active_path": "hermes_qwen",
+    "retired_path": "dedicated_company_gpt_resource_authoring",
+    "reason": "The accepted Qwen path produced adequate live lexicon quality; the second generation architecture was unnecessary.",
+    "recovery_ref": "checkpoint/multi-user-resource-authoring-20260922"
+  },
+  "company_gpt_experiment": {
+    "status": "retired",
+    "evidence_level": "implementation_and_automated_tests",
+    "covered_behaviors": [
+      "strict_json_schema_output",
+      "nested_output_parsing",
+      "provider_error_classification",
+      "timeout_and_output_token_limits",
+      "validation_before_tool_write",
+      "no_partial_resource_on_failure",
+      "terminal_turn_replay_idempotency",
+      "enabled_variant_trimming",
+      "streamed_progress_feedback"
+    ]
+  },
+  "qwen_live_trials": [
+    {
+      "case": "sexual_service_solicitation_initial_reproduction",
+      "model": "qwen3.7-plus",
+      "endpoint": "https://www.dmxapi.cn/v1",
+      "status": "completed",
+      "duration_seconds": 43.394,
+      "finish_reason": "stop"
+    },
+    {
+      "case": "uyghur_han_marriage_initial_reproduction",
+      "model": "qwen3.7-plus",
+      "endpoint": "https://www.dmxapi.cn/v1",
+      "status": "completed",
+      "duration_seconds": 51.255,
+      "finish_reason": "stop"
+    },
+    {
+      "case": "sexual_service_solicitation_final_5_to_7_prompt",
+      "model": "qwen3.7-plus",
+      "endpoint": "https://www.dmxapi.cn/v1",
+      "status": "completed",
+      "duration_seconds": 39.414,
+      "finish_reason": "stop",
+      "enabled_variant_count": 7,
+      "disabled_variant_count": 0,
+      "search_terms": [
+        "sp服务",
+        "约拍私聊",
+        "同城可约",
+        "全套过夜",
+        "陪玩陪聊",
+        "资源主页看",
+        "加V详谈"
+      ],
+      "saved": false,
+      "draft_count": 0,
+      "run_count": 0
+    }
+  ],
+  "provider_failures_observed_in_qwen_live_trials": [],
+  "lifecycle_verification": {
+    "draft_revision_transition": "1_to_2",
+    "stale_revision_rejected": true,
+    "latest_revision_saved": true,
+    "save_idempotent": true,
+    "persisted_search_terms_match_drawer": true,
+    "persisted_content_matches_drawer": true
+  },
+  "test_harness_incident": {
+    "error": "TypeError: 'dict' object is not an iterator",
+    "cause": "The acceptance script called next() on the dictionary returned by m3_stack.__wrapped__(...).",
+    "product_defect": false
+  },
+  "secrets_recorded": false
+}

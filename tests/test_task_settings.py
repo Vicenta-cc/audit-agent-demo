@@ -6,14 +6,13 @@ from backend.audit_agent.task_settings import TaskSettingsStore, TaskSettingsCon
 
 
 def test_unsaved_settings_match_service_execution_defaults(tmp_path, monkeypatch):
-    monkeypatch.setattr(settings, "m3_posts_per_keyword", 4)
+    monkeypatch.setattr(settings, "investigation_max_posts", 30)
     monkeypatch.setattr(settings, "m3_comments_per_post", 123)
-    monkeypatch.setattr(settings, "m3_analyze_limit", 4)
 
     current = TaskSettingsStore(tmp_path / "audit.sqlite3").get()
 
     assert current["revision"] == 0
-    assert current["parameters"]["max_notes"] == 4
+    assert current["parameters"]["max_notes"] == 1
     assert current["parameters"]["max_total_notes"] == 5
     assert current["parameters"]["max_comments"] == 123
     assert current["parameters"]["search_sort"] == "general"
@@ -39,9 +38,21 @@ def test_settings_reject_unknown_search_sort(tmp_path, value):
         store.save({'search_sort': value}, 0)
 
 
-@pytest.mark.parametrize('value', [0, 6, 1.5, '2', True])
-def test_settings_keep_small_collection_boundary(tmp_path, value):
+@pytest.mark.parametrize('value', [0, 31, 1.5, '2', True])
+def test_settings_keep_supported_collection_boundary(tmp_path, value):
     store = TaskSettingsStore(tmp_path / 'audit.sqlite3')
     with pytest.raises(ValidationError):
         store.save({'max_notes': value}, 0)
     assert store.get()['revision'] == 0
+
+
+def test_one_live_cap_clamps_both_saved_post_limits(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "investigation_max_posts", 10)
+    saved = TaskSettingsStore(tmp_path / "audit.sqlite3").save(
+        {"max_notes": 30, "max_total_notes": 30, "analyze_limit": 30},
+        0,
+    )
+
+    assert saved["parameters"]["max_notes"] == 10
+    assert saved["parameters"]["max_total_notes"] == 10
+    assert saved["parameters"]["analyze_limit"] == 10

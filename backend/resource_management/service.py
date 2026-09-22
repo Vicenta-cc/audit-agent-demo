@@ -78,7 +78,7 @@ class ResourceManagementService:
             if body.get('deleted'):
                 raise ResourceError('词库不存在。', code='RESOURCE_NOT_FOUND')
             revision = conn.execute('SELECT version,content_hash FROM lexicon_content_versions WHERE category_id=? ORDER BY version DESC LIMIT 1', (resource_id,)).fetchone()
-            terms = self.lexicons.enabled_main_terms(resource_id, connection=conn)
+            terms = self.lexicons.enabled_search_terms(resource_id, connection=conn)
             runtime_hash = self.lexicons.runtime_content_hash(resource_id, connection=conn)
             return {'id': resource_id, 'kind': kind, 'content': body, 'version': revision['version'],
                     'content_hash': revision['content_hash'], 'editable': True, 'search_terms': terms,
@@ -220,7 +220,12 @@ class ResourceManagementService:
                 source['published_revision_id'] = last['revision_id']
             result['source'] = source
         if result['kind'] == 'lexicon':
-            result['recall_plan'] = {'strategy': 'temporary_terms', 'terms': result['search_terms'], 'source_lexicon_ids': [source['id']] if source else []}
+            result['recall_plan'] = {
+                'strategy': 'temporary_terms',
+                'terms': result['search_terms'],
+                'source_lexicon_ids': [source['id']] if source else [],
+                'lexicon_content': result['content'],
+            }
         result['saves'] = saved
         result['saved'] = any(r['edit_version'] == result['version'] and r['edit_content_hash'] == result['content_hash'] for r in saved)
         return result

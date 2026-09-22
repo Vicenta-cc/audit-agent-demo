@@ -1,4 +1,4 @@
-"""Deterministic report template for every newly created 1..5 post task."""
+"""Deterministic report template for supported frozen investigation tasks."""
 
 from __future__ import annotations
 
@@ -116,9 +116,15 @@ class UnifiedAuditReportGraph(PassReportGraph):
 
     @staticmethod
     def _validate_snapshot(snapshot):
-        if not 1 <= len(snapshot.posts) <= 5:
+        from backend.audit_agent.limits import MAX_SUPPORTED_INVESTIGATION_POSTS
+
+        if not 1 <= len(snapshot.posts) <= MAX_SUPPORTED_INVESTIGATION_POSTS:
             raise ReportValidationError(
-                "validate_unified_snapshot", ["1 to 5 audited posts are required"]
+                "validate_unified_snapshot",
+                [
+                    "1 to "
+                    f"{MAX_SUPPORTED_INVESTIGATION_POSTS} audited posts are required"
+                ],
             )
         if len(snapshot.findings) != len(snapshot.posts):
             raise ReportValidationError(

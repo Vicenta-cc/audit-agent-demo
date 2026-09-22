@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Bot, Check, Edit3, ExternalLink, Save } from "lucide-react";
+import { AlertTriangle, Bot, Check, Edit3, ExternalLink } from "lucide-react";
 import type { PlatformCode, TaskDraft } from "../../types/investigation";
 import type { RuleSetProposalPresentation } from "../../types/investigationCreation";
 import { GeneratedRulesMessage } from "./GeneratedRulesMessage";
 import type { ConfirmationPreview } from "../../types/investigationCreation";
 import {
   formatConfirmationBlockerMessage,
-  formatCreationErrorMessage,
-  parseInvestigationSearchTerms
+  formatCreationErrorMessage
 } from "./confirmationView";
 import { StreamingAssistantText } from "./StreamingAssistantText";
 import {
@@ -41,7 +40,7 @@ interface TaskSuggestionCardProps {
   platformOptions?: Array<{ code: PlatformCode; label: string; available?: boolean }>;
   isReadOnly: boolean;
   onUpdatePlatforms: (platforms: PlatformCode[]) => void;
-  onUpdateSearchTerms?: (terms: string[]) => Promise<boolean | void> | boolean | void;
+  onOpenKeywordEditor?: () => void;
   onGenerateConfig: () => void;
   onOpenAnalysisPlan: () => void;
   error?: string;
@@ -59,7 +58,7 @@ export function TaskSuggestionCard({
   platformOptions = defaultPlatformOptions,
   isReadOnly,
   onUpdatePlatforms,
-  onUpdateSearchTerms,
+  onOpenKeywordEditor,
   onGenerateConfig,
   onOpenAnalysisPlan,
   error = ""
@@ -72,10 +71,6 @@ export function TaskSuggestionCard({
   const hasAnalysisPlan = preview
     ? Boolean(preview.ruleset_revision || preview.temporary_ruleset)
     : Boolean(draft.analysisPlanName || draft.matchedRuleSet);
-  const [isEditingKeywords, setIsEditingKeywords] = useState(false);
-  const [keywordDraft, setKeywordDraft] = useState(keywordsText);
-  const [isSavingKeywords, setIsSavingKeywords] = useState(false);
-  const parsedKeywordDraft = parseInvestigationSearchTerms(keywordDraft);
   const displayPlatformOptions = defaultPlatformOptions.map((fallback) => {
     const authoritative = platformOptions.find((item) => item.code === fallback.code);
     return {
@@ -86,10 +81,6 @@ export function TaskSuggestionCard({
       available: fallback.code === "dy" && authoritative?.available === true
     };
   });
-
-  useEffect(() => {
-    setKeywordDraft(keywordsText);
-  }, [keywordsText]);
 
   useEffect(() => {
     const element = keywordsRef.current;
@@ -111,17 +102,6 @@ export function TaskSuggestionCard({
     if (isReadOnly) return;
     if (draft.platforms[0] === platform) return;
     onUpdatePlatforms(selectSingleSuggestionPlatform(platform));
-  };
-
-  const handleSaveKeywords = async () => {
-    if (!onUpdateSearchTerms) return;
-    setIsSavingKeywords(true);
-    try {
-      const saved = await onUpdateSearchTerms(parseInvestigationSearchTerms(keywordDraft));
-      if (saved !== false) setIsEditingKeywords(false);
-    } finally {
-      setIsSavingKeywords(false);
-    }
   };
 
   return (
@@ -177,69 +157,40 @@ export function TaskSuggestionCard({
           <section className="task-suggestion-section">
             <div className="task-suggestion-label-row">
               <span className="task-suggestion-label">
-                {preview?.mode === "creator" ? "博主主页 URL" : "本次启用主词"}
+                {preview?.mode === "creator" ? "博主主页 URL" : "本次实际搜索词"}
               </span>
               <span className="task-suggestion-note">
-                {preview?.mode === "creator" ? "主页采集" : "仅主词进入采集"}
+                {preview?.mode === "creator" ? "主页采集" : "优先使用黑话变体召回"}
               </span>
             </div>
             <div className="task-suggestion-field-body">
-              {isEditingKeywords && preview?.mode !== "creator" ? (
-                <div className="task-suggestion-term-editor">
-                  <textarea
-                    aria-label="编辑召回词"
-                    rows={3}
-                    value={keywordDraft}
-                    onChange={(event) => setKeywordDraft(event.target.value)}
-                    placeholder="使用顿号、逗号或换行分隔召回词"
-                  />
-                  <div>
-                    <button type="button" className="task-suggestion-text-action" onClick={() => setIsEditingKeywords(false)}>
-                      取消
-                    </button>
-                    <button
-                      type="button"
-                      className="task-suggestion-save-terms"
-                      onClick={() => void handleSaveKeywords()}
-                      disabled={isSavingKeywords || parsedKeywordDraft.length === 0}
-                    >
-                      <Save size={13} aria-hidden="true" />
-                      {isSavingKeywords ? "应用中" : "应用到本次任务"}
-                    </button>
-                  </div>
-                  <p className="task-suggestion-editor-note">仅修改当前 Draft，不保存到黑话库。</p>
-                </div>
-              ) : (
-                <>
-                  <div className="task-suggestion-keyword-line">
-                    <p
-                      ref={keywordsRef}
-                      className={`task-suggestion-keywords${isKeywordsExpanded ? " is-expanded" : ""}`}
-                    >
-                      {preview?.mode === "creator"
-                        ? preview.creator_url
-                        : keywordsText || "暂未生成可用召回词"}
-                    </p>
-                    {preview?.mode !== "creator" && onUpdateSearchTerms && !isReadOnly && !draft.confirmed ? (
-                      <button type="button" className="task-suggestion-text-action task-suggestion-edit-terms" onClick={() => setIsEditingKeywords(true)}>
-                        <Edit3 size={13} aria-hidden="true" /> 编辑主词
-                      </button>
-                    ) : null}
-                  </div>
-                  {preview?.mode !== "creator" && draft.confirmed ? (
-                    <p className="task-suggestion-locked-note">任务已启动，搜索词已冻结；如需修改，请新建调查。</p>
-                  ) : null}
-                  {isKeywordsOverflowing ? (
-                    <button
-                      type="button"
-                      className="task-suggestion-text-action"
-                      onClick={() => setIsKeywordsExpanded((current) => !current)}
-                    >
-                      {isKeywordsExpanded ? "收起" : "展开全部"}
-                    </button>
-                  ) : null}
-                </>
-              )}
+              <div className="task-suggestion-keyword-line">
+                <p
+                  ref={keywordsRef}
+                  className={`task-suggestion-keywords${isKeywordsExpanded ? " is-expanded" : ""}`}
+                >
+                  {preview?.mode === "creator"
+                    ? preview.creator_url
+                    : keywordsText || "暂未生成可用召回词"}
+                </p>
+                {preview?.mode !== "creator" && onOpenKeywordEditor && !draft.confirmed ? (
+                  <button type="button" className="task-suggestion-text-action task-suggestion-edit-terms" onClick={onOpenKeywordEditor}>
+                    <Edit3 size={13} aria-hidden="true" /> 编辑主题与变体
+                  </button>
+                ) : null}
+              </div>
+              {preview?.mode !== "creator" && draft.confirmed ? (
+                <p className="task-suggestion-locked-note">任务已启动，搜索词已冻结；如需修改，请新建调查。</p>
+              ) : null}
+              {isKeywordsOverflowing ? (
+                <button
+                  type="button"
+                  className="task-suggestion-text-action"
+                  onClick={() => setIsKeywordsExpanded((current) => !current)}
+                >
+                  {isKeywordsExpanded ? "收起" : "展开全部"}
+                </button>
+              ) : null}
             </div>
           </section>
 

@@ -43,7 +43,7 @@ def save(service, edit, key='save-1', mode='new'):
 
 def test_lexicon_edit_save_roundtrip_preserves_variants_and_search(service):
     draft = service.create_lexicon(lexicon(), **CTX)
-    assert draft['search_terms'] == ['维吾尔族文化']
+    assert draft['search_terms'] == ['维族文化']
     assert not draft['saved']
     stored = save(service, draft)
     actual = service.read('lexicon', stored['resource_id'], principal=P)
@@ -54,6 +54,27 @@ def test_lexicon_edit_save_roundtrip_preserves_variants_and_search(service):
     assert service.get_save('save-1', **CTX) == stored
 
 
+def test_search_projection_prefers_variants_and_falls_back_per_topic(service):
+    body = {
+        'title': '隐晦服务召回',
+        'entries': [
+            {'id': 'main-service', 'term': '色情服务', 'kind': 'main'},
+            {'id': 'variant-one', 'term': '非绿地陪', 'kind': 'variant', 'parent_id': 'main-service'},
+            {'id': 'variant-two', 'term': '门槛验牌', 'kind': 'variant', 'parent_id': 'main-service'},
+            {'id': 'variant-off', 'term': '停用变体', 'kind': 'variant', 'parent_id': 'main-service', 'enabled': False},
+            {'id': 'main-legacy', 'term': '旧词无变体', 'kind': 'main'},
+            {'id': 'main-disabled', 'term': '停用主题', 'kind': 'main', 'enabled': False},
+            {'id': 'disabled-child', 'term': '不应召回', 'kind': 'variant', 'parent_id': 'main-disabled'},
+        ],
+    }
+    edit = service.create_lexicon(body, **CTX)
+    assert edit['search_terms'] == ['非绿地陪', '门槛验牌', '旧词无变体']
+    saved = save(service, edit, 'variant-search')
+    assert service.lexicons.enabled_search_terms(saved['resource_id']) == edit['search_terms']
+    assert service.lexicons.enabled_search_keywords(saved['resource_id']) == edit['search_terms']
+    assert service.read('lexicon', saved['resource_id'], principal=P)['search_terms'] == edit['search_terms']
+
+
 def test_rename_main_preserves_variant_parent_and_stats(service):
     formal = save(service, service.create_lexicon(lexicon(), **CTX))
     with service.lexicons._connect() as conn:
@@ -62,7 +83,7 @@ def test_rename_main_preserves_variant_parent_and_stats(service):
     draft = service.open('lexicon', formal['resource_id'], **CTX)
     changed = service.update(draft['edit_id'], 1, [{'operation':'upsert_entry','target_id':'main-1','values':{'term':'维吾尔族语言文化'}}], **CTX)
     result = save(service, changed, 'rename', 'update')
-    assert result['search_terms'] == ['维吾尔族语言文化']
+    assert result['search_terms'] == ['维族文化']
     read = service.read('lexicon', formal['resource_id'], principal=P)
     assert read['content']['entries'][1]['parent_id'] == 'main-1'
     with service.lexicons._connect() as conn:
@@ -208,14 +229,15 @@ def test_formal_read_distinguishes_edit_version_from_search_binding(service):
     saved=save(service,edit)
     before=service.read('lexicon',saved['resource_id'],principal=P)
     assert before['content_hash'] != before['runtime_content_hash']
-    assert before['recall_plan']['enabled_main_terms'] == ['维吾尔族文化']
+    assert before['recall_plan']['enabled_main_terms'] == ['维族文化']
     opened=service.open('lexicon',saved['resource_id'],**CTX)
     changed=service.update(opened['edit_id'],1,[{'operation':'upsert_entry','target_id':'variant-1','values':{'term':'维吾尔文化'}}],**CTX)
     save(service,changed,key='variant-only',mode='update')
     after=service.read('lexicon',saved['resource_id'],principal=P)
     assert after['version'] == before['version']+1
     assert after['content_hash'] != before['content_hash']
-    assert after['recall_plan'] == before['recall_plan']
+    assert after['runtime_content_hash'] != before['runtime_content_hash']
+    assert after['recall_plan']['enabled_main_terms'] == ['维吾尔文化']
 
 
 def test_formal_read_plan_can_bind_a_presented_temporary_rule(creation_stack):
@@ -281,8 +303,9 @@ def test_four_resource_combinations_freeze_precise_configuration(creation_stack,
     execution=adapter(stack)
     job_id=execution.ensure_job(run) # Creates an isolated Job; never invokes crawler.run.
     job_before=execution.job_store.get(job_id)
-    assert '维吾尔族文化' in json.dumps(frozen,ensure_ascii=False)
-    assert '维族文化' not in json.dumps(frozen,ensure_ascii=False)
+    assert '维族文化' in json.dumps(frozen,ensure_ascii=False)
+    assert '维吾尔族文化' not in json.dumps(frozen,ensure_ascii=False)
+    assert job_before['keyword'] == '维族文化'
     if saved_lex:
         edit=manager.open('lexicon',saved_lex['resource_id'],**ctx)
         edit=manager.update(edit['edit_id'],1,[{'operation':'upsert_entry','target_id':'main-1','values':{'term':'维汉日常交往'}}],**ctx)
@@ -311,7 +334,7 @@ def test_api_save_read_and_cross_session_access(creation_stack):
     path=root+'/resource-edits/'+data['edit_id']
     saved=client.post(path+'/save',json={'expected_version':1,'mode':'new','operation_id':'api-save'})
     assert saved.status_code==200,saved.text
-    assert client.get('/api/resource-library/lexicon/'+saved.json()['resource_id']).json()['search_terms']==['维吾尔族文化']
+    assert client.get('/api/resource-library/lexicon/'+saved.json()['resource_id']).json()['search_terms']==['维族文化']
     stack['principals'].current=Principal('principal-b')
     assert client.get(path).status_code in (403,404)
     assert client.post(path+'/save',json={'expected_version':1,'mode':'new','operation_id':'api-save'}).status_code in (403,404)
@@ -333,7 +356,7 @@ def test_keyword_swap_preserves_identity_and_history_is_immutable(service):
         {'operation':'upsert_entry','target_id':'main-2','values':{'term':'维吾尔族文化'}},
     ],**CTX)
     result=save(service,changed,'swap','update')
-    assert result['search_terms']==['维汉婚恋']
+    assert result['search_terms']==['维族文化']
     with service.lexicons._connect() as conn:
         assert conn.execute('SELECT keyword FROM lexicon_keywords WHERE entry_id=?',('main-1',)).fetchone()[0]=='维汉婚恋'
         with pytest.raises(sqlite3.IntegrityError,match='immutable'):
@@ -384,7 +407,7 @@ def test_legacy_full_editor_preserves_variant_identity_and_rejects_stale_save(se
 def test_formal_projection_matches_explicit_entry_kinds(service):
     body=lexicon();body['entries'][0]['match_type']='tag'
     edit=service.create_lexicon(body,**CTX);receipt=save(service,edit)
-    assert service.lexicons.enabled_main_terms(receipt['resource_id'])==edit['search_terms']
+    assert service.lexicons.enabled_search_terms(receipt['resource_id'])==edit['search_terms']
 
 
 def test_copy_then_edit_targets_copy_and_preserves_original(service):

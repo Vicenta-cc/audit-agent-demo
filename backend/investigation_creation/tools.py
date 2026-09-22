@@ -203,7 +203,7 @@ M3_TOOL_DESCRIPTIONS = {
     "query_investigation_options": (
         "Query currently available real platforms, published 审核规则已发布版本, independent "
         "recall 黑话库, and blockers. Use it to discover, explain, "
-        "compare, recommend, or configure resources. For search, request enabled main terms "
+        "compare, recommend, or configure resources. For search, request actual enabled search terms "
         "only for explicit candidate 黑话库 IDs. Request 审核规则 categories, 审核规则, hit "
         "conditions, exemptions, adjudication notes, and application stages only for exact "
         "published revision IDs. This query never creates a Draft, Run, or Job."
@@ -212,12 +212,13 @@ M3_TOOL_DESCRIPTIONS = {
         "Create an editable Investigation Draft when the user wants the currently defined "
         "configuration captured as an investigation. Use current real resource candidates. "
         "Select a published 审核规则已发布版本 directly as judgement. "
-        "Search Drafts prefer a suitable real existing_lexicon ID, hash, and enabled_main_terms "
-        "snapshot. If none is sufficiently suitable and the conversation authorizes generating "
-        "missing Recall, supply focused canonical strings directly in temporary_terms.terms; "
+        "Search Drafts prefer a suitable real existing_lexicon ID, hash, and the server-projected "
+        "variant-first search snapshot (stored in the legacy enabled_main_terms field). If none is "
+        "sufficiently suitable and the conversation authorizes generating missing Recall, supply "
+        "focused, covert, platform-plausible search strings directly in temporary_terms.terms; "
         "otherwise explain the gap and propose generation without creating a Draft or listing "
-        "any candidate/example search terms in the reply. Never generate "
-        "variants or query_type. source_lexicon_ids are write-time checked provenance, not runtime "
+        "any candidate/example search terms in the reply. Prefer hidden-language variants over "
+        "explicit risk labels. source_lexicon_ids are write-time checked provenance, not runtime "
         "dependencies. Temporary terms are not saved as a formal 黑话库. "
         "Creator Drafts must contain only a validated creator homepage URL and no "
         "recall plan. This never confirms or starts a Run. A creation Session that already has "
@@ -228,7 +229,7 @@ M3_TOOL_DESCRIPTIONS = {
         "Update an editable Investigation Draft at its expected revision. User changes "
         "to platform, 审核规则 judgement, 黑话库, or terms are allowed before confirmation; edited "
         "黑话库 terms must be represented as temporary_terms. Authorized generation of missing "
-        "Recall supplies canonical terms directly, without variants, query_type, or formal save. "
+        "Recall supplies actual search terms directly as a flat list, without formal save. "
         "Changed source_lexicon_ids must reference real 黑话库; unchanged provenance needs no "
         "resource refresh. Each temporary term must be comma-free. This command never confirms "
         "or starts an investigation. A PUBLISHED Run cannot be replaced or supplemented in the "
@@ -311,11 +312,13 @@ M3_PARAMETER_GUIDANCE = {
     ),
     'create_investigation_draft': (
         'configuration 可包含 task_parameters。用户明确指定帖子数、每帖评论数、并发、是否采集媒体或是否自动审核时，必须把这些值写入 '
-        'configuration.task_parameters；未明确指定时可省略并使用统一设置。不要传 crawler_account_id。'
+        'configuration.task_parameters；未明确指定时可省略并使用统一设置。生成临时召回时，temporary_terms 必须同时包含完整 '
+        'lexicon_content，主词表示主题、启用变体表示实际搜索词，terms 必须与变体投影完全一致。不要传 crawler_account_id。'
     ),
     'update_investigation_draft': (
         '参数须有 draft_id、expected_revision，另传需要修改的 title、objective 或完整 configuration。先读当前草案；修改搜索词时保留 '
-        'platform、judgement 和未要求改变的 task_parameters，修改 investigation.recall_plan.terms。用户明确指定帖子数、评论数、并发、媒体采集等'
+        'platform、judgement 和未要求改变的 task_parameters。结构化关键词编辑必须同时提交完整 lexicon_content 和与其启用变体投影完全一致的 '
+        'investigation.recall_plan.terms，不得只改扁平 terms 而丢失主题归属。用户明确指定帖子数、评论数、并发、媒体采集等'
         '执行参数时，在 configuration.task_parameters 中写入并在后续完整配置更新中保留；不要传 crawler_account_id、patch 或 expected_version。'
     ),
     'confirm_and_queue_investigation': (

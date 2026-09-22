@@ -28,6 +28,7 @@ import {
   getInvestigationWorkspaceState,
   listInvestigationWorkspaces,
   resumeInvestigationCreationTurn,
+  saveInvestigationDraftLexicon,
   sendInvestigationCreationTurn,
   updateInvestigationDraft,
   sendInvestigationWorkspaceReportTurn,
@@ -35,6 +36,7 @@ import {
   waitForInvestigationWorkspaceReportTurn,
   waitForInvestigationCreationTurn
 } from "../../services/investigationCreation";
+import type { DraftLexiconContent, PublicInvestigationDraft } from "../../types/investigationCreation";
 import { ApiError } from "../../services/apiClient";
 import { deleteInvestigationWorkspace } from "../../services/investigations";
 import { fetchPublishedReportVersion, fetchPublishedReportVersions } from "../../services/reports";
@@ -54,6 +56,7 @@ import {
 } from "./historicalReportPending";
 import { mapInvestigationRunState, shouldPollInvestigationRun } from "./investigationRunState";
 import { buildConfirmationIdempotencyKey, isTaskAdmissionRejection } from "./confirmationView";
+import { projectLexiconSearchTerms } from "./lexiconDraft";
 import {
   activityTimelineMessage,
   activityTimelineMessages,
@@ -1274,11 +1277,26 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     }));
   };
 
-  const handleUpdateCreationSearchTerms = async (keywords: string[]) => {
+  const persistCreationLexicon = async (
+    content: DraftLexiconContent
+  ): Promise<PublicInvestigationDraft> => {
     const session = activeSession;
     const binding = session.creationBinding;
     const draft = binding?.draft;
-    if (!binding || !draft || draft.configuration.investigation.mode !== "search") return false;
+    if (!binding || !draft || draft.configuration.investigation.mode !== "search") {
+      throw new Error("当前没有可编辑的调查 Draft。");
+    }
+    const keywords = projectLexiconSearchTerms(content);
+    if (!keywords.length) throw new Error("至少需要一个启用的变体搜索词。");
+    const currentPlan = draft.configuration.investigation.recall_plan;
+    if (
+      currentPlan.strategy === "temporary_terms"
+      && currentPlan.lexicon_content
+      && JSON.stringify(currentPlan.lexicon_content) === JSON.stringify(content)
+      && JSON.stringify(currentPlan.terms) === JSON.stringify(keywords)
+    ) {
+      return draft;
+    }
     const configuration = {
       ...draft.configuration,
       investigation: {
@@ -1287,9 +1305,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           strategy: "temporary_terms" as const,
           terms: keywords,
           source_lexicon_ids:
-            draft.configuration.investigation.recall_plan.strategy === "temporary_terms"
-              ? draft.configuration.investigation.recall_plan.source_lexicon_ids
-              : [draft.configuration.investigation.recall_plan.lexicon_id]
+            currentPlan.strategy === "temporary_terms"
+              ? currentPlan.source_lexicon_ids
+              : [currentPlan.lexicon_id],
+          lexicon_content: content
         }
       }
     };
@@ -1327,7 +1346,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             }
           : item
       )));
-      return true;
+      return updated;
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         const [currentDraft, preview] = await Promise.all([
@@ -1363,7 +1382,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
               }
             : item
         )));
-        return false;
+        throw new Error("配置已被更新，已重新载入最新 Draft；请核对后再次应用。");
       }
       const message = error instanceof Error ? error.message : "搜索词保存失败";
       setSessions((current) => current.map((item) => (
@@ -1374,8 +1393,26 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             }
           : item
       )));
-      return false;
+      throw error instanceof Error ? error : new Error(message);
     }
+  };
+
+  const handleApplyCreationLexicon = async (content: DraftLexiconContent) => {
+    await persistCreationLexicon(content);
+    return true;
+  };
+
+  const handleSaveCreationLexicon = async (content: DraftLexiconContent) => {
+    const currentDraft = activeSession.creationBinding?.draft;
+    if (!currentDraft) throw new Error("当前没有可保存的调查 Draft。");
+    const latestDraft = activeSession.draft.confirmed
+      ? currentDraft
+      : await persistCreationLexicon(content);
+    const result = await saveInvestigationDraftLexicon(latestDraft.id, {
+      expectedRevision: latestDraft.current_revision,
+      operationId: `draft-lexicon:${latestDraft.id}:r${latestDraft.current_revision}`
+    });
+    return { resourceId: result.resource_id };
   };
 
   // Pilot creation Drafts use one real platform revision at a time.
@@ -2629,7 +2666,6 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={() => setIsSidebarCollapsed(false)}
           onUpdateDraftKeywords={handleUpdateDraftKeywords}
-          onUpdateCreationSearchTerms={handleUpdateCreationSearchTerms}
           onRunControlAccepted={() => {
             const binding = activeSession.creationBinding;
             if (!binding?.run) return;
@@ -2679,6 +2715,11 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         evidenceItems={activeSession.messages.find((m) => m.type === "evidence_list")?.evidenceItems}
         activeRuleSet={activeRuleSet}
         draftSuggestion={activeSession.creationBinding?.suggestion}
+        creationDraft={activeSession.creationBinding?.draft}
+        confirmationPreview={activeSession.creationBinding?.confirmationPreview}
+        onApplyLexicon={handleApplyCreationLexicon}
+        onSaveLexicon={handleSaveCreationLexicon}
+        canPublishLexicon={!applicationUser || applicationUser.role === "admin"}
       />
     </div>
   );

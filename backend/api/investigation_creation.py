@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, field_validator
+from backend.resource_management.contracts import ResourceError
 
 from backend.api.contracts import (
     PublicInvestigationDraft,
@@ -71,6 +72,11 @@ class ConfirmAndQueueRequest(RequestModel):
     expected_task_settings_revision: int | None = Field(default=None, ge=0)
     expected_revision: int = Field(ge=1)
     confirmed: StrictBool
+
+
+class SaveDraftLexiconRequest(RequestModel):
+    expected_revision: int = Field(ge=1)
+    operation_id: str = Field(min_length=1, max_length=200)
 
 
 def create_investigation_creation_router(
@@ -185,6 +191,24 @@ def create_investigation_creation_router(
             _raise_public_error(exc)
 
     @router.post(
+        "/api/investigation-drafts/{draft_id}/save-lexicon",
+    )
+    def save_draft_lexicon(
+        draft_id: str,
+        request: SaveDraftLexiconRequest,
+        principal: Principal = Depends(provide_principal),
+    ) -> dict[str, Any]:
+        try:
+            return service.save_draft_lexicon(
+                draft_id,
+                expected_revision=request.expected_revision,
+                operation_id=request.operation_id,
+                principal=principal,
+            )
+        except Exception as exc:
+            _raise_public_error(exc)
+
+    @router.post(
         "/api/investigation-drafts/{draft_id}/confirm-and-queue",
         response_model=PublicInvestigationRunProjection,
         status_code=202,
@@ -228,6 +252,15 @@ def _raise_public_error(exc: Exception) -> None:
     from backend.task_admission.store import AdmissionError
     if isinstance(exc, AdmissionError):
         raise HTTPException(status_code=409, detail={"code": exc.code, "message": str(exc), "details": exc.details}) from exc
+    if isinstance(exc, ResourceError):
+        detail = {"code": exc.code, "message": str(exc), "details": exc.details}
+        if exc.code == "RESOURCE_FORBIDDEN":
+            raise HTTPException(status_code=403, detail=detail) from exc
+        if exc.code == "RESOURCE_NOT_FOUND":
+            raise HTTPException(status_code=404, detail=detail) from exc
+        if "CONFLICT" in exc.code:
+            raise HTTPException(status_code=409, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
     detail = (
         {
             "code": exc.code,

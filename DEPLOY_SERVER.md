@@ -74,9 +74,15 @@ PY
 Copy this project to the server, then create or edit `.env`:
 
 ```env
+# 常规阶段：调查、审核、报告生成和报告问答。
 DASHSCOPE_BASE_URL=http://127.0.0.1:8001/v1
 DASHSCOPE_API_KEY=local
 QWEN_TEXT_MODEL=qwen3-vl-8b
+# 资源生成阶段：只生成审核规则、黑话库和关键词；必须使用独立 Key。
+RESOURCE_GENERATION_BASE_URL=https://www.dmxapi.cn/v1
+RESOURCE_GENERATION_API_KEY=
+RESOURCE_GENERATION_MODEL=qwen3.7-plus
+INVESTIGATION_MAX_POSTS=30
 QWEN_VL_MODEL=qwen3-vl-8b
 QWEN_USE_RESPONSE_FORMAT=false
 VL_IMAGE_MAX_SIDE=1024

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { ArrowLeft, ShieldCheck, UserPlus, Users, RefreshCw, KeyRound, X } from "lucide-react";
 import { Button } from "../../components/common/Button";
 import { ConfirmDialog } from "../../components/feedback/ConfirmDialog";
@@ -60,7 +60,7 @@ export function AdminUsersPage() {
     catch (error) { setError(error instanceof Error ? error.message : "操作失败，请重试。"); }
     finally { mutating.current = false; setBusy(false); }
   };
-  if (user?.role !== "admin") return <main className="account-admin"><h1>此页面仅限管理员</h1><Link to="/investigation">返回调查工作区</Link></main>;
+  if (user?.role !== "admin") return <Navigate to="/investigation" replace />;
   return <main className="account-admin">
     <Link className="admin-back-link" to="/investigation"><ArrowLeft size={14} />返回调查工作区</Link>
     <header className="admin-page-header"><div className="admin-page-heading"><span className="admin-page-icon"><ShieldCheck size={24} /></span><div><span className="admin-eyebrow">管理控制台</span><h1>应用账号管理</h1><p>管理应用账号的开通、有效期与登录密码。</p></div></div><div className="admin-current-account"><AccountMenu /></div></header>

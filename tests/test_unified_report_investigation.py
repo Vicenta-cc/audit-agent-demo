@@ -25,18 +25,30 @@ from hermes_m0.unified_support import (
 seed = runpy.run_path(str(Path(__file__).with_name("test_pass_report.py")))
 
 
-def test_unified_overview_prompt_and_schema_require_all_post_report_read():
+def test_unified_overview_prompt_and_schema_support_bounded_post_directory():
     schemas = unified_tool_schemas()
     read_report = next(
         schema for schema in schemas if schema["name"] == "read_report"
+    )
+    list_report_posts = next(
+        schema for schema in schemas if schema["name"] == "list_report_posts"
+    )
+    list_post_comments = next(
+        schema for schema in schemas if schema["name"] == "list_post_comments"
     )
     names = {schema["name"] for schema in schemas}
 
     assert "报告的大概内容是什么" in UNIFIED_REPORT_SYSTEM_PROMPT
     assert "先调用read_report" in UNIFIED_REPORT_SYSTEM_PROMPT
     assert "不得只讲风险帖而遗漏安全帖" in UNIFIED_REPORT_SYSTEM_PROMPT
-    assert "全部1至5条冻结帖子" in read_report["description"]
+    assert "1至30条帖子" in read_report["description"]
+    assert "第一页最多10条" in read_report["description"]
+    assert list_report_posts["parameters"]["properties"]["page"]["maximum"] == 3
+    assert list_post_comments["parameters"]["properties"]["risk_filter"][
+        "enum"
+    ] == ["all", "risk", "no_risk", "unknown"]
     assert "read_report" in names
+    assert "list_report_posts" in names
     assert "read_posts" in names
     assert "list_post_comments" in names
     assert "list_evidence" in names
@@ -92,6 +104,17 @@ def test_unified_report_read_report_exposes_every_mixed_post(tmp_path):
         verdicts
     )
     assert response["data"]["post_previews_complete_for_report"] is True
+    assert response["data"]["post_directory"] == {
+        "total_count": 5,
+        "returned_count": 5,
+        "page": 1,
+        "page_size": 10,
+        "page_count": 1,
+        "has_more": False,
+        "next_page": None,
+        "complete_for_report": True,
+    }
+    assert "remaining post directory pages" not in response["not_loaded"]
     assert len({item["ref"] for item in previews}) == 5
 
     details = json.loads(
@@ -164,6 +187,306 @@ def test_unified_report_read_report_exposes_every_mixed_post(tmp_path):
         )
         assert not rejected["ok"]
         assert rejected["error"]["code"] == "tool_unavailable_for_report_task_scope"
+
+
+def test_unified_report_thirty_post_directory_pages_and_restored_last_post(tmp_path):
+    verdicts = [
+        (("pass", "none"), ("review", "medium"), ("reject", "high"))[index % 3]
+        for index in range(30)
+    ]
+    source, store = seed["seed_audit"](tmp_path, verdicts=verdicts)
+    result = seed["R31ReportRuntime"](store).generate(
+        "new-search-task",
+        source=source,
+        checkpoint_path=tmp_path / "checkpoints.sqlite3",
+    )
+    version = store.get_version(result.report_version_id)
+    snapshot = store.get_source_snapshot(result.report_version_id)
+    ledger_path = tmp_path / "tool-ledger.sqlite3"
+
+    def configured_service():
+        configured = configure_real_report_runtime(
+            store.db_path,
+            report_version_id=result.report_version_id,
+            expected_database_sha256=hashlib.sha256(
+                store.db_path.read_bytes()
+            ).hexdigest(),
+            expected_content_hash=version["content_hash"],
+            expected_snapshot_hash=snapshot["snapshot_hash"],
+            ledger_path=ledger_path,
+        )
+        configured.bind_session("thirty-post-session")
+        return configured
+
+    service = configured_service()
+    overview = json.loads(
+        service.dispatch(
+            "read_report", {}, session_id="thirty-post-session", turn_id="overview"
+        )
+    )["data"]
+    assert len(overview["post_previews"]) == 10
+    assert [item["position"] for item in overview["post_previews"]] == list(
+        range(1, 11)
+    )
+    assert overview["post_previews_complete_for_report"] is False
+    assert overview["post_directory"]["page_count"] == 3
+    assert overview["post_directory"]["next_page"] == 2
+
+    second = json.loads(
+        service.dispatch(
+            "list_report_posts",
+            {"page": 2},
+            session_id="thirty-post-session",
+            turn_id="page-2",
+        )
+    )["data"]
+    assert [item["position"] for item in second["post_previews"]] == list(
+        range(11, 21)
+    )
+
+    third_payload = service.execute_tool_call(
+        session_id="thirty-post-session",
+        tool_call_id="page-3-call",
+        tool_name="list_report_posts",
+        args={"page": 3},
+        next_call=lambda args: service.dispatch(
+            "list_report_posts",
+            args,
+            session_id="thirty-post-session",
+            turn_id="page-3",
+        ),
+    )
+    third = json.loads(third_payload)["data"]
+    assert [item["position"] for item in third["post_previews"]] == list(
+        range(21, 31)
+    )
+    assert third["post_directory"]["has_more"] is False
+
+    restored = configured_service()
+    last_post = third["post_previews"][-1]
+    detail = json.loads(
+        restored.dispatch(
+            "read_posts",
+            {"post_refs": [last_post["ref"]]},
+            session_id="thirty-post-session",
+            turn_id="read-last",
+        )
+    )
+    assert detail["ok"], detail
+    assert detail["data"]["post_groups"][0]["post"]["name"] == "日常分享 30"
+
+
+def test_unified_comment_risk_filter_runs_before_paging_and_keeps_account_ref(
+    tmp_path,
+):
+    comments = [
+        {
+            "comment_id": "risk-1",
+            "content": "风险评论一",
+            "audit_status": "completed",
+            "risk_level": "high",
+            "risk_type": "色情引流",
+            "nickname": "风险用户一",
+            "sec_uid": "risk-user-1",
+            "create_time": 1788825601,
+        },
+        {
+            "comment_id": "normal-1",
+            "content": "正常评论",
+            "audit_status": "completed",
+            "risk_level": "none",
+            "risk_type": "none",
+            "nickname": "正常用户",
+            "sec_uid": "normal-user",
+            "create_time": 1788825602,
+        },
+        {
+            "comment_id": "risk-2",
+            "content": "风险评论二",
+            "audit_status": "completed",
+            "risk_level": "medium",
+            "risk_type": "联系方式导流",
+            "nickname": "风险用户二",
+            "sec_uid": "risk-user-2",
+            "create_time": 1788825603,
+        },
+        {
+            "comment_id": "pending-1",
+            "content": "尚未完成审核",
+            "audit_status": "pending",
+            "risk_level": "none",
+            "risk_type": "none",
+            "nickname": "待审核用户",
+            "sec_uid": "pending-user",
+            "create_time": 1788825604,
+        },
+    ]
+    source, store = seed["seed_audit"](
+        tmp_path,
+        count=1,
+        decision="review",
+        risk="medium",
+        comments=comments,
+    )
+    result = seed["R31ReportRuntime"](store).generate(
+        "new-search-task",
+        source=source,
+        checkpoint_path=tmp_path / "checkpoints.sqlite3",
+    )
+    version = store.get_version(result.report_version_id)
+    snapshot = store.get_source_snapshot(result.report_version_id)
+    service = configure_real_report_runtime(
+        store.db_path,
+        report_version_id=result.report_version_id,
+        expected_database_sha256=hashlib.sha256(store.db_path.read_bytes()).hexdigest(),
+        expected_content_hash=version["content_hash"],
+        expected_snapshot_hash=snapshot["snapshot_hash"],
+        ledger_path=tmp_path / "comments-ledger.sqlite3",
+    )
+    service.bind_session("comment-filter-session")
+    report = json.loads(
+        service.dispatch(
+            "read_report", {}, session_id="comment-filter-session", turn_id="overview"
+        )
+    )["data"]
+    post_ref = report["post_previews"][0]["ref"]
+
+    first = json.loads(
+        service.dispatch(
+            "list_post_comments",
+            {"post_ref": post_ref, "risk_filter": "risk", "limit": 1},
+            session_id="comment-filter-session",
+            turn_id="risk-page-1",
+        )
+    )["data"]
+    assert first["total_count"] == 4
+    assert first["matched_count"] == 2
+    assert first["returned_count"] == 1
+    assert first["comments"][0]["risk_level"] in {"medium", "high"}
+    assert first["comments"][0]["risk_type"] in {"色情引流", "联系方式导流"}
+    assert first["comments"][0]["account_ref"]
+    assert first["has_more"] is True
+
+    second = json.loads(
+        service.dispatch(
+            "list_post_comments",
+            {
+                "post_ref": post_ref,
+                "risk_filter": "risk",
+                "limit": 1,
+                "cursor": first["cursor"],
+            },
+            session_id="comment-filter-session",
+            turn_id="risk-page-2",
+        )
+    )["data"]
+    assert second["matched_count"] == 2
+    assert second["returned_count"] == 1
+    assert second["has_more"] is False
+
+    wrong_filter = json.loads(
+        service.dispatch(
+            "list_post_comments",
+            {
+                "post_ref": post_ref,
+                "risk_filter": "no_risk",
+                "limit": 1,
+                "cursor": first["cursor"],
+            },
+            session_id="comment-filter-session",
+            turn_id="wrong-filter",
+        )
+    )
+    assert not wrong_filter["ok"]
+    assert wrong_filter["error"]["code"] == "cursor_order_mismatch"
+
+    no_risk = json.loads(
+        service.dispatch(
+            "list_post_comments",
+            {"post_ref": post_ref, "risk_filter": "no_risk", "limit": 20},
+            session_id="comment-filter-session",
+            turn_id="no-risk",
+        )
+    )["data"]
+    unknown = json.loads(
+        service.dispatch(
+            "list_post_comments",
+            {"post_ref": post_ref, "risk_filter": "unknown", "limit": 20},
+            session_id="comment-filter-session",
+            turn_id="unknown",
+        )
+    )["data"]
+    assert no_risk["matched_count"] == 1
+    assert unknown["matched_count"] == 1
+
+    account = json.loads(
+        service.dispatch(
+            "get_account_overview",
+            {"account_ref": first["comments"][0]["account_ref"]},
+            session_id="comment-filter-session",
+            turn_id="account-overview",
+        )
+    )
+    assert account["ok"], account
+    assert account["data"]["statistics"]["comment_count"] == 1
+
+
+def test_unified_report_overview_limits_default_account_entries_to_five_per_role(
+    tmp_path,
+):
+    source, store = seed["seed_audit"](
+        tmp_path, count=1, decision="review", risk="medium"
+    )
+    result = seed["R31ReportRuntime"](store).generate(
+        "new-search-task",
+        source=source,
+        checkpoint_path=tmp_path / "checkpoints.sqlite3",
+    )
+    version = store.get_version(result.report_version_id)
+    snapshot = store.get_source_snapshot(result.report_version_id)
+    service = configure_real_report_runtime(
+        store.db_path,
+        report_version_id=result.report_version_id,
+        expected_database_sha256=hashlib.sha256(store.db_path.read_bytes()).hexdigest(),
+        expected_content_hash=version["content_hash"],
+        expected_snapshot_hash=snapshot["snapshot_hash"],
+        ledger_path=tmp_path / "accounts-ledger.sqlite3",
+    )
+    service.bind_session("account-entry-session")
+    fake_entries = [
+        {
+            "account_ref": f"publisher-{index}",
+            "report_roles": ["post_author"],
+            "report_group_placement": {"default_active_comment_visible": False},
+        }
+        for index in range(7)
+    ] + [
+        {
+            "account_ref": f"commenter-{index}",
+            "report_roles": ["comment_author"],
+            "report_group_placement": {"default_active_comment_visible": True},
+        }
+        for index in range(7)
+    ]
+    service.account_activity.report_entries = Mock(return_value=fake_entries)
+    service.repository.report_account_entries = Mock(return_value=())
+
+    report = json.loads(
+        service.dispatch(
+            "read_report", {}, session_id="account-entry-session", turn_id="overview"
+        )
+    )["data"]
+    assert [item["account_ref"] for item in report["account_entries"]] == [
+        *[f"publisher-{index}" for index in range(5)],
+        *[f"commenter-{index}" for index in range(5)],
+    ]
+    assert report["account_entry_statistics"] == {
+        "publisher_account_count": 7,
+        "commenter_account_count": 7,
+        "distinct_account_count": 14,
+        "displayed_publisher_count": 5,
+        "displayed_commenter_count": 5,
+    }
 
 
 def test_unified_report_selects_its_own_product_mode(tmp_path):

@@ -45,6 +45,7 @@ from backend.investigation_creation.fake_runtime import (
     FakePublishedReportHermesAgent,
 )
 from backend.investigation_creation.principal import Principal
+from backend.investigation_creation.provider_routing import resource_generation_kinds
 from backend.investigation_creation.public_answer import (
     redact_creation_internal_references,
 )
@@ -60,6 +61,7 @@ from backend.investigation_creation.tools import (
     configure_hermes_investigation_creation_tools,
     dispatch_hermes_investigation_creation_tool,
 )
+from backend.resource_management.tools import RESOURCE_PROMPT
 from backend.rulesets.service import RuleSetService
 from backend.rulesets.store import RuleSetStore
 from backend.reporting.store import ReportStore
@@ -426,7 +428,13 @@ def _run_scripted_creation_turn(
         actions=actions,
         final_response=final_response,
     )
-    conversation._agents[session.id] = agent
+    provider_route = conversation._provider_route(content)
+    cache_key: object = (
+        session.id
+        if provider_route == "default"
+        else (session.id, provider_route)
+    )
+    conversation._agents[cache_key] = agent
     turn, idempotent_replay = conversation.accept_message(
         session.id,
         client_message_id=client_message_id,
@@ -2070,10 +2078,27 @@ def test_creation_prompt_preserves_literal_short_search_terms() -> None:
     assert "想抓一条抖音 X" in normalized_prompt
     assert "即使 X 没有引号" in normalized_prompt
     assert "想抓一条抖音 bc料" in normalized_prompt
-    assert "唯一搜索主词是 bc料" in normalized_prompt
-    assert "实际搜索主词仍是用户原文" in normalized_prompt
+    assert "唯一实际搜索词是 bc料" in normalized_prompt
+    assert "实际搜索词仍是用户原文" in normalized_prompt
+    assert "启用变体词是优先的实际平台搜索词" in normalized_prompt
+    assert "pinyin or letter abbreviations" in normalized_prompt
+    assert "ordinary-life scene disguises" in normalized_prompt
     assert "不正式保存到黑话库数据库" in normalized_prompt
     assert "搜索词和任务配置即冻结" in normalized_prompt
+
+
+def test_resource_prompt_generates_covert_variants_as_search_terms() -> None:
+    normalized_prompt = " ".join(RESOURCE_PROMPT.split())
+    assert "主词是主题和语义归类" in normalized_prompt
+    assert "变体词是主要的实际召回表达" in normalized_prompt
+    assert "只生成 5 至 7 个最终可直接搜索的启用变体" in normalized_prompt
+    assert "主题主词按语义归类需要生成" in normalized_prompt
+    assert "不要以 “生成但默认关闭”的形式放进词库" in normalized_prompt
+    assert "可靠候选不足时宁可少于 5 个" in normalized_prompt
+    assert "谐音、拼音/字母缩写" in normalized_prompt
+    assert "正常生活场景伪装" in normalized_prompt
+    assert "主页看" in normalized_prompt
+    assert "过于直白、实际难以召回" in normalized_prompt
 
 
 def test_creation_prompt_preserves_explicit_per_run_parameters() -> None:
@@ -3145,27 +3170,30 @@ def test_collection_limits_are_previewed_and_frozen_with_all_posts_audited(creat
         principal=Principal('principal-a'),
     ).model_dump(mode='json')
     arguments = _search_draft_from_options([options])
+    arguments['configuration']['task_parameters'] = {
+        'max_notes': 30,
+        'max_total_notes': 30,
+        'analyze_limit': 30,
+        'max_comments': 1000,
+    }
     response = stack['client'].post('/api/investigation-drafts', json=arguments)
     assert response.status_code == 201, response.text
     draft = response.json()
     endpoint = '/api/investigation-drafts/' + draft['id']
-    demo = stack['client'].get(endpoint + '/confirmation-preview').json()
-    assert demo['max_notes'] == min(5, len(demo['resolved_search_terms']))
-    monkeypatch.setattr(settings, 'm3_posts_per_keyword', 20)
-    monkeypatch.setattr(settings, 'm3_analyze_limit', 340)
     monkeypatch.setattr(settings, 'm3_comments_per_post', 1000)
     preview = stack['client'].get(endpoint + '/confirmation-preview').json()
-    assert preview['max_notes'] == min(5, len(preview['resolved_search_terms']) * 5)
-    assert preview['max_posts_per_keyword'] == 5
+    assert preview['max_post_limit'] == 30
+    assert preview['max_notes'] == 30
+    assert preview['max_posts_per_keyword'] == 30
     assert preview['max_comments_per_post'] == 1000
     assert preview['get_sub_comment'] is False
     queued = stack['client'].post(endpoint + '/confirm-and-queue', json={'expected_revision': draft['current_revision'], 'confirmed': True}, headers={'Idempotency-Key': 'production-limits'})
     assert queued.status_code == 202, queued.text
     run = stack['creation_store'].get_run(queued.json()['run_id'], principal='principal-a')
     snapshot = ConfirmedConfigurationSnapshotV4.model_validate(run.confirmed_configuration)
-    assert snapshot.max_notes == snapshot.execution.max_notes == 5
-    assert snapshot.execution.max_total_notes == 5
-    assert snapshot.execution.analyze_limit == 5
+    assert snapshot.max_notes == snapshot.execution.max_notes == 30
+    assert snapshot.execution.max_total_notes == 30
+    assert snapshot.execution.analyze_limit == 30
     assert snapshot.execution.max_comments == 1000
     assert snapshot.execution.max_concurrency == 1
     assert snapshot.execution.get_sub_comment is False
@@ -3174,12 +3202,71 @@ def test_collection_limits_are_previewed_and_frozen_with_all_posts_audited(creat
     adapter.crawler_account_store = CrawlerAccountStore(stack['resource_db'])
     adapter._provider_validator = lambda configuration: None
     adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
-    monkeypatch.setattr(settings, 'm3_posts_per_keyword', 1)
-    monkeypatch.setattr(settings, 'm3_analyze_limit', 1)
-    # Frozen v4 task settings use their own 1..5 contract and are no longer
-    # retroactively rejected when hidden deployment defaults change.
+    monkeypatch.setattr(settings, 'investigation_max_posts', 10)
+    # Frozen v4 task settings use the compatibility contract and are not
+    # retroactively rejected when the live new-task limit changes to 10.
     adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
     changed = snapshot.model_dump(mode='json')
     changed['max_notes'] = 1
     with pytest.raises(ValidationError):
         ConfirmedConfigurationSnapshotV4.model_validate(changed)
+
+
+def test_resource_generation_provider_routing_is_explicit_and_narrow():
+    assert resource_generation_kinds("帮我生成一套审核规则和黑话库") == (
+        "ruleset",
+        "lexicon",
+    )
+    assert resource_generation_kinds("重新生成关键词") == ("lexicon",)
+    assert resource_generation_kinds("修改并保存这套审核规则") == ()
+    assert resource_generation_kinds("查看现有黑话库") == ()
+
+
+def test_resource_generation_and_normal_turns_use_separate_providers(
+    creation_stack, monkeypatch
+):
+    conversation = creation_stack["conversation"]
+    calls: list[dict[str, Any]] = []
+
+    class Agent:
+        def close(self):
+            return None
+
+    class Runtime:
+        def create_agent(self, **options):
+            calls.append(options)
+            return Agent()
+
+    conversation.fake_runtime = False
+    conversation.runtime_binding = Runtime()
+    monkeypatch.setattr(settings, "resource_generation_api_key", "")
+    assert conversation._provider_route("帮我生成审核规则") == "resource_generation"
+    with pytest.raises(RuntimeError, match="provider is not configured"):
+        conversation._agent(
+            "unconfigured-resource-provider",
+            provider_route="resource_generation",
+        )
+
+    monkeypatch.setattr(settings, "resource_generation_api_key", "dmx-test-key")
+    monkeypatch.setattr(
+        settings, "resource_generation_base_url", "https://www.dmxapi.cn/v1"
+    )
+    monkeypatch.setattr(settings, "resource_generation_model", "qwen3.7-plus")
+    monkeypatch.setattr(settings, "dashscope_api_key", "official-test-key")
+    monkeypatch.setattr(
+        settings,
+        "dashscope_base_url",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    )
+    assert conversation._provider_route("帮我生成审核规则") == "resource_generation"
+    assert conversation._provider_route("保存这套审核规则") == "default"
+    resource_agent = conversation._agent(
+        "provider-routing-session", provider_route="resource_generation"
+    )
+    default_agent = conversation._agent("provider-routing-session")
+
+    assert resource_agent is not default_agent
+    assert calls[0]["base_url"] == "https://www.dmxapi.cn/v1"
+    assert calls[0]["api_key"] == "dmx-test-key"
+    assert calls[1]["base_url"].startswith("https://dashscope.aliyuncs.com/")
+    assert calls[1]["api_key"] == "official-test-key"

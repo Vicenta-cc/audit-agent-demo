@@ -3,7 +3,7 @@ import { apiRequest } from "../../services/apiClient";
 import type { InvestigationTaskParameters } from "../../types/investigationCreation";
 import { TaskParametersForm } from "./TaskParametersForm";
 
-type SavedSettings = { revision: number; parameters: InvestigationTaskParameters; effective_parameters?: InvestigationTaskParameters };
+type SavedSettings = { revision: number; parameters: InvestigationTaskParameters; effective_parameters?: InvestigationTaskParameters; max_post_limit?: number };
 const ignoreDirty = () => {};
 
 export function TaskSettingsPage() {
@@ -17,6 +17,7 @@ export function TaskSettingsPage() {
   useEffect(() => { void reload(); }, []);
   const preview = useMemo(() => saved ? ({
     requested_parameters: saved.parameters, effective_parameters: saved.effective_parameters,
+    max_post_limit: saved.max_post_limit,
     platform: "dy" as const, mode: "search" as const, resolved_search_terms: [], estimated_max_contents: 0,
   }) : null, [saved]);
   return <section style={{ maxWidth: 1000, margin: "24px auto", padding: 24, background: "white", borderRadius: 12 }} aria-label="统一采集与分析设置">

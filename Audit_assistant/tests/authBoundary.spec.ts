@@ -94,9 +94,28 @@ test("login in another tab hides previous user's data; another browser context s
 test("ordinary user cannot render admin controls or load admin data", async ({page,context}) => {
   await server(context,account()); let adminReads=0;
   page.on("request",req=>{if(req.url().includes("/api/admin")) adminReads++;});
-  await page.goto(entry); await expect(page.getByTestId("owner")).toHaveText("alice");
+  await page.goto(entry);
   await page.evaluate(()=>{history.pushState({},"","/admin/users");window.dispatchEvent(new PopStateEvent("popstate"));});
-  await expect(page.getByRole("heading",{name:"此页面仅限管理员"})).toBeVisible(); expect(adminReads).toBe(0);
+  await expect(page.getByTestId("owner")).toHaveText("alice");
+  await expect(page).toHaveURL(/\/investigation$/);
+  expect(adminReads).toBe(0);
+});
+test("admin logout replaces the protected URL before showing login", async ({page,context}) => {
+  await server(context,account("admin","admin"));
+  await page.goto(entry);
+  await page.getByRole("link",{name:"应用账号管理"}).click();
+  await expect(page).toHaveURL(/\/admin\/users$/);
+  await page.getByRole("button",{name:"退出登录"}).click();
+  await expect(page.getByRole("heading",{name:"登录调查工作区"})).toBeVisible();
+  await expect(page).toHaveURL(/\/investigation$/);
+});
+test("ordinary login from an admin URL enters the investigation workspace", async ({page,context}) => {
+  await server(context);
+  await page.goto(entry);
+  await page.evaluate(()=>{history.pushState({},"","/admin/users");window.dispatchEvent(new PopStateEvent("popstate"));});
+  await signIn(page,"alice");
+  await expect(page.getByTestId("owner")).toHaveText("alice");
+  await expect(page).toHaveURL(/\/investigation$/);
 });
 test("admin manages app accounts without crawler sharing controls", async ({page,context}) => {
   const state = await server(context,account("admin","admin")); await page.goto(entry);

@@ -48,6 +48,7 @@ from .errors import (
 from .principal import Principal
 from .public_projection import draft_artifact, public_draft, run_artifact
 from .public_answer import redact_creation_internal_references
+from .provider_routing import resource_generation_kinds
 from .tools import (
     HermesToolExecutionIdentity,
     InvestigationCreationToolService,
@@ -70,7 +71,7 @@ response may explain the design or changes; it is not the authoritative rule pre
 你的产品身份固定为“研判助手”。不要自称 Hermes、Hermes Agent，不能向用户透露底层代理框架、
 模型运行时、供应商实现或产品改造来源。用户只是在打招呼（例如 hello、你好）时，简短回应并说明
 你可以协助配置调查、查询审核规则与黑话库、跟进调查报告，不要擅自创建调查草稿或调用资源工具。
-用户界面与回复统一使用“审核规则”和“黑话库”两个资源名称；理解用户旧称，但回复、标题和生成说明只用新名称。黑话库仍包含用于平台搜索和内容召回的词条，不仅限于隐语；不因改名改变搜索词生成标准、临时资源边界或采用流程。用户明确“搜索主词 X”“只用 X”，或用自然语序说“想抓一条抖音 X”“抖音抓 N 条 X”“在抖音搜索 N 条 X”时，即使 X 没有引号，也必须剥离意图词、平台名、数量和“抓取/报告”等动作词，把剩余的用户原文 X 作为本次临时词库唯一启用主词。例如“想抓一条抖音 bc料”的平台是抖音、数量是一条、唯一搜索主词是 bc料。保留 X 的原始大小写、字母数字、符号和简写，不把短词或黑话改写成解释性词语，也不要自行扩展相关主词、变体或标签。可以把“博彩”等领域解释用于调查标题和审核规则匹配，但必须明确说明实际搜索主词仍是用户原文。临时词库只写入当前调查 Draft 供本次任务使用，不正式保存到黑话库数据库。
+用户界面与回复统一使用“审核规则”和“黑话库”两个资源名称；理解用户旧称，但回复、标题和生成说明只用新名称。黑话库的主词用于表达主题，启用变体词是优先的实际平台搜索词；某个主词没有启用变体时，才兼容性地回退使用该主词。任务卡只展示实际搜索词摘要；关键词修改在结构化 Drawer 中按“主题主词→变体词”完成。用户明确“搜索主词 X”“只用 X”，或用自然语序说“想抓一条抖音 X”“抖音抓 N 条 X”“在抖音搜索 N 条 X”时，即使 X 没有引号，也必须剥离意图词、平台名、数量和“抓取/报告”等动作词，把剩余的用户原文 X 作为本次唯一实际搜索词。例如“想抓一条抖音 bc料”的平台是抖音、数量是一条、唯一实际搜索词是 bc料。保留 X 的原始大小写、字母数字、符号和简写，不把短词或黑话改写成解释性词语，也不要自行增加其他主词、变体或标签。若建立完整词库，可以把 X 作为某个主题主词下的启用变体，但 search_terms 必须仍严格只有 X。可以把“博彩”等领域解释用于调查标题和审核规则匹配，但必须明确说明实际搜索词仍是用户原文。临时词库只写入当前调查 Draft 供本次任务使用，不正式保存到黑话库数据库。
 
 Conversation is primary. Use only the investigation creation tools
 exposed in this mode, choosing and combining them according to the user's current intent. There is
@@ -108,8 +109,9 @@ not require explicit confirmation of every editable or defaultable field. Derive
 from the objective; preserve any available platform the user explicitly selected, or otherwise
 choose one reasonable available platform from the available resource context. Select the clearly
 matching published 审核规则已发布版本 directly as the Judgement resource and independently select a
-clearly matching available real recall 黑话库. When enabled_main_terms for that existing 黑话库
-are available in the conversation context, that authoritative term snapshot is the recall
+clearly matching available real recall 黑话库. When the actual enabled search-term snapshot for that
+existing 黑话库 is available in the conversation context (the legacy tool field may still be named
+enabled_main_terms), that authoritative term snapshot is the recall
 configuration; do not ask the user to enter separate search keywords before creating the Draft. The
 user can review and edit these recommended values on the Draft afterward.
 
@@ -120,7 +122,7 @@ In particular, an explicit request not to collect media must set collect_media=f
 that such a choice cannot be represented. Omit task_parameters only when the user did not specify
 per-run execution choices. crawler_account_id remains application-managed and must not be supplied.
 
-Judge recall suitability from the actual enabled main terms, not the lexicon title, risk label,
+Judge recall suitability from the actual enabled search terms, not the lexicon title, risk label,
 or the fact that its domain matches the Judgement rules. Ask whether searching those exact terms
 will discover the user's requested subject. Generic risk labels such as "群体攻击", "驱逐", or
 "排斥" alone do not target a specific discussion such as 维汉婚恋; a matching ethnic audit ruleset
@@ -136,10 +138,12 @@ must not carry search terms, source 黑话库, or recall plans, and must resolve
 For a search Draft, select a matching published 审核规则已发布版本 and prefer an independently available
 real recall 黑话库 when it is sufficiently suitable. When its terms need to be discovered, query that 黑话库 with
 include_lexicon_terms_for_ids. Save existing_lexicon with its ID,
-expected_runtime_content_hash, and the returned enabled_main_terms snapshot. Never expand variants,
-tag entries, query type, or order into crawler terms. When the user explicitly changes the
-main terms, use update_investigation_draft to replace existing_lexicon with temporary_terms containing
-exactly the user's edited terms and the source 黑话库 ID.
+expected_runtime_content_hash, and the returned actual search-term snapshot. The legacy
+enabled_main_terms field already contains the server-projected variant-first search terms; do not
+replace them with theme main terms or tag entries. When the user explicitly changes the
+search terms, use update_investigation_draft to replace existing_lexicon with temporary_terms containing
+the complete lexicon_content edited in the Drawer, its exact variant-first terms projection, and the
+source 黑话库 ID. Never flatten a structured Drawer edit and discard theme-to-variant relationships.
 
 If no sufficiently suitable existing 黑话库 is available, inspect the full conversation for
 authorization to generate missing Recall. Without that authorization, explain the Recall resource
@@ -152,21 +156,31 @@ For this branch, use a brief reply such as: "当前没有找到足够合适的�
 list, examples, a proposed configuration, or a Draft to that reply.
 If the user already authorized generation (for example, "没有合适词库就帮我生成这次搜索词" or
 "没有的话你自己补"), and investigation intent and a valid published Judgement 审核规则 are present,
-generate focused temporary canonical search terms and create the Draft in the same turn only when
+generate a structured temporary lexicon and create the Draft in the same turn only when
 using that valid published Judgement. Store terms in configuration.investigation.recall_plan with
-strategy=temporary_terms and source_lexicon_ids as real referenced 黑话库 IDs, or [].
+strategy=temporary_terms, source_lexicon_ids as real referenced 黑话库 IDs or [], and lexicon_content
+containing stable main/variant entry IDs. Every enabled theme main must have at least one enabled
+variant; terms must exactly equal the variant-first search projection from lexicon_content. The main
+entries express semantic themes and the variants contain the real platform queries.
 When temporary 审核规则 and search terms are generated together, this takes priority: create the
 审核规则 Proposal, then show its 审核规则 and the complete search-term list, and END this turn.
 Do not call create_investigation_draft, update_investigation_draft or use_ruleset_proposal in that
 generation turn. Generating or displaying temporary terms does not require a Draft. Wait for a
 LATER explicit adoption; then use_ruleset_proposal creates the Draft with the displayed terms.
 Do not ask again for permission to generate terms that the user already requested.
-Generate concrete platform search queries for the user's actual discovery goal. For discussion
-research, combine the subject with relevant everyday topics; a recalled post need not be risky.
-Use deliberate common subject names where helpful, avoid obvious duplicates and padding, and
-keep the list focused. Each generated Chinese query is natural continuous text with no whitespace,
-plus signs, commas or Boolean separators; each list item is one complete query. Keep search
-queries separate from risk conditions. Do not generate tags, query_type or variant objects.
+Generate concrete platform search queries for the user's actual discovery goal. Temporary terms are
+the flattened equivalent of lexicon variants: prioritize expressions that real posts are likely to
+use, rather than explicit risk-category labels. Black/grey-market content often hides behind homophones,
+pinyin or letter abbreviations; ordinary-life scene disguises whose surrounding context implies an
+ambiguous or transactional offer; and diversion hooks such as “主页看”“扣1”“同城私”“加V”. Do not copy
+these examples mechanically, and do not use broad generic hooks alone when they would create mostly
+noise; make the set domain-relevant and plausible for the selected platform. For discussion research,
+combine the subject with relevant everyday topics; a recalled post need not itself be risky. Avoid
+obvious duplicates, padding, and over-explicit phrases that sellers are unlikely to publish. Each
+generated Chinese query is natural continuous text with no whitespace, plus signs, commas or Boolean
+separators; each list item is one complete query. Keep search queries separate from risk conditions.
+This temporary flat path does not create tag, query_type, main/variant objects; a complete generated
+黑话库 uses create_lexicon_edit and should contain theme mains plus many concrete variants.
 Preserve exact authoritative resource terms and explicit user edits. Before Draft adoption,
 show proposed temporary terms in the conversation and preserve that list when later binding.
 source_lexicon_ids are provenance references only; they do not contribute search terms or variants.
@@ -203,6 +217,11 @@ the formal library again merely because the user approved a temporary Proposal. 
 require clarification. A stale presentation requires a new full presentation and later approval.
 Do not retry use with a newly displayed snapshot in the same user turn. On Draft revision conflict,
 read the latest Draft and assess changes; do not blindly replace expected_revision and force a retry.
+When the user asks to save the current Draft keywords as a formal 黑话库, first read the latest Draft.
+If temporary_terms.lexicon_content exists, pass that exact content unchanged to create_lexicon_edit and
+then save_resource. Do not reconstruct, regroup, rename, or add terms from conversation memory. If the
+latest Draft still has only legacy flat terms, explain that it must first be structured and confirmed in
+the Drawer. Saving a lexicon never mutates the Draft and never changes an already-started task.
 For re-presentation, get the current Proposal and update it with unchanged content/expected_version.
 Temporary Drafts use the same Preview/Confirm flow as formal Drafts, subject to fresh Application
 readiness validation. Adoption alone never starts execution. Execution requires a separate explicit
@@ -682,7 +701,7 @@ class InvestigationCreationConversationService:
         self.hermes_state_dir = (
             hermes_state_dir or settings.data_dir / "hermes-investigation-creation"
         ).resolve()
-        self._agents: dict[str, Any] = {}
+        self._agents: dict[object, Any] = {}
         self._agent_lock = RLock()
         self._turn_node_observers: list[Callable[[str, str], None]] = []
         self._activity_emitter = PublicActivityEmitter(
@@ -1174,6 +1193,7 @@ class InvestigationCreationConversationService:
             history = projected
         self._notify(turn.id, "call_qwen")
         self.tool_service.begin_conversation_turn(session.id, turn.id)
+        provider_route = self._provider_route(user_message)
         try:
             with ExitStack() as public_streams:
                 public_streams.enter_context(
@@ -1183,7 +1203,7 @@ class InvestigationCreationConversationService:
                     self._answer_streamer.bind_turn(session.id, turn.id)
                 )
                 if self.fake_runtime:
-                    agent = self._agent(session.id)
+                    agent = self._agent(session.id, provider_route=provider_route)
                     result = agent.run_conversation(
                         user_message,
                         system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
@@ -1195,7 +1215,7 @@ class InvestigationCreationConversationService:
                         session_runtime_home(self.hermes_state_dir, session.id),
                         product_mode="creation"
                     ):
-                        agent = self._agent(session.id)
+                        agent = self._agent(session.id, provider_route=provider_route)
                         result = agent.run_conversation(
                             user_message,
                             system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
@@ -1211,12 +1231,14 @@ class InvestigationCreationConversationService:
                 self._answer_streamer.interrupt(turn.id)
                 self.store.fail_turn(
                     turn.id,
-                    error_code="hermes_execution_failed",
+                    error_code=str(
+                        result.get("error_code") or "hermes_execution_failed"
+                    ),
                     safe_message=(
                         str(result.get("final_response") or "").strip()
                         or "调查方案生成暂时无法完成。"
                     ) + ("\n" + self._binding_failure_notice(turn) if self._binding_failure_notice(turn) else ""),
-                    retryable=False,
+                    retryable=bool(result.get("retryable", False)),
                 )
                 self._answer_streamer.release(turn.id)
                 return self.store.turn_result(turn.id)
@@ -1308,9 +1330,20 @@ class InvestigationCreationConversationService:
         turn = self.store.get_turn(turn_id)
         return self.store.get_session(turn.session_id).scope_type == "creation"
 
-    def _agent(self, session_id: str) -> Any:
+    @staticmethod
+    def _provider_route(user_message: str) -> str:
+        if resource_generation_kinds(user_message):
+            return "resource_generation"
+        return "default"
+
+    def _agent(self, session_id: str, *, provider_route: str = "default") -> Any:
         with self._agent_lock:
-            agent = self._agents.get(session_id)
+            cache_key: object = (
+                session_id
+                if provider_route == "default"
+                else (session_id, provider_route)
+            )
+            agent = self._agents.get(cache_key)
             if agent is None:
                 callbacks = HermesInvestigationAgentService._compose_agent_callbacks(
                     self._answer_streamer.agent_callbacks(session_id),
@@ -1325,15 +1358,35 @@ class InvestigationCreationConversationService:
                         **callbacks,
                     )
                 else:
+                    provider_options = {
+                        "base_url": settings.dashscope_base_url,
+                        "api_key": settings.dashscope_api_key,
+                        "model": settings.qwen_text_model,
+                    }
+                    if provider_route == "resource_generation":
+                        if not all(
+                            (
+                                settings.resource_generation_api_key,
+                                settings.resource_generation_base_url,
+                                settings.resource_generation_model,
+                            )
+                        ):
+                            raise RuntimeError(
+                                "resource generation provider is not configured"
+                            )
+                        provider_options = {
+                            "base_url": settings.resource_generation_base_url,
+                            "api_key": settings.resource_generation_api_key,
+                            "model": settings.resource_generation_model,
+                        }
                     agent = self.runtime_binding.create_agent(
                         session_id=session_id,
                         agent_factory=self.agent_factory,
                         product_mode="creation",
-                        base_url=settings.dashscope_base_url,
-                        api_key=settings.dashscope_api_key,
+                        **provider_options,
                         **callbacks,
                     )
-                self._agents[session_id] = agent
+                self._agents[cache_key] = agent
             return agent
 
     def _verified_artifact(

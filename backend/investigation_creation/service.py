@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from backend.rulesets.compiler import compile_ruleset_content, content_hash
@@ -245,6 +246,48 @@ class InvestigationCreationService:
             self._required_identifier(draft_id, "draft_id"),
             principal=principal.id,
         )
+
+    def save_draft_lexicon(
+        self,
+        draft_id: str,
+        *,
+        expected_revision: int,
+        operation_id: str,
+        principal: Principal,
+    ) -> dict[str, Any]:
+        draft = self.get_draft(draft_id, principal=principal)
+        if draft.current_revision != expected_revision:
+            raise DraftRevisionConflictError(
+                f"expected revision {expected_revision}, "
+                f"current revision is {draft.current_revision}"
+            )
+        configuration = draft.configuration
+        if (
+            not isinstance(configuration, InvestigationDraftConfiguration)
+            or configuration.investigation.mode != "search"
+            or configuration.investigation.recall_plan.strategy != "temporary_terms"
+            or configuration.investigation.recall_plan.lexicon_content is None
+        ):
+            raise ConfigurationValidationError(
+                "the latest Draft does not contain a structured temporary lexicon"
+            )
+        plan = configuration.investigation.recall_plan
+        # Revalidate the exact current Draft structure immediately before the
+        # formal write. The deterministic resource ID makes network retries with
+        # the same operation ID resolve to the same save receipt.
+        content = plan.lexicon_content.model_dump(mode="json")
+        resource_key = hashlib.sha256(
+            f"{principal.id}:{draft.id}:{expected_revision}:{operation_id}".encode("utf-8")
+        ).hexdigest()[:16]
+        saved = self.resource_management.save_library(
+            "lexicon",
+            f"custom_{resource_key}",
+            content,
+            0,
+            operation_id,
+            principal=principal,
+        )
+        return {**saved, "status": "saved", "resource_id": saved["id"]}
 
     def get_confirmation_preview(
         self, draft_id: str, *, principal: Principal

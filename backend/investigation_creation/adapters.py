@@ -728,11 +728,9 @@ class AuditPipelineExecutionAdapter:
         schema_version: str = "",
         job_id: str = "",
     ) -> None:
-        max_notes_limit = (
-            min(5, settings.m3_posts_per_keyword)
-            if schema_version == "investigation-run-config-v3"
-            else 5
-        )
+        from backend.audit_agent.limits import MAX_SUPPORTED_INVESTIGATION_POSTS
+
+        max_notes_limit = MAX_SUPPORTED_INVESTIGATION_POSTS
         if not 1 <= int(configuration.get("max_notes") or 0) <= max_notes_limit:
             raise ValueError("M3 execution exceeds this backend's per-keyword limit")
         analyze_limit = int(configuration.get("analyze_limit") or 0)
@@ -746,7 +744,7 @@ class AuditPipelineExecutionAdapter:
             analyze_limit >= 1
             if schema_version == "investigation-run-config-v3"
             else (
-                1 <= max_total_notes <= 5
+                1 <= max_total_notes <= MAX_SUPPORTED_INVESTIGATION_POSTS
                 and analyze_limit == max_total_notes
             )
         )

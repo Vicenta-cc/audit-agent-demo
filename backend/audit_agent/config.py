@@ -3,6 +3,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .limits import MAX_SUPPORTED_INVESTIGATION_POSTS
+
 
 ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(ROOT / ".env")
@@ -62,6 +64,17 @@ class Settings:
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     ).rstrip("/")
     qwen_text_model = os.getenv("QWEN_TEXT_MODEL", "qwen3.7-plus")
+    # Only explicit RuleSet/Lexicon generation turns use this provider. Every
+    # other creation, audit and reporting call remains on DASHSCOPE_*.
+    resource_generation_api_key = os.getenv("RESOURCE_GENERATION_API_KEY", "")
+    resource_generation_base_url = os.getenv(
+        "RESOURCE_GENERATION_BASE_URL",
+        "https://www.dmxapi.cn/v1",
+    ).rstrip("/")
+    resource_generation_model = os.getenv(
+        "RESOURCE_GENERATION_MODEL",
+        qwen_text_model,
+    ).strip()
     hermes_authorized_report_version_ids = tuple(
         item.strip()
         for item in os.getenv("HERMES_AUTHORIZED_REPORT_VERSION_IDS", "").split(",")
@@ -204,12 +217,15 @@ class Settings:
     auto_analyze_crawled_content = os.getenv("AUTO_ANALYZE_CRAWLED_CONTENT", "true").lower() == "true"
     analysis_media_scope = os.getenv("ANALYSIS_MEDIA_SCOPE", "all").strip().lower()
     stream_crawl_analysis = os.getenv("STREAM_CRAWL_ANALYSIS", "true").lower() == "true"
-    # Separate deployments retain the one-post demo unless explicitly configured.
-    m3_posts_per_keyword = min(
-        5,
-        max(1, int(os.getenv("M3_POSTS_PER_KEYWORD", "1"))),
+    # One deployment switch controls both per-keyword and per-task limits for
+    # newly configured tasks. Frozen snapshots retain their confirmed values.
+    investigation_max_posts = min(
+        MAX_SUPPORTED_INVESTIGATION_POSTS,
+        max(1, int(os.getenv("INVESTIGATION_MAX_POSTS", "30"))),
     )
-    m3_analyze_limit = max(1, int(os.getenv("M3_ANALYZE_LIMIT", "1")))
+    # Compatibility aliases for older diagnostics during the migration.
+    m3_posts_per_keyword = investigation_max_posts
+    m3_analyze_limit = investigation_max_posts
     m3_comments_per_post = min(
         1000,
         max(0, int(os.getenv("M3_COMMENTS_PER_POST", "300"))),

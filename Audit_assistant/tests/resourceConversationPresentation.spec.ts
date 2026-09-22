@@ -8,7 +8,7 @@ test('resource availability tables preserve the generation consent question', ()
 });
 
 test('successful resource answers keep their content when metadata rows are present', () => {
-  const answer = '已完成临时词库与现有规则读取。\n\n| 字段 | 值 |\n|---|---|\n| 会话 edit_id | lexicon-edit:private |\n| 标题 | 维汉婚恋词库 |\n\n变体和标签不进入搜索。\n\n| 词条 | 类型 |\n|---|---|\n| 维汉通婚 | 主词 |\n| 维汉婚恋 | 变体 |\n\n应用阶段：comment_audit、fusion_audit。';
+  const answer = '已完成临时词库与现有规则读取。\n\n| 字段 | 值 |\n|---|---|\n| 会话 edit_id | lexicon-edit:private |\n| 标题 | 维汉婚恋词库 |\n\n启用变体优先进入搜索，标签不进入搜索。\n\n| 词条 | 类型 |\n|---|---|\n| 维汉通婚 | 主词 |\n| 维汉婚恋 | 变体 |\n\n应用阶段：comment_audit、fusion_audit。';
   const shown = presentCreationAssistantContent(answer);
   expect(shown).toContain('已完成临时词库与现有规则读取');
   expect(shown).toContain('| 维汉婚恋 | 变体 |');
