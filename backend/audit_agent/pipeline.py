@@ -1946,9 +1946,8 @@ class AuditPipeline:
                     job_store.log(self.job_id, f"词「{keyword}」跳过：候选 {len(scores)} 条，可疑 {positive} 条，"
                                                f"排除重复或已审 {excluded} 条，换下一个词")
                     continue
-                selected_keys.add(selected.content_key)
                 job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}（{strategy}，{selected.band}，分 {selected.score}）：{selected.reason}")
-                self.crawler.run_detail(
+                detail_output = self.crawler.run_detail(
                     platform, selected.content_key, source_keyword=keyword,
                     max_comments=int(getattr(request, "max_comments", 300) or 300), max_concurrency=crawler_concurrency,
                     max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
@@ -1958,6 +1957,10 @@ class AuditPipeline:
                     account_id=crawler_account_id, collect_comments=bool(getattr(request, "collect_comments", True)),
                     collect_media=bool(getattr(request, "collect_media", True)),
                 )
+                if detail_output.contents:
+                    selected_keys.add(selected.content_key)
+                else:
+                    job_store.log(self.job_id, f"词「{keyword}」精采未返回内容：{selected.content_key}，本词无产出")
             except (CrawlerVerificationError, CrawlerAuthenticationError, CrawlerRateLimitError):
                 raise
             except Exception as exc:

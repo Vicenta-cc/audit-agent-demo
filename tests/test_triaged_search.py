@@ -13,10 +13,13 @@ from backend.audit_agent.triage import CandidateScore
 
 
 class FakeCrawler:
-    def __init__(self, candidates_by_word, detail_exceptions=None, comments_by_word=None):
+    def __init__(self, candidates_by_word, detail_exceptions=None, comments_by_word=None,
+                 detail_fail_once=None, detail_empty_once=None):
         self.candidates_by_word = candidates_by_word
         self.detail_exceptions = detail_exceptions or {}
         self.comments_by_word = comments_by_word or {}
+        self.detail_fail_once = dict(detail_fail_once or {})       # content_id -> exception, raised once
+        self.detail_empty_once = set(detail_empty_once or set())   # content_id -> empty CrawlOutput once
         self.detail_calls = []
         self.search_sorts = []
         self.search_calls = []
@@ -32,6 +35,12 @@ class FakeCrawler:
     def run_detail(self, platform, content_id, *, source_keyword, content_callback=None, save_root=None, **kwargs):
         if source_keyword in self.detail_exceptions:
             raise self.detail_exceptions[source_keyword]
+        if content_id in self.detail_fail_once:
+            exc = self.detail_fail_once.pop(content_id)
+            raise exc
+        if content_id in self.detail_empty_once:
+            self.detail_empty_once.discard(content_id)
+            return CrawlOutput(platform=platform, contents=[], comments=[], output_dir=Path(save_root))
         self.detail_calls.append((source_keyword, content_id))
         item = {"aweme_id": content_id, "desc": "full", "source_keyword": source_keyword}
         if content_callback:
@@ -230,3 +239,44 @@ def test_run_search_contract_for_candidate_sweep(tmp_path: Path, monkeypatch):
     assert call_kwargs["stream_items"] is False
     assert call_kwargs["max_notes"] == call_kwargs["max_total_notes"] == 10
     assert "content_callback" not in call_kwargs
+
+
+def test_selected_keys_only_recorded_after_successful_precise_collection(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
+
+    # run_detail raises for 词A's pick (shared1); since the exception happens before
+    # selected_keys is populated, 词B can still pick and successfully collect shared1.
+    crawler_fail = FakeCrawler(
+        {"词A": [("shared1", "今晚上分")], "词B": [("shared1", "今晚上分")]},
+        detail_fail_once={"shared1": RuntimeError("boom")},
+    )
+    pipeline_fail = _new_pipeline("job-fail-once", crawler_fail, FakeIngestion(analyzed=set()), FakeEngine())
+    output_fail = pipeline_fail._run_triaged_search(
+        request=_base_request(keyword="词A,词B"), save_root=tmp_path / "fail", start_page=1,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    assert crawler_fail.detail_calls == [("词B", "shared1")]
+    assert [c["aweme_id"] for c in output_fail.contents] == ["shared1"]
+    payload_b = json.loads((tmp_path / "fail" / "candidates" / "02-词B" / "candidates.json").read_text(encoding="utf-8"))
+    assert payload_b["selected"] == "shared1"
+
+    # run_detail returns an empty CrawlOutput for 词A's pick (shared2); since contents
+    # is empty, selected_keys is not populated and 词B can still pick and collect it.
+    crawler_empty = FakeCrawler(
+        {"词A": [("shared2", "今晚上分")], "词B": [("shared2", "今晚上分")]},
+        detail_empty_once={"shared2"},
+    )
+    pipeline_empty = _new_pipeline("job-empty-once", crawler_empty, FakeIngestion(analyzed=set()), FakeEngine())
+    output_empty = pipeline_empty._run_triaged_search(
+        request=_base_request(keyword="词A,词B"), save_root=tmp_path / "empty", start_page=1,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    assert crawler_empty.detail_calls == [("词B", "shared2")]        # 词A的空结果不计入成功采集
+    assert [c["aweme_id"] for c in output_empty.contents] == ["shared2"]
