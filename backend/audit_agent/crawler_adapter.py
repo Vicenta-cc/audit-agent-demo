@@ -109,6 +109,7 @@ class MediaCrawlerAdapter:
         collect_comments: bool = True,
         collect_media: bool = True,
         max_total_notes: int | None = None,
+        query_correct_type: int | None = None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         effective_max_comments = max_comments if collect_comments else 0
@@ -206,6 +207,8 @@ class MediaCrawlerAdapter:
                 command.extend(["--reusable_content_db", str(reusable_content_db)])
             if current_task_id:
                 command.extend(["--current_task_id", current_task_id])
+            if query_correct_type is not None:
+                command.extend(["--dy_query_correct_type", str(int(query_correct_type))])
             if term == resume_keyword and resume_page is not None:
                 command.extend(
                     ["--resume_keyword", resume_keyword, "--resume_page", str(resume_page)]

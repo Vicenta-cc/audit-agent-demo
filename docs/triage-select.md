@@ -14,3 +14,15 @@
 
 ## 回滚
 `TRIAGE_MODE=off` 并重启。无数据结构变更。
+
+## 纠错参数 A/B（待执行）
+
+抖音搜索默认开启查询纠错（`query_correct_type=1`），可能把黑话词纠成常规词。在配置好采集账号 Profile 的环境执行：
+
+```bash
+python -m scripts.douyin_query_correct_ab --category gambling --account-id <账号ID> --limit 10
+```
+
+脚本对每个词各跑一次"开启纠错"和"关闭纠错"，输出到 `ab-query-correct/report.json`，每个词含 `on_count`、`off_count`、`overlap`、`only_on`、`only_off`、`on_rule_hits`、`off_rule_hits`。
+
+判定规则：若关闭纠错后词库命中总数（`off_rule_hits` 之和）高于开启时，且没有词变成 0 结果，则把应用侧 `run_search` 的 `query_correct_type` 默认传 0；否则维持 1。结论出来前默认值保持 1。
