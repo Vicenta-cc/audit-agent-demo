@@ -1429,11 +1429,32 @@ class InvestigationCreationConversationService:
         for failed_turn in previous[last_completed + 1 :]:
             if failed_turn.status not in {"error", "interrupted"}:
                 continue
-            recovered.extend(
-                self._checkpoint_messages_for_turn(
-                    failed_turn, principal=principal
-                )
+            checkpoint_messages = self._checkpoint_messages_for_turn(
+                failed_turn, principal=principal
             )
+            if not checkpoint_messages:
+                continue
+            # ``hermes_conversation_history`` closes every failed user turn
+            # with a synthetic assistant failure notice.  A recovered
+            # checkpoint starts with an assistant tool-call message, so
+            # appending it directly creates ``assistant, assistant``.  Hermes
+            # repairs that alternation in place before the provider call,
+            # which makes the completed transcript differ from the exact
+            # history we supplied and trips the fail-closed transcript fence.
+            #
+            # Keep each durable checkpoint as its own protocol-valid recovery
+            # turn.  The bridge is deliberately explicit that it is system
+            # recovery context, not a fresh request to repeat the mutation.
+            recovered.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "系统恢复上下文：请读取下面从上一回合持久化收据恢复的成功操作。"
+                        "这些操作已经完成，不要重复执行；只据此继续当前用户尚未完成的步骤。"
+                    ),
+                }
+            )
+            recovered.extend(checkpoint_messages)
         return recovered
 
     def _verified_checkpoint_artifact(

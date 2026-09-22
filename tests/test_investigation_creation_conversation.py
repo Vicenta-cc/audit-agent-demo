@@ -735,6 +735,12 @@ def test_partial_failed_turn_exposes_only_successful_checkpoints_to_followup(
     assert "recovered_from_durable_checkpoint" in recovered_history
     assert "create_ruleset_proposal" in recovered_history
     assert "只继续尚未完成的后续步骤" in recovered_history
+    assert "系统恢复上下文" in recovered_history
+    roles = [item["role"] for item in resumed["agent"].conversation_histories[0]]
+    assert all(
+        current != "assistant" or previous != "assistant"
+        for previous, current in zip(roles, roles[1:])
+    )
     with sqlite3.connect(creation_stack["creation_store"].db_path) as connection:
         assert connection.execute(
             "SELECT COUNT(*) FROM ruleset_proposals"
