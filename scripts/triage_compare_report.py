@@ -22,7 +22,8 @@ def load_selections(outputs_dir: Path, job_id: str) -> list[tuple[str, str]]:
 def load_outcomes(job_id: str) -> dict[str, str]:
     from backend.audit_agent.ingestion import AuditResultStore
 
-    results = AuditResultStore().list_results(job_id, limit=100000)
+    # list_results 内部把 limit 夹到 1000，而一个任务最多 10 条结果，取满上限即可
+    results = AuditResultStore().list_results(job_id, limit=1000)
     items = results.get("items") if isinstance(results, dict) else results
     return {str(i.get("content_key") or ""): str(i.get("decision") or "").lower()
             for i in items or [] if i.get("content_key")}
