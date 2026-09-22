@@ -549,7 +549,7 @@ class InvestigationCreationToolService:
             with self._conversation_lock:
                 application_turn_id = (
                     self._conversation_turns.get(identity.session_id, "")
-                    if tool_name in {"create_ruleset_proposal", "update_ruleset_proposal", "use_ruleset_proposal", "get_ruleset_proposal"} | RESOURCE_MUTATIONS | {"get_resource_edit"} else ""
+                    if tool_name in M3_RECORDED_TOOL_NAMES else ""
                 )
             # Reads only need a receipt when they can contribute to this turn's
             # durable public display. Standalone reads retain their read-only API.

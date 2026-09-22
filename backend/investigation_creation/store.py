@@ -608,6 +608,57 @@ class InvestigationCreationStore:
                 results.append(data)
         return results
 
+    def successful_conversation_tool_receipts(
+        self,
+        *,
+        session_id: str,
+        turn_id: str,
+        principal: str,
+        mutations_only: bool = True,
+    ) -> list[dict[str, Any]]:
+        """Return successful tool results bound to one public conversation Turn.
+
+        A model Turn can fail after an Application mutation has committed.  The
+        durable receipt and its conversation binding are the authoritative
+        checkpoint for that partial success; model prose and failed transcripts
+        are deliberately not used here.
+        """
+
+        mutation_filter = "AND r.is_mutation=1" if mutations_only else ""
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""SELECT r.receipt_id, r.tool_call_id, r.tool_name,
+                           r.response_json, r.arguments_fingerprint
+                    FROM investigation_creation_tool_receipts r
+                    JOIN ruleset_proposal_conversation_bindings b
+                      ON b.receipt_id=r.receipt_id
+                    WHERE r.session_id=? AND b.application_turn_id=?
+                      AND r.principal=? AND r.status='SUCCEEDED'
+                      {mutation_filter}
+                    ORDER BY r.rowid""",
+                (session_id, turn_id, principal),
+            ).fetchall()
+        receipts: list[dict[str, Any]] = []
+        for row in rows:
+            if not row["tool_call_id"] or not row["arguments_fingerprint"]:
+                raise RuntimeError("Successful tool receipt execution identity is incomplete")
+            response = json.loads(str(row["response_json"] or ""))
+            if (
+                not isinstance(response, dict)
+                or response.get("status") != "ok"
+                or not isinstance(response.get("data"), dict)
+            ):
+                raise RuntimeError("Successful tool receipt has an invalid response")
+            receipts.append(
+                {
+                    "receipt_id": str(row["receipt_id"]),
+                    "tool_call_id": str(row["tool_call_id"]),
+                    "tool_name": str(row["tool_name"]),
+                    "response": response,
+                }
+            )
+        return receipts
+
     def proposal_presentation_snapshots(self, *, session_id: str, turn_id: str) -> list[dict[str, Any]]:
         # Only durable successful Application receipts may select snapshots for display.
         with self._connect() as connection:

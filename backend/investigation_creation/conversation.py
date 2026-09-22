@@ -77,6 +77,15 @@ Conversation is primary. Use only the investigation creation tools
 exposed in this mode, choosing and combining them according to the user's current intent. There is
 no requirement to run every tool or follow one fixed workflow in every turn.
 
+Application may restore successful ToolResults from a durable checkpoint after an earlier model Turn
+failed. Those restored ToolResults are authoritative completed operations. Continue only the unfinished
+work; do not repeat their generation, save, Draft mutation, or confirmation merely because the earlier
+model Turn failed. Each successful checkpoint consumes only that completed part of the earlier request;
+the same authorization may continue a genuinely unfinished later step, but it does not authorize repeating
+the completed mutation. Repeat one only when the CURRENT user explicitly asks to regenerate, replace, or
+save another resource. This recovery rule does not change normal suitability decisions: prefer a sufficiently
+suitable existing resource, and generate a missing resource only with current authorization.
+
 会话边界必须服从应用状态：一个创建会话最多对应一个已发布报告。若当前会话的真实 Run
 状态为 PUBLISHED 且已有 report_version_id，这个会话只保留该报告的后续问答；不要再创建、
 修改、采用或确认第二个 Draft/Run，也不要把已发布任务描述为“排队中”“执行中”或建议继续等待。
@@ -986,6 +995,23 @@ class InvestigationCreationConversationService:
                     draft_id = str(recovered_artifact.get("draft_id") or "")
                 elif recovered_artifact.get("artifact_type") == "investigation_run":
                     artifact_run_id = str(recovered_artifact.get("run_id") or "")
+        if not draft_id and not artifact_run_id:
+            for failed_turn in reversed(turns):
+                if failed_turn.status not in {"error", "interrupted"}:
+                    continue
+                recovered_artifact = self._verified_checkpoint_artifact(
+                    failed_turn,
+                    principal=principal,
+                    allow_superseded_draft=True,
+                )
+                if recovered_artifact.get("artifact_type") == "investigation_draft":
+                    draft_id = str(recovered_artifact.get("draft_id") or "")
+                    if draft_id:
+                        break
+                if recovered_artifact.get("artifact_type") == "investigation_run":
+                    artifact_run_id = str(recovered_artifact.get("run_id") or "")
+                    if artifact_run_id:
+                        break
         current_artifact: dict[str, Any] = {}
         run = None
         report_messages: tuple[InvestigationMessage, ...] = ()
@@ -1137,6 +1163,11 @@ class InvestigationCreationConversationService:
         session = self.store.get_session(turn.session_id)
         principal = self.principal_for_session(session.id)
         history = self.store.hermes_conversation_history(turn.id)
+        recovered_history = self._failed_turn_checkpoint_history(
+            turn, principal=principal
+        )
+        if recovered_history:
+            history = [*(history or []), *recovered_history]
         user_message = self.store.get_user_message_for_turn(turn.id).content
         # A creation session is single-report scoped. Once its run is published,
         # keep accidental creation-route turns deterministic and preserve the
@@ -1229,6 +1260,41 @@ class InvestigationCreationConversationService:
                 raise RuntimeError("Hermes creation Turn was interrupted")
             if bool(result.get("failed")) or not bool(result.get("completed", True)):
                 self._answer_streamer.interrupt(turn.id)
+                checkpoint_messages = self._checkpoint_messages_for_turn(
+                    turn, principal=principal
+                )
+                artifact = self._verified_artifact(
+                    checkpoint_messages,
+                    principal=principal,
+                    adoption_turn=turn,
+                )
+                if artifact.get("artifact_type") in {
+                    "investigation_draft",
+                    "investigation_run",
+                }:
+                    answer = self._checkpoint_completion_answer(artifact)
+                    transcript = [
+                        *(history or []),
+                        {"role": "user", "content": user_message},
+                        *checkpoint_messages,
+                        {"role": "assistant", "content": answer},
+                    ]
+                    result = {
+                        **result,
+                        "completed": True,
+                        "failed": False,
+                        "interrupted": False,
+                        "final_response": answer,
+                        "turn_exit_reason": "recovered_successful_application_checkpoint",
+                    }
+                    return self._persist_result(
+                        turn,
+                        result,
+                        transcript,
+                        artifact,
+                        history_count=len(history or []),
+                        include_proposal_presentations=False,
+                    )
                 self.store.fail_turn(
                     turn.id,
                     error_code=str(
@@ -1248,7 +1314,13 @@ class InvestigationCreationConversationService:
             artifact = self._verified_artifact(
                 transcript[len(history or []):], principal=principal, adoption_turn=turn
             )
-            return self._persist_result(turn, result, transcript, artifact)
+            return self._persist_result(
+                turn,
+                result,
+                transcript,
+                artifact,
+                history_count=len(history or []),
+            )
         except Exception as exc:
             current = self.store.get_turn(turn.id)
             if current.status == "completed":
@@ -1275,6 +1347,150 @@ class InvestigationCreationConversationService:
                 connection, session_id=turn.session_id, before_sequence=user.sequence,
             )
         return records
+
+    def _checkpoint_messages_for_turn(
+        self,
+        turn: InvestigationTurn,
+        *,
+        principal: Principal,
+    ) -> list[dict[str, Any]]:
+        receipts = (
+            self.tool_service.application_service.store
+            .successful_conversation_tool_receipts(
+                session_id=turn.session_id,
+                turn_id=turn.id,
+                principal=principal.id,
+            )
+        )
+        if not receipts:
+            return []
+        calls = []
+        results = []
+        for receipt in receipts:
+            call_id = f"recovered-checkpoint:{receipt['receipt_id']}"
+            calls.append(
+                {
+                    "id": call_id,
+                    "type": "function",
+                    "function": {
+                        "name": receipt["tool_name"],
+                        "arguments": {},
+                    },
+                }
+            )
+            results.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "name": receipt["tool_name"],
+                    "content": json.dumps(
+                        {
+                            **receipt["response"],
+                            "recovered_from_durable_checkpoint": True,
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
+                }
+            )
+        return [
+            {"role": "assistant", "content": "", "tool_calls": calls},
+            *results,
+            {
+                "role": "assistant",
+                "content": (
+                    "系统已从持久化检查点恢复以上成功操作。它们已经完成，不要因原回合失败而重复执行；"
+                    "只继续尚未完成的后续步骤，原请求对这些未完成步骤仍然有效。只有当前用户明确要求"
+                    "重新生成、替换或另存时，才重复已经完成的写操作。"
+                ),
+            },
+        ]
+
+    def _failed_turn_checkpoint_history(
+        self,
+        current_turn: InvestigationTurn,
+        *,
+        principal: Principal,
+    ) -> list[dict[str, Any]]:
+        turns = self.store.list_turns(current_turn.session_id)
+        current_index = next(
+            index for index, item in enumerate(turns) if item.id == current_turn.id
+        )
+        previous = list(turns[:current_index])
+        last_completed = max(
+            (
+                index
+                for index, item in enumerate(previous)
+                if item.status == "completed"
+            ),
+            default=-1,
+        )
+        recovered: list[dict[str, Any]] = []
+        for failed_turn in previous[last_completed + 1 :]:
+            if failed_turn.status not in {"error", "interrupted"}:
+                continue
+            recovered.extend(
+                self._checkpoint_messages_for_turn(
+                    failed_turn, principal=principal
+                )
+            )
+        return recovered
+
+    def _verified_checkpoint_artifact(
+        self,
+        turn: InvestigationTurn,
+        *,
+        principal: Principal,
+        allow_superseded_draft: bool = False,
+    ) -> dict[str, Any]:
+        messages = self._checkpoint_messages_for_turn(turn, principal=principal)
+        if not messages:
+            return {}
+        return self._verified_artifact(
+            messages,
+            principal=principal,
+            allow_superseded_draft=allow_superseded_draft,
+            adoption_turn=turn,
+        )
+
+    @staticmethod
+    def _checkpoint_completion_answer(artifact: dict[str, Any]) -> str:
+        if artifact.get("artifact_type") == "investigation_run":
+            status = str((artifact.get("run") or {}).get("status") or "QUEUED")
+            return (
+                "调查任务已经确认，成功写入的执行状态已恢复。\n\n"
+                f"- 当前状态：{status}\n"
+                "- 后续操作：可在当前页面继续查看采集、分析和报告进度。"
+            )
+
+        draft = artifact.get("draft") or {}
+        preview = artifact.get("confirmation_preview") or {}
+        configuration = draft.get("configuration") or {}
+        task_parameters = configuration.get("task_parameters") or {}
+        platform_names = {"dy": "抖音", "xhs": "小红书", "ks": "快手", "wb": "微博"}
+        platform = str(preview.get("platform") or configuration.get("platform") or "")
+        terms = [str(item) for item in preview.get("resolved_search_terms") or []]
+        term_summary = "、".join(terms[:10])
+        if len(terms) > 10:
+            term_summary += f"等 {len(terms)} 个"
+        lines = [
+            "调查草案已成功保存，尚未开始采集。",
+            "",
+            f"- 标题：{draft.get('title') or '未命名调查'}",
+            f"- 平台：{platform_names.get(platform, platform or '未设置')}",
+        ]
+        if term_summary:
+            lines.append(f"- 实际搜索词：{term_summary}")
+        lines.extend(
+            [
+                f"- 每关键词上限：{preview.get('max_posts_per_keyword', 1)} 条",
+                f"- 单任务总量：{task_parameters.get('max_total_notes', preview.get('max_notes', 1))} 条",
+            ]
+        )
+        if "analyze_limit" in task_parameters:
+            lines.append(f"- 自动分析上限：{task_parameters['analyze_limit']} 条")
+        lines.append("\n可以继续确认并启动任务，或先修改草案参数。")
+        return "\n".join(lines)
 
     def _binding_failure_notice(self, turn: InvestigationTurn, trace_messages: list[dict] | None = None) -> str:
         from .approval import BINDING_FAILURES
@@ -1508,13 +1724,17 @@ class InvestigationCreationConversationService:
         result: dict[str, Any],
         transcript: list[dict[str, Any]],
         artifact: dict[str, Any],
+        *,
+        history_count: int | None = None,
+        include_proposal_presentations: bool = True,
     ) -> TurnResult:
         answer = str(result.get("final_response") or "").strip()
         answer_was_redacted = False
         transcript_was_redacted = False
         if settings.creation_answer_stream_enabled:
             answer, answer_was_redacted = redact_creation_internal_references(answer)
-        history_count = len(self.store.hermes_conversation_history(turn.id) or [])
+        if history_count is None:
+            history_count = len(self.store.hermes_conversation_history(turn.id) or [])
         trace_messages = [
             item
             for item in transcript[history_count:]
@@ -1534,7 +1754,6 @@ class InvestigationCreationConversationService:
                     transcript_was_redacted = transcript_was_redacted or changed
                 public_transcript.append(projected)
             transcript = public_transcript
-            history_count = len(self.store.hermes_conversation_history(turn.id) or [])
             trace_messages = [
                 item
                 for item in transcript[history_count:]
@@ -1596,8 +1815,12 @@ class InvestigationCreationConversationService:
             scope_remaining_issues=[],
             hermes_transcript=transcript,
             public_artifact=artifact,
-            proposal_snapshots=self.tool_service.application_service.store.proposal_presentation_snapshots(
-                session_id=turn.session_id, turn_id=turn.id,
+            proposal_snapshots=(
+                self.tool_service.application_service.store.proposal_presentation_snapshots(
+                    session_id=turn.session_id, turn_id=turn.id,
+                )
+                if include_proposal_presentations
+                else []
             ),
         )
         self._answer_streamer.release(turn.id)

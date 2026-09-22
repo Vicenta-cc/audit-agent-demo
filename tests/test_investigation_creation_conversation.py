@@ -122,14 +122,21 @@ class ScriptedCreationHermesAgent:
         principal_resolver: Callable[[str], Principal],
         actions: list[tuple[str, ScriptArguments]],
         final_response: str,
+        completed: bool = True,
+        failed: bool = False,
+        turn_exit_reason: str = "completed",
     ) -> None:
         self.session_id = session_id
         self.tool_service = tool_service
         self.principal_resolver = principal_resolver
         self.actions = actions
         self.final_response = final_response
+        self.completed = completed
+        self.failed = failed
+        self.turn_exit_reason = turn_exit_reason
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.results: list[dict[str, Any]] = []
+        self.conversation_histories: list[list[dict[str, Any]]] = []
 
     def run_conversation(
         self,
@@ -140,6 +147,9 @@ class ScriptedCreationHermesAgent:
         **_: Any,
     ) -> dict[str, Any]:
         principal = self.principal_resolver(self.session_id)
+        self.conversation_histories.append(
+            [dict(item) for item in conversation_history or []]
+        )
         messages = [
             *(conversation_history or []),
             {"role": "user", "content": message},
@@ -192,12 +202,12 @@ class ScriptedCreationHermesAgent:
             )
         messages.append({"role": "assistant", "content": self.final_response})
         return {
-            "completed": True,
-            "failed": False,
+            "completed": self.completed,
+            "failed": self.failed,
             "interrupted": False,
             "final_response": self.final_response,
             "messages": messages,
-            "turn_exit_reason": "completed",
+            "turn_exit_reason": self.turn_exit_reason,
             "api_calls": 0,
         }
 
@@ -411,6 +421,9 @@ def _run_scripted_creation_turn(
     final_response: str = "已根据当前系统资源回答。",
     session_id: str = "",
     client_message_id: str = "scripted-message",
+    completed: bool = True,
+    failed: bool = False,
+    turn_exit_reason: str = "completed",
 ) -> dict[str, Any]:
     conversation = stack["conversation"]
     principal = Principal("principal-a")
@@ -427,6 +440,9 @@ def _run_scripted_creation_turn(
         principal_resolver=conversation.principal_for_session,
         actions=actions,
         final_response=final_response,
+        completed=completed,
+        failed=failed,
+        turn_exit_reason=turn_exit_reason,
     )
     provider_route = conversation._provider_route(content)
     cache_key: object = (
@@ -637,6 +653,92 @@ def test_failed_creation_requirements_survive_followup_without_failed_claims(cre
     assert '已覆盖正式词库' not in json.dumps(transcript, ensure_ascii=False)
     assert result['turn'].status == 'completed'
     assert _draft_count(creation_stack['creation_store']) == 0
+
+
+def test_failed_model_turn_recovers_successful_draft_checkpoint(creation_stack: dict):
+    def draft_with_limits(results: list[dict[str, Any]]) -> dict[str, Any]:
+        arguments = _search_draft_from_options(results)
+        arguments["configuration"]["task_parameters"] = {
+            "max_notes": 30,
+            "max_total_notes": 30,
+            "analyze_limit": 30,
+        }
+        return arguments
+
+    actions = _explicit_create_actions()
+    actions[-1] = ("create_investigation_draft", draft_with_limits)
+    recovered = _run_scripted_creation_turn(
+        creation_stack,
+        content="创建这个调查草案，三个数量上限都设为30。",
+        actions=actions,
+        final_response="模型在最终回复阶段被供应商拦截。",
+        client_message_id="recover-successful-draft-checkpoint",
+        completed=False,
+        failed=True,
+        turn_exit_reason="max_iterations_reached",
+    )
+
+    assert recovered["turn"].status == "completed"
+    assert recovered["turn"].stop_reason == (
+        "recovered_successful_application_checkpoint"
+    )
+    assert recovered["turn"].public_artifact["artifact_type"] == (
+        "investigation_draft"
+    )
+    assert _draft_count(creation_stack["creation_store"]) == 1
+    assert "每关键词上限：30 条" in recovered["result"].answer
+    assert "单任务总量：30 条" in recovered["result"].answer
+    assert "自动分析上限：30 条" in recovered["result"].answer
+    assert "模型在最终回复阶段" not in recovered["result"].answer
+
+    state = creation_stack["conversation"].get_workspace_state(
+        recovered["session_id"], principal=Principal("principal-a")
+    )
+    assert state.draft_artifact["draft_id"] == (
+        recovered["turn"].public_artifact["draft_id"]
+    )
+    transcript = creation_stack["conversation"].store.latest_completed_hermes_transcript(
+        recovered["session_id"]
+    )
+    assert transcript is not None
+    assert "recovered_from_durable_checkpoint" in json.dumps(transcript)
+
+
+def test_partial_failed_turn_exposes_only_successful_checkpoints_to_followup(
+    creation_stack: dict,
+):
+    content = json.loads(
+        (Path(__file__).parent / "fixtures/recruitment_fraud_ruleset.json").read_text()
+    )
+    failed = _run_scripted_creation_turn(
+        creation_stack,
+        content="生成并保存一套招聘诈骗审核规则。",
+        actions=[("create_ruleset_proposal", {"content": content})],
+        final_response="未完成。",
+        client_message_id="partial-checkpoint-create",
+        completed=False,
+        failed=True,
+        turn_exit_reason="max_iterations_reached",
+    )
+    assert failed["turn"].status == "error"
+
+    resumed = _run_scripted_creation_turn(
+        creation_stack,
+        session_id=failed["session_id"],
+        content="继续完成剩余步骤，不要重复已经完成的操作。",
+        actions=[],
+        client_message_id="partial-checkpoint-resume",
+    )
+    recovered_history = json.dumps(
+        resumed["agent"].conversation_histories[0], ensure_ascii=False
+    )
+    assert "recovered_from_durable_checkpoint" in recovered_history
+    assert "create_ruleset_proposal" in recovered_history
+    assert "只继续尚未完成的后续步骤" in recovered_history
+    with sqlite3.connect(creation_stack["creation_store"].db_path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM ruleset_proposals"
+        ).fetchone()[0] == 1
 
 
 def test_fake_hermes_turn_returns_verified_draft_artifact_without_starting_run(
