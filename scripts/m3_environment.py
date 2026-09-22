@@ -107,7 +107,14 @@ def check(config):
     HermesRuntimeBinding()._verify_version()
     HermesRuntimeBinding().product_system_prompt()
     if not os.environ.get('DASHSCOPE_API_KEY'):
-        raise RuntimeError('实验模型密钥未配置。')
+        raise RuntimeError('常规模型 DASHSCOPE_API_KEY 未配置。')
+    if not os.environ.get('RESOURCE_GENERATION_API_KEY'):
+        raise RuntimeError('资源生成模型 RESOURCE_GENERATION_API_KEY 未配置。')
+    print(
+        '模型路由配置完整：规则/黑话库/关键词生成使用 RESOURCE_GENERATION_*；'
+        '其他对话、审核、报告生成和问答使用 DASHSCOPE_*。',
+        flush=True,
+    )
     crawler = Path(config['crawler_dir'])
     if not (crawler / 'cache/abs_cache.py').is_file():
         raise RuntimeError('采集器 cache 源码包缺失，需补齐独立采集代码。')
