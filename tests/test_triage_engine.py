@@ -47,6 +47,24 @@ def test_trusted_verified_is_penalized_and_model_bands_map_to_scores():
     assert trusted.band == "trusted" and trusted.score == -500
 
 
+def test_verified_account_penalty_is_additive_with_rule_hits():
+    engine = _engine({"suspicion": "none"})
+    terms = engine.terms_for(["gambling"])
+    verified = {"enterprise_verify_reason": "某某日报官方账号"}
+
+    single = engine.score("a", 1, {"desc": "今晚上分", **verified}, [], terms)
+    assert single.band == "rule" and single.score == -200 and "认证账号 −500" in single.reason
+    # 认证账号的单命中不再抢走该词唯一的深审名额
+    assert select_candidate(rank_candidates([single]), exclude_keys=set()) is None
+
+    double = engine.score("b", 1, {"desc": "今晚上分，加微信", **verified}, [], terms)
+    assert double.band == "rule" and double.score == 100 and len(double.hits) == 2
+
+    plain = engine.score("c", 1, {"desc": "今晚上分"}, [], terms)
+    assert plain.band == "rule" and plain.score == 300 and "认证账号" not in plain.reason
+    assert engine.qwen.calls == []      # 规则层命中后不调模型
+
+
 def test_model_failure_counts_as_weak():
     score = _engine(RuntimeError("down")).score("d", 1, {"desc": "日常"}, [], [])
     assert score.band == "weak" and score.score == 100

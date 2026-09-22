@@ -101,14 +101,20 @@ class TriageEngine:
     def score(self, content_key: str, rank: int, item: dict, comments: list[dict], terms: list[TriageTerm]) -> CandidateScore:
         engagement = _int(item.get("liked_count")) + _int(item.get("comment_count")) + _int(item.get("share_count"))
         hits = self._rule_hits(item, comments, terms)
+        verify_reason = _text(item.get("enterprise_verify_reason"))
         if hits:
             top = hits[0]
-            total = min(RULE_HIT_CAP, RULE_HIT_SCORE * len(hits))
-            return CandidateScore(content_key, rank, total, "rule", f"命中{top.category_id or '导流'}：{top.keyword}（{top.field}）",
+            # 规则层三个信号相加（方案 §4）：认证账号的 −500 要能抵掉命中分，
+            # 否则蓝V的反诈科普只要出现"微信"就会拿走该词唯一的深审名额。
+            total = min(RULE_HIT_CAP, RULE_HIT_SCORE * len(hits)) + (TRUSTED_PENALTY if verify_reason else 0)
+            reason = f"命中{top.category_id or '导流'}：{top.keyword}（{top.field}）"
+            if verify_reason:
+                reason += "，认证账号 −500"
+            return CandidateScore(content_key, rank, total, "rule", reason,
                                   hits=[asdict(h) for h in hits], engagement=engagement)
-        if _text(item.get("enterprise_verify_reason")):
+        if verify_reason:
             return CandidateScore(content_key, rank, TRUSTED_PENALTY, "trusted",
-                                  f"认证账号（{_text(item.get('enterprise_verify_reason'))[:40]}）且无命中", engagement=engagement)
+                                  f"认证账号（{verify_reason[:40]}）且无命中", engagement=engagement)
         try:
             raw = self.qwen.audit_text(self.build_prompt(item, comments, terms), max_tokens=400, model=self.model,
                                        enable_thinking=False, request_timeout=self.request_timeout)
