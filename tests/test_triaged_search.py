@@ -48,7 +48,8 @@ class FakeCrawler:
         return CrawlOutput(platform=platform, contents=[item], comments=[], output_dir=Path(save_root))
 
     def _load_platform_output(self, save_root, platform):
-        items = [{"aweme_id": cid, "source_keyword": kw} for kw, cid in self.detail_calls]
+        # 抖音 detail 模式写盘时 source_keyword 为空，重新读盘拿不到词：这里保持同样的诚实行为
+        items = [{"aweme_id": cid, "source_keyword": ""} for _kw, cid in self.detail_calls]
         return CrawlOutput(platform=platform, contents=items, comments=[], output_dir=Path(save_root))
 
 
@@ -121,6 +122,8 @@ def test_selects_one_per_keyword_skipping_duplicates_and_analyzed(tmp_path: Path
     assert ("词F", "f1") not in pipeline.crawler.detail_calls        # 重复后只剩正常候选 → 跳过（R9）
     assert set(pipeline.crawler.search_sorts) == {"latest"}   # 沿用同事的排序设置（R10）
     assert [c["aweme_id"] for c in output.contents] == ["a2", "b1"]
+    # 重新读盘的行没有 source_keyword，应用侧必须按选中它的词补回（R7/§5）
+    assert [(c["aweme_id"], c["source_keyword"]) for c in output.contents] == [("a2", "词A"), ("b1", "词B")]
     assert [c["aweme_id"] for c in streamed] == ["a2", "b1"]
     payload = json.loads((tmp_path / "candidates" / "02-词B" / "candidates.json").read_text(encoding="utf-8"))
     assert payload["selected"] == "b1"

@@ -1901,14 +1901,14 @@ class AuditPipeline:
             [category] if category and getattr(request, "keyword_source", "keyword") == "lexicon" else []
         )
         mode = str(getattr(settings, "triage_mode", "off") or "off")
-        selected_keys: set[str] = set()
+        selected_by_key: dict[str, str] = {}      # content_key -> 选中它的词
         crawler_started = False
         for index, keyword in enumerate(terms, start=1):
             if stop_checker and stop_checker():
                 break
             # 本任务采集上限沿用旧路径的 max_total_notes：达到上限就不再搜索后面的词，
             # 避免采到 analyze_limit 之外、永远排队的内容（R8）。
-            if len(selected_keys) >= max_total_notes:
+            if len(selected_by_key) >= max_total_notes:
                 remaining = terms[index - 1:]
                 job_store.log(self.job_id,
                               f"已达本任务采集上限 {max_total_notes} 条，以下词未搜索：{', '.join(remaining)}")
@@ -1940,7 +1940,7 @@ class AuditPipeline:
                     if key:
                         scores.append(engine.score(key, rank, item, comments_by_key.get(key, []), lexicon_terms))
                 ranked = rank_candidates(scores)
-                exclude = set(selected_keys) | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked])
+                exclude = set(selected_by_key) | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked])
                 strategy = "triage"
                 if mode == "compare" and random.random() < 0.5:
                     strategy = "rank1"
@@ -1967,7 +1967,7 @@ class AuditPipeline:
                     collect_media=bool(getattr(request, "collect_media", True)),
                 )
                 if detail_output.contents:
-                    selected_keys.add(selected.content_key)
+                    selected_by_key[selected.content_key] = keyword
                 else:
                     job_store.log(self.job_id, f"词「{keyword}」精采未返回内容：{selected.content_key}，本词无产出")
             except (CrawlerVerificationError, CrawlerAuthenticationError, CrawlerRateLimitError):
@@ -1976,8 +1976,10 @@ class AuditPipeline:
                 job_store.log(self.job_id, f"词「{keyword}」采集或初筛失败：{exc}，跳过该词")
                 continue
         output = self.crawler._load_platform_output(save_root, platform)
-        output.contents = [item for item in output.contents if content_identity(item, platform) in selected_keys]
-        job_store.log(self.job_id, f"初筛完成：{len(terms)} 个词，选中 {len(selected_keys)} 条进入精审")
+        # 重新读盘拿到的是爬虫原始行：抖音 detail 模式不写 source_keyword，按选中它的词补回（R7）
+        output.contents = [item | {"source_keyword": selected_by_key[key]} for item in output.contents
+                           if (key := content_identity(item, platform)) in selected_by_key]
+        job_store.log(self.job_id, f"初筛完成：{len(terms)} 个词，选中 {len(selected_by_key)} 条进入精审")
         return output
 
     def _mark_subject_skipped(self, platform: str, content_key: str, subject: AuditSubject) -> None:
