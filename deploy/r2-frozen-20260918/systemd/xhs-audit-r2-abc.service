@@ -1,0 +1,19 @@
+[Unit]
+Description=Isolated XHS Audit R2 runtime (empty data profile)
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime
+Environment=DOUYIN_CANDIDATE_CONFIG=/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/runtime.json
+ExecStart=/bin/bash /mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/candidate-runtime.sh start
+ExecStartPost=/bin/bash /mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/candidate-runtime.sh status
+ExecStop=/bin/bash /mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/candidate-runtime.sh stop
+ExecReload=/bin/bash /mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/candidate-runtime.sh restart
+TimeoutStartSec=180
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

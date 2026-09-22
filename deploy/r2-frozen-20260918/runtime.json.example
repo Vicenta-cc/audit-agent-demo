@@ -1,0 +1,75 @@
+{
+  "environment_id": "xhs-audit-r2-interactive-server-20260918",
+  "runtime_root": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime",
+  "application_repository": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/application",
+  "application_commit": "509d922af4d23dec9d488e7f1e3b95042b0c4bf1",
+  "application_tag": "douyin-r2-interactive-20260918-v3",
+  "crawler_repository": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-abc-20260916/crawler",
+  "crawler_commit": "efafe3186400b1020955c6acfdc201235b84a2d8",
+  "crawler_runtime": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-abc-20260916/crawler",
+  "crawler_fingerprint_paths": [
+    "api",
+    "base",
+    "cmd_arg",
+    "config",
+    "constant",
+    "database",
+    "libs",
+    "media_platform",
+    "model",
+    "proxy",
+    "store",
+    "tools",
+    "main.py",
+    "var.py",
+    "pyproject.toml"
+  ],
+  "formal_runtime_root": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime",
+  "data_dir": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/data",
+  "outputs_dir": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/data/outputs",
+  "browser_profile_root": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/browser-profiles",
+  "application_python": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/venv-app/bin/python",
+  "crawler_python": "/mnt/datadisk0/xhs-audit-agent-r2-abc/runtime/venv-crawler/bin/python",
+  "node": "/usr/bin/node",
+  "frontend_root": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/application/Audit_assistant",
+  "frontend_dependencies": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/application/Audit_assistant/node_modules",
+  "host": "127.0.0.1",
+  "frontend_port": 3198,
+  "backend_port": 8198,
+  "protected_ports": [
+    80,
+    443,
+    3010,
+    8080,
+    8443,
+    18000
+  ],
+  "media_inventory": {
+    "files": 0,
+    "bytes": 0
+  },
+  "entrypoints": {
+    "backend": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/runtime-support/serve.py",
+    "worker": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/runtime-support/worker.py",
+    "frontend": "/mnt/datadisk0/xhs-audit-agent-r2-abc/releases/r2-interactive-20260918/runtime-support/frontend.py"
+  },
+  "expected_hashes": {
+    "entrypoints": {
+      "backend": "cf1de607fef0656c774f81de3f46d29372b808eb1778bebbb6d05f673e581fbe",
+      "worker": "a50737899a2469bbf7b2787e3f8ac315ba49248781ded5a4fa9dafad399fdc2e",
+      "frontend": "d5f160352f893941be77c0c15f2fe175bba318c4fd6251eb88d146ea121d8592"
+    },
+    "crawler_runtime": "ee14ccc213f80cf8f4e91e73d08e22f2fc4a5f3b0663a279aac11efda12cafeb",
+    "crawler_client": "4d082fbc865ee0acfd56ae01d44888c91b13ab0ca77f053a4b88df4b7b0bc4de"
+  },
+  "streaming_flags": {
+    "INVESTIGATION_ACTIVITY_STREAM_ENABLED": true,
+    "INVESTIGATION_ANSWER_STREAM_ENABLED": true,
+    "INVESTIGATION_CREATION_ANSWER_STREAM_ENABLED": true
+  },
+  "interactive_login": {
+    "enabled": true,
+    "timeout_seconds": 600,
+    "browser_version": "145.0.7632.109.2"
+  }
+}

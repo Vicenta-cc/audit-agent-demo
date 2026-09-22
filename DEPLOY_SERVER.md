@@ -1,3 +1,5 @@
+> 历史 GPU 模型/后端部署说明。当前多用户候选版本与环境边界请先阅读 [README](README.md)；[R2 基线说明](docs/runtime/R2-FROZEN-BASELINE-20260920.md) 为旧版归档。
+
 # Server Backend + Qwen3-VL Deployment
 
 This project can run with the frontend on your local machine and the backend on a GPU server.
