@@ -11,6 +11,7 @@ RULE_HIT_SCORE = 300
 RULE_HIT_CAP = 900
 TRUSTED_PENALTY = -500
 MODEL_SCORES = {"strong": 200, "weak": 100, "none": 0}
+CATEGORY_LABELS = {"diversion": "导流"}      # 命中原因会进任务日志，别把内部 id 给运营看
 
 
 @dataclass
@@ -112,7 +113,8 @@ class TriageEngine:
             # 规则层三个信号相加（方案 §4）：认证账号的 −500 要能抵掉命中分，
             # 否则蓝V的反诈科普只要出现"微信"就会拿走该词唯一的深审名额。
             total = min(RULE_HIT_CAP, RULE_HIT_SCORE * len(hits)) + (TRUSTED_PENALTY if verify_reason else 0)
-            reason = f"命中{top.category_id or '导流'}：{top.keyword}（{top.field}）"
+            label = CATEGORY_LABELS.get(top.category_id, top.category_id) or "导流"
+            reason = f"命中{label}：{top.keyword}（{top.field}）"
             if verify_reason:
                 reason += "，认证账号 −500"
             return CandidateScore(content_key, rank, total, "rule", reason,

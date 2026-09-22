@@ -47,6 +47,11 @@ def test_trusted_verified_is_penalized_and_model_bands_map_to_scores():
     assert trusted.band == "trusted" and trusted.score == -500
 
 
+def test_diversion_reason_reaches_the_operator_log_in_chinese():
+    score = _engine({"suspicion": "none"}).score("a", 1, {"desc": "加微信详聊"}, [], [])
+    assert score.band == "rule" and score.reason == "命中导流：微信/vx（desc）"
+
+
 def test_verified_account_penalty_is_additive_with_rule_hits():
     engine = _engine({"suspicion": "none"})
     terms = engine.terms_for(["gambling"])
