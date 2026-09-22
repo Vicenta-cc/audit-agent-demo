@@ -9,7 +9,8 @@ import pytest
 
 import backend.audit_agent.pipeline as pipeline_module
 from backend.audit_agent.crawler_adapter import (CrawlerCollectionIncompleteError,
-                                                 CrawlerVerificationError, CrawlOutput)
+                                                 CrawlerVerificationError, CrawlOutput,
+                                                 MediaCrawlerAdapter)
 from backend.audit_agent.triage import CandidateScore, mark_candidates_collected, write_candidates_file
 
 
@@ -440,3 +441,43 @@ def test_zero_keywords_fails_like_run_search(tmp_path: Path, monkeypatch):
             stop_checker=lambda: False, started_callback=None, progress_callback=None,
         )
     assert crawler.search_calls == []
+
+
+class RealOutputCrawler(FakeCrawler):
+    """搜索与精采仍然是假的，最后一步读盘用真的 _load_platform_output。"""
+
+    def _load_platform_output(self, save_root, platform):
+        adapter = MediaCrawlerAdapter.__new__(MediaCrawlerAdapter)
+        return adapter._load_platform_output(Path(save_root), platform)
+
+
+def _write_jsonl(path: Path, rows: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+
+
+def test_candidate_rows_never_reach_the_returned_output(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
+    # 精采落在正常目录，9 条未选中的候选落在 candidates 子树里（R6）
+    _write_jsonl(tmp_path / "douyin" / "jsonl" / "search_contents_2026-09-22.jsonl",
+                 [{"aweme_id": "top1", "desc": "今晚上分", "source_keyword": ""}])
+    _write_jsonl(tmp_path / "candidates" / "01-词A" / "douyin" / "jsonl" / "search_contents_2026-09-22.jsonl",
+                 [{"aweme_id": "cand9", "desc": "候选", "source_keyword": "词A"}])
+    crawler = RealOutputCrawler({"词A": [("top1", "今晚上分"), ("cand9", "候选")]})
+    pipeline = _new_pipeline("job-r6", crawler, FakeIngestion(analyzed=set()), FakeEngine())
+    output = pipeline._run_triaged_search(
+        request=_base_request(keyword="词A"), save_root=tmp_path, start_page=1, max_total_notes=10,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    assert crawler.detail_calls == [("词A", "top1")]
+    assert [c["aweme_id"] for c in output.contents] == ["top1"]          # 候选子树对读盘不可见
+    assert output.contents[0]["source_keyword"] == "词A"                 # 读盘行由应用侧补回词
+    # 候选行确实是一条能被读出来的行，只是 save_root 那一层读不到它
+    candidates_output = MediaCrawlerAdapter.__new__(MediaCrawlerAdapter)._load_platform_output(
+        tmp_path / "candidates" / "01-词A", "dy")
+    assert [c["aweme_id"] for c in candidates_output.contents] == ["cand9"]
