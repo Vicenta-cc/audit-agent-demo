@@ -12,6 +12,12 @@
 ## 对照报告
 `python -m scripts.triage_compare_report <job_id> [...]`，看 `lift`（初筛组 reject 率 ÷ 排第一组 reject 率，目标 ≥ 1.5）。
 
+## 已知限制
+
+- **任务采集上限**：一次任务最多采多少条由请求参数 `max_total_notes` 决定（当前契约上限 5），它同时决定 `analyze_limit`。词数超过上限时，靠后的词不会被搜索，任务日志里有「已达本任务采集上限 N 条，以下词未搜索：…」一行列出这些词。
+- **精采不完整**：补采媒体或评论的子步骤失败（`CrawlerCollectionIncompleteError`）与 `TRIAGE_MODE=off` 时一致，整个任务失败并提示查看 `douyin/collection_status`；不会把已经流式入库的半条内容当成「本词无产出」。
+- **恢复采集与切换账号**：按 `candidates.json` 的 `collected` 标记跳过已经精采成功的词，所以续采或换账号重跑不会让同一个词出两条。非流式入库配置下（`STREAM_CRAWL_ANALYSIS=false`），切换账号前采到的内容不会被再次读取，与现状一致。
+
 ## 回滚
 `TRIAGE_MODE=off` 并重启。无数据结构变更。
 
