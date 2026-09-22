@@ -148,6 +148,42 @@ def write_candidates_file(directory: Path, keyword: str, ranked: list[CandidateS
         "keyword": keyword,
         "strategy": strategy,
         "selected": selected.content_key if selected else None,
+        "collected": False,
         "candidates": [asdict(item) for item in ranked],
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
+
+
+def _read_candidates_file(path: Path) -> dict | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def mark_candidates_collected(candidate_root: Path) -> None:
+    """Record that this keyword's pick was precisely collected, so a resumed run skips the word."""
+    path = candidate_root / "candidates.json"
+    payload = _read_candidates_file(path)
+    if payload is None:
+        return
+    payload["collected"] = True
+    try:
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        return
+
+
+def load_collected_selections(job_crawl_dir: Path) -> dict[str, str]:
+    """keyword -> content_key for every word already collected in this job, rotation dirs included."""
+    collected: dict[str, str] = {}
+    for path in sorted(Path(job_crawl_dir).rglob("candidates.json")):
+        payload = _read_candidates_file(path)
+        if payload is None or not payload.get("collected"):
+            continue
+        keyword = str(payload.get("keyword") or "").strip()
+        selected = str(payload.get("selected") or "").strip()
+        if keyword and selected:
+            collected[keyword] = selected
+    return collected

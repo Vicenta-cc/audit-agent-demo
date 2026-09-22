@@ -9,13 +9,14 @@ import pytest
 
 import backend.audit_agent.pipeline as pipeline_module
 from backend.audit_agent.crawler_adapter import CrawlerVerificationError, CrawlOutput
-from backend.audit_agent.triage import CandidateScore
+from backend.audit_agent.triage import CandidateScore, mark_candidates_collected, write_candidates_file
 
 
 class FakeCrawler:
     def __init__(self, candidates_by_word, detail_exceptions=None, comments_by_word=None,
-                 detail_fail_once=None, detail_empty_once=None):
+                 detail_fail_once=None, detail_empty_once=None, existing_rows=()):
         self.candidates_by_word = candidates_by_word
+        self.existing_rows = list(existing_rows)                   # 之前的采集已经落盘的 content_id
         self.detail_exceptions = detail_exceptions or {}
         self.comments_by_word = comments_by_word or {}
         self.detail_fail_once = dict(detail_fail_once or {})       # content_id -> exception, raised once
@@ -26,7 +27,7 @@ class FakeCrawler:
 
     def run_search(self, *, platform, keyword, save_root, **kwargs):
         self.search_sorts.append(kwargs.get("search_sort"))
-        self.search_calls.append(kwargs)
+        self.search_calls.append({**kwargs, "keyword": keyword})
         items = [{"aweme_id": aid, "desc": desc, "source_keyword": keyword, "liked_count": "1"}
                  for aid, desc in self.candidates_by_word.get(keyword, [])]
         comments = self.comments_by_word.get(keyword, [])
@@ -49,7 +50,8 @@ class FakeCrawler:
 
     def _load_platform_output(self, save_root, platform):
         # 抖音 detail 模式写盘时 source_keyword 为空，重新读盘拿不到词：这里保持同样的诚实行为
-        items = [{"aweme_id": cid, "source_keyword": ""} for _kw, cid in self.detail_calls]
+        items = [{"aweme_id": cid, "source_keyword": ""} for cid in self.existing_rows]
+        items += [{"aweme_id": cid, "source_keyword": ""} for _kw, cid in self.detail_calls]
         return CrawlOutput(platform=platform, contents=items, comments=[], output_dir=Path(save_root))
 
 
@@ -310,3 +312,59 @@ def test_selected_keys_only_recorded_after_successful_precise_collection(tmp_pat
     )
     assert crawler_empty.detail_calls == [("词B", "shared2")]        # 词A的空结果不计入成功采集
     assert [c["aweme_id"] for c in output_empty.contents] == ["shared2"]
+
+
+def _collected_candidates(directory: Path, keyword: str, content_key: str) -> None:
+    """之前的采集留下的证据：选中并已精采成功。"""
+    write_candidates_file(directory, keyword, [CandidateScore(content_key, 1, 300, "rule", "命中", [], None, 0)],
+                          CandidateScore(content_key, 1, 300, "rule", "命中", [], None, 0), "triage")
+    mark_candidates_collected(directory)
+
+
+def test_resumed_sweep_skips_collected_words_and_counts_them_against_the_budget(tmp_path: Path, monkeypatch):
+    logs: list[str] = []
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda job_id, message, *a, **k: logs.append(message))
+    crawl_dir = tmp_path / "crawler"
+    _collected_candidates(crawl_dir / "candidates" / "01-词A", "词A", "a1")
+    crawler = FakeCrawler(
+        {"词A": [("a1", "今晚上分")], "词B": [("a1", "今晚上分"), ("b1", "今晚上分")], "词C": [("c1", "今晚上分")]},
+        existing_rows=["a1"],
+    )
+    pipeline = _new_pipeline("job-resume", crawler, FakeIngestion(analyzed={"a1"}), FakeEngine())
+    output = pipeline._run_triaged_search(
+        request=_base_request(keyword="词A,词B,词C"), save_root=crawl_dir, start_page=1, max_total_notes=2,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    assert [call["keyword"] for call in crawler.search_calls] == ["词B"]    # 词A 已采，词C 超预算
+    assert crawler.detail_calls == [("词B", "b1")]                          # a1 仍然被当作重复排除
+    assert [(c["aweme_id"], c["source_keyword"]) for c in output.contents] == [("a1", "词A"), ("b1", "词B")]
+    assert any("恢复采集：1 个词" in message for message in logs)
+    assert any("词「词A」已选定 a1" in message for message in logs)
+    assert [message for message in logs if "采集上限" in message] == [
+        "已达本任务采集上限 2 条，以下词未搜索：词C"]
+
+
+def test_rotated_sweep_reads_collected_markers_from_both_account_directories(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
+    crawl_dir = tmp_path / "crawler"
+    _collected_candidates(crawl_dir / "candidates" / "01-词A", "词A", "a1")                      # 上一个账号采的
+    _collected_candidates(crawl_dir / "rotation-x" / "candidates" / "02-词B", "词B", "b1")        # 本轮换目录里的
+    crawler = FakeCrawler({"词A": [("a1", "今晚上分")], "词B": [("b1", "今晚上分")], "词C": [("c1", "今晚上分")]})
+    pipeline = _new_pipeline("job-rotate", crawler, FakeIngestion(analyzed=set()), FakeEngine())
+    output = pipeline._run_triaged_search(
+        request=_base_request(keyword="词A,词B,词C"), save_root=crawl_dir / "rotation-x", start_page=1,
+        max_total_notes=10, crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc2",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    assert [call["keyword"] for call in crawler.search_calls] == ["词C"]
+    assert crawler.detail_calls == [("词C", "c1")]
+    assert [(c["aweme_id"], c["source_keyword"]) for c in output.contents] == [("c1", "词C")]

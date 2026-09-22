@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 
 from backend.audit_agent.triage import (
-    CandidateScore, TriageEngine, rank_candidates, select_candidate, write_candidates_file,
+    CandidateScore, TriageEngine, load_collected_selections, mark_candidates_collected,
+    rank_candidates, select_candidate, write_candidates_file,
 )
 
 
@@ -68,3 +69,39 @@ def test_rank_and_select_prefer_score_then_deeper_rank_then_low_engagement(tmp_p
     path = write_candidates_file(tmp_path, "上分", ranked, ranked[0], "triage")
     payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["selected"] == "k3" and payload["strategy"] == "triage" and len(payload["candidates"]) == 4
+
+
+def _score(key: str) -> CandidateScore:
+    return CandidateScore(key, 1, 300, "rule", "命中", [], None, 0)
+
+
+def test_collected_marker_is_written_off_and_read_back_across_rotation_dirs(tmp_path: Path):
+    crawl_dir = tmp_path / "crawler"
+    first = crawl_dir / "candidates" / "01-词A"
+    write_candidates_file(first, "词A", [_score("a1")], _score("a1"), "triage")
+    assert json.loads((first / "candidates.json").read_text(encoding="utf-8"))["collected"] is False
+    assert load_collected_selections(crawl_dir) == {}      # 精采未完成前不算已选定
+
+    mark_candidates_collected(first)
+    assert load_collected_selections(crawl_dir) == {"词A": "a1"}
+
+    # 切换账号后的候选目录也要读到
+    second = crawl_dir / "rotation-acc2" / "candidates" / "02-词B"
+    write_candidates_file(second, "词B", [_score("b1")], _score("b1"), "triage")
+    mark_candidates_collected(second)
+    assert load_collected_selections(crawl_dir) == {"词A": "a1", "词B": "b1"}
+
+    # 没选中的词即使被标记也不算已采
+    third = crawl_dir / "candidates" / "03-词C"
+    write_candidates_file(third, "词C", [], None, "triage")
+    mark_candidates_collected(third)
+    assert "词C" not in load_collected_selections(crawl_dir)
+
+
+def test_collected_helpers_tolerate_missing_and_broken_files(tmp_path: Path):
+    mark_candidates_collected(tmp_path / "does-not-exist")          # 文件缺失 → 静默跳过
+    broken = tmp_path / "candidates" / "01-词A"
+    broken.mkdir(parents=True)
+    (broken / "candidates.json").write_text("{not json", encoding="utf-8")
+    mark_candidates_collected(broken)
+    assert load_collected_selections(tmp_path) == {}

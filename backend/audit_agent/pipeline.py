@@ -43,7 +43,8 @@ from .prompts import get_prompt_set
 from .qwen_client import QwenClient, QwenTimeoutError, QwenProviderError
 from .rule_compiler import DEFAULT_THRESHOLDS, compact_library_policy
 from .translation import TranslationProcessor
-from .triage import TriageEngine, rank_candidates, select_candidate, write_candidates_file
+from .triage import (TriageEngine, load_collected_selections, mark_candidates_collected, rank_candidates,
+                     select_candidate, write_candidates_file)
 from .video_processor import DemoAudioProcessor, DemoFrameExtractor
 
 
@@ -1901,15 +1902,24 @@ class AuditPipeline:
             [category] if category and getattr(request, "keyword_source", "keyword") == "lexicon" else []
         )
         mode = str(getattr(settings, "triage_mode", "off") or "off")
-        selected_by_key: dict[str, str] = {}      # content_key -> 选中它的词
+        # 切换账号后 save_root 是 crawler/rotation-<账号>，证据要从整个任务的采集目录回读
+        job_crawl_dir = save_root.parent if save_root.name.startswith("rotation-") else save_root
+        collected = load_collected_selections(job_crawl_dir)
+        selected_by_key: dict[str, str] = {key: word for word, key in collected.items()}  # content_key -> 选中它的词
+        if collected:
+            job_store.log(self.job_id, f"恢复采集：{len(collected)} 个词已在之前的采集中选定，跳过")
         crawler_started = False
         for index, keyword in enumerate(terms, start=1):
             if stop_checker and stop_checker():
                 break
+            # 续采或切换账号后重跑：已经精采成功的词不再搜索，避免一个词出两条（R2/R3）
+            if keyword in collected:
+                job_store.log(self.job_id, f"词「{keyword}」已选定 {collected[keyword]}，跳过重复采集")
+                continue
             # 本任务采集上限沿用旧路径的 max_total_notes：达到上限就不再搜索后面的词，
             # 避免采到 analyze_limit 之外、永远排队的内容（R8）。
             if len(selected_by_key) >= max_total_notes:
-                remaining = terms[index - 1:]
+                remaining = [term for term in terms[index - 1:] if term not in collected]
                 job_store.log(self.job_id,
                               f"已达本任务采集上限 {max_total_notes} 条，以下词未搜索：{', '.join(remaining)}")
                 break
@@ -1968,6 +1978,7 @@ class AuditPipeline:
                 )
                 if detail_output.contents:
                     selected_by_key[selected.content_key] = keyword
+                    mark_candidates_collected(candidate_root)
                 else:
                     job_store.log(self.job_id, f"词「{keyword}」精采未返回内容：{selected.content_key}，本词无产出")
             except (CrawlerVerificationError, CrawlerAuthenticationError, CrawlerRateLimitError):
