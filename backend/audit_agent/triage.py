@@ -36,6 +36,11 @@ def _int(value) -> int:
         return 0
 
 
+def _str_list(value) -> list[str]:
+    """模型可能把 matched_terms/locations 答成字符串；非 list 一律当空，避免按字拆成命中。"""
+    return [_text(item) for item in value if _text(item)] if isinstance(value, list) else []
+
+
 def _comment_text(comment: dict) -> str:
     return _text(comment.get("content") or comment.get("source_text") or comment.get("text"))
 
@@ -121,15 +126,20 @@ class TriageEngine:
         except Exception as exc:
             return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak",
                                   f"初筛模型调用失败，按 weak 计：{exc}"[:200], engagement=engagement)
-        suspicion = _text((raw or {}).get("suspicion")).lower()
+        # 模型答一个数组或字符串时 json.loads 原样返回，按调用失败同样处理，不能让整个词失败
+        if not isinstance(raw, dict):
+            return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak",
+                                  "初筛模型输出不合法（非 JSON 对象），按 weak 计", engagement=engagement)
+        suspicion = _text(raw.get("suspicion")).lower()
         if suspicion not in MODEL_SCORES:
             return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak", "初筛模型输出不合法，按 weak 计",
                                   model=raw, engagement=engagement)
-        matched = [_text(v) for v in (raw.get("matched_terms") or []) if _text(v)]
+        matched = _str_list(raw.get("matched_terms"))
+        model = {**raw, "matched_terms": matched, "locations": _str_list(raw.get("locations"))}
         return CandidateScore(content_key, rank, MODEL_SCORES[suspicion], suspicion,
                               _text(raw.get("reason"))[:120] or f"模型判定 {suspicion}",
                               hits=[{"keyword": v, "match_type": "model", "category_id": "", "risk_level": "", "field": "", "snippet": ""} for v in matched],
-                              model=raw, engagement=engagement)
+                              model=model, engagement=engagement)
 
 
 def rank_candidates(scores: list[CandidateScore]) -> list[CandidateScore]:

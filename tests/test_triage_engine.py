@@ -18,7 +18,7 @@ class FakeQwen:
         self.calls.append((prompt, kwargs))
         if isinstance(self.response, Exception):
             raise self.response
-        return dict(self.response)
+        return dict(self.response) if isinstance(self.response, dict) else self.response
 
 
 class FakeLexicon:
@@ -68,6 +68,21 @@ def test_verified_account_penalty_is_additive_with_rule_hits():
 def test_model_failure_counts_as_weak():
     score = _engine(RuntimeError("down")).score("d", 1, {"desc": "日常"}, [], [])
     assert score.band == "weak" and score.score == 100
+
+
+def test_non_dict_model_output_degrades_to_weak_instead_of_killing_the_keyword():
+    # _parse_json_object 原样返回 json.loads 的结果，模型答一个数组就会得到 list
+    score = _engine([{"suspicion": "strong"}]).score("e", 1, {"desc": "日常"}, [], [])
+    assert score.band == "weak" and score.score == 100 and "初筛模型输出不合法" in score.reason
+    assert score.model is None
+
+
+def test_non_list_matched_terms_is_not_split_into_characters():
+    engine = _engine({"suspicion": "strong", "matched_terms": "上分", "locations": "desc", "reason": "有暗语"})
+    score = engine.score("f", 1, {"desc": "日常"}, [], [])
+    assert score.band == "strong" and score.score == 200
+    assert score.hits == []
+    assert score.model["matched_terms"] == [] and score.model["locations"] == []
 
 
 def test_rank_and_select_prefer_score_then_deeper_rank_then_low_engagement(tmp_path: Path):
