@@ -755,6 +755,25 @@ class LexiconStore:
             ).fetchall()
         return [str(row["keyword"]) for row in rows]
 
+    def triage_terms(self, category_ids: list[str]) -> list[dict]:
+        """Enabled main terms and variants usable for body-text matching."""
+        ids = [str(item).strip() for item in category_ids if str(item).strip()]
+        if not ids:
+            return []
+        placeholders = ",".join("?" for _ in ids)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT category_id, keyword, match_type, risk_level, COALESCE(entry_kind, '') AS entry_kind
+                FROM lexicon_keywords
+                WHERE enabled = 1 AND category_id IN ({placeholders})
+                  AND match_type IN ('精确', '模糊', '正则', '黑话词')
+                ORDER BY id ASC
+                """,
+                ids,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def enabled_main_terms(
         self,
         category_id: str,
