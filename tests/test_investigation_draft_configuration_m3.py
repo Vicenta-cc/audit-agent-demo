@@ -334,7 +334,7 @@ def test_unmarked_pipeline_preserves_legacy_multiple_item_behavior(
     assert "_confirmed_analyze_limit" not in configuration
 
 
-@pytest.mark.parametrize("value", [0, 6, -1, 1.5, "2", True])
+@pytest.mark.parametrize("value", [0, 31, -1, 1.5, "2", True])
 def test_main_workspace_rejects_invalid_per_keyword_limit(m3_stack, value):
     configuration = _douyin_configuration(m3_stack)
     configuration["task_parameters"] = {"max_notes": value}

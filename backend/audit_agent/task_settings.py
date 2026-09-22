@@ -13,20 +13,23 @@ class TaskSettingsConflict(ValueError):
 
 def default_task_parameters() -> InvestigationTaskParameters:
     """Return the same unsaved defaults used by preview and execution."""
+    post_limit = int(settings.investigation_max_posts)
     return InvestigationTaskParameters(
-        max_notes=min(5, max(1, int(settings.m3_posts_per_keyword))),
+        max_notes=1,
+        max_total_notes=min(5, post_limit),
         max_comments=min(1000, max(0, int(settings.m3_comments_per_post))),
         max_items_per_minute=5,
-        analyze_limit=max(1, int(settings.m3_analyze_limit)),
+        analyze_limit=1,
         analysis_batch_size=5,
     )
 
 
 def effective_parameters(requested):
     requested = InvestigationTaskParameters.model_validate(requested)
-    max_total_notes = min(requested.max_total_notes, 5)
+    post_limit = int(settings.investigation_max_posts)
+    max_total_notes = min(requested.max_total_notes, post_limit)
     return requested.model_copy(update={
-        "max_notes": min(requested.max_notes, 5),
+        "max_notes": min(requested.max_notes, post_limit),
         "max_total_notes": max_total_notes,
         "max_comments": min(requested.max_comments, settings.m3_comments_per_post) if requested.collect_comments else 0,
         "get_sub_comment": requested.get_sub_comment and requested.collect_comments and requested.max_comments > 0 and settings.m3_comments_per_post > 0,
@@ -35,6 +38,17 @@ def effective_parameters(requested):
         # later, after the final keyword count is known.
         "analyze_limit": max_total_notes,
         "auto_analyze": True,
+    })
+
+
+def requested_parameters_within_current_limit(requested):
+    """Normalize persisted settings when a deployment lowers its live cap."""
+    requested = InvestigationTaskParameters.model_validate(requested)
+    post_limit = int(settings.investigation_max_posts)
+    return requested.model_copy(update={
+        "max_notes": min(requested.max_notes, post_limit),
+        "max_total_notes": min(requested.max_total_notes, post_limit),
+        "analyze_limit": min(requested.analyze_limit, post_limit),
     })
 
 
@@ -55,11 +69,12 @@ class TaskSettingsStore:
             if row
             else default_task_parameters().model_dump(mode="json")
         )
+        parameters = requested_parameters_within_current_limit(parameters)
         return {"revision": int(row[0]) if row else 0,
-                "parameters": InvestigationTaskParameters.model_validate(parameters).model_dump(mode="json")}
+                "parameters": parameters.model_dump(mode="json")}
 
     def save(self, parameters, expected_revision):
-        parameters = InvestigationTaskParameters.model_validate(parameters).model_dump(mode="json")
+        parameters = requested_parameters_within_current_limit(parameters).model_dump(mode="json")
         with sqlite3.connect(self.db_path) as connection:
             connection.execute("BEGIN IMMEDIATE")
             current = self.get(connection)

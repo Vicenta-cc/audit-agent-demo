@@ -402,11 +402,23 @@ def test_inconsistent_pass_risk_result_is_isolated_as_pending(tmp_path):
     )
 
 
-def test_unified_report_rejects_more_than_five_posts(tmp_path):
+def test_unified_report_accepts_thirty_posts(tmp_path):
     source, store = seed["seed_audit"](
-        tmp_path, verdicts=[("pass", "none")] * 6
+        tmp_path, verdicts=[("pass", "none")] * 30
     )
-    with pytest.raises(Exception, match="1 to 5 audited posts"):
+    result = seed["R31ReportRuntime"](store).generate(
+        "new-search-task",
+        source=source,
+        checkpoint_path=tmp_path / "checkpoints.sqlite3",
+    )
+    assert store.get_version(result.report_version_id)["status"] == "published"
+
+
+def test_unified_report_rejects_more_than_thirty_posts(tmp_path):
+    source, store = seed["seed_audit"](
+        tmp_path, verdicts=[("pass", "none")] * 31
+    )
+    with pytest.raises(Exception, match="1 to 30 audited posts"):
         seed["R31ReportRuntime"](store).generate(
             "new-search-task",
             source=source,

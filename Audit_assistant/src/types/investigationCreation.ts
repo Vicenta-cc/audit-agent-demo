@@ -156,6 +156,7 @@ export interface PublicInvestigationDraft {
 }
 
 export interface ConfirmationPreview {
+  max_post_limit?: number;
   task_settings_revision?: number;
   requested_parameters?: InvestigationTaskParameters;
   effective_parameters?: InvestigationTaskParameters;

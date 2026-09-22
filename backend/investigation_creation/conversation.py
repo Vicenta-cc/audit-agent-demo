@@ -6,7 +6,7 @@ import re
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Event, RLock, Thread
+from threading import RLock
 from typing import Any, Callable, Literal
 from urllib.parse import urlsplit
 
@@ -48,12 +48,7 @@ from .errors import (
 from .principal import Principal
 from .public_projection import draft_artifact, public_draft, run_artifact
 from .public_answer import redact_creation_internal_references
-from .resource_authoring import (
-    CompanyResourceAuthoringClient,
-    ResourceAuthoringError,
-    ResourceKind,
-    resource_generation_kinds,
-)
+from .provider_routing import resource_generation_kinds
 from .tools import (
     HermesToolExecutionIdentity,
     InvestigationCreationToolService,
@@ -68,24 +63,6 @@ PUBLISHED_SESSION_NOTICE = (
 )
 
 logger = logging.getLogger(__name__)
-
-RESOURCE_AUTHORING_FEEDBACK: dict[ResourceKind, tuple[str, ...]] = {
-    "lexicon": (
-        "正在生成黑话库，并筛选约 5 个最有价值的实际搜索变体。",
-        "正在检查每个候选词能否独立用于平台搜索。",
-        "正在剔除宽泛生活词和低价值引流词。",
-        "正在校验主题主词与变体归属，请稍候。",
-        "生成耗时较长，请求仍在处理中。",
-    ),
-    "ruleset": (
-        "正在生成审核规则，并整理风险类型与命中边界。",
-        "正在核对命中条件与研判说明是否一致。",
-        "正在检查强豁免和正常内容保护边界。",
-        "正在校验规则阶段与结构，请稍候。",
-        "生成耗时较长，请求仍在处理中。",
-    ),
-}
-RESOURCE_AUTHORING_FEEDBACK_DELAYS = (15.0, 25.0, 30.0, 30.0)
 
 CREATION_SYSTEM_PROMPT = """You are the investigation configuration and resource assistant for a
 content-audit platform. Application appends the complete authoritative 审核规则 Proposal snapshot
@@ -713,7 +690,6 @@ class InvestigationCreationConversationService:
         fake_runtime: bool = False,
         hermes_state_dir: Path | None = None,
         principal_resolver: Callable[[str], Principal] | None = None,
-        resource_authoring_client: CompanyResourceAuthoringClient | None = None,
     ) -> None:
         self.tool_service = tool_service
         self.store = store or InvestigationStore()
@@ -722,13 +698,10 @@ class InvestigationCreationConversationService:
         self.agent_factory = agent_factory
         self.fake_runtime = bool(fake_runtime)
         self.principal_resolver = principal_resolver
-        self.resource_authoring_client = (
-            resource_authoring_client or CompanyResourceAuthoringClient()
-        )
         self.hermes_state_dir = (
             hermes_state_dir or settings.data_dir / "hermes-investigation-creation"
         ).resolve()
-        self._agents: dict[str, Any] = {}
+        self._agents: dict[object, Any] = {}
         self._agent_lock = RLock()
         self._turn_node_observers: list[Callable[[str, str], None]] = []
         self._activity_emitter = PublicActivityEmitter(
@@ -1220,6 +1193,7 @@ class InvestigationCreationConversationService:
             history = projected
         self._notify(turn.id, "call_qwen")
         self.tool_service.begin_conversation_turn(session.id, turn.id)
+        provider_route = self._provider_route(user_message)
         try:
             with ExitStack() as public_streams:
                 public_streams.enter_context(
@@ -1228,17 +1202,8 @@ class InvestigationCreationConversationService:
                 public_streams.enter_context(
                     self._answer_streamer.bind_turn(session.id, turn.id)
                 )
-                authoring_kinds = resource_generation_kinds(user_message)
-                if authoring_kinds and self.resource_authoring_client.enabled:
-                    result = self._run_resource_authoring_turn(
-                        turn,
-                        kinds=authoring_kinds,
-                        user_message=user_message,
-                        history=history,
-                        principal=principal,
-                    )
-                elif self.fake_runtime:
-                    agent = self._agent(session.id)
+                if self.fake_runtime:
+                    agent = self._agent(session.id, provider_route=provider_route)
                     result = agent.run_conversation(
                         user_message,
                         system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
@@ -1250,7 +1215,7 @@ class InvestigationCreationConversationService:
                         session_runtime_home(self.hermes_state_dir, session.id),
                         product_mode="creation"
                     ):
-                        agent = self._agent(session.id)
+                        agent = self._agent(session.id, provider_route=provider_route)
                         result = agent.run_conversation(
                             user_message,
                             system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
@@ -1300,177 +1265,6 @@ class InvestigationCreationConversationService:
             raise RuntimeError("Hermes creation Turn ended with an unknown outcome") from exc
         finally:
             self.tool_service.end_conversation_turn(session.id)
-
-    def _run_resource_authoring_turn(
-        self,
-        turn: InvestigationTurn,
-        *,
-        kinds: tuple[ResourceKind, ...],
-        user_message: str,
-        history: list[dict[str, Any]] | None,
-        principal: Principal,
-    ) -> dict[str, Any]:
-        messages: list[dict[str, Any]] = [
-            *(history or []),
-            {"role": "user", "content": user_message},
-        ]
-        authored: list[tuple[ResourceKind, dict[str, Any]]] = []
-        usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
-        try:
-            for kind in kinds:
-                feedback_stop, feedback_thread = self._start_resource_feedback(
-                    turn.session_id, kind
-                )
-                try:
-                    generated = self.resource_authoring_client.generate(
-                        kind,
-                        user_request=user_message,
-                    )
-                finally:
-                    feedback_stop.set()
-                    feedback_thread.join(timeout=0.2)
-                self._answer_streamer.stream_delta(
-                    turn.session_id,
-                    (
-                        "黑话库结构已生成并通过校验，正在建立可编辑副本。\n"
-                        if kind == "lexicon"
-                        else "审核规则结构已生成并通过校验，正在建立候选方案。\n"
-                    ),
-                )
-                authored.append((kind, generated.content))
-                for key in usage:
-                    usage[key] += int(generated.usage.get(key) or 0)
-        except ResourceAuthoringError as exc:
-            return {
-                "completed": False,
-                "failed": True,
-                "interrupted": False,
-                "final_response": exc.safe_message,
-                "messages": messages,
-                "turn_exit_reason": f"resource_authoring_{exc.kind}",
-                "error_code": f"resource_authoring_{exc.kind}",
-                "retryable": exc.retryable,
-                "api_calls": max(1, len(authored) + 1),
-                **usage,
-            }
-
-        completed_kinds: list[ResourceKind] = []
-        for index, (kind, content) in enumerate(authored, start=1):
-            tool_name = (
-                "create_ruleset_proposal"
-                if kind == "ruleset"
-                else "create_lexicon_edit"
-            )
-            arguments = {"content": content}
-            call_id = f"{turn.id}:resource-authoring:{index}:{kind}"
-            envelope = self.tool_service.execute_with_identity(
-                tool_name,
-                arguments,
-                principal=principal,
-                identity=HermesToolExecutionIdentity.require(
-                    session_id=turn.session_id,
-                    turn_id=turn.id,
-                    tool_call_id=call_id,
-                ),
-            )
-            self._activity_emitter.tool_completed(
-                turn.session_id,
-                call_id,
-                tool_name,
-                envelope,
-                arguments,
-            )
-            messages.extend(
-                [
-                    {
-                        "role": "assistant",
-                        "content": "",
-                        "tool_calls": [
-                            {
-                                "id": call_id,
-                                "type": "function",
-                                "function": {
-                                    "name": tool_name,
-                                    "arguments": arguments,
-                                },
-                            }
-                        ],
-                    },
-                    {
-                        "role": "tool",
-                        "tool_call_id": call_id,
-                        "name": tool_name,
-                        "content": json.dumps(
-                            envelope, ensure_ascii=False, sort_keys=True
-                        ),
-                    },
-                ]
-            )
-            if envelope.get("status") != "ok":
-                error = envelope.get("error") or {}
-                return {
-                    "completed": False,
-                    "failed": True,
-                    "interrupted": False,
-                    "final_response": str(
-                        error.get("message") or "资源生成结果暂时无法保存。"
-                    ),
-                    "messages": messages,
-                    "turn_exit_reason": "resource_authoring_tool_failed",
-                    "error_code": str(
-                        error.get("code") or "resource_authoring_tool_failed"
-                    ),
-                    "retryable": bool(error.get("retryable", False)),
-                    "api_calls": len(authored),
-                    **usage,
-                }
-            completed_kinds.append(kind)
-
-        if completed_kinds == ["ruleset"]:
-            answer = "审核规则候选方案已生成，请查看完整规则后再决定是否采用或保存。"
-        elif completed_kinds == ["lexicon"]:
-            answer = "黑话库编辑副本已生成，可在右侧 Drawer 中查看、修改或保存。"
-        else:
-            answer = (
-                "审核规则候选方案和黑话库编辑副本已生成，请查看完整内容后再决定是否采用或保存。"
-            )
-        messages.append({"role": "assistant", "content": answer})
-        return {
-            "completed": True,
-            "failed": False,
-            "interrupted": False,
-            "final_response": answer,
-            "messages": messages,
-            "turn_exit_reason": "resource_authoring_completed",
-            "api_calls": len(authored),
-            **usage,
-        }
-
-    def _start_resource_feedback(
-        self,
-        session_id: str,
-        kind: ResourceKind,
-    ) -> tuple[Event, Thread]:
-        messages = RESOURCE_AUTHORING_FEEDBACK[kind]
-        self._answer_streamer.stream_delta(session_id, messages[0] + "\n")
-        stop = Event()
-
-        def emit_later() -> None:
-            for delay, message in zip(
-                RESOURCE_AUTHORING_FEEDBACK_DELAYS,
-                messages[1:],
-            ):
-                if stop.wait(delay):
-                    return
-                self._answer_streamer.stream_delta(session_id, message + "\n")
-
-        thread = Thread(
-            target=emit_later,
-            name=f"resource-authoring-feedback-{kind}",
-            daemon=True,
-        )
-        thread.start()
-        return stop, thread
 
     def _presentation_context_for_turn(self, turn: InvestigationTurn) -> list[dict]:
         from .approval import published_presentations
@@ -1536,9 +1330,20 @@ class InvestigationCreationConversationService:
         turn = self.store.get_turn(turn_id)
         return self.store.get_session(turn.session_id).scope_type == "creation"
 
-    def _agent(self, session_id: str) -> Any:
+    @staticmethod
+    def _provider_route(user_message: str) -> str:
+        if resource_generation_kinds(user_message):
+            return "resource_generation"
+        return "default"
+
+    def _agent(self, session_id: str, *, provider_route: str = "default") -> Any:
         with self._agent_lock:
-            agent = self._agents.get(session_id)
+            cache_key: object = (
+                session_id
+                if provider_route == "default"
+                else (session_id, provider_route)
+            )
+            agent = self._agents.get(cache_key)
             if agent is None:
                 callbacks = HermesInvestigationAgentService._compose_agent_callbacks(
                     self._answer_streamer.agent_callbacks(session_id),
@@ -1553,15 +1358,35 @@ class InvestigationCreationConversationService:
                         **callbacks,
                     )
                 else:
+                    provider_options = {
+                        "base_url": settings.dashscope_base_url,
+                        "api_key": settings.dashscope_api_key,
+                        "model": settings.qwen_text_model,
+                    }
+                    if provider_route == "resource_generation":
+                        if not all(
+                            (
+                                settings.resource_generation_api_key,
+                                settings.resource_generation_base_url,
+                                settings.resource_generation_model,
+                            )
+                        ):
+                            raise RuntimeError(
+                                "resource generation provider is not configured"
+                            )
+                        provider_options = {
+                            "base_url": settings.resource_generation_base_url,
+                            "api_key": settings.resource_generation_api_key,
+                            "model": settings.resource_generation_model,
+                        }
                     agent = self.runtime_binding.create_agent(
                         session_id=session_id,
                         agent_factory=self.agent_factory,
                         product_mode="creation",
-                        base_url=settings.dashscope_base_url,
-                        api_key=settings.dashscope_api_key,
+                        **provider_options,
                         **callbacks,
                     )
-                self._agents[session_id] = agent
+                self._agents[cache_key] = agent
             return agent
 
     def _verified_artifact(

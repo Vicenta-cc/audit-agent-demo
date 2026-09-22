@@ -45,13 +45,9 @@ from backend.investigation_creation.fake_runtime import (
     FakePublishedReportHermesAgent,
 )
 from backend.investigation_creation.principal import Principal
+from backend.investigation_creation.provider_routing import resource_generation_kinds
 from backend.investigation_creation.public_answer import (
     redact_creation_internal_references,
-)
-from backend.investigation_creation.resource_authoring import (
-    CompanyResourceAuthoringClient,
-    ResourceAuthoringError,
-    ResourceAuthoringResult,
 )
 from backend.investigation_creation.resources import InvestigationResourceService
 from backend.investigation_creation.service import InvestigationCreationService
@@ -245,7 +241,6 @@ def creation_stack(tmp_path: Path) -> dict:
         store=InvestigationStore(tmp_path / "turns.sqlite3"),
         fake_runtime=True,
         hermes_state_dir=tmp_path / "hermes",
-        resource_authoring_client=CompanyResourceAuthoringClient(api_key=""),
     )
     executor = InvestigationTurnExecutor(conversation, max_workers=1)
     report_service = RecordingReportService(
@@ -433,7 +428,13 @@ def _run_scripted_creation_turn(
         actions=actions,
         final_response=final_response,
     )
-    conversation._agents[session.id] = agent
+    provider_route = conversation._provider_route(content)
+    cache_key: object = (
+        session.id
+        if provider_route == "default"
+        else (session.id, provider_route)
+    )
+    conversation._agents[cache_key] = agent
     turn, idempotent_replay = conversation.accept_message(
         session.id,
         client_message_id=client_message_id,
@@ -2090,7 +2091,10 @@ def test_resource_prompt_generates_covert_variants_as_search_terms() -> None:
     normalized_prompt = " ".join(RESOURCE_PROMPT.split())
     assert "主词是主题和语义归类" in normalized_prompt
     assert "变体词是主要的实际召回表达" in normalized_prompt
-    assert "变体词数量通常应多于主词" in normalized_prompt
+    assert "只生成 5 至 7 个最终可直接搜索的启用变体" in normalized_prompt
+    assert "主题主词按语义归类需要生成" in normalized_prompt
+    assert "不要以 “生成但默认关闭”的形式放进词库" in normalized_prompt
+    assert "可靠候选不足时宁可少于 5 个" in normalized_prompt
     assert "谐音、拼音/字母缩写" in normalized_prompt
     assert "正常生活场景伪装" in normalized_prompt
     assert "主页看" in normalized_prompt
@@ -3166,27 +3170,30 @@ def test_collection_limits_are_previewed_and_frozen_with_all_posts_audited(creat
         principal=Principal('principal-a'),
     ).model_dump(mode='json')
     arguments = _search_draft_from_options([options])
+    arguments['configuration']['task_parameters'] = {
+        'max_notes': 30,
+        'max_total_notes': 30,
+        'analyze_limit': 30,
+        'max_comments': 1000,
+    }
     response = stack['client'].post('/api/investigation-drafts', json=arguments)
     assert response.status_code == 201, response.text
     draft = response.json()
     endpoint = '/api/investigation-drafts/' + draft['id']
-    demo = stack['client'].get(endpoint + '/confirmation-preview').json()
-    assert demo['max_notes'] == min(5, len(demo['resolved_search_terms']))
-    monkeypatch.setattr(settings, 'm3_posts_per_keyword', 20)
-    monkeypatch.setattr(settings, 'm3_analyze_limit', 340)
     monkeypatch.setattr(settings, 'm3_comments_per_post', 1000)
     preview = stack['client'].get(endpoint + '/confirmation-preview').json()
-    assert preview['max_notes'] == min(5, len(preview['resolved_search_terms']) * 5)
-    assert preview['max_posts_per_keyword'] == 5
+    assert preview['max_post_limit'] == 30
+    assert preview['max_notes'] == 30
+    assert preview['max_posts_per_keyword'] == 30
     assert preview['max_comments_per_post'] == 1000
     assert preview['get_sub_comment'] is False
     queued = stack['client'].post(endpoint + '/confirm-and-queue', json={'expected_revision': draft['current_revision'], 'confirmed': True}, headers={'Idempotency-Key': 'production-limits'})
     assert queued.status_code == 202, queued.text
     run = stack['creation_store'].get_run(queued.json()['run_id'], principal='principal-a')
     snapshot = ConfirmedConfigurationSnapshotV4.model_validate(run.confirmed_configuration)
-    assert snapshot.max_notes == snapshot.execution.max_notes == 5
-    assert snapshot.execution.max_total_notes == 5
-    assert snapshot.execution.analyze_limit == 5
+    assert snapshot.max_notes == snapshot.execution.max_notes == 30
+    assert snapshot.execution.max_total_notes == 30
+    assert snapshot.execution.analyze_limit == 30
     assert snapshot.execution.max_comments == 1000
     assert snapshot.execution.max_concurrency == 1
     assert snapshot.execution.get_sub_comment is False
@@ -3195,10 +3202,9 @@ def test_collection_limits_are_previewed_and_frozen_with_all_posts_audited(creat
     adapter.crawler_account_store = CrawlerAccountStore(stack['resource_db'])
     adapter._provider_validator = lambda configuration: None
     adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
-    monkeypatch.setattr(settings, 'm3_posts_per_keyword', 1)
-    monkeypatch.setattr(settings, 'm3_analyze_limit', 1)
-    # Frozen v4 task settings use their own 1..5 contract and are no longer
-    # retroactively rejected when hidden deployment defaults change.
+    monkeypatch.setattr(settings, 'investigation_max_posts', 10)
+    # Frozen v4 task settings use the compatibility contract and are not
+    # retroactively rejected when the live new-task limit changes to 10.
     adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
     changed = snapshot.model_dump(mode='json')
     changed['max_notes'] = 1
@@ -3206,254 +3212,61 @@ def test_collection_limits_are_previewed_and_frozen_with_all_posts_audited(creat
         ConfirmedConfigurationSnapshotV4.model_validate(changed)
 
 
-_AUTHORING_RULESET_CONTENT = {
-    "schema_version": 0,
-    "name": "公司模型生成审核规则",
-    "domain": "内容安全",
-    "audit_goal": "识别明确风险表达并保护正常讨论。",
-    "general_exemptions": [],
-    "categories": [
-        {
-            "category_id": "risk_expression",
-            "name": "风险表达",
-            "description": "测试分类",
-            "order": 1,
-            "rules": [
-                {
-                    "rule_id": "explicit_risk",
-                    "name": "明确风险表达",
-                    "hit_condition": "内容明确表达风险意图时命中。",
-                    "suggested_risk_level": "high",
-                    "rule_exemptions": [],
-                    "application_stages": ["fusion_audit"],
-                    "adjudication_notes": "仅在证据明确表达风险意图时判定。",
-                    "enabled": True,
-                    "order": 1,
-                    "source_mappings": [],
-                }
-            ],
-        }
-    ],
-}
+def test_resource_generation_provider_routing_is_explicit_and_narrow():
+    assert resource_generation_kinds("帮我生成一套审核规则和黑话库") == (
+        "ruleset",
+        "lexicon",
+    )
+    assert resource_generation_kinds("重新生成关键词") == ("lexicon",)
+    assert resource_generation_kinds("修改并保存这套审核规则") == ()
+    assert resource_generation_kinds("查看现有黑话库") == ()
 
 
-_AUTHORING_LEXICON_CONTENT = {
-    "title": "公司模型生成黑话库",
-    "risk_label": "测试风险",
-    "description": "验证主题与启用变体能够进入 Drawer。",
-    "entries": [
-        {
-            "id": "theme:test-risk",
-            "term": "测试风险主题",
-            "kind": "main",
-            "parent_id": "",
-            "enabled": True,
-            "platform": "全平台",
-            "match_type": "黑话词",
-            "risk_level": "中",
-            "note": "主题主词",
-        },
-        {
-            "id": "variant:test-risk-code",
-            "term": "测试隐语",
-            "kind": "variant",
-            "parent_id": "theme:test-risk",
-            "enabled": True,
-            "platform": "全平台",
-            "match_type": "黑话词",
-            "risk_level": "中",
-            "note": "实际搜索词",
-        },
-    ],
-}
-
-
-class _FakeResourceAuthoringClient:
-    enabled = True
-
-    def __init__(self, *, failure: ResourceAuthoringError | None = None) -> None:
-        self.failure = failure
-        self.calls: list[tuple[str, str]] = []
-
-    def generate(self, kind: str, *, user_request: str) -> ResourceAuthoringResult:
-        self.calls.append((kind, user_request))
-        if self.failure is not None:
-            raise self.failure
-        content = (
-            _AUTHORING_RULESET_CONTENT
-            if kind == "ruleset"
-            else _AUTHORING_LEXICON_CONTENT
-        )
-        return ResourceAuthoringResult(
-            content=json.loads(json.dumps(content, ensure_ascii=False)),
-            model="company-test-model",
-            usage={"input_tokens": 11, "output_tokens": 22, "total_tokens": 33},
-        )
-
-
-def _run_company_authoring_turn(
-    creation_stack: dict,
-    *,
-    content: str,
-    client_message_id: str,
-    authoring_client: _FakeResourceAuthoringClient,
-) -> dict[str, Any]:
+def test_resource_generation_and_normal_turns_use_separate_providers(
+    creation_stack, monkeypatch
+):
     conversation = creation_stack["conversation"]
-    conversation.resource_authoring_client = authoring_client
-    principal = Principal("principal-a")
-    session = conversation.create_session(
-        principal=principal,
-        workspace_key=f"company-authoring:{client_message_id}",
-    )
-    turn, replayed = conversation.accept_message(
-        session.id,
-        client_message_id=client_message_id,
-        content=content,
-        principal=principal,
-    )
-    assert replayed is False
-    result = conversation.execute_turn(turn.id)
-    return {
-        "session": session,
-        "turn": conversation.store.get_turn(turn.id),
-        "result": result,
-    }
+    calls: list[dict[str, Any]] = []
 
+    class Agent:
+        def close(self):
+            return None
 
-def test_company_authoring_creates_real_ruleset_proposal_without_draft(
-    creation_stack,
-):
-    fake = _FakeResourceAuthoringClient()
-    authored = _run_company_authoring_turn(
-        creation_stack,
-        content="生成一套审核规则",
-        client_message_id="company-ruleset",
-        authoring_client=fake,
-    )
+    class Runtime:
+        def create_agent(self, **options):
+            calls.append(options)
+            return Agent()
 
-    result = authored["result"]
-    assert fake.calls == [("ruleset", "生成一套审核规则")]
-    assert result.status == "completed"
-    assert result.stop_reason == "resource_authoring_completed"
-    assert result.tool_names == ("create_ruleset_proposal",)
-    assert result.total_tokens == 33
-    assert "公司模型生成审核规则" in result.answer
-    edits = creation_stack["app_service"].resource_management.list_edits(
-        session_id=authored["session"].id,
-        principal=Principal("principal-a"),
-    )["items"]
-    assert len(edits) == 1
-    assert edits[0]["kind"] == "ruleset"
-    assert edits[0]["version"] == 1
-    assert edits[0]["saved"] is False
-    assert edits[0]["content"]["name"] == "公司模型生成审核规则"
-    assert _draft_count(creation_stack["creation_store"]) == 0
-    assert _run_count(creation_stack["creation_store"]) == 0
-
-
-def test_company_authoring_creates_real_lexicon_edit_with_variant_search_terms(
-    creation_stack,
-    monkeypatch,
-):
-    monkeypatch.setattr(settings, "activity_stream_enabled", True)
-    monkeypatch.setattr(settings, "creation_answer_stream_enabled", True)
-    fake = _FakeResourceAuthoringClient()
-    authored = _run_company_authoring_turn(
-        creation_stack,
-        content="生成一套黑话库和关键词",
-        client_message_id="company-lexicon",
-        authoring_client=fake,
-    )
-
-    result = authored["result"]
-    assert fake.calls == [("lexicon", "生成一套黑话库和关键词")]
-    assert result.status == "completed"
-    assert result.stop_reason == "resource_authoring_completed"
-    assert result.tool_names == ("create_lexicon_edit",)
-    edits = creation_stack["app_service"].resource_management.list_edits(
-        session_id=authored["session"].id,
-        principal=Principal("principal-a"),
-    )["items"]
-    assert len(edits) == 1
-    assert edits[0]["kind"] == "lexicon"
-    assert edits[0]["version"] == 1
-    assert edits[0]["saved"] is False
-    assert edits[0]["search_terms"] == ["测试隐语"]
-    assert edits[0]["recall_plan"]["lexicon_content"] == _AUTHORING_LEXICON_CONTENT
-    assert _draft_count(creation_stack["creation_store"]) == 0
-    assert _run_count(creation_stack["creation_store"]) == 0
-    events = creation_stack["conversation"].store.list_public_turn_events(
-        authored["turn"].id
-    )
-    assert any(
-        event.get("event_type") == "answer_delta"
-        and "正在生成黑话库" in str(event.get("delta") or "")
-        for event in events
-    )
-    assert any(event.get("event_type") == "answer_reset" for event in events)
-    activities = [
-        event for event in events if event.get("event_type") == "activity"
-    ]
-    assert activities[-1]["label"] == "生成黑话库编辑稿"
-    assert activities[-1]["status"] == "succeeded"
-
-
-def test_company_authoring_failure_does_not_create_partial_resource(
-    creation_stack,
-):
-    fake = _FakeResourceAuthoringClient(
-        failure=ResourceAuthoringError(
-            "rate_limit",
-            "资源生成服务当前请求过多或额度受限。",
-            retryable=True,
+    conversation.fake_runtime = False
+    conversation.runtime_binding = Runtime()
+    monkeypatch.setattr(settings, "resource_generation_api_key", "")
+    assert conversation._provider_route("帮我生成审核规则") == "resource_generation"
+    with pytest.raises(RuntimeError, match="provider is not configured"):
+        conversation._agent(
+            "unconfigured-resource-provider",
+            provider_route="resource_generation",
         )
+
+    monkeypatch.setattr(settings, "resource_generation_api_key", "dmx-test-key")
+    monkeypatch.setattr(
+        settings, "resource_generation_base_url", "https://www.dmxapi.cn/v1"
     )
-    authored = _run_company_authoring_turn(
-        creation_stack,
-        content="生成一套黑话库",
-        client_message_id="company-authoring-error",
-        authoring_client=fake,
+    monkeypatch.setattr(settings, "resource_generation_model", "qwen3.7-plus")
+    monkeypatch.setattr(settings, "dashscope_api_key", "official-test-key")
+    monkeypatch.setattr(
+        settings,
+        "dashscope_base_url",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
-
-    assert authored["result"].status == "error"
-    assert authored["turn"].error_code == "resource_authoring_rate_limit"
-    assert authored["turn"].retryable is True
-    assert creation_stack["app_service"].resource_management.list_edits(
-        session_id=authored["session"].id,
-        principal=Principal("principal-a"),
-    )["items"] == []
-    assert _mutation_receipt_count(creation_stack["creation_store"]) == 0
-
-
-def test_company_authoring_is_not_used_for_edit_or_save_requests(creation_stack):
-    fake = _FakeResourceAuthoringClient()
-    authored = _run_company_authoring_turn(
-        creation_stack,
-        content="保存刚生成的黑话库",
-        client_message_id="company-authoring-not-routed",
-        authoring_client=fake,
+    assert conversation._provider_route("帮我生成审核规则") == "resource_generation"
+    assert conversation._provider_route("保存这套审核规则") == "default"
+    resource_agent = conversation._agent(
+        "provider-routing-session", provider_route="resource_generation"
     )
+    default_agent = conversation._agent("provider-routing-session")
 
-    assert authored["result"].status == "completed"
-    assert fake.calls == []
-
-
-def test_company_authoring_terminal_turn_replay_does_not_duplicate_resource(
-    creation_stack,
-):
-    fake = _FakeResourceAuthoringClient()
-    authored = _run_company_authoring_turn(
-        creation_stack,
-        content="生成一套黑话库",
-        client_message_id="company-authoring-replay",
-        authoring_client=fake,
-    )
-
-    replay = creation_stack["conversation"].execute_turn(authored["turn"].id)
-    assert replay.idempotent_replay is True
-    edits = creation_stack["app_service"].resource_management.list_edits(
-        session_id=authored["session"].id,
-        principal=Principal("principal-a"),
-    )["items"]
-    assert len(edits) == 1
-    assert fake.calls == [("lexicon", "生成一套黑话库")]
+    assert resource_agent is not default_agent
+    assert calls[0]["base_url"] == "https://www.dmxapi.cn/v1"
+    assert calls[0]["api_key"] == "dmx-test-key"
+    assert calls[1]["base_url"].startswith("https://dashscope.aliyuncs.com/")
+    assert calls[1]["api_key"] == "official-test-key"

@@ -120,10 +120,10 @@ class JobRequestValidationTest(unittest.TestCase):
             with self.assertRaises(ValidationError):
                 main.CrawlRequest(max_items_per_minute=value)
 
-    def test_max_notes_accepts_only_strict_integers_from_one_to_five(self):
-        for value in (1, 5):
+    def test_max_notes_accepts_only_strict_integers_from_one_to_thirty(self):
+        for value in (1, 5, 30):
             self.assertEqual(main.CrawlRequest(max_notes=value).max_notes, value)
-        for value in (0, 6, -1, 1.5, "5", True):
+        for value in (0, 31, -1, 1.5, "5", True):
             with self.assertRaises(ValidationError):
                 main.CrawlRequest(max_notes=value)
 

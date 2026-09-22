@@ -13,7 +13,7 @@ RESOURCE_TOOL_INPUTS = {
 RESOURCE_MUTATIONS = frozenset({'create_lexicon_edit', 'open_resource_edit', 'update_resource_edit', 'save_resource'})
 RESOURCE_DESCRIPTIONS = {
     'read_resource': '查询或读取后台正式规则 ruleset 或词库 lexicon。resource_id 为空时按 query 分页检索；指定真实 ID 时返回完整内容和版本。正式词库返回可直接用于 Draft 的 recall_plan；其中 runtime_content_hash 是实际搜索指纹，content_hash 是完整编辑内容指纹，两者不可混用。只读，不创建编辑副本、任务或保存。任务资源选择仍可用 query_investigation_options。',
-    'create_lexicon_edit': '用户授权生成词库时，将完整词库持久化为当前会话编辑内容，不正式保存。content.entries 每项含稳定 id、term、kind(main/variant/tag)、parent_id、enabled。主词表达主题，变体 parent_id 指向本词库的主词 id；每个启用主词优先把其启用变体投影进 search_terms，没有启用变体时才回退主词。生成完整黑话库时应主动生成变体，而且变体通常应是词条主体：优先真实平台可能出现的隐晦说法，而不是直接写风险类别。用户明确说“搜索主词 X”“只用 X”或指定一组召回词且未要求扩展时，search_terms 必须严格等于用户指定集合；可以把 X 建模为主题主词下的启用变体，但不得补充其他搜索词。这种临时词库仍保存到当前会话供草稿使用，不正式保存。与临时规则一起生成时保持原有规则生成、展示、后续采用流程。',
+    'create_lexicon_edit': '用户授权生成词库时，将完整词库持久化为当前会话编辑内容，不正式保存。content.entries 每项含稳定 id、term、kind(main/variant/tag)、parent_id、enabled。主词表达主题，变体 parent_id 指向本词库的主词 id；每个启用主词优先把其启用变体投影进 search_terms，没有启用变体时才回退主词。生成完整黑话库时应主动生成变体，而且变体通常应是词条主体：优先真实平台可能出现的隐晦说法，而不是直接写风险类别。用户未指定数量时，默认只生成 5 至 7 个最终可直接搜索的启用变体，主题主词不计入该数量；低价值或过宽候选直接舍弃，不要作为默认关闭词条输出。用户明确说“搜索主词 X”“只用 X”或指定一组召回词且未要求扩展时，search_terms 必须严格等于用户指定集合；可以把 X 建模为主题主词下的启用变体，但不得补充其他搜索词。这种临时词库仍保存到当前会话供草稿使用，不正式保存。与临时规则一起生成时保持原有规则生成、展示、后续采用流程。',
     'open_resource_edit': '用户要求编辑已存在后台资源时，按真实 kind/resource_id 读取完整内容并建立当前会话副本，返回 edit_id、精确版本和来源。不会修改正式资源、采用资源或启动任务。系统规则仅可另存。规则副本仍为原 M3 Proposal，后续采用必须使用其已展示版本。',
     'get_resource_edit': '读取当前会话完整编辑内容、版本、来源、保存回执和实际 search_terms。规则 edit_id 就是已有 proposal_id。只读；不能把已保存旧版本误说成当前修改已保存。',
     'update_resource_edit': '按 edit_id/expected_version 局部修改，changes 是操作数组。词库用 upsert_entry（target_id 为已有词条 ID，新增省略 target_id）、remove_entry（删变体只删该条，删主词会连同其变体删除，须在用户明确删除范围内）；规则用 update_rule/remove_rule（target_id 为 rule_id）、add_rule（target_id 为 category_id）、set_exemptions；元数据用 set_metadata：词库允许 title（名称）、description（整库说明，最多2000字）、risk_label（风险标签）；规则允许 name、domain、audit_goal。词库说明不能写入词条 note。values 只包含需要修改的字段。变体归属使用固定 ID，不因改名而丢失。相同term/platform/match_type不可重复，主词与变体也一样；停用不消除重名。改名与保留要求冲突时说明冲突并等待用户选择，不能自行删除、改名或改变其他词条属性来绕过校验。更新校验失败不会提交这次修改；失败不授予删词权限。用户已明确选择方案后按所选范围修改，无需再次确认。不会保存、采用或启动。版本冲突先读并核对，不强行更新预期版本。',
@@ -56,7 +56,12 @@ create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资�
 作为 edit_id，不重复生成规则。只要求查看或生成时不调用 save_resource。
 用户请求完整词库、词库变体或独立保存词库时使用 create_lexicon_edit。主词是主题和语义归类，
 变体词是主要的实际召回表达；每个启用主词有启用变体时，search_terms 使用这些变体，没有启用
-变体时才为兼容旧词库回退到主词。标签不参与搜索。生成完整黑话库时默认需要生成变体，变体词数量通常应多于主词。
+变体时才为兼容旧词库回退到主词。标签不参与搜索。生成完整黑话库时默认需要生成变体。
+用户未指定数量时，整个词库只生成 5 至 7 个最终可直接搜索的启用变体；主题主词按语义归类需要生成，
+不计入这 5 至 7 个搜索词。所有新生成的搜索变体都应 enabled=true。过宽、低价值、直白、重复、
+必须依赖系统不支持的组合查询才有价值，或模型自己判断不应启用的候选，应直接舍弃，不要以
+“生成但默认关闭”的形式放进词库。只有用户明确要求保留备选/停用项，或正在忠实编辑已有词库时，
+才保留 disabled 词条。可靠候选不足时宁可少于 5 个，也不能用停用词或低价值词凑数。
 优先生成真实平台可能出现的隐晦表达，包括但不限于谐音、拼音/字母缩写、
 正常生活场景伪装，以及带交易或引流语境的钩子表达；不要机械复制示例，也不要只生成“色情服务”
 “赌博”等过于直白、实际难以召回的风险类别词。宽泛的“主页看”“扣1”“同城私”“加V”等钩子若

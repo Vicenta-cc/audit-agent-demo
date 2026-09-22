@@ -2105,7 +2105,11 @@ class TaskSettingsRequest(BaseModel):
 @app.get("/api/task-settings")
 def get_task_settings():
     saved = TaskSettingsStore(job_store.db_path).get()
-    return {**saved, "effective_parameters": effective_parameters(saved["parameters"]).model_dump(mode="json")}
+    return {
+        **saved,
+        "max_post_limit": settings.investigation_max_posts,
+        "effective_parameters": effective_parameters(saved["parameters"]).model_dump(mode="json"),
+    }
 
 
 @app.put("/api/task-settings")
@@ -2117,7 +2121,11 @@ def save_task_settings(
     try:
         saved = TaskSettingsStore(job_store.db_path).save(
             request.parameters.model_dump(mode="json"), request.expected_revision)
-        return {**saved, "effective_parameters": effective_parameters(saved["parameters"]).model_dump(mode="json")}
+        return {
+            **saved,
+            "max_post_limit": settings.investigation_max_posts,
+            "effective_parameters": effective_parameters(saved["parameters"]).model_dump(mode="json"),
+        }
     except TaskSettingsConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -2164,6 +2172,17 @@ def create_job(
                 )
             if account:
                 request.crawler_account_id = account["id"]
+    if request.run_crawler and (
+        request.max_notes > settings.investigation_max_posts
+        or request.max_total_notes > settings.investigation_max_posts
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "采集数量超过当前新任务上限 "
+                f"{settings.investigation_max_posts}；请调整后重试。"
+            ),
+        )
     requested_config = request.model_dump(
         include={
             "platform",

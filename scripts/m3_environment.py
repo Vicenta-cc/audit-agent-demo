@@ -44,6 +44,9 @@ def configure():
     keep = {k: v for k, v in os.environ.items() if k in ('HOME', 'TMPDIR', 'LANG', 'USER')}
     environment = {**keep, **json.loads((RUNTIME / 'environment.json').read_text()),
                    **{k: v for k, v in dotenv_values(RUNTIME / 'secrets.env').items() if v is not None}}
+    investigation_max_posts = int(environment.get('INVESTIGATION_MAX_POSTS') or 30)
+    if not 1 <= investigation_max_posts <= 30:
+        raise RuntimeError('INVESTIGATION_MAX_POSTS 必须在 1 到 30 之间。')
     environment.update(
         XHS_AUDIT_DATA_DIR=str(data), XHS_AUDIT_OUTPUTS_DIR=str(data / 'outputs'),
         HERMES_HOME=str(data / 'hermes'), CRAWLER_AUTH_KEY_FILE=str(data / 'crawler_auth.key'),
@@ -57,7 +60,7 @@ def configure():
         PATH=os.pathsep.join([str(Path(config['node']).parent), str(Path(config['python']).parent),
                              '/usr/bin', '/bin', '/usr/sbin', '/sbin', '/opt/homebrew/bin']),
         XHS_MANAGED_RUNTIME=str(RUNTIME),
-        PYTHONDONTWRITEBYTECODE='1', M3_POSTS_PER_KEYWORD='1', M3_ANALYZE_LIMIT='1',
+        PYTHONDONTWRITEBYTECODE='1', INVESTIGATION_MAX_POSTS=str(investigation_max_posts),
         CRAWLER_MAX_CONCURRENCY='1', COMMENT_AUDIT_CONCURRENCY='1', VIDEO_REVIEW_CONCURRENCY='1')
     if formal:
         environment['HISTORICAL_REPORT_C_MANIFEST'] = str(RUNTIME / 'archives/report-c-manifest.json')

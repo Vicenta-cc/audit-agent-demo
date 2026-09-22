@@ -383,7 +383,13 @@ class PassReportToolService(ReportTaskInvestigationToolService):
                 "stale_revision_ref", "Post is outside the frozen snapshot"
             )
         if not any(
-            o.source_tool in {"read_report", "search_posts", "read_account_occurrence"}
+            o.source_tool
+            in {
+                "read_report",
+                "list_report_posts",
+                "search_posts",
+                "read_account_occurrence",
+            }
             and o.parent_id == self.repository.snapshot.id
             for o in record.origins
         ):
@@ -505,7 +511,7 @@ class PassReportToolService(ReportTaskInvestigationToolService):
 
     def _list_post_comments(self, session_id, args):
         if (
-            set(args) - {"post_ref", "limit", "cursor"}
+            set(args) - {"post_ref", "limit", "cursor", "risk_filter"}
             or not isinstance(args.get("post_ref"), str)
             or type(args.get("limit")) is not int
             or not 1 <= args["limit"] <= 20
@@ -513,14 +519,31 @@ class PassReportToolService(ReportTaskInvestigationToolService):
             raise ToolInputError(
                 "invalid_arguments", "post_ref and limit (1..20) are required"
             )
+        risk_filter = args.get("risk_filter", "all")
+        if risk_filter not in {"all", "risk", "no_risk", "unknown"}:
+            raise ToolInputError(
+                "invalid_arguments",
+                "risk_filter must be all, risk, no_risk, or unknown",
+            )
         if "cursor" in args:
             _require_string(args["cursor"], "cursor")
         record = self.refs.resolve(session_id, args["post_ref"], expected_kind="post")
         post = self.repository.post(record.object_id)
         self._validate_post_record(record, post)
-        comments = self.repository._report_comments_by_post.get(post.id, ())
+        all_comments = self.repository._report_comments_by_post.get(post.id, ())
+        comments = tuple(
+            comment
+            for comment in all_comments
+            if self._comment_matches_risk_filter(comment, risk_filter)
+        )
         digest = hashlib.sha256(
-            json.dumps([c.id for c in comments]).encode()
+            json.dumps(
+                {
+                    "risk_filter": risk_filter,
+                    "comment_ids": [c.id for c in comments],
+                },
+                sort_keys=True,
+            ).encode()
         ).hexdigest()
         offset = 0
         if args.get("cursor"):
@@ -569,6 +592,7 @@ class PassReportToolService(ReportTaskInvestigationToolService):
                 "published_at": c.published_at,
                 "audit_status": c.audit_status,
                 "risk_level": c.risk_level,
+                "risk_type": c.risk_type,
             }
 
         return self._success(
@@ -577,8 +601,11 @@ class PassReportToolService(ReportTaskInvestigationToolService):
             content_state="complete_stored_comments",
             data={
                 "post_ref": args["post_ref"],
-                "total_count": len(comments),
-                "audit_coverage": self._comment_coverage(comments),
+                "risk_filter": risk_filter,
+                "total_count": len(all_comments),
+                "matched_count": len(comments),
+                "returned_count": len(selected),
+                "audit_coverage": self._comment_coverage(all_comments),
                 "comments": [comment_card(c) for c in selected],
                 "cursor": cursor,
                 "has_more": cursor is not None,
@@ -588,6 +615,18 @@ class PassReportToolService(ReportTaskInvestigationToolService):
                 "A comment without completed independent audit is not a normal/safe comment."
             ],
         )
+
+    @staticmethod
+    def _comment_matches_risk_filter(comment, risk_filter):
+        if risk_filter == "all":
+            return True
+        completed = comment.audit_status == "completed"
+        has_risk = comment.risk_level in {"low", "medium", "high"}
+        if risk_filter == "risk":
+            return completed and has_risk
+        if risk_filter == "no_risk":
+            return completed and comment.risk_level == "none"
+        return not completed
 
     def _dispatch_account_activity(self, session_id, args, *, tool_name):
         result = json.loads(
@@ -652,13 +691,23 @@ def pass_tool_schemas():
     schemas.append(
         {
             "name": "list_post_comments",
-            "description": "读取已验证帖子下的全部评论（含正常与未审核），返回原文、作者、时间及各自审核状态，支持分页。",
+            "description": (
+                "读取已验证帖子下的冻结评论，返回原文、作者账号入口、时间及评论自身审核状态，支持分页。"
+                "risk_filter由服务器先筛选再分页：all返回全部，risk只返回审核完成且自身风险等级为"
+                "low/medium/high的评论，no_risk只返回审核完成且自身无风险的评论，unknown返回未完成、"
+                "失败或状态未知的评论。帖子风险不得继承给评论。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "post_ref": {"type": "string"},
                     "limit": {"type": "integer", "minimum": 1, "maximum": 20},
                     "cursor": {"type": "string"},
+                    "risk_filter": {
+                        "type": "string",
+                        "enum": ["all", "risk", "no_risk", "unknown"],
+                        "default": "all",
+                    },
                 },
                 "required": ["post_ref", "limit"],
                 "additionalProperties": False,

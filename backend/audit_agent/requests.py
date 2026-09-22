@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, StrictBool, StrictInt
 
+from .limits import MAX_SUPPORTED_INVESTIGATION_POSTS
+
 
 class CrawlRequest(BaseModel):
     platform: str = "xhs"
@@ -21,8 +23,12 @@ class CrawlRequest(BaseModel):
     creator_url: str = ""
     creator_id: str = ""
     start_page: StrictInt = Field(default=0, ge=0)
-    max_notes: StrictInt = Field(default=5, ge=1, le=5)
-    max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
+    max_notes: StrictInt = Field(
+        default=5, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
+    max_total_notes: StrictInt = Field(
+        default=5, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
     max_comments: StrictInt = Field(default=100, ge=0, le=1000)
     max_concurrency: StrictInt = Field(default=1, ge=1, le=3)
     max_items_per_minute: StrictInt = Field(default=5, ge=1, le=5)

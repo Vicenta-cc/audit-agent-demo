@@ -19,6 +19,7 @@ from pydantic import (
 )
 
 from backend.audit_agent.creator_url import validate_creator_url
+from backend.audit_agent.limits import MAX_SUPPORTED_INVESTIGATION_POSTS
 from backend.resource_management.contracts import LexiconContent
 from backend.rulesets.contracts import ApplicationStage, RiskLevel, RuleSetContent
 
@@ -304,8 +305,12 @@ class InvestigationTaskParameters(StrictModel):
     crawler_account_id: StrictStr | None = None
     search_sort: Literal["general", "most_liked", "latest"] = "general"
     start_page: StrictInt = Field(default=1, ge=1)
-    max_notes: StrictInt = Field(default=1, ge=1, le=5)
-    max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
+    max_notes: StrictInt = Field(
+        default=1, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
+    max_total_notes: StrictInt = Field(
+        default=5, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
     max_comments: StrictInt = Field(default=1, ge=0, le=1000)
     collect_comments: StrictBool = True
     get_sub_comment: StrictBool = False
@@ -366,8 +371,12 @@ class CollectionConfiguration(StrictModel):
     creator_url: StrictStr = ""
     display_name: StrictStr = ""
     start_page: StrictInt = Field(default=1, ge=1)
-    max_notes: StrictInt = Field(default=5, ge=1, le=5)
-    max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
+    max_notes: StrictInt = Field(
+        default=5, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
+    max_total_notes: StrictInt = Field(
+        default=5, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
     max_comments: StrictInt = Field(default=300, ge=0, le=1000)
     max_concurrency: StrictInt = Field(default=1, ge=1, le=3)
     max_items_per_minute: StrictInt = Field(default=5, ge=1, le=5)
@@ -686,6 +695,11 @@ class CrawlerAccountConfirmedState(StrictModel):
 
 
 class ConfirmationPreview(StrictModel):
+    max_post_limit: StrictInt = Field(
+        default=MAX_SUPPORTED_INVESTIGATION_POSTS,
+        ge=1,
+        le=MAX_SUPPORTED_INVESTIGATION_POSTS,
+    )
     task_settings_revision: int = 0
     requested_parameters: InvestigationTaskParameters | None = None
     effective_parameters: InvestigationTaskParameters | None = None
@@ -702,7 +716,9 @@ class ConfirmationPreview(StrictModel):
     ruleset_revision: RuleSetRevisionSummary | None = None
     temporary_ruleset: TemporaryRuleSetJudgement | None = None
     max_notes: StrictInt = Field(default=1, ge=0)
-    max_posts_per_keyword: StrictInt = Field(default=1, ge=1, le=5)
+    max_posts_per_keyword: StrictInt = Field(
+        default=1, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
     max_comments_per_post: StrictInt = Field(default=300, ge=0, le=1000)
     get_sub_comment: StrictBool = False
     blockers: list[InvestigationBlocker] = Field(default_factory=list)
@@ -730,7 +746,9 @@ class ResolvedExecutionConfiguration(StrictModel):
     auto_analyze: StrictBool | None = None
     collect_comments: StrictBool | None = None
     collect_media: StrictBool | None = None
-    max_total_notes: StrictInt | None = Field(default=None, ge=1, le=5)
+    max_total_notes: StrictInt | None = Field(
+        default=None, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+    )
     search_sort: Literal["general", "most_liked", "latest"] | None = None
 
     @model_serializer(mode="wrap")
@@ -761,7 +779,7 @@ class ResolvedExecutionConfiguration(StrictModel):
     creator_url: StrictStr = ""
     creator_id: StrictStr = ""
     start_page: StrictInt = Field(ge=1)
-    max_notes: StrictInt = Field(ge=1, le=5)
+    max_notes: StrictInt = Field(ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS)
     max_comments: StrictInt = Field(ge=0, le=1000)
     max_concurrency: StrictInt = Field(ge=1, le=3)
     max_items_per_minute: StrictInt = Field(ge=1, le=5)
@@ -1021,7 +1039,7 @@ class ConfirmedConfigurationSnapshotV4(FrozenRuleSetSource):
     resolved_search_terms: list[StrictStr] = Field(default_factory=list)
     creator_url: StrictStr = ""
     recall_plan: ConfirmedRecallPlanSnapshot | None = None
-    max_notes: StrictInt = Field(ge=1, le=5)
+    max_notes: StrictInt = Field(ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS)
     execution: ResolvedExecutionConfiguration
     config_hash: StrictStr = Field(pattern=r"^[0-9a-f]{64}$")
     confirmed_by: StrictStr

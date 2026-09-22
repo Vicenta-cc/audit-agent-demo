@@ -13,6 +13,7 @@ from backend.audit_agent.crawler_account_store import (
 )
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
 from backend.audit_agent.crawler_adapter import SUPPORTED_PLATFORMS
+from backend.audit_agent.config import settings
 from backend.audit_agent.lexicon_store import LexiconStore
 from backend.resource_management.contracts import LexiconContent
 from backend.resource_management.lexicon_versions import content as stored_lexicon_content
@@ -420,6 +421,7 @@ class InvestigationResourceService:
         )
         blockers = self._dedupe_blockers(blockers)
         return ConfirmationPreview(
+            max_post_limit=settings.investigation_max_posts,
             task_settings_revision=settings_revision,
             requested_parameters=effective_configuration.task_parameters,
             effective_parameters=parameters,

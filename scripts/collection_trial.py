@@ -34,8 +34,7 @@ def configure_backend(config, role):
         XHS_AUDIT_DATA_DIR=str(data), XHS_AUDIT_OUTPUTS_DIR=str(data / 'outputs'),
         HERMES_HOME=str(data / 'hermes'), HERMES_CREATION_FAKE_RUNTIME='false',
         CRAWLER_AUTH_KEY_FILE=str(data / 'crawler_auth.key'), EXECJS_RUNTIME='Node',
-        M3_POSTS_PER_KEYWORD='20' if role == 'production' else '1',
-        M3_ANALYZE_LIMIT='340' if role == 'production' else '1',
+        INVESTIGATION_MAX_POSTS='20' if role == 'production' else '1',
         M3_COMMENTS_PER_POST='1000' if role == 'production' else '300',
     )
     os.environ.pop('CRAWLER_AUTH_ENCRYPTION_KEY', None)
