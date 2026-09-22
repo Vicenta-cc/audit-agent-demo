@@ -6,7 +6,8 @@ import unicodedata
 from dataclasses import dataclass
 
 _ZERO_WIDTH = re.compile(r"[​-‏⁠﻿]")
-_SEPARATORS = re.compile(r"[\s\.\-_*·•/\\|,，。、~～!！?？:：;；'\"""''()（）\[\]【】<>《》]+")
+# Curly quotes (""'') are U+201C U+201D U+2018 U+2019
+_SEPARATORS = re.compile("[\s\\.\\-_*·•/\\\\|,，。、~～!！?？:：;；'\"" + "“”‘’" + "''()（）\\[\\]【】<>《》]+")
 _SEARCH_ONLY_MATCH_TYPES = {"平台搜索词", "平台标签", "tag"}
 
 DIVERSION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [

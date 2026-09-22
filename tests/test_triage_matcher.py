@@ -11,6 +11,12 @@ def test_normalize_strips_zero_width_separators_and_fullwidth():
     assert normalize_text("回 血 ！！") == "回血"
 
 
+def test_normalize_strips_curly_quotes():
+    assert normalize_text("上“分”不用等") == "上分不用等"
+    hits = match_terms("上“分”稳赢", "desc", [TriageTerm("上分", "模糊", "gambling", "高")])
+    assert len(hits) == 1
+
+
 def test_fuzzy_and_exact_match_on_normalized_text():
     terms = [TriageTerm("上分", "模糊", "gambling", "高"), TriageTerm("盘口", "精确", "gambling", "高")]
     hits = match_terms("今晚上.分稳赢，盘 口已开", "desc", terms)
