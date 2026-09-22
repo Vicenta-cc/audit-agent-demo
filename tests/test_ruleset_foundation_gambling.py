@@ -2023,9 +2023,9 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
         pipeline = bare_v2_pipeline(self.compiled)
         pipeline.authoritative_m3 = True
         pipeline.job_id = "image-contract-retry"
-        allowed_rule_id = sorted(
-            pipeline._stage_rule_ids("image_evidence")
-        )[0]
+        allowed_rule_code, allowed_rule_id = next(
+            iter(pipeline._image_rule_code_mapping().items())
+        )
         invalid = {
             "ocr_text": "入口",
             "visual_summary": "图片展示入口",
@@ -2041,7 +2041,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
             ],
         }
         valid = deepcopy(invalid)
-        valid["risk_items"][0]["rule_id"] = allowed_rule_id
+        valid["risk_items"][0]["rule_id"] = allowed_rule_code
         pipeline.qwen = ImageSequenceProvider([invalid, valid])
         subject = AuditSubject(
             platform="dy",
@@ -2082,10 +2082,46 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
         self.assertEqual(len(traces), 1)
         self.assertEqual(trace["error_type"], "FusionAuditContractError")
         self.assertEqual(
-            trace["returned_rule_ids"], ["gambling.not_in_revision"]
+            trace["returned_rule_codes"], ["gambling.not_in_revision"]
+        )
+        self.assertEqual(trace["decoded_rule_ids"], [""])
+        self.assertEqual(
+            trace["rule_code_mapping"][allowed_rule_code], allowed_rule_id
+        )
+        self.assertEqual(
+            trace["ruleset_ref"], pipeline.rule_snapshot["ruleset_ref"]
         )
         self.assertIn(allowed_rule_id, trace["allowed_rule_ids"])
-        self.assertIn("allowed_rule_ids", pipeline.qwen.prompts[1])
+        self.assertIn("allowed_rule_codes", pipeline.qwen.prompts[1])
+        self.assertIn(allowed_rule_code, pipeline.qwen.prompts[0])
+        self.assertNotIn(allowed_rule_id, pipeline.qwen.prompts[0])
+
+    def test_image_rule_code_mapping_is_deterministic_and_exact(self) -> None:
+        pipeline = bare_v2_pipeline(self.compiled)
+        mapping = pipeline._image_rule_code_mapping()
+
+        self.assertEqual(
+            list(mapping),
+            [f"IR{index:02d}" for index in range(1, len(mapping) + 1)],
+        )
+        raw = {
+            "risk_items": [
+                {
+                    "rule_id": "IR01",
+                    "severity": "high",
+                }
+            ]
+        }
+        decoded = pipeline._decode_image_rule_codes(raw, mapping)
+        self.assertEqual(decoded["risk_items"][0]["rule_id"], mapping["IR01"])
+        self.assertEqual(raw["risk_items"][0]["rule_id"], "IR01")
+        with self.assertRaisesRegex(
+            FusionAuditContractError, "unknown rule code"
+        ):
+            pipeline._decode_image_rule_codes(
+                {"risk_items": [{"rule_id": mapping["IR01"]}]},
+                mapping,
+            )
 
     def test_image_contract_exhaustion_preserves_contract_error(self) -> None:
         pipeline = bare_v2_pipeline(self.compiled)
@@ -2101,7 +2137,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                     "evidence": "入口",
                     "reason": "存在入口",
                     "severity": "high",
-                    "rule_id": "gambling.not_in_revision",
+                    "rule_id": "IR99",
                 }
             ],
         }
@@ -2128,7 +2164,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
             subject.local_image_paths = [str(image_path)]
             with self.assertRaisesRegex(
                 FusionAuditContractError,
-                "image_evidence non-none result has an invalid rule_id",
+                "image_evidence has an unknown rule code",
             ):
                 pipeline._analyze_images(
                     subject, Path(temp_dir) / "staged-images"

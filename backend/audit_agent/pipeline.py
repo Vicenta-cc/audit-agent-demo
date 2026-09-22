@@ -6939,20 +6939,51 @@ class AuditPipeline:
         *,
         evidence_id: str,
     ) -> tuple[dict, list[str]]:
-        """Validate V2 image output, retaining a trace and correcting it once."""
+        """Decode V2 image rule codes, retaining a trace and correcting once."""
         authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
         is_v2 = self._is_ruleset_v2()
         attempts = 2 if authoritative_m3 and is_v2 else 1
         base_prompt = self.prompt_set.image_prompt
+        rule_code_mapping = self._image_rule_code_mapping() if is_v2 else {}
+        if rule_code_mapping:
+            reverse = {rule_id: code for code, rule_id in rule_code_mapping.items()}
+            pattern = (
+                r"(?<![A-Za-z0-9_.:-])(?:"
+                + "|".join(
+                    re.escape(rule_id)
+                    for rule_id in sorted(reverse, key=len, reverse=True)
+                )
+                + r")(?![A-Za-z0-9_.:-])"
+            )
+            base_prompt = re.sub(
+                pattern,
+                lambda match: reverse[match.group()],
+                base_prompt,
+            )
+            base_prompt = base_prompt.replace(
+                "上述 stable rule_id", "本次短编号，例如IR01"
+            ).replace("stable rule_id", "本次短编号，例如IR01")
+        if is_v2:
+            base_prompt += (
+                "\n规则编号协议 image-rule-codes-v1：每个风险项的 rule_id "
+                "只能从下列短编号中准确选择，禁止自造、拼接、猜测或输出完整"
+                "规则ID。必须满足该编号对应规则的必要条件；编号正确不代表风险"
+                "成立，无明确风险时 risk_items 为空。豁免ID保持原格式。\n"
+                + json.dumps(
+                    {"allowed_rule_codes": list(rule_code_mapping)},
+                    ensure_ascii=False,
+                )
+            )
         request_prompt = base_prompt
         allowed_rule_ids = sorted(self._stage_rule_ids("image_evidence"))
 
         for attempt in range(1, attempts + 1):
-            analysis = self.qwen.analyze_image(
+            raw_analysis = self.qwen.analyze_image(
                 image_source,
                 request_prompt,
                 model=settings.qwen_image_audit_model,
             )
+            analysis = raw_analysis
             try:
                 analysis = (
                     self._validated_authoritative_visual_response(
@@ -6961,6 +6992,10 @@ class AuditPipeline:
                     if authoritative_m3
                     else dict(analysis or {})
                 )
+                if is_v2:
+                    analysis = self._decode_image_rule_codes(
+                        analysis, rule_code_mapping
+                    )
                 raw_risk_items = analysis.get("risk_items")
                 analysis["risk_items"] = self._filter_stage_risk_items(
                     raw_risk_items,
@@ -6973,30 +7008,42 @@ class AuditPipeline:
             except (FusionAuditContractError, AuditProviderCallError) as exc:
                 if not (authoritative_m3 and is_v2):
                     raise
-                returned_rule_ids = [
+                returned_rule_codes = [
                     str(item.get("rule_id") or item.get("id") or "")
                     for item in (
-                        analysis.get("risk_items")
-                        if isinstance(analysis, dict)
-                        and isinstance(analysis.get("risk_items"), list)
+                        raw_analysis.get("risk_items")
+                        if isinstance(raw_analysis, dict)
+                        and isinstance(raw_analysis.get("risk_items"), list)
                         else []
                     )
                     if isinstance(item, dict)
                 ]
                 capture = getattr(self.qwen, "last_raw_response", None)
                 diagnostic = {
-                    "protocol": "image-rule-ids-v1",
+                    "protocol": "image-rule-codes-v1",
                     "attempt": attempt,
                     "evidence_id": evidence_id,
                     "error": str(exc),
                     "error_type": type(exc).__name__,
+                    "audit_config_revision_id": str(
+                        getattr(self, "audit_config_revision_id", "") or ""
+                    ),
+                    "ruleset_ref": dict(
+                        self.rule_snapshot.get("ruleset_ref") or {}
+                    ),
+                    "rule_code_mapping": rule_code_mapping,
+                    "allowed_rule_codes": list(rule_code_mapping),
                     "allowed_rule_ids": allowed_rule_ids,
-                    "returned_rule_ids": returned_rule_ids,
+                    "returned_rule_codes": returned_rule_codes,
+                    "decoded_rule_ids": [
+                        rule_code_mapping.get(code, "")
+                        for code in returned_rule_codes
+                    ],
                     "request_prompt": request_prompt,
                     "raw_provider_response": (
                         capture() if callable(capture) else None
                     ),
-                    "parsed_response": analysis,
+                    "parsed_response": raw_analysis,
                 }
                 diagnostic_dir = (
                     settings.outputs_dir
@@ -7023,13 +7070,13 @@ class AuditPipeline:
                 request_prompt = base_prompt + (
                     "\n上次输出未通过程序校验。请只纠正规则编号或 JSON 字段合同，"
                     "保留有依据的风险判断；不能以删除已有风险项代替修正规则编号。"
-                    "risk_items[].rule_id 只能从 allowed_rule_ids 中选择，无明确风险时"
+                    "risk_items[].rule_id 只能从 allowed_rule_codes 中选择，无明确风险时"
                     "才返回空数组。只输出完整 JSON。\n"
                     + json.dumps(
                         {
                             "error": str(exc),
-                            "returned_rule_ids": returned_rule_ids,
-                            "allowed_rule_ids": allowed_rule_ids,
+                            "returned_rule_codes": returned_rule_codes,
+                            "allowed_rule_codes": list(rule_code_mapping),
                         },
                         ensure_ascii=False,
                     )
@@ -7038,6 +7085,43 @@ class AuditPipeline:
             return analysis, matched_exemption_ids
 
         raise AssertionError("unreachable")
+
+    def _image_rule_code_mapping(self) -> dict[str, str]:
+        """Bind short model-facing codes to this request's frozen image rules."""
+        routes = self.rule_snapshot.get("stage_routes") or {}
+        rule_ids = list(dict.fromkeys(routes.get("image_evidence") or []))
+        return {
+            f"IR{index:02d}": str(rule_id)
+            for index, rule_id in enumerate(rule_ids, start=1)
+            if str(rule_id).strip()
+        }
+
+    @staticmethod
+    def _decode_image_rule_codes(raw: dict, mapping: dict[str, str]) -> dict:
+        """Restore stable image rule IDs without guessing unknown model codes."""
+        decoded = dict(raw)
+        values = raw.get("risk_items")
+        if not isinstance(values, list):
+            raise FusionAuditContractError("image_evidence risk_items is not a list")
+        restored = []
+        for original in values:
+            if not isinstance(original, dict):
+                raise FusionAuditContractError(
+                    "image_evidence has a non-object risk item"
+                )
+            item = dict(original)
+            code = str(item.get("rule_id") or item.get("id") or "").strip()
+            if code:
+                if code not in mapping:
+                    raise FusionAuditContractError(
+                        f"image_evidence has an unknown rule code: {code!r}"
+                    )
+                item["rule_id"] = mapping[code]
+                if "id" in item:
+                    item["id"] = mapping[code]
+            restored.append(item)
+        decoded["risk_items"] = restored
+        return decoded
 
     def _analyze_images(self, subject: AuditSubject, image_dir: Path) -> list[dict]:
         authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
