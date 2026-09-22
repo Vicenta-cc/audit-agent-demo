@@ -72,6 +72,73 @@ def _hermes_stored_assistant_projection(value: Any) -> str | None:
     return projected
 
 
+def _hermes_continuation_projection(
+    transcript: list[dict[str, Any]],
+    *,
+    current_user_index: int,
+    final_response: Any,
+) -> str | None:
+    """Rebuild a response Hermes split across its own continuation turns.
+
+    On a partial streaming failure Hermes persists the received assistant
+    fragment, appends a fixed synthetic user nudge, and then persists the
+    continuation as another assistant message.  Its returned final response is
+    the newline-safe concatenation of those fragments, so it legitimately does
+    not equal only the last transcript message.  Accept that shape only when
+    every boundary uses one of the pinned runtime's exact continuation nudges.
+    """
+
+    try:
+        from agent.conversation_loop import (
+            _LENGTH_CONTINUATION_DROPPED_TOOLS_PREFIX,
+            _LENGTH_CONTINUATION_NETWORK_STUB,
+            _LENGTH_CONTINUATION_OUTPUT_LIMIT,
+        )
+    except ImportError:
+        return None
+
+    def is_continuation_nudge(value: Any) -> bool:
+        return isinstance(value, str) and (
+            value in {
+                _LENGTH_CONTINUATION_NETWORK_STUB,
+                _LENGTH_CONTINUATION_OUTPUT_LIMIT,
+            }
+            or value.startswith(_LENGTH_CONTINUATION_DROPPED_TOOLS_PREFIX)
+        )
+
+    final_message = transcript[-1]
+    if final_message.get("role") != "assistant":
+        return None
+    parts = [str(final_message.get("content") or "")]
+    index = len(transcript) - 2
+    found_boundary = False
+    while index - 1 > current_user_index:
+        nudge = transcript[index]
+        fragment = transcript[index - 1]
+        if (
+            nudge.get("role") != "user"
+            or not is_continuation_nudge(nudge.get("content"))
+            or fragment.get("role") != "assistant"
+            or fragment.get("tool_calls")
+            or not isinstance(fragment.get("content"), str)
+            or not fragment.get("content")
+        ):
+            break
+        parts.insert(0, fragment["content"])
+        found_boundary = True
+        index -= 2
+    if not found_boundary:
+        return None
+
+    joined = ""
+    for part in parts:
+        if joined and not joined[-1].isspace() and part and not part[0].isspace():
+            joined += "\n"
+        joined += part
+    final_projection = _hermes_stored_assistant_projection(final_response)
+    return joined if joined == final_projection else None
+
+
 def redact_internal_account_references(value: str) -> tuple[str, bool]:
     """Remove account navigation tokens from one user-visible model answer."""
 
@@ -689,14 +756,26 @@ class HermesInvestigationAgentService:
             stored_projection = _hermes_stored_assistant_projection(
                 result.get("final_response")
             )
-            if final_content != stored_projection:
+            continuation_projection = _hermes_continuation_projection(
+                transcript,
+                current_user_index=len(expected_history),
+                final_response=result.get("final_response"),
+            )
+            if (
+                final_content != stored_projection
+                and continuation_projection is None
+            ):
                 raise RuntimeError(
                     "Hermes final assistant does not match the completed response"
                 )
             # The transcript is the durable source of truth.  Once the only
             # difference is Hermes' own storage projection, expose and persist
             # that same safe content rather than the pre-projection response.
-            result["final_response"] = stored_projection
+            result["final_response"] = (
+                continuation_projection
+                if continuation_projection is not None
+                else stored_projection
+            )
         return [dict(item) for item in transcript]
 
     @staticmethod

@@ -857,6 +857,50 @@ class TranscriptIntegrityTest(unittest.TestCase):
         self.assertEqual(validated, result["messages"])
         self.assertEqual(result["final_response"], "answer")
 
+    def test_completed_transcript_accepts_exact_hermes_continuation_chain(self):
+        network_nudge = (
+            "[System: The previous response was cut off by a "
+            "network error mid-stream. Continue exactly where "
+            "you left off. Do not restart or repeat prior text. "
+            "Finish the answer directly.]"
+        )
+        result = {
+            "messages": [
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "partial"},
+                {"role": "user", "content": network_nudge},
+                {"role": "assistant", "content": "answer"},
+            ],
+            "final_response": "partial\nanswer",
+        }
+
+        validated = HermesInvestigationAgentService._validate_completed_transcript(
+            result,
+            history=None,
+            user_message="question",
+        )
+
+        self.assertEqual(validated, result["messages"])
+        self.assertEqual(result["final_response"], "partial\nanswer")
+
+    def test_completed_transcript_rejects_untrusted_continuation_chain(self):
+        result = {
+            "messages": [
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "partial"},
+                {"role": "user", "content": "continue"},
+                {"role": "assistant", "content": "answer"},
+            ],
+            "final_response": "partial\nanswer",
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "does not match"):
+            HermesInvestigationAgentService._validate_completed_transcript(
+                result,
+                history=None,
+                user_message="question",
+            )
+
     def test_serialization_failure_is_unknown_and_preserves_completed_transcript(self):
         with tempfile.TemporaryDirectory() as directory:
             service, session, _agents = self._service(directory)
