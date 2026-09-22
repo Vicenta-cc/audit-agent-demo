@@ -839,6 +839,24 @@ class TranscriptIntegrityTest(unittest.TestCase):
                 user_message="question",
             )
 
+    def test_completed_transcript_accepts_only_hermes_storage_projection(self):
+        result = {
+            "messages": [
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "answer"},
+            ],
+            "final_response": "<think>private reasoning</think>\nanswer",
+        }
+
+        validated = HermesInvestigationAgentService._validate_completed_transcript(
+            result,
+            history=None,
+            user_message="question",
+        )
+
+        self.assertEqual(validated, result["messages"])
+        self.assertEqual(result["final_response"], "answer")
+
     def test_serialization_failure_is_unknown_and_preserves_completed_transcript(self):
         with tempfile.TemporaryDirectory() as directory:
             service, session, _agents = self._service(directory)

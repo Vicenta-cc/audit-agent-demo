@@ -46,6 +46,32 @@ _INTERNAL_RUNTIME_BRAND = re.compile(
 logger = logging.getLogger(__name__)
 
 
+def _hermes_stored_assistant_projection(value: Any) -> str | None:
+    """Reproduce Hermes' assistant-message persistence boundary.
+
+    Hermes returns the provider response separately from the transcript.  Its
+    transcript builder sanitizes Unicode, strips private reasoning blocks and
+    redacts secrets before storing the assistant message, while the returned
+    ``final_response`` is not guaranteed to receive the same projection.  Keep
+    these optional-runtime imports lazy and fail closed if the pinned Hermes
+    implementation is unavailable.
+    """
+
+    if not isinstance(value, str):
+        return None
+    try:
+        from agent.agent_runtime_helpers import strip_think_blocks
+        from agent.message_sanitization import _sanitize_surrogates
+        from agent.redact import redact_sensitive_text
+    except ImportError:
+        return None
+
+    projected = strip_think_blocks(None, _sanitize_surrogates(value)).strip()
+    if projected:
+        projected = redact_sensitive_text(projected)
+    return projected
+
+
 def redact_internal_account_references(value: str) -> tuple[str, bool]:
     """Remove account navigation tokens from one user-visible model answer."""
 
@@ -660,9 +686,17 @@ class HermesInvestigationAgentService:
             raise RuntimeError("Hermes transcript changed the current user message")
         final_content = transcript[-1].get("content")
         if final_content != result.get("final_response"):
-            raise RuntimeError(
-                "Hermes final assistant does not match the completed response"
+            stored_projection = _hermes_stored_assistant_projection(
+                result.get("final_response")
             )
+            if final_content != stored_projection:
+                raise RuntimeError(
+                    "Hermes final assistant does not match the completed response"
+                )
+            # The transcript is the durable source of truth.  Once the only
+            # difference is Hermes' own storage projection, expose and persist
+            # that same safe content rather than the pre-projection response.
+            result["final_response"] = stored_projection
         return [dict(item) for item in transcript]
 
     @staticmethod
