@@ -71,7 +71,7 @@ export function AdminUsersPage() {
         setUsername(""); setPassword("");
       }, "账号已开通。"); }}>
         <label>新账号<input placeholder="输入账号名称（至少 3 位）" required minLength={3} maxLength={64} autoComplete="off" value={username} onChange={e => setUsername(e.target.value)} /></label>
-        <label>初始密码<input placeholder="设置至少 12 位密码" required type="password" minLength={12} maxLength={256} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} /></label>
+        <label>初始密码<input placeholder="设置至少 8 位密码" required type="password" minLength={8} maxLength={256} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} /></label>
         <Button type="submit" variant="primary" loading={busy}>开通七天账号</Button>
       </form>
       <p className="admin-form-hint">初始密码请通过安全渠道交给用户。</p>
@@ -91,7 +91,7 @@ export function AdminUsersPage() {
       {error ? <p role="alert">{error}</p> : null}{notice ? <p role="status">{notice}</p> : null}
       <p className="admin-description">设置新的应用登录密码后，该账号的现有登录将失效，需要重新登录。</p>
       <form onSubmit={event => { event.preventDefault(); setChange({ title: `重置 ${selected.username} 的密码？`, description: "该账号的现有登录将失效，用户需要使用新密码重新登录。", run: async () => { await apiRequest(userPath(selected.id), { method: "PATCH", body: JSON.stringify({ password: resetPassword }) }); setResetPassword(""); } }); }}>
-          <label>新密码<input type="password" required minLength={12} maxLength={256} autoComplete="new-password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} /></label><Button type="submit" disabled={busy}>重置密码</Button>
+          <label>新密码<input type="password" required minLength={8} maxLength={256} autoComplete="new-password" value={resetPassword} onChange={e => setResetPassword(e.target.value)} /></label><Button type="submit" disabled={busy}>重置密码</Button>
         </form>
     </section> : null}
     <ConfirmDialog open={Boolean(change)} title={change?.title || ""} description={change?.description || ""} confirmText="确认" onCancel={() => setChange(null)} onConfirm={() => { const pending = change; setChange(null); if (pending) void execute(pending.run, "操作已保存。"); }} />

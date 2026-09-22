@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ExternalLink, PencilLine, Play, Save, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ExternalLink, FileText, Play, Save, ShieldCheck } from "lucide-react";
 import type { TaskDraft } from "../../types/investigation";
 import type { ConfirmationPreview } from "../../types/investigationCreation";
 import {
@@ -11,17 +11,17 @@ import {
 
 interface TaskConfirmationCardProps {
   draft: TaskDraft;
-  onModifyConfig: () => void;
+  onOpenConfig: () => void;
   onStartExecution: () => void;
   preview?: ConfirmationPreview;
-  onUpdateSearchTerms?: (terms: string[]) => Promise<void>;
+  onUpdateSearchTerms?: (terms: string[]) => Promise<boolean | void>;
   isConfirming?: boolean;
   error?: string;
 }
 
 export function TaskConfirmationCard({
   draft,
-  onModifyConfig,
+  onOpenConfig,
   onStartExecution,
   preview,
   onUpdateSearchTerms,
@@ -46,8 +46,8 @@ export function TaskConfirmationCard({
     const terms = parseInvestigationSearchTerms(searchTerms);
     setIsSavingTerms(true);
     try {
-      await onUpdateSearchTerms(terms);
-      setSavedSearchTerms(terms.join("、"));
+      const saved = await onUpdateSearchTerms(terms);
+      if (saved !== false) setSavedSearchTerms(terms.join("、"));
     } finally {
       setIsSavingTerms(false);
     }
@@ -90,8 +90,13 @@ export function TaskConfirmationCard({
                 disabled={isSavingTerms || parsedSearchTerms.length === 0}
               >
                 <Save size={14} aria-hidden="true" />
-                {isSavingTerms ? "保存中" : "保存搜索词"}
+                {isSavingTerms ? "应用中" : "应用到本次任务"}
               </button>
+              <p className="task-final-term-help">
+                {normalizedSearchTerms === savedSearchTerms
+                  ? "已应用到当前 Draft，可以确认并开始调查；不会保存到黑话库。"
+                  : "搜索词已修改，请先应用到本次任务；不会保存到黑话库。"}
+              </p>
             </div>
           ) : (
             <strong>{view.termsOrCreator}</strong>
@@ -150,9 +155,9 @@ export function TaskConfirmationCard({
       {error ? <p className="task-final-error" role="alert">{formatCreationErrorMessage(error)}</p> : null}
 
       <div className="task-final-actions">
-        <button type="button" className="mt-button mt-button-secondary" onClick={onModifyConfig}>
-          <PencilLine size={14} aria-hidden="true" />
-          修改配置
+        <button type="button" className="mt-button mt-button-secondary" onClick={onOpenConfig}>
+          <FileText size={14} aria-hidden="true" />
+          查看完整配置
         </button>
         <button
           type="button"

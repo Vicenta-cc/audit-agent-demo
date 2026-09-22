@@ -270,6 +270,7 @@ RuleSetJudgement = Annotated[
 
 class InvestigationTaskParameters(StrictModel):
     crawler_account_id: StrictStr | None = None
+    search_sort: Literal["general", "most_liked", "latest"] = "general"
     start_page: StrictInt = Field(default=1, ge=1)
     max_notes: StrictInt = Field(default=1, ge=1, le=5)
     max_total_notes: StrictInt = Field(default=5, ge=1, le=5)
@@ -328,6 +329,7 @@ class InvestigationDraftConfiguration(StrictModel):
 class CollectionConfiguration(StrictModel):
     crawl_mode: CrawlMode = CrawlMode.SEARCH
     keyword_source: KeywordSource = KeywordSource.KEYWORD
+    search_sort: Literal["general", "most_liked", "latest"] = "general"
     keywords: list[StrictStr] = Field(default_factory=list)
     creator_url: StrictStr = ""
     display_name: StrictStr = ""
@@ -693,6 +695,7 @@ class ResolvedExecutionConfiguration(StrictModel):
     collect_comments: StrictBool | None = None
     collect_media: StrictBool | None = None
     max_total_notes: StrictInt | None = Field(default=None, ge=1, le=5)
+    search_sort: Literal["general", "most_liked", "latest"] | None = None
 
     @model_serializer(mode="wrap")
     def serialize_execution(self, handler):
@@ -702,6 +705,7 @@ class ResolvedExecutionConfiguration(StrictModel):
             "collect_comments",
             "collect_media",
             "max_total_notes",
+            "search_sort",
         ):
             if payload.get(key) is None:
                 payload.pop(key, None)

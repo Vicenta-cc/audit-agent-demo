@@ -140,7 +140,12 @@ def test_new_tasks_publish_one_deterministic_unified_report_for_every_safe_risk_
         ).fetchone()[0] == 0
 
 
-def test_partial_report_exposes_sanitized_failed_post_diagnostics(tmp_path):
+@pytest.mark.parametrize('error_code,reason', [
+    ('fusion_contract_invalid', '审核结果未通过证据或格式校验'),
+    ('asr_gpu_out_of_memory', '语音转写 GPU 显存不足，帖子审核未完成'),
+    ('audit_content_blocked', '模型供应商内容安全检查拦截，审核未完成，不代表已判定违规'),
+])
+def test_partial_report_exposes_sanitized_failed_post_diagnostics(tmp_path, error_code, reason):
     source, store = seed["seed_audit"](tmp_path, count=1)
     batch = tmp_path / "failed-batch.json"
     batch.write_text(
@@ -166,7 +171,7 @@ def test_partial_report_exposes_sanitized_failed_post_diagnostics(tmp_path):
                 "note_id": "failed-20002",
                 "content_key": "failed-20002",
                 "stage": "fusion",
-                "error_code": "fusion_contract_invalid",
+                "error_code": error_code,
                 "reason": "private provider detail /Users/private/token",
             }
         ),
@@ -188,8 +193,8 @@ def test_partial_report_exposes_sanitized_failed_post_diagnostics(tmp_path):
             "note_id": "failed-20002",
             "analyze_status": "failed",
             "stage": "fusion",
-            "reason": "审核结果未通过证据或格式校验",
-            "error_code": "fusion_contract_invalid",
+            "reason": reason,
+            "error_code": error_code,
         }
     ]
     serialized = json.dumps(document, ensure_ascii=False)
@@ -203,7 +208,7 @@ def test_partial_report_exposes_sanitized_failed_post_diagnostics(tmp_path):
     text = "".join(paragraph["text"] for paragraph in methodology["paragraphs"])
     assert "排除在风险比例分母之外" in text
     assert "failed-20002" in text
-    assert "fusion_contract_invalid" in text
+    assert error_code in text
 
 
 def test_unified_report_presents_publishers_commenters_and_complete_post_navigation(

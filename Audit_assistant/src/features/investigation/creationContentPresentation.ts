@@ -5,6 +5,8 @@ const technicalColumn = /(?:\bID\b|_id\b|哈希|指纹|schema_version|revision)/
 
 function publicTerms(text: string): string {
   return text
+    .replace(/\bHermes(?:\s+Agent|助手)?(?:\s+v?\d+(?:\.\d+)*)?\b/gi, "研判助手")
+    .replace(/我是\s+研判助手/g, "我是研判助手")
     .replace(/[（(]id=[^）)]*[）)]/gi, (value) => value.includes("归属主词") ? "（归属主词）" : "")
     .replace(/[（(](?:adjudication_notes|recall_plan\.search_terms)[）)]/g, "")
     .replace(/term\s*(?:\+|\/)\s*platform\s*(?:\+|\/)\s*match_type/g, "词条、适用平台和匹配方式")

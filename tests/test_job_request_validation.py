@@ -52,6 +52,7 @@ class JobRequestValidationTest(unittest.TestCase):
         jobs = JobStore(self.store.db_path)
         settings_store = TaskSettingsStore(self.store.db_path)
         settings_store.save({'max_notes': 2, 'max_comments': 1, 'analyze_limit': 2,
+                             'search_sort': 'most_liked',
                              'analysis_batch_size': 1, 'max_items_per_minute': 1}, 0)
         account = self.store.create(platform='dy', display_name='available')
         self.store.save_auth_state(account['id'], 'encrypted-state')
@@ -68,6 +69,8 @@ class JobRequestValidationTest(unittest.TestCase):
         self.assertEqual(job['max_notes'], 2)
         self.assertEqual(job['crawler_account_id'], account['id'])
         self.assertEqual(job['effective_config']['max_comments'], 1)
+        self.assertEqual(job['search_sort'], 'most_liked')
+        self.assertEqual(job['effective_config']['search_sort'], 'most_liked')
         self.assertEqual(len(background.tasks), 1)
         settings_store.save({'max_notes': 1}, 1)
         self.assertEqual(jobs.get(job['id'])['max_notes'], 2)
@@ -141,6 +144,21 @@ class JobRequestValidationTest(unittest.TestCase):
                 "id": "m3-123456",
                 "crawler_account_id": "internal-account-id",
                 "crawler_account_display_name": "内部采集账号",
+                "requested_config": {
+                    "crawler_account_id": "internal-account-id",
+                    "max_notes": 1,
+                },
+                "effective_config": {
+                    "crawler_account_id": "internal-account-id",
+                    "max_notes": 1,
+                },
+                "control": {
+                    "execution_account": {
+                        "id": "internal-account-id",
+                        "display_name": "内部采集账号",
+                    },
+                    "crawl_epoch": 1,
+                },
                 "logs": [
                     {"time": "t1", "message": "执行账号：内部采集账号"},
                     {"time": "t2", "message": "审核完成 1/1"},
@@ -149,6 +167,10 @@ class JobRequestValidationTest(unittest.TestCase):
         )
         self.assertNotIn("crawler_account_id", projected)
         self.assertNotIn("crawler_account_display_name", projected)
+        self.assertNotIn("crawler_account_id", projected["requested_config"])
+        self.assertNotIn("crawler_account_id", projected["effective_config"])
+        self.assertNotIn("execution_account", projected["control"])
+        self.assertEqual(projected["control"]["crawl_epoch"], 1)
         self.assertEqual(projected["logs"], [{"time": "t2", "message": "审核完成 1/1"}])
 
     def test_legacy_public_job_keeps_existing_account_contract(self):

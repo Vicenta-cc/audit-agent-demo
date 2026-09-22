@@ -268,6 +268,7 @@ class InvestigationConfigurationResolver:
             "display_name": collection.display_name,
             "crawl_mode": crawl_mode,
             "keyword": ",".join(keywords),
+            "search_sort": collection.search_sort,
             "keyword_source": keyword_source if crawl_mode == "search" else "keyword",
             "lexicon_category": library_ids[0],
             "library_ids": library_ids,
@@ -399,6 +400,7 @@ class InvestigationConfigurationResolver:
             "display_name": collection.display_name,
             "crawl_mode": crawl_mode,
             "keyword": ",".join(keywords),
+            "search_sort": collection.search_sort,
             "keyword_source": "keyword",
             "lexicon_category": recall_library_ids[0] if recall_library_ids else "",
             "library_ids": list(recall_library_ids),
@@ -480,6 +482,12 @@ class AuditPipelineExecutionAdapter:
     def ensure_job(self, run: InvestigationRun) -> str:
         snapshot = parse_confirmed_configuration_snapshot(run.confirmed_configuration)
         configuration = snapshot.execution.model_dump(mode="json")
+        # Historical frozen snapshots predate the Douyin search-sort setting.
+        # Preserve their original behavior instead of writing NULL into the
+        # JobStore's non-null execution column.
+        configuration["search_sort"] = str(
+            configuration.get("search_sort") or "general"
+        )
         if snapshot.schema_version in {
             "investigation-run-config-v3",
             "investigation-run-config-v4",
@@ -501,6 +509,7 @@ class AuditPipelineExecutionAdapter:
                     "crawl_mode",
                     "keyword",
                     "keyword_source",
+                    "search_sort",
                     "creator_url",
                     "start_page",
                     "max_notes",
@@ -543,6 +552,7 @@ class AuditPipelineExecutionAdapter:
                         "crawl_mode",
                         "keyword",
                         "keyword_source",
+                        "search_sort",
                         "lexicon_category",
                         "library_ids",
                         "capabilities",
@@ -700,6 +710,7 @@ class AuditPipelineExecutionAdapter:
             "crawler_account_display_name",
             "crawl_mode",
             "keyword",
+            "search_sort",
             "creator_url",
             "max_notes",
             "max_total_notes",

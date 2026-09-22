@@ -11,6 +11,7 @@ from .config import settings
 
 SUPPORTED_CRAWLER_ACCOUNT_PLATFORMS = {"xhs", "dy", "ks"}
 CRAWLER_ACCOUNT_STATUSES = {"active", "login_required", "expired", "disabled"}
+CRAWLER_ACCOUNT_ACCESS_SCOPES = {"private", "public"}
 
 
 def account_is_cooling_down(account: dict, *, now: datetime | None = None) -> bool:
@@ -75,6 +76,10 @@ class CrawlerAccountStore:
             conn.execute("ALTER TABLE crawler_accounts ADD COLUMN cooldown_until TEXT")
         if "failure_kind" not in columns:
             conn.execute("ALTER TABLE crawler_accounts ADD COLUMN failure_kind TEXT")
+        if "access_scope" not in columns:
+            conn.execute(
+                "ALTER TABLE crawler_accounts ADD COLUMN access_scope TEXT NOT NULL DEFAULT 'private'"
+            )
 
     def list(
         self,
@@ -136,10 +141,12 @@ class CrawlerAccountStore:
         platform: str,
         display_name: str,
         platform_account_id: str = "",
+        access_scope: str = "private",
     ) -> dict:
         normalized_platform = self._validate_platform(platform)
         normalized_name = self._validate_display_name(display_name)
         normalized_platform_account_id = str(platform_account_id or "").strip()
+        normalized_access_scope = self._validate_access_scope(access_scope)
         now = datetime.now().isoformat(timespec="seconds")
         account_id = uuid4().hex[:12]
 
@@ -152,16 +159,17 @@ class CrawlerAccountStore:
             conn.execute(
                 """
                 INSERT INTO crawler_accounts (
-                    id, platform, display_name, platform_account_id, status,
+                    id, platform, display_name, platform_account_id, access_scope, status,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, 'login_required', ?, ?)
+                VALUES (?, ?, ?, ?, ?, 'login_required', ?, ?)
                 """,
                 (
                     account_id,
                     normalized_platform,
                     normalized_name,
                     normalized_platform_account_id,
+                    normalized_access_scope,
                     now,
                     now,
                 ),
@@ -342,7 +350,9 @@ class CrawlerAccountStore:
                 "SELECT * FROM crawler_accounts WHERE platform=? AND status='active' "
                 "AND COALESCE(auth_state_ciphertext,'')<>'' "
                 + exclusion +
-                "AND (cooldown_until IS NULL OR cooldown_until<=?) ORDER BY last_used_at IS NOT NULL, last_used_at, id",
+                "AND (cooldown_until IS NULL OR cooldown_until<=?) "
+                "ORDER BY CASE access_scope WHEN 'public' THEN 0 ELSE 1 END, "
+                "last_used_at IS NOT NULL, last_used_at, id",
                 (platform, *excluded, now),
             ).fetchall()
             return [self._row_to_account(row) for row in rows]
@@ -386,12 +396,19 @@ class CrawlerAccountStore:
             raise ValueError("账号名称不能超过 80 个字符")
         return normalized
 
+    def _validate_access_scope(self, access_scope: str) -> str:
+        normalized = str(access_scope or "private").strip().lower()
+        if normalized not in CRAWLER_ACCOUNT_ACCESS_SCOPES:
+            raise ValueError(f"Unsupported crawler account access scope: {access_scope}")
+        return normalized
+
     def _row_to_account(self, row: sqlite3.Row) -> dict:
         return {
             "id": row["id"],
             "platform": row["platform"],
             "display_name": row["display_name"],
             "platform_account_id": row["platform_account_id"] or "",
+            "access_scope": row["access_scope"] or "private",
             "status": row["status"],
             "last_validated_at": row["last_validated_at"] or "",
             "last_used_at": row["last_used_at"] or "",

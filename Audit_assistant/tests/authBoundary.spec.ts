@@ -18,7 +18,7 @@ async function server(context: BrowserContext, initial: ReturnType<typeof accoun
     if (path === "/api/auth/me") return route.fulfill({json:{user:state.current}});
     if (path === "/api/auth/csrf") return route.fulfill({json:{csrf_token:"test-csrf"}});
     if (path === "/api/auth/logout") { state.current = null; return route.fulfill({status:204}); }
-    if (path === "/api/me/task-quota") return route.fulfill({json:{enabled:true,used:1,remaining:2,limit:3,legacy_record_count:0,active_task:state.active}});
+    if (path === "/api/me/task-quota") return route.fulfill({json:{enabled:true,used:1,remaining:state.current.role === "admin" ? null : 2,limit:state.current.role === "admin" ? null : 3,unlimited:state.current.role === "admin",legacy_record_count:0,active_task:state.active}});
     if (path === "/api/investigation-workspaces") return route.fulfill({json:{items:[{workspace_session_id:"workspace-a",run_id:"run-a",title:"测试调查",updated_at:new Date().toISOString(),run_status:"QUEUED",presentation_stage:"confirmation"}],has_more:false}});
     if (path === "/api/historical-report-workspaces") return route.fulfill({json:{items:[]}});
     if (path === "/api/crawler-accounts") return route.fulfill({json:{items:[{id:"crawler-a",display_name:"测试采集账号",platform:"dy",status:"active"}]}});
@@ -101,7 +101,8 @@ test("ordinary user cannot render admin controls or load admin data", async ({pa
 test("admin manages app accounts without crawler sharing controls", async ({page,context}) => {
   const state = await server(context,account("admin","admin")); await page.goto(entry);
   await page.getByRole("link",{name:"应用账号管理"}).click();
-  await page.getByLabel("新账号",{exact:true}).fill("new-user"); await page.getByLabel("初始密码").fill("test-password-123");
+  await page.getByLabel("新账号",{exact:true}).fill("new-user"); await page.getByLabel("初始密码").fill("12345678");
+  await expect(page.getByLabel("初始密码")).toHaveAttribute("minlength", "8");
   await page.getByRole("button",{name:"开通七天账号"}).click();
   await expect(page.getByRole("row").filter({hasText:"new-user"})).toContainText("待首次登录");
   expect(state.writes.find(x=>x.path === "/api/admin/users")?.body).toMatchObject({role:"user",validity_days:7,activation_mode:"first_login"});
@@ -117,10 +118,10 @@ test("admin manages app accounts without crawler sharing controls", async ({page
   await expect(page.getByLabel("用户密码设置",{exact:true})).toBeFocused();
   await expect(page.getByRole("button",{name:"允许使用",exact:true})).toHaveCount(0);
   expect(state.writes.some(x => x.path.includes("/grants/"))).toBe(false);
-  await page.getByLabel("新密码",{exact:true}).fill("replacement-1234"); await page.getByRole("button",{name:"重置密码",exact:true}).click();
+  await page.getByLabel("新密码",{exact:true}).fill("87654321"); await page.getByRole("button",{name:"重置密码",exact:true}).click();
   await page.getByRole("dialog").getByRole("button",{name:"确认",exact:true}).click();
   await expect(page.getByLabel("新密码",{exact:true})).toHaveValue("");
-  expect(state.writes.filter(x=>x.method === "PATCH").map(x=>x.body)).toEqual([{renew_days:7},{status:"disabled"},{password:"replacement-1234"}]);
+  expect(state.writes.filter(x=>x.method === "PATCH").map(x=>x.body)).toEqual([{renew_days:7},{status:"disabled"},{password:"87654321"}]);
   expect(state.writes.filter(x=>x.path.startsWith("/api/admin")).every(x=>x.csrf === "test-csrf" && x.owner === "admin")).toBe(true);
   await page.screenshot({path:"/tmp/phase5-admin.png",fullPage:true});
 });
@@ -210,4 +211,15 @@ test("administrator stays signed in without an account deadline", async ({page,c
   await page.getByRole("button",{name:"关闭用户密码设置"}).click();
   await expect(page.getByLabel("用户密码设置",{exact:true})).toHaveCount(0);
   await expect(page.getByRole("row").filter({hasText:"alice"}).getByRole("button",{name:"密码设置"})).toBeFocused();
+});
+
+
+test("admin quota is unlimited and retains active task navigation", async ({page,context}) => {
+  const state = await server(context,account("admin","admin"));
+  state.active={task_id:"run-a",kind:"investigation",queue_state:"QUEUED",decision:"OPEN",waiting_reason:"account_busy"};
+  await page.goto(entry);
+  await expect(page.getByLabel("今日任务额度")).toContainText("管理员每日任务次数不限");
+  await expect(page.getByLabel("今日任务额度")).not.toContainText("剩余");
+  await page.getByRole("button",{name:"返回当前任务"}).click();
+  await expect(page.getByTestId("path")).toHaveText("/investigation/workspace-a");
 });

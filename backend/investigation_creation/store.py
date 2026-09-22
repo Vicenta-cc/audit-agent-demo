@@ -58,6 +58,7 @@ class InvestigationCreationStore:
         db_path: Path | None = None,
         *,
         clock: Callable[[], datetime] = utc_now,
+        account_db: Path | None = None,
     ) -> None:
         self.db_path = (
             db_path or (settings.data_dir / "investigation_creation.sqlite3")
@@ -66,7 +67,11 @@ class InvestigationCreationStore:
         self.clock = clock
         self._init_db()
         from backend.task_admission.store import AdmissionStore
-        self.admission = AdmissionStore(self.db_path, clock=self.clock)
+        self.admission = AdmissionStore(
+            self.db_path,
+            account_db=account_db or self.db_path,
+            clock=self.clock,
+        )
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path, timeout=30)

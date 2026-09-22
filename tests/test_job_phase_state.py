@@ -43,7 +43,7 @@ def test_log_level_uses_explicit_metadata_and_does_not_treat_zero_failures_as_er
 
     store.log(
         "log-levels",
-        "逐条评论审核完成，成功=10，失败=0，翻译失败=0",
+        "评论审核批次 4/15 完成，返回有效=20，漏项=0，成功=20，失败=0，翻译失败=0",
     )
     store.log(
         "log-levels",

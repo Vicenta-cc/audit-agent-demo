@@ -185,6 +185,73 @@ def test_busy_account_queues_without_consuming_execution_or_refunding(stack):
     assert worker.run_once().status == RunStatus.PUBLISHED
 
 
+def test_scheduler_prefers_public_then_private_then_waits(tmp_path, monkeypatch):
+    from backend.application_auth.store import AuthStore
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    from backend.task_admission.scheduler import select_account
+    from test_task_admission import enqueue
+
+    auth = AuthStore(tmp_path / "pool-auth.sqlite3")
+    monkeypatch.setattr(settings, "app_auth_mode", "required")
+    monkeypatch.setattr(settings, "app_auth_db", auth.db_path)
+    owner = auth.create_user(
+        username="pool-owner",
+        password="correct horse battery staple",
+    )["id"]
+    auth.login("pool-owner", "correct horse battery staple")
+    accounts = CrawlerAccountStore(tmp_path / "pool-accounts.sqlite3")
+    public_account = accounts.create(
+        platform="dy",
+        display_name="公共账号",
+        access_scope="public",
+    )
+    private_account = accounts.create(
+        platform="dy",
+        display_name="私有账号",
+    )
+    accounts.save_auth_state(public_account["id"], "public-state")
+    accounts.save_auth_state(private_account["id"], "private-state")
+    auth.register_crawler_account(private_account["id"], owner)
+    creation = InvestigationCreationStore(
+        tmp_path / "pool-creation.sqlite3",
+        account_db=accounts.db_path,
+    )
+    admission = enqueue(
+        creation.admission,
+        owner,
+        key="pool-order",
+        payload={"platform": "dy", "crawler_account_id": private_account["id"]},
+    )
+    worker = SimpleNamespace(
+        store=creation,
+        execution_adapter=SimpleNamespace(crawler_account_store=accounts),
+    )
+
+    with select_account(worker, admission) as ready:
+        assert ready
+        assert selected_account() == public_account["id"]
+
+    public_handle = acquire_account_handle("dy", public_account["id"])
+    assert public_handle is not None
+    try:
+        with select_account(worker, admission) as ready:
+            assert ready
+            assert selected_account() == private_account["id"]
+
+        private_handle = acquire_account_handle("dy", private_account["id"])
+        assert private_handle is not None
+        try:
+            with select_account(worker, admission) as ready:
+                assert not ready
+            waiting_row = creation.admission.for_task(admission["task_id"])
+            assert waiting_row["waiting_reason"] == "account_busy"
+            assert waiting_row["resource_account_id"] == ""
+        finally:
+            private_handle.close()
+    finally:
+        public_handle.close()
+
+
 def test_capacity_queue_is_separate_from_account_availability(stack, monkeypatch):
     creation, auth, (a, _) = stack
     run = create_run(creation, auth, a, "capacity", "account-a")
@@ -242,6 +309,44 @@ def test_analysis_capacity_can_cancel_while_other_task_runs(monkeypatch):
     with analysis_capacity():
         with capacity_lease("analysis", 1) as second:
             assert not second
+
+
+def test_candidate_defaults_and_analysis_capacity_are_three(monkeypatch):
+    env = dict(os.environ)
+    for key in (
+        "TASK_WORKER_PROCESSES",
+        "TASK_EXECUTION_CAPACITY",
+        "TASK_ANALYSIS_CAPACITY",
+    ):
+        env.pop(key, None)
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from backend.audit_agent.config import settings; "
+                "print(settings.task_worker_processes, "
+                "settings.task_execution_capacity, "
+                "settings.task_analysis_capacity)"
+            ),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert probe.stdout.strip() == "3 3 3"
+
+    monkeypatch.setattr(settings, "task_analysis_capacity", 3)
+    with (
+        capacity_lease("analysis", 3) as first,
+        capacity_lease("analysis", 3) as second,
+        capacity_lease("analysis", 3) as third,
+        capacity_lease("analysis", 3) as fourth,
+    ):
+        assert first and second and third
+        assert not fourth
 
 
 def test_login_and_maintenance_cannot_enter_an_account_used_by_collection(

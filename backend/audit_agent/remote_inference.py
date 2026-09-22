@@ -7,6 +7,7 @@ import time
 import requests
 
 from .config import settings
+from .asr_chunks import ASROutOfMemoryError, is_asr_oom, transcribe_in_chunks
 
 
 class RemoteInferenceClient:
@@ -42,10 +43,13 @@ class RemoteInferenceClient:
         return bool(self.ocr_base_url)
 
     def transcribe(self, audio_path: Path) -> dict:
-        return self._post_audio_with_retry(
-            f"{self.asr_base_url}/api/inference/transcribe",
+        return transcribe_in_chunks(
             audio_path,
-            "remote ASR failed",
+            lambda chunk: self._post_audio_with_retry(
+                f"{self.asr_base_url}/api/inference/transcribe", chunk, "remote ASR failed",
+            ),
+            max_seconds=settings.asr_chunk_seconds,
+            overlap_seconds=settings.asr_chunk_overlap_seconds,
         )
 
     def mms_transcribe(self, audio_path: Path) -> dict:
@@ -77,6 +81,13 @@ class RemoteInferenceClient:
                 self._wait_before_asr_retry(attempt)
                 continue
 
+            if response.status_code >= 400 and is_asr_oom(response.text):
+                try:
+                    detail = response.json().get("detail", {})
+                except (ValueError, AttributeError):
+                    detail = {}
+                raise ASROutOfMemoryError("语音转写 GPU 显存不足；已停止重试当前音频",
+                    subdivision_exhausted=isinstance(detail, dict) and detail.get("subdivision_exhausted") is True)
             if not self._retryable_asr_status(response.status_code) or attempt + 1 >= attempts:
                 return self._json_response(response, error_message)
             self._wait_before_asr_retry(attempt)

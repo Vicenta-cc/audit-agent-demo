@@ -7,7 +7,6 @@ import sqlite3
 from typing import Any, Callable, Iterator
 import unicodedata
 
-from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_account_store import (
     CrawlerAccountStore,
     account_is_cooling_down,
@@ -59,22 +58,12 @@ _ENABLED_CREATION_PLATFORMS = frozenset({"dy"})
 _RULES_MANAGEMENT_PATH = "/rule-assistant/rulesets?return_to=/investigation"
 
 
-def _effective_m3_posts_per_keyword() -> int:
-    return min(5, max(1, int(settings.m3_posts_per_keyword)))
-
-
-def _effective_m3_comments_per_post() -> int:
-    return min(1000, max(0, int(settings.m3_comments_per_post)))
-
-
 def effective_task_parameters(configuration) -> InvestigationTaskParameters:
-    requested = configuration.task_parameters or InvestigationTaskParameters(
-        max_notes=_effective_m3_posts_per_keyword(),
-        max_comments=_effective_m3_comments_per_post(),
-        max_items_per_minute=5, analyze_limit=settings.m3_analyze_limit,
-        analysis_batch_size=5,
+    from backend.audit_agent.task_settings import (
+        default_task_parameters,
+        effective_parameters,
     )
-    from backend.audit_agent.task_settings import effective_parameters
+    requested = configuration.task_parameters or default_task_parameters()
     return effective_parameters(requested)
 
 
@@ -719,18 +708,13 @@ class InvestigationResourceService:
             )
         configuration, _ = self.task_configuration(configuration, resource_connection)
         parameters = effective_task_parameters(configuration)
-        selected_account = (
-            next(
-                (
-                    account
-                    for account in available_accounts
-                    if account["id"] == parameters.crawler_account_id
-                ),
-                None,
+        available_accounts.sort(
+            key=lambda account: (
+                str(account.get("access_scope") or "private") != "public",
+                account["id"] != parameters.crawler_account_id,
             )
-            if parameters.crawler_account_id
-            else None
-        ) or available_accounts[0]
+        )
+        selected_account = available_accounts[0]
         mode = configuration.investigation.mode
         collection: dict[str, Any]
         if mode == "search":
@@ -769,7 +753,7 @@ class InvestigationResourceService:
                 "run_crawler": True,
             }
         collection.update({key: getattr(parameters, key) for key in (
-            "start_page", "max_comments", "max_concurrency", "get_sub_comment",
+            "search_sort", "start_page", "max_comments", "max_concurrency", "get_sub_comment",
             "max_items_per_minute", "collect_comments", "collect_media",
         )})
         collection["display_name"] = draft.title
@@ -1171,7 +1155,13 @@ class InvestigationResourceService:
                 )
             )
         ]
-        return sorted(available, key=lambda account: str(account["id"]))
+        return sorted(
+            available,
+            key=lambda account: (
+                str(account.get("access_scope") or "private") != "public",
+                str(account["id"]),
+            ),
+        )
 
     @staticmethod
     def _collection_unavailable_message(platform: str) -> str:

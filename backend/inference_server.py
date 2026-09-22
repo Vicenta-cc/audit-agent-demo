@@ -8,6 +8,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from .audit_agent.config import settings
+from .audit_agent.asr_chunks import is_asr_oom
 from .audit_agent.prompts import IMAGE_PROMPT
 
 
@@ -144,6 +145,12 @@ async def transcribe(audio: UploadFile = File(...), x_inference_key: str | None 
             return get_audio_processor().transcribe(audio_path)
         except Exception as exc:
             logger.exception("remote ASR failed")
+            if is_asr_oom(exc):
+                raise HTTPException(status_code=422, detail={
+                    "code": "asr_gpu_out_of_memory", "retryable": False,
+                    "message": "语音转写 GPU 显存不足",
+                    "subdivision_exhausted": bool(getattr(exc, "subdivision_exhausted", False)),
+                }) from exc
             raise HTTPException(status_code=500, detail=f"remote ASR failed: {exc}") from exc
 
 

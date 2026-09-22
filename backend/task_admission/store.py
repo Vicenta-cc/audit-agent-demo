@@ -32,11 +32,20 @@ class AdmissionStore:
     RESERVED tracks the unfinished slot. charge_state independently tracks billing.
     """
 
-    def __init__(self, db_path=None, *, auth_db=None, clock=None, enabled=None):
+    def __init__(
+        self,
+        db_path=None,
+        *,
+        auth_db=None,
+        account_db=None,
+        clock=None,
+        enabled=None,
+    ):
         self.db_path = Path(
             db_path or settings.data_dir / "investigation_creation.sqlite3"
         ).resolve()
         self.auth_db = Path(auth_db or settings.app_auth_db).resolve()
+        self.account_db = Path(account_db or self.db_path).resolve()
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.enabled = (
             settings.app_auth_mode == "required" if enabled is None else enabled
@@ -164,24 +173,44 @@ class AdmissionStore:
                 (reason, self.now(), row["id"]),
             )
 
-    def connect(self):
+    def connect(self, *, attach_account_db=False):
+        # The crawler-account database is an authorization input, not part of
+        # the quota/slot write transaction. Attaching it here makes SQLite's
+        # BEGIN IMMEDIATE lock the JobStore database and can deadlock callbacks
+        # that project cancellation or recovery state. _crawler_account_scope
+        # performs a separate read when the database is not attached.
         db = sqlite3.connect(self.db_path, timeout=30)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA busy_timeout=30000")
         if self.enabled and self.auth_db != self.db_path:
             db.execute("ATTACH DATABASE ? AS admission_auth", (str(self.auth_db),))
+        if (
+            attach_account_db
+            and
+            self.enabled
+            and self.account_db != self.db_path
+            and self.account_db != self.auth_db
+        ):
+            db.execute(
+                "ATTACH DATABASE ? AS admission_accounts", (str(self.account_db),)
+            )
         return db
 
     def now(self):
         return self.clock().astimezone(timezone.utc).isoformat()
 
+    def user_record(self, db, owner):
+        if not self.enabled:
+            return ""
+        schema = "main" if self.auth_db == self.db_path else "admission_auth"
+        return db.execute(
+            f"SELECT * FROM {schema}.app_users WHERE id=?", (owner,)
+        ).fetchone()
+
     def validate_user(self, db, owner, account_id=""):
         if not self.enabled:
             return
-        schema = "main" if self.auth_db == self.db_path else "admission_auth"
-        user = db.execute(
-            f"SELECT * FROM {schema}.app_users WHERE id=?", (owner,)
-        ).fetchone()
+        user = self.user_record(db, owner)
         if (
             not user
             or user["status"] != "active"
@@ -194,21 +223,64 @@ class AdmissionStore:
                 "账号已失效，请重新登录或联系管理员。", code="ACCOUNT_EXPIRED"
             )
         if account_id:
+            schema = "main" if self.auth_db == self.db_path else "admission_auth"
             grant = db.execute(
                 f"""SELECT 1 FROM {schema}.crawler_account_owners
                 WHERE owner_user_id=? AND account_id=?""",
                 (owner, account_id),
             ).fetchone()
-            if grant is None:
-                raise AdmissionError(
-                    "只能使用自己的采集账号。", code="CRAWLER_ACCOUNT_FORBIDDEN"
-                )
+            if grant is not None:
+                return "private"
+            if self._crawler_account_scope(db, account_id) == "public":
+                return "public"
+            raise AdmissionError(
+                "只能使用公共采集账号或自己的私有采集账号。",
+                code="CRAWLER_ACCOUNT_FORBIDDEN",
+            )
+        return ""
+
+    def _crawler_account_scope(self, db, account_id: str) -> str:
+        if self.account_db == self.db_path:
+            schema = "main"
+        elif self.account_db == self.auth_db:
+            schema = "main" if self.auth_db == self.db_path else "admission_auth"
+        else:
+            schema = "admission_accounts"
+        attached = {str(row[1]) for row in db.execute("PRAGMA database_list")}
+        if schema not in attached:
+            # Investigation confirmation owns a wider transaction and passes
+            # its connection into AdmissionStore.reserve(). That connection
+            # attaches the auth database, but intentionally does not know the
+            # independently configured crawler-account database. Read only the
+            # account scope here; dispatch revalidates eligibility and ownership
+            # after acquiring the execution/account leases.
+            if schema != "admission_accounts":
+                return ""
+            with sqlite3.connect(self.account_db) as account_db:
+                row = account_db.execute(
+                    "SELECT access_scope FROM crawler_accounts WHERE id=?",
+                    (account_id,),
+                ).fetchone()
+            return str(row[0] or "private") if row else ""
+        exists = db.execute(
+            f"SELECT 1 FROM {schema}.sqlite_master "
+            "WHERE type='table' AND name='crawler_accounts'"
+        ).fetchone()
+        if not exists:
+            return ""
+        row = db.execute(
+            f"SELECT access_scope FROM {schema}.crawler_accounts WHERE id=?",
+            (account_id,),
+        ).fetchone()
+        return str(row[0] or "private") if row else ""
 
     def reserve(
         self, db, *, owner, task_id, kind, key, payload, job_id="", request_hash=None
     ):
         digest = request_hash or fingerprint(payload)
         self.validate_user(db, owner, payload.get("crawler_account_id") or "")
+        user = self.user_record(db, owner)
+        unlimited = bool(user) and user["role"] == "admin"
         previous = db.execute(
             "SELECT * FROM task_admissions WHERE owner_id=? AND request_key=?",
             (owner, key),
@@ -235,7 +307,7 @@ class AdmissionStore:
             + self.charge_predicate(),
             (owner, day),
         ).fetchone()[0]
-        if count >= 3:
+        if not unlimited and count >= 3:
             raise AdmissionError("今日三次任务额度已用完。", code="DAILY_REPORT_LIMIT")
         ident, now = uuid4().hex, self.now()
         db.execute(
@@ -292,6 +364,8 @@ class AdmissionStore:
             now.date() + timedelta(days=1), datetime.min.time(), tzinfo=now.tzinfo
         )
         with self.connect() as db:
+            user = self.user_record(db, owner)
+            unlimited = bool(user) and user["role"] == "admin"
             counts = dict(
                 db.execute(
                     "SELECT state,count(*) FROM task_admissions WHERE owner_id=? AND day=? GROUP BY state",
@@ -319,7 +393,8 @@ class AdmissionStore:
         return dict(
             day=day,
             timezone="Asia/Shanghai",
-            limit=3,
+            unlimited=unlimited,
+            limit=None if unlimited else 3,
             completed=used,
             reserved=reserved,
             used=charged,
@@ -327,13 +402,17 @@ class AdmissionStore:
             refunded=refunded,
             quota_policy="accepted_v2",
             legacy_record_count=legacy,
-            remaining=max(0, 3 - charged),
+            remaining=None if unlimited else max(0, 3 - charged),
             reset_at=reset.isoformat(),
             active_task=dict(active) if active else None,
         )
 
     def cancel(self, task_id, owner, *, on_cancel=None):
-        with self.connect() as db:
+        # Cancellation updates the Job projection in on_cancel(). Do not attach
+        # the independently configured account database to this write
+        # transaction: BEGIN IMMEDIATE would lock that database too and make the
+        # callback deadlock against its own JobStore connection.
+        with self.connect(attach_account_db=False) as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(
                 "SELECT * FROM task_admissions WHERE (task_id=? OR job_id=?) AND owner_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1",

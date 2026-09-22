@@ -172,7 +172,7 @@ def test_resume_rejects_globally_available_but_unauthorized_account(
             principal=Principal("user-a"),
         )
     assert exc_info.value.status_code == 409
-    assert "个人采集账号" in str(exc_info.value.detail)
+    assert "公共或私有采集账号" in str(exc_info.value.detail)
     assert jobs.get(job["id"])["status"] == "crawl_paused"
 
 
@@ -285,7 +285,10 @@ def test_continue_collection_projection_waits_for_an_eligible_account(
     monkeypatch.setattr(
         main,
         "crawler_account_store",
-        SimpleNamespace(available_accounts=lambda _platform: []),
+        SimpleNamespace(
+            get=lambda _account_id: None,
+            available_accounts=lambda _platform: [],
+        ),
     )
 
     cooling = main.enrich_job(jobs.get(job["id"]))
@@ -294,7 +297,10 @@ def test_continue_collection_projection_waits_for_an_eligible_account(
     monkeypatch.setattr(
         main,
         "crawler_account_store",
-        SimpleNamespace(available_accounts=lambda _platform: [{"id": "fresh"}]),
+        SimpleNamespace(
+            get=lambda _account_id: None,
+            available_accounts=lambda _platform: [{"id": "fresh"}],
+        ),
     )
     eligible = main.enrich_job(jobs.get(job["id"]))
     assert eligible["available_actions"]["resume_crawl"] is True

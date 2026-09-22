@@ -11,6 +11,7 @@ import {
   Search,
   ShieldAlert,
   Trash2,
+  UserRound,
   UsersRound
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -24,15 +25,18 @@ import { Toast } from "../../components/feedback/Toast";
 import {
   createCrawlerAccount,
   deleteCrawlerAccount,
-  fetchCrawlerAccounts,
+  fetchCrawlerAccountOverview,
   updateCrawlerAccount
 } from "../../services/crawlerAccounts";
 import type {
   CrawlerAccount,
+  CrawlerAccountAccessScope,
   CrawlerAccountInput,
   CrawlerAccountPlatform,
-  CrawlerAccountStatus
+  CrawlerAccountStatus,
+  SharedCrawlerPoolSummary
 } from "../../types/crawlerAccounts";
+import { useApplicationAuth } from "../auth/AuthBoundary";
 import { CrawlerAccountDrawer } from "./CrawlerAccountDrawer";
 import { CrawlerAccountLoginDialog } from "./CrawlerAccountLoginDialog";
 
@@ -62,15 +66,25 @@ const statusMeta: Record<CrawlerAccountStatus, { label: string; className: strin
 };
 
 export function CrawlerAccountsPage() {
+  const { user } = useApplicationAuth();
+  const isAdmin = !user || user.role === "admin";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedReturnTo = searchParams.get("return_to") || "";
   const returnTo = requestedReturnTo.startsWith("/investigation") ? requestedReturnTo : "";
   const [accounts, setAccounts] = useState<CrawlerAccount[]>([]);
+  const [sharedPool, setSharedPool] = useState<SharedCrawlerPoolSummary>({
+    total: 0,
+    ready: 0,
+    busy: 0,
+    unavailable: 0,
+    byPlatform: {}
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [scopeFilter, setScopeFilter] = useState<CrawlerAccountAccessScope>("private");
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -94,12 +108,13 @@ export function CrawlerAccountsPage() {
     else setRefreshing(true);
     setError("");
     try {
-      const nextAccounts = await fetchCrawlerAccounts();
+      const overview = await fetchCrawlerAccountOverview();
       if (generation !== loadGenerationRef.current) return;
-      setAccounts(nextAccounts);
+      setAccounts(overview.accounts);
+      setSharedPool(overview.sharedPool);
       const pendingAccountId = window.sessionStorage.getItem("crawler-account-login-target") || "";
       if (pendingAccountId) {
-        const pendingAccount = nextAccounts.find((account) => account.id === pendingAccountId);
+        const pendingAccount = overview.accounts.find((account) => account.id === pendingAccountId);
         if (pendingAccount) setLoginTarget(pendingAccount);
         else window.sessionStorage.removeItem("crawler-account-login-target");
       }
@@ -131,9 +146,22 @@ export function CrawlerAccountsPage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  const scopedAccounts = useMemo(
+    () => isAdmin ? accounts.filter((account) => account.accessScope === scopeFilter) : accounts,
+    [accounts, isAdmin, scopeFilter]
+  );
+
+  const scopeCounts = useMemo(
+    () => ({
+      public: accounts.filter((account) => account.accessScope === "public").length,
+      private: accounts.filter((account) => account.accessScope === "private").length
+    }),
+    [accounts]
+  );
+
   const filteredAccounts = useMemo(() => {
     const keyword = query.trim().toLowerCase();
-    return accounts.filter((account) => {
+    return scopedAccounts.filter((account) => {
       const matchesQuery =
         !keyword ||
         [account.displayName, account.platformAccountId, platformMeta[account.platform].label]
@@ -147,18 +175,18 @@ export function CrawlerAccountsPage() {
         (statusFilter === "cooling" ? cooling : account.status === statusFilter && !cooling);
       return matchesQuery && matchesPlatform && matchesStatus;
     });
-  }, [accounts, clock, platformFilter, query, statusFilter]);
+  }, [clock, platformFilter, query, scopedAccounts, statusFilter]);
 
   const stats = useMemo(
     () => ({
-      total: accounts.length,
-      active: accounts.filter((account) => account.status === "active" && !isCooling(account, clock)).length,
-      attention: accounts.filter(
+      total: scopedAccounts.length,
+      active: scopedAccounts.filter((account) => account.status === "active" && !isCooling(account, clock)).length,
+      attention: scopedAccounts.filter(
         (account) => isCooling(account, clock) || ["login_required", "expired"].includes(account.status)
       ).length,
-      disabled: accounts.filter((account) => account.status === "disabled").length
+      disabled: scopedAccounts.filter((account) => account.status === "disabled").length
     }),
-    [accounts, clock]
+    [clock, scopedAccounts]
   );
 
   const openCreate = () => {
@@ -189,6 +217,7 @@ export function CrawlerAccountsPage() {
       } else {
         const created = await createCrawlerAccount(input);
         setAccounts((current) => [created, ...current]);
+        if (isAdmin) setScopeFilter(created.accessScope);
         openLogin(created);
         setToast({ message: "账号已添加，请扫码登录" });
       }
@@ -246,22 +275,74 @@ export function CrawlerAccountsPage() {
             </button>
           ) : null}
           <h1>采集账号</h1>
-          <p>平台登录账号与当前可用状态</p>
+          <p>{isAdmin ? "维护公共账号池和管理员私有账号" : "维护你的私有账号，并查看公共池可用情况"}</p>
         </div>
         <Button type="button" variant="primary" onClick={openCreate}>
           <Plus size={18} />
-          添加账号
+          {isAdmin ? "添加采集账号" : "添加私有账号"}
         </Button>
       </header>
 
-      <section className="crawler-account-summary" aria-label="账号概况">
-        <SummaryItem label="账号总数" value={stats.total} />
-        <SummaryItem label="当前可用" value={stats.active} />
-        <SummaryItem label="需要处理" value={stats.attention} />
-        <SummaryItem label="已停用" value={stats.disabled} />
+      <section className="crawler-account-pool-strip" aria-label="公共账号池概况">
+        <div className="crawler-account-pool-intro">
+          <span className="crawler-account-pool-icon" aria-hidden="true">
+            <UsersRound size={19} />
+          </span>
+          <div>
+            <strong>公共账号池</strong>
+            <p>创建任务时由系统优先调度，无需手动选择</p>
+          </div>
+          <span className="crawler-account-pool-badge">自动调度</span>
+        </div>
+        <div className="crawler-account-pool-metrics">
+          <PoolMetric label="公共账号总数" value={sharedPool.total} tone="neutral" />
+          <PoolMetric label="当前空闲" value={sharedPool.ready} tone="ready" />
+          <PoolMetric label="正在使用" value={sharedPool.busy} tone="busy" />
+          <PoolMetric label="不可用" value={sharedPool.unavailable} tone="unavailable" />
+        </div>
       </section>
 
       <section className="crawler-account-panel">
+        <div className="crawler-account-panel-heading">
+          <div>
+            <h2>{isAdmin ? (scopeFilter === "public" ? "公共账号池明细" : "管理员私有账号") : "我的私有账号"}</h2>
+            <p>{isAdmin
+              ? (scopeFilter === "public" ? "所有用户任务均可调度，由系统优先使用" : "仅用于当前管理员自己的任务")
+              : "公共池繁忙时，系统会自动使用你的可用私有账号"}</p>
+          </div>
+          <div className="crawler-account-compact-summary" aria-label="账号概况">
+            <span><strong>{stats.total}</strong> 个账号</span>
+            <span className="is-ready"><strong>{stats.active}</strong> 可用</span>
+            {stats.attention ? <span className="is-attention"><ShieldAlert size={14} /><strong>{stats.attention}</strong> 待处理</span> : null}
+            {stats.disabled ? <span><strong>{stats.disabled}</strong> 已停用</span> : null}
+          </div>
+        </div>
+        {isAdmin ? (
+          <div className="crawler-account-scope-tabs" role="tablist" aria-label="账号池分类">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={scopeFilter === "public"}
+              className={scopeFilter === "public" ? "is-active" : ""}
+              onClick={() => setScopeFilter("public")}
+            >
+              <UsersRound size={16} />
+              公共账号池
+              <span>{scopeCounts.public}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={scopeFilter === "private"}
+              className={scopeFilter === "private" ? "is-active" : ""}
+              onClick={() => setScopeFilter("private")}
+            >
+              <UserRound size={16} />
+              我的私有账号
+              <span>{scopeCounts.private}</span>
+            </button>
+          </div>
+        ) : null}
         <div className="crawler-account-toolbar">
           <label className="crawler-account-search">
             <Search size={18} aria-hidden="true" />
@@ -375,6 +456,7 @@ export function CrawlerAccountsPage() {
                               {formatDateTime(account.lastUsedAt)}
                             </span>
                             <div className="crawler-account-row-actions">
+                              {account.canManage ? <>
                               <IconButton
                                 type="button"
                                 aria-label={`${account.status === "active" ? "重新登录" : "扫码登录"}${account.displayName}`}
@@ -406,6 +488,7 @@ export function CrawlerAccountsPage() {
                               >
                                 <Trash2 size={16} />
                               </IconButton>
+                              </> : <span>由管理员维护</span>}
                             </div>
                           </div>
                         );
@@ -428,6 +511,7 @@ export function CrawlerAccountsPage() {
         open={drawerOpen}
         account={editingAccount}
         submitting={submitting}
+        allowPublicAccounts={isAdmin}
         onClose={() => {
           if (!submitting) setDrawerOpen(false);
         }}
@@ -459,19 +543,20 @@ export function CrawlerAccountsPage() {
   );
 }
 
-function SummaryItem({
+function PoolMetric({
   label,
-  value
+  value,
+  tone
 }: {
   label: string;
   value: number;
+  tone: "neutral" | "ready" | "busy" | "unavailable";
 }) {
   return (
-    <div className="crawler-account-summary-item">
-      <span>
-        <small>{label}</small>
-        <strong>{value}</strong>
-      </span>
+    <div className={`crawler-account-pool-metric is-${tone}`}>
+      <span aria-hidden="true" />
+      <small>{label}</small>
+      <strong>{value}</strong>
     </div>
   );
 }

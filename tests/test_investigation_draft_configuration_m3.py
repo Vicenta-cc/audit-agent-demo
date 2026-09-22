@@ -3498,17 +3498,19 @@ def test_global_parameters_override_draft_and_freeze_only_at_confirmation(m3_sta
     service = m3_stack['service']
     global_store = m3_stack['resources'].task_settings
     draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ['维汉夫妻']))
-    global_store.save({'max_notes': 2, 'analysis_batch_size': 1}, 0)
+    global_store.save({'max_notes': 2, 'analysis_batch_size': 1, 'search_sort': 'most_liked'}, 0)
     preview = service.get_confirmation_preview(draft.id, principal=_principal(m3_stack))
     assert preview.task_settings_revision == 1
     assert preview.effective_parameters.max_notes == 2
-    global_store.save({'max_notes': 3, 'analysis_batch_size': 2}, 1)
+    assert preview.effective_parameters.search_sort == 'most_liked'
+    global_store.save({'max_notes': 3, 'analysis_batch_size': 2, 'search_sort': 'latest'}, 1)
     command = ConfirmAndQueueCommand(draft_id=draft.id, expected_revision=1,
         expected_task_settings_revision=1, confirmed=True, idempotency_key='global-settings-test')
     with pytest.raises(ResourceStaleError):
         service.confirm_and_queue(command, principal=_principal(m3_stack))
     run = service.confirm_and_queue(command.model_copy(update={'expected_task_settings_revision': 2}), principal=_principal(m3_stack))
     assert run.confirmed_configuration['execution']['max_notes'] == 3
+    assert run.confirmed_configuration['execution']['search_sort'] == 'latest'
     assert run.confirmed_configuration['requested_parameters']['analysis_batch_size'] == 2
     global_store.save({'max_notes': 1}, 2)
     replay = service.confirm_and_queue(command, principal=_principal(m3_stack))

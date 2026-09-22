@@ -66,6 +66,7 @@ JOB_SUMMARY_COLUMNS = ", ".join((
     "display_name",
     "crawl_mode",
     "keyword",
+    "search_sort",
     "keyword_source",
     "lexicon_category",
     "library_ids",
@@ -131,6 +132,7 @@ class JobStore:
                     display_name TEXT,
                     crawl_mode TEXT,
                     keyword TEXT,
+                    search_sort TEXT NOT NULL DEFAULT 'general',
                     keyword_source TEXT,
                     lexicon_category TEXT,
                     library_ids TEXT NOT NULL DEFAULT '[]',
@@ -265,6 +267,8 @@ class JobStore:
                 conn.execute("ALTER TABLE jobs ADD COLUMN crawler_account_display_name TEXT")
             if "max_items_per_minute" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN max_items_per_minute INTEGER NOT NULL DEFAULT 5")
+            if "search_sort" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN search_sort TEXT NOT NULL DEFAULT 'general'")
             if "crawl_checkpoint_page" not in columns:
                 conn.execute("ALTER TABLE jobs ADD COLUMN crawl_checkpoint_page INTEGER")
             if "crawl_checkpoint_keyword" not in columns:
@@ -409,7 +413,7 @@ class JobStore:
                 """
                 INSERT INTO jobs (
                     id, owner_user_id, status, crawl_status, analysis_status, platform, crawler_account_id, crawler_account_display_name,
-                    display_name, crawl_mode, keyword, keyword_source, lexicon_category,
+                    display_name, crawl_mode, keyword, search_sort, keyword_source, lexicon_category,
                     library_ids, capabilities, scoring_template, rule_snapshot,
                     lexicon_keywords, prompt_profile_snapshot, current_audit_config_revision_id,
                     creator_url, creator_id, start_page, crawl_checkpoint_page, crawl_checkpoint_keyword, max_notes,
@@ -419,7 +423,7 @@ class JobStore:
                     requested_config, effective_config, items, control,
                     error, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job["id"],
@@ -433,6 +437,7 @@ class JobStore:
                     job.get("display_name"),
                     job.get("crawl_mode"),
                     job.get("keyword"),
+                    job.get("search_sort") or "general",
                     job.get("keyword_source"),
                     job.get("lexicon_category"),
                     json.dumps(job.get("library_ids") or [], ensure_ascii=False),
@@ -626,6 +631,7 @@ class JobStore:
             "display_name",
             "crawl_mode",
             "keyword",
+            "search_sort",
             "keyword_source",
             "lexicon_category",
             "library_ids",
@@ -1375,10 +1381,11 @@ class JobStore:
     @staticmethod
     def _classify_log(message: str) -> tuple[str, str]:
         text = str(message or "")
-        # Counters such as "失败=0" describe a successful summary and must not
-        # promote the entire event to ERROR merely because the word is present.
+        # Zero counters such as "失败=0" or "漏项=0" describe a successful
+        # summary and must not promote the event merely because the label is
+        # also used by real warning/error messages.
         semantic_text = re.sub(
-            r"(?:失败|异常|超时|不可用)\s*[=:：]\s*0(?!\d)",
+            r"(?:失败|异常|超时|不可用|漏项)\s*[=:：]\s*0(?!\d)",
             "",
             text,
         )

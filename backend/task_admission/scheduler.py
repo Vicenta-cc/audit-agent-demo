@@ -44,17 +44,26 @@ def select_account(worker, row):
     platform = config.get("platform", "xhs")
     preferred = config.get("crawler_account_id") or ""
     accounts = account_store.available_accounts(platform)
-    accounts.sort(key=lambda item: item["id"] != preferred)
-    permitted = 0
+    permitted_accounts = []
     from .store import AdmissionError
 
     for account in accounts:
         try:
             with worker.store.admission.connect() as db:
-                worker.store.admission.validate_user(db, row["owner_id"], account["id"])
+                access_scope = worker.store.admission.validate_user(
+                    db, row["owner_id"], account["id"]
+                )
         except AdmissionError:
             continue
-        permitted += 1
+        permitted_accounts.append((access_scope, account))
+    permitted_accounts.sort(
+        key=lambda item: (
+            item[0] != "public",
+            item[1]["id"] != preferred,
+        )
+    )
+
+    for _, account in permitted_accounts:
         with account_lease(platform, account["id"]) as acquired:
             if not acquired:
                 continue
@@ -70,7 +79,9 @@ def select_account(worker, row):
     waiting(
         worker.store.admission,
         row,
-        "account_busy" if permitted else "no_available_authorized_account",
+        "account_busy"
+        if permitted_accounts
+        else "no_available_authorized_account",
     )
     yield False
 

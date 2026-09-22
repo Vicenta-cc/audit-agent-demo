@@ -30,3 +30,9 @@ test('resource read and save tables remain readable while internal diagnostics s
   expect(presentCreationAssistantContent('RESOURCE_STALE revision conflict'))
     .toBe('配置刚刚发生变化，已载入最新内容，请重新核对。');
 });
+
+test('internal runtime branding is never shown as the assistant identity', () => {
+  const shown = presentCreationAssistantContent('你好！我是 Hermes Agent 0.20.4，可以协助配置调查。');
+  expect(shown).toBe('你好！我是研判助手，可以协助配置调查。');
+  expect(shown).not.toContain('Hermes');
+});

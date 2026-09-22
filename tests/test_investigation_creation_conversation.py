@@ -773,10 +773,10 @@ def test_fake_runtime_activity_stream_preserves_turn_replay_idempotency(
     activities = [event for event in events if event["event_type"] == "activity"]
 
     assert [(event["label"], event["status"]) for event in activities] == [
-        ("查询可用平台、审核规则和黑话库", "running"),
-        ("查询可用平台、审核规则和黑话库", "succeeded"),
-        ("查询可用平台、审核规则和黑话库", "running"),
-        ("查询可用平台、审核规则和黑话库", "succeeded"),
+        ("查询可用平台与审核资源", "running"),
+        ("查询可用平台与审核资源", "succeeded"),
+        ("读取所选黑话库词条", "running"),
+        ("读取所选黑话库词条", "succeeded"),
         ("创建任务配置草案", "running"),
         ("创建任务配置草案", "succeeded"),
     ]
@@ -2059,6 +2059,23 @@ def test_creation_prompt_leaves_resource_query_timing_to_the_agent() -> None:
         assert workflow_first_instruction not in CREATION_SYSTEM_PROMPT
 
 
+def test_creation_prompt_uses_only_the_public_assistant_identity() -> None:
+    assert '产品身份固定为“研判助手”' in CREATION_SYSTEM_PROMPT
+    assert "不要自称 Hermes、Hermes Agent" in CREATION_SYSTEM_PROMPT
+    assert "hello、你好" in CREATION_SYSTEM_PROMPT
+
+
+def test_creation_prompt_preserves_literal_short_search_terms() -> None:
+    normalized_prompt = " ".join(CREATION_SYSTEM_PROMPT.split())
+    assert "想抓一条抖音 X" in normalized_prompt
+    assert "即使 X 没有引号" in normalized_prompt
+    assert "想抓一条抖音 bc料" in normalized_prompt
+    assert "唯一搜索主词是 bc料" in normalized_prompt
+    assert "实际搜索主词仍是用户原文" in normalized_prompt
+    assert "不正式保存到黑话库数据库" in normalized_prompt
+    assert "搜索词和任务配置即冻结" in normalized_prompt
+
+
 def test_creation_prompt_preserves_explicit_per_run_parameters() -> None:
     normalized_prompt = " ".join(CREATION_SYSTEM_PROMPT.split())
     assert "configuration.task_parameters" in normalized_prompt
@@ -2877,6 +2894,16 @@ def test_creation_answer_filter_covers_resource_run_and_receipt_metadata() -> No
         "fusion_audit",
     ):
         assert forbidden not in public
+
+
+def test_creation_answer_filter_hides_internal_runtime_brand() -> None:
+    public, changed = redact_creation_internal_references(
+        "你好！我是 Hermes Agent 0.20.4，可以协助配置调查。"
+    )
+
+    assert changed is True
+    assert public == "你好！我是研判助手，可以协助配置调查。"
+    assert "Hermes" not in public
 
 
 def test_workspace_state_restores_creation_answer_only_when_enabled(

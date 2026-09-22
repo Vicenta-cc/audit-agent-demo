@@ -1278,7 +1278,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     const session = activeSession;
     const binding = session.creationBinding;
     const draft = binding?.draft;
-    if (!binding || !draft || draft.configuration.investigation.mode !== "search") return;
+    if (!binding || !draft || draft.configuration.investigation.mode !== "search") return false;
     const configuration = {
       ...draft.configuration,
       investigation: {
@@ -1327,6 +1327,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             }
           : item
       )));
+      return true;
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         const [currentDraft, preview] = await Promise.all([
@@ -1362,7 +1363,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
               }
             : item
         )));
-        return;
+        return false;
       }
       const message = error instanceof Error ? error.message : "搜索词保存失败";
       setSessions((current) => current.map((item) => (
@@ -1373,6 +1374,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             }
           : item
       )));
+      return false;
     }
   };
 
@@ -1667,17 +1669,44 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const confirmCreationInvestigation = async () => {
     const session = activeSession;
     const binding = session.creationBinding;
-    const draft = binding?.draft;
-    const preview = binding?.confirmationPreview;
-    if (!binding || !draft || !preview?.can_confirm || preview.blockers.length > 0) return;
-    const idempotencyKey = binding.confirmationKey
-      || buildConfirmationIdempotencyKey(
+    const boundDraft = binding?.draft;
+    if (!binding || !boundDraft) return;
+    setConfirmingCreationSessionId(session.id);
+    try {
+      // Always confirm the latest persisted Draft/Preview. A search-term save can
+      // complete just before React commits the refreshed parent props, and using
+      // the rendered revision here would otherwise cause a false 409 conflict.
+      const [draft, preview] = await Promise.all([
+        getInvestigationDraft(boundDraft.id),
+        getConfirmationPreview(boundDraft.id)
+      ]);
+      if (!preview.can_confirm || preview.blockers.length > 0) {
+        setSessions((current) => current.map((item) => (
+          item.id === session.id && item.creationBinding
+            ? {
+                ...item,
+                draft: { ...item.draft, keywords: preview.resolved_search_terms },
+                creationBinding: {
+                  ...item.creationBinding,
+                  draft,
+                  confirmationPreview: preview,
+                  confirmationKey: buildConfirmationIdempotencyKey(
+                    item.creationBinding.workspaceSessionId,
+                    draft.id,
+                    draft.current_revision
+                  ),
+                  error: "当前配置尚不能启动，请根据提示完成调整。"
+                }
+              }
+            : item
+        )));
+        return;
+      }
+      const idempotencyKey = buildConfirmationIdempotencyKey(
         binding.workspaceSessionId,
         draft.id,
         draft.current_revision
       );
-    setConfirmingCreationSessionId(session.id);
-    try {
       const run = await confirmAndQueueInvestigation(draft.id, {
         expectedRevision: draft.current_revision,
         taskSettingsRevision: preview.task_settings_revision ?? 0,
@@ -1723,8 +1752,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     } catch (error) {
       if (error instanceof ApiError && error.status === 409 && !isTaskAdmissionRejection(error.code)) {
         const [currentDraft, currentPreview] = await Promise.all([
-          getInvestigationDraft(draft.id),
-          getConfirmationPreview(draft.id)
+          getInvestigationDraft(boundDraft.id),
+          getConfirmationPreview(boundDraft.id)
         ]);
         setSessions((current) => current.map((item) => (
           item.id === session.id && item.creationBinding

@@ -1,4 +1,23 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+const applicationUser = (role: "admin" | "user") => ({
+  id: role === "admin" ? "admin-id" : "alice-id",
+  username: role === "admin" ? "admin" : "alice",
+  role,
+  status: "active",
+  activation_mode: "first_login",
+  validity_started_at: "2026-09-21T00:00:00Z",
+  expires_at: role === "admin" ? null : "2026-09-28T00:00:00Z",
+  created_at: "2026-09-21T00:00:00Z",
+  updated_at: "2026-09-21T00:00:00Z"
+});
+
+async function useAuthenticatedRole(page: Page, role: "admin" | "user") {
+  await page.unroute("**/api/auth/config");
+  await page.route("**/api/auth/config", route => route.fulfill({ json: { enabled: true } }));
+  await page.route("**/api/auth/me", route => route.fulfill({ json: { user: applicationUser(role) } }));
+  await page.route("**/api/auth/csrf", route => route.fulfill({ json: { csrf_token: "test-csrf" } }));
+}
 
 // These page fixtures exercise legacy mode; authentication has separate coverage.
 test.beforeEach(async ({ page }) => {
@@ -97,6 +116,99 @@ test("desktop page renders exactly two authoritative accounts and restores the D
 
   await returnButton.click();
   await expect(page).toHaveURL(/\/investigation\/session-ethnic-relations$/);
+});
+
+test("ordinary user sees only private accounts plus shared pool capacity", async ({ page }) => {
+  await useAuthenticatedRole(page, "user");
+  await page.route("**/api/crawler-accounts", route => route.fulfill({
+    json: {
+      items: [account("private-alice", "Alice 私有账号", "dy")],
+      shared_pool: {
+        total: 3,
+        ready: 1,
+        busy: 1,
+        unavailable: 1,
+        by_platform: {
+          dy: { total: 3, ready: 1, busy: 1, unavailable: 1 }
+        }
+      }
+    }
+  }));
+
+  await page.goto("/crawler-accounts");
+
+  await expect(page.getByRole("button", { name: "添加私有账号" })).toBeVisible();
+  await expect(page.getByText("Alice 私有账号", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("公共账号池概况")).toContainText("公共账号总数3");
+  await expect(page.getByLabel("公共账号池概况")).toContainText("当前空闲1");
+  await expect(page.getByLabel("公共账号池概况")).toContainText("正在使用1");
+  await expect(page.getByLabel("公共账号池概况")).toContainText("不可用1");
+  await expect(page.getByText("公共账号明细", { exact: true })).toHaveCount(0);
+});
+
+test("administrator switches between clearly separated public and private pools", async ({ page }) => {
+  await useAuthenticatedRole(page, "admin");
+  await page.route("**/api/crawler-accounts", route => route.fulfill({
+    json: {
+      items: [
+        { ...account("public-account", "公共采集账号", "dy"), access_scope: "public", can_manage: true },
+        { ...account("private-account", "管理员私有账号", "dy"), access_scope: "private", can_manage: true }
+      ],
+      shared_pool: { total: 1, ready: 1, busy: 0, unavailable: 0 }
+    }
+  }));
+
+  await page.goto("/crawler-accounts");
+
+  await expect(page.getByRole("tab", { name: /公共账号池 1/ })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /我的私有账号 1/ })).toBeVisible();
+  await expect(page.locator(".crawler-account-table-row").filter({ hasText: "管理员私有账号" })).toBeVisible();
+  await expect(page.locator(".crawler-account-table-row").filter({ hasText: "公共采集账号" })).toHaveCount(0);
+
+  await page.getByRole("tab", { name: /公共账号池 1/ }).click();
+
+  await expect(page.locator(".crawler-account-table-row").filter({ hasText: "公共采集账号" })).toBeVisible();
+  await expect(page.locator(".crawler-account-table-row").filter({ hasText: "管理员私有账号" })).toHaveCount(0);
+});
+
+test("administrator can create a public pool account with explicit scope", async ({ page }) => {
+  await useAuthenticatedRole(page, "admin");
+  let createdBody: Record<string, unknown> | undefined;
+  await page.route("**/api/crawler-accounts", async route => {
+    if (route.request().method() === "POST") {
+      createdBody = route.request().postDataJSON();
+      return route.fulfill({
+        status: 201,
+        json: {
+          item: {
+            ...account("public-new", "新公共账号", "dy"),
+            access_scope: "public",
+            can_manage: true
+          }
+        }
+      });
+    }
+    return route.fulfill({
+      json: {
+        items: [],
+        shared_pool: { total: 0, ready: 0, busy: 0, unavailable: 0 }
+      }
+    });
+  });
+
+  await page.goto("/crawler-accounts");
+  await page.getByRole("button", { name: "添加采集账号" }).click();
+  await page.getByLabel("所属平台").selectOption("dy");
+  await page.getByRole("radio", { name: /公共账号池/ }).check();
+  await page.getByLabel("账号名称").fill("新公共账号");
+  await page.getByRole("button", { name: "保存账号" }).click();
+
+  await expect(page.getByText("新公共账号", { exact: true })).toBeVisible();
+  expect(createdBody).toMatchObject({
+    platform: "dy",
+    display_name: "新公共账号",
+    access_scope: "public"
+  });
 });
 
 test("empty response remains a real empty state", async ({ page }) => {

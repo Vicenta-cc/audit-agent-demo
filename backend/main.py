@@ -199,14 +199,43 @@ def _require_crawler_account(
     allowed = (
         not _authz_enabled()
         or (
-            auth_service.can_use_crawler_account(principal, account_id)
+            _can_use_crawler_account(principal, account)
             if permission == "use"
-            else auth_service.can_manage_crawler_account(principal, account_id)
+            else _can_manage_crawler_account(principal, account)
         )
     )
     if account is None or not allowed:
         raise HTTPException(status_code=404, detail="Crawler account not found")
     return account
+
+
+def _can_use_crawler_account(principal: Principal, account: dict | None) -> bool:
+    if account is None:
+        return False
+    if str(account.get("access_scope") or "private") == "public":
+        return True
+    return auth_service.can_use_crawler_account(principal, str(account["id"]))
+
+
+def _can_manage_crawler_account(principal: Principal, account: dict | None) -> bool:
+    if account is None:
+        return False
+    if str(account.get("access_scope") or "private") == "public":
+        return principal.is_admin
+    return auth_service.can_manage_crawler_account(principal, str(account["id"]))
+
+
+def _can_use_crawler_account_id(principal: Principal, account_id: str) -> bool:
+    return _can_use_crawler_account(principal, crawler_account_store.get(account_id))
+
+
+def _crawler_account_public_view(account: dict, principal: Principal) -> dict:
+    item = auth_service.public_crawler_account(account)
+    item["access_scope"] = str(account.get("access_scope") or "private")
+    item["can_manage"] = not _authz_enabled() or _can_manage_crawler_account(
+        principal, account
+    )
+    return item
 
 
 def _authorized_crawler_accounts(principal: Principal) -> list[dict]:
@@ -215,9 +244,12 @@ def _authorized_crawler_accounts(principal: Principal) -> list[dict]:
         accounts = [
             item
             for item in accounts
-            if auth_service.can_use_crawler_account(principal, str(item["id"]))
+            if _can_use_crawler_account(principal, item)
         ]
-    return [auth_service.public_crawler_account(item) for item in accounts]
+    accounts.sort(
+        key=lambda item: str(item.get("access_scope") or "private") != "public"
+    )
+    return [_crawler_account_public_view(item, principal) for item in accounts]
 
 
 def _authorized_available_crawler_accounts(
@@ -228,7 +260,7 @@ def _authorized_available_crawler_accounts(
         accounts = [
             item
             for item in accounts
-            if auth_service.can_use_crawler_account(principal, str(item["id"]))
+            if _can_use_crawler_account(principal, item)
         ]
     return accounts
 
@@ -242,7 +274,10 @@ def _available_crawler_accounts_for_job(job: dict) -> list[dict]:
     owner_user_id = str(job.get("owner_user_id") or "").strip()
     authorized_ids = auth_store.owned_crawler_account_ids(owner_user_id) if owner_user_id else frozenset()
     return [
-        item for item in accounts if str(item.get("id") or "") in authorized_ids
+        item
+        for item in accounts
+        if str(item.get("access_scope") or "private") == "public"
+        or str(item.get("id") or "") in authorized_ids
     ]
 
 
@@ -260,7 +295,9 @@ audit_policy_store = AuditPolicyStore()
 audit_config_revision_store = TaskAuditConfigRevisionStore()
 report_store = ReportStore()
 r31_report_runtime = R31ReportRuntime(report_store)
-investigation_creation_store = InvestigationCreationStore()
+investigation_creation_store = InvestigationCreationStore(
+    account_db=crawler_account_store.db_path
+)
 
 
 def _authorized_m3_peer_report_versions(session, anchor: str) -> tuple[str, ...]:
@@ -301,7 +338,7 @@ investigation_configuration_resolver = InvestigationConfigurationResolver(
     ruleset_service=ruleset_service,
     principal_provider=principal_provider,
     crawler_account_authorizer=(
-        auth_service.can_use_crawler_account if _authz_enabled() else None
+        _can_use_crawler_account_id if _authz_enabled() else None
     ),
 )
 investigation_resource_service = InvestigationResourceService(
@@ -309,7 +346,7 @@ investigation_resource_service = InvestigationResourceService(
     ruleset_service=ruleset_service,
     configuration_resolver=investigation_configuration_resolver,
     crawler_account_authorizer=(
-        auth_service.can_use_crawler_account if _authz_enabled() else None
+        _can_use_crawler_account_id if _authz_enabled() else None
     ),
 )
 investigation_run_projector = (
@@ -676,6 +713,7 @@ class CrawlerAccountCreateRequest(BaseModel):
     platform: str
     display_name: str
     platform_account_id: str = ""
+    access_scope: Literal["private", "public"] = "private"
 
 
 class CrawlerAccountUpdateRequest(BaseModel):
@@ -1172,24 +1210,73 @@ def enrich_job(job: dict) -> dict:
                 "prompt_version": (revision.get("prompt_profile_snapshot") or {}).get("prompt_version", ""),
                 "audit_config": revision.get("audit_config") or {},
             }
-    return redact_authoritative_m3_crawler_account(enriched)
+    return redact_authoritative_m3_crawler_account(
+        redact_public_pool_crawler_account(enriched)
+    )
+
+
+def _redact_crawler_account_details(job: dict, *, log_markers: tuple[str, ...]) -> dict:
+    public_job = dict(job)
+    public_job.pop("crawler_account_id", None)
+    public_job.pop("crawler_account_display_name", None)
+    for field in ("requested_config", "effective_config"):
+        if isinstance(public_job.get(field), dict):
+            config = dict(public_job[field])
+            config.pop("crawler_account_id", None)
+            public_job[field] = config
+    if isinstance(public_job.get("control"), dict):
+        control = dict(public_job["control"])
+        control.pop("execution_account", None)
+        public_job["control"] = control
+    public_job["logs"] = [
+        dict(item)
+        for item in public_job.get("logs") or []
+        if not any(
+            marker in str(item.get("message") or "") for marker in log_markers
+        )
+    ]
+    return public_job
+
+
+def _job_crawler_account_id(job: dict) -> str:
+    for value in (
+        job.get("crawler_account_id"),
+        ((job.get("control") or {}).get("execution_account") or {}).get("id"),
+        (job.get("effective_config") or {}).get("crawler_account_id"),
+        (job.get("requested_config") or {}).get("crawler_account_id"),
+    ):
+        normalized = str(value or "").strip()
+        if normalized:
+            return normalized
+    return ""
+
+
+def redact_public_pool_crawler_account(job: dict) -> dict:
+    account_id = _job_crawler_account_id(job)
+    if not account_id:
+        return job
+    account = crawler_account_store.get(account_id)
+    if account is not None:
+        shared = str(account.get("access_scope") or "private") == "public"
+    else:
+        owner_user_id = str(job.get("owner_user_id") or "").strip()
+        shared = bool(
+            _authz_enabled()
+            and owner_user_id
+            and not auth_store.owns_crawler_account(owner_user_id, account_id)
+        )
+    if not shared:
+        return job
+    return _redact_crawler_account_details(job, log_markers=("执行账号：",))
 
 
 def redact_authoritative_m3_crawler_account(job: dict) -> dict:
     if not str(job.get("id") or "").startswith("m3-"):
         return job
-    public_job = dict(job)
-    public_job.pop("crawler_account_id", None)
-    public_job.pop("crawler_account_display_name", None)
-    public_job["logs"] = [
-        dict(item)
-        for item in public_job.get("logs") or []
-        if not any(
-            marker in str(item.get("message") or "")
-            for marker in ("执行账号", "采集账号")
-        )
-    ]
-    return public_job
+    return _redact_crawler_account_details(
+        job,
+        log_markers=("执行账号", "采集账号"),
+    )
 
 
 def validate_crawler_account_for_job(
@@ -1207,7 +1294,7 @@ def validate_crawler_account_for_job(
     if (
         principal is not None
         and _authz_enabled()
-        and not auth_service.can_use_crawler_account(principal, normalized_id)
+        and not _can_use_crawler_account(principal, account)
     ):
         raise HTTPException(status_code=404, detail="采集账号不存在")
     if account["platform"] != platform:
@@ -1395,7 +1482,54 @@ def list_outputs(principal: Principal = Depends(principal_provider)):
 
 @app.get("/api/crawler-accounts")
 def list_crawler_accounts(principal: Principal = Depends(principal_provider)):
-    return {"items": _authorized_crawler_accounts(principal)}
+    accounts = _authorized_crawler_accounts(principal)
+    visible = (
+        accounts
+        if not _authz_enabled() or principal.is_admin
+        else [item for item in accounts if item.get("access_scope") != "public"]
+    )
+    return {"items": visible, "shared_pool": _shared_crawler_pool_summary()}
+
+
+def _shared_crawler_pool_summary() -> dict:
+    from backend.task_admission.resources import acquire_account_handle
+
+    shared = [
+        item
+        for item in crawler_account_store.list()
+        if str(item.get("access_scope") or "private") == "public"
+    ]
+    ready = busy = 0
+    by_platform: dict[str, dict[str, int]] = {}
+    for account in shared:
+        platform = str(account.get("platform") or "")
+        platform_summary = by_platform.setdefault(
+            platform, {"total": 0, "ready": 0, "busy": 0, "unavailable": 0}
+        )
+        platform_summary["total"] += 1
+        usable = (
+            account.get("status") == "active"
+            and account.get("has_auth_state")
+            and not account_is_cooling_down(account)
+        )
+        if not usable:
+            platform_summary["unavailable"] += 1
+            continue
+        handle = acquire_account_handle(platform, str(account["id"]))
+        if handle is None:
+            busy += 1
+            platform_summary["busy"] += 1
+            continue
+        handle.close()
+        ready += 1
+        platform_summary["ready"] += 1
+    return {
+        "total": len(shared),
+        "ready": ready,
+        "busy": busy,
+        "unavailable": len(shared) - ready - busy,
+        "by_platform": by_platform,
+    }
 
 
 @app.post("/api/crawler-accounts", status_code=201)
@@ -1403,13 +1537,16 @@ def create_crawler_account(
     request: CrawlerAccountCreateRequest,
     principal: Principal = Depends(principal_provider),
 ):
+    if request.access_scope == "public":
+        _require_admin(principal)
     try:
         item = crawler_account_store.create(
             platform=request.platform,
             display_name=request.display_name,
             platform_account_id=request.platform_account_id,
+            access_scope=request.access_scope,
         )
-        if _authz_enabled():
+        if _authz_enabled() and request.access_scope == "private":
             try:
                 auth_store.register_crawler_account(str(item["id"]), principal.id)
             except Exception:
@@ -1461,6 +1598,8 @@ def delete_crawler_account(
             raise HTTPException(409, detail="账号正在采集或登录，请等待结束后再删除。")
         if not crawler_account_store.delete(account_id):
             raise HTTPException(status_code=404, detail="Crawler account not found")
+        if _authz_enabled():
+            auth_store.unregister_crawler_account(account_id)
 
 
 @app.post("/api/crawler-accounts/{account_id}/login-sessions", status_code=201)
@@ -2019,7 +2158,10 @@ def create_job(
                 None,
             )
             if not account and _authz_enabled():
-                raise HTTPException(status_code=409, detail="当前没有可用采集账号，请检查登录状态或等待冷却结束。")
+                raise HTTPException(
+                    status_code=409,
+                    detail="当前没有可用的公共或私有采集账号，请等待公共池资源或检查私有账号登录状态。",
+                )
             if account:
                 request.crawler_account_id = account["id"]
     requested_config = request.model_dump(
@@ -2028,6 +2170,7 @@ def create_job(
             "crawl_mode",
             "keyword",
             "keyword_source",
+            "search_sort",
             "crawler_account_id",
             "creator_url",
             "start_page",
@@ -2142,9 +2285,7 @@ def create_job(
             configured_account is None
             or (
                 _authz_enabled()
-                and not auth_service.can_use_crawler_account(
-                    principal, request.crawler_account_id
-                )
+                and not _can_use_crawler_account(principal, configured_account)
             )
         ):
             request.crawler_account_id = None
@@ -2163,7 +2304,7 @@ def create_job(
         if not request.crawler_account_id and _authz_enabled():
             raise HTTPException(
                 status_code=409,
-                detail="当前没有可用的个人采集账号，请先添加账号并扫码登录。",
+                detail="当前没有可用的公共或私有采集账号，请等待公共池资源，或添加并登录自己的私有账号。",
             )
     crawler_account = validate_crawler_account_for_job(
         request.crawler_account_id,
@@ -2214,6 +2355,7 @@ def create_job(
         display_name=request.display_name.strip(),
         crawl_mode=request.crawl_mode,
         keyword=request.keyword,
+        search_sort=request.search_sort,
         keyword_source=request.keyword_source,
         lexicon_category=request.lexicon_category,
         library_ids=request.library_ids,
@@ -2524,7 +2666,10 @@ def control_job(
                 if preferred:
                     _require_crawler_account(str(preferred),principal,permission="use")
                 if not _authorized_available_crawler_accounts(principal,crawl_request.platform):
-                    raise HTTPException(409,detail="当前没有已登录且结束冷却的个人采集账号，请检查自己的账号状态。")
+                    raise HTTPException(
+                        409,
+                        detail="当前没有已登录且结束冷却的公共或私有采集账号，请等待公共池资源或检查私有账号状态。",
+                    )
             if not isinstance(idempotency_key,str) or not idempotency_key.strip():
                 raise HTTPException(400,detail={"code":"IDEMPOTENCY_KEY_REQUIRED","message":"恢复任务需要请求标识。"})
             if request.action != "backfill_analysis" and not actions.get(request.action):
@@ -2560,7 +2705,7 @@ def control_job(
         if (_authz_enabled() or preferred_account_id) and not available_accounts:
             raise HTTPException(
                 status_code=409,
-                detail="当前没有已登录且结束冷却的个人采集账号，请检查自己的账号登录状态或稍后重试。",
+                detail="当前没有已登录且结束冷却的公共或私有采集账号，请等待公共池资源或检查私有账号登录状态。",
             )
         bound_run = investigation_creation_store.get_run_for_job(job_id)
         if bound_run and bound_run.status == RunStatus.FAILED:

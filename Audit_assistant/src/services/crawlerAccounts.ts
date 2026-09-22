@@ -1,11 +1,13 @@
 import { apiRequest } from "./apiClient";
 import type {
   CrawlerAccount,
+  CrawlerAccountAccessScope,
   CrawlerAccountInput,
   CrawlerAccountLoginSession,
   CrawlerAccountLoginStatus,
   CrawlerAccountPlatform,
-  CrawlerAccountStatus
+  CrawlerAccountStatus,
+  SharedCrawlerPoolSummary
 } from "../types/crawlerAccounts";
 
 interface ApiCrawlerAccount {
@@ -13,6 +15,8 @@ interface ApiCrawlerAccount {
   platform: CrawlerAccountPlatform;
   display_name: string;
   platform_account_id: string;
+  access_scope?: CrawlerAccountAccessScope;
+  can_manage?: boolean;
   status: CrawlerAccountStatus;
   last_validated_at: string;
   last_used_at: string;
@@ -23,6 +27,19 @@ interface ApiCrawlerAccount {
   auth_state_updated_at: string;
   created_at: string;
   updated_at: string;
+}
+
+interface ApiSharedCrawlerPoolSummary {
+  total?: number;
+  ready?: number;
+  busy?: number;
+  unavailable?: number;
+  by_platform?: Partial<Record<CrawlerAccountPlatform, {
+    total?: number;
+    ready?: number;
+    busy?: number;
+    unavailable?: number;
+  }>>;
 }
 
 interface ApiCrawlerAccountLoginSession {
@@ -43,8 +60,21 @@ interface ApiCrawlerAccountLoginSession {
 }
 
 export async function fetchCrawlerAccounts(): Promise<CrawlerAccount[]> {
-  const payload = await apiRequest<{ items: ApiCrawlerAccount[] }>("/api/crawler-accounts");
-  return (payload.items || []).map(mapCrawlerAccount);
+  return (await fetchCrawlerAccountOverview()).accounts;
+}
+
+export async function fetchCrawlerAccountOverview(): Promise<{
+  accounts: CrawlerAccount[];
+  sharedPool: SharedCrawlerPoolSummary;
+}> {
+  const payload = await apiRequest<{
+    items: ApiCrawlerAccount[];
+    shared_pool?: ApiSharedCrawlerPoolSummary;
+  }>("/api/crawler-accounts");
+  return {
+    accounts: (payload.items || []).map(mapCrawlerAccount),
+    sharedPool: mapSharedPool(payload.shared_pool)
+  };
 }
 
 export async function createCrawlerAccount(input: CrawlerAccountInput): Promise<CrawlerAccount> {
@@ -116,7 +146,8 @@ function toApiInput(input: CrawlerAccountInput) {
   return {
     platform: input.platform,
     display_name: input.displayName,
-    platform_account_id: input.platformAccountId
+    platform_account_id: input.platformAccountId,
+    access_scope: input.accessScope
   };
 }
 
@@ -126,6 +157,8 @@ function mapCrawlerAccount(item: ApiCrawlerAccount): CrawlerAccount {
     platform: item.platform,
     displayName: item.display_name,
     platformAccountId: item.platform_account_id,
+    accessScope: item.access_scope || "private",
+    canManage: item.can_manage ?? true,
     status: item.status,
     lastValidatedAt: item.last_validated_at,
     lastUsedAt: item.last_used_at,
@@ -136,6 +169,24 @@ function mapCrawlerAccount(item: ApiCrawlerAccount): CrawlerAccount {
     authStateUpdatedAt: item.auth_state_updated_at,
     createdAt: item.created_at,
     updatedAt: item.updated_at
+  };
+}
+
+function mapSharedPool(item?: ApiSharedCrawlerPoolSummary): SharedCrawlerPoolSummary {
+  const byPlatform = Object.fromEntries(
+    Object.entries(item?.by_platform || {}).map(([platform, summary]) => [platform, {
+      total: Number(summary?.total || 0),
+      ready: Number(summary?.ready || 0),
+      busy: Number(summary?.busy || 0),
+      unavailable: Number(summary?.unavailable || 0)
+    }])
+  ) as SharedCrawlerPoolSummary["byPlatform"];
+  return {
+    total: Number(item?.total || 0),
+    ready: Number(item?.ready || 0),
+    busy: Number(item?.busy || 0),
+    unavailable: Number(item?.unavailable || 0),
+    byPlatform
   };
 }
 

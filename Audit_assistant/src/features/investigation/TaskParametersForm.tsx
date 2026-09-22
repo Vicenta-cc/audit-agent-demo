@@ -49,12 +49,17 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
       disabled={inactive} onChange={event => change(key, event.target.checked)} />{label}</label>
   );
   const effective = preview.effective_parameters;
+  const searchSortLabel = (value?: InvestigationTaskParameters["search_sort"]) => ({
+    general: "综合排序",
+    most_liked: "最多点赞",
+    latest: "最新发布"
+  }[value || "general"]);
   const keywordCount = Math.max(1, preview.resolved_search_terms.length);
   const plannedCount = Math.min(values.max_total_notes, values.max_notes * keywordCount);
   return <form className="investigation-parameters" aria-label="采集与分析参数" onSubmit={async event => {
     event.preventDefault(); setSaving(true); setError("");
     try {
-      await onSave({ ...values, auto_analyze: true, analyze_limit: values.max_total_notes });
+      await onSave({ ...values, search_sort: values.search_sort || "general", auto_analyze: true, analyze_limit: values.max_total_notes });
       setDirty(false); onDirty(false);
     }
     catch (reason) { setError(reason instanceof Error ? reason.message : "参数保存失败"); }
@@ -71,9 +76,19 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
           {account.displayName}{account.status !== "active" || !account.hasAuthState ? "（不可用）" : ""}
         </option>)}
       </select></label>
+      {preview.mode === "search" && preview.platform === "dy" ? (
+        <label className="investigation-parameter-field"><span>抖音搜索排序</span><select
+          aria-label="抖音搜索排序"
+          value={values.search_sort || "general"}
+          onChange={event => change("search_sort", event.target.value as NonNullable<InvestigationTaskParameters["search_sort"]>)}>
+          <option value="general">综合排序</option>
+          <option value="most_liked">最多点赞</option>
+          <option value="latest">最新发布</option>
+        </select><small>仅对抖音关键词搜索生效；任务启动后使用确认时的排序快照。</small></label>
+      ) : null}
       {accountError ? <p role="alert">{accountError}</p> : null}
       <div className="investigation-parameter-grid">
-        {numeric("max_notes", preview.mode === "search" ? "每个关键词采集上限" : "本任务采集上限", 1, 5, "条", "默认 1 条")}
+        {numeric("max_notes", preview.mode === "search" ? "每个关键词采集上限" : "本任务采集上限", 1, 5, "条", "单任务仍受总采集上限约束")}
         {numeric("max_total_notes", "单任务总采集上限", 1, 5, "条", "达到后停止后续关键词")}
         {numeric("start_page", "起始页", 1, 10000, "页", "默认第 1 页；恢复使用检查点")}
       </div>
@@ -89,13 +104,13 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
     </fieldset>
     <fieldset disabled={saving || disabled}><legend>抓帖速度</legend>
       <div className="investigation-parameter-grid">
-        {numeric("max_items_per_minute", "帖子抓取速度", 1, 5, "条/分钟", "默认 1；不等同于评论抓取速度")}
+        {numeric("max_items_per_minute", "帖子抓取速度", 1, 5, "条/分钟", "不等同于评论抓取速度")}
         {numeric("max_concurrency", "采集并发", 1, 3, "个", "默认 1；受服务端上限约束")}
       </div>
     </fieldset>
     <fieldset disabled={saving || disabled}><legend>分析设置</legend>
       <div className="investigation-parameter-grid">
-        {numeric("analysis_batch_size", "分析批次", 1, 20, "条/批", "默认 1；内容完成后响应暂停/停止")}
+        {numeric("analysis_batch_size", "分析批次", 1, 20, "条/批", "内容完成后响应暂停/停止")}
       </div>
       <small>实际采集并入库的内容会全部自动审核；审核数量不再单独设置。管理员限速、凭据和浏览器配置由服务端管理。</small>
     </fieldset>
@@ -103,6 +118,7 @@ export function TaskParametersForm({ preview, onSave, onDirty, disabled = false,
       已保存生效值：采集上限 {effective.max_notes} 条{preview.mode === "search" ? "/词" : "/任务"}，单任务最多 {effective.max_total_notes} 条{globalSettings ? "" : `，本次预计最多 ${preview.estimated_max_contents} 条`}；
       评论 {effective.max_comments} 条/帖，{effective.get_sub_comment ? "含二级评论" : "仅一级评论"}；
       图片与视频{effective.collect_media ? "采集并审核" : "不采集、不审核"}；
+      {preview.mode === "search" && preview.platform === "dy" ? `抖音搜索${searchSortLabel(effective.search_sort)}；` : ""}
       {effective.max_items_per_minute} 条/分钟，并发 {effective.max_concurrency}；
       实际采集内容全部自动审核，每批 {effective.analysis_batch_size} 条。
     </p> : null}

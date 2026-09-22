@@ -45,8 +45,8 @@ def test_t2_5_golden_and_content_semantics(factory):
     content = factory()
     golden = json.loads((FIXTURES / "ruleset_compiler_t2_5_golden.json").read_text(encoding="utf-8"))
     actual, historical = golden_case(content), deepcopy(golden[content.domain])
-    # Keep the historical oracle intact. Only comment field bindings and their
-    # derived prompt/config hashes may differ from it.
+    # Keep the historical oracle intact. Comment field bindings and the V2
+    # backend-owned video library identity contract may differ from it.
     for key in ("content_compile_result", "formal_compile_result"):
         profile = actual[key]["prompt_profile_snapshot"]
         old_profile = historical[key]["prompt_profile_snapshot"]
@@ -57,6 +57,8 @@ def test_t2_5_golden_and_content_semantics(factory):
         for field in ("comment_prompt_template", "prompt_version"):
             old_profile[field] = profile[field]
         old_profile["fixed_prompt_chars"]["comment_audit"] = profile["fixed_prompt_chars"]["comment_audit"]
+        old_profile["frame_prompt"] = profile["frame_prompt"]
+        old_profile["fixed_prompt_chars"]["video_frame_evidence"] = profile["fixed_prompt_chars"]["video_frame_evidence"]
     assert actual["formal_compile_result"]["config_hash"] != historical["formal_compile_result"]["config_hash"]
     historical["formal_compile_result"]["config_hash"] = actual["formal_compile_result"]["config_hash"]
     assert actual == historical
@@ -101,7 +103,12 @@ def test_t2_5_golden_and_content_semantics(factory):
         old_contract = historical[key].split(start, 1)[1]
         if end:
             current_contract, old_contract = current_contract.split(end, 1)[0], old_contract.split(end, 1)[0]
-        assert json.loads(current_contract) == json.loads(old_contract)
+        current_contract = json.loads(current_contract)
+        old_contract = json.loads(old_contract)
+        if key == "frame_prompt":
+            old_contract.pop("risk_library_id", None)
+            old_contract.pop("risk_library_label", None)
+        assert current_contract == old_contract
 
 
 @pytest.mark.parametrize("field", ["category", "audit_goal", "domain"])
@@ -196,7 +203,11 @@ def test_v2_provider_prompts_have_no_heuristic_guidance_and_legacy_retains_it(do
     )
     fusion = pipeline._render_compact_fusion_prompt(subject, {"evidence_catalog": []}, [])
     assert frame.startswith(case["prompt_profile_snapshot"]["frame_prompt"])
-    assert fusion.startswith(case["prompt_profile_snapshot"]["fusion_prompt_template"])
+    expected_fusion = pipeline._render_fusion_wire_template(
+        case["prompt_profile_snapshot"]["fusion_prompt_template"],
+        pipeline._fusion_wire_codebook(),
+    )
+    assert fusion.startswith(expected_fusion)
     assert pipeline.prompt_set.image_prompt == case["prompt_profile_snapshot"]["image_prompt"]
     for rendered in (frame, fusion, pipeline.prompt_set.image_prompt):
         assert not any(word in rendered for word in LEAKS)

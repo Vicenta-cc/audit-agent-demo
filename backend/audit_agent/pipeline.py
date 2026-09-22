@@ -15,6 +15,7 @@ from time import perf_counter, time_ns
 import requests
 
 from .auth_state_cipher import auth_state_cipher
+from .asr_chunks import ASROutOfMemoryError, is_asr_oom
 from .asset_utils import download_url_with_error, safe_filename_from_url, split_csv_urls
 from .config import settings
 from .crawler_account_store import crawler_account_store
@@ -54,7 +55,7 @@ def _analysis_lock_for(job_id: str) -> threading.RLock:
 
 
 def _authorized_crawler_account_ids(job_id: str) -> frozenset[str] | None:
-    """Return the task owner's private accounts, or None when auth is disabled."""
+    """Return public accounts plus the task owner's private accounts."""
     if settings.app_auth_mode != "required":
         return None
     job = job_store.get(job_id) or {}
@@ -68,7 +69,13 @@ def _authorized_crawler_account_ids(job_id: str) -> frozenset[str] | None:
         default_validity_days=settings.app_account_validity_days,
         activation_mode=settings.app_account_activation_mode,
     )
-    return store.owned_crawler_account_ids(owner_user_id)
+    private_ids = store.owned_crawler_account_ids(owner_user_id)
+    public_ids = frozenset(
+        str(account["id"])
+        for account in crawler_account_store.list()
+        if str(account.get("access_scope") or "private") == "public"
+    )
+    return private_ids | public_ids
 
 AUDIO_URL_EXTENSIONS = {".aac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav"}
 AUDIO_FILE_SIGNATURES = (
@@ -534,7 +541,6 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
-                            self._consecutive_provider_failures = 0
                             results.append(persisted or result)
                         except Exception as exc:
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
@@ -603,7 +609,6 @@ class AuditPipeline:
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
                             analyzed_ids.add(subject.note_id)
                             continue
-                        self._consecutive_provider_failures = 0
                         results.append(persisted or result)
                         job_store.update(self.job_id, items=results)
                         job_store.log(self.job_id, f"边抓边分析完成：{subject.note_id}")
@@ -804,6 +809,7 @@ class AuditPipeline:
                                 max_comments=request.max_comments,
                                 max_concurrency=crawler_concurrency,
                                 max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                                search_sort=str(getattr(request, "search_sort", "general") or "general"),
                                 get_sub_comment=request.get_sub_comment,
                                 collect_comments=bool(getattr(request, "collect_comments", True)),
                                 collect_media=bool(getattr(request, "collect_media", True)),
@@ -1135,7 +1141,6 @@ class AuditPipeline:
                         self._record_subject_failure(output.platform, subject_key, subject, exc)
                         analyzed_ids.add(subject.note_id)
                         continue
-                    self._consecutive_provider_failures = 0
                     results.append(persisted or result)
                     analyzed_ids.add(subject.note_id)
                     job_store.update(self.job_id, items=results)
@@ -1320,14 +1325,26 @@ class AuditPipeline:
         # Preserve error types/status only: raw network errors can contain credentials.
         statuses = [e.response.status_code for e in chain
                     if isinstance(e, requests.HTTPError) and e.response is not None]
-        fatal_provider = (provider_failure and any(code in {401, 402, 403} for code in statuses)) or any(
-            isinstance(e, AuditProviderUnavailableError) for e in chain)
-        count = getattr(self, "_consecutive_provider_failures", 0) + 1 if provider_failure else 0
-        self._consecutive_provider_failures = count
+        # Per-post failures never issue user controls or impose a failure-count
+        # circuit breaker. Drain the selected posts so valid results can report.
+        messages = [str(e).lower() for e in chain]
+        messages.extend(e.response.text.lower() for e in chain
+                        if isinstance(e, requests.HTTPError) and e.response is not None)
+        oom = any(isinstance(e, ASROutOfMemoryError) or is_asr_oom(e) for e in chain) or any(is_asr_oom(m) for m in messages)
+        content_blocked = any("data_inspection_failed" in m for m in messages)
         self._begin_subject_audit()
         folder = settings.outputs_dir / self.job_id / "post_failures"
         folder.mkdir(parents=True, exist_ok=True)
-        if statuses:
+        if oom:
+            reason = "语音转写 GPU 显存不足，当前帖子未完成审核"
+            error_code = "asr_gpu_out_of_memory"
+        elif content_blocked:
+            reason = "模型供应商内容安全检查拦截，本帖审核未完成，不代表已判定违规"
+            error_code = "audit_content_blocked"
+        elif any(isinstance(e, AuditProviderUnavailableError) for e in chain):
+            reason = "审核服务未配置或不可用，当前帖子未完成审核"
+            error_code = "audit_provider_unavailable"
+        elif statuses:
             reason = f"审核接口返回 HTTP {statuses[-1]}"
             error_code = f"audit_http_{statuses[-1]}"
         elif any(isinstance(e, (QwenTimeoutError, requests.Timeout, TimeoutError)) for e in chain):
@@ -1343,30 +1360,19 @@ class AuditPipeline:
                   "error_code": error_code,
                   "stage": getattr(self, "_current_audit_stage", "post_audit"),
                   "error_type": type(exc).__name__, "cause_types": [type(e).__name__ for e in chain],
-                  "http_statuses": statuses, "consecutive_provider_failures": count,
-                  "action": "stop_analysis_only" if fatal_provider or count >= 3 else "skip_post"}
+                  "http_statuses": statuses, "action": "skip_post"}
         (folder / f"{subject.note_id}-{time_ns()}.json").write_text(
             json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
         job_store.log(
             self.job_id,
-            f"笔记 {subject.note_id}：审核失败（{type(exc).__name__}），已记录并跳过",
+            f"笔记 {subject.note_id}：{reason}；已记录并跳过",
             level="error",
             reason=reason,
             error_code=error_code,
-            retryable=bool(provider_failure and not fatal_provider and count < 3),
+            retryable=bool(provider_failure and not oom and not content_blocked
+                           and not any(code in {401, 402, 403} for code in statuses)),
             action=record["action"],
         )
-        if fatal_provider or count >= 3:
-            job_store.update_control(self.job_id, analysis_stop_requested=True)
-            job_store.log(
-                self.job_id,
-                "审核服务不可用或连续三帖调用失败，仅停止审核；采集继续，待审核内容保留",
-                level="error",
-                reason="审核服务不可用或连续失败已达到停止阈值",
-                error_code="analysis_provider_failure_threshold",
-                retryable=True,
-                action="stop_analysis_only",
-            )
 
     def _assert_authoritative_provider_healthy(self) -> None:
         if not getattr(self, "authoritative_m3", False):
@@ -1490,7 +1496,6 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
-                            self._consecutive_provider_failures = 0
                             results.append(persisted or result)
                             job_store.update(self.job_id, items=results)
                         except Exception as exc:
@@ -2244,7 +2249,10 @@ class AuditPipeline:
             prompt,
             contract_validator=(
                 lambda value: self._validate_v2_fusion_contract(
-                    self._recover_truncated_fusion_audit(value),
+                    self._decode_fusion_wire_codes(
+                        self._recover_truncated_fusion_audit(value),
+                        self._fusion_wire_codebook(),
+                    ),
                     evidence_index,
                     visible_evidence_ids=self._fusion_visible_ids(prompt),
                 )
@@ -2551,7 +2559,10 @@ class AuditPipeline:
 
     @staticmethod
     def _validated_authoritative_visual_response(
-        value: object, *, response_contract: str
+        value: object,
+        *,
+        response_contract: str,
+        backend_library_identity: dict | None = None,
     ) -> dict:
         if not isinstance(value, dict) or not value:
             raise AuditProviderCallError(
@@ -2638,8 +2649,21 @@ class AuditPipeline:
         if response_contract == "video_segment":
             require_string(value, "segment_summary")
             require_score(value, "segment_score")
-            for field in ("risk_library_id", "risk_library_label"):
-                require_string(value, field)
+            normalized = dict(value)
+            if backend_library_identity is None:
+                for field in ("risk_library_id", "risk_library_label"):
+                    require_string(value, field)
+            else:
+                library_id = str(backend_library_identity.get("id") or "").strip()
+                library_label = str(
+                    backend_library_identity.get("title") or library_id
+                ).strip()
+                if not library_id or not library_label:
+                    raise AuditProviderCallError(
+                        "video review job has no backend risk library identity"
+                    )
+                normalized["risk_library_id"] = library_id
+                normalized["risk_library_label"] = library_label
             if "segment_level" in value and value["segment_level"] not in {
                 "none",
                 "low",
@@ -2672,7 +2696,7 @@ class AuditPipeline:
                     validate_optional_common_fields(
                         item, allow_none_risk_level=True
                     )
-            return dict(value)
+            return normalized
 
         raise AuditProviderCallError(
             f"unknown authoritative visual response contract: {response_contract}"
@@ -6249,6 +6273,221 @@ class AuditPipeline:
                 remainder.append(item)
         return (selected + remainder)[:max(0, limit)]
 
+    def _fusion_wire_codebook(self) -> dict:
+        """Build deterministic wire-only codes from the frozen RuleSet snapshot."""
+        rule_ids = list(
+            dict.fromkeys(
+                (self.rule_snapshot.get("stage_routes") or {}).get("fusion_audit")
+                or []
+            )
+        )
+        rule_codes = {
+            f"FR{index:02d}": str(rule_id)
+            for index, rule_id in enumerate(rule_ids, start=1)
+            if str(rule_id).strip()
+        }
+
+        exemption_ids: list[str] = []
+        for item in self.rule_snapshot.get("general_exemptions") or []:
+            if not isinstance(item, dict):
+                continue
+            exemption_id = str(item.get("exemption_id") or "").strip()
+            if exemption_id and exemption_id not in exemption_ids:
+                exemption_ids.append(exemption_id)
+        rules_by_id = {
+            str(rule.get("rule_id") or ""): rule
+            for rule in self.rule_snapshot.get("decision_rules") or []
+            if isinstance(rule, dict)
+        }
+        for rule_id in rule_ids:
+            rule = rules_by_id.get(str(rule_id)) or {}
+            for item in rule.get("rule_exemptions") or []:
+                if not isinstance(item, dict):
+                    continue
+                exemption_id = str(item.get("exemption_id") or "").strip()
+                if exemption_id and exemption_id not in exemption_ids:
+                    exemption_ids.append(exemption_id)
+        exemption_codes = {
+            f"EX{index:02d}": exemption_id
+            for index, exemption_id in enumerate(exemption_ids, start=1)
+        }
+        exemption_code_by_id = {
+            exemption_id: code for code, exemption_id in exemption_codes.items()
+        }
+        general_ids = {
+            str(item.get("exemption_id") or "").strip()
+            for item in self.rule_snapshot.get("general_exemptions") or []
+            if isinstance(item, dict) and item.get("exemption_id")
+        }
+        allowed_exemption_codes: dict[str, list[str]] = {}
+        for rule_code, rule_id in rule_codes.items():
+            allowed_ids = set(general_ids)
+            rule = rules_by_id.get(rule_id) or {}
+            allowed_ids.update(
+                str(item.get("exemption_id") or "").strip()
+                for item in rule.get("rule_exemptions") or []
+                if isinstance(item, dict) and item.get("exemption_id")
+            )
+            allowed_exemption_codes[rule_code] = [
+                exemption_code_by_id[exemption_id]
+                for exemption_id in exemption_ids
+                if exemption_id in allowed_ids
+            ]
+        return {
+            "rule_codes": rule_codes,
+            "exemption_codes": exemption_codes,
+            "allowed_exemption_codes": allowed_exemption_codes,
+        }
+
+    @staticmethod
+    def _replace_exact_wire_ids(text: str, replacements: dict[str, str]) -> str:
+        if not replacements:
+            return text
+        pattern = (
+            r"(?<![A-Za-z0-9_.:-])(?:"
+            + "|".join(
+                re.escape(value)
+                for value in sorted(replacements, key=len, reverse=True)
+            )
+            + r")(?![A-Za-z0-9_.:-])"
+        )
+        return re.sub(pattern, lambda match: replacements[match.group()], text)
+
+    def _render_fusion_wire_template(self, template: str, codebook: dict) -> str:
+        replacements = {
+            stable_id: code
+            for key in ("rule_codes", "exemption_codes")
+            for code, stable_id in (codebook.get(key) or {}).items()
+        }
+        rendered = self._replace_exact_wire_ids(template, replacements)
+        rendered = rendered.replace(
+            "stable rule_id",
+            "本次正式规则短码，例如FR01",
+        ).replace(
+            "实际命中的 exemption_id，可选",
+            "实际命中的豁免短码，例如EX01，可选",
+        )
+        protocol = {
+            "rule_codes": list((codebook.get("rule_codes") or {}).keys()),
+            "exemption_codes": list((codebook.get("exemption_codes") or {}).keys()),
+            "allowed_exemption_codes_by_rule": codebook.get(
+                "allowed_exemption_codes"
+            )
+            or {},
+        }
+        return (
+            rendered
+            + "\n融合编号协议 fusion-wire-codes-v1：rule_matches[].rule_id 只能填写 FRxx；"
+            "matched_exemption_ids 只能填写 EXxx。禁止输出完整稳定ID、交换两个字段或自造编号。"
+            "豁免短码只有在 allowed_exemption_codes_by_rule 对应正式规则下才有效；"
+            "命中豁免时仍需同时填写它所豁免的正式规则短码。\n"
+            + json.dumps(protocol, ensure_ascii=False, separators=(",", ":"))
+        )
+
+    @staticmethod
+    def _encode_fusion_payload_ids(value, codebook: dict):
+        rule_code_by_id = {
+            stable_id: code
+            for code, stable_id in (codebook.get("rule_codes") or {}).items()
+        }
+        exemption_code_by_id = {
+            stable_id: code
+            for code, stable_id in (codebook.get("exemption_codes") or {}).items()
+        }
+
+        def encode(node):
+            if isinstance(node, list):
+                return [encode(item) for item in node]
+            if not isinstance(node, dict):
+                return node
+            output = {}
+            for key, item in node.items():
+                if key == "rule_counts" and isinstance(item, dict):
+                    output[key] = {
+                        rule_code_by_id[rule_id]: count
+                        for raw_rule_id, count in item.items()
+                        for rule_id in [str(raw_rule_id or "").strip()]
+                        if rule_id in rule_code_by_id
+                    }
+                    continue
+                if key == "rule_id":
+                    code = rule_code_by_id.get(str(item or "").strip())
+                    if code:
+                        output[key] = code
+                    continue
+                if key == "matched_exemption_ids":
+                    output[key] = [
+                        exemption_code_by_id[exemption_id]
+                        for exemption_id in (
+                            str(entry or "").strip() for entry in (item or [])
+                        )
+                        if exemption_id in exemption_code_by_id
+                    ]
+                    continue
+                output[key] = encode(item)
+            return output
+
+        return encode(value)
+
+    @staticmethod
+    def _decode_fusion_wire_codes(raw: dict, codebook: dict) -> dict:
+        if not isinstance(raw, dict):
+            return raw
+        raw_matches = raw.get("rule_matches")
+        if "rule_matches" not in raw or not isinstance(raw_matches, list):
+            return raw
+        rule_codes = codebook.get("rule_codes") or {}
+        exemption_codes = codebook.get("exemption_codes") or {}
+        allowed = codebook.get("allowed_exemption_codes") or {}
+        decoded = dict(raw)
+        decoded_matches = []
+        for original in raw_matches:
+            if not isinstance(original, dict):
+                decoded_matches.append(original)
+                continue
+            item = dict(original)
+            rule_code = str(item.get("rule_id") or "").strip()
+            if rule_code in exemption_codes:
+                raise FusionAuditContractError(
+                    f"fusion rule_id uses an exemption code: {rule_code!r}"
+                )
+            if rule_code not in rule_codes:
+                raise FusionAuditContractError(
+                    f"fusion rule_match has an unknown rule code: {rule_code!r}"
+                )
+            item["rule_id"] = rule_codes[rule_code]
+            if "matched_exemption_ids" in item:
+                values = item.get("matched_exemption_ids")
+                if not isinstance(values, list):
+                    raise FusionAuditContractError(
+                        "fusion matched_exemption_ids must be an array"
+                    )
+                decoded_exemptions = []
+                for value in values:
+                    exemption_code = str(value or "").strip()
+                    if exemption_code in rule_codes:
+                        raise FusionAuditContractError(
+                            "fusion matched_exemption_ids uses a rule code: "
+                            f"{exemption_code!r}"
+                        )
+                    if exemption_code not in exemption_codes:
+                        raise FusionAuditContractError(
+                            "fusion has an unknown exemption code: "
+                            f"{exemption_code!r}"
+                        )
+                    if exemption_code not in (allowed.get(rule_code) or []):
+                        raise FusionAuditContractError(
+                            f"fusion exemption code {exemption_code!r} is not allowed "
+                            f"for rule code {rule_code!r}"
+                        )
+                    stable_id = exemption_codes[exemption_code]
+                    if stable_id not in decoded_exemptions:
+                        decoded_exemptions.append(stable_id)
+                item["matched_exemption_ids"] = decoded_exemptions
+            decoded_matches.append(item)
+        decoded["rule_matches"] = decoded_matches
+        return decoded
+
     def _render_compact_fusion_prompt(
         self,
         subject: AuditSubject,
@@ -6372,6 +6611,11 @@ class AuditPipeline:
             or ""
         )
         if self._is_ruleset_v2() and fusion_template:
+            codebook = self._fusion_wire_codebook()
+            fusion_template = self._render_fusion_wire_template(
+                fusion_template,
+                codebook,
+            )
             payload["scoring_rules"] = []
             payload["comment_fusion_contract"] = {
                 "version": "risk-only-final-comments-v1",
@@ -6387,6 +6631,7 @@ class AuditPipeline:
                     "其他模态继续结合风险证据与必要背景判断引用、反驳等语境。"
                 ),
             }
+            payload = self._encode_fusion_payload_ids(payload, codebook)
             return self._render_v2_json_prompt(
                 fusion_template,
                 payload,
@@ -7683,7 +7928,19 @@ class AuditPipeline:
             capture = getattr(self.qwen, "last_raw_response", None)
             trace.update(parsed_response=raw, raw_provider_response=capture() if callable(capture) else None)
             try:
-                validated = self._validated_authoritative_visual_response(raw, response_contract="video_segment") if authoritative_m3 else raw
+                validated = (
+                    self._validated_authoritative_visual_response(
+                        raw,
+                        response_contract="video_segment",
+                        backend_library_identity=(
+                            job.get("library_policy") or {}
+                            if is_v2
+                            else None
+                        ),
+                    )
+                    if authoritative_m3
+                    else raw
+                )
                 decoded = self._decode_video_rule_codes(validated, mapping) if is_v2 else validated
                 analysis = self._normalize_segment_review(
                     decoded, sheet, job["frames"], library_policy=job.get("library_policy") or {},

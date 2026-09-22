@@ -83,10 +83,10 @@ def test_over_twenty_diversity_counts_and_unselected_results(pipeline):
     before = copy.deepcopy(evidence)
     prompt, data = render(pipeline, comments, evidence)
     assert len(data['top_comments']) == 20
-    assert {c['rule_id'] for c in data['top_comments']} == {'rule.a', 'rule.b', 'rule.c'}
+    assert {c['rule_id'] for c in data['top_comments']} == {'FR01', 'FR02', 'FR03'}
     assert data['top_comments'][0]['score'] == 80
     assert data['comment_stats']['level_counts'] == {'none': 0, 'low': 1, 'medium': 1, 'high': 30}
-    assert data['comment_stats']['rule_counts'] == {'rule.a': 30, 'rule.b': 1, 'rule.c': 1}
+    assert data['comment_stats']['rule_counts'] == {'FR01': 30, 'FR02': 1, 'FR03': 1}
     visible = pipeline._fusion_visible_ids(prompt)
     assert len(visible) == 20
     validated = pipeline._validate_v2_fusion_contract(response(['comment:0'], 'high'), evidence, visible_evidence_ids=visible)
@@ -213,7 +213,8 @@ def test_video_rule_contract_retains_failure_and_retries_only_once(pipeline, tmp
     image.write_bytes(b'original sheet input')
     job = {'sheet_path': image, 'prompt': 'frozen K instructions',
            'sheet': {'segment_id': 'video_1/segment_2'},
-           'frames': [{'frame_id': 'f0017'}], 'library_policy': {}}
+           'frames': [{'frame_id': 'f0017'}],
+           'library_policy': {'id': 'test', 'title': '测试'}}
     calls = []
     def analyze_image(path, prompt, **options):
         calls.append((path, prompt, options))
@@ -277,7 +278,8 @@ def test_video_invalid_array_is_saved_and_stops_after_one_correction(pipeline, t
                 'risk_library_label': 'test', 'visual_risks': 7, 'ocr_risks': [], 'asr_risks': []}
     pipeline.qwen = SimpleNamespace(analyze_image=analyze_image)
     job = {'sheet': {'segment_id': 'test'}, 'sheet_path': image, 'frames': [],
-           'prompt': 'rule.a｜说明。豁免ID rule.a.exemption；证据ID frame:rule.a'}
+           'prompt': 'rule.a｜说明。豁免ID rule.a.exemption；证据ID frame:rule.a',
+           'library_policy': {'id': 'test', 'title': '测试'}}
     with patch.object(settings, 'outputs_dir', tmp_path), patch('backend.audit_agent.pipeline.job_store.log'):
         with pytest.raises(AuditProviderCallError, match='invalid visual_risks'):
             pipeline._audit_review_sheet(job, authoritative_m3=True)
