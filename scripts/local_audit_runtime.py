@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import http.cookiejar
 import json
 import os
 from pathlib import Path
@@ -197,7 +198,10 @@ def start_service(config, config_path, service):
 
 
 def status(config):
-    with urllib.request.urlopen(f"http://127.0.0.1:{config['api_port']}/api/local-runtime", timeout=5) as response:
+    cookies = http.cookiejar.MozillaCookieJar(config["auth_cookie_file"])
+    cookies.load(ignore_discard=True)
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
+    with opener.open(f"http://127.0.0.1:{config['api_port']}/api/local-runtime", timeout=5) as response:
         running = json.load(response)
     if any(running.get(k) != v for k, v in identity(config).items()):
         raise RuntimeError("Running API does not match pinned runtime")
@@ -205,7 +209,7 @@ def status(config):
     os.kill(worker["pid"], 0)
     if any(worker.get(k) != v for k, v in identity(config).items()):
         raise RuntimeError("Running worker does not match pinned runtime")
-    with urllib.request.urlopen(f"http://127.0.0.1:{config['frontend_port']}/api/local-runtime", timeout=5) as response:
+    with opener.open(f"http://127.0.0.1:{config['frontend_port']}/api/local-runtime", timeout=5) as response:
         if json.load(response) != running:
             raise RuntimeError("Frontend proxy does not reach this API")
     return {"status": "ready", "api": running, "worker_pid": worker["pid"], "frontend": f"http://127.0.0.1:{config['frontend_port']}/investigation"}
