@@ -256,6 +256,38 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
 
         self.assertNotIn("--dy_search_sort", output.command)
 
+    def test_query_correct_type_is_passed_to_crawler_when_set_and_omitted_when_not(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = RecordingAdapter(Path(temp_dir))
+            output = adapter.run_search(
+                platform="dy", keyword="测试", start_page=0, max_notes=1,
+                max_comments=0, max_concurrency=1, max_items_per_minute=5,
+                get_sub_comment=False, save_root=Path(temp_dir) / "output",
+                query_correct_type=0,
+            )
+        command = output.command
+        self.assertEqual(command[command.index("--dy_query_correct_type") + 1], "0")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = RecordingAdapter(Path(temp_dir))
+            output = adapter.run_search(
+                platform="dy", keyword="测试", start_page=0, max_notes=1,
+                max_comments=0, max_concurrency=1, max_items_per_minute=5,
+                get_sub_comment=False, save_root=Path(temp_dir) / "output",
+                query_correct_type=1,
+            )
+        command = output.command
+        self.assertEqual(command[command.index("--dy_query_correct_type") + 1], "1")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = RecordingAdapter(Path(temp_dir))
+            output = adapter.run_search(
+                platform="dy", keyword="测试", start_page=0, max_notes=1,
+                max_comments=0, max_concurrency=1, max_items_per_minute=5,
+                get_sub_comment=False, save_root=Path(temp_dir) / "output",
+            )
+        self.assertNotIn("--dy_query_correct_type", output.command)
+
     def test_task_can_disable_comments_and_media_without_exposing_deployment_options(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             adapter = RecordingAdapter(Path(temp_dir))

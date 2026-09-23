@@ -137,6 +137,11 @@ class Settings:
     qwen_vl_model = os.getenv("QWEN_VL_MODEL", "qwen3.7-plus")
     qwen_contact_sheet_model = os.getenv("QWEN_CONTACT_SHEET_MODEL", "qwen3.6-flash").strip()
     qwen_image_audit_model = os.getenv("QWEN_IMAGE_AUDIT_MODEL", qwen_contact_sheet_model).strip()
+    triage_mode = os.getenv("TRIAGE_MODE", "off").strip().lower()
+    triage_candidates_per_keyword = max(1, min(30, int(os.getenv("TRIAGE_CANDIDATES_PER_KEYWORD", "10"))))
+    triage_candidate_comments = max(0, min(200, int(os.getenv("TRIAGE_CANDIDATE_COMMENTS", "60"))))
+    triage_model = os.getenv("TRIAGE_MODEL", "").strip() or qwen_contact_sheet_model
+    triage_request_timeout = max(5, int(os.getenv("TRIAGE_REQUEST_TIMEOUT", "60")))
     asr_translate_model = os.getenv("ASR_TRANSLATE_MODEL", qwen_text_model).strip()
     asr_translate_max_tokens = int(os.getenv("ASR_TRANSLATE_MAX_TOKENS", "6000"))
     asr_translate_enable_thinking = (
