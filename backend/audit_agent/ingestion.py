@@ -805,6 +805,20 @@ class IngestionStore:
             if self._valid_raw_payload(Path(str(row["raw_item_path"] or "")), platform, str(row["content_key"]))
         }
 
+    def analyzed_content_keys(self, platform: str, content_keys: list[str]) -> set[str]:
+        """Content already analyzed by any task; triage must skip these candidates."""
+        keys = sorted({str(key).strip() for key in content_keys if str(key).strip()})
+        if not keys:
+            return set()
+        placeholders = ",".join("?" for _ in keys)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT content_key FROM contents WHERE platform = ? AND analyze_status = 'completed' "
+                f"AND content_key IN ({placeholders})",
+                [platform, *keys],
+            ).fetchall()
+        return {str(row["content_key"]) for row in rows}
+
     def mark_collection_status(
         self,
         platform: str,
