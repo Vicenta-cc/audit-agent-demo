@@ -1954,7 +1954,8 @@ class AuditPipeline:
                 for rank, item in enumerate(candidates.contents, start=1):
                     key = content_identity(item, platform)
                     if key:
-                        scores.append(engine.score(key, rank, item, comments_by_key.get(key, []), lexicon_terms))
+                        scores.append(engine.score(key, rank, item, comments_by_key.get(key, []), lexicon_terms,
+                                                   search_keyword=keyword))
                 ranked = rank_candidates(scores)
                 exclude = set(selected_by_key) | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked])
                 strategy = "triage"

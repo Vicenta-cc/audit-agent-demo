@@ -23,7 +23,8 @@ class FakeQwen:
 
 class FakeLexicon:
     def triage_terms(self, category_ids):
-        return [{"category_id": "gambling", "keyword": "上分", "match_type": "模糊", "risk_level": "高", "entry_kind": ""}]
+        return [{"category_id": "gambling", "keyword": "上分", "match_type": "模糊", "risk_level": "高", "entry_kind": ""},
+                {"category_id": "gambling", "keyword": "上分群", "match_type": "模糊", "risk_level": "高", "entry_kind": ""}]
 
 
 def _engine(response):
@@ -36,6 +37,38 @@ def test_rule_hit_scores_high_without_model_call():
     score = engine.score("a", 1, {"desc": "今晚上分稳赢", "liked_count": "10"}, [], terms)
     assert score.band == "rule" and score.score >= 300 and engine.qwen.calls == []
     assert score.hits[0]["keyword"] == "上分"
+
+
+def test_search_keyword_self_hit_is_not_scored_and_falls_through_to_the_model():
+    # 搜「上分」搜出来的帖子必然带「上分」，这一条自命中不能当规则分，否则模型判强的候选永远抢不过它
+    engine = _engine({"suspicion": "strong", "reason": "评论区约私聊"})
+    item = {"title": "今晚上分吗", "liked_count": "10"}
+    scored = engine.score("a", 1, item, [], engine.terms_for(["gambling"]), search_keyword="上分")
+    assert scored.band == "strong" and scored.score == 200
+    assert len(engine.qwen.calls) == 1
+    assert scored.reason == "评论区约私聊（搜索词自身命中 1 处不计分）"
+
+    # 不带搜索词（别的调用方）时行为不变：规则层照常计分，不调模型
+    baseline = _engine({"suspicion": "strong", "reason": "评论区约私聊"})
+    plain = baseline.score("a", 1, item, [], baseline.terms_for(["gambling"]))
+    assert plain.band == "rule" and plain.score == 300 and baseline.qwen.calls == []
+
+
+def test_other_lexicon_term_still_counts_when_the_search_keyword_is_dropped():
+    engine = _engine({"suspicion": "none"})
+    scored = engine.score("b", 1, {"title": "上分群带你上分"}, [], engine.terms_for(["gambling"]), search_keyword="上分")
+    assert scored.band == "rule" and scored.score == 300 and engine.qwen.calls == []
+    assert [hit["keyword"] for hit in scored.hits] == ["上分群"]
+    assert "上分群" in scored.reason and "搜索词自身命中" not in scored.reason
+
+
+def test_diversion_hit_survives_the_search_keyword_drop():
+    engine = _engine({"suspicion": "none"})
+    scored = engine.score("c", 1, {"title": "上分", "desc": "加微信详聊"}, [], engine.terms_for(["gambling"]),
+                          search_keyword="上分")
+    assert scored.band == "rule" and scored.score == 300 and engine.qwen.calls == []
+    assert [hit["category_id"] for hit in scored.hits] == ["diversion"]
+    assert scored.reason == "命中导流：微信/vx（desc）"
 
 
 def test_trusted_verified_is_penalized_and_model_bands_map_to_scores():

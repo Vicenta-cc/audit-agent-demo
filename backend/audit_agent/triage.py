@@ -5,7 +5,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from .triage_matcher import TriageHit, TriageTerm, diversion_hits, match_terms, terms_from_rows
+from .triage_matcher import TriageHit, TriageTerm, diversion_hits, match_terms, normalize_text, terms_from_rows
 
 RULE_HIT_SCORE = 300
 RULE_HIT_CAP = 900
@@ -104,9 +104,21 @@ class TriageEngine:
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
 
-    def score(self, content_key: str, rank: int, item: dict, comments: list[dict], terms: list[TriageTerm]) -> CandidateScore:
+    @staticmethod
+    def _drop_self_hits(hits: list[TriageHit], search_keyword: str) -> tuple[list[TriageHit], int]:
+        """搜「上分」搜回来的帖子必然含「上分」，这种自命中不算风险信号，只有导流模板照旧计分。"""
+        needle = normalize_text(search_keyword)
+        if not needle:
+            return hits, 0
+        kept = [h for h in hits if h.category_id == "diversion" or normalize_text(h.keyword) != needle]
+        return kept, len(hits) - len(kept)
+
+    def score(self, content_key: str, rank: int, item: dict, comments: list[dict], terms: list[TriageTerm],
+              *, search_keyword: str = "") -> CandidateScore:
         engagement = _int(item.get("liked_count")) + _int(item.get("comment_count")) + _int(item.get("share_count"))
-        hits = self._rule_hits(item, comments, terms)
+        hits, self_hits = self._drop_self_hits(self._rule_hits(item, comments, terms), search_keyword)
+        # 自命中被扣掉后才走模型的候选，要在理由里说清楚，运营看日志时不会以为规则层漏判
+        note = f"（搜索词自身命中 {self_hits} 处不计分）" if self_hits else ""
         verify_reason = _text(item.get("enterprise_verify_reason"))
         if hits:
             top = hits[0]
@@ -127,19 +139,19 @@ class TriageEngine:
                                        enable_thinking=False, request_timeout=self.request_timeout)
         except Exception as exc:
             return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak",
-                                  f"初筛模型调用失败，按 weak 计：{exc}"[:200], engagement=engagement)
+                                  f"初筛模型调用失败，按 weak 计：{exc}"[:200] + note, engagement=engagement)
         # 模型答一个数组或字符串时 json.loads 原样返回，按调用失败同样处理，不能让整个词失败
         if not isinstance(raw, dict):
             return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak",
-                                  "初筛模型输出不合法（非 JSON 对象），按 weak 计", engagement=engagement)
+                                  "初筛模型输出不合法（非 JSON 对象），按 weak 计" + note, engagement=engagement)
         suspicion = _text(raw.get("suspicion")).lower()
         if suspicion not in MODEL_SCORES:
-            return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak", "初筛模型输出不合法，按 weak 计",
+            return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak", "初筛模型输出不合法，按 weak 计" + note,
                                   model=raw, engagement=engagement)
         matched = _str_list(raw.get("matched_terms"))
         model = {**raw, "matched_terms": matched, "locations": _str_list(raw.get("locations"))}
         return CandidateScore(content_key, rank, MODEL_SCORES[suspicion], suspicion,
-                              _text(raw.get("reason"))[:120] or f"模型判定 {suspicion}",
+                              (_text(raw.get("reason"))[:120] or f"模型判定 {suspicion}") + note,
                               hits=[{"keyword": v, "match_type": "model", "category_id": "", "risk_level": "", "field": "", "snippet": ""} for v in matched],
                               model=model, engagement=engagement)
 

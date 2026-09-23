@@ -77,8 +77,8 @@ class FakeEngine:
     def terms_for(self, category_ids):
         return []
 
-    def score(self, content_key, rank, item, comments, terms):
-        self.score_calls.append((content_key, comments))
+    def score(self, content_key, rank, item, comments, terms, *, search_keyword=""):
+        self.score_calls.append((content_key, comments, search_keyword))
         score = 300 if "上分" in item.get("desc", "") else 0
         return CandidateScore(content_key, rank, score, "rule" if score else "none", "", [], None, 0)
 
@@ -269,9 +269,10 @@ def test_comments_grouped_by_platform_aware_content_identity(tmp_path: Path, mon
         account_auth_state=None, crawler_account_id="acc", content_callback=lambda c, m: None, stream_items=True,
         stop_checker=lambda: False, started_callback=None, progress_callback=None,
     )
-    [(key, comments)] = engine.score_calls
+    [(key, comments, search_keyword)] = engine.score_calls
     assert key == "a1"
     assert [c["content"] for c in comments] == ["有暗号"]
+    assert search_keyword == "词A"      # 规则层要认得本次搜索词，才能不给自命中计分
 
 
 def test_run_search_contract_for_candidate_sweep(tmp_path: Path, monkeypatch):
