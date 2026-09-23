@@ -12,6 +12,8 @@ RULE_HIT_SCORE = 300
 RULE_HIT_CAP = 900
 DISCARD_SCORE = -1000
 MODEL_SCORES = {"strong": 200, "weak": 100, "none": 0}
+# 模型答这些语境且不是 strong 时一律按正常内容处理，不占深审名额（方案 §4，2026-09-23）
+EXEMPT_CONTENT_TYPES = ("科普", "新闻")
 CATEGORY_LABELS = {"diversion": "导流"}      # 命中原因会进任务日志，别把内部 id 给运营看
 
 # 官方/机构类蓝V识别片段：命中即discard，不进精审。$ 结尾的片段只匹配 enterprise_verify_reason 的末尾
@@ -125,7 +127,12 @@ class TriageEngine:
             "\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\n"
             "判定标准：strong = 正文、签名或评论中存在与 lexicon_terms 同义的暗语、导流方式或交易意图；"
             "weak = 有可疑但不明确的信号，或作者是小号且内容擦边；none = 明显正常内容且评论区无异常。"
-            "不确定时选 weak，不要选 none。\n输入 JSON：\n"
+            "不确定时选 weak，不要选 none。\n"
+            "以下语境判 none，除非评论区或签名出现明确的联系方式或交易约定："
+            "反诈/反赌科普与警示、警方/媒体/官方宣传、游戏术语（上分、代练、段位、活动攻略等）、"
+            "电商与商品展示（瓷器、金饰、店铺运营等）、金融教学（股票、盘口分析）。"
+            "只有存在暗语交易或导流意图（联系方式、加群、私聊、代充、上下分、回收、代理招募等）时才判 weak/strong。\n"
+            "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
 
@@ -193,8 +200,14 @@ class TriageEngine:
                                   model=raw, engagement=engagement)
         matched = _str_list(raw.get("matched_terms"))
         model = {**raw, "matched_terms": matched, "locations": _str_list(raw.get("locations"))}
-        return CandidateScore(content_key, rank, MODEL_SCORES[suspicion], suspicion,
-                              (_text(raw.get("reason"))[:120] or f"模型判定 {suspicion}") + note,
+        score_value, band = MODEL_SCORES[suspicion], suspicion
+        reason = _text(raw.get("reason"))[:120] or f"模型判定 {suspicion}"
+        # 反诈科普、警方通报这类内容必然带黑话，判 weak 就会占掉该词唯一的深审名额；
+        # 模型看到明确交易意图时仍可判 strong 推翻这个语境标签（方案 §4，2026-09-23）
+        if _text(raw.get("content_type")) in EXEMPT_CONTENT_TYPES and suspicion != "strong":
+            score_value, band = MODEL_SCORES["none"], "none"
+            reason = f"科普/新闻语境：{reason}"
+        return CandidateScore(content_key, rank, score_value, band, reason + note,
                               hits=[{"keyword": v, "match_type": "model", "category_id": "", "risk_level": "", "field": "", "snippet": ""} for v in matched],
                               model=model, engagement=engagement)
 

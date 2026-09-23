@@ -361,6 +361,8 @@ def test_run_search_contract_for_candidate_sweep(tmp_path: Path, monkeypatch):
     [call_kwargs] = crawler.search_calls
     assert call_kwargs["collect_media"] is False
     assert call_kwargs["collect_comments"] is True
+    # 搜索结果的 author 粉丝数恒为 0、没有签名，粉丝阈值和签名规则要靠这次资料请求
+    assert call_kwargs["fetch_author_profile"] is True
     assert call_kwargs["stream_items"] is False
     assert call_kwargs["max_notes"] == call_kwargs["max_total_notes"] == 10
     assert "content_callback" not in call_kwargs

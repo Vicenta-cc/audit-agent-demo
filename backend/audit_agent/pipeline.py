@@ -1965,6 +1965,7 @@ class AuditPipeline:
                     max_comments=settings.triage_candidate_comments, max_concurrency=crawler_concurrency,
                     max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
                     get_sub_comment=False, collect_comments=True, collect_media=False, save_root=candidate_root,
+                    fetch_author_profile=True,
                     stream_items=False, stop_checker=stop_checker, auth_state=account_auth_state,
                     account_id=crawler_account_id,
                     started_callback=None if crawler_started else started_callback,

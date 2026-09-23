@@ -2,7 +2,7 @@
 
 ## 模式
 - `TRIAGE_MODE=off`：默认，采集逻辑与现状一致（每词取搜索排第一）。
-- `select`：每词采 10 条文本候选，规则加 flash 打分，选最可疑的 1 条按 ID 补采媒体与评论，再精审。规则层加载任务全部词库的词，与搜索词来源无关（关键词任务配了 library_ids 时同样生效）。规则层不把本次搜索词自身的命中计分（搜出来的帖子必然含搜索词），只计其他词库词、变体与导流模板；搜索词自身命中的候选走模型判断。初筛先做身份丢弃：官方与机构类蓝V（媒体、政务、公安、事业单位等，按 `TRIAGE_OFFICIAL_VERIFY_PATTERNS` 识别）一律不进精审；商家/企业认证按普通账号打分，只受粉丝阈值约束；个人黄V粉丝超过 `TRIAGE_MAX_FOLLOWERS_PERSONAL_VERIFIED`、无认证账号（含商家/企业蓝V）粉丝超过 `TRIAGE_MAX_FOLLOWERS_UNVERIFIED` 的不进精审；丢弃的候选记录在 candidates.json 的 band=discard。
+- `select`：每词采 10 条文本候选，规则加 flash 打分，选最可疑的 1 条按 ID 补采媒体与评论，再精审。规则层加载任务全部词库的词，与搜索词来源无关（关键词任务配了 library_ids 时同样生效）。规则层不把本次搜索词自身的命中计分（搜出来的帖子必然含搜索词），只计其他词库词、变体与导流模板；搜索词自身命中的候选走模型判断。初筛先做身份丢弃：官方与机构类蓝V（媒体、政务、公安、事业单位等，按 `TRIAGE_OFFICIAL_VERIFY_PATTERNS` 识别）一律不进精审；商家/企业认证按普通账号打分，只受粉丝阈值约束；个人黄V粉丝超过 `TRIAGE_MAX_FOLLOWERS_PERSONAL_VERIFIED`、无认证账号（含商家/企业蓝V）粉丝超过 `TRIAGE_MAX_FOLLOWERS_UNVERIFIED` 的不进精审；丢弃的候选记录在 candidates.json 的 band=discard。候选采集时对每个作者补一次资料请求（粉丝数、签名、认证），同一作者只请求一次；粉丝阈值与签名命中依赖它。初筛模型对反诈科普、官方宣传、游戏术语、电商展示、金融教学语境判正常；content_type 为科普/新闻且非 strong 时不可选。
 - `compare`：每个词随机选用"排第一"或"初筛选中"策略，记录在 candidates.json 的 strategy 字段，用于对照验证。
 
 ## 证据
@@ -14,12 +14,12 @@
 
 ## 已知限制
 
-- **爬虫表结构**：爬虫 `douyin_aweme` 行新增 `custom_verify`、`enterprise_verify_reason`、`follower_count`、`verification_type` 四个字段。本平台用 jsonl 存储不受影响；若某个环境用爬虫的 db/sqlite/postgres 存储且已有旧表，需手动 `ALTER TABLE` 加这四列，`create_all` 不会给旧表加列。
+- **爬虫表结构**：爬虫 `douyin_aweme` 行新增 `custom_verify`、`enterprise_verify_reason`、`follower_count`、`verification_type`、`max_follower_count` 五个字段。本平台用 jsonl 存储不受影响；若某个环境用爬虫的 db/sqlite/postgres 存储且已有旧表，需手动 `ALTER TABLE` 加这五列，`create_all` 不会给旧表加列。
 
 - **任务采集上限**：一次任务最多采多少条由请求参数 `max_total_notes` 决定（当前契约上限 5），它同时决定 `analyze_limit`。词数超过上限时，靠后的词不会被搜索，任务日志里有「已达本任务采集上限 N 条，以下词未搜索：…」一行列出这些词。
 - **精采不完整**：补采媒体或评论的子步骤失败（`CrawlerCollectionIncompleteError`）与 `TRIAGE_MODE=off` 时一致，整个任务失败并提示查看 `douyin/collection_status`；不会把已经流式入库的半条内容当成「本词无产出」。
 - **恢复采集与切换账号**：按 `candidates.json` 的 `collected` 标记跳过已经精采成功的词，所以续采或换账号重跑不会让同一个词出两条。非流式入库配置下（`STREAM_CRAWL_ANALYSIS=false`），切换账号前采到的内容不会被再次读取，也不会再次采集，因此会从本次任务产出中丢失；默认的流式入库配置不受影响。
-- **搜索结果里没有作者签名**：签名相关的导流命中只在精采后可用。
+- **作者资料请求失败**：该候选按搜索结果里的作者信息打分（粉丝数为 0、没有签名），不会让整个词失败。
 
 ## 回滚
 `TRIAGE_MODE=off` 并重启。无数据结构变更。

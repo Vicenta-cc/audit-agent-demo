@@ -79,6 +79,41 @@ def test_model_bands_map_to_scores():
     assert "有资源吗" in engine.qwen.calls[0][0] and engine.qwen.calls[0][1]["enable_thinking"] is False
 
 
+def test_public_service_context_is_forced_to_none_unless_the_model_says_strong():
+    # 反诈科普、警方宣传这类内容必然带黑话，模型判 weak 就会占掉该词唯一的深审名额
+    engine = _engine({"suspicion": "weak", "content_type": "科普", "reason": "反诈提醒里提到上分"})
+    scored = engine.score("a", 1, {"desc": "民警提醒大家注意"}, [], [])
+    assert scored.band == "none" and scored.score == 0
+    assert scored.reason.startswith("科普/新闻语境：")
+    assert scored.model["content_type"] == "科普"
+    assert select_candidate(rank_candidates([scored]), exclude_keys=set()) is None
+
+    # note 后缀照旧拼在理由末尾
+    noted_engine = _engine({"suspicion": "weak", "content_type": "科普", "reason": "反诈提醒"})
+    noted = noted_engine.score("b", 1, {"title": "今晚上分吗"}, [], noted_engine.terms_for(["gambling"]),
+                               search_keyword="上分")
+    assert noted.reason == "科普/新闻语境：反诈提醒（搜索词自身命中 1 处不计分）"
+
+
+def test_news_context_still_yields_strong_when_the_model_sees_trade_intent():
+    engine = _engine({"suspicion": "strong", "content_type": "新闻", "reason": "评论区留了联系方式"})
+    scored = engine.score("a", 1, {"desc": "记者报道"}, [], [])
+    assert scored.band == "strong" and scored.score == 200
+    assert scored.reason == "评论区留了联系方式"
+
+
+def test_ordinary_content_type_keeps_the_weak_band():
+    engine = _engine({"suspicion": "weak", "content_type": "日常", "reason": "有点可疑"})
+    scored = engine.score("a", 1, {"desc": "随手拍"}, [], [])
+    assert scored.band == "weak" and scored.score == 100
+
+
+def test_prompt_states_the_exempt_contexts():
+    engine = _engine({"suspicion": "none"})
+    prompt = engine.build_prompt({"desc": "民警提醒"}, [], engine.terms_for(["gambling"]))
+    assert "反诈" in prompt and "游戏术语" in prompt
+
+
 def test_diversion_reason_reaches_the_operator_log_in_chinese():
     score = _engine({"suspicion": "none"}).score("a", 1, {"desc": "加微信详聊"}, [], [])
     assert score.band == "rule" and score.reason == "命中导流：微信/vx（desc）"

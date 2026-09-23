@@ -110,6 +110,7 @@ class MediaCrawlerAdapter:
         collect_media: bool = True,
         max_total_notes: int | None = None,
         query_correct_type: int | None = None,
+        fetch_author_profile: bool = False,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         effective_max_comments = max_comments if collect_comments else 0
@@ -201,6 +202,9 @@ class MediaCrawlerAdapter:
             ]
             if platform == "dy":
                 command.extend(["--dy_search_sort", search_sort])
+            if fetch_author_profile:
+                # 搜索结果里的 author 粉丝数恒为 0 且没有签名，只有初筛候选需要这一轮补充请求
+                command.extend(["--dy_fetch_author_profile", "true"])
             if skip_content_ids_file:
                 command.extend(["--skip_aweme_ids_file", str(skip_content_ids_file)])
             if reusable_content_db:
