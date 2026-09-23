@@ -159,7 +159,9 @@ def serve(config, service):
         main()
         return
     import uvicorn
-    from backend.main import app
+    from backend.main import app, principal_provider, _require_job
+    from backend.api.local_reaudit import create_local_reaudit_router
+    app.include_router(create_local_reaudit_router(config, principal_provider, _require_job))
     running = {**identity(config), "pid": os.getpid()}
     @app.get("/api/local-runtime", include_in_schema=False)
     def runtime_identity():
