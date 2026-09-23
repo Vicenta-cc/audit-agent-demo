@@ -10,6 +10,8 @@
 
 **新部署请先读：[当前版本启动交接](docs/runtime/CURRENT-STARTUP.md)。** 当前业务入口是 `Audit_assistant` 的 `/investigation`，不是旧 `/saas`。文档区分新机器初始化、本机固定控制器、Linux 托管和升级；API 能启动不代表 worker、报告问答或 Dolphin 已通过验收。
 
+新环境可使用[统一运行入口](docs/runtime/UNIFIED-RUNTIME.md)：生成一份环境清单和一份私有密钥文件，以同一入口初始化、检查、启动 API/worker/前端并生成托管模板。现有环境不自动迁移。
+
 ```bash
 git clone https://github.com/Vicenta-cc/audit-agent-demo.git audit-agent-multi-user
 cd audit-agent-multi-user
