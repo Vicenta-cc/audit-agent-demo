@@ -125,6 +125,7 @@ class TriageEngine:
             "{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\","
             "\"suspicion\":\"none|weak|strong\",\"matched_terms\":[\"命中的词或变体\"],"
             "\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\n"
+            "matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n"
             "判定标准：strong = 正文、签名或评论中存在与 lexicon_terms 同义的暗语、导流方式或交易意图；"
             "weak = 有可疑但不明确的信号，或作者是小号且内容擦边；none = 明显正常内容且评论区无异常。"
             "不确定时选 weak，不要选 none。\n"
@@ -185,7 +186,7 @@ class TriageEngine:
             return CandidateScore(content_key, rank, total, "rule", reason,
                                   hits=[asdict(h) for h in hits], engagement=engagement)
         try:
-            raw = self.qwen.audit_text(self.build_prompt(item, comments, terms), max_tokens=400, model=self.model,
+            raw = self.qwen.audit_text(self.build_prompt(item, comments, terms), max_tokens=800, model=self.model,
                                        enable_thinking=False, request_timeout=self.request_timeout)
         except Exception as exc:
             return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak",

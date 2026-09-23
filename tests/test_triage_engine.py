@@ -301,3 +301,12 @@ def test_collected_helpers_tolerate_missing_and_broken_files(tmp_path: Path):
     (broken / "candidates.json").write_text("{not json", encoding="utf-8")
     mark_candidates_collected(broken)
     assert load_collected_selections(tmp_path) == {}
+
+
+def test_prompt_bounds_list_lengths_and_model_gets_a_larger_output_budget():
+    engine = _engine({"suspicion": "none"})
+    prompt = engine.build_prompt({"desc": "x"}, [], [])
+    assert "最多列 5 项" in prompt
+    engine.score("k", 1, {"desc": "x"}, [], [])
+    _prompt, kwargs = engine.qwen.calls[-1]
+    assert kwargs.get("max_tokens") == 800
