@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 from contextlib import ExitStack
 import json
 import os
@@ -8,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import re
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import sleep
@@ -366,6 +368,19 @@ class MediaCrawlerAdapter:
         content_id = str(content_id or "").strip()
         if not content_id:
             raise ValueError("run_detail requires a content id")
+        # Detail mode writes the post BEFORE media/comments, even with STREAM_ITEMS.
+        # Never expose those intermediate rows to ingestion. A fresh attempt also
+        # prevents a retry from mistaking a previous attempt's post for success.
+        attempts = save_root / "detail_attempts"
+        attempts.mkdir(parents=True, exist_ok=True)
+        attempt_root = Path(tempfile.mkdtemp(prefix="detail-", dir=attempts))
+        stopped = False
+
+        def check_stopped() -> bool:
+            nonlocal stopped
+            stopped = stopped or bool(stop_checker and stop_checker())
+            return stopped
+
         effective_max_comments = max_comments if collect_comments else 0
         command = [
             *self._base_command(platform),
@@ -383,7 +398,7 @@ class MediaCrawlerAdapter:
             "--get_media", "true" if collect_media else "false",
             "--stream_items", "true" if stream_items else "false",
             "--save_data_option", "jsonl",
-            "--save_data_path", str(save_root),
+            "--save_data_path", str(attempt_root),
         ]
 
         def only_target(contents: list[dict]) -> list[dict]:
@@ -395,21 +410,49 @@ class MediaCrawlerAdapter:
                     selected.append(tagged)
             return selected
 
-        def relay(contents: list[dict], comments: list[dict]) -> None:
-            if content_callback is None:
-                return
-            targeted = only_target(contents)
-            if targeted:
-                content_callback(targeted, comments)
-
         output = self._run_command(
-            command=command, save_root=save_root, platform=platform, max_notes=1,
-            progress_callback=progress_callback, content_callback=relay if content_callback else None,
-            stop_checker=stop_checker, auth_state=auth_state, started_callback=started_callback,
+            command=command, save_root=attempt_root, platform=platform, max_notes=1,
+            progress_callback=None, content_callback=None,
+            stop_checker=check_stopped, auth_state=auth_state, started_callback=started_callback,
             checkpoint_callback=None, account_id=account_id,
         )
-        output.contents = only_target(output.contents)
+        if check_stopped():
+            return CrawlOutput(platform=platform, contents=[], comments=[], output_dir=attempt_root, command=command)
+        targeted = only_target(output.contents)
+        if not targeted:
+            raise CrawlerCollectionIncompleteError(f"精采未返回目标帖子：{content_id}；诊断目录：{attempt_root}")
+        output.contents = [targeted[-1]]
+        from .ingestion import comment_content_identity
+        comments = {}
+        for comment in output.comments:
+            if comment_content_identity(comment, platform) == content_id:
+                key = str(comment.get("comment_id") or json.dumps(comment, sort_keys=True, ensure_ascii=False))
+                comments[key] = comment
+        output.comments = list(comments.values()) if collect_comments else []
         output.command = command
+        # Keep failed attempts for diagnosis, but publish only completed snapshots.
+        # The normal media lookup still uses crawler/<platform>/<kind>/<post>.
+        for kind in ("images", "videos"):
+            source = attempt_root / PLATFORM_DATA_DIRS[platform] / kind / content_id
+            if source.is_dir():
+                shutil.copytree(source, save_root / PLATFORM_DATA_DIRS[platform] / kind / content_id, dirs_exist_ok=True)
+        completed_dir = save_root / PLATFORM_DATA_DIRS[platform] / "detail_completed"
+        completed_dir.mkdir(parents=True, exist_ok=True)
+        receipt = completed_dir / (hashlib.sha256(content_id.encode()).hexdigest() + ".json")
+        pending = receipt.with_suffix(".tmp")
+        pending.write_text(json.dumps({"contents": output.contents, "comments": output.comments,
+                                       "creators": output.creators, "attempt_root": str(attempt_root)},
+                                      ensure_ascii=False), encoding="utf-8")
+        pending.replace(receipt)
+        if content_callback:
+            try:
+                content_callback(output.contents, output.comments)
+            except Exception as exc:
+                raise CrawlerCollectionIncompleteError(
+                    f"精采已完成但交付入库失败：{content_id}；完整快照已保留，可恢复"
+                ) from exc
+        if progress_callback:
+            progress_callback(1, 1)
         return output
 
     def _run_command(
@@ -742,7 +785,7 @@ class MediaCrawlerAdapter:
         self._validate_platform(platform)
         platform_dir = save_root / PLATFORM_DATA_DIRS[platform] / "jsonl"
         if not platform_dir.exists():
-            return CrawlOutput(platform=platform, contents=[], comments=[], output_dir=save_root)
+            return self._with_completed_details(CrawlOutput(platform=platform, contents=[], comments=[], output_dir=save_root))
 
         content_files = sorted(platform_dir.glob("*_contents_*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
         comment_files = sorted(platform_dir.glob("*_comments_*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -751,7 +794,7 @@ class MediaCrawlerAdapter:
         contents = self._read_jsonl(content_files[0]) if content_files else []
         comments = self._read_jsonl(comment_files[0]) if comment_files else []
         creators = self._read_jsonl(creator_files[0]) if creator_files else []
-        return CrawlOutput(platform=platform, contents=contents, comments=comments, creators=creators, output_dir=save_root)
+        return self._with_completed_details(CrawlOutput(platform=platform, contents=contents, comments=comments, creators=creators, output_dir=save_root))
 
     def load_latest_xhs_output(self, save_root: Path) -> CrawlOutput:
         return self.load_latest_output(save_root, "xhs")
@@ -829,22 +872,41 @@ class MediaCrawlerAdapter:
         """Load only the selected platform directory while the process is live."""
         platform_dir = save_root / PLATFORM_DATA_DIRS[platform] / "jsonl"
         if not platform_dir.exists():
-            return CrawlOutput(
+            return self._with_completed_details(CrawlOutput(
                 platform=platform,
                 contents=[],
                 comments=[],
                 output_dir=save_root,
-            )
+            ))
         content_files = sorted(platform_dir.glob("*_contents_*.jsonl"))
         comment_files = sorted(platform_dir.glob("*_comments_*.jsonl"))
         creator_files = sorted(platform_dir.glob("*_creators_*.jsonl"))
-        return CrawlOutput(
+        return self._with_completed_details(CrawlOutput(
             platform=platform,
             contents=[item for path in content_files for item in self._read_jsonl(path)],
             comments=[item for path in comment_files for item in self._read_jsonl(path)],
             creators=[item for path in creator_files for item in self._read_jsonl(path)],
             output_dir=save_root,
-        )
+        ))
+
+    def _with_completed_details(self, output: CrawlOutput) -> CrawlOutput:
+        """Replay completed detail payloads, never partial attempt directories.
+
+        Each post snapshot atomically replaces its legacy rows and comments, so
+        a previous zero-comment/partial snapshot cannot win during recovery.
+        """
+        from .ingestion import comment_content_identity
+        root = output.output_dir / PLATFORM_DATA_DIRS[output.platform] / "detail_completed"
+        for path in sorted(root.glob("*.json")):
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            contents = payload["contents"]
+            keys = {self._content_identity(item, output.platform) for item in contents}
+            output.contents = [item for item in output.contents
+                               if self._content_identity(item, output.platform) not in keys] + contents
+            output.comments = [comment for comment in output.comments
+                               if comment_content_identity(comment, output.platform) not in keys] + payload["comments"]
+            output.creators.extend(payload.get("creators", []))
+        return output
 
     def _content_identity(self, item: dict, platform: str) -> str:
         fields = {

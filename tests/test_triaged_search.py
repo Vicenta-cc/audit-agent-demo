@@ -452,6 +452,38 @@ class RealOutputCrawler(FakeCrawler):
         return adapter._load_platform_output(Path(save_root), platform)
 
 
+@pytest.mark.parametrize("state", ["missing", "complete", "incomplete"])
+def test_resume_replays_complete_snapshot_not_partial_attempt(tmp_path, monkeypatch, state):
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
+    item = {"aweme_id": "p1", "source_keyword": "词A"}
+    comments = [{"aweme_id": "p1", "comment_id": "c1"}]
+    receipt = tmp_path / "douyin" / "detail_completed" / "p1.json"
+    receipt.parent.mkdir(parents=True)
+    receipt.write_text(json.dumps({"contents": [item], "comments": comments}))
+    _write_jsonl(tmp_path / "detail_attempts" / "failed" / "douyin" / "jsonl" / "detail_contents_x.jsonl",
+                 [{"aweme_id": "incomplete-post"}])
+    crawler = RealOutputCrawler({})
+    ingestion = FakeIngestion(analyzed=set())
+    ingestion.validated_refs_for_task = lambda task: ([] if state == "missing" else [
+        {"content_key": "p1", "comments": comments if state == "complete" else []}])
+    pipeline = _new_pipeline("resume", crawler, ingestion, FakeEngine())
+    delivered = []
+    kwargs = dict(request=_base_request(), save_root=tmp_path, start_page=1, max_total_notes=10,
+                  crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+                  content_callback=lambda c, m: delivered.append((c, m)), stream_items=True,
+                  stop_checker=lambda: False, started_callback=None, progress_callback=None)
+    if state == "incomplete":
+        with pytest.raises(CrawlerCollectionIncompleteError, match="评论与精采完成快照不一致"):
+            pipeline._run_triaged_search(**kwargs)
+    else:
+        output = pipeline._run_triaged_search(**kwargs)
+        assert output.contents == [item]
+        assert output.comments == comments
+    assert delivered == ([([item], comments)] if state == "missing" else [])
+    assert crawler.search_calls == []
+
+
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")

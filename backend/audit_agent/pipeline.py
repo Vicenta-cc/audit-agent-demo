@@ -466,6 +466,8 @@ class AuditPipeline:
                             ):
                                 continue
                             batch_paths = batch_writer.add([content], comments)
+                            if settings.triage_mode in {"select", "compare"} and request.crawl_mode == "search":
+                                batch_paths.extend(batch_writer.flush_due(force=True))
                             for batch_path in batch_paths:
                                 ingest_completed_batch(batch_path)
                             refresh_selected_contents()
@@ -475,6 +477,9 @@ class AuditPipeline:
                     if use_batch_ingestion:
                         for batch_path in batch_writer.add(contents, comments):
                             ingest_completed_batch(batch_path)
+                        if settings.triage_mode in {"select", "compare"} and request.crawl_mode == "search":
+                            for batch_path in batch_writer.flush_due(force=True):
+                                ingest_completed_batch(batch_path)
                         return
                     if stream_analysis:
                         stream_queue.put((contents, comments))
@@ -1930,6 +1935,24 @@ class AuditPipeline:
         # 切换账号后 save_root 是 crawler/rotation-<账号>，证据要从整个任务的采集目录回读
         job_crawl_dir = save_root.parent if save_root.name.startswith("rotation-") else save_root
         collected = load_collected_selections(job_crawl_dir)
+        # A crash can occur after a complete snapshot is published but before the
+        # callback/keyword marker. Recover the complete payload, not the attempt's
+        # intermediate files. Existing task rows must agree; never silently bless
+        # old zero-comment audits as complete.
+        for receipt in sorted(job_crawl_dir.glob(f"**/{PLATFORM_DATA_DIRS[platform]}/detail_completed/*.json")):
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+            item = payload["contents"][0]
+            word = str(item.get("source_keyword") or "")
+            key = content_identity(item, platform)
+            if word not in terms or not key:
+                continue
+            refs = self.ingestion.validated_refs_for_task(self.job_id)
+            existing = next((ref for ref in refs if str(ref.get("content_key")) == key), None)
+            if existing is not None and existing.get("comments", []) != payload["comments"]:
+                raise CrawlerCollectionIncompleteError(f"已入库评论与精采完成快照不一致：{key}；需复核后重新审核")
+            if existing is None and content_callback:
+                content_callback([item], payload["comments"])
+            collected[word] = key
         selected_by_key: dict[str, str] = {key: word for word, key in collected.items()}  # content_key -> 选中它的词
         if collected:
             job_store.log(self.job_id, f"恢复采集：{len(collected)} 个词已在之前的采集中选定，跳过")
@@ -2013,6 +2036,7 @@ class AuditPipeline:
                 if detail_output.contents:
                     selected_by_key[selected.content_key] = keyword
                     mark_candidates_collected(candidate_root)
+                    job_store.log(self.job_id, f"精采完成并交付：{selected.content_key}，评论 {len(detail_output.comments)} 条")
                 else:
                     job_store.log(self.job_id, f"词「{keyword}」精采未返回内容：{selected.content_key}，本词无产出")
             # 精采不完整沿用 off 模式：整任务失败并提示查看 collection_status，
@@ -2027,6 +2051,8 @@ class AuditPipeline:
         # 重新读盘拿到的是爬虫原始行：抖音 detail 模式不写 source_keyword，按选中它的词补回（R7）
         output.contents = [item | {"source_keyword": selected_by_key[key]} for item in output.contents
                            if (key := content_identity(item, platform)) in selected_by_key]
+        output.comments = [comment for comment in output.comments
+                           if comment_content_identity(comment, platform) in selected_by_key]
         # 诊断行 "MediaCrawler command:" 读的是 output.command，逐词模式下补上最后一次精采命令
         output.command = last_command or ["triage-select", str(len(terms)), "keywords"]
         job_store.log(self.job_id, f"初筛完成：{visited} 个词，选中 {len(selected_by_key)} 条，本次精采 {len(output.contents)} 条进入精审")
