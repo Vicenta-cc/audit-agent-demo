@@ -1903,7 +1903,9 @@ class AuditPipeline:
         if engine is None:
             engine = TriageEngine(LexiconStore(), self.qwen, model=settings.triage_model,
                                   max_comments=settings.triage_candidate_comments,
-                                  request_timeout=settings.triage_request_timeout)
+                                  request_timeout=settings.triage_request_timeout,
+                                  max_followers_personal_verified=settings.triage_max_followers_personal_verified,
+                                  max_followers_unverified=settings.triage_max_followers_unverified)
             self._triage_engine = engine
         return engine
 
@@ -1991,7 +1993,9 @@ class AuditPipeline:
                 if selected is None:
                     excluded = len(exclude & {s.content_key for s in ranked})
                     positive = sum(1 for s in ranked if s.score > 0)
+                    discarded = sum(1 for s in ranked if s.band == "discard")
                     job_store.log(self.job_id, f"词「{keyword}」跳过：候选 {len(scores)} 条，可疑 {positive} 条，"
+                                               f"身份丢弃 {discarded} 条，"
                                                f"排除重复或已审 {excluded} 条，换下一个词")
                     continue
                 job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}（{strategy}，{selected.band}，分 {selected.score}）：{selected.reason}")

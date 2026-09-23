@@ -9,7 +9,7 @@ from .triage_matcher import TriageHit, TriageTerm, diversion_hits, match_terms, 
 
 RULE_HIT_SCORE = 300
 RULE_HIT_CAP = 900
-TRUSTED_PENALTY = -500
+DISCARD_SCORE = -1000
 MODEL_SCORES = {"strong": 200, "weak": 100, "none": 0}
 CATEGORY_LABELS = {"diversion": "导流"}      # 命中原因会进任务日志，别把内部 id 给运营看
 
@@ -47,12 +47,15 @@ def _comment_text(comment: dict) -> str:
 
 
 class TriageEngine:
-    def __init__(self, lexicon_store, qwen, *, model: str, max_comments: int, request_timeout: int):
+    def __init__(self, lexicon_store, qwen, *, model: str, max_comments: int, request_timeout: int,
+                 max_followers_personal_verified: int = 500000, max_followers_unverified: int = 1000000):
         self.lexicon_store = lexicon_store
         self.qwen = qwen
         self.model = model
         self.max_comments = max_comments
         self.request_timeout = request_timeout
+        self.max_followers_personal_verified = max_followers_personal_verified
+        self.max_followers_unverified = max_followers_unverified
         self._terms_cache: dict[tuple[str, ...], list[TriageTerm]] = {}
 
     def terms_for(self, category_ids: list[str]) -> list[TriageTerm]:
@@ -82,6 +85,7 @@ class TriageEngine:
                 "author": _text(item.get("nickname")),
                 "signature": _text(item.get("user_signature"))[:200],
                 "verify": _text(item.get("custom_verify")) or _text(item.get("enterprise_verify_reason")),
+                "followers": _text(item.get("follower_count")),
                 "stats": {"liked": _text(item.get("liked_count")), "comments": _text(item.get("comment_count")),
                           "shares": _text(item.get("share_count"))},
                 "source_keyword": _text(item.get("source_keyword")),
@@ -104,6 +108,20 @@ class TriageEngine:
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
 
+    def _identity_discard_reason(self, item: dict) -> str:
+        """身份丢弃（方案 §4）：蓝V一律不进精审，个人黄V/无认证账号粉丝超阈值同样丢弃，阈值 0 = 不限。"""
+        enterprise = _text(item.get("enterprise_verify_reason"))
+        if enterprise:
+            return f"蓝V认证账号（{enterprise[:40]}），不进精审"
+        custom_verify = _text(item.get("custom_verify"))
+        followers = _int(item.get("follower_count"))
+        limit = self.max_followers_personal_verified if custom_verify else self.max_followers_unverified
+        if limit <= 0 or followers <= limit:
+            return ""
+        if custom_verify:
+            return f"个人认证账号（{custom_verify[:30]}）粉丝 {followers} 超过 {limit}，不进精审"
+        return f"粉丝 {followers} 超过 {limit}，不进精审"
+
     @staticmethod
     def _drop_self_hits(hits: list[TriageHit], search_keyword: str) -> tuple[list[TriageHit], int]:
         """搜「上分」搜回来的帖子必然含「上分」，这种自命中不算风险信号，只有导流模板照旧计分。"""
@@ -116,24 +134,20 @@ class TriageEngine:
     def score(self, content_key: str, rank: int, item: dict, comments: list[dict], terms: list[TriageTerm],
               *, search_keyword: str = "") -> CandidateScore:
         engagement = _int(item.get("liked_count")) + _int(item.get("comment_count")) + _int(item.get("share_count"))
+        # 身份先于规则和模型：蓝V的反诈科普必然带黑话和联系方式，不丢掉就会占走该词唯一的深审名额
+        discard_reason = self._identity_discard_reason(item)
+        if discard_reason:
+            return CandidateScore(content_key, rank, DISCARD_SCORE, "discard", discard_reason, engagement=engagement)
         hits, self_hits = self._drop_self_hits(self._rule_hits(item, comments, terms), search_keyword)
         # 自命中被扣掉后才走模型的候选，要在理由里说清楚，运营看日志时不会以为规则层漏判
         note = f"（搜索词自身命中 {self_hits} 处不计分）" if self_hits else ""
-        verify_reason = _text(item.get("enterprise_verify_reason"))
         if hits:
             top = hits[0]
-            # 规则层三个信号相加（方案 §4）：认证账号的 −500 要能抵掉命中分，
-            # 否则蓝V的反诈科普只要出现"微信"就会拿走该词唯一的深审名额。
-            total = min(RULE_HIT_CAP, RULE_HIT_SCORE * len(hits)) + (TRUSTED_PENALTY if verify_reason else 0)
+            total = min(RULE_HIT_CAP, RULE_HIT_SCORE * len(hits))
             label = CATEGORY_LABELS.get(top.category_id, top.category_id) or "导流"
             reason = f"命中{label}：{top.keyword}（{top.field}）"
-            if verify_reason:
-                reason += "，认证账号 −500"
             return CandidateScore(content_key, rank, total, "rule", reason,
                                   hits=[asdict(h) for h in hits], engagement=engagement)
-        if verify_reason:
-            return CandidateScore(content_key, rank, TRUSTED_PENALTY, "trusted",
-                                  f"认证账号（{verify_reason[:40]}）且无命中", engagement=engagement)
         try:
             raw = self.qwen.audit_text(self.build_prompt(item, comments, terms), max_tokens=400, model=self.model,
                                        enable_thinking=False, request_timeout=self.request_timeout)

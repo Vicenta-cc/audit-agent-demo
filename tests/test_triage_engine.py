@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from backend.audit_agent.triage import (
-    CandidateScore, TriageEngine, load_collected_selections, mark_candidates_collected,
+    DISCARD_SCORE, CandidateScore, TriageEngine, load_collected_selections, mark_candidates_collected,
     rank_candidates, select_candidate, write_candidates_file,
 )
 
@@ -27,8 +27,9 @@ class FakeLexicon:
                 {"category_id": "gambling", "keyword": "上分群", "match_type": "模糊", "risk_level": "高", "entry_kind": ""}]
 
 
-def _engine(response):
-    return TriageEngine(FakeLexicon(), FakeQwen(response), model="qwen3.6-flash", max_comments=60, request_timeout=60)
+def _engine(response, **limits):
+    return TriageEngine(FakeLexicon(), FakeQwen(response), model="qwen3.6-flash", max_comments=60,
+                        request_timeout=60, **limits)
 
 
 def test_rule_hit_scores_high_without_model_call():
@@ -71,13 +72,11 @@ def test_diversion_hit_survives_the_search_keyword_drop():
     assert scored.reason == "命中导流：微信/vx（desc）"
 
 
-def test_trusted_verified_is_penalized_and_model_bands_map_to_scores():
+def test_model_bands_map_to_scores():
     engine = _engine({"suspicion": "weak", "content_type": "婚恋", "reason": "暗示"})
     weak = engine.score("b", 2, {"desc": "日常", "user_signature": "普通人"}, [{"comment_id": "c1", "content": "有资源吗"}], [])
     assert weak.band == "weak" and weak.score == 100
     assert "有资源吗" in engine.qwen.calls[0][0] and engine.qwen.calls[0][1]["enable_thinking"] is False
-    trusted = _engine({"suspicion": "none"}).score("c", 3, {"desc": "新闻", "enterprise_verify_reason": "官方"}, [], [])
-    assert trusted.band == "trusted" and trusted.score == -500
 
 
 def test_diversion_reason_reaches_the_operator_log_in_chinese():
@@ -85,22 +84,68 @@ def test_diversion_reason_reaches_the_operator_log_in_chinese():
     assert score.band == "rule" and score.reason == "命中导流：微信/vx（desc）"
 
 
-def test_verified_account_penalty_is_additive_with_rule_hits():
-    engine = _engine({"suspicion": "none"})
+def test_blue_v_is_discarded_before_the_rules_and_the_model():
+    # 蓝V的反诈科普必然带黑话和联系方式，两处命中也不该占掉该词唯一的深审名额
+    engine = _engine({"suspicion": "strong", "reason": "有暗语"})
     terms = engine.terms_for(["gambling"])
-    verified = {"enterprise_verify_reason": "某某日报官方账号"}
+    item = {"desc": "今晚上分群，加微信", "enterprise_verify_reason": "某某日报官方账号", "liked_count": "7"}
 
-    single = engine.score("a", 1, {"desc": "今晚上分", **verified}, [], terms)
-    assert single.band == "rule" and single.score == -200 and "认证账号 −500" in single.reason
-    # 认证账号的单命中不再抢走该词唯一的深审名额
-    assert select_candidate(rank_candidates([single]), exclude_keys=set()) is None
+    scored = engine.score("a", 1, item, [], terms)
 
-    double = engine.score("b", 1, {"desc": "今晚上分，加微信", **verified}, [], terms)
-    assert double.band == "rule" and double.score == 100 and len(double.hits) == 2
+    assert DISCARD_SCORE == -1000
+    assert scored.band == "discard" and scored.score == DISCARD_SCORE
+    assert scored.hits == [] and scored.model is None and scored.engagement == 7
+    assert engine.qwen.calls == []      # 丢弃的候选不调模型
+    assert scored.reason == "蓝V认证账号（某某日报官方账号），不进精审"
+    assert select_candidate(rank_candidates([scored]), exclude_keys=set()) is None
 
-    plain = engine.score("c", 1, {"desc": "今晚上分"}, [], terms)
+    plain = engine.score("b", 1, {"desc": "今晚上分"}, [], terms)
     assert plain.band == "rule" and plain.score == 300 and "认证账号" not in plain.reason
-    assert engine.qwen.calls == []      # 规则层命中后不调模型
+
+
+def test_personal_yellow_v_is_discarded_only_above_the_follower_limit():
+    item = {"desc": "今晚上分", "custom_verify": "知名情感博主", "follower_count": "600000"}
+
+    engine = _engine({"suspicion": "none"}, max_followers_personal_verified=500000)
+    discarded = engine.score("a", 1, item, [], engine.terms_for(["gambling"]))
+    assert discarded.band == "discard" and discarded.score == DISCARD_SCORE
+    assert discarded.reason == "个人认证账号（知名情感博主）粉丝 600000 超过 500000，不进精审"
+    assert engine.qwen.calls == []
+
+    kept = engine.score("b", 1, {**item, "follower_count": "400000"}, [], engine.terms_for(["gambling"]))
+    assert kept.band == "rule" and kept.score == 300      # 阈值以下照常走规则/模型
+
+    unlimited = _engine({"suspicion": "none"}, max_followers_personal_verified=0)
+    assert unlimited.score("c", 1, item, [], []).band == "none"      # 0 = 不限
+
+
+def test_unverified_account_is_discarded_only_above_its_own_limit():
+    engine = _engine({"suspicion": "none"}, max_followers_unverified=1000000)
+
+    big = engine.score("a", 1, {"desc": "日常", "follower_count": "1500000"}, [], [])
+    assert big.band == "discard" and big.score == DISCARD_SCORE
+    assert big.reason == "粉丝 1500000 超过 1000000，不进精审"
+    assert engine.qwen.calls == []
+
+    small = engine.score("b", 1, {"desc": "日常", "follower_count": "900000"}, [], [])
+    assert small.band == "none" and len(engine.qwen.calls) == 1
+
+    unlimited = _engine({"suspicion": "none"}, max_followers_unverified=0)
+    assert unlimited.score("c", 1, {"desc": "日常", "follower_count": "1500000"}, [], []).band == "none"
+
+
+def test_follower_count_parses_strings_and_treats_a_missing_key_as_zero():
+    engine = _engine({"suspicion": "none"}, max_followers_unverified=1000)
+    assert engine.score("a", 1, {"desc": "日常", "follower_count": "1708"}, [], []).band == "discard"
+    assert engine.score("b", 1, {"desc": "日常"}, [], []).band == "none"
+    assert engine.score("c", 1, {"desc": "日常", "follower_count": ""}, [], []).band == "none"
+
+
+def test_a_discard_is_never_selected_even_when_it_sorts_first():
+    discard = CandidateScore("d1", 1, DISCARD_SCORE, "discard", "蓝V认证账号（官方），不进精审", [], None, 0)
+    rule = CandidateScore("d2", 2, 300, "rule", "命中", [], None, 0)
+    assert [c.content_key for c in rank_candidates([discard, rule])] == ["d2", "d1"]   # 丢弃排最后
+    assert select_candidate([discard, rule], exclude_keys=set()) is None
 
 
 def test_model_failure_counts_as_weak():
@@ -135,7 +180,7 @@ def test_rank_and_select_prefer_score_then_deeper_rank_then_low_engagement(tmp_p
     assert select_candidate(ranked, exclude_keys={"k3", "k4"}).content_key == "k2"
     assert select_candidate(ranked, exclude_keys={"k1", "k2", "k3", "k4"}) is None
     all_normal = rank_candidates([CandidateScore("z1", 1, 0, "none", "", [], None, 0),
-                                  CandidateScore("z2", 2, -500, "trusted", "", [], None, 0)])
+                                  CandidateScore("z2", 2, DISCARD_SCORE, "discard", "", [], None, 0)])
     assert select_candidate(all_normal, exclude_keys=set()) is None   # 全判正常 → 该词跳过
     path = write_candidates_file(tmp_path, "上分", ranked, ranked[0], "triage")
     payload = json.loads(path.read_text(encoding="utf-8"))

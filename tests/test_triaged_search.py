@@ -79,7 +79,10 @@ class FakeEngine:
 
     def score(self, content_key, rank, item, comments, terms, *, search_keyword=""):
         self.score_calls.append((content_key, comments, search_keyword))
-        score = 300 if "上分" in item.get("desc", "") else 0
+        desc = item.get("desc", "")
+        if "蓝V" in desc:       # 身份丢弃：真引擎在规则和模型之前就判掉
+            return CandidateScore(content_key, rank, -1000, "discard", "蓝V认证账号（官方），不进精审", [], None, 0)
+        score = 300 if "上分" in desc else 0
         return CandidateScore(content_key, rank, score, "rule" if score else "none", "", [], None, 0)
 
 
@@ -163,6 +166,30 @@ def test_task_content_budget_stops_the_sweep_and_names_the_unsearched_keywords(t
     budget_logs = [message for message in logs if "采集上限" in message]
     assert len(budget_logs) == 1 and "词C" in budget_logs[0]
     assert not (tmp_path / "candidates" / "03-词C").exists()
+
+
+def test_skip_log_counts_the_candidates_dropped_by_identity(tmp_path: Path, monkeypatch):
+    logs: list[str] = []
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda job_id, message, *a, **k: logs.append(message))
+    crawler = FakeCrawler({"词H": [("h1", "蓝V反诈科普"), ("h2", "蓝V辟谣"), ("h3", "普通")]})
+    pipeline = _new_pipeline("job-discard", crawler, FakeIngestion(analyzed=set()), FakeEngine())
+
+    pipeline._run_triaged_search(
+        request=_base_request(keyword="词H"), save_root=tmp_path, start_page=1, max_total_notes=10,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+
+    assert crawler.detail_calls == []       # 两条蓝V被丢弃，剩下的判正常 → 该词跳过
+    skipped = [message for message in logs if "跳过" in message]
+    assert len(skipped) == 1
+    assert "候选 3 条，可疑 0 条，身份丢弃 2 条，排除重复或已审 0 条" in skipped[0]
+    payload = json.loads((tmp_path / "candidates" / "01-词H" / "candidates.json").read_text(encoding="utf-8"))
+    assert [c["band"] for c in payload["candidates"]] == ["none", "discard", "discard"]
 
 
 def test_compare_mode_rank1_arm_bypasses_score_gate_but_triage_arm_prefers_score(tmp_path: Path, monkeypatch):
