@@ -1,4 +1,4 @@
-"""Zero-cost text matching for triage: normalization, lexicon terms, diversion patterns."""
+"""Zero-cost text matching for triage: normalization and lexicon terms."""
 from __future__ import annotations
 
 import re
@@ -9,14 +9,6 @@ _ZERO_WIDTH = re.compile(r"[\u200b-\u200f\u2060\ufeff]")
 # Curly quotes (""'') are U+201C U+201D U+2018 U+2019
 _SEPARATORS = re.compile(r"[\s\.\-_*·•/\\|,，。、~～!！?？:：;；'" '"' r"“”‘’''()（）\[\]【】<>《》]+")
 _SEARCH_ONLY_MATCH_TYPES = {"平台搜索词", "平台标签", "tag"}
-
-DIVERSION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("微信/vx", re.compile(r"(微信|vx|v信|wx|威信|薇信|加v|\+v|v\s*[:：])", re.IGNORECASE)),
-    ("QQ", re.compile(r"(qq|扣扣|企鹅|球球)\s*[:：]?\s*\d{5,}", re.IGNORECASE)),
-    ("telegram", re.compile(r"(telegram|tg|电报|飞机|纸飞机)", re.IGNORECASE)),
-    ("私聊导流", re.compile(r"(私聊|私我|私信我|滴滴我|扣1|懂的来|想看更多)")),
-    ("主页导流", re.compile(r"(主页有|看主页|看简介|简介有|头像有|评论区第一条)")),
-]
 
 
 @dataclass(frozen=True)
@@ -83,16 +75,4 @@ def match_terms(text: str, field: str, terms: list[TriageTerm]) -> list[TriageHi
         if index >= 0:
             hits.append(TriageHit(term.keyword, term.match_type, term.category_id, term.risk_level,
                                   field, _snippet(normalized, index, index + len(needle))))
-    return hits
-
-
-def diversion_hits(text: str, field: str) -> list[TriageHit]:
-    raw = str(text or "")
-    if not raw:
-        return []
-    hits: list[TriageHit] = []
-    for label, pattern in DIVERSION_PATTERNS:
-        match = pattern.search(raw)
-        if match:
-            hits.append(TriageHit(label, "正则", "diversion", "高", field, _snippet(raw, match.start(), match.end())))
     return hits

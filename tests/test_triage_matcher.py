@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from backend.audit_agent.lexicon_store import LexiconStore
 from backend.audit_agent.triage_matcher import (
-    TriageTerm, diversion_hits, match_terms, normalize_text, terms_from_rows,
+    TriageTerm, match_terms, normalize_text, terms_from_rows,
 )
 
 
@@ -30,10 +30,11 @@ def test_regex_term_matches_raw_text_case_insensitive():
     assert len(hits) == 1 and hits[0].match_type == "正则"
 
 
-def test_search_only_terms_are_ignored_and_diversion_patterns_fire():
+def test_search_only_terms_are_ignored():
+    # 平台搜索词/标签只用来搜，不参与文本命中；判定信号只来自可匹配的词库条目
     assert match_terms("泳装", "desc", [TriageTerm("泳装", "平台搜索词", "soft", "中")]) == []
-    hits = diversion_hits("想看更多主页有惊喜，加薇 xxx", "signature")
-    assert [hit.category_id for hit in hits] == ["diversion", "diversion"]
+    assert match_terms("泳装", "desc", [TriageTerm("泳装", "tag", "soft", "中")]) == []
+    assert len(match_terms("泳装", "desc", [TriageTerm("泳装", "模糊", "soft", "中")])) == 1
 
 
 def test_lexicon_store_triage_terms_include_seed_rows(tmp_path):

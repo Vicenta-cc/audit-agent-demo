@@ -1928,8 +1928,12 @@ class AuditPipeline:
         library_ids = [str(x).strip() for x in (getattr(request, "library_ids", None) or []) if str(x).strip()]
         category = str(getattr(request, "lexicon_category", "") or "").strip()
         # 规则层加载本任务全部词库的词，与搜索词来源（关键词/词库）无关：显式关键词任务也可能配了
-        # library_ids，只按 keyword_source 过滤会让它们的规则层退化成只剩导流模板。
+        # library_ids，只按 keyword_source 过滤会让它们的规则层完全没有可匹配的条目。
         lexicon_terms = engine.terms_for(library_ids or ([category] if category else []))
+        # 模型层的判定口径来自任务分类的判定规则（审核目标、证据规则），与黑话库一起构成初筛的两份数据
+        profile_snapshot = getattr(request, "prompt_profile_snapshot", None)
+        rules = dict(profile_snapshot) if isinstance(profile_snapshot, dict) else {}
+        job_store.log(self.job_id, f"初筛判定规则：{rules.get('prompt_version') or '未提供'}")
         mode = str(getattr(settings, "triage_mode", "off") or "off")
         # 切换账号后 save_root 是 crawler/rotation-<账号>，证据要从整个任务的采集目录回读
         job_crawl_dir = save_root.parent if save_root.name.startswith("rotation-") else save_root
@@ -1982,7 +1986,7 @@ class AuditPipeline:
                     key = content_identity(item, platform)
                     if key:
                         scores.append(engine.score(key, rank, item, comments_by_key.get(key, []), lexicon_terms,
-                                                   search_keyword=keyword))
+                                                   search_keyword=keyword, rules=rules))
                 ranked = rank_candidates(scores)
                 exclude = set(selected_by_key) | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked])
                 strategy = "triage"

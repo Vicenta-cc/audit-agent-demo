@@ -24,7 +24,10 @@ class FakeQwen:
 class FakeLexicon:
     def triage_terms(self, category_ids):
         return [{"category_id": "gambling", "keyword": "上分", "match_type": "模糊", "risk_level": "高", "entry_kind": ""},
-                {"category_id": "gambling", "keyword": "上分群", "match_type": "模糊", "risk_level": "高", "entry_kind": ""}]
+                {"category_id": "gambling", "keyword": "上分群", "match_type": "模糊", "risk_level": "高", "entry_kind": ""},
+                # 引流用语在词库里以正则条目维护，不再由代码内置的导流模板提供
+                {"category_id": "gambling", "keyword": r"加\s*微信", "match_type": "正则", "risk_level": "高",
+                 "entry_kind": ""}]
 
 
 def _engine(response, **limits):
@@ -63,13 +66,14 @@ def test_other_lexicon_term_still_counts_when_the_search_keyword_is_dropped():
     assert "上分群" in scored.reason and "搜索词自身命中" not in scored.reason
 
 
-def test_diversion_hit_survives_the_search_keyword_drop():
+def test_regex_lexicon_entry_survives_the_search_keyword_drop():
+    # 自命中被扣掉后，词库里的正则条目照样计分——引流用语现在全部来自词库
     engine = _engine({"suspicion": "none"})
-    scored = engine.score("c", 1, {"title": "上分", "desc": "加微信详聊"}, [], engine.terms_for(["gambling"]),
+    scored = engine.score("c", 1, {"title": "上分", "desc": "加 微信详聊"}, [], engine.terms_for(["gambling"]),
                           search_keyword="上分")
     assert scored.band == "rule" and scored.score == 300 and engine.qwen.calls == []
-    assert [hit["category_id"] for hit in scored.hits] == ["diversion"]
-    assert scored.reason == "命中导流：微信/vx（desc）"
+    assert [hit["match_type"] for hit in scored.hits] == ["正则"]
+    assert scored.reason == "命中gambling：加\\s*微信（desc）"
 
 
 def test_model_bands_map_to_scores():
@@ -79,20 +83,19 @@ def test_model_bands_map_to_scores():
     assert "有资源吗" in engine.qwen.calls[0][0] and engine.qwen.calls[0][1]["enable_thinking"] is False
 
 
-def test_public_service_context_is_forced_to_none_unless_the_model_says_strong():
-    # 反诈科普、警方宣传这类内容必然带黑话，模型判 weak 就会占掉该词唯一的深审名额
+def test_content_type_is_descriptive_and_no_longer_overrides_the_band():
+    # 放行语境由判定规则的放行条目决定，代码不再按 content_type 强制改判
     engine = _engine({"suspicion": "weak", "content_type": "科普", "reason": "反诈提醒里提到上分"})
     scored = engine.score("a", 1, {"desc": "民警提醒大家注意"}, [], [])
-    assert scored.band == "none" and scored.score == 0
-    assert scored.reason.startswith("科普/新闻语境：")
+    assert scored.band == "weak" and scored.score == 100
+    assert scored.reason == "反诈提醒里提到上分"
     assert scored.model["content_type"] == "科普"
-    assert select_candidate(rank_candidates([scored]), exclude_keys=set()) is None
 
     # note 后缀照旧拼在理由末尾
     noted_engine = _engine({"suspicion": "weak", "content_type": "科普", "reason": "反诈提醒"})
     noted = noted_engine.score("b", 1, {"title": "今晚上分吗"}, [], noted_engine.terms_for(["gambling"]),
                                search_keyword="上分")
-    assert noted.reason == "科普/新闻语境：反诈提醒（搜索词自身命中 1 处不计分）"
+    assert noted.reason == "反诈提醒（搜索词自身命中 1 处不计分）"
 
 
 def test_news_context_still_yields_strong_when_the_model_sees_trade_intent():
@@ -108,15 +111,43 @@ def test_ordinary_content_type_keeps_the_weak_band():
     assert scored.band == "weak" and scored.score == 100
 
 
-def test_prompt_states_the_exempt_contexts():
+def test_prompt_is_built_from_the_task_judgement_rules():
     engine = _engine({"suspicion": "none"})
-    prompt = engine.build_prompt({"desc": "民警提醒"}, [], engine.terms_for(["gambling"]))
-    assert "反诈" in prompt and "游戏术语" in prompt
+    rules = {"audit_goal": "识别赌博、上分提现与代理推广风险",
+             "evidence_rules": "1. 高危：出现联系方式或上下分交易。\n2. 放行：反诈宣传与新闻报道。",
+             "fusion_rules": "包赢与私域导流同时出现时上调风险。"}
+
+    prompt = engine.build_prompt({"desc": "民警提醒"}, [], engine.terms_for(["gambling"]), rules=rules)
+
+    assert "审核目标：识别赌博、上分提现与代理推广风险" in prompt
+    assert "证据规则：\n1. 高危：出现联系方式或上下分交易。\n2. 放行：反诈宣传与新闻报道。" in prompt
+    assert "包赢与私域导流同时出现时上调风险。" in prompt
+    assert "符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none" in prompt
+    for removed in ("反诈科普与警示", "游戏术语", "科普/新闻语境"):
+        assert removed not in prompt
+    # 事实输入与输出契约照旧
+    assert "lexicon_terms" in prompt and "suspicion" in prompt and "最多列 5 项" in prompt
 
 
-def test_diversion_reason_reaches_the_operator_log_in_chinese():
-    score = _engine({"suspicion": "none"}).score("a", 1, {"desc": "加微信详聊"}, [], [])
-    assert score.band == "rule" and score.reason == "命中导流：微信/vx（desc）"
+def test_prompt_without_rules_has_no_rules_section():
+    engine = _engine({"suspicion": "none"})
+    prompt = engine.build_prompt({"desc": "民警提醒"}, [], [])
+    assert "审核目标" not in prompt and "证据规则" not in prompt
+    assert "最多列 5 项" in prompt
+
+
+def test_fusion_rules_identical_to_evidence_rules_are_not_repeated():
+    engine = _engine({"suspicion": "none"})
+    rules = {"audit_goal": "赌博", "evidence_rules": "1. 高危：上下分交易。", "fusion_rules": "1. 高危：上下分交易。"}
+    prompt = engine.build_prompt({"desc": "x"}, [], [], rules=rules)
+    assert prompt.count("1. 高危：上下分交易。") == 1
+
+
+def test_score_sends_the_task_rules_to_the_model():
+    engine = _engine({"suspicion": "weak", "reason": "可疑"})
+    engine.score("a", 1, {"desc": "日常"}, [], [], rules={"audit_goal": "涉赌识别", "evidence_rules": "1. 高危：约赌。"})
+    prompt, _kwargs = engine.qwen.calls[0]
+    assert "审核目标：涉赌识别" in prompt and "证据规则：\n1. 高危：约赌。" in prompt
 
 
 def test_blue_v_is_discarded_before_the_rules_and_the_model():

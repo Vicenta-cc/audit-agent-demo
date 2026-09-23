@@ -6,15 +6,12 @@ import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from .triage_matcher import TriageHit, TriageTerm, diversion_hits, match_terms, normalize_text, terms_from_rows
+from .triage_matcher import TriageHit, TriageTerm, match_terms, normalize_text, terms_from_rows
 
 RULE_HIT_SCORE = 300
 RULE_HIT_CAP = 900
 DISCARD_SCORE = -1000
 MODEL_SCORES = {"strong": 200, "weak": 100, "none": 0}
-# 模型答这些语境且不是 strong 时一律按正常内容处理，不占深审名额（方案 §4，2026-09-23）
-EXEMPT_CONTENT_TYPES = ("科普", "新闻")
-CATEGORY_LABELS = {"diversion": "导流"}      # 命中原因会进任务日志，别把内部 id 给运营看
 
 # 官方/机构类蓝V识别片段：命中即discard，不进精审。$ 结尾的片段只匹配 enterprise_verify_reason 的末尾
 # （如"XX局"），避免"局"作为任意子串把商家认证也判成机构号。商家/企业蓝V（如"商家认证账号"、
@@ -92,15 +89,31 @@ class TriageEngine:
         for name, value in (("title", _text(item.get("title"))), ("desc", _text(item.get("desc"))),
                             ("signature", _text(item.get("user_signature")))):
             hits.extend(match_terms(value, name, terms))
-            hits.extend(diversion_hits(value, name))
         for comment in comments[: self.max_comments]:
             label = f"comment:{_text(comment.get('comment_id'))}"
-            value = _comment_text(comment)
-            hits.extend(match_terms(value, label, terms))
-            hits.extend(diversion_hits(value, label))
+            hits.extend(match_terms(_comment_text(comment), label, terms))
         return hits
 
-    def build_prompt(self, item: dict, comments: list[dict], terms: list[TriageTerm]) -> str:
+    @staticmethod
+    def _rules_text(rules: dict | None) -> str:
+        """把任务分类的判定规则原文拼进提示词：审核目标、证据规则（含高危/中危/低危与放行定义）、
+        以及与证据规则不同的融合规则。没有判定规则时返回空串，提示词里就没有规则段。"""
+        if not isinstance(rules, dict):
+            return ""
+        audit_goal = _text(rules.get("audit_goal"))
+        evidence_rules = _text(rules.get("evidence_rules"))
+        fusion_rules = _text(rules.get("fusion_rules"))
+        sections: list[str] = []
+        if audit_goal:
+            sections.append(f"审核目标：{audit_goal}\n")
+        if evidence_rules:
+            sections.append(f"证据规则：\n{evidence_rules}\n")
+        if fusion_rules and fusion_rules != evidence_rules:
+            sections.append(f"融合规则：\n{fusion_rules}\n")
+        return "".join(sections)
+
+    def build_prompt(self, item: dict, comments: list[dict], terms: list[TriageTerm],
+                     *, rules: dict | None = None) -> str:
         payload = {
             "post": {
                 "title": _text(item.get("title"))[:200],
@@ -121,18 +134,15 @@ class TriageEngine:
             "你是内容风险初筛器，任务是判断一条社交平台帖子是否值得进入深度多模态审核。"
             "lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，"
             "不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n"
+            # 判定口径全部来自任务分类的判定规则，代码里不写死豁免语境或风险定义
+            + self._rules_text(rules) +
             "只输出合法 JSON，不要输出 Markdown：\n"
             "{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\","
             "\"suspicion\":\"none|weak|strong\",\"matched_terms\":[\"命中的词或变体\"],"
             "\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\n"
+            "content_type 只是描述性标签，不参与判定。"
             "matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n"
-            "判定标准：strong = 正文、签名或评论中存在与 lexicon_terms 同义的暗语、导流方式或交易意图；"
-            "weak = 有可疑但不明确的信号，或作者是小号且内容擦边；none = 明显正常内容且评论区无异常。"
-            "不确定时选 weak，不要选 none。\n"
-            "以下语境判 none，除非评论区或签名出现明确的联系方式或交易约定："
-            "反诈/反赌科普与警示、警方/媒体/官方宣传、游戏术语（上分、代练、段位、活动攻略等）、"
-            "电商与商品展示（瓷器、金饰、店铺运营等）、金融教学（股票、盘口分析）。"
-            "只有存在暗语交易或导流意图（联系方式、加群、私聊、代充、上下分、回收、代理招募等）时才判 weak/strong。\n"
+            "按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n"
             "输入 JSON：\n"
             + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         )
@@ -161,15 +171,15 @@ class TriageEngine:
 
     @staticmethod
     def _drop_self_hits(hits: list[TriageHit], search_keyword: str) -> tuple[list[TriageHit], int]:
-        """搜「上分」搜回来的帖子必然含「上分」，这种自命中不算风险信号，只有导流模板照旧计分。"""
+        """搜「上分」搜回来的帖子必然含「上分」，这种自命中不算风险信号，词库里的其他条目照常计分。"""
         needle = normalize_text(search_keyword)
         if not needle:
             return hits, 0
-        kept = [h for h in hits if h.category_id == "diversion" or normalize_text(h.keyword) != needle]
+        kept = [h for h in hits if normalize_text(h.keyword) != needle]
         return kept, len(hits) - len(kept)
 
     def score(self, content_key: str, rank: int, item: dict, comments: list[dict], terms: list[TriageTerm],
-              *, search_keyword: str = "") -> CandidateScore:
+              *, search_keyword: str = "", rules: dict | None = None) -> CandidateScore:
         engagement = _int(item.get("liked_count")) + _int(item.get("comment_count")) + _int(item.get("share_count"))
         # 身份先于规则和模型：蓝V的反诈科普必然带黑话和联系方式，不丢掉就会占走该词唯一的深审名额
         discard_reason = self._identity_discard_reason(item)
@@ -181,13 +191,13 @@ class TriageEngine:
         if hits:
             top = hits[0]
             total = min(RULE_HIT_CAP, RULE_HIT_SCORE * len(hits))
-            label = CATEGORY_LABELS.get(top.category_id, top.category_id) or "导流"
-            reason = f"命中{label}：{top.keyword}（{top.field}）"
+            reason = f"命中{top.category_id or '词库'}：{top.keyword}（{top.field}）"
             return CandidateScore(content_key, rank, total, "rule", reason,
                                   hits=[asdict(h) for h in hits], engagement=engagement)
         try:
-            raw = self.qwen.audit_text(self.build_prompt(item, comments, terms), max_tokens=800, model=self.model,
-                                       enable_thinking=False, request_timeout=self.request_timeout)
+            raw = self.qwen.audit_text(self.build_prompt(item, comments, terms, rules=rules), max_tokens=800,
+                                       model=self.model, enable_thinking=False,
+                                       request_timeout=self.request_timeout)
         except Exception as exc:
             return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak",
                                   f"初筛模型调用失败，按 weak 计：{exc}"[:200] + note, engagement=engagement)
@@ -203,11 +213,6 @@ class TriageEngine:
         model = {**raw, "matched_terms": matched, "locations": _str_list(raw.get("locations"))}
         score_value, band = MODEL_SCORES[suspicion], suspicion
         reason = _text(raw.get("reason"))[:120] or f"模型判定 {suspicion}"
-        # 反诈科普、警方通报这类内容必然带黑话，判 weak 就会占掉该词唯一的深审名额；
-        # 模型看到明确交易意图时仍可判 strong 推翻这个语境标签（方案 §4，2026-09-23）
-        if _text(raw.get("content_type")) in EXEMPT_CONTENT_TYPES and suspicion != "strong":
-            score_value, band = MODEL_SCORES["none"], "none"
-            reason = f"科普/新闻语境：{reason}"
         return CandidateScore(content_key, rank, score_value, band, reason + note,
                               hits=[{"keyword": v, "match_type": "model", "category_id": "", "risk_level": "", "field": "", "snippet": ""} for v in matched],
                               model=model, engagement=engagement)

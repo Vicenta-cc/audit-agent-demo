@@ -74,13 +74,15 @@ class FakeEngine:
     def __init__(self):
         self.score_calls = []
         self.terms_for_calls = []
+        self.rules_seen = []
 
     def terms_for(self, category_ids):
         self.terms_for_calls.append(list(category_ids))
         return []
 
-    def score(self, content_key, rank, item, comments, terms, *, search_keyword=""):
+    def score(self, content_key, rank, item, comments, terms, *, search_keyword="", rules=None):
         self.score_calls.append((content_key, comments, search_keyword))
+        self.rules_seen.append(rules)
         desc = item.get("desc", "")
         if "蓝V" in desc:       # 身份丢弃：真引擎在规则和模型之前就判掉
             return CandidateScore(content_key, rank, -1000, "discard", "蓝V认证账号（官方），不进精审", [], None, 0)
@@ -234,6 +236,41 @@ def test_lexicon_terms_load_from_every_task_library_regardless_of_keyword_source
         save_root=tmp_path / "none", **kwargs,
     )
     assert engine_none.terms_for_calls == [[]]
+
+
+def test_task_prompt_profile_is_passed_to_every_score_call_and_logged(tmp_path: Path, monkeypatch):
+    # 判定规则来自任务分类的 prompt_profile_snapshot，初筛模型的提示词必须拿到它
+    logs: list[str] = []
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda job_id, message, *a, **k: logs.append(message))
+    kwargs = dict(
+        start_page=1, max_total_notes=10, crawler_concurrency=1, account_auth_state=None,
+        crawler_account_id="acc", content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    snapshot = {"category_id": "composite", "audit_goal": "识别赌博与代理推广风险",
+                "evidence_rules": "1. 高危：出现上下分交易。", "prompt_version": "composite-v1-ab12cd34ef"}
+
+    engine = FakeEngine()
+    crawler = FakeCrawler({"词A": [("a1", "普通"), ("a2", "今晚上分")]})
+    pipeline = _new_pipeline("job-rules", crawler, FakeIngestion(analyzed=set()), engine)
+    pipeline._run_triaged_search(
+        request=_base_request(keyword="词A", prompt_profile_snapshot=snapshot),
+        save_root=tmp_path / "rules", **kwargs)
+
+    assert engine.rules_seen == [snapshot, snapshot]
+    assert [m for m in logs if m.startswith("初筛判定规则：")] == ["初筛判定规则：composite-v1-ab12cd34ef"]
+
+    # 没有判定规则时不报错，日志写明未提供，模型提示词就没有规则段
+    logs.clear()
+    engine_bare = FakeEngine()
+    pipeline_bare = _new_pipeline("job-no-rules", FakeCrawler({"词B": [("b1", "普通")]}),
+                                  FakeIngestion(analyzed=set()), engine_bare)
+    pipeline_bare._run_triaged_search(request=_base_request(keyword="词B"), save_root=tmp_path / "bare", **kwargs)
+    assert engine_bare.rules_seen == [{}]
+    assert [m for m in logs if m.startswith("初筛判定规则：")] == ["初筛判定规则：未提供"]
 
 
 def test_compare_mode_rank1_arm_bypasses_score_gate_but_triage_arm_prefers_score(tmp_path: Path, monkeypatch):
