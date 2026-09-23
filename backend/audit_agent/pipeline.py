@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import queue
 import re
 import shutil
 import shlex
 import threading
+import tempfile
+import traceback
 from contextlib import nullcontext
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -104,6 +107,10 @@ class FusionAuditContractError(RuntimeError):
 
 class AuditProviderCallError(RuntimeError):
     pass
+
+
+class AudioExtractionError(AuditProviderCallError):
+    """ffmpeg/input/output failure before any ASR provider request."""
 
 
 class AuditProviderUnavailableError(RuntimeError):
@@ -1350,7 +1357,10 @@ class AuditPipeline:
         elif any(isinstance(e, (QwenTimeoutError, requests.Timeout, TimeoutError)) for e in chain):
             reason = "审核请求超时，当前请求补试已结束"
             error_code = "audit_timeout"
-        elif isinstance(exc, FusionAuditContractError):
+        elif any(isinstance(e, AudioExtractionError) for e in chain):
+            reason = "视频音频抽取失败；详见 ffmpeg 诊断"
+            error_code = "audio_extraction_failed"
+        elif any(isinstance(e, FusionAuditContractError) for e in chain):
             reason = "审核输出不满足证据或格式合同；详见阶段诊断"
             error_code = "fusion_contract_invalid"
         else:
@@ -1361,6 +1371,18 @@ class AuditPipeline:
                   "stage": getattr(self, "_current_audit_stage", "post_audit"),
                   "error_type": type(exc).__name__, "cause_types": [type(e).__name__ for e in chain],
                   "http_statuses": statuses, "action": "skip_post"}
+        record["diagnostic_paths"] = list(dict.fromkeys(
+            path for error in chain
+            for path in getattr(error, "diagnostic_paths", [])
+        ))
+        record["diagnostic_write_errors"] = [
+            detail for error in chain
+            for detail in getattr(error, "diagnostic_write_errors", [])
+        ]
+        record["audio_extraction_diagnostics"] = [
+            e.audio_extraction_diagnostic for e in chain
+            if getattr(e, "audio_extraction_diagnostic", None)
+        ]
         (folder / f"{subject.note_id}-{time_ns()}.json").write_text(
             json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
         job_store.log(
@@ -6977,14 +6999,50 @@ class AuditPipeline:
         request_prompt = base_prompt
         allowed_rule_ids = sorted(self._stage_rule_ids("image_evidence"))
 
+        trace_id = str(time_ns())
+        diagnostic_paths: list[str] = []
+        write_errors: list[dict] = []
         for attempt in range(1, attempts + 1):
-            raw_analysis = self.qwen.analyze_image(
-                image_source,
-                request_prompt,
-                model=settings.qwen_image_audit_model,
+            raw_analysis = None
+            phase = "provider_call"
+            diagnostic = {
+                "protocol": "image-rule-codes-v1",
+                "trace_id": trace_id,
+                "attempt": attempt,
+                "evidence_id": evidence_id,
+                "note_id": subject.note_id,
+                "image_source": str(image_source),
+                "model": settings.qwen_image_audit_model,
+                "audit_config_revision_id": str(
+                    getattr(self, "audit_config_revision_id", "") or ""
+                ),
+                "ruleset_ref": dict(self.rule_snapshot.get("ruleset_ref") or {}),
+                "rule_code_mapping": rule_code_mapping,
+                "allowed_rule_codes": list(rule_code_mapping),
+                "allowed_rule_ids": allowed_rule_ids,
+                "request_prompt": request_prompt,
+                "status": "started",
+            }
+            self._save_image_audit_trace(
+                subject, diagnostic, "image_attempts", diagnostic_paths, write_errors
             )
-            analysis = raw_analysis
             try:
+                raw_analysis = self.qwen.analyze_image(
+                    image_source,
+                    request_prompt,
+                    model=settings.qwen_image_audit_model,
+                )
+                diagnostic.update(
+                    parsed_response=raw_analysis,
+                    raw_provider_response=self._image_raw_response(),
+                    status="response_received",
+                )
+                # Save before any validation/decoding can raise or mutate fields.
+                self._save_image_audit_trace(
+                    subject, diagnostic, "image_attempts", diagnostic_paths, write_errors
+                )
+                phase = "contract_validation"
+                analysis = raw_analysis
                 analysis = (
                     self._validated_authoritative_visual_response(
                         analysis, response_contract="image"
@@ -7005,9 +7063,21 @@ class AuditPipeline:
                     raw_risk_items,
                     "image_evidence",
                 )
-            except (FusionAuditContractError, AuditProviderCallError) as exc:
-                if not (authoritative_m3 and is_v2):
-                    raise
+            except Exception as exc:
+                chain = []
+                cause = exc
+                while cause is not None and id(cause) not in {id(e) for e in chain}:
+                    chain.append(cause)
+                    cause = cause.__cause__ or cause.__context__
+                contract_error = next(
+                    (e for e in chain if isinstance(e, FusionAuditContractError)), None
+                )
+                if phase == "contract_validation" and isinstance(exc, AuditProviderCallError):
+                    contract_error = FusionAuditContractError(str(exc))
+                retry = bool(
+                    authoritative_m3 and is_v2 and attempt < attempts
+                    and contract_error is not None
+                )
                 returned_rule_codes = [
                     str(item.get("rule_id") or item.get("id") or "")
                     for item in (
@@ -7018,54 +7088,42 @@ class AuditPipeline:
                     )
                     if isinstance(item, dict)
                 ]
-                capture = getattr(self.qwen, "last_raw_response", None)
-                diagnostic = {
-                    "protocol": "image-rule-codes-v1",
-                    "attempt": attempt,
-                    "evidence_id": evidence_id,
+                diagnostic.update({
+                    "status": "failed",
+                    "phase": phase,
                     "error": str(exc),
                     "error_type": type(exc).__name__,
-                    "audit_config_revision_id": str(
-                        getattr(self, "audit_config_revision_id", "") or ""
-                    ),
-                    "ruleset_ref": dict(
-                        self.rule_snapshot.get("ruleset_ref") or {}
-                    ),
-                    "rule_code_mapping": rule_code_mapping,
-                    "allowed_rule_codes": list(rule_code_mapping),
-                    "allowed_rule_ids": allowed_rule_ids,
+                    "cause_types": [type(e).__name__ for e in chain],
+                    "traceback": "".join(traceback.format_exception(exc)),
+                    "will_retry": retry,
                     "returned_rule_codes": returned_rule_codes,
                     "decoded_rule_ids": [
                         rule_code_mapping.get(code, "")
                         for code in returned_rule_codes
                     ],
-                    "request_prompt": request_prompt,
-                    "raw_provider_response": (
-                        capture() if callable(capture) else None
-                    ),
+                    "raw_provider_response": self._image_raw_response(),
                     "parsed_response": raw_analysis,
-                }
-                diagnostic_dir = (
-                    settings.outputs_dir
-                    / self.job_id
-                    / "assets"
-                    / subject.note_id
-                    / "image_failures"
+                })
+                self._save_image_audit_trace(
+                    subject, diagnostic, "image_attempts", diagnostic_paths, write_errors
                 )
-                diagnostic_dir.mkdir(parents=True, exist_ok=True)
-                diagnostic_path = (
-                    diagnostic_dir / f"attempt-{attempt}-{time_ns()}.json"
+                saved = self._save_image_audit_trace(
+                    subject, diagnostic, "image_failures", diagnostic_paths, write_errors
                 )
-                diagnostic_path.write_text(
-                    json.dumps(diagnostic, ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
+                exc.diagnostic_paths = list(diagnostic_paths)
+                exc.diagnostic_write_errors = list(write_errors)
                 job_store.log(
                     self.job_id,
-                    f"笔记 {subject.note_id}：图片 {evidence_id} 结构校验失败 "
-                    f"{attempt}/{attempts}，error={exc}，已保存原始响应",
+                    f"笔记 {subject.note_id}：图片 {evidence_id} 审核失败 "
+                    f"{attempt}/{attempts}，phase={phase}，error_type={type(exc).__name__}，"
+                    + (f"诊断={saved}" if saved else "诊断写入失败"),
                 )
-                if attempt == attempts:
+                if not retry:
+                    if contract_error is not None and contract_error is not exc:
+                        normalized = FusionAuditContractError(str(contract_error))
+                        normalized.diagnostic_paths = list(diagnostic_paths)
+                        normalized.diagnostic_write_errors = list(write_errors)
+                        raise normalized from exc
                     raise
                 request_prompt = base_prompt + (
                     "\n上次输出未通过程序校验。请只纠正规则编号或 JSON 字段合同，"
@@ -7082,9 +7140,55 @@ class AuditPipeline:
                     )
                 )
                 continue
+            diagnostic.update(status="completed", decoded_response=analysis)
+            self._save_image_audit_trace(
+                subject, diagnostic, "image_attempts", diagnostic_paths, write_errors
+            )
             return analysis, matched_exemption_ids
 
         raise AssertionError("unreachable")
+
+    def _image_raw_response(self):
+        capture = getattr(self.qwen, "last_raw_response", None)
+        try:
+            return capture() if callable(capture) else None
+        except Exception as exc:
+            return {"capture_error_type": type(exc).__name__}
+
+    def _save_image_audit_trace(
+        self, subject, diagnostic, folder_name, paths, write_errors
+    ) -> str | None:
+        """Atomic private files; a diagnostics failure must not hide audit errors."""
+        folder = settings.outputs_dir / self.job_id / "assets" / subject.note_id / folder_name
+        path = folder / f"attempt-{diagnostic['attempt']}-{diagnostic['trace_id']}.json"
+        temporary = None
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=folder, delete=False
+            ) as stream:
+                temporary = Path(stream.name)
+                json.dump(diagnostic, stream, ensure_ascii=False, indent=2, default=str)
+                stream.flush()
+                os.fsync(stream.fileno())
+            temporary.replace(path)
+            if str(path) not in paths:
+                paths.append(str(path))
+            return str(path)
+        except Exception as exc:
+            write_errors.append({"path": str(path), "error_type": type(exc).__name__})
+            job_store.log(
+                self.job_id,
+                f"笔记 {subject.note_id}：图片诊断写入失败，path={path}，error_type={type(exc).__name__}",
+                level="warning",
+            )
+            return None
+        finally:
+            if temporary is not None and temporary.exists():
+                try:
+                    temporary.unlink()
+                except OSError:
+                    pass
 
     def _image_rule_code_mapping(self) -> dict[str, str]:
         """Bind short model-facing codes to this request's frozen image rules."""
@@ -7406,10 +7510,12 @@ class AuditPipeline:
         }
         errors = []
 
+        audio_phase = "audio_extraction"
         try:
             job_store.log(self.job_id, f"{video_label}：开始抽取音频")
             audio_path = self.audio.extract_audio(video_path, video_dir / f"audio_{index:02d}")
             if audio_path:
+                audio_phase = "asr"
                 job_store.log(self.job_id, f"{video_label}：音频抽取完成，开始 ASR 转写")
                 if authoritative_m3:
                     self._validate_authoritative_asr_configuration()
@@ -7450,7 +7556,7 @@ class AuditPipeline:
                         getattr(self.audio, "last_extract_error", "")
                         or "audio extraction did not prove success"
                     )
-                    raise AuditProviderCallError(
+                    raise AudioExtractionError(
                         f"audio extraction failed: {detail}"
                     )
                 else:
@@ -7458,6 +7564,26 @@ class AuditPipeline:
                     errors.append(f"audio extraction failed: {detail}")
                     job_store.log(self.job_id, f"{video_label}：音频抽取失败：{detail}，跳过转写")
         except Exception as exc:
+            if audio_phase == "audio_extraction":
+                diagnostic = dict(getattr(self.audio, "last_extract_diagnostic", {}) or {})
+                diagnostic.setdefault("input_path", str(video_path))
+                diagnostic.setdefault("last_extract_error", getattr(self.audio, "last_extract_error", "") or str(exc))
+                diagnostic.setdefault("traceback", "".join(traceback.format_exception(exc)))
+                failure = exc if isinstance(exc, AudioExtractionError) else AudioExtractionError(str(exc))
+                failure.audio_extraction_diagnostic = diagnostic
+                failure.diagnostic_paths = (
+                    [diagnostic["diagnostic_path"]]
+                    if diagnostic.get("diagnostic_path") and not diagnostic.get("diagnostic_write_error") else []
+                )
+                failure.diagnostic_write_errors = (
+                    [diagnostic["diagnostic_write_error"]]
+                    if diagnostic.get("diagnostic_write_error") else []
+                )
+                job_store.log(self.job_id, f"{video_label}：音频抽取失败，详见 audio_extraction.json 或帖子失败收据")
+                if authoritative_m3:
+                    if failure is exc:
+                        raise
+                    raise failure from exc
             if authoritative_m3:
                 if isinstance(
                     exc, (AuditProviderUnavailableError, AuditProviderCallError)

@@ -122,7 +122,7 @@ class QwenClient:
                 mime_type = "image/jpeg"
                 remote_compress_image = compress_image
             try:
-                return self.remote.analyze_image(
+                result = self.remote.analyze_image(
                     image_bytes,
                     prompt,
                     filename=path.name or "image.jpg",
@@ -134,7 +134,12 @@ class QwenClient:
                     model=model,
                     enable_thinking=enable_thinking,
                 )
+                self._response_capture.value = result
+                return result
             except Exception as exc:
+                response = getattr(exc, "response", None)
+                if response is not None:
+                    self._capture_http_response(response)
                 raise self._provider_error("vision Provider request failed", exc) from exc
 
         if not self.enabled:
@@ -224,6 +229,7 @@ class QwenClient:
             raise
         except Exception as exc:
             raise self._provider_error("Provider request failed", exc) from exc
+        self._capture_http_response(response)
         try:
             response.raise_for_status()
         except requests.HTTPError as exc:
@@ -251,6 +257,16 @@ class QwenClient:
         }
         metadata = {key: value for key, value in metadata.items() if value is not None}
         return ChatCompletionText(choice["message"]["content"], metadata)
+
+    def _capture_http_response(self, response) -> None:
+        """Keep the body even for HTTP failures/non-JSON; never capture headers."""
+        if not hasattr(self, "_response_capture"):
+            self._response_capture = threading.local()
+        try:
+            body = response.json()
+        except ValueError:
+            body = {"http_status": response.status_code, "body": response.text}
+        self._response_capture.value = body
 
     def _with_timeout_retry(self, request: Callable[[], T]) -> T:
         for attempt in (1, 2):

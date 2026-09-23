@@ -5,6 +5,9 @@ import os
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
+import traceback
 from pathlib import Path
 from time import perf_counter
 
@@ -36,27 +39,48 @@ class DemoAudioProcessor:
         self._load_error = ""
         self.last_extract_error = ""
         self.last_extract_status = "not_started"
+        self.last_extract_diagnostic: dict = {}
         self.remote = RemoteInferenceClient()
 
     def extract_audio(self, video_path: Path, output_dir: Path) -> Path | None:
-        output_dir.mkdir(parents=True, exist_ok=True)
         audio_path = output_dir / "audio.wav"
         self.last_extract_error = ""
         self.last_extract_status = "running"
-
-        ffmpeg_path = self._resolve_ffmpeg()
-        if not ffmpeg_path:
-            self.last_extract_error = "ffmpeg not found; install ffmpeg or set FFMPEG_PATH"
-            self.last_extract_status = "failed"
-            return None
-        if not video_path.exists():
-            self.last_extract_error = f"video file not found: {video_path}"
-            self.last_extract_status = "failed"
-            return None
-
+        started = perf_counter()
+        diagnostic = self.last_extract_diagnostic = {
+            "operation": "audio_extraction",
+            "input_path": str(video_path),
+            "output_path": str(audio_path),
+            "configured_ffmpeg": settings.ffmpeg_path,
+            "python": sys.executable,
+            "cwd": str(Path.cwd()),
+            "phase": "prepare_output",
+            "command": [],
+            "returncode": None,
+            "stdout": "",
+            "stderr": "",
+        }
         try:
-            completed = subprocess.run(
-                [
+            output_dir.mkdir(parents=True, exist_ok=True)
+            diagnostic["phase"] = "resolve_ffmpeg"
+            ffmpeg_path = self._resolve_ffmpeg()
+            diagnostic["resolved_ffmpeg"] = ffmpeg_path
+            diagnostic["ffmpeg_executable"] = bool(ffmpeg_path and os.access(ffmpeg_path, os.X_OK))
+            if not ffmpeg_path:
+                self.last_extract_error = "ffmpeg not found; install ffmpeg or set FFMPEG_PATH"
+                self.last_extract_status = "failed"
+                return None
+            diagnostic["phase"] = "inspect_input"
+            diagnostic["input_exists"] = video_path.exists()
+            if not video_path.exists():
+                self.last_extract_error = f"video file not found: {video_path}"
+                self.last_extract_status = "failed"
+                return None
+            diagnostic["input_size"] = video_path.stat().st_size
+            with video_path.open("rb") as stream:
+                diagnostic["input_header_hex"] = stream.read(32).hex()
+            diagnostic["phase"] = "run_ffmpeg"
+            diagnostic["command"] = [
                     ffmpeg_path,
                     "-hide_banner",
                     "-i",
@@ -70,12 +94,16 @@ class DemoAudioProcessor:
                     "1",
                     "-y",
                     str(audio_path),
-                ],
+                ]
+            completed = subprocess.run(
+                diagnostic["command"],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
             )
+            diagnostic.update(returncode=completed.returncode,
+                              stdout=completed.stdout or "", stderr=completed.stderr or "")
             if completed.returncode != 0:
                 details = (completed.stderr or completed.stdout or "").strip()
                 if self._ffmpeg_confirms_no_audio_track(details):
@@ -87,20 +115,47 @@ class DemoAudioProcessor:
                 )
                 self.last_extract_status = "failed"
                 return None
+            diagnostic["phase"] = "verify_output"
+            diagnostic["output_size"] = audio_path.stat().st_size if audio_path.exists() else None
             if not audio_path.exists() or audio_path.stat().st_size == 0:
                 self.last_extract_error = "ffmpeg produced no audio; the video may not contain an audio track"
                 self.last_extract_status = "failed"
                 return None
             self.last_extract_status = "success"
             return audio_path
-        except FileNotFoundError:
-            self.last_extract_error = f"ffmpeg command not found: {ffmpeg_path}"
-            self.last_extract_status = "failed"
-            return None
         except Exception as exc:
+            diagnostic.update(error_type=type(exc).__name__, exception=str(exc),
+                              traceback="".join(traceback.format_exception(exc)))
             self.last_extract_error = self._compact_error(str(exc))
             self.last_extract_status = "failed"
             return None
+        finally:
+            diagnostic.update(status=self.last_extract_status,
+                              last_extract_error=self.last_extract_error,
+                              elapsed_seconds=round(perf_counter() - started, 3))
+            self._persist_extract_diagnostic(output_dir)
+
+    def _persist_extract_diagnostic(self, output_dir: Path) -> None:
+        """Keep complete stderr; filesystem failures remain available to the caller."""
+        path = output_dir / "audio_extraction.json"
+        diagnostic = self.last_extract_diagnostic
+        diagnostic["diagnostic_path"] = str(path)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output_dir, delete=False) as stream:
+                temporary = Path(stream.name)
+                json.dump(diagnostic, stream, ensure_ascii=False, indent=2)
+                stream.flush()
+                os.fsync(stream.fileno())
+            temporary.replace(path)
+        except Exception as exc:
+            diagnostic["diagnostic_write_error"] = {"error_type": type(exc).__name__, "error": str(exc)}
+        finally:
+            if temporary is not None:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     @staticmethod
     def _ffmpeg_confirms_no_audio_track(details: str) -> bool:
