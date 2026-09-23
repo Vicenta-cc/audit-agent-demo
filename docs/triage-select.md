@@ -2,7 +2,7 @@
 
 ## 模式
 - `TRIAGE_MODE=off`：默认，采集逻辑与现状一致（每词取搜索排第一）。
-- `select`：每词采 10 条文本候选，规则加 flash 打分，选最可疑的 1 条按 ID 补采媒体与评论，再精审。规则层不把本次搜索词自身的命中计分（搜出来的帖子必然含搜索词），只计其他词库词、变体与导流模板；搜索词自身命中的候选走模型判断。初筛先做身份丢弃：蓝V认证账号一律不进精审；个人黄V粉丝超过 `TRIAGE_MAX_FOLLOWERS_PERSONAL_VERIFIED`、无认证账号粉丝超过 `TRIAGE_MAX_FOLLOWERS_UNVERIFIED` 的不进精审；丢弃的候选记录在 candidates.json 的 band=discard。
+- `select`：每词采 10 条文本候选，规则加 flash 打分，选最可疑的 1 条按 ID 补采媒体与评论，再精审。规则层加载任务全部词库的词，与搜索词来源无关（关键词任务配了 library_ids 时同样生效）。规则层不把本次搜索词自身的命中计分（搜出来的帖子必然含搜索词），只计其他词库词、变体与导流模板；搜索词自身命中的候选走模型判断。初筛先做身份丢弃：官方与机构类蓝V（媒体、政务、公安、事业单位等，按 `TRIAGE_OFFICIAL_VERIFY_PATTERNS` 识别）一律不进精审；商家/企业认证按普通账号打分，只受粉丝阈值约束；个人黄V粉丝超过 `TRIAGE_MAX_FOLLOWERS_PERSONAL_VERIFIED`、无认证账号（含商家/企业蓝V）粉丝超过 `TRIAGE_MAX_FOLLOWERS_UNVERIFIED` 的不进精审；丢弃的候选记录在 candidates.json 的 band=discard。
 - `compare`：每个词随机选用"排第一"或"初筛选中"策略，记录在 candidates.json 的 strategy 字段，用于对照验证。
 
 ## 证据

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -12,6 +13,23 @@ RULE_HIT_CAP = 900
 DISCARD_SCORE = -1000
 MODEL_SCORES = {"strong": 200, "weak": 100, "none": 0}
 CATEGORY_LABELS = {"diversion": "导流"}      # 命中原因会进任务日志，别把内部 id 给运营看
+
+# 官方/机构类蓝V识别片段：命中即discard，不进精审。$ 结尾的片段只匹配 enterprise_verify_reason 的末尾
+# （如"XX局"），避免"局"作为任意子串把商家认证也判成机构号。商家/企业蓝V（如"商家认证账号"、
+# "XX科技有限公司"）不命中这里，按无认证账号的粉丝阈值正常打分（方案 §4，2026-09-23）。
+OFFICIAL_VERIFY_PATTERNS: tuple[str, ...] = (
+    "官方", "政务", "公安", "警", "法院", "检察", "政府", "委员会", "管理中心", "人民",
+    "电视台", "广播", "电台", "日报", "晚报", "新闻", "通讯社", "融媒体", "传媒中心",
+    "银行", "大学", "学院", "学校", "医院", "协会", "学会", "基金会", "工会", "妇联",
+    "团委", "消防", "交警", "派出所", "街道", "社区",
+    "局$", "厅$", "部$", "署$", "委$", "院$", "中心$",
+)
+
+
+def _compile_official_verify_regex(patterns: tuple[str, ...]) -> re.Pattern[str]:
+    if not patterns:
+        return re.compile(r"(?!)")   # 空元组：永不匹配，而不是空 pattern 匹配一切
+    return re.compile("|".join(patterns))
 
 
 @dataclass
@@ -48,7 +66,8 @@ def _comment_text(comment: dict) -> str:
 
 class TriageEngine:
     def __init__(self, lexicon_store, qwen, *, model: str, max_comments: int, request_timeout: int,
-                 max_followers_personal_verified: int = 500000, max_followers_unverified: int = 1000000):
+                 max_followers_personal_verified: int = 500000, max_followers_unverified: int = 1000000,
+                 official_verify_patterns: tuple[str, ...] = OFFICIAL_VERIFY_PATTERNS):
         self.lexicon_store = lexicon_store
         self.qwen = qwen
         self.model = model
@@ -56,6 +75,8 @@ class TriageEngine:
         self.request_timeout = request_timeout
         self.max_followers_personal_verified = max_followers_personal_verified
         self.max_followers_unverified = max_followers_unverified
+        self.official_verify_patterns = tuple(official_verify_patterns)
+        self._official_verify_regex = _compile_official_verify_regex(self.official_verify_patterns)
         self._terms_cache: dict[tuple[str, ...], list[TriageTerm]] = {}
 
     def terms_for(self, category_ids: list[str]) -> list[TriageTerm]:
@@ -109,12 +130,20 @@ class TriageEngine:
         )
 
     def _identity_discard_reason(self, item: dict) -> str:
-        """身份丢弃（方案 §4）：蓝V一律不进精审，个人黄V/无认证账号粉丝超阈值同样丢弃，阈值 0 = 不限。"""
+        """身份丢弃（方案 §4）：官方/机构类蓝V（媒体、政务、公安、事业单位等，按
+        official_verify_patterns 识别）一律丢弃；商家/企业类蓝V按无认证账号的粉丝阈值正常打分；
+        个人黄V/无认证账号粉丝超阈值同样丢弃，阈值 0 = 不限。"""
         enterprise = _text(item.get("enterprise_verify_reason"))
-        if enterprise:
-            return f"蓝V认证账号（{enterprise[:40]}），不进精审"
-        custom_verify = _text(item.get("custom_verify"))
+        if enterprise and self._official_verify_regex.search(enterprise):
+            return f"官方/机构认证账号（{enterprise[:40]}），不进精审"
         followers = _int(item.get("follower_count"))
+        if enterprise:
+            # 商家/企业认证：认证本身不是身份丢弃理由，但粉丝仍受无认证账号的阈值约束
+            limit = self.max_followers_unverified
+            if limit <= 0 or followers <= limit:
+                return ""
+            return f"商家/企业认证账号（{enterprise[:30]}）粉丝 {followers} 超过 {limit}，不进精审"
+        custom_verify = _text(item.get("custom_verify"))
         limit = self.max_followers_personal_verified if custom_verify else self.max_followers_unverified
         if limit <= 0 or followers <= limit:
             return ""

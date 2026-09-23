@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 from backend.audit_agent.triage import (
-    DISCARD_SCORE, CandidateScore, TriageEngine, load_collected_selections, mark_candidates_collected,
-    rank_candidates, select_candidate, write_candidates_file,
+    DISCARD_SCORE, OFFICIAL_VERIFY_PATTERNS, CandidateScore, TriageEngine, load_collected_selections,
+    mark_candidates_collected, rank_candidates, select_candidate, write_candidates_file,
 )
 
 
@@ -96,11 +96,56 @@ def test_blue_v_is_discarded_before_the_rules_and_the_model():
     assert scored.band == "discard" and scored.score == DISCARD_SCORE
     assert scored.hits == [] and scored.model is None and scored.engagement == 7
     assert engine.qwen.calls == []      # 丢弃的候选不调模型
-    assert scored.reason == "蓝V认证账号（某某日报官方账号），不进精审"
+    assert scored.reason == "官方/机构认证账号（某某日报官方账号），不进精审"
     assert select_candidate(rank_candidates([scored]), exclude_keys=set()) is None
 
     plain = engine.score("b", 1, {"desc": "今晚上分"}, [], terms)
     assert plain.band == "rule" and plain.score == 300 and "认证账号" not in plain.reason
+
+
+def test_official_institution_blue_v_is_discarded_by_built_in_patterns():
+    engine = _engine({"suspicion": "none"})
+    for reason in ("新华通讯社官方账号", "泾源县公安局官方抖音账号", "河南省体育彩票管理中心"):
+        scored = engine.score("a", 1, {"desc": "普通内容", "enterprise_verify_reason": reason}, [], [])
+        assert scored.band == "discard" and scored.score == DISCARD_SCORE, reason
+        assert scored.reason == f"官方/机构认证账号（{reason[:40]}），不进精审"
+        assert engine.qwen.calls == []
+
+
+def test_merchant_blue_v_is_not_discarded_and_proceeds_to_the_model():
+    engine = _engine({"suspicion": "none"})
+    scored = engine.score("a", 1, {"desc": "普通内容", "enterprise_verify_reason": "商家认证账号"}, [], [])
+    assert scored.band != "discard"
+    assert len(engine.qwen.calls) == 1      # 没有规则命中，走到模型判断
+
+
+def test_merchant_blue_v_is_discarded_only_above_the_unverified_follower_limit():
+    engine = _engine({"suspicion": "none"}, max_followers_unverified=1000000)
+    item = {"desc": "普通内容", "enterprise_verify_reason": "广州展丰智能科技有限公司"}
+
+    big = engine.score("a", 1, {**item, "follower_count": "2000000"}, [], [])
+    assert big.band == "discard" and big.score == DISCARD_SCORE
+    assert engine.qwen.calls == []
+
+    small = engine.score("b", 1, {**item, "follower_count": "500000"}, [], [])
+    assert small.band != "discard"
+
+
+def test_official_verify_patterns_env_override_narrows_the_match():
+    engine = TriageEngine(FakeLexicon(), FakeQwen({"suspicion": "none"}), model="qwen3.6-flash",
+                          max_comments=60, request_timeout=60, official_verify_patterns=("测试",))
+
+    discarded = engine.score("a", 1, {"desc": "内容", "enterprise_verify_reason": "测试账号"}, [], [])
+    assert discarded.band == "discard" and discarded.score == DISCARD_SCORE
+
+    passthrough = engine.score("b", 1, {"desc": "内容", "enterprise_verify_reason": "新华通讯社官方账号"}, [], [])
+    assert passthrough.band != "discard"
+
+
+def test_official_verify_patterns_default_matches_the_module_constant():
+    engine = _engine({"suspicion": "none"})
+    scored = engine.score("a", 1, {"desc": "内容", "enterprise_verify_reason": OFFICIAL_VERIFY_PATTERNS[0]}, [], [])
+    assert scored.band == "discard"
 
 
 def test_personal_yellow_v_is_discarded_only_above_the_follower_limit():

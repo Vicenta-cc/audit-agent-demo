@@ -73,8 +73,10 @@ class FakeIngestion:
 class FakeEngine:
     def __init__(self):
         self.score_calls = []
+        self.terms_for_calls = []
 
     def terms_for(self, category_ids):
+        self.terms_for_calls.append(list(category_ids))
         return []
 
     def score(self, content_key, rank, item, comments, terms, *, search_keyword=""):
@@ -190,6 +192,48 @@ def test_skip_log_counts_the_candidates_dropped_by_identity(tmp_path: Path, monk
     assert "候选 3 条，可疑 0 条，身份丢弃 2 条，排除重复或已审 0 条" in skipped[0]
     payload = json.loads((tmp_path / "candidates" / "01-词H" / "candidates.json").read_text(encoding="utf-8"))
     assert [c["band"] for c in payload["candidates"]] == ["none", "discard", "discard"]
+
+
+def test_lexicon_terms_load_from_every_task_library_regardless_of_keyword_source(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
+    kwargs = dict(
+        start_page=1, max_total_notes=10, crawler_concurrency=1, account_auth_state=None,
+        crawler_account_id="acc", content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+
+    # 显式关键词任务也带 library_ids 时，规则层要加载全部任务词库，不再依赖 keyword_source
+    crawler_libs = FakeCrawler({"词A": [("a1", "普通")]})
+    engine_libs = FakeEngine()
+    pipeline_libs = _new_pipeline("job-libs", crawler_libs, FakeIngestion(analyzed=set()), engine_libs)
+    pipeline_libs._run_triaged_search(
+        request=_base_request(keyword="词A", keyword_source="keyword", library_ids=["gambling", "fraud"]),
+        save_root=tmp_path / "libs", **kwargs,
+    )
+    assert engine_libs.terms_for_calls == [["gambling", "fraud"]]
+
+    # 没有 library_ids 时回退到 lexicon_category
+    crawler_cat = FakeCrawler({"词B": [("b1", "普通")]})
+    engine_cat = FakeEngine()
+    pipeline_cat = _new_pipeline("job-cat", crawler_cat, FakeIngestion(analyzed=set()), engine_cat)
+    pipeline_cat._run_triaged_search(
+        request=_base_request(keyword="词B", lexicon_category="soft"),
+        save_root=tmp_path / "cat", **kwargs,
+    )
+    assert engine_cat.terms_for_calls == [["soft"]]
+
+    # 两者都没有 → 空列表，不报错
+    crawler_none = FakeCrawler({"词C": [("c1", "普通")]})
+    engine_none = FakeEngine()
+    pipeline_none = _new_pipeline("job-none", crawler_none, FakeIngestion(analyzed=set()), engine_none)
+    pipeline_none._run_triaged_search(
+        request=_base_request(keyword="词C"),
+        save_root=tmp_path / "none", **kwargs,
+    )
+    assert engine_none.terms_for_calls == [[]]
 
 
 def test_compare_mode_rank1_arm_bypasses_score_gate_but_triage_arm_prefers_score(tmp_path: Path, monkeypatch):
