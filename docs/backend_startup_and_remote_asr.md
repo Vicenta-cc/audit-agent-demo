@@ -1,6 +1,6 @@
 # 后端启动与远程 ASR 接入手册
 
-这份手册给新同学在自己的电脑上启动本项目后端用。项目的主页面由后端直接托管，启动后访问 `http://127.0.0.1:8000/saas`。
+这是早期单后端启动及 ASR 连接参考，不是当前多用户系统的完整启动指南。当前前端为 `Audit_assistant`，入口 `/investigation`，另需独立 worker 和 Hermes。新部署优先阅读[当前版本启动交接](runtime/CURRENT-STARTUP.md)；下文 `/saas` 属于旧入口。
 
 ## 1. 运行结构
 
@@ -128,7 +128,7 @@ ASR_TRANSLATE_MODEL=qwen3.7-max
 CHECK_REMOTE_ASR=true ./scripts/start-backend.sh
 ```
 
-`CHECK_REMOTE_ASR=true` 会先请求一次远端 `/api/inference/health`，用于确认 URL 和鉴权没问题。
+`CHECK_REMOTE_ASR=true` 只请求一次远端 `/api/inference/health`，用于确认健康接口可达；部分服务的健康接口不要求鉴权，因此不能证明转写凭据正确。必须再用相同环境实际转写短音频。
 真实视频任务验收必须使用这个检查，不能只确认 `19001` 端口处于监听状态：端口监听不代表
 Dolphin 模型已加载、鉴权一致或返回合同正确。检查失败时不要启动真实采集任务。
 

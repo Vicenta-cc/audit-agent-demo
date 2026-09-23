@@ -8,11 +8,14 @@
 
 ## 获取与配置多用户版本
 
+**新部署请先读：[当前版本启动交接](docs/runtime/CURRENT-STARTUP.md)。** 当前业务入口是 `Audit_assistant` 的 `/investigation`，不是旧 `/saas`。文档区分新机器初始化、本机固定控制器、Linux 托管和升级；API 能启动不代表 worker、报告问答或 Dolphin 已通过验收。
+
 ```bash
 git clone https://github.com/Vicenta-cc/audit-agent-demo.git audit-agent-multi-user
 cd audit-agent-multi-user
-# 精确复现初始多用户候选源码；若需要当前能力及历史启动归档，则保留 main。
-git switch --detach 5873ea7570397f4b6f0c07dcec214e8541d7b2e0
+git switch main
+git rev-parse HEAD
+# 将核验过的完整 SHA 固定在部署清单；不要为启动当前版切回历史候选。
 ```
 
 应用与 worker 必须使用同一套明确配置的数据路径和认证数据库。按 `.env.example` 配置 `APP_AUTH_MODE=required`、`APP_AUTH_DB`、Cookie、CORS、任务容量以及采集环境，不能直接把旧 R2 的免登录配置用于公开多用户环境。
@@ -45,7 +48,7 @@ ASR_ENGINE=dolphin
 CHECK_REMOTE_ASR=true ./scripts/start-backend.sh
 ```
 
-检查成功会访问 `REMOTE_ASR_BASE_URL/api/inference/health`；失败时不要继续做真实任务验收。API 与 worker 必须读取同一份 ASR 和 ffmpeg 配置，不能假设新进程会继承另一套旧服务的环境变量。完整的直接连接、SSH 隧道和 Coder 转发方式见[后端启动与远程 ASR 接入手册](docs/backend_startup_and_remote_asr.md)。
+该脚本只做 health 检查，不能证明转写接口的鉴权或实际 Dolphin 推理成功；还必须完成短音频真实转写，见[当前版本启动交接](docs/runtime/CURRENT-STARTUP.md)。API 与 worker 必须读取同一份 ASR 和 ffmpeg 配置，不能假设新进程会继承另一套旧服务的环境变量。直接连接、SSH 隧道和 Coder 转发方式见[后端启动与远程 ASR 接入手册](docs/backend_startup_and_remote_asr.md)。
 
 在配置好的独立环境中，通过以下命令初始化首个管理员（交互输入密码，仓库没有预设正式密码）：
 
