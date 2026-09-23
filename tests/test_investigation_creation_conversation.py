@@ -2189,8 +2189,7 @@ def test_creation_prompt_preserves_literal_short_search_terms() -> None:
     assert "唯一实际搜索词是 bc料" in normalized_prompt
     assert "实际搜索词仍是用户原文" in normalized_prompt
     assert "启用变体词是优先的实际平台搜索词" in normalized_prompt
-    assert "pinyin or letter abbreviations" in normalized_prompt
-    assert "ordinary-life scene disguises" in normalized_prompt
+    assert "统一召回词生成要求" in normalized_prompt
     assert "不正式保存到黑话库数据库" in normalized_prompt
     assert "搜索词和任务配置即冻结" in normalized_prompt
 
@@ -2199,14 +2198,44 @@ def test_resource_prompt_generates_covert_variants_as_search_terms() -> None:
     normalized_prompt = " ".join(RESOURCE_PROMPT.split())
     assert "主词是主题和语义归类" in normalized_prompt
     assert "变体词是主要的实际召回表达" in normalized_prompt
-    assert "只生成 5 至 7 个最终可直接搜索的启用变体" in normalized_prompt
+    assert "默认只生成 5 至 10 个最终可直接搜索的实际搜索词" in normalized_prompt
     assert "主题主词按语义归类需要生成" in normalized_prompt
-    assert "不要以 “生成但默认关闭”的形式放进词库" in normalized_prompt
+    assert "不要以“生成但默认关闭”的形式输出" in normalized_prompt
     assert "可靠候选不足时宁可少于 5 个" in normalized_prompt
     assert "谐音、拼音/字母缩写" in normalized_prompt
     assert "正常生活场景伪装" in normalized_prompt
     assert "主页看" in normalized_prompt
     assert "过于直白、实际难以召回" in normalized_prompt
+
+
+def test_temporary_and_structured_recall_share_one_generation_policy() -> None:
+    from backend.resource_management.recall_prompt import RECALL_GENERATION_PROMPT
+    from backend.resource_management.tools import RESOURCE_DESCRIPTIONS
+
+    system_prompt = CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT
+    assert system_prompt.count(RECALL_GENERATION_PROMPT) == 1
+    assert RECALL_GENERATION_PROMPT in RESOURCE_DESCRIPTIONS['create_lexicon_edit']
+    assert "displayed alongside a ruleset Proposal without create_lexicon_edit" in CREATION_SYSTEM_PROMPT
+    assert "临时搜索词与完整黑话库共用" in RECALL_GENERATION_PROMPT
+    assert "不是每个主题各生成 5 至 10 个" in RECALL_GENERATION_PROMPT
+    assert "可靠候选不足时宁可少于 5 个" in RECALL_GENERATION_PROMPT
+    assert "回复前核对整组数量" in RECALL_GENERATION_PROMPT
+    for obsolete in ("5 至 7", "5–7", "5-7", "many concrete variants"):
+        assert obsolete not in system_prompt
+        assert obsolete not in RESOURCE_DESCRIPTIONS['create_lexicon_edit']
+
+
+def test_recall_generation_defaults_preserve_explicit_and_existing_content() -> None:
+    from backend.resource_management.recall_prompt import RECALL_GENERATION_PROMPT
+
+    for boundary in (
+        "用户明确指定数量时按指定数量生成",
+        "严格保留该词表和原文",
+        "不因默认数量裁剪已有内容",
+        "不是采集帖子数、评论数或审核规则条数",
+        "不改变生成授权、规则展示后采用、正式保存和任务启动",
+    ):
+        assert boundary in RECALL_GENERATION_PROMPT
 
 
 def test_creation_prompt_preserves_explicit_per_run_parameters() -> None:
@@ -3241,11 +3270,12 @@ def test_t1_missing_recall_conversation_contract(creation_stack, preauthorized):
 
 
 def test_t1_generation_guidance_preserves_conversation_authority():
-    prompt = " ".join(CREATION_SYSTEM_PROMPT.split())
+    prompt = " ".join((CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT).split())
     assert "Without that authorization" in prompt
     assert "no Draft and no generated terms" in prompt
     assert "do not list even illustrative example terms or candidate terms" in prompt
-    assert "Each generated Chinese query is natural continuous text with no whitespace" in prompt
+    assert "新生成的中文查询使用自然连续文本" in prompt
+    assert "不含空格、加号、逗号或布尔分隔符" in prompt
     assert "审核规则 Proposal, then show its 审核规则 and the complete search-term list, and END this turn" in prompt
     assert "create the Draft in the same turn" in prompt
     assert "Do not ask again for permission to generate terms" in prompt

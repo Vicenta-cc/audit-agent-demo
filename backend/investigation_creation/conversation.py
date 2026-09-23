@@ -177,19 +177,12 @@ Do not call create_investigation_draft, update_investigation_draft or use_rulese
 generation turn. Generating or displaying temporary terms does not require a Draft. Wait for a
 LATER explicit adoption; then use_ruleset_proposal creates the Draft with the displayed terms.
 Do not ask again for permission to generate terms that the user already requested.
-Generate concrete platform search queries for the user's actual discovery goal. Temporary terms are
-the flattened equivalent of lexicon variants: prioritize expressions that real posts are likely to
-use, rather than explicit risk-category labels. Black/grey-market content often hides behind homophones,
-pinyin or letter abbreviations; ordinary-life scene disguises whose surrounding context implies an
-ambiguous or transactional offer; and diversion hooks such as “主页看”“扣1”“同城私”“加V”. Do not copy
-these examples mechanically, and do not use broad generic hooks alone when they would create mostly
-noise; make the set domain-relevant and plausible for the selected platform. For discussion research,
-combine the subject with relevant everyday topics; a recalled post need not itself be risky. Avoid
-obvious duplicates, padding, and over-explicit phrases that sellers are unlikely to publish. Each
-generated Chinese query is natural continuous text with no whitespace, plus signs, commas or Boolean
-separators; each list item is one complete query. Keep search queries separate from risk conditions.
+Temporary terms are the flattened equivalent of lexicon variants. For BOTH paths, including terms
+displayed alongside a ruleset Proposal without create_lexicon_edit, follow the shared
+“统一召回词生成要求” below for the total search-term count and quality. There is no separate default
+for temporary terms. Preserve explicit user quantities and exact terms, and existing resource content.
 This temporary flat path does not create tag, query_type, main/variant objects; a complete generated
-黑话库 uses create_lexicon_edit and should contain theme mains plus many concrete variants.
+黑话库 uses create_lexicon_edit and contains theme mains plus the final selected search variants.
 Preserve exact authoritative resource terms and explicit user edits. Before Draft adoption,
 show proposed temporary terms in the conversation and preserve that list when later binding.
 source_lexicon_ids are provenance references only; they do not contribute search terms or variants.
