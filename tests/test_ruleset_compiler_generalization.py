@@ -108,6 +108,11 @@ def test_t2_5_golden_and_content_semantics(factory):
         if key == "frame_prompt":
             old_contract.pop("risk_library_id", None)
             old_contract.pop("risk_library_label", None)
+            old_contract["segment_score"] = 80
+            for field in ("visual_risks", "ocr_risks", "asr_risks"):
+                old_contract[field][0].update(score=80, risk_level="high", matched_exemption_ids=[])
+            assert '"visual_risks":[],"ocr_risks":[],"asr_risks":[]' in result.prompt_profile_snapshot[key]
+            assert "无风险占位项" in result.prompt_profile_snapshot[key]
         assert current_contract == old_contract
 
 

@@ -1,0 +1,4 @@
+[
+  {"segment_summary":"视频讲解电视画质与音轨设置，OCR显示“都写的清清楚楚”、“还可以选中文字幕+中文配音”，ASR提及杜比视界等参数。","segment_score":0,"visual_risks":[],"ocr_risks":[{"ocr_chunk_id":"video:1/segment:2/ocr:1","frame_ids":["f0017","f0018","f0019","f0020"],"score":0,"risk_type":"","reason":"OCR文本均为视频功能介绍（如字幕、配音），无色情引流暗语或联系方式。","rule_id":"","risk_level":""}],"asr_risks":[]},
+  {"segment_summary":"视频讲解如何获取高质量片源，提及杜比视界、HDR10+及中文字幕配音功能。","segment_score":0,"visual_risks":[],"ocr_risks":[{"ocr_chunk_id":"video:1/segment:2/ocr:1","frame_ids":["f0017","f0018","f0019","f0020"],"score":0,"risk_type":"","reason":"OCR内容均为正常技术描述，无色情引流信息。","rule_id":"","risk_level":""}],"asr_risks":[{"asr_chunk_id":"video:1/segment:2/asr:2","score":0,"risk_type":"","reason":"ASR文本为'具体方法就不细说了'，属正常引导，非色情暗语。","rule_id":"","risk_level":""}]}
+]

@@ -2914,7 +2914,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
             v2_fixed,
             {
                 "image_evidence": 1840,
-                "video_frame_evidence": 2258,
+                "video_frame_evidence": 2453,
                 "comment_audit": 2733,
                 "fusion_audit": 2297,
             },
@@ -3067,7 +3067,7 @@ class PipelineContractAndGoldenTests(unittest.TestCase):
                 },
                 "v2": {
                     "image_evidence": {"fixed": 1840, "dynamic": 0, "total": 1840},
-                    "video_frame_evidence": {"fixed": 2258, "dynamic": 532, "total": 2790},
+                    "video_frame_evidence": {"fixed": 2453, "dynamic": 532, "total": 2985},
                     "comment_audit": {"fixed": 2733, "dynamic": 422, "total": 3155},
                     "fusion_audit": {"fixed": 2297, "dynamic": 876, "total": 3173},
                 },

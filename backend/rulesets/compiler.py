@@ -320,19 +320,24 @@ def _frame_prompt(payload: dict) -> str:
             ),
         )
         + "\n\nframe_id、ocr_chunk_id、asr_chunk_id 仅可取自输入。无明确风险时对应数组为空。"
-        "每个非零风险项必须给出 stable rule_id、与 score 一致的 low|medium|high risk_level 和短原因；"
+        "风险数组仅放明确风险，不得放 score=0、rule_id 或 risk_level 为空的无风险占位项。"
+        "正常内容及无风险说明写入 segment_summary。每个风险项必须给出 stable rule_id、"
+        "与 score 一致的 low|medium|high risk_level 和短原因；"
         "matched_exemption_ids 仅在真正命中豁免时输出。segment_score 和各项 score 均为0-100，"
         "reason 最多35字，segment_summary 客观且最多45字。风险库身份由后端按本次冻结配置写入，"
-        "不要在输出中复述 risk_library_id 或 risk_library_label。\n\n只输出合法 JSON，不要输出 Markdown：\n"
-        "{\"segment_summary\":\"string\",\"segment_score\":0,\"visual_risks\":[{\"frame_ids\":[\"f0001\"],\"score\":0,"
+        "不要在输出中复述 risk_library_id 或 risk_library_label。"
+        '\n无风险示例：{"segment_summary":"正常技术介绍，未发现明确风险","segment_score":0,"visual_risks":[],"ocr_risks":[],"asr_risks":[]}\n'
+        "下列有风险结构示例不是审核结论，引用须替换为输入中的真实编号；没有风险的模态仍返回空数组。"
+        "\n\n只输出合法 JSON，不要输出 Markdown：\n"
+        "{\"segment_summary\":\"string\",\"segment_score\":80,\"visual_risks\":[{\"frame_ids\":[\"f0001\"],\"score\":80,"
         "\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\","
-        "\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],"
-        "\"ocr_risks\":[{\"ocr_chunk_id\":\"string\",\"frame_ids\":[\"f0001\"],\"score\":0,"
+        "\"risk_level\":\"high\",\"matched_exemption_ids\":[]}],"
+        "\"ocr_risks\":[{\"ocr_chunk_id\":\"string\",\"frame_ids\":[\"f0001\"],\"score\":80,"
         "\"risk_type\":\"string\",\"reason\":\"string\",\"rule_id\":\"stable rule_id\","
-        "\"risk_level\":\"low|medium|high\",\"matched_exemption_ids\":[\"可选\"]}],"
-        "\"asr_risks\":[{\"asr_chunk_id\":\"string\",\"score\":0,\"risk_type\":\"string\","
-        "\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"low|medium|high\","
-        "\"matched_exemption_ids\":[\"可选\"]}]}"
+        "\"risk_level\":\"high\",\"matched_exemption_ids\":[]}],"
+        "\"asr_risks\":[{\"asr_chunk_id\":\"string\",\"score\":80,\"risk_type\":\"string\","
+        "\"reason\":\"string\",\"rule_id\":\"stable rule_id\",\"risk_level\":\"high\","
+        "\"matched_exemption_ids\":[]}]}"
     )
 
 

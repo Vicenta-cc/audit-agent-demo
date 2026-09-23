@@ -8186,6 +8186,9 @@ class AuditPipeline:
             base_prompt = re.sub(pattern, lambda match: reverse[match.group()], base_prompt)
             base_prompt = base_prompt.replace("stable rule_id", "本次短编号，例如R01")
         if is_v2:
+            # Frozen profiles may still contain the legacy zero-score item example.
+            # Clarify wire format without changing frozen rules or accepting blanks.
+            base_prompt += '\n视频无风险输出协议 video-empty-risks-v1：此前结构示例中的零分对象不是要填写的风险。visual_risks、ocr_risks、asr_risks 仅放明确风险；正常内容和无风险说明写入 segment_summary，相应数组返回 []。不得输出 score=0 的无风险占位项或空 risk_level。真实风险项使用有效规则编号及一致的 low=40、medium=60、high=80。无风险示例：{"segment_summary":"正常技术介绍，未发现明确风险","segment_score":0,"visual_risks":[],"ocr_risks":[],"asr_risks":[]}\n'
             base_prompt += "\n规则编号协议 video-rule-codes-v1：每个风险项的 rule_id 只能从下列短编号中准确选择，禁止自造、拼接、猜测或输出完整规则ID。必须满足该编号对应规则的必要条件；编号正确不代表风险成立，无明确风险时对应数组为空。frame_id、ocr_chunk_id、asr_chunk_id、豁免ID不是规则编号，保持原格式。\n" + json.dumps({"allowed_rule_codes": list(mapping)}, ensure_ascii=False)
         prompt = base_prompt
         attempts = 2 if is_v2 else 1
@@ -8255,7 +8258,15 @@ class AuditPipeline:
                 job_store.log(self.job_id, f"视频分段 {sheet.get('segment_id')}：结构校验失败 {attempt}/{attempts}，error={exc}，已保存失败输入与响应")
                 if attempt == attempts:
                     raise
-                prompt = base_prompt + "\n上次输出未通过程序校验。请纠正规则或证据引用格式，沿用原审核标准，不能以删除已有风险项代替修正引用。只输出 JSON。\n" + json.dumps({
+                correction = "请按具体错误纠正输出结构或规则、证据引用。"
+                if "risk_level" in str(exc):
+                    correction = (
+                        "本次错误是 risk_level 缺失或非法，不只是规则编号错误。"
+                        "重新核对原证据：无风险说明移到 segment_summary，相应风险数组留空；"
+                        "确有风险则填写有效规则编号、low|medium|high 等级及一致的 40|60|80 分数。"
+                        "不得仅为通过校验把空等级猜填为 none 或其他等级。"
+                    )
+                prompt = base_prompt + "\n上次输出未通过程序校验。" + correction + "沿用原审核标准，不得为了通过校验删除真实风险；可以移除误填的零分无风险占位项。只输出 JSON。\n" + json.dumps({
                     "error": str(exc), "returned_rule_codes": returned, "allowed_ids": allowed,
                 }, ensure_ascii=False)
                 continue

@@ -16,8 +16,11 @@ def main():
     parser.add_argument("--source-output", required=True, type=Path)
     parser.add_argument("--source-job", required=True)
     parser.add_argument("--expected-failed", required=True, type=int)
+    parser.add_argument("--note-id", help="Re-audit exactly one failed numeric note ID, never the whole batch")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
+    if args.note_id and not args.note_id.isdigit():
+        parser.error("note-id must be numeric")
     args.output.mkdir(parents=True, exist_ok=True)
     if any(args.output.iterdir()):
         parser.error("Output directory must be empty")
@@ -65,6 +68,15 @@ def main():
         raise RuntimeError("Source selection differs from expected failed-only scope")
     if row is None or json.loads(row[0]) != source_job["rule_snapshot"] or json.loads(row[1]) != source_job["prompt_profile_snapshot"]:
         raise RuntimeError("Frozen revision and job snapshots differ")
+    if args.note_id:
+        selected = []
+        for ref in refs:
+            subjects = pipeline._build_subjects(source_job["platform"], [ref["item"]], ref["comments"], args.source_output, include_media=False)
+            if len(subjects) == 1 and subjects[0].note_id == args.note_id:
+                selected.append(ref)
+        if len(selected) != 1:
+            raise RuntimeError("Requested note is not uniquely present in the failed-only selection")
+        refs = selected
     pipeline.authoritative_m3 = True
     pipeline.rule_snapshot = source_job["rule_snapshot"]
     pipeline.audit_config_revision_id = source_job["current_audit_config_revision_id"]
