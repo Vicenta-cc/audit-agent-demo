@@ -29,6 +29,29 @@ class FakeLexicon:
                 {"category_id": "gambling", "keyword": r"加\s*微信", "match_type": "正则", "risk_level": "高",
                  "entry_kind": ""}]
 
+    def search_word_groups(self, category_ids):
+        return {}
+
+
+class EntryLexicon:
+    """房卡词条：主词 + 两个变体；十三水是另一个词条；彩金与平台搜索词「注册送彩金」没有变体关联。"""
+
+    def triage_terms(self, category_ids):
+        def row(keyword, group, match_type="模糊", kind="main"):
+            return {"category_id": "gambling", "keyword": keyword, "match_type": match_type, "risk_level": "高",
+                    "entry_kind": kind, "entry_group": group}
+        return [row("房卡", "房卡"), row("房卡代理", "房卡", kind="variant"), row("批发房卡", "房卡", kind="variant"),
+                row("十三水", "十三水"), row("彩金", "彩金"), row("送彩金", "送彩金", match_type="正则")]
+
+    def search_word_groups(self, category_ids):
+        return {"房卡": "房卡", "房卡代理": "房卡", "批发房卡": "房卡", "十三水": "十三水", "彩金": "彩金",
+                "注册送彩金": "注册送彩金"}
+
+
+def _entry_engine(response):
+    return TriageEngine(EntryLexicon(), FakeQwen(response), model="qwen3.6-flash", max_comments=60,
+                        request_timeout=60)
+
 
 def _engine(response, **limits):
     return TriageEngine(FakeLexicon(), FakeQwen(response), model="qwen3.6-flash", max_comments=60,
@@ -50,7 +73,7 @@ def test_search_keyword_self_hit_is_not_scored_and_falls_through_to_the_model():
     scored = engine.score("a", 1, item, [], engine.terms_for(["gambling"]), search_keyword="上分")
     assert scored.band == "strong" and scored.score == 200
     assert len(engine.qwen.calls) == 1
-    assert scored.reason == "评论区约私聊（搜索词自身命中 1 处不计分）"
+    assert scored.reason == "评论区约私聊（搜索词所在词条命中 1 处不计分）"
 
     # 不带搜索词（别的调用方）时行为不变：规则层照常计分，不调模型
     baseline = _engine({"suspicion": "strong", "reason": "评论区约私聊"})
@@ -63,7 +86,7 @@ def test_other_lexicon_term_still_counts_when_the_search_keyword_is_dropped():
     scored = engine.score("b", 1, {"title": "上分群带你上分"}, [], engine.terms_for(["gambling"]), search_keyword="上分")
     assert scored.band == "rule" and scored.score == 300 and engine.qwen.calls == []
     assert [hit["keyword"] for hit in scored.hits] == ["上分群"]
-    assert "上分群" in scored.reason and "搜索词自身命中" not in scored.reason
+    assert "上分群" in scored.reason and "搜索词所在词条命中" not in scored.reason
 
 
 def test_regex_lexicon_entry_survives_the_search_keyword_drop():
@@ -74,6 +97,49 @@ def test_regex_lexicon_entry_survives_the_search_keyword_drop():
     assert scored.band == "rule" and scored.score == 300 and engine.qwen.calls == []
     assert [hit["match_type"] for hit in scored.hits] == ["正则"]
     assert scored.reason == "命中gambling：加\\s*微信（desc）"
+
+
+def test_searching_a_variant_drops_hits_on_its_main_and_sibling_variants():
+    # 搜「房卡代理」：主词「房卡」和兄弟变体「批发房卡」都属于同一个词条，不能算规则分
+    engine = _entry_engine({"suspicion": "weak", "reason": "疑似代理"})
+    scored = engine.score("a", 1, {"desc": "批发房卡，房卡便宜"}, [], engine.terms_for(["gambling"]),
+                          search_keyword="房卡代理")
+    assert scored.band == "weak" and len(engine.qwen.calls) == 1
+    assert scored.reason == "疑似代理（搜索词所在词条命中 2 处不计分）"
+
+
+def test_other_entry_still_scores_when_the_searched_entry_is_dropped():
+    engine = _entry_engine({"suspicion": "none"})
+    scored = engine.score("b", 1, {"desc": "房卡代理，十三水开桌"}, [], engine.terms_for(["gambling"]),
+                          search_keyword="房卡代理")
+    assert scored.band == "rule" and scored.score == 300 and engine.qwen.calls == []
+    assert [hit["keyword"] for hit in scored.hits] == ["十三水"]
+    assert "十三水" in scored.reason
+
+
+def test_term_contained_in_the_search_word_is_dropped_without_a_variant_link():
+    # 搜平台搜索词「注册送彩金」，帖子必然带「彩金」；二者没有变体关联，靠包含关系排除
+    engine = _entry_engine({"suspicion": "none", "reason": "无交易"})
+    scored = engine.score("c", 1, {"title": "新人注册彩金"}, [], engine.terms_for(["gambling"]),
+                          search_keyword="注册送彩金")
+    assert scored.band == "none" and len(engine.qwen.calls) == 1
+    assert scored.reason == "无交易（搜索词所在词条命中 1 处不计分）"
+
+
+def test_regex_term_is_never_dropped_by_the_containment_rule():
+    engine = _entry_engine({"suspicion": "none"})
+    scored = engine.score("d", 1, {"title": "注册送彩金"}, [], engine.terms_for(["gambling"]),
+                          search_keyword="注册送彩金")
+    assert scored.band == "rule" and engine.qwen.calls == []
+    assert [(hit["keyword"], hit["match_type"]) for hit in scored.hits] == [("送彩金", "正则")]
+    assert scored.hits[0]["entry_group"] == "送彩金"
+
+
+def test_blank_search_keyword_drops_nothing():
+    engine = _entry_engine({"suspicion": "none"})
+    scored = engine.score("e", 1, {"desc": "批发房卡"}, [], engine.terms_for(["gambling"]), search_keyword="  ")
+    assert scored.band == "rule" and scored.score == 600
+    assert [hit["keyword"] for hit in scored.hits] == ["房卡", "批发房卡"]
 
 
 def test_model_bands_map_to_scores():
@@ -95,7 +161,7 @@ def test_content_type_is_descriptive_and_no_longer_overrides_the_band():
     noted_engine = _engine({"suspicion": "weak", "content_type": "科普", "reason": "反诈提醒"})
     noted = noted_engine.score("b", 1, {"title": "今晚上分吗"}, [], noted_engine.terms_for(["gambling"]),
                                search_keyword="上分")
-    assert noted.reason == "反诈提醒（搜索词自身命中 1 处不计分）"
+    assert noted.reason == "反诈提醒（搜索词所在词条命中 1 处不计分）"
 
 
 def test_news_context_still_yields_strong_when_the_model_sees_trade_intent():

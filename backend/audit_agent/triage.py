@@ -77,12 +77,23 @@ class TriageEngine:
         self.official_verify_patterns = tuple(official_verify_patterns)
         self._official_verify_regex = _compile_official_verify_regex(self.official_verify_patterns)
         self._terms_cache: dict[tuple[str, ...], list[TriageTerm]] = {}
+        # 归一化的搜索词 -> 归一化的所在词条主词；平台搜索词和变体不在匹配词表里，要单独查
+        self._search_groups: dict[tuple[str, ...], dict[str, str]] = {}
 
     def terms_for(self, category_ids: list[str]) -> list[TriageTerm]:
         key = tuple(sorted(str(item) for item in category_ids if str(item).strip()))
         if key not in self._terms_cache:
             self._terms_cache[key] = terms_from_rows(self.lexicon_store.triage_terms(list(key))) if key else []
+            groups = self.lexicon_store.search_word_groups(list(key)) if key else {}
+            self._search_groups[key] = {normalize_text(word): normalize_text(group)
+                                        for word, group in groups.items() if normalize_text(word)}
         return self._terms_cache[key]
+
+    def _search_groups_for(self, terms: list[TriageTerm]) -> dict[str, str]:
+        for key, cached in self._terms_cache.items():
+            if cached is terms:
+                return self._search_groups.get(key, {})
+        return {}
 
     def _rule_hits(self, item: dict, comments: list[dict], terms: list[TriageTerm]) -> list[TriageHit]:
         hits: list[TriageHit] = []
@@ -170,12 +181,26 @@ class TriageEngine:
         return f"粉丝 {followers} 超过 {limit}，不进精审"
 
     @staticmethod
-    def _drop_self_hits(hits: list[TriageHit], search_keyword: str) -> tuple[list[TriageHit], int]:
-        """搜「上分」搜回来的帖子必然含「上分」，这种自命中不算风险信号，词库里的其他条目照常计分。"""
+    def _drop_self_hits(hits: list[TriageHit], search_keyword: str, terms: list[TriageTerm],
+                        search_groups: dict[str, str] | None = None) -> tuple[list[TriageHit], int]:
+        """搜「房卡代理」搜回来的帖子必然含「房卡」：搜索词所在词条（主词及全部变体）的命中不算风险信号，
+        被搜索词包含的非正则词条（搜「注册送彩金」时的「彩金」）同样不算；其他词条照常计分。"""
         needle = normalize_text(search_keyword)
         if not needle:
             return hits, 0
-        kept = [h for h in hits if normalize_text(h.keyword) != needle]
+        self_groups = {needle}
+        if search_groups and search_groups.get(needle):
+            self_groups.add(search_groups[needle])
+        self_groups.update(normalize_text(t.entry_group) for t in terms
+                           if t.entry_group and normalize_text(t.keyword) == needle)
+
+        def is_self(hit: TriageHit) -> bool:
+            if normalize_text(hit.entry_group) in self_groups:
+                return True
+            keyword = normalize_text(hit.keyword)
+            return hit.match_type != "正则" and bool(keyword) and keyword in needle
+
+        kept = [h for h in hits if not is_self(h)]
         return kept, len(hits) - len(kept)
 
     def score(self, content_key: str, rank: int, item: dict, comments: list[dict], terms: list[TriageTerm],
@@ -185,9 +210,10 @@ class TriageEngine:
         discard_reason = self._identity_discard_reason(item)
         if discard_reason:
             return CandidateScore(content_key, rank, DISCARD_SCORE, "discard", discard_reason, engagement=engagement)
-        hits, self_hits = self._drop_self_hits(self._rule_hits(item, comments, terms), search_keyword)
+        hits, self_hits = self._drop_self_hits(self._rule_hits(item, comments, terms), search_keyword, terms,
+                                               self._search_groups_for(terms))
         # 自命中被扣掉后才走模型的候选，要在理由里说清楚，运营看日志时不会以为规则层漏判
-        note = f"（搜索词自身命中 {self_hits} 处不计分）" if self_hits else ""
+        note = f"（搜索词所在词条命中 {self_hits} 处不计分）" if self_hits else ""
         if hits:
             top = hits[0]
             total = min(RULE_HIT_CAP, RULE_HIT_SCORE * len(hits))

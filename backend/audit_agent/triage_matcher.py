@@ -18,6 +18,7 @@ class TriageTerm:
     category_id: str
     risk_level: str
     entry_kind: str = ""
+    entry_group: str = ""
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,7 @@ class TriageHit:
     risk_level: str
     field: str
     snippet: str
+    entry_group: str = ""
 
 
 def normalize_text(text: str) -> str:
@@ -44,7 +46,7 @@ def terms_from_rows(rows: list[dict]) -> list[TriageTerm]:
         if keyword:
             terms.append(TriageTerm(keyword, str(row.get("match_type") or "模糊"),
                                     str(row.get("category_id") or ""), str(row.get("risk_level") or ""),
-                                    str(row.get("entry_kind") or "")))
+                                    str(row.get("entry_kind") or ""), str(row.get("entry_group") or "")))
     return terms
 
 
@@ -68,11 +70,11 @@ def match_terms(text: str, field: str, terms: list[TriageTerm]) -> list[TriageHi
                 continue
             if match:
                 hits.append(TriageHit(term.keyword, term.match_type, term.category_id, term.risk_level,
-                                      field, _snippet(raw, match.start(), match.end())))
+                                      field, _snippet(raw, match.start(), match.end()), term.entry_group))
             continue
         needle = normalize_text(term.keyword)
         index = normalized.find(needle) if needle else -1
         if index >= 0:
             hits.append(TriageHit(term.keyword, term.match_type, term.category_id, term.risk_level,
-                                  field, _snippet(normalized, index, index + len(needle))))
+                                  field, _snippet(normalized, index, index + len(needle)), term.entry_group))
     return hits
