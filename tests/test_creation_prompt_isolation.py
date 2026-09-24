@@ -128,7 +128,7 @@ def test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes():
         "The backend binds and validates the exact resource version",
         "runtime fingerprint, access permissions, and actual search-term snapshot",
         "rather than silently adopting a newer version",
-        "replace the selected recall plan with temporary_terms",
+        "update_investigation_draft with its latest",
         "Never flatten a structured Drawer edit",
     ):
         assert instruction in CREATION_SYSTEM_PROMPT

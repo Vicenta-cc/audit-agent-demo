@@ -10,7 +10,6 @@ _CONSTRAINTS = {
     'no searchable terms': 'no_searchable_terms',
     'generated enabled themes require enabled variants': 'theme_without_active_variants',
     'original terms or order were changed': 'exact_terms_mismatch',
-    'default total search terms exceeds 10': 'default_count_exceeded',
     'explicit resource count was not preserved': 'requested_count_mismatch',
 }
 _FIELDS = frozenset({

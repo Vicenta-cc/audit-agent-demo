@@ -8,6 +8,24 @@
   "changed_lines": [
     {
       "source": "CREATION_SYSTEM_PROMPT",
+      "line": 88,
+      "text": "the complete lexicon_content edited in the Drawer, its exact variant-first terms projection, and the",
+      "reason": "临时编辑稿采用改用版本引用；完整内容、主变体关系与投影由后端保留，不再要求模型重抄。"
+    },
+    {
+      "source": "CREATION_SYSTEM_PROMPT",
+      "line": 103,
+      "text": "using that valid published Judgement. Store terms in configuration.investigation.recall_plan with",
+      "reason": "保持正式规则下允许建草案的边界，只将模型填写内容改成传编辑稿引用。"
+    },
+    {
+      "source": "CREATION_SYSTEM_PROMPT",
+      "line": 104,
+      "text": "strategy=temporary_terms, source_lexicon_ids as real referenced 黑话库 IDs or [], and lexicon_content",
+      "reason": "存储格式不变，由后端从已校验的编辑稿引用构造。"
+    },
+    {
+      "source": "CREATION_SYSTEM_PROMPT",
       "line": 83,
       "text": "include_lexicon_terms_for_ids. Save existing_lexicon with its ID,",
       "reason": "2026-09-24 主提示与 resource_ref 工具契约对齐：保留发现资源流程，读取或保存后原样复用引用，不让模型组装旧哈希参数。"

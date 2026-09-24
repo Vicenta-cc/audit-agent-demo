@@ -12,7 +12,7 @@ from backend.rulesets.compiler import compile_ruleset_content, content_hash
 from backend.rulesets.trial_profiles import TRIAL_BUNDLES, apply_trial_profile
 from .contracts import LexiconContent, LexiconEntry, ResourceError
 from .lexicon_versions import canonical, digest, content as lexicon_content, synchronize
-from . import snapshot_refs
+from . import snapshot_refs, edit_refs
 
 
 def now():
@@ -42,6 +42,7 @@ class ResourceManagementService:
             raise RuntimeError('Resource persistence requires a single resource database')
         self.db = self.lexicons.db_path
         with self.app.store._connect() as conn:
+            edit_refs.initialize(conn)
             conn.executescript('''
                 CREATE TABLE IF NOT EXISTS resource_edit_origins (
                     edit_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, principal_id TEXT NOT NULL,
@@ -89,7 +90,12 @@ class ResourceManagementService:
                     'recall_plan': {'strategy': 'existing_lexicon', 'lexicon_id': resource_id,
                                     'expected_runtime_content_hash': runtime_hash, 'enabled_main_terms': terms}}
 
-    def resolve_lexicon_ref(self, resource_ref, *, principal, connection=None):
+    def resolve_lexicon_ref(self, resource_ref, *, principal, session_id='', connection=None):
+        with self.app.store._connect() as conn:
+            conn.execute('BEGIN')
+            temporary = edit_refs.resolve(conn, resource_ref, session_id=session_id, principal=principal)
+        if temporary is not None:
+            return temporary
         if connection is not None:
             return snapshot_refs.resolve(connection, self.lexicons, resource_ref, principal=principal)
         with self.lexicons._connect() as conn:
@@ -220,6 +226,8 @@ class ResourceManagementService:
                     raise ResourceError('编辑内容不存在。', code='RESOURCE_NOT_FOUND')
                 body = json.loads(row['content_json'])
                 result = dict(edit_id=edit_id, kind='lexicon', version=row['version'], content_hash=digest(body), content=body, source=source, search_terms=LexiconContent.model_validate(body).search_terms())
+                result['resource_ref'] = edit_refs.issue(conn, result, session_id=session_id,
+                                                        principal=principal, source=source)
         with self.lexicons._connect() as conn:
             rows = conn.execute('SELECT result_json FROM resource_save_receipts WHERE principal_id=? AND session_id=? ORDER BY created_at', (principal.id, session_id)).fetchall()
         saved = [json.loads(r[0]) for r in rows if json.loads(r[0]).get('edit_id') == edit_id]

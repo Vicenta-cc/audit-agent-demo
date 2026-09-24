@@ -71,13 +71,29 @@ class LexiconContent(StrictModel):
         return body
 
     def search_terms(self) -> list[str]:
+        # Storage/draft projection stays in authoring order for compatibility.
+        return list(dict.fromkeys(entry.term for entry in self._search_entries()))
+
+    def prioritize_search_terms(self, terms: list[str]) -> list[str]:
+        """Order an already selected set; never enable or add search terms."""
+        ranks = {'高': 3, '高风险': 3, 'high': 3,
+                 '中': 2, '中风险': 2, 'medium': 2,
+                 '低': 1, '低风险': 1, 'low': 1}
+        priorities: dict[str, int] = {}
+        for entry in self._search_entries():
+            rank = ranks.get(entry.risk_level.strip().lower(), 0)
+            # A query shared by multiple enabled entries runs only once, at
+            # its highest declared priority. Disabled entries cannot promote it.
+            priorities[entry.term] = max(priorities.get(entry.term, 0), rank)
+        return sorted(terms, key=lambda term: -priorities.get(term, 0))
+
+    def _search_entries(self) -> list[LexiconEntry]:
         by_parent: dict[str, list[LexiconEntry]] = {}
         for entry in self.entries:
             if entry.kind == 'variant' and entry.enabled:
                 by_parent.setdefault(entry.parent_id, []).append(entry)
 
-        terms: list[str] = []
-        seen: set[str] = set()
+        entries: list[LexiconEntry] = []
         for entry in self.entries:
             if entry.kind != 'main' or not entry.enabled:
                 continue
@@ -85,11 +101,8 @@ class LexiconContent(StrictModel):
             # concrete platform queries; legacy topics without variants keep
             # their main term as a compatibility fallback.
             candidates = by_parent.get(entry.id) or [entry]
-            for candidate in candidates:
-                if candidate.term not in seen:
-                    seen.add(candidate.term)
-                    terms.append(candidate.term)
-        return terms
+            entries.extend(candidates)
+        return entries
 
 
 class ReadResourceInput(StrictModel):

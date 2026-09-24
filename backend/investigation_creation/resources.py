@@ -410,6 +410,12 @@ class InvestigationResourceService:
                     source_lexicon_ids=list(plan.source_lexicon_ids),
                     lexicon_content=plan.lexicon_content,
                 )
+            # Sort only the execution projection, not the stored draft or its
+            # resource fingerprint. Invalid/stale formal resources remain blocked.
+            if recall_preview.lexicon_content is not None:
+                resolved_terms = recall_preview.lexicon_content.prioritize_search_terms(resolved_terms)
+            terms_field = "enabled_main_terms" if plan.strategy == "existing_lexicon" else "temporary_terms"
+            recall_preview = recall_preview.model_copy(update={terms_field: list(resolved_terms)})
         else:
             creator_url = effective_configuration.investigation.creator_url
 
@@ -746,12 +752,20 @@ class InvestigationResourceService:
         mode = configuration.investigation.mode
         collection: dict[str, Any]
         if mode == "search":
+            plan = configuration.investigation.recall_plan
             collection_keywords = list(
                 configuration.investigation.recall_plan.enabled_main_terms
                 if configuration.investigation.recall_plan.strategy
                 == "existing_lexicon"
                 else configuration.investigation.recall_plan.terms
             )
+            content = (
+                self.lexicon_editor_content(plan.lexicon_id, connection=resource_connection)
+                if plan.strategy == "existing_lexicon"
+                else plan.lexicon_content
+            )
+            if content is not None:
+                collection_keywords = content.prioritize_search_terms(collection_keywords)
             planned_content_count = min(
                 parameters.max_total_notes,
                 parameters.max_notes * max(1, len(collection_keywords)),
@@ -850,12 +864,12 @@ class InvestigationResourceService:
             if plan.strategy == "existing_lexicon":
                 resolved["keyword_source"] = "lexicon"
                 resolved["lexicon_category"] = plan.lexicon_id
-                resolved["lexicon_keywords"] = list(plan.enabled_main_terms)
+                resolved["lexicon_keywords"] = list(collection_keywords)
                 recall_snapshot = ConfirmedRecallPlanSnapshot(
                     strategy="existing_lexicon",
                     lexicon_id=plan.lexicon_id,
                     runtime_content_hash=resolution.recall_lexicon.runtime_content_hash,
-                    enabled_main_terms=list(plan.enabled_main_terms),
+                    enabled_main_terms=list(collection_keywords),
                 )
             else:
                 resolved["keyword_source"] = "keyword"
@@ -863,20 +877,11 @@ class InvestigationResourceService:
                 resolved["lexicon_keywords"] = []
                 recall_snapshot = ConfirmedRecallPlanSnapshot(
                     strategy="temporary_terms",
-                    temporary_terms=list(plan.terms),
+                    temporary_terms=list(collection_keywords),
                     source_lexicon_ids=list(plan.source_lexicon_ids),
                 )
         execution = ResolvedExecutionConfiguration.model_validate(resolved)
-        resolved_search_terms = (
-            list(configuration.investigation.recall_plan.enabled_main_terms)
-            if mode == "search"
-            and configuration.investigation.recall_plan.strategy == "existing_lexicon"
-            else (
-                list(configuration.investigation.recall_plan.terms)
-                if mode == "search"
-                else []
-            )
-        )
+        resolved_search_terms = list(collection_keywords) if mode == "search" else []
         creator_url = (
             configuration.investigation.creator_url if mode == "creator" else ""
         )

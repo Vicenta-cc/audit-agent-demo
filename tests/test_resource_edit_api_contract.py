@@ -103,3 +103,32 @@ def test_openapi_editor_schema_requires_only_content(api):
     assert body['required'] == ['content']
     assert set(body['properties']) == {'content'}
     assert body['additionalProperties'] is False
+
+
+def test_card_edit_then_agent_adoption_uses_new_version_without_copying(api):
+    from test_investigation_creation_conversation import _t1_temporary_arguments
+    from backend.resource_management.snapshot_refs import tool_view
+    from backend.resource_management.contracts import ResourceError
+    stack, manager, client, path = api
+    old = client.post(path, json={'content': CONTENT}).json()
+    session_id = path.split('/')[3]
+    ctx = dict(session_id=session_id, principal=Principal('principal-a'))
+    edit_path = path.rsplit('/', 1)[0] + '/' + old['edit_id']
+    response = client.patch(edit_path, json={'expected_version': 1, 'changes': [
+        {'operation': 'upsert_entry', 'target_id': 'variant',
+         'values': {'term': '招聘培训收费', 'note': '引号 "保留" 与反斜线 \\ 完整保存'}}]})
+    assert response.status_code == 200, response.text
+    updated = response.json()
+    assert updated['version'] == 2
+    assert updated['resource_ref'] != old['resource_ref']
+    with pytest.raises(ResourceError) as error:
+        manager.resolve_lexicon_ref(old['resource_ref'], **ctx)
+    assert error.value.code == 'RESOURCE_REF_STALE'
+    selected = stack['tool_service'].execute('get_resource_edit', {'edit_id': old['edit_id']}, **ctx)
+    assert selected['recall_plan'] == tool_view(updated)['recall_plan']
+    args = _t1_temporary_arguments(stack)
+    args['configuration']['investigation']['recall_plan'] = selected['recall_plan']
+    result = stack['tool_service'].execute('create_investigation_draft', args, **ctx)
+    plan = result['draft']['configuration']['investigation']['recall_plan']
+    assert plan['terms'] == ['招聘培训收费']
+    assert plan['lexicon_content']['entries'][1]['note'] == updated['content']['entries'][1]['note']

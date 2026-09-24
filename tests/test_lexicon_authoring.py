@@ -80,7 +80,6 @@ def test_alternatives_and_tags_do_not_enter_search_projection():
     ({'title': '空变体', 'themes': [{'term': '主题', 'variants': []}]}, 'authoring_schema', 'schema_validation'),
     ({'title': '空词', 'themes': [{'term': '主题', 'variants': [{'term': '  '}]}]}, 'authoring_schema', 'blank_term'),
     ({'title': '重复', 'themes': [{'term': '主题', 'variants': [{'term': '重复'}, {'term': '重复'}]}]}, 'storage_contract', 'duplicate_term_platform_match_type'),
-    (authoring_lexicon(11), 'search_constraints', 'default_count_exceeded'),
 ])
 def test_validation_reports_exact_stage_and_constraint(body, stage, constraint):
     with pytest.raises(ResourceError) as caught:

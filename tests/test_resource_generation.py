@@ -106,16 +106,36 @@ def test_provider_error_is_classified_without_replay_or_secret_echo(text, code, 
     assert client.chat.completions.create.call_count == 1
 
 
-def test_count_policy_applies_to_generation_not_import():
+@pytest.mark.parametrize("count", [1, 4, 5, 10, 11, 15, 30])
+def test_default_count_is_guidance_not_failure_or_silent_trimming(count):
+    gen, client, _ = generator(authoring_lexicon(count))
+    parsed = gen.generate("lexicon", ResourceGenerationRequest(**REQUEST))
+    assert parsed.search_terms() == [f"招聘押金{i}" for i in range(count)]
+    assert client.chat.completions.create.call_count == 1
+    assert len(CreateLexiconInput(content=lexicon(count)).content.search_terms()) == count
+
+
+def test_explicit_count_remains_strict_even_when_default_range_is_soft():
     gen, _, _ = generator(authoring_lexicon(11))
-    with pytest.raises(ResourceError):
-        gen.generate("lexicon", ResourceGenerationRequest(**REQUEST))
-    parsed = gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=11))
-    assert len(parsed.search_terms()) == 11
-    assert len(CreateLexiconInput(content=lexicon(11)).content.search_terms()) == 11
-    for count in (1, 4, 5, 10):
-        gen, _, _ = generator(authoring_lexicon(count))
-        assert len(gen.generate("lexicon", ResourceGenerationRequest(**REQUEST)).search_terms()) == count
+    assert len(gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=11)).search_terms()) == 11
+    with pytest.raises(ResourceError) as error:
+        gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=10))
+    assert error.value.details['validation_errors'][0]['constraint'] == 'requested_count_mismatch'
+
+
+def test_default_over_ten_creates_real_edit_and_can_save_without_regeneration(creation_stack):
+    tools = creation_stack['tool_service']
+    gen, client, _ = generator(authoring_lexicon(11))
+    tools.resource_generator = gen
+    ctx = dict(session_id='soft-count-session', principal=PRINCIPAL)
+    edit = tools.execute('create_lexicon_edit', {'generation_request': REQUEST}, **ctx)
+    assert len(edit['search_terms']) == 11
+    assert edit['recall_plan']['strategy'] == 'resource_ref'
+    saved = tools.execute('save_resource', {'edit_id': edit['edit_id'],
+        'expected_version': edit['version'], 'operation_id': 'save-eleven'}, **ctx)
+    read = tools.execute('read_resource', {'kind': 'lexicon', 'resource_id': saved['resource_id']}, **ctx)
+    assert read['search_terms'] == edit['search_terms']
+    assert client.chat.completions.create.call_count == 1
 
 
 def test_exact_terms_preserved_or_rejected_no_silent_trimming():

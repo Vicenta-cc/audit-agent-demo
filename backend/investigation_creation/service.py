@@ -85,7 +85,7 @@ class InvestigationCreationService:
             raise ConfigurationValidationError("investigation resource service is not configured")
         with self.resource_service.authoritative_draft_fence() as resource_connection:
             if resource_ref:
-                self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, connection=resource_connection)
+                self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
             def normalize(configuration: InvestigationDraftConfiguration, *, previous) -> InvestigationDraftConfiguration:
                 self._reject_legacy_creation_platform(configuration)
                 sources = self._temporary_provenance(configuration)
@@ -100,7 +100,19 @@ class InvestigationCreationService:
             return self.store.use_ruleset_proposal(
                 command, session_id=session_id, turn_id=turn_id, tool_call_id=tool_call_id, runtime_turn_id=runtime_turn_id or turn_id, principal=principal.id,
                 conversation_db=self.conversation_store.db_path, normalize=normalize,
+                before_write=self._edit_ref_guard(resource_ref, session_id, principal),
             )
+
+    @staticmethod
+    def _edit_ref_guard(resource_ref, session_id, principal):
+        if resource_ref is None:
+            return None
+        from backend.resource_management import edit_refs
+        # The creation-store write lock also protects lexicon edits. Recheck here,
+        # not just during tool argument resolution, to close the edit/adopt race.
+        return lambda connection: edit_refs.resolve(
+            connection, resource_ref, session_id=session_id, principal=principal,
+        )
 
     def create_ruleset_proposal(
         self, content: RuleSetContent | dict, *, session_id: str
@@ -141,7 +153,8 @@ class InvestigationCreationService:
         return RuleSetContent.model_validate(content)
 
     def create_draft(
-        self, command: CreateDraftCommand, *, principal: Principal, resource_ref: str | None = None
+        self, command: CreateDraftCommand, *, principal: Principal, resource_ref: str | None = None,
+        session_id: str = "",
     ) -> InvestigationDraft:
         command = CreateDraftCommand.model_validate(
             command.model_dump(mode="json", warnings=False)
@@ -156,7 +169,7 @@ class InvestigationCreationService:
                 )
             with self.resource_service.authoritative_draft_fence() as resource_connection:
                 if resource_ref:
-                    self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, connection=resource_connection)
+                    self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
                 sources = self._temporary_provenance(configuration)
                 if sources:
                     self.resource_service.validate_temporary_provenance(
@@ -172,6 +185,7 @@ class InvestigationCreationService:
                     title=command.title,
                     objective=command.objective,
                     configuration=resolution.normalized_configuration,
+                    before_write=self._edit_ref_guard(resource_ref, session_id, principal),
                 )
         return self.store.create_draft(
             principal=principal.id,
@@ -181,7 +195,8 @@ class InvestigationCreationService:
         )
 
     def update_draft(
-        self, command: UpdateDraftCommand, *, principal: Principal, resource_ref: str | None = None
+        self, command: UpdateDraftCommand, *, principal: Principal, resource_ref: str | None = None,
+        session_id: str = "",
     ) -> InvestigationDraft:
         command = UpdateDraftCommand.model_validate(
             command.model_dump(mode="json", warnings=False)
@@ -208,7 +223,7 @@ class InvestigationCreationService:
                 )
             with self.resource_service.authoritative_draft_fence() as resource_connection:
                 if resource_ref:
-                    self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, connection=resource_connection)
+                    self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
                 sources = self._temporary_provenance(effective_configuration)
                 if sources and sources != self._temporary_provenance(draft.configuration):
                     self.resource_service.validate_temporary_provenance(
@@ -226,6 +241,7 @@ class InvestigationCreationService:
                     title=command.title,
                     objective=command.objective,
                     configuration=resolution.normalized_configuration,
+                    before_write=self._edit_ref_guard(resource_ref, session_id, principal),
                 )
         return self.store.update_draft(
             command.draft_id,

@@ -152,8 +152,8 @@ runtime fingerprint, access permissions, and actual search-term snapshot; do not
 If the reference is stale, re-read and review the differences rather than silently adopting a newer version. The legacy
 enabled_main_terms field already contains the server-projected variant-first search terms; do not
 replace them with theme main terms or tag entries. When the user explicitly changes the
-search terms, use update_investigation_draft to replace the selected recall plan with temporary_terms containing
-the complete lexicon_content edited in the Drawer, its exact variant-first terms projection, and the
+search terms, update the session lexicon edit first, then use update_investigation_draft with its latest
+resource_ref recall_plan. The backend preserves complete lexicon_content, variant-first projection and
 source 黑话库 ID. Never flatten a structured Drawer edit and discard theme-to-variant relationships.
 
 If no sufficiently suitable existing 黑话库 is available, inspect the full conversation for
@@ -168,8 +168,8 @@ list, examples, a proposed configuration, or a Draft to that reply.
 If the user already authorized generation (for example, "没有合适词库就帮我生成这次搜索词" or
 "没有的话你自己补"), and investigation intent and a valid published Judgement 审核规则 are present,
 call create_lexicon_edit to persist a structured temporary lexicon, then create the Draft in the same turn only when
-using that valid published Judgement. Store terms in configuration.investigation.recall_plan with
-strategy=temporary_terms, source_lexicon_ids as real referenced 黑话库 IDs or [], and lexicon_content
+using that valid published Judgement. Pass the edit's resource_ref recall_plan unchanged; do not copy content.
+The backend stores strategy=temporary_terms, source_lexicon_ids as real referenced 黑话库 IDs or [], and lexicon_content
 containing stable main/variant entry IDs. Every enabled theme main must have at least one enabled
 variant; terms must exactly equal the variant-first search projection from lexicon_content. The main
 entries express semantic themes and the variants contain the real platform queries.

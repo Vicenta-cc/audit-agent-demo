@@ -765,12 +765,14 @@ class InvestigationCreationStore:
 
     def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str,
                             turn_id: str, tool_call_id: str, runtime_turn_id: str, principal: str, conversation_db: Path,
-                            normalize: Callable) -> InvestigationDraft:
+                            normalize: Callable, before_write: Callable | None = None) -> InvestigationDraft:
         command = UseRuleSetProposalInput.model_validate(command.model_dump(mode="json"))
         with self._connect() as connection:
             # Lock both existing SQLite stores before reading the approval basis.
             connection.execute("ATTACH DATABASE ? AS conversation", (str(conversation_db),))
             connection.execute("BEGIN IMMEDIATE")
+            if before_write:
+                before_write(connection)
             approval = resolve_approval(connection, session_id=session_id, turn_id=turn_id,
                                         principal=principal, presentation_id=command.presentation_id)
             presented = approval["presentation"]
@@ -872,6 +874,7 @@ class InvestigationCreationStore:
         title: str,
         objective: str,
         configuration: DraftConfiguration,
+        before_write: Callable | None = None,
     ) -> InvestigationDraft:
         self.protect_temporary_judgement(configuration)
         draft_id = f"investigation-draft:{uuid4().hex}"
@@ -879,6 +882,8 @@ class InvestigationCreationStore:
         configuration_json = self._json(configuration.model_dump(mode="json"))
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if before_write:
+                before_write(connection)
             connection.execute(
                 """
                 INSERT INTO investigation_drafts (
@@ -918,10 +923,13 @@ class InvestigationCreationStore:
         title: str | None = None,
         objective: str | None = None,
         configuration: DraftConfiguration | None = None,
+        before_write: Callable | None = None,
     ) -> InvestigationDraft:
         now = self._now_text()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if before_write:
+                before_write(connection)
             row = self._owned_draft_row(connection, draft_id, principal)
             if configuration is not None:
                 self.protect_temporary_judgement(configuration, self._draft(row).configuration)

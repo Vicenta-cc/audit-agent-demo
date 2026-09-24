@@ -85,8 +85,8 @@ def _validate_content(kind: str, content: str, request: ResourceGenerationReques
             if request.exact_terms is not None:
                 if terms != request.exact_terms:
                     raise ValueError("original terms or order were changed")
-            elif request.requested_count is None and len(terms) > 10:
-                raise ValueError("default total search terms exceeds 10")
+            # The default 5–10 range is authoring guidance, not a rejection
+            # threshold. Preserve valid output; never trim it to fit the target.
             count = len(terms)
         else:
             stage = "rule_constraints"

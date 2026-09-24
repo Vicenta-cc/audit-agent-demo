@@ -234,7 +234,7 @@ M3_TOOL_DESCRIPTIONS = {
         "Search Drafts prefer a suitable formal lexicon: use the resource_ref recall_plan returned "
         "by read_resource or save_resource; the backend binds its exact search snapshot. If none is "
         "sufficiently suitable and the conversation authorizes generating missing Recall, first call "
-        "create_lexicon_edit and use its exact recall_plan including lexicon_content; "
+        "create_lexicon_edit and use its resource_ref recall_plan unchanged, without copying content; "
         "otherwise explain the gap and propose generation without creating a Draft or listing "
         "any candidate/example search terms in the reply. Prefer hidden-language variants over "
         "explicit risk labels. source_lexicon_ids are write-time checked provenance, not runtime "
@@ -247,7 +247,7 @@ M3_TOOL_DESCRIPTIONS = {
     "update_investigation_draft": (
         "Update an editable Investigation Draft at its expected revision. User changes "
         "to platform, 审核规则 judgement, 黑话库, or terms are allowed before confirmation; edited "
-        "黑话库 terms must be represented as temporary_terms. Authorized generation of missing "
+        "黑话库 edits use the latest edit's resource_ref recall_plan; the backend captures temporary_terms. Authorized generation of missing "
         "Recall first creates a session lexicon edit and uses its exact structured recall_plan, without formal save. "
         "Changed source_lexicon_ids must reference real 黑话库; unchanged provenance needs no "
         "resource refresh. Each temporary term must be comma-free. This command never confirms "
@@ -308,8 +308,8 @@ M3_TOOL_DESCRIPTIONS.update(RESOURCE_DESCRIPTIONS)
 M3_PARAMETER_GUIDANCE = {
     'use_ruleset_proposal': (
         '新建草案时 arguments 结构为 '
-        '{"presentation_id":"展示记录返回的真实ID","create_draft":{"title":"任务标题","objective":"任务目标","configuration":{"platform":"dy","investigation":{"mode":"search","recall_plan":{"strategy":"temporary_terms","terms":["已展示的搜索词"]}}}}}。title/objective/configuration'
-        ' 必须放在 create_draft 内；recall_plan 直接放 terms，不嵌套 temporary_terms。configuration 也可包含 task_parameters；'
+        '{"presentation_id":"展示记录返回的真实ID","create_draft":{"title":"任务标题","objective":"任务目标","configuration":{"platform":"dy","investigation":{"mode":"search","recall_plan":{"strategy":"resource_ref","resource_ref":"词库回执返回的真实引用"}}}}}。title/objective/configuration'
+        ' 必须放在 create_draft 内；临时或正式词库均直接使用回执中的 recall_plan，不重抄内容。configuration 也可包含 task_parameters；'
         '用户明确指定执行参数时须写入并保留，不要传 crawler_account_id。已有草案则传 '
         'presentation_id、draft_id、expected_revision，不传 create_draft。'
     ),
@@ -337,13 +337,13 @@ M3_PARAMETER_GUIDANCE = {
     ),
     'create_investigation_draft': (
         'configuration 可包含 task_parameters。用户明确指定帖子数、每帖评论数、并发、是否采集媒体或是否自动审核时，必须把这些值写入 '
-        'configuration.task_parameters；未明确指定时可省略并使用统一设置。生成临时召回时，temporary_terms 必须同时包含完整 '
-        'lexicon_content，主词表示主题、启用变体表示实际搜索词，terms 必须与变体投影完全一致。不要传 crawler_account_id。'
+        'configuration.task_parameters；未明确指定时可省略并使用统一设置。已有临时或正式词库时直接使用其 resource_ref recall_plan，'
+        '不重新填写内容、词条或 hash；主词归属、启用变体与搜索投影由后端保留。不要传 crawler_account_id。'
     ),
     'update_investigation_draft': (
         '参数须有 draft_id、expected_revision，另传需要修改的 title、objective 或完整 configuration。先读当前草案；修改搜索词时保留 '
-        'platform、judgement 和未要求改变的 task_parameters。结构化关键词编辑必须同时提交完整 lexicon_content 和与其启用变体投影完全一致的 '
-        'investigation.recall_plan.terms，不得只改扁平 terms 而丢失主题归属。用户明确指定帖子数、评论数、并发、媒体采集等'
+        'platform、judgement 和未要求改变的 task_parameters。词库编辑后使用最新编辑稿的 resource_ref recall_plan，'
+        '不得只改扁平 terms 而丢失主题归属；完整内容与启用变体投影由后端绑定。用户明确指定帖子数、评论数、并发、媒体采集等'
         '执行参数时，在 configuration.task_parameters 中写入并在后续完整配置更新中保留；不要传 crawler_account_id、patch 或 expected_version。'
     ),
     'confirm_and_queue_investigation': (
@@ -444,7 +444,7 @@ class InvestigationCreationToolService:
         if tool_name in {'create_investigation_draft', 'update_investigation_draft', 'use_ruleset_proposal'}:
             resolved, resource_ref = resolve_arguments(tool_name, parsed.model_dump(mode='json'),
                                          lambda: self.application_service.resource_management,
-                                         principal=principal)
+                                         principal=principal, session_id=session_id)
             parsed = (UseRuleSetProposalInput if tool_name == 'use_ruleset_proposal' else schema).model_validate(resolved)
         if tool_name in {"create_ruleset_proposal", "create_lexicon_edit"} and parsed.generation_request is not None:
             kind = "ruleset" if tool_name == "create_ruleset_proposal" else "lexicon"
@@ -494,7 +494,7 @@ class InvestigationCreationToolService:
             draft = self.application_service.create_draft(
                 CreateDraftCommand.model_validate(parsed.model_dump(mode="json")),
                 principal=principal,
-                **({'resource_ref': resource_ref} if resource_ref else {}),
+                **({'resource_ref': resource_ref, 'session_id': session_id} if resource_ref else {}),
             )
             result = self.application_service.get_draft_view(
                 draft.id, principal=principal
@@ -503,7 +503,7 @@ class InvestigationCreationToolService:
             draft = self.application_service.update_draft(
                 UpdateDraftCommand.model_validate(parsed.model_dump(mode="json")),
                 principal=principal,
-                **({'resource_ref': resource_ref} if resource_ref else {}),
+                **({'resource_ref': resource_ref, 'session_id': session_id} if resource_ref else {}),
             )
             result = self.application_service.get_draft_view(
                 draft.id, principal=principal
