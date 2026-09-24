@@ -1,4 +1,4 @@
-"""Per-keyword candidate scoring and selection: rules first, one flash call otherwise."""
+"""Per-keyword candidate scoring and selection: lexicon hits weighted by risk level plus one flash call."""
 from __future__ import annotations
 
 import json
@@ -8,8 +8,12 @@ from pathlib import Path
 
 from .triage_matcher import TriageHit, TriageTerm, match_terms, normalize_text, terms_from_rows
 
-RULE_HIT_SCORE = 300
-RULE_HIT_CAP = 900
+# 词库命中按词条风险等级计分，未标或其他等级按中计；规则分封顶后再加模型分（方案 §4，2026-09-24）
+RULE_SCORE_HIGH = 300
+RULE_SCORE_MEDIUM = 100
+RULE_SCORE_LOW = 50
+RULE_SCORE_CAP = 900
+PROMPT_HIT_LIMIT = 5
 DISCARD_SCORE = -1000
 MODEL_SCORES = {"strong": 200, "weak": 100, "none": 0}
 
@@ -66,7 +70,9 @@ def _comment_text(comment: dict) -> str:
 class TriageEngine:
     def __init__(self, lexicon_store, qwen, *, model: str, max_comments: int, request_timeout: int,
                  max_followers_personal_verified: int = 500000, max_followers_unverified: int = 1000000,
-                 official_verify_patterns: tuple[str, ...] = OFFICIAL_VERIFY_PATTERNS):
+                 official_verify_patterns: tuple[str, ...] = OFFICIAL_VERIFY_PATTERNS,
+                 rule_score_high: int = RULE_SCORE_HIGH, rule_score_medium: int = RULE_SCORE_MEDIUM,
+                 rule_score_low: int = RULE_SCORE_LOW, rule_score_cap: int = RULE_SCORE_CAP):
         self.lexicon_store = lexicon_store
         self.qwen = qwen
         self.model = model
@@ -76,6 +82,9 @@ class TriageEngine:
         self.max_followers_unverified = max_followers_unverified
         self.official_verify_patterns = tuple(official_verify_patterns)
         self._official_verify_regex = _compile_official_verify_regex(self.official_verify_patterns)
+        self.rule_weights = {"高": rule_score_high, "中": rule_score_medium, "低": rule_score_low}
+        self.rule_score_medium = rule_score_medium
+        self.rule_score_cap = rule_score_cap
         self._terms_cache: dict[tuple[str, ...], list[TriageTerm]] = {}
         # 归一化的搜索词 -> 归一化的所在词条主词；平台搜索词和变体不在匹配词表里，要单独查
         self._search_groups: dict[tuple[str, ...], dict[str, str]] = {}
@@ -123,8 +132,29 @@ class TriageEngine:
             sections.append(f"融合规则：\n{fusion_rules}\n")
         return "".join(sections)
 
+    @staticmethod
+    def _hits_text(hits: list[TriageHit] | None) -> str:
+        """词库命中作为事实交给模型，最多列 PROMPT_HIT_LIMIT 处；是否构成风险仍按判定规则判断。"""
+        if not hits:
+            return ""
+        listed = "，".join(f"{hit.keyword}@{hit.field}" for hit in hits[:PROMPT_HIT_LIMIT])
+        return f"词库命中：{listed}\n"
+
+    def _rule_score(self, hits: list[TriageHit]) -> tuple[int, str]:
+        """按词条风险等级加权求和并封顶；返回规则分和「词条(等级)×次数」的理由片段。"""
+        counts: dict[tuple[str, str], int] = {}
+        total = 0
+        for hit in hits:
+            total += self.rule_weights.get(hit.risk_level, self.rule_score_medium)
+            key = (hit.keyword, hit.risk_level or "未标")
+            counts[key] = counts.get(key, 0) + 1
+        total = min(self.rule_score_cap, total)
+        listed = "、".join(f"{keyword}({level})" + (f"×{count}" if count > 1 else "")
+                          for (keyword, level), count in counts.items())
+        return total, f"词库命中 {listed} +{total}"
+
     def build_prompt(self, item: dict, comments: list[dict], terms: list[TriageTerm],
-                     *, rules: dict | None = None) -> str:
+                     *, rules: dict | None = None, hits: list[TriageHit] | None = None) -> str:
         payload = {
             "post": {
                 "title": _text(item.get("title"))[:200],
@@ -146,7 +176,8 @@ class TriageEngine:
             "lexicon_terms 是本次调查的黑话词与变体清单，请把它当作识别暗语、谐音、拆字、拼音缩写的参考，"
             "不要只做字面匹配。评论区往往是隐藏交易的接头处，要逐条看。\n"
             # 判定口径全部来自任务分类的判定规则，代码里不写死豁免语境或风险定义
-            + self._rules_text(rules) +
+            + self._rules_text(rules)
+            + self._hits_text(hits) +
             "只输出合法 JSON，不要输出 Markdown：\n"
             "{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\","
             "\"suspicion\":\"none|weak|strong\",\"matched_terms\":[\"命中的词或变体\"],"
@@ -212,36 +243,47 @@ class TriageEngine:
             return CandidateScore(content_key, rank, DISCARD_SCORE, "discard", discard_reason, engagement=engagement)
         hits, self_hits = self._drop_self_hits(self._rule_hits(item, comments, terms), search_keyword, terms,
                                                self._search_groups_for(terms))
-        # 自命中被扣掉后才走模型的候选，要在理由里说清楚，运营看日志时不会以为规则层漏判
+        # 自命中被扣掉的处数要在理由里说清楚，运营看日志时不会以为规则层漏判
         note = f"（搜索词所在词条命中 {self_hits} 处不计分）" if self_hits else ""
-        if hits:
-            top = hits[0]
-            total = min(RULE_HIT_CAP, RULE_HIT_SCORE * len(hits))
-            reason = f"命中{top.category_id or '词库'}：{top.keyword}（{top.field}）"
-            return CandidateScore(content_key, rank, total, "rule", reason,
-                                  hits=[asdict(h) for h in hits], engagement=engagement)
+        lexicon_hits = [asdict(h) for h in hits]
+        rule_score, rule_reason = self._rule_score(hits) if hits else (0, "")
+        # 每条非丢弃候选都过模型：词库命中只是事实，模型按判定规则给出 strong/weak/none
+        verdict, model_reason, model, matched = self._model_verdict(item, comments, terms, rules, hits)
+        model_hits = [{"keyword": v, "match_type": "model", "category_id": "", "risk_level": "", "field": "", "snippet": ""}
+                      for v in matched]
+        if not hits:
+            reason = model_reason
+        elif verdict == "none":
+            reason = f"模型判 none，词库命中 {len(hits)} 处不计分：{model_reason}"
+        else:
+            reason = f"{rule_reason}；{model_reason}"
+        total = (0 if verdict == "none" else rule_score) + MODEL_SCORES[verdict]
+        return CandidateScore(content_key, rank, total, verdict, reason + note, hits=lexicon_hits + model_hits,
+                              model=model, engagement=engagement)
+
+    def _model_verdict(self, item: dict, comments: list[dict], terms: list[TriageTerm], rules: dict | None,
+                       hits: list[TriageHit]) -> tuple[str, str, dict | None, list[str]]:
+        """调一次初筛模型，返回 (verdict, 理由, 规整后的模型输出, 模型命中词)；调用失败或输出不合法按 weak 计。
+        有词库命中时理由带上「模型 <verdict> +<分>」前缀，方便和规则分拼在一起。"""
+        weak = f" +{MODEL_SCORES['weak']}" if hits else ""
         try:
-            raw = self.qwen.audit_text(self.build_prompt(item, comments, terms, rules=rules), max_tokens=800,
-                                       model=self.model, enable_thinking=False,
+            raw = self.qwen.audit_text(self.build_prompt(item, comments, terms, rules=rules, hits=hits),
+                                       max_tokens=800, model=self.model, enable_thinking=False,
                                        request_timeout=self.request_timeout)
         except Exception as exc:
-            return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak",
-                                  f"初筛模型调用失败，按 weak 计：{exc}"[:200] + note, engagement=engagement)
+            return "weak", f"初筛模型调用失败，按 weak 计{weak}：{exc}"[:200], None, []
         # 模型答一个数组或字符串时 json.loads 原样返回，按调用失败同样处理，不能让整个词失败
         if not isinstance(raw, dict):
-            return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak",
-                                  "初筛模型输出不合法（非 JSON 对象），按 weak 计" + note, engagement=engagement)
+            return "weak", f"初筛模型输出不合法（非 JSON 对象），按 weak 计{weak}", None, []
         suspicion = _text(raw.get("suspicion")).lower()
         if suspicion not in MODEL_SCORES:
-            return CandidateScore(content_key, rank, MODEL_SCORES["weak"], "weak", "初筛模型输出不合法，按 weak 计" + note,
-                                  model=raw, engagement=engagement)
+            return "weak", f"初筛模型输出不合法，按 weak 计{weak}", raw, []
         matched = _str_list(raw.get("matched_terms"))
         model = {**raw, "matched_terms": matched, "locations": _str_list(raw.get("locations"))}
-        score_value, band = MODEL_SCORES[suspicion], suspicion
         reason = _text(raw.get("reason"))[:120] or f"模型判定 {suspicion}"
-        return CandidateScore(content_key, rank, score_value, band, reason + note,
-                              hits=[{"keyword": v, "match_type": "model", "category_id": "", "risk_level": "", "field": "", "snippet": ""} for v in matched],
-                              model=model, engagement=engagement)
+        if hits and suspicion != "none":
+            reason = f"模型 {suspicion} +{MODEL_SCORES[suspicion]}：{reason}"
+        return suspicion, reason, model, matched
 
 
 def rank_candidates(scores: list[CandidateScore]) -> list[CandidateScore]:

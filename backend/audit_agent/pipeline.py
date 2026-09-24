@@ -1906,7 +1906,11 @@ class AuditPipeline:
                                   request_timeout=settings.triage_request_timeout,
                                   max_followers_personal_verified=settings.triage_max_followers_personal_verified,
                                   max_followers_unverified=settings.triage_max_followers_unverified,
-                                  official_verify_patterns=settings.triage_official_verify_patterns)
+                                  official_verify_patterns=settings.triage_official_verify_patterns,
+                                  rule_score_high=settings.triage_rule_score_high,
+                                  rule_score_medium=settings.triage_rule_score_medium,
+                                  rule_score_low=settings.triage_rule_score_low,
+                                  rule_score_cap=settings.triage_rule_score_cap)
             self._triage_engine = engine
         return engine
 

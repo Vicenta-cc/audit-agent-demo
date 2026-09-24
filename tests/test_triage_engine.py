@@ -58,11 +58,103 @@ def _engine(response, **limits):
                         request_timeout=60, **limits)
 
 
-def test_rule_hit_scores_high_without_model_call():
-    engine = _engine({"suspicion": "none"})
+class LeveledLexicon:
+    """同一类目下高/中/低/未标等级各一个词，用来验证按词条风险等级计分。"""
+
+    def triage_terms(self, category_ids):
+        def row(keyword, level):
+            return {"category_id": "gambling", "keyword": keyword, "match_type": "模糊", "risk_level": level,
+                    "entry_kind": "main", "entry_group": keyword}
+        return [row("甲词", "高"), row("乙词", "中"), row("丙词", "低"), row("丁词", "")]
+
+    def search_word_groups(self, category_ids):
+        return {}
+
+
+def _leveled_engine(response, **weights):
+    return TriageEngine(LeveledLexicon(), FakeQwen(response), model="qwen3.6-flash", max_comments=60,
+                        request_timeout=60, **weights)
+
+
+def _leveled(engine, text, comments=()):
+    return engine.score("a", 1, {"desc": text}, list(comments), engine.terms_for(["gambling"]))
+
+
+def test_high_hit_plus_strong_model_adds_both_scores():
+    engine = _leveled_engine({"suspicion": "strong", "reason": "评论区约私聊"})
+    scored = _leveled(engine, "甲词")
+    assert scored.score == 500 and scored.band == "strong"
+    assert len(engine.qwen.calls) == 1      # 有规则命中也要过模型
+    assert scored.reason == "词库命中 甲词(高) +300；模型 strong +200：评论区约私聊"
+    assert [hit["keyword"] for hit in scored.hits] == ["甲词"]
+
+
+def test_medium_hit_weights_combine_with_strong_and_weak():
+    assert _leveled(_leveled_engine({"suspicion": "strong"}), "乙词").score == 300
+    weak = _leveled(_leveled_engine({"suspicion": "weak"}), "乙词")
+    assert weak.score == 200 and weak.band == "weak"
+
+
+def test_low_and_unlabelled_levels_use_their_weights():
+    assert _leveled(_leveled_engine({"suspicion": "strong"}), "丙词").score == 250
+    assert _leveled(_leveled_engine({"suspicion": "strong"}), "丁词").score == 300   # 未标等级按中计
+
+
+def test_model_none_zeroes_the_rule_hits():
+    engine = _leveled_engine({"suspicion": "none", "reason": "反诈科普"})
+    scored = _leveled(engine, "甲词", [{"comment_id": "c1", "content": "甲词"}])
+    assert scored.score == 0 and scored.band == "none"
+    assert scored.reason == "模型判 none，词库命中 2 处不计分：反诈科普"
+    assert len(scored.hits) == 2
+    assert select_candidate(rank_candidates([scored]), exclude_keys=set()) is None
+
+
+def test_model_failure_keeps_the_rule_score_as_weak():
+    engine = _leveled_engine(RuntimeError("down"))
+    scored = _leveled(engine, "甲词")
+    assert scored.score == 400 and scored.band == "weak"
+    assert scored.reason.startswith("词库命中 甲词(高) +300；初筛模型调用失败，按 weak 计")
+
+
+def test_rule_score_is_capped_before_the_model_score_is_added():
+    engine = _leveled_engine({"suspicion": "strong"})
+    comments = [{"comment_id": f"c{i}", "content": "甲词"} for i in range(3)]
+    scored = _leveled(engine, "甲词", comments)
+    assert scored.score == 900 + 200
+    assert "甲词(高)×4 +900" in scored.reason
+
+
+def test_rule_weights_are_configurable():
+    engine = _leveled_engine({"suspicion": "weak"}, rule_score_high=500, rule_score_cap=2000)
+    assert _leveled(engine, "甲词").score == 600
+    capped = _leveled_engine({"suspicion": "weak"}, rule_score_medium=100, rule_score_cap=150)
+    assert _leveled(capped, "乙词丁词").score == 150 + 100
+
+
+def test_prompt_lists_the_lexicon_hits_as_facts():
+    engine = _leveled_engine({"suspicion": "strong"})
+    _leveled(engine, "甲词", [{"comment_id": "c9", "content": "乙词"}])
+    prompt = engine.qwen.calls[0][0]
+    assert "词库命中：甲词@desc，乙词@comment:c9" in prompt
+
+    no_hits = _leveled_engine({"suspicion": "none"})
+    _leveled(no_hits, "日常")
+    assert "词库命中：" not in no_hits.qwen.calls[0][0]
+
+
+def test_prompt_lists_at_most_five_lexicon_hits():
+    engine = _leveled_engine({"suspicion": "strong"})
+    comments = [{"comment_id": f"c{i}", "content": "甲词"} for i in range(6)]
+    _leveled(engine, "日常", comments)
+    line = next(l for l in engine.qwen.calls[0][0].splitlines() if l.startswith("词库命中："))
+    assert line.count("@") == 5
+
+
+def test_rule_hit_is_scored_together_with_the_model():
+    engine = _engine({"suspicion": "weak"})
     terms = engine.terms_for(["gambling"])
     score = engine.score("a", 1, {"desc": "今晚上分稳赢", "liked_count": "10"}, [], terms)
-    assert score.band == "rule" and score.score >= 300 and engine.qwen.calls == []
+    assert score.band == "weak" and score.score == 400 and len(engine.qwen.calls) == 1
     assert score.hits[0]["keyword"] == "上分"
 
 
@@ -75,28 +167,28 @@ def test_search_keyword_self_hit_is_not_scored_and_falls_through_to_the_model():
     assert len(engine.qwen.calls) == 1
     assert scored.reason == "评论区约私聊（搜索词所在词条命中 1 处不计分）"
 
-    # 不带搜索词（别的调用方）时行为不变：规则层照常计分，不调模型
+    # 不带搜索词（别的调用方）时自命中照常计规则分
     baseline = _engine({"suspicion": "strong", "reason": "评论区约私聊"})
     plain = baseline.score("a", 1, item, [], baseline.terms_for(["gambling"]))
-    assert plain.band == "rule" and plain.score == 300 and baseline.qwen.calls == []
+    assert plain.band == "strong" and plain.score == 500 and len(baseline.qwen.calls) == 1
 
 
 def test_other_lexicon_term_still_counts_when_the_search_keyword_is_dropped():
-    engine = _engine({"suspicion": "none"})
+    engine = _engine({"suspicion": "weak"})
     scored = engine.score("b", 1, {"title": "上分群带你上分"}, [], engine.terms_for(["gambling"]), search_keyword="上分")
-    assert scored.band == "rule" and scored.score == 300 and engine.qwen.calls == []
+    assert scored.band == "weak" and scored.score == 400
     assert [hit["keyword"] for hit in scored.hits] == ["上分群"]
-    assert "上分群" in scored.reason and "搜索词所在词条命中" not in scored.reason
+    assert "上分群(高) +300" in scored.reason and scored.reason.endswith("（搜索词所在词条命中 1 处不计分）")
 
 
 def test_regex_lexicon_entry_survives_the_search_keyword_drop():
     # 自命中被扣掉后，词库里的正则条目照样计分——引流用语现在全部来自词库
-    engine = _engine({"suspicion": "none"})
+    engine = _engine({"suspicion": "weak", "reason": "引流"})
     scored = engine.score("c", 1, {"title": "上分", "desc": "加 微信详聊"}, [], engine.terms_for(["gambling"]),
                           search_keyword="上分")
-    assert scored.band == "rule" and scored.score == 300 and engine.qwen.calls == []
+    assert scored.band == "weak" and scored.score == 400
     assert [hit["match_type"] for hit in scored.hits] == ["正则"]
-    assert scored.reason == "命中gambling：加\\s*微信（desc）"
+    assert scored.reason == "词库命中 加\\s*微信(高) +300；模型 weak +100：引流（搜索词所在词条命中 1 处不计分）"
 
 
 def test_searching_a_variant_drops_hits_on_its_main_and_sibling_variants():
@@ -109,10 +201,10 @@ def test_searching_a_variant_drops_hits_on_its_main_and_sibling_variants():
 
 
 def test_other_entry_still_scores_when_the_searched_entry_is_dropped():
-    engine = _entry_engine({"suspicion": "none"})
+    engine = _entry_engine({"suspicion": "weak"})
     scored = engine.score("b", 1, {"desc": "房卡代理，十三水开桌"}, [], engine.terms_for(["gambling"]),
                           search_keyword="房卡代理")
-    assert scored.band == "rule" and scored.score == 300 and engine.qwen.calls == []
+    assert scored.band == "weak" and scored.score == 400
     assert [hit["keyword"] for hit in scored.hits] == ["十三水"]
     assert "十三水" in scored.reason
 
@@ -127,18 +219,18 @@ def test_term_contained_in_the_search_word_is_dropped_without_a_variant_link():
 
 
 def test_regex_term_is_never_dropped_by_the_containment_rule():
-    engine = _entry_engine({"suspicion": "none"})
+    engine = _entry_engine({"suspicion": "weak"})
     scored = engine.score("d", 1, {"title": "注册送彩金"}, [], engine.terms_for(["gambling"]),
                           search_keyword="注册送彩金")
-    assert scored.band == "rule" and engine.qwen.calls == []
+    assert scored.band == "weak" and scored.score == 400
     assert [(hit["keyword"], hit["match_type"]) for hit in scored.hits] == [("送彩金", "正则")]
     assert scored.hits[0]["entry_group"] == "送彩金"
 
 
 def test_blank_search_keyword_drops_nothing():
-    engine = _entry_engine({"suspicion": "none"})
+    engine = _entry_engine({"suspicion": "weak"})
     scored = engine.score("e", 1, {"desc": "批发房卡"}, [], engine.terms_for(["gambling"]), search_keyword="  ")
-    assert scored.band == "rule" and scored.score == 600
+    assert scored.band == "weak" and scored.score == 700
     assert [hit["keyword"] for hit in scored.hits] == ["房卡", "批发房卡"]
 
 
@@ -232,7 +324,8 @@ def test_blue_v_is_discarded_before_the_rules_and_the_model():
     assert select_candidate(rank_candidates([scored]), exclude_keys=set()) is None
 
     plain = engine.score("b", 1, {"desc": "今晚上分"}, [], terms)
-    assert plain.band == "rule" and plain.score == 300 and "认证账号" not in plain.reason
+    assert plain.band == "strong" and plain.score == 500 and "认证账号" not in plain.reason
+    assert len(engine.qwen.calls) == 1
 
 
 def test_official_institution_blue_v_is_discarded_by_built_in_patterns():
@@ -290,7 +383,7 @@ def test_personal_yellow_v_is_discarded_only_above_the_follower_limit():
     assert engine.qwen.calls == []
 
     kept = engine.score("b", 1, {**item, "follower_count": "400000"}, [], engine.terms_for(["gambling"]))
-    assert kept.band == "rule" and kept.score == 300      # 阈值以下照常走规则/模型
+    assert kept.band == "none" and kept.score == 0 and len(engine.qwen.calls) == 1   # 阈值以下照常走规则+模型
 
     unlimited = _engine({"suspicion": "none"}, max_followers_personal_verified=0)
     assert unlimited.score("c", 1, item, [], []).band == "none"      # 0 = 不限
