@@ -509,15 +509,18 @@ class PassReportToolService(ReportTaskInvestigationToolService):
             ],
         )
 
-    def _list_post_comments(self, session_id, args):
+    def _list_post_comments(self, session_id, args, *, turn_id=""):
+        return self._comment_page(session_id, args)
+
+    def _comment_page(self, session_id, args, *, max_limit=20):
         if (
             set(args) - {"post_ref", "limit", "cursor", "risk_filter"}
             or not isinstance(args.get("post_ref"), str)
             or type(args.get("limit")) is not int
-            or not 1 <= args["limit"] <= 20
+            or not 1 <= args["limit"] <= max_limit
         ):
             raise ToolInputError(
-                "invalid_arguments", "post_ref and limit (1..20) are required"
+                "invalid_arguments", f"post_ref and limit (1..{max_limit}) are required"
             )
         risk_filter = args.get("risk_filter", "all")
         if risk_filter not in {"all", "risk", "no_risk", "unknown"}:
@@ -566,6 +569,10 @@ class PassReportToolService(ReportTaskInvestigationToolService):
             else None
         )
         account_repository = self.account_activity._load_repository()
+        author_ids = [account_repository.comment_occurrence(
+            self.repository.fixture.provenance.source_task_id,
+            post.id.split(":", 1)[-1], c.id,
+        ).get("account_ref") for c in comments]
 
         def comment_card(c):
             occurrence = account_repository.comment_occurrence(
@@ -604,6 +611,11 @@ class PassReportToolService(ReportTaskInvestigationToolService):
                 "risk_filter": risk_filter,
                 "total_count": len(all_comments),
                 "matched_count": len(comments),
+                "matched_author_statistics": {
+                    "identified_author_count": len({identity for identity in author_ids if identity}),
+                    "comments_without_identified_author": sum(not identity for identity in author_ids),
+                    "scope": "all_matching_comments_for_this_post",
+                },
                 "returned_count": len(selected),
                 "audit_coverage": self._comment_coverage(all_comments),
                 "comments": [comment_card(c) for c in selected],

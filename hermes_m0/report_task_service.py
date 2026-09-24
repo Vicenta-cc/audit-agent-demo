@@ -230,7 +230,7 @@ class ReportTaskInvestigationToolService:
                 raise ToolInputError(
                     "invalid_arguments", "Tool arguments must be an object."
                 )
-            if tool_name == "search_posts":
+            if tool_name in {"search_posts", "list_post_comments"}:
                 return handler(session_id, args, turn_id=turn_id)
             if tool_name in {
                 "search_accounts",

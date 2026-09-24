@@ -7,6 +7,7 @@ from copy import deepcopy
 
 from backend.audit_agent.limits import MAX_SUPPORTED_INVESTIGATION_POSTS
 
+from .comment_batches import COMMENT_SOURCE_CONTEXT, READ_COMMENT_DELIVERY, read_delivery
 from .pass_support import PassReportToolService, pass_tool_schemas
 from .schemas import REPORT_STATISTICS_DESCRIPTION
 from .service import (
@@ -119,6 +120,8 @@ class UnifiedAuditReportToolService(PassReportToolService):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.comment_batch_states = {}
+        self._handlers["read_comment_delivery"] = lambda session_id, args: read_delivery(self, session_id, args)
         self._handlers["list_report_posts"] = self._list_report_posts
         for tool_name in (
             "search_posts",
@@ -130,6 +133,21 @@ class UnifiedAuditReportToolService(PassReportToolService):
             for name in ("compare_authorized_report_accounts", "list_authorized_reports", "list_report_accounts",
                          "get_report_account_statistics"):
                 self._handlers[name] = self._dispatch_account_activity
+
+    def bind_session(self, session_id, *, force_new_generation=False):
+        self.comment_batch_states.pop(session_id, None)
+        return super().bind_session(session_id, force_new_generation=force_new_generation)
+
+    def _list_post_comments(self, session_id, args, *, turn_id=""):
+        from .comment_batches import read_batch, session_state
+        if "batch_action" in args:
+            return read_batch(self, session_id, args, turn_id)
+        if turn_id in session_state(self, session_id)["pages"]:
+            raise ToolInputError("comment_batch_turn_limit", "本轮已准备一批评论，请结束回答，等待用户继续。")
+        result = json.loads(super()._list_post_comments(
+            session_id, {"limit": 5, **args}, turn_id=turn_id))
+        result["authority"]["limitations"].append(COMMENT_SOURCE_CONTEXT)
+        return json.dumps(result, ensure_ascii=False)
 
     def _read_real_report(self, session_id, args):
         if args:
@@ -314,9 +332,25 @@ def unified_tool_schemas():
     schemas.extend(
         [deepcopy(LIST_REPORT_POSTS), deepcopy(LIST_AUTHORIZED_REPORTS),
          deepcopy(COMPARE_AUTHORIZED_REPORT_ACCOUNTS), deepcopy(LIST_REPORT_ACCOUNTS),
-         deepcopy(GET_REPORT_ACCOUNT_STATISTICS)]
+         deepcopy(GET_REPORT_ACCOUNT_STATISTICS), deepcopy(READ_COMMENT_DELIVERY)]
     )
     for schema in schemas:
+        if schema["name"] == "list_post_comments":
+            schema["description"] += " " + COMMENT_SOURCE_CONTEXT
+            schema["description"] += (
+                " 普通‘看看评论’默认预览5条，limit最多20；不要自动选择全部交付。"
+                "只有用户明确要求‘全部逐条列出/展示所有原文’时，batch_action=start。"
+                "已开始分批交付后用户说‘继续’，同post_ref和risk_filter使用batch_action=continue；"
+                "不能再次start重头读取。分批模式每轮固定最多100条，不传limit/cursor。"
+                "服务端保存交付进度并在聊天回答中直接列出原文，不产生Drawer、链接或卡片。"
+                "工具仅返回计数，不能声称模型已经阅读或分析了全部原文；本轮不再翻页，等待用户继续。"
+            )
+            schema["parameters"]["properties"]["batch_action"] = {
+                "type": "string", "enum": ["start", "continue"],
+                "description": "省略为少量预览；明确全部逐条展示才start，用户后续继续才continue。"
+            }
+            schema["parameters"]["properties"]["limit"]["default"] = 5
+            schema["parameters"]["required"] = ["post_ref"]
         if schema["name"] == "read_report":
             schema["description"] = (
                 "读取当前1至30条帖子新增统一审核报告的概览、完整统计、第一页最多10条"
@@ -341,7 +375,7 @@ UNIFIED_REPORT_SYSTEM_PROMPT = f"""你是新增统一审核报告的问答助手
 用户询问“这个报告的大概内容是什么”、报告概览或结果分布时，先调用read_report。read_report返回完整统计和第一页最多{POST_DIRECTORY_PAGE_SIZE}条帖子目录；概览问题可据此回答并说明当前展示数量，不要为概览自动展开正文。用户明确要求列出全部帖子、全部安全帖或全部风险帖时，继续调用list_report_posts读取所有尚未加载的目录页，再完整回答，不得只讲风险帖而遗漏安全帖，也不得把预览扩写成尚未读取的正文。
 用户要求展开“第几条帖子”“第几条安全帖”、帖子正文、ASR、翻译、完整审核理由或多个帖子的比较时，优先复用当前会话历史目录中已验证的引用；尚未展示目标时，调用read_report或直接调用包含该全局序号的list_report_posts页面，再调用read_posts。read_posts每次最多读取5条，可以分批读取后统一回答；不使用主题发现工具。需要按主题判断时读取相关目录页和帖子，证据不足就明确说明，不能拿不相关帖子补足。
 解释为什么通过、复审或拒绝，必须归因于read_posts返回的原审核说明及可核对材料。需要材料目录时调用list_evidence，需要具体材料原文时调用read_evidence；没有独立材料时明确说明结论依据仅为原审核说明，不能伪造Finding或Evidence。所有评论使用list_post_comments；未审核或审核失败的评论不等于无风险，帖子风险不能传递给评论。
-用户询问某帖的风险评论时，调用list_post_comments并使用risk_filter=risk；筛选和计数由服务器在分页前完成。用户要求全部匹配评论时，沿相同筛选读取所有分页。评论结果中的账号引用可以继续查询该评论者的账号概览与活动。
+用户询问某帖的风险评论时，调用list_post_comments并使用risk_filter=risk；筛选和计数由服务器在分页前完成。普通查看评论只预览少量；明确要求全部逐条展示时按工具分批交付，每轮最多100条，等用户说继续再取下一批，不在同轮读完所有页。评论结果中的账号引用可以继续查询该评论者的账号概览与活动。
 询问评论统计时，重新调用read_report取得当前汇总。完成审核数、评论自身风险数和报告引用评论材料数含义不同，不能混用；范围限当前报告冻结帖子下的已存评论，不代表平台全部评论。
 只有昵称时先调用search_accounts。唯一精确匹配可以继续查看账号概览和活动；同名或模糊匹配必须请用户选择，不能按昵称强行合并。报告内容范围与账号活动授权范围分别说明，账号没有整体审核决定，不能把帖子或评论通过说成“账号审核通过”。
 比较共同账号时，从list_authorized_reports选择用户指定报告，调用compare_authorized_report_accounts；同名或指代不明先澄清，不擅自扩大到全部报告。比较只返回交集；各报告账号目录另用list_report_accounts。按用户问题选择角色，默认展示首批并说明总数；明确要求全部才续页，未读完不能声称全部。结果账号引用可直接穿透，详情仍按原授权范围查询。无法稳定识别的活动不参与合并，同昵称不合并。报告引用失效时重读报告目录；内部引用不向用户展示。

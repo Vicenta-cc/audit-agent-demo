@@ -52,6 +52,10 @@ class HermesRuntimeUnavailable(RuntimeError):
     """Raised when the pinned Hermes runtime is absent or has the wrong version."""
 
 
+class HermesReportToolsUnavailable(HermesRuntimeUnavailable):
+    """The report catalog or its model-visible entry points did not load."""
+
+
 def _load_module(name: str) -> Any:
     try:
         return import_module(name)
@@ -285,7 +289,45 @@ class HermesRuntimeBinding:
             from .creation_prompt import install_creation_prompt
 
             install_creation_prompt(agent)
+        if product_mode == "unified-report":
+            try:
+                self.validate_report_tools(agent, enabled_toolsets=options["enabled_toolsets"])
+            except Exception:
+                self._close_failed_agent(agent)
+                raise
         return agent
+
+    @staticmethod
+    def validate_report_tools(agent: Any, *, enabled_toolsets: list[str]) -> None:
+        """Fail before inference; a legal deferred bridge must have real tools.
+
+        Project-plugin discovery depends on the launch directory. A missing
+        plugin otherwise constructs an apparently usable agent with no tools,
+        then rejects legal tool_call entries from the persisted conversation.
+        Do not rename model calls or register a permissive fallback dispatcher.
+        """
+        from hermes_m0.unified_support import unified_tool_schemas
+
+        required = {schema["name"] for schema in unified_tool_schemas()}
+        visible = {item["function"]["name"] for item in (getattr(agent, "tools", None) or [])}
+        visible &= set(getattr(agent, "valid_tool_names", ()) or ())
+        bridge = {"tool_search", "tool_describe", "tool_call"}
+        if not (required <= visible or bridge <= visible):
+            raise HermesReportToolsUnavailable("unified report model-visible tool entry points are incomplete")
+        model_tools = _load_module("model_tools")
+        definitions = model_tools.get_tool_definitions(
+            enabled_toolsets=enabled_toolsets,
+            disabled_toolsets=getattr(agent, "disabled_toolsets", None),
+            quiet_mode=True,
+            skip_tool_search_assembly=True,
+        ) or []
+        catalog = {item["function"]["name"] for item in definitions}
+        if not required <= catalog:
+            raise HermesReportToolsUnavailable("unified report scoped business tool catalog is incomplete")
+        if not required <= visible:
+            deferred = _load_module("tools.tool_search").scoped_deferrable_names(definitions)
+            if not required <= visible | set(deferred):
+                raise HermesReportToolsUnavailable("unified report deferred business tools are not callable")
 
     @staticmethod
     def _close_failed_agent(agent: Any) -> None:

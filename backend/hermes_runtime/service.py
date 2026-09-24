@@ -12,7 +12,9 @@ from threading import RLock
 from typing import Any, Callable
 
 from backend.audit_agent.config import settings
-from backend.hermes_runtime.adapter import HermesRuntimeBinding, session_runtime_home
+from backend.hermes_runtime.adapter import (
+    HermesReportToolsUnavailable, HermesRuntimeBinding, session_runtime_home,
+)
 from backend.investigation.contracts import (
     InvestigationMessage,
     InvestigationSession,
@@ -295,6 +297,12 @@ class HermesInvestigationAgentService:
             )
             with mode_scope:
                 self._bind_session(session)
+                if self.bind_runtime:
+                    from hermes_m0.runtime import report_task_runtime_for_session
+                    from hermes_m0.comment_batches import reconcile
+                    runtime = report_task_runtime_for_session(session.id)
+                    if hasattr(runtime, "comment_batch_states"):
+                        reconcile(runtime, session.id, self.store)
                 agent = self._agent(session.id)
                 history = self.store.hermes_conversation_history(turn.id)
                 if self.bind_runtime and history:
@@ -310,7 +318,17 @@ class HermesInvestigationAgentService:
                 )
                 if self.bind_runtime:
                     from hermes_m0.runtime import report_task_runtime_for_session
-                    activity = report_task_runtime_for_session(session.id).account_activity
+                    runtime = report_task_runtime_for_session(session.id)
+                    if hasattr(runtime, "comment_batch_states"):
+                        from hermes_m0.comment_batches import delivery_context
+                        progress = delivery_context(runtime, session.id)
+                        if progress["confirmed_deliveries"]:
+                            # Ephemeral server facts, not another persisted prompt/history copy.
+                            system_message += (
+                                "\n当前评论交付检查点（服务端已确认；以此核对进度，不以模型历史自述代替）："
+                                + json.dumps(progress, ensure_ascii=False)
+                            )
+                    activity = runtime.account_activity
                     if activity is not None:
                         titles = [repo.report.title for repo in activity.authorized_report_repositories]
                         system_message += (
@@ -337,6 +355,18 @@ class HermesInvestigationAgentService:
                     )
             if not isinstance(result, dict):
                 raise RuntimeError("Hermes returned a non-object Turn result")
+        except HermesReportToolsUnavailable:
+            logger.error("Report tool loading preflight failed for Turn %s", turn.id, exc_info=True)
+            self._answer_streamer.interrupt(turn.id)
+            self.store.fail_turn(
+                turn.id,
+                error_code="report_tools_unavailable",
+                safe_message="报告问答工具未加载完整，本轮未执行读取，已有交付进度保留。请检查启动目录和插件配置后再试。",
+                retryable=False,
+                stop_reason="environment_preflight_failed",
+            )
+            self._answer_streamer.release(turn.id)
+            return self.store.turn_result(turn.id)
         except Exception as exc:
             self._answer_streamer.interrupt(turn.id)
             self.store.mark_interrupted(
@@ -676,6 +706,23 @@ class HermesInvestigationAgentService:
         ]
         tool_calls = self._tool_calls(trace_messages)
         session = self.store.get_session(self.store.get_turn(turn_id).session_id)
+        comment_batch_runtime = None
+        if self.bind_runtime:
+            from hermes_m0.runtime import report_task_runtime_for_session
+            from hermes_m0.comment_batches import render
+            runtime = report_task_runtime_for_session(session.id)
+            if hasattr(runtime, "comment_batch_states"):
+                batch_answer = render(runtime, session.id, turn_id)
+                if batch_answer is not None:
+                    # Only the explicit full-list branch uses deterministic text.
+                    # The validated provider transcript is preserved unchanged.
+                    composed_answer = (
+                        answer + "\n\n---\n\n### 评论原文\n\n" + batch_answer
+                        if answer else batch_answer
+                    )
+                    answer, changed = redact_internal_account_references(composed_answer)
+                    answer_was_redacted = answer_was_redacted or changed
+                    comment_batch_runtime = runtime
         try:
             self._answer_streamer.finalize(turn_id, answer)
         except Exception:
@@ -726,6 +773,14 @@ class HermesInvestigationAgentService:
             scope_remaining_issues=[],
             hermes_transcript=transcript,
         )
+        if comment_batch_runtime is not None:
+            from hermes_m0.comment_batches import acknowledge
+            try:
+                acknowledge(comment_batch_runtime, session.id, turn_id)
+            except Exception:
+                # The answer is already durable. Reconcile its checkpoint before
+                # the next turn instead of reporting this completed turn failed.
+                logger.exception("Comment batch checkpoint deferred for Turn %s", turn_id)
         self._answer_streamer.release(turn_id)
         self._notify(turn_id, "persist_turn")
         return self.store.turn_result(turn_id)

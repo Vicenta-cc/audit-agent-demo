@@ -124,6 +124,8 @@ def _save(service: Any, session_id: str) -> None:
              "report": _dump(service.refs, session_id, _REPORT_TYPES),
              "account": (_dump(service.account_activity.refs, session_id, _ACCOUNT_TYPES)
                          if service.account_activity else None)}
+    if hasattr(service, "comment_batch_states"):
+        state["comment_batches"] = service.comment_batch_states.get(session_id, {"pages": {}, "progress": {}})
     payload = json.dumps(state, ensure_ascii=False, sort_keys=True)
     with _connect(service) as conn:
         conn.execute("INSERT OR REPLACE INTO reference_states VALUES (?, ?, ?)",
@@ -150,6 +152,8 @@ def restore(service: Any, session_id: str) -> bool:
     _load(service.refs, session_id, state["report"], _REPORT_TYPES)
     if service.account_activity and state["account"] is not None:
         _load(service.account_activity.refs, session_id, state["account"], _ACCOUNT_TYPES)
+    if hasattr(service, "comment_batch_states"):
+        service.comment_batch_states[session_id] = state.get("comment_batches", {"pages": {}, "progress": {}})
     service.legacy_reference_restore_versions[session_id] = state.get("legacy_restore_version", 0)
     return True
 
@@ -323,6 +327,11 @@ def restore_legacy_transcript(service: Any, session_id: str, history: list[dict]
             name = args.get("tool_name") or args.get("name")
             args = args.get("arguments", {})
         if name not in service._handlers or not isinstance(old, dict) or old.get("ok") is not True:
+            continue
+        if name == "list_post_comments" and "batch_action" in args:
+            # Full-list delivery has a checkpoint side effect. Alias restoration
+            # may reread ordinary queries, but must not create synthetic turns
+            # or advance/restart delivery while replaying conversation history.
             continue
         fresh = json.loads(service.dispatch(
             name, _replace_tokens(args, aliases), session_id=session_id, turn_id=turn_id))
