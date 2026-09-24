@@ -45,6 +45,7 @@ class CandidateScore:
     hits: list[dict] = field(default_factory=list)
     model: dict | None = None
     engagement: int = 0
+    model_risk: int | None = None
 
 
 def _text(value) -> str:
@@ -61,6 +62,17 @@ def _int(value) -> int:
 def _str_list(value) -> list[str]:
     """模型可能把 matched_terms/locations 答成字符串；非 list 一律当空，避免按字拆成命中。"""
     return [_text(item) for item in value if _text(item)] if isinstance(value, list) else []
+
+
+def _risk_score(value) -> int | None:
+    """模型的 0-100 可疑分：int/float/数字字符串按四舍五入取整并夹到 0..100；缺失或不是数字给 None。"""
+    if value is None:
+        return None
+    try:
+        parsed = int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+    return max(0, min(100, parsed))
 
 
 def _comment_text(comment: dict) -> str:
@@ -180,9 +192,11 @@ class TriageEngine:
             + self._hits_text(hits) +
             "只输出合法 JSON，不要输出 Markdown：\n"
             "{\"content_type\":\"科普|新闻|日常|带货|婚恋|擦边|暗语交易|其他\","
-            "\"suspicion\":\"none|weak|strong\",\"matched_terms\":[\"命中的词或变体\"],"
+            "\"suspicion\":\"none|weak|strong\",\"risk_score\":0-100,\"matched_terms\":[\"命中的词或变体\"],"
             "\"locations\":[\"desc|signature|comment:<id>\"],\"reason\":\"不超过40字\"}\n"
             "content_type 只是描述性标签，不参与判定。"
+            "risk_score 为按上述判定规则评估的可疑程度（0 最安全，100 最确定违规），与 suspicion 一致："
+            "none 通常 0-30，weak 31-69，strong 70-100。"
             "matched_terms 与 locations 各最多列 5 项，只列最有代表性的，不要穷举。\n"
             "按上述判定规则判断这条内容：符合高危定义答 strong，符合中危定义答 weak，属于低危、放行或安全语境答 none。\n"
             "输入 JSON：\n"
@@ -248,7 +262,7 @@ class TriageEngine:
         lexicon_hits = [asdict(h) for h in hits]
         rule_score, rule_reason = self._rule_score(hits) if hits else (0, "")
         # 每条非丢弃候选都过模型：词库命中只是事实，模型按判定规则给出 strong/weak/none
-        verdict, model_reason, model, matched = self._model_verdict(item, comments, terms, rules, hits)
+        verdict, model_reason, model, matched, model_risk = self._model_verdict(item, comments, terms, rules, hits)
         model_hits = [{"keyword": v, "match_type": "model", "category_id": "", "risk_level": "", "field": "", "snippet": ""}
                       for v in matched]
         if not hits:
@@ -259,35 +273,41 @@ class TriageEngine:
             reason = f"{rule_reason}；{model_reason}"
         total = (0 if verdict == "none" else rule_score) + MODEL_SCORES[verdict]
         return CandidateScore(content_key, rank, total, verdict, reason + note, hits=lexicon_hits + model_hits,
-                              model=model, engagement=engagement)
+                              model=model, engagement=engagement, model_risk=model_risk)
 
     def _model_verdict(self, item: dict, comments: list[dict], terms: list[TriageTerm], rules: dict | None,
-                       hits: list[TriageHit]) -> tuple[str, str, dict | None, list[str]]:
-        """调一次初筛模型，返回 (verdict, 理由, 规整后的模型输出, 模型命中词)；调用失败或输出不合法按 weak 计。
-        有词库命中时理由带上「模型 <verdict> +<分>」前缀，方便和规则分拼在一起。"""
+                       hits: list[TriageHit]) -> tuple[str, str, dict | None, list[str], int | None]:
+        """调一次初筛模型，返回 (verdict, 理由, 规整后的模型输出, 模型命中词, 可疑分 0-100)；调用失败或输出
+        不合法按 weak 计，可疑分为 None。有词库命中时理由带上「模型 <verdict> +<分>」前缀，方便和规则分拼在
+        一起；可疑分存在时追加在理由末尾，方便和后面的自命中备注拼接。"""
         weak = f" +{MODEL_SCORES['weak']}" if hits else ""
         try:
             raw = self.qwen.audit_text(self.build_prompt(item, comments, terms, rules=rules, hits=hits),
                                        max_tokens=800, model=self.model, enable_thinking=False,
                                        request_timeout=self.request_timeout)
         except Exception as exc:
-            return "weak", f"初筛模型调用失败，按 weak 计{weak}：{exc}"[:200], None, []
+            return "weak", f"初筛模型调用失败，按 weak 计{weak}：{exc}"[:200], None, [], None
         # 模型答一个数组或字符串时 json.loads 原样返回，按调用失败同样处理，不能让整个词失败
         if not isinstance(raw, dict):
-            return "weak", f"初筛模型输出不合法（非 JSON 对象），按 weak 计{weak}", None, []
+            return "weak", f"初筛模型输出不合法（非 JSON 对象），按 weak 计{weak}", None, [], None
         suspicion = _text(raw.get("suspicion")).lower()
         if suspicion not in MODEL_SCORES:
-            return "weak", f"初筛模型输出不合法，按 weak 计{weak}", raw, []
+            return "weak", f"初筛模型输出不合法，按 weak 计{weak}", raw, [], None
         matched = _str_list(raw.get("matched_terms"))
         model = {**raw, "matched_terms": matched, "locations": _str_list(raw.get("locations"))}
+        risk = _risk_score(raw.get("risk_score"))
         reason = _text(raw.get("reason"))[:120] or f"模型判定 {suspicion}"
         if hits and suspicion != "none":
             reason = f"模型 {suspicion} +{MODEL_SCORES[suspicion]}：{reason}"
-        return suspicion, reason, model, matched
+        if risk is not None:
+            reason = f"{reason}，可疑分 {risk}"
+        return suspicion, reason, model, matched, risk
 
 
 def rank_candidates(scores: list[CandidateScore]) -> list[CandidateScore]:
-    return sorted(scores, key=lambda s: (-s.score, -s.rank, s.engagement))
+    # 总分降序；同分按模型可疑分降序（缺失的可疑分排在任何已有值之后）；再同分取搜索排位靠后、互动少者
+    return sorted(scores, key=lambda s: (-s.score, -(s.model_risk if s.model_risk is not None else -1),
+                                         -s.rank, s.engagement))
 
 
 def select_candidate(ranked: list[CandidateScore], *, exclude_keys: set[str]) -> CandidateScore | None:

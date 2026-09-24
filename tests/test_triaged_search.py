@@ -649,3 +649,45 @@ def test_off_mode_still_uses_run_search_and_select_mode_uses_the_sweep(tmp_path:
     assert _drive_crawl_dispatch(tmp_path, monkeypatch, "off") == ["run_search"]
     assert _drive_crawl_dispatch(tmp_path, monkeypatch, "select") == ["_run_triaged_search"]
     assert _drive_crawl_dispatch(tmp_path, monkeypatch, "compare") == ["_run_triaged_search"]
+
+
+class RiskEngine(FakeEngine):
+    """真引擎在 model_risk 有值时才附带可疑分；这里固定返回一个值来验证选中日志会带上它。"""
+
+    def score(self, content_key, rank, item, comments, terms, *, search_keyword="", rules=None):
+        self.score_calls.append((content_key, comments, search_keyword))
+        self.rules_seen.append(rules)
+        return CandidateScore(content_key, rank, 300, "strong", "命中", [], None, 0, model_risk=88)
+
+
+def test_selection_log_includes_the_model_risk_score_when_present(tmp_path: Path, monkeypatch):
+    logs: list[str] = []
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda job_id, message, *a, **k: logs.append(message))
+    crawler = FakeCrawler({"词A": [("a1", "今晚上分")]})
+    pipeline = _new_pipeline("job-risk-log", crawler, FakeIngestion(analyzed=set()), RiskEngine())
+
+    pipeline._run_triaged_search(
+        request=_base_request(keyword="词A"), save_root=tmp_path, start_page=1, max_total_notes=10,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+
+    [selected_log] = [m for m in logs if "选中" in m and "a1" in m]
+    assert "，可疑分 88" in selected_log
+
+    # 没有可疑分时不追加后缀，沿用既有格式
+    logs.clear()
+    crawler_plain = FakeCrawler({"词A": [("a1", "今晚上分")]})
+    pipeline_plain = _new_pipeline("job-no-risk-log", crawler_plain, FakeIngestion(analyzed=set()), FakeEngine())
+    pipeline_plain._run_triaged_search(
+        request=_base_request(keyword="词A"), save_root=tmp_path / "plain", start_page=1, max_total_notes=10,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    [selected_log_plain] = [m for m in logs if "选中" in m and "a1" in m]
+    assert "可疑分" not in selected_log_plain

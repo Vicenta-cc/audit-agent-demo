@@ -500,3 +500,115 @@ def test_prompt_bounds_list_lengths_and_model_gets_a_larger_output_budget():
     engine.score("k", 1, {"desc": "x"}, [], [])
     _prompt, kwargs = engine.qwen.calls[-1]
     assert kwargs.get("max_tokens") == 800
+
+
+# == model 0-100 suspicion score as the tie-breaker (方案 §4, 2026-09-24) ==
+
+def test_prompt_contract_includes_risk_score():
+    engine = _engine({"suspicion": "none"})
+    prompt = engine.build_prompt({"desc": "x"}, [], [])
+    assert "risk_score" in prompt
+
+
+def test_risk_score_is_parsed_and_clamped_to_0_100():
+    for raw, expected in ((85, 85), ("72", 72), (150, 100), (-5, 0)):
+        engine = _engine({"suspicion": "weak", "reason": "x", "risk_score": raw})
+        scored = engine.score("a", 1, {"desc": "日常"}, [], [])
+        assert scored.model_risk == expected, raw
+
+
+def test_risk_score_missing_or_invalid_is_none():
+    invalid = _engine({"suspicion": "weak", "reason": "x", "risk_score": "abc"})
+    assert invalid.score("a", 1, {"desc": "日常"}, [], []).model_risk is None
+
+    missing = _engine({"suspicion": "weak", "reason": "x"})
+    assert missing.score("a", 1, {"desc": "日常"}, [], []).model_risk is None
+
+
+def test_model_failure_or_invalid_output_leaves_model_risk_none():
+    failed = _engine(RuntimeError("down")).score("a", 1, {"desc": "日常"}, [], [])
+    assert failed.band == "weak" and failed.model_risk is None
+
+    invalid = _engine([{"suspicion": "strong", "risk_score": 90}]).score("b", 1, {"desc": "日常"}, [], [])
+    assert invalid.band == "weak" and invalid.model_risk is None
+
+
+def test_blue_v_discard_path_leaves_model_risk_none():
+    engine = _engine({"suspicion": "strong", "risk_score": 90})
+    item = {"desc": "内容", "enterprise_verify_reason": "某某日报官方账号"}
+    scored = engine.score("a", 1, item, [], [])
+    assert scored.band == "discard" and scored.model_risk is None
+    assert engine.qwen.calls == []
+
+
+def test_reason_appends_the_model_risk_score_when_present():
+    engine = _leveled_engine({"suspicion": "strong", "reason": "评论区约私聊", "risk_score": 92})
+    scored = _leveled(engine, "甲词")
+    assert scored.reason == "词库命中 甲词(高) +300；模型 strong +200：评论区约私聊，可疑分 92"
+
+    no_hits = _engine({"suspicion": "weak", "reason": "可疑", "risk_score": 40})
+    plain = no_hits.score("a", 1, {"desc": "日常"}, [], [])
+    assert plain.reason == "可疑，可疑分 40"
+
+    no_risk = _engine({"suspicion": "weak", "reason": "可疑"})
+    plain_no_risk = no_risk.score("a", 1, {"desc": "日常"}, [], [])
+    assert plain_no_risk.reason == "可疑"      # 没给 risk_score 时不追加后缀
+
+
+def test_reason_risk_suffix_precedes_the_self_hit_note():
+    engine = _engine({"suspicion": "strong", "reason": "评论区约私聊", "risk_score": 92})
+    item = {"title": "今晚上分吗", "liked_count": "10"}
+    scored = engine.score("a", 1, item, [], engine.terms_for(["gambling"]), search_keyword="上分")
+    assert scored.reason == "评论区约私聊，可疑分 92（搜索词所在词条命中 1 处不计分）"
+
+
+def test_equal_score_ranks_by_model_risk_before_rank_and_engagement():
+    # 两条同为 strong 200：可疑分高的先选，即使它的搜索排位更靠前（本该在旧规则下更吃亏）
+    high_risk_early_rank = CandidateScore("hi", 1, 200, "strong", "", [], None, engagement=0, model_risk=90)
+    low_risk_late_rank = CandidateScore("lo", 9, 200, "strong", "", [], None, engagement=0, model_risk=75)
+    ranked = rank_candidates([low_risk_late_rank, high_risk_early_rank])
+    assert [c.content_key for c in ranked] == ["hi", "lo"]
+
+    # 缺失可疑分的候选排在任何有可疑分的候选之后，即使它的排位更靠后
+    none_risk = CandidateScore("none_risk", 5, 200, "strong", "", [], None, engagement=0, model_risk=None)
+    has_risk = CandidateScore("has_risk", 1, 200, "strong", "", [], None, engagement=0, model_risk=60)
+    ranked2 = rank_candidates([none_risk, has_risk])
+    assert [c.content_key for c in ranked2] == ["has_risk", "none_risk"]
+
+    # 可疑分相同：退回原有的靠后排位优先
+    later_rank = CandidateScore("b", 5, 200, "strong", "", [], None, engagement=50, model_risk=70)
+    earlier_rank = CandidateScore("a", 1, 200, "strong", "", [], None, engagement=50, model_risk=70)
+    ranked3 = rank_candidates([earlier_rank, later_rank])
+    assert [c.content_key for c in ranked3] == ["b", "a"]
+
+    # 可疑分与排位都相同：退回互动数更低者
+    low_engagement = CandidateScore("c", 5, 200, "strong", "", [], None, engagement=10, model_risk=70)
+    high_engagement = CandidateScore("d", 5, 200, "strong", "", [], None, engagement=90, model_risk=70)
+    ranked4 = rank_candidates([high_engagement, low_engagement])
+    assert [c.content_key for c in ranked4] == ["c", "d"]
+
+    # 总分不同时，总分仍然优先于可疑分
+    high_score = CandidateScore("hs", 1, 500, "strong", "", [], None, engagement=0, model_risk=None)
+    high_risk_low_score = CandidateScore("hr", 1, 200, "strong", "", [], None, engagement=0, model_risk=100)
+    ranked5 = rank_candidates([high_risk_low_score, high_score])
+    assert [c.content_key for c in ranked5] == ["hs", "hr"]
+
+
+def test_select_candidate_prefers_higher_model_risk_among_equal_totals():
+    low = CandidateScore("low", 1, 200, "strong", "", [], None, engagement=0, model_risk=50)
+    high = CandidateScore("high", 2, 200, "strong", "", [], None, engagement=0, model_risk=95)
+    ranked = rank_candidates([low, high])
+    assert select_candidate(ranked, exclude_keys=set()).content_key == "high"
+
+
+def test_write_candidates_file_serialises_model_risk(tmp_path: Path):
+    scored = CandidateScore("k1", 1, 200, "strong", "命中", [], None, engagement=0, model_risk=88)
+    path = write_candidates_file(tmp_path, "词", [scored], scored, "triage")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["candidates"][0]["model_risk"] == 88
+
+
+def test_candidate_score_still_accepts_the_old_positional_shape():
+    # 既有调用点（如 discard 分支）不传 model_risk，字段要有默认值且不破坏位置传参
+    legacy = CandidateScore("z", 1, 300, "rule", "命中", [], None, 0)
+    assert legacy.model_risk is None

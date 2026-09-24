@@ -2009,7 +2009,9 @@ class AuditPipeline:
                                                f"身份丢弃 {discarded} 条，"
                                                f"排除重复或已审 {excluded} 条，换下一个词")
                     continue
-                job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}（{strategy}，{selected.band}，分 {selected.score}）：{selected.reason}")
+                risk_note = f"，可疑分 {selected.model_risk}" if selected.model_risk is not None else ""
+                job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}"
+                                           f"（{strategy}，{selected.band}，分 {selected.score}{risk_note}）：{selected.reason}")
                 # run_detail 内部只会报 1/1，外层进度条要看到"第几个词/共几个词"
                 keyword_progress = ((lambda _done, _total, _index=index: progress_callback(_index, len(terms)))
                                     if progress_callback else None)
