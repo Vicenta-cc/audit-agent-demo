@@ -1008,6 +1008,7 @@ class InvestigationCreationStore:
         request_fingerprint: str,
         resolved_configuration: dict[str, Any],
         confirmation_resolution: dict[str, Any] | None = None,
+        search_terms_resolver: Callable[[InvestigationDraftConfiguration], list[str]] | None = None,
     ) -> InvestigationRun:
         if not confirmed:
             raise ConfirmationRequiredError("explicit confirmation is required")
@@ -1128,6 +1129,17 @@ class InvestigationCreationStore:
                     if mode == "search":
                         plan = configuration.investigation.recall_plan
                         terms = list(plan.enabled_main_terms if plan.strategy == "existing_lexicon" else plan.terms)
+                        if search_terms_resolver is not None:
+                            # Recompute from this transaction's persisted Draft,
+                            # with formal resource reads under the caller's fence.
+                            # Do not trust the proposed snapshot's order or merely
+                            # compare sets: arbitrary permutations must still fail.
+                            ordered = search_terms_resolver(configuration)
+                            if sorted(ordered) != sorted(terms):
+                                reject("CONFIGURATION_INVALID", "Search projection changed selected Draft terms.")
+                            terms = ordered
+                        elif plan.strategy == "temporary_terms" and plan.lexicon_content is not None:
+                            terms = plan.lexicon_content.prioritize_search_terms(terms)
                     else:
                         creator_url = configuration.investigation.creator_url
                     expected_fields = {"mode": mode, "platform": configuration.platform.value,

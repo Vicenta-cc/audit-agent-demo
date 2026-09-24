@@ -692,6 +692,24 @@ class InvestigationResourceService:
                 resource_connection=resource_connection,
             ).normalized_configuration
 
+    def execution_search_terms(
+        self,
+        configuration: InvestigationDraftConfiguration,
+        *,
+        resource_connection: sqlite3.Connection | None = None,
+    ) -> list[str]:
+        """Project execution order; callers resolving formal resources hold the fence."""
+        if configuration.investigation.mode != "search":
+            return []
+        plan = configuration.investigation.recall_plan
+        terms = list(plan.enabled_main_terms if plan.strategy == "existing_lexicon" else plan.terms)
+        content = (
+            self.lexicon_editor_content(plan.lexicon_id, connection=resource_connection)
+            if plan.strategy == "existing_lexicon"
+            else plan.lexicon_content
+        )
+        return content.prioritize_search_terms(terms) if content is not None else terms
+
     def resolve_confirmation(
         self,
         draft: InvestigationDraft,
@@ -752,20 +770,9 @@ class InvestigationResourceService:
         mode = configuration.investigation.mode
         collection: dict[str, Any]
         if mode == "search":
-            plan = configuration.investigation.recall_plan
-            collection_keywords = list(
-                configuration.investigation.recall_plan.enabled_main_terms
-                if configuration.investigation.recall_plan.strategy
-                == "existing_lexicon"
-                else configuration.investigation.recall_plan.terms
+            collection_keywords = self.execution_search_terms(
+                configuration, resource_connection=resource_connection
             )
-            content = (
-                self.lexicon_editor_content(plan.lexicon_id, connection=resource_connection)
-                if plan.strategy == "existing_lexicon"
-                else plan.lexicon_content
-            )
-            if content is not None:
-                collection_keywords = content.prioritize_search_terms(collection_keywords)
             planned_content_count = min(
                 parameters.max_total_notes,
                 parameters.max_notes * max(1, len(collection_keywords)),

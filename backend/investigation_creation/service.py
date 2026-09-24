@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from typing import Any, Callable
 
 from backend.rulesets.compiler import compile_ruleset_content, content_hash
 from backend.rulesets.contracts import RuleSetContent
@@ -445,6 +445,9 @@ class InvestigationCreationService:
                         resolved_model=resolution.execution,
                         configuration_hash=resolution.config_hash,
                         confirmation_resolution=resolution.model_dump(mode="json"),
+                        search_terms_resolver=lambda configuration: self.resource_service.execution_search_terms(
+                            configuration, resource_connection=resource_connection
+                        ),
                     )
             return self._prepare_run(run)
         else:
@@ -478,6 +481,7 @@ class InvestigationCreationService:
         resolved_model: ResolvedExecutionConfiguration,
         configuration_hash: str,
         confirmation_resolution: dict[str, Any] | None,
+        search_terms_resolver: Callable[[InvestigationDraftConfiguration], list[str]] | None = None,
     ) -> InvestigationRun:
         resolved = resolved_model.model_dump(mode="json")
         if confirmation_resolution is not None:
@@ -498,6 +502,7 @@ class InvestigationCreationService:
             request_fingerprint=fingerprint,
             resolved_configuration=resolved,
             confirmation_resolution=confirmation_resolution,
+            search_terms_resolver=search_terms_resolver,
         )
 
     def get_run(

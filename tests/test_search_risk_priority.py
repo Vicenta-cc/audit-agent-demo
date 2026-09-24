@@ -1,5 +1,7 @@
 """Risk priority belongs to confirmation/execution, not storage or model prompts."""
 from copy import deepcopy
+import json
+from pathlib import Path
 
 import pytest
 
@@ -7,6 +9,8 @@ from backend.investigation_creation.contracts import CreateDraftCommand, Confirm
 from backend.investigation_creation.principal import Principal
 from backend.resource_management.contracts import LexiconContent
 from test_investigation_creation_conversation import creation_stack, _t1_temporary_arguments
+from test_investigation_creation_conversation import _run_scripted_creation_turn
+from test_ruleset_proposal_approval import approve
 
 
 def content():
@@ -48,7 +52,8 @@ def test_duplicates_use_highest_enabled_priority_and_legacy_main_fallback():
 
 
 @pytest.mark.parametrize('source', ['temporary', 'card_edited', 'saved', 'opened_edited', 'plain'])
-def test_preview_and_frozen_execution_share_order_without_rewriting_draft(creation_stack, source):
+@pytest.mark.parametrize('rules', ['formal', 'temporary'])
+def test_preview_and_frozen_execution_share_order_without_rewriting_draft(creation_stack, source, rules):
     stack = creation_stack
     app = stack['app_service']
     principal = Principal('principal-a')
@@ -73,7 +78,17 @@ def test_preview_and_frozen_execution_share_order_without_rewriting_draft(creati
             expected = ['低词', '高词甲', '高词乙', '中词', '未知词']
         plan = manager.resolve_lexicon_ref(selected['resource_ref'], **ctx)
     args['configuration']['investigation']['recall_plan'] = plan
-    draft = app.create_draft(CreateDraftCommand.model_validate(args), principal=principal)
+    if rules == 'temporary':
+        rule_body = json.loads((Path(__file__).parent/'fixtures/recruitment_fraud_ruleset.json').read_text())
+        shown = _run_scripted_creation_turn(stack, content='生成并展示临时规则，不启动',
+            actions=[('create_ruleset_proposal', {'content': rule_body})])
+        args['configuration'].pop('judgement', None)
+        args['configuration'].pop('schema_version', None)
+        result, _, _ = approve(stack, shown, arguments={'create_draft': args})
+        assert result['status'] == 'ok', result
+        draft = app.get_draft(result['data']['draft']['id'], principal=principal)
+    else:
+        draft = app.create_draft(CreateDraftCommand.model_validate(args), principal=principal)
     original = deepcopy(draft.configuration.model_dump(mode='json'))
     preview = app.get_confirmation_preview(draft.id, principal=principal)
     assert preview.can_confirm, preview.blockers
