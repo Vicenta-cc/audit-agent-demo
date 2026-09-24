@@ -33,6 +33,9 @@ RESOURCE_DESCRIPTIONS["open_resource_edit"] += RESOURCE_EDIT_GUIDANCE
 RESOURCE_DESCRIPTIONS["create_lexicon_edit"] = (
     "生成临时搜索词或完整黑话库的统一入口。新生成传 generation_request：objective、platform、"
     "requirements，用户明确指定数量才传 requested_count，禁止扩展的原文词表传 exact_terms。"
+    "keyword_profile 为可选主题指导：色情服务引流选 sexual_service_leadgen，网络赌博/金融黑产/"
+    "电诈助诈选 gambling_financial_abuse；按完整调查目标选择，不仅凭单词命中。"
+    "无匹配模板时省略或填null，仍按通用要求自主生成，不强行套类。模板示例由后端加载，不必自行抄写。"
     "专用生成步骤携带完整原有质量指导，返回经校验的会话编辑稿、search_terms 和 recall_plan。"
     "默认整组5–10个实际词，可靠候选不足不凑数；用户指定数量/原文优先。"
     "仅原样导入已有完整内容（如保存 Draft 词库）使用 content，不调用生成模型。两种输入只能选一种。"

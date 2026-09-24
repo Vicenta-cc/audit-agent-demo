@@ -2202,7 +2202,8 @@ def test_resource_prompt_generates_covert_variants_as_search_terms() -> None:
         objective="调查", platform="dy"))[0]["content"].split())
     assert "主词是主题和语义归类" in RESOURCE_PROMPT
     assert "变体词是主要的实际召回表达" in RESOURCE_PROMPT
-    assert "主词表达主题" in normalized_prompt
+    assert "每个主题下用 variants 列出实际搜索词" in normalized_prompt
+    assert "主题只用于归类，不额外参与搜索" in normalized_prompt
     assert "默认只生成 5 至 10 个最终可直接搜索的实际搜索词" in normalized_prompt
     assert "主题主词按语义归类需要生成" in normalized_prompt
     assert "不要以“生成但默认关闭”的形式输出" in normalized_prompt

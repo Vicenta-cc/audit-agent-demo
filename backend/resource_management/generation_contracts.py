@@ -1,6 +1,7 @@
 """Task data for the dedicated author, never authorization to save or run."""
 from pydantic import Field, StrictInt, field_validator, model_validator
 from backend.rulesets.contracts import StrictModel
+from .keyword_profiles import KeywordProfileName
 
 
 class ResourceGenerationRequest(StrictModel):
@@ -35,3 +36,13 @@ class ResourceGenerationRequest(StrictModel):
                 and len(self.exact_terms) != self.requested_count):
             raise ValueError("exact_terms conflicts with requested_count; clarify, do not trim")
         return self
+
+
+class LexiconGenerationRequest(ResourceGenerationRequest):
+    keyword_profile: KeywordProfileName | None = Field(
+        default=None,
+        description=("可选主题指导：色情服务引流用 sexual_service_leadgen；网络赌博、金融黑产或电诈助诈用 "
+                     "gambling_financial_abuse。根据完整调查目标选择，不能仅凭某个词匹配；"
+                     "普通招聘、电脑性能跑分等无关主题不套模板。无匹配时省略或填null，按通用要求自主生成。"
+                     "不改变调查范围；exact_terms原样词表请求不加载主题示例。"),
+    )

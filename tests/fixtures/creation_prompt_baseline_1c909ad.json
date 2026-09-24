@@ -7,6 +7,24 @@
   },
   "changed_lines": [
     {
+      "source": "CREATION_SYSTEM_PROMPT",
+      "line": 83,
+      "text": "include_lexicon_terms_for_ids. Save existing_lexicon with its ID,",
+      "reason": "2026-09-24 主提示与 resource_ref 工具契约对齐：保留发现资源流程，读取或保存后原样复用引用，不让模型组装旧哈希参数。"
+    },
+    {
+      "source": "CREATION_SYSTEM_PROMPT",
+      "line": 84,
+      "text": "expected_runtime_content_hash, and the returned actual search-term snapshot. The legacy",
+      "reason": "版本、运行指纹、权限及实际搜索词快照由后端绑定校验；过期引用需重新读取并核对，不能静默采用新版。"
+    },
+    {
+      "source": "CREATION_SYSTEM_PROMPT",
+      "line": 87,
+      "text": "search terms, use update_investigation_draft to replace existing_lexicon with temporary_terms containing",
+      "reason": "用户编辑搜索词时替换所选召回计划，不再指示模型构造旧 existing_lexicon 输入；保留临时词、完整 Drawer 结构及用户授权边界。"
+    },
+    {
       "source": "RECALL_GENERATION_PROMPT",
       "line": 2,
       "text": "无论直接展示临时搜索词、与临时审核规则一起生成，还是通过 create_lexicon_edit 生成完整黑话库，",

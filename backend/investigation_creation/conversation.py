@@ -145,11 +145,14 @@ configuration.investigation.mode=creator with creator_url set to that homepage U
 must not carry search terms, source 黑话库, or recall plans, and must resolve to crawl_mode=creator.
 For a search Draft, select a matching published 审核规则已发布版本 and prefer an independently available
 real recall 黑话库 when it is sufficiently suitable. When its terms need to be discovered, query that 黑话库 with
-include_lexicon_terms_for_ids. Save existing_lexicon with its ID,
-expected_runtime_content_hash, and the returned actual search-term snapshot. The legacy
+include_lexicon_terms_for_ids. For a selected formal 黑话库, reuse the resource_ref recall_plan
+returned by read_resource or save_resource unchanged; if you only have discovery results,
+read the selected resource first. The backend binds and validates the exact resource version,
+runtime fingerprint, access permissions, and actual search-term snapshot; do not assemble hashes.
+If the reference is stale, re-read and review the differences rather than silently adopting a newer version. The legacy
 enabled_main_terms field already contains the server-projected variant-first search terms; do not
 replace them with theme main terms or tag entries. When the user explicitly changes the
-search terms, use update_investigation_draft to replace existing_lexicon with temporary_terms containing
+search terms, use update_investigation_draft to replace the selected recall plan with temporary_terms containing
 the complete lexicon_content edited in the Drawer, its exact variant-first terms projection, and the
 source 黑话库 ID. Never flatten a structured Drawer edit and discard theme-to-variant relationships.
 

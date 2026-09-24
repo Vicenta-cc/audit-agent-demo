@@ -17,6 +17,7 @@ from backend.rulesets.contracts import RuleSetContent
 from backend.resource_management.authoring_guidance import RULESET_AUTHORING_GUIDANCE
 from backend.resource_management.generation_contracts import ResourceGenerationRequest
 from backend.resource_management.generation import ResourceGenerator
+from backend.resource_management.keyword_profiles import keyword_profile_metadata
 
 from .contracts import (
     ConfirmAndQueueCommand,
@@ -439,6 +440,7 @@ class InvestigationCreationToolService:
             raise ValueError("Hermes M3 tool name is not allowed")
         parsed = schema.model_validate(arguments)
         resource_ref = None
+        generation_profile = None
         if tool_name in {'create_investigation_draft', 'update_investigation_draft', 'use_ruleset_proposal'}:
             resolved, resource_ref = resolve_arguments(tool_name, parsed.model_dump(mode='json'),
                                          lambda: self.application_service.resource_management,
@@ -446,11 +448,16 @@ class InvestigationCreationToolService:
             parsed = (UseRuleSetProposalInput if tool_name == 'use_ruleset_proposal' else schema).model_validate(resolved)
         if tool_name in {"create_ruleset_proposal", "create_lexicon_edit"} and parsed.generation_request is not None:
             kind = "ruleset" if tool_name == "create_ruleset_proposal" else "lexicon"
+            if kind == "lexicon":
+                generation_profile = keyword_profile_metadata(parsed.generation_request)
             content = self.resource_generator.generate(kind, parsed.generation_request)
             parsed = schema.model_validate({"content": content.model_dump(mode="json")})
         if tool_name in RESOURCE_TOOL_INPUTS:
-            return execute_resource(self.application_service.resource_management, tool_name, parsed,
-                                    session_id=session_id, principal=principal)
+            result = execute_resource(self.application_service.resource_management, tool_name, parsed,
+                                      session_id=session_id, principal=principal)
+            if generation_profile is not None:
+                result = {**result, "generation_profile": generation_profile}
+            return result
         if tool_name == "use_ruleset_proposal":
             with self._conversation_lock:
                 turn_id = self._conversation_turns.get(session_id, "")

@@ -117,6 +117,23 @@ def test_global_prompt_keeps_authority_but_not_authoring_payloads():
     assert "由本段替代" not in product
 
 
+def test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes():
+    product = CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT
+    assert "expected_runtime_content_hash" not in product
+    assert "Save existing_lexicon with its ID" not in product
+    for instruction in (
+        "reuse the resource_ref recall_plan",
+        "returned by read_resource or save_resource unchanged",
+        "read the selected resource first",
+        "The backend binds and validates the exact resource version",
+        "runtime fingerprint, access permissions, and actual search-term snapshot",
+        "rather than silently adopting a newer version",
+        "replace the selected recall plan with temporary_terms",
+        "Never flatten a structured Drawer edit",
+    ):
+        assert instruction in CREATION_SYSTEM_PROMPT
+
+
 def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
     """A wording move cannot silently delete an old behavioral/quality constraint."""
     from backend.investigation_creation.tools import M3_TOOL_DESCRIPTIONS

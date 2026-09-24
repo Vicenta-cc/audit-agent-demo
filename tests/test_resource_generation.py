@@ -26,13 +26,19 @@ def lexicon(count=6):
     ]}
 
 
+def authoring_lexicon(count=6):
+    return {"title": "招聘风险", "themes": [
+        {"term": "招聘风险", "variants": [{"term": f"招聘押金{i}"} for i in range(count)]},
+    ]}
+
+
 def generator(payload=None, *, finish="stop", refusal=None, error=None):
     client = MagicMock()
     client.__enter__.return_value = client
     client.chat.completions.create.return_value = SimpleNamespace(
         _request_id="provider-request",
         choices=[SimpleNamespace(finish_reason=finish, message=SimpleNamespace(
-            content=json.dumps(payload or lexicon(), ensure_ascii=False), refusal=refusal))],
+            content=json.dumps(payload if payload is not None else authoring_lexicon(), ensure_ascii=False), refusal=refusal))],
     )
     if error:
         client.chat.completions.create.side_effect = error
@@ -101,14 +107,14 @@ def test_provider_error_is_classified_without_replay_or_secret_echo(text, code, 
 
 
 def test_count_policy_applies_to_generation_not_import():
-    gen, _, _ = generator(lexicon(11))
+    gen, _, _ = generator(authoring_lexicon(11))
     with pytest.raises(ResourceError):
         gen.generate("lexicon", ResourceGenerationRequest(**REQUEST))
     parsed = gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=11))
     assert len(parsed.search_terms()) == 11
     assert len(CreateLexiconInput(content=lexicon(11)).content.search_terms()) == 11
     for count in (1, 4, 5, 10):
-        gen, _, _ = generator(lexicon(count))
+        gen, _, _ = generator(authoring_lexicon(count))
         assert len(gen.generate("lexicon", ResourceGenerationRequest(**REQUEST)).search_terms()) == count
 
 

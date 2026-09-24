@@ -7,15 +7,19 @@ import hashlib
 import json
 import logging
 import time
+from uuid import uuid4
 
 from pydantic import ValidationError
 
 from backend.audit_agent.config import settings
 from backend.rulesets.contracts import RuleSetContent
 from .authoring_guidance import LEXICON_DOMAIN_GUIDANCE, RULESET_AUTHORING_GUIDANCE
-from .contracts import LexiconContent, ResourceError
+from .contracts import ResourceError
 from .generation_contracts import ResourceGenerationRequest
 from .recall_prompt import RECALL_GENERATION_PROMPT
+from .keyword_profiles import selected_keyword_profile
+from .lexicon_authoring import GeneratedLexicon, LEXICON_AUTHORING_VERSION
+from .generation_diagnostics import validation_details
 
 logger = logging.getLogger(__name__)
 
@@ -31,15 +35,26 @@ AUTHOR_IDENTITY = """你是内容审核平台的资源编写器，只为人工�
 def generation_messages(kind: str, request: ResourceGenerationRequest) -> list[dict]:
     if kind not in {"lexicon", "ruleset"}:
         raise ValueError("unsupported resource kind")
-    schema = LexiconContent if kind == "lexicon" else RuleSetContent
+    schema = GeneratedLexicon if kind == "lexicon" else RuleSetContent
     guidance = (RECALL_GENERATION_PROMPT + LEXICON_DOMAIN_GUIDANCE if kind == "lexicon"
                 else RULESET_AUTHORING_GUIDANCE)
     if kind == "lexicon":
-        guidance += "\n主词表达主题；每个启用主词必须有启用变体。变体 parent_id 精确指向主题 id，标签不参与搜索。"
+        guidance += ("\n生成输出使用 themes，每个主题下用 variants 列出实际搜索词。"
+                     "只写主题、候选及语义备注，不填写 id、kind、parent_id、enabled；"
+                     "这些存储字段由后端构造，主题和 variants 默认启用，tags 不参与搜索。"
+                     "仅用户明确要求停用备选时放入 alternatives，后端将其停用。")
+    # Profiles do not replace shared quality guidance or the user's original requirements.
+    payload = request.model_dump(mode="json", exclude={"keyword_profile"})
+    profile = selected_keyword_profile(kind, request)
+    if profile is not None:
+        payload["requirements"] = (
+            "【主题模板指导】\n" + profile.guidance.strip()
+            + "\n\n【用户本次要求】\n" + request.requirements
+        )
     return [
         {"role": "system", "content": AUTHOR_IDENTITY + "\n" + guidance +
          "\nJSON Schema:\n" + json.dumps(schema.model_json_schema(), ensure_ascii=False)},
-        {"role": "user", "content": json.dumps(request.model_dump(mode="json"), ensure_ascii=False)},
+        {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
 
 
@@ -50,10 +65,14 @@ def _failure(code: str, message: str, **details) -> ResourceError:
 
 
 def _validate_content(kind: str, content: str, request: ResourceGenerationRequest):
-    schema = LexiconContent if kind == "lexicon" else RuleSetContent
+    schema = GeneratedLexicon if kind == "lexicon" else RuleSetContent
+    stage = "authoring_schema"
     try:
         parsed = schema.model_validate_json(content)
         if kind == "lexicon":
+            stage = "storage_contract"
+            parsed = parsed.to_content()
+            stage = "search_constraints"
             terms = parsed.search_terms()
             if not terms:
                 raise ValueError("no searchable terms")
@@ -70,19 +89,24 @@ def _validate_content(kind: str, content: str, request: ResourceGenerationReques
                 raise ValueError("default total search terms exceeds 10")
             count = len(terms)
         else:
+            stage = "rule_constraints"
             count = sum(len(category.rules) for category in parsed.categories)
         if request.requested_count is not None and count != request.requested_count:
             raise ValueError("explicit resource count was not preserved")
     except (ValidationError, ValueError) as exc:
         # Never include an unvalidated model payload in the next Agent request.
-        raise _failure("RESOURCE_GENERATION_INVALID", "生成内容未通过结构或数量校验，未创建资源。") from exc
+        details = validation_details(exc, stage)
+        raise _failure("RESOURCE_GENERATION_INVALID", "生成内容未通过结构或数量校验，未创建资源。",
+                       **details) from exc
     return parsed
 
 
 class ResourceGenerator:
-    def __init__(self, *, config=None, client_factory=None):
+    def __init__(self, *, config=None, client_factory=None, diagnostic_sink=None):
         self.config = settings if config is None else config
         self.client_factory = client_factory
+        # Explicit injection for private acceptance evidence only. No default raw dumps.
+        self.diagnostic_sink = diagnostic_sink
 
     def generate(self, kind: str, request: ResourceGenerationRequest):
         if kind == "ruleset" and request.exact_terms is not None:
@@ -92,9 +116,11 @@ class ResourceGenerator:
                     config.resource_generation_model)):
             raise _failure("RESOURCE_GENERATION_UNCONFIGURED", "资源生成模型未配置，未创建资源。")
         messages = generation_messages(kind, request)
+        profile = selected_keyword_profile(kind, request)
         fingerprint = hashlib.sha256(json.dumps(messages, ensure_ascii=False).encode()).hexdigest()
         started = time.monotonic()
         outcome, request_id, http_status, finish = "error", None, None, None
+        raw_content = None
         factory = self.client_factory
         if factory is None:
             from openai import OpenAI
@@ -122,11 +148,31 @@ class ResourceGenerator:
                 raise _failure("OUTPUT_LENGTH_TRUNCATED", "生成响应因长度限制不完整，未创建资源。")
             if finish != "stop":
                 raise _failure("RESOURCE_GENERATION_INCOMPLETE", "生成响应未正常结束，未创建资源。")
-            parsed = _validate_content(kind, choice.message.content or "", request)
+            raw_content = choice.message.content or ""
+            parsed = _validate_content(kind, raw_content, request)
             outcome = "validated"
             return parsed
         except ResourceError as exc:
             outcome = exc.code
+            if exc.code == "RESOURCE_GENERATION_INVALID":
+                diagnostic_id = uuid4().hex
+                metadata = {
+                    "diagnostic_id": diagnostic_id, "request_hash": fingerprint,
+                    "response_hash": hashlib.sha256((raw_content or '').encode()).hexdigest(),
+                    "http_status": http_status, "provider_request_id": request_id,
+                    "finish_reason": finish,
+                    "authoring_version": LEXICON_AUTHORING_VERSION if kind == "lexicon" else None,
+                }
+                exc.details.update(metadata)
+                logger.warning("resource_generation_invalid diagnostics=%s",
+                               json.dumps(exc.details, ensure_ascii=False))
+                if self.diagnostic_sink is not None:
+                    try:
+                        self.diagnostic_sink({"kind": kind, "diagnostics": dict(exc.details),
+                                              "messages": messages, "raw_response": raw_content})
+                    except Exception:
+                        # Evidence-storage failure must not mask the original validation failure.
+                        logger.warning("resource_generation_diagnostic_capture_failed id=%s", diagnostic_id)
             raise
         except Exception as exc:
             http_status = getattr(exc, "status_code", None)
@@ -144,6 +190,8 @@ class ResourceGenerator:
             raise _failure(code, message, http_status=http_status, provider_request_id=request_id) from exc
         finally:
             logger.info("resource_generation kind=%s model=%s request_hash=%s outcome=%s "
-                        "http_status=%s request_id=%s finish_reason=%s elapsed_ms=%s",
+                        "http_status=%s request_id=%s finish_reason=%s elapsed_ms=%s "
+                        "keyword_profile=%s keyword_profile_version=%s",
                         kind, config.resource_generation_model, fingerprint, outcome,
-                        http_status, request_id, finish, round((time.monotonic() - started) * 1000))
+                        http_status, request_id, finish, round((time.monotonic() - started) * 1000),
+                        profile.name if profile else None, profile.version if profile else None)
