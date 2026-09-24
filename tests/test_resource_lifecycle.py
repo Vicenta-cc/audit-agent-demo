@@ -448,3 +448,16 @@ def test_legacy_editor_keeps_same_text_variants_with_distinct_metadata(service):
     assert len(variants)==2
     assert next(e for e in variants if e['id']=='variant-platform')['note']=='来源备注'
     assert not next(e for e in variants if e['id']=='variant-platform')['enabled']
+
+
+def test_regex_entries_are_never_search_terms(tmp_path):
+    store = LexiconStore(tmp_path / 'lex.sqlite3')
+    store.upsert_category(category_id='t', title='测试词库')
+    store.add_keyword(category_id='t', keyword='上分', match_type='模糊')
+    store.add_keyword(category_id='t', keyword=r'加\s*微信', match_type='正则')
+    store.add_keyword(category_id='t', keyword='房卡', match_type='模糊')
+    store.add_keyword(category_id='t', keyword=r'房.卡', match_type='正则', note=json.dumps({'variant_of': '房卡'}))
+    store.add_keyword(category_id='t', keyword='房卡代理', match_type='模糊', note=json.dumps({'variant_of': '房卡'}))
+    store.add_keyword(category_id='t', keyword=r'十三\s*水', match_type='正则')
+    store.add_keyword(category_id='t', keyword='十三水群', match_type='模糊', note=json.dumps({'variant_of': r'十三\s*水'}))
+    assert store.enabled_search_terms('t') == ['上分', '房卡代理', '十三水群']

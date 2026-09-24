@@ -73,13 +73,20 @@ class FakeIngestion:
 class FakeEngine:
     def __init__(self):
         self.score_calls = []
+        self.terms_for_calls = []
+        self.rules_seen = []
 
     def terms_for(self, category_ids):
+        self.terms_for_calls.append(list(category_ids))
         return []
 
-    def score(self, content_key, rank, item, comments, terms, *, search_keyword=""):
+    def score(self, content_key, rank, item, comments, terms, *, search_keyword="", rules=None):
         self.score_calls.append((content_key, comments, search_keyword))
-        score = 300 if "上分" in item.get("desc", "") else 0
+        self.rules_seen.append(rules)
+        desc = item.get("desc", "")
+        if "蓝V" in desc:       # 身份丢弃：真引擎在规则和模型之前就判掉
+            return CandidateScore(content_key, rank, -1000, "discard", "蓝V认证账号（官方），不进精审", [], None, 0)
+        score = 300 if "上分" in desc else 0
         return CandidateScore(content_key, rank, score, "rule" if score else "none", "", [], None, 0)
 
 
@@ -163,6 +170,107 @@ def test_task_content_budget_stops_the_sweep_and_names_the_unsearched_keywords(t
     budget_logs = [message for message in logs if "采集上限" in message]
     assert len(budget_logs) == 1 and "词C" in budget_logs[0]
     assert not (tmp_path / "candidates" / "03-词C").exists()
+
+
+def test_skip_log_counts_the_candidates_dropped_by_identity(tmp_path: Path, monkeypatch):
+    logs: list[str] = []
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda job_id, message, *a, **k: logs.append(message))
+    crawler = FakeCrawler({"词H": [("h1", "蓝V反诈科普"), ("h2", "蓝V辟谣"), ("h3", "普通")]})
+    pipeline = _new_pipeline("job-discard", crawler, FakeIngestion(analyzed=set()), FakeEngine())
+
+    pipeline._run_triaged_search(
+        request=_base_request(keyword="词H"), save_root=tmp_path, start_page=1, max_total_notes=10,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+
+    assert crawler.detail_calls == []       # 两条蓝V被丢弃，剩下的判正常 → 该词跳过
+    skipped = [message for message in logs if "跳过" in message]
+    assert len(skipped) == 1
+    assert "候选 3 条，可疑 0 条，身份丢弃 2 条，排除重复或已审 0 条" in skipped[0]
+    payload = json.loads((tmp_path / "candidates" / "01-词H" / "candidates.json").read_text(encoding="utf-8"))
+    assert [c["band"] for c in payload["candidates"]] == ["none", "discard", "discard"]
+
+
+def test_lexicon_terms_load_from_every_task_library_regardless_of_keyword_source(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
+    kwargs = dict(
+        start_page=1, max_total_notes=10, crawler_concurrency=1, account_auth_state=None,
+        crawler_account_id="acc", content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+
+    # 显式关键词任务也带 library_ids 时，规则层要加载全部任务词库，不再依赖 keyword_source
+    crawler_libs = FakeCrawler({"词A": [("a1", "普通")]})
+    engine_libs = FakeEngine()
+    pipeline_libs = _new_pipeline("job-libs", crawler_libs, FakeIngestion(analyzed=set()), engine_libs)
+    pipeline_libs._run_triaged_search(
+        request=_base_request(keyword="词A", keyword_source="keyword", library_ids=["gambling", "fraud"]),
+        save_root=tmp_path / "libs", **kwargs,
+    )
+    assert engine_libs.terms_for_calls == [["gambling", "fraud"]]
+
+    # 没有 library_ids 时回退到 lexicon_category
+    crawler_cat = FakeCrawler({"词B": [("b1", "普通")]})
+    engine_cat = FakeEngine()
+    pipeline_cat = _new_pipeline("job-cat", crawler_cat, FakeIngestion(analyzed=set()), engine_cat)
+    pipeline_cat._run_triaged_search(
+        request=_base_request(keyword="词B", lexicon_category="soft"),
+        save_root=tmp_path / "cat", **kwargs,
+    )
+    assert engine_cat.terms_for_calls == [["soft"]]
+
+    # 两者都没有 → 空列表，不报错
+    crawler_none = FakeCrawler({"词C": [("c1", "普通")]})
+    engine_none = FakeEngine()
+    pipeline_none = _new_pipeline("job-none", crawler_none, FakeIngestion(analyzed=set()), engine_none)
+    pipeline_none._run_triaged_search(
+        request=_base_request(keyword="词C"),
+        save_root=tmp_path / "none", **kwargs,
+    )
+    assert engine_none.terms_for_calls == [[]]
+
+
+def test_task_prompt_profile_is_passed_to_every_score_call_and_logged(tmp_path: Path, monkeypatch):
+    # 判定规则来自任务分类的 prompt_profile_snapshot，初筛模型的提示词必须拿到它
+    logs: list[str] = []
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda job_id, message, *a, **k: logs.append(message))
+    kwargs = dict(
+        start_page=1, max_total_notes=10, crawler_concurrency=1, account_auth_state=None,
+        crawler_account_id="acc", content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    snapshot = {"category_id": "composite", "audit_goal": "识别赌博与代理推广风险",
+                "evidence_rules": "1. 高危：出现上下分交易。", "prompt_version": "composite-v1-ab12cd34ef"}
+
+    engine = FakeEngine()
+    crawler = FakeCrawler({"词A": [("a1", "普通"), ("a2", "今晚上分")]})
+    pipeline = _new_pipeline("job-rules", crawler, FakeIngestion(analyzed=set()), engine)
+    pipeline._run_triaged_search(
+        request=_base_request(keyword="词A", prompt_profile_snapshot=snapshot),
+        save_root=tmp_path / "rules", **kwargs)
+
+    assert engine.rules_seen == [snapshot, snapshot]
+    assert [m for m in logs if m.startswith("初筛判定规则：")] == ["初筛判定规则：composite-v1-ab12cd34ef"]
+
+    # 没有判定规则时不报错，日志写明未提供，模型提示词就没有规则段
+    logs.clear()
+    engine_bare = FakeEngine()
+    pipeline_bare = _new_pipeline("job-no-rules", FakeCrawler({"词B": [("b1", "普通")]}),
+                                  FakeIngestion(analyzed=set()), engine_bare)
+    pipeline_bare._run_triaged_search(request=_base_request(keyword="词B"), save_root=tmp_path / "bare", **kwargs)
+    assert engine_bare.rules_seen == [{}]
+    assert [m for m in logs if m.startswith("初筛判定规则：")] == ["初筛判定规则：未提供"]
 
 
 def test_compare_mode_rank1_arm_bypasses_score_gate_but_triage_arm_prefers_score(tmp_path: Path, monkeypatch):
@@ -290,6 +398,8 @@ def test_run_search_contract_for_candidate_sweep(tmp_path: Path, monkeypatch):
     [call_kwargs] = crawler.search_calls
     assert call_kwargs["collect_media"] is False
     assert call_kwargs["collect_comments"] is True
+    # 搜索结果的 author 粉丝数恒为 0、没有签名，粉丝阈值和签名规则要靠这次资料请求
+    assert call_kwargs["fetch_author_profile"] is True
     assert call_kwargs["stream_items"] is False
     assert call_kwargs["max_notes"] == call_kwargs["max_total_notes"] == 10
     assert "content_callback" not in call_kwargs
@@ -539,3 +649,45 @@ def test_off_mode_still_uses_run_search_and_select_mode_uses_the_sweep(tmp_path:
     assert _drive_crawl_dispatch(tmp_path, monkeypatch, "off") == ["run_search"]
     assert _drive_crawl_dispatch(tmp_path, monkeypatch, "select") == ["_run_triaged_search"]
     assert _drive_crawl_dispatch(tmp_path, monkeypatch, "compare") == ["_run_triaged_search"]
+
+
+class RiskEngine(FakeEngine):
+    """真引擎在 model_risk 有值时才附带可疑分；这里固定返回一个值来验证选中日志会带上它。"""
+
+    def score(self, content_key, rank, item, comments, terms, *, search_keyword="", rules=None):
+        self.score_calls.append((content_key, comments, search_keyword))
+        self.rules_seen.append(rules)
+        return CandidateScore(content_key, rank, 300, "strong", "命中", [], None, 0, model_risk=88)
+
+
+def test_selection_log_includes_the_model_risk_score_when_present(tmp_path: Path, monkeypatch):
+    logs: list[str] = []
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda job_id, message, *a, **k: logs.append(message))
+    crawler = FakeCrawler({"词A": [("a1", "今晚上分")]})
+    pipeline = _new_pipeline("job-risk-log", crawler, FakeIngestion(analyzed=set()), RiskEngine())
+
+    pipeline._run_triaged_search(
+        request=_base_request(keyword="词A"), save_root=tmp_path, start_page=1, max_total_notes=10,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+
+    [selected_log] = [m for m in logs if "选中" in m and "a1" in m]
+    assert "，可疑分 88" in selected_log
+
+    # 没有可疑分时不追加后缀，沿用既有格式
+    logs.clear()
+    crawler_plain = FakeCrawler({"词A": [("a1", "今晚上分")]})
+    pipeline_plain = _new_pipeline("job-no-risk-log", crawler_plain, FakeIngestion(analyzed=set()), FakeEngine())
+    pipeline_plain._run_triaged_search(
+        request=_base_request(keyword="词A"), save_root=tmp_path / "plain", start_page=1, max_total_notes=10,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    [selected_log_plain] = [m for m in logs if "选中" in m and "a1" in m]
+    assert "可疑分" not in selected_log_plain

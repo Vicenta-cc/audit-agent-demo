@@ -785,10 +785,12 @@ class LexiconStore:
                 not entry_kind and match_type in {"平台标签", "tag"}
             )
             is_variant = entry_kind == "variant" or bool(parent_id) or bool(variant_of)
+            # 正则条目只用于匹配，不作为搜索词；正则主词下的非正则变体照常可搜
+            is_regex = match_type == "正则"
             if is_tag:
                 continue
             if is_variant:
-                if row["enabled"]:
+                if row["enabled"] and not is_regex:
                     variant_rows.append((row, parent_id, variant_of))
                 continue
             if not row["enabled"]:
@@ -817,10 +819,11 @@ class LexiconStore:
         for row in enabled_mains:
             entry_id = str(row["entry_id"] or "").strip()
             main_term = str(row["keyword"] or "").strip()
+            main_fallback = [] if str(row["match_type"] or "").strip() == "正则" else [main_term]
             candidates = (
                 variants_by_parent_id.get(entry_id)
                 or variants_by_parent_term.get(main_term)
-                or [main_term]
+                or main_fallback
             )
             for term in candidates:
                 if term and term not in seen:
@@ -850,7 +853,31 @@ class LexiconStore:
         ).fetchall()
 
     def triage_terms(self, category_ids: list[str]) -> list[dict]:
-        """Enabled main terms and variants usable for body-text matching."""
+        """Enabled main terms and variants usable for body-text matching, each with its entry_group
+        (the main term text of the entry it belongs to)."""
+        return [
+            {key: row[key] for key in ("category_id", "keyword", "match_type", "risk_level", "entry_kind", "entry_group")}
+            for row in self._entry_group_rows(category_ids)
+            if row["enabled"] and row["match_type"] in {"精确", "模糊", "正则", "黑话词"}
+        ]
+
+    def search_word_groups(self, category_ids: list[str]) -> dict[str, str]:
+        """Every enabled non-regex, non-tag word (search words included) -> its entry_group."""
+        groups: dict[str, str] = {}
+        for row in self._entry_group_rows(category_ids):
+            match_type = str(row["match_type"] or "").strip().lower()
+            is_tag = row["entry_kind"] == "tag" or match_type in {"平台标签", "tag"}
+            if not row["enabled"] or is_tag or match_type == "正则":
+                continue
+            keyword = str(row["keyword"] or "").strip()
+            if keyword and row["entry_group"]:
+                groups.setdefault(keyword, row["entry_group"])
+        return groups
+
+    def _entry_group_rows(self, category_ids: list[str]) -> list[dict]:
+        """All keyword rows of the categories with entry_group resolved: a main is its own group, a variant
+        belongs to its parent main (parent_entry_id first, else note.variant_of). 平台搜索词 mains are
+        resolved too, so a variant of a search word shares the search word's group."""
         ids = [str(item).strip() for item in category_ids if str(item).strip()]
         if not ids:
             return []
@@ -858,15 +885,35 @@ class LexiconStore:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 f"""
-                SELECT category_id, keyword, match_type, risk_level, COALESCE(entry_kind, '') AS entry_kind
+                SELECT category_id, keyword, match_type, risk_level, enabled, note,
+                       COALESCE(entry_id, '') AS entry_id, COALESCE(entry_kind, '') AS entry_kind,
+                       COALESCE(parent_entry_id, '') AS parent_entry_id
                 FROM lexicon_keywords
-                WHERE enabled = 1 AND category_id IN ({placeholders})
-                  AND match_type IN ('精确', '模糊', '正则', '黑话词')
+                WHERE category_id IN ({placeholders})
                 ORDER BY id ASC
                 """,
                 ids,
             ).fetchall()
-        return [dict(row) for row in rows]
+        keyword_by_entry_id = {
+            str(row["entry_id"]): str(row["keyword"] or "").strip() for row in rows if row["entry_id"]
+        }
+        resolved: list[dict] = []
+        for row in rows:
+            item = dict(row)
+            keyword = str(row["keyword"] or "").strip()
+            variant_of = ""
+            note = str(row["note"] or "").strip()
+            if note:
+                try:
+                    metadata = json.loads(note)
+                except (TypeError, json.JSONDecodeError):
+                    metadata = {}
+                if isinstance(metadata, dict):
+                    variant_of = str(metadata.get("variant_of") or "").strip()
+            parent_id = str(row["parent_entry_id"] or "").strip()
+            item["entry_group"] = keyword_by_entry_id.get(parent_id) or variant_of or keyword
+            resolved.append(item)
+        return resolved
 
     def enabled_main_terms(
         self,

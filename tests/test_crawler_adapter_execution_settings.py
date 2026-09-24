@@ -288,6 +288,29 @@ class CrawlerAdapterExecutionSettingsTest(unittest.TestCase):
             )
         self.assertNotIn("--dy_query_correct_type", output.command)
 
+    def test_author_profile_flag_is_passed_only_for_the_candidate_sweep(self):
+        # 搜索结果里的 author 没有真实粉丝数和签名，初筛候选要补一次资料请求；
+        # 精采等其它调用方不带这个开关，避免多出一轮请求。
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = RecordingAdapter(Path(temp_dir))
+            output = adapter.run_search(
+                platform="dy", keyword="测试", start_page=0, max_notes=1,
+                max_comments=0, max_concurrency=1, max_items_per_minute=5,
+                get_sub_comment=False, save_root=Path(temp_dir) / "output",
+                fetch_author_profile=True,
+            )
+        command = output.command
+        self.assertEqual(command[command.index("--dy_fetch_author_profile") + 1], "true")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            adapter = RecordingAdapter(Path(temp_dir))
+            output = adapter.run_search(
+                platform="dy", keyword="测试", start_page=0, max_notes=1,
+                max_comments=0, max_concurrency=1, max_items_per_minute=5,
+                get_sub_comment=False, save_root=Path(temp_dir) / "output",
+            )
+        self.assertNotIn("--dy_fetch_author_profile", output.command)
+
     def test_task_can_disable_comments_and_media_without_exposing_deployment_options(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             adapter = RecordingAdapter(Path(temp_dir))

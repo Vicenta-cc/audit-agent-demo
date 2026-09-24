@@ -1903,7 +1903,14 @@ class AuditPipeline:
         if engine is None:
             engine = TriageEngine(LexiconStore(), self.qwen, model=settings.triage_model,
                                   max_comments=settings.triage_candidate_comments,
-                                  request_timeout=settings.triage_request_timeout)
+                                  request_timeout=settings.triage_request_timeout,
+                                  max_followers_personal_verified=settings.triage_max_followers_personal_verified,
+                                  max_followers_unverified=settings.triage_max_followers_unverified,
+                                  official_verify_patterns=settings.triage_official_verify_patterns,
+                                  rule_score_high=settings.triage_rule_score_high,
+                                  rule_score_medium=settings.triage_rule_score_medium,
+                                  rule_score_low=settings.triage_rule_score_low,
+                                  rule_score_cap=settings.triage_rule_score_cap)
             self._triage_engine = engine
         return engine
 
@@ -1922,10 +1929,15 @@ class AuditPipeline:
         if not terms:
             raise ValueError("at least one search keyword is required")
         engine = self._triage_engine_instance()
-        category = str(getattr(request, "lexicon_category", "") or "")
-        lexicon_terms = engine.terms_for(
-            [category] if category and getattr(request, "keyword_source", "keyword") == "lexicon" else []
-        )
+        library_ids = [str(x).strip() for x in (getattr(request, "library_ids", None) or []) if str(x).strip()]
+        category = str(getattr(request, "lexicon_category", "") or "").strip()
+        # 规则层加载本任务全部词库的词，与搜索词来源（关键词/词库）无关：显式关键词任务也可能配了
+        # library_ids，只按 keyword_source 过滤会让它们的规则层完全没有可匹配的条目。
+        lexicon_terms = engine.terms_for(library_ids or ([category] if category else []))
+        # 模型层的判定口径来自任务分类的判定规则（审核目标、证据规则），与黑话库一起构成初筛的两份数据
+        profile_snapshot = getattr(request, "prompt_profile_snapshot", None)
+        rules = dict(profile_snapshot) if isinstance(profile_snapshot, dict) else {}
+        job_store.log(self.job_id, f"初筛判定规则：{rules.get('prompt_version') or '未提供'}")
         mode = str(getattr(settings, "triage_mode", "off") or "off")
         # 切换账号后 save_root 是 crawler/rotation-<账号>，证据要从整个任务的采集目录回读
         job_crawl_dir = save_root.parent if save_root.name.startswith("rotation-") else save_root
@@ -1961,6 +1973,7 @@ class AuditPipeline:
                     max_comments=settings.triage_candidate_comments, max_concurrency=crawler_concurrency,
                     max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
                     get_sub_comment=False, collect_comments=True, collect_media=False, save_root=candidate_root,
+                    fetch_author_profile=True,
                     stream_items=False, stop_checker=stop_checker, auth_state=account_auth_state,
                     account_id=crawler_account_id,
                     started_callback=None if crawler_started else started_callback,
@@ -1977,7 +1990,7 @@ class AuditPipeline:
                     key = content_identity(item, platform)
                     if key:
                         scores.append(engine.score(key, rank, item, comments_by_key.get(key, []), lexicon_terms,
-                                                   search_keyword=keyword))
+                                                   search_keyword=keyword, rules=rules))
                 ranked = rank_candidates(scores)
                 exclude = set(selected_by_key) | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked])
                 strategy = "triage"
@@ -1991,10 +2004,14 @@ class AuditPipeline:
                 if selected is None:
                     excluded = len(exclude & {s.content_key for s in ranked})
                     positive = sum(1 for s in ranked if s.score > 0)
+                    discarded = sum(1 for s in ranked if s.band == "discard")
                     job_store.log(self.job_id, f"词「{keyword}」跳过：候选 {len(scores)} 条，可疑 {positive} 条，"
+                                               f"身份丢弃 {discarded} 条，"
                                                f"排除重复或已审 {excluded} 条，换下一个词")
                     continue
-                job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}（{strategy}，{selected.band}，分 {selected.score}）：{selected.reason}")
+                risk_note = f"，可疑分 {selected.model_risk}" if selected.model_risk is not None else ""
+                job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}"
+                                           f"（{strategy}，{selected.band}，分 {selected.score}{risk_note}）：{selected.reason}")
                 # run_detail 内部只会报 1/1，外层进度条要看到"第几个词/共几个词"
                 keyword_progress = ((lambda _done, _total, _index=index: progress_callback(_index, len(terms)))
                                     if progress_callback else None)
