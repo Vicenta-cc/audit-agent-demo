@@ -281,6 +281,10 @@ class HermesRuntimeBinding:
             raise HermesRuntimeUnavailable(
                 "Hermes Agent 0.20.4 canonical retry control did not take effect"
             )
+        if product_mode == "creation":
+            from .creation_prompt import install_creation_prompt
+
+            install_creation_prompt(agent)
         return agent
 
     @staticmethod

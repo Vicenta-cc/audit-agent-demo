@@ -212,12 +212,20 @@ def test_tool_schemas_are_canonical_and_minimal():
     canonical = RuleSetContent.model_json_schema()
     canonical.pop("$defs")
     for name, keys in {
-        "create_ruleset_proposal": {"content"},
+        "create_ruleset_proposal": {"content", "generation_request"},
         "update_ruleset_proposal": {"proposal_id", "expected_version", "content"},
         "get_ruleset_proposal": {"proposal_id"},
     }.items():
         schema = schemas[name]
-        assert set(schema["properties"]) == set(schema["required"]) == keys
+        assert set(schema["properties"]) == keys
+        if name == "create_ruleset_proposal":
+            assert not schema.get("required")
+            assert schema["properties"]["content"]["anyOf"] == [
+                {"$ref": "#/$defs/RuleSetContent"}, {"type": "null"},
+            ]
+            assert schema["$defs"]["RuleSetContent"] == canonical
+            continue
+        assert set(schema["required"]) == keys
         assert schema["additionalProperties"] is False
         if "content" in keys:
             assert schema["properties"]["content"]["$ref"] == "#/$defs/RuleSetContent"

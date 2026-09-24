@@ -5,7 +5,13 @@ from pydantic import Field, StrictInt
 from backend.investigation_creation.principal import LocalPrincipalProvider, Principal
 from backend.rulesets.contracts import StrictModel
 from backend.rulesets.errors import RuleSetNotFoundError, RuleSetForbiddenError, RuleSetRevisionConflictError
-from .contracts import CreateLexiconInput, OpenResourceInput, UpdateEditInput, EditChange
+from .contracts import LexiconContent, OpenResourceInput, UpdateEditInput, EditChange
+
+
+class CreateLexiconEditBody(StrictModel):
+    """Editor import only; model generation belongs to the Agent tool contract."""
+
+    content: LexiconContent
 
 
 class SaveLibraryBody(StrictModel):
@@ -72,7 +78,7 @@ def create_resource_router(application, conversation, principal_provider=None):
         return invoke('open', session_id=session_id, principal=principal, **body.model_dump())
 
     @router.post('/api/investigation-workspaces/{session_id}/resource-edits/lexicon')
-    def create_lexicon(session_id: str, body: CreateLexiconInput, principal: Principal=Depends(provide)):
+    def create_lexicon(session_id: str, body: CreateLexiconEditBody, principal: Principal=Depends(provide)):
         return invoke('create_lexicon', session_id=session_id, principal=principal, content=body.content.model_dump(mode='json'))
 
     @router.get('/api/investigation-workspaces/{session_id}/resource-edits/{edit_id}')

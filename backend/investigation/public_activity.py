@@ -41,8 +41,11 @@ PUBLIC_TOOL_ACTIVITIES: dict[str, PublicActivitySpec] = {
     "read_account_occurrence": PublicActivitySpec("读取账号活动详情", "已读取账号活动详情。"),
     "read_account_post": PublicActivitySpec("读取账号关联帖子", "已读取账号关联帖子。"),
     "compare_authorized_report_accounts": PublicActivitySpec(
-        "查询账号跨报告活动", "已完成授权报告间的账号活动查询。"
+        "比较报告共同账号", "已读取选定报告的共同账号。"
     ),
+    "list_authorized_reports": PublicActivitySpec("读取可比较报告目录", "已读取已授权报告目录。"),
+    "list_report_accounts": PublicActivitySpec("读取报告账号目录", "已读取所选报告的账号目录。"),
+    "get_report_account_statistics": PublicActivitySpec("统计报告账号", "已统计所选报告的账号总数及活跃排名。"),
     # Investigation creation tools.
     "query_investigation_options": PublicActivitySpec(
         "查询可用平台与审核资源", "已读取可用平台与审核资源。"

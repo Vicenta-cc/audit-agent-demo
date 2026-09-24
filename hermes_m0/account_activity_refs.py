@@ -11,7 +11,7 @@ from hermes_m0.refs import ReferenceError
 
 
 AccountActivityReferenceKind = Literal[
-    "account", "occurrence", "comment_target", "post"
+    "account", "occurrence", "comment_target", "post", "report"
 ]
 
 
@@ -337,5 +337,6 @@ class AccountActivityReferenceRegistry:
                 "occurrence": "activity",
                 "comment_target": "target",
                 "post": "post",
+                "report": "report",
             }[kind]
             return f"{prefix}{self._counter}_{self._nonce}"

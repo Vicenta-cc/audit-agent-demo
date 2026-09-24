@@ -51,12 +51,20 @@ def test_unified_overview_prompt_and_schema_support_bounded_post_directory():
     assert "list_report_posts" in names
     assert "read_posts" in names
     assert "list_post_comments" in names
+    assert not {"view_post_comments", "open_post_comments"} & names
     assert "list_evidence" in names
     assert "read_evidence" in names
     assert "search_posts" not in names
     assert "list_post_risk_comments" not in names
     assert "list_finding_posts" not in names
     assert "compare_authorized_report_accounts" in names
+    assert {"list_authorized_reports", "list_report_accounts", "get_report_account_statistics"} <= names
+    comparison = next(s for s in schemas if s["name"] == "compare_authorized_report_accounts")
+    assert comparison["parameters"]["required"] == ["report_refs"]
+    assert comparison["parameters"]["properties"]["limit"]["maximum"] == 20
+    assert not {"list_authorized_reports", "list_report_accounts", "get_report_account_statistics"} & {
+        schema["name"] for schema in pass_tool_schemas()
+    }
     assert "compare_authorized_report_accounts" not in {
         schema["name"] for schema in pass_tool_schemas()
     }
@@ -262,7 +270,21 @@ def test_unified_report_thirty_post_directory_pages_and_restored_last_post(tmp_p
     )
     assert third["post_directory"]["has_more"] is False
 
+    catalog_payload = service.execute_tool_call(
+        session_id="thirty-post-session", tool_call_id="report-catalog-call",
+        tool_name="list_authorized_reports", args={},
+        next_call=lambda args: service.dispatch(
+            "list_authorized_reports", args, session_id="thirty-post-session"
+        ),
+    )
+    report_ref = json.loads(catalog_payload)["data"]["reports"][0]["report_ref"]
+
     restored = configured_service()
+    restored_accounts = json.loads(restored.dispatch(
+        "list_report_accounts", {"report_ref": report_ref}, session_id="thirty-post-session"
+    ))
+    assert restored_accounts["ok"], restored_accounts
+    assert restored_accounts["data"]["returned_count"] <= 10
     last_post = third["post_previews"][-1]
     detail = json.loads(
         restored.dispatch(
@@ -481,12 +503,13 @@ def test_unified_report_overview_limits_default_account_entries_to_five_per_role
         *[f"commenter-{index}" for index in range(5)],
     ]
     assert report["account_entry_statistics"] == {
-        "publisher_account_count": 7,
-        "commenter_account_count": 7,
-        "distinct_account_count": 14,
+        # Fake preview cards must not become the source of full-report counts.
+        **service.account_activity.current_report_account_statistics(),
         "displayed_publisher_count": 5,
         "displayed_commenter_count": 5,
     }
+    assert report["account_entry_statistics"]["publisher_account_count"] == 1
+    assert report["account_entry_statistics"]["commenter_account_count"] == 0
 
 
 def test_unified_report_selects_its_own_product_mode(tmp_path):
@@ -800,35 +823,67 @@ def test_unified_reports_deterministically_enumerate_and_compare_all_stable_acco
     service = UnifiedAuditReportToolService(current, account_activity=activity)
     service.bind_session("compare-reports-session")
 
+    catalog = json.loads(service.dispatch(
+        "list_authorized_reports", {}, session_id="compare-reports-session"
+    ))
+    assert catalog["ok"], catalog
+    report_refs = [item["report_ref"] for item in catalog["data"]["reports"]]
     comparison = json.loads(
         service.dispatch(
             "compare_authorized_report_accounts",
-            {},
+            {"report_refs": report_refs},
             session_id="compare-reports-session",
             turn_id="compare",
         )
     )
     assert comparison["ok"], comparison
     assert comparison["scope"]["account_activity_scope"] == (
-        "authorized_published_unified_audit_reports"
+        "selected_authorized_unified_reports"
     )
     data = comparison["data"]
-    assert data["report_count"] == 2
+    assert len(data["reports_compared"]) == 2
     assert data["comparison_complete_for_stable_accounts"] is True
-    assert [item["account_count"] for item in data["accounts_by_report"]] == [2, 2]
+    assert "accounts_by_report" not in data
+    assert "pairwise_comparisons" not in data
     assert {
         role
-        for report in data["accounts_by_report"]
-        for account in report["accounts"]
-        for role in account["roles"]
+        for account in data["accounts"]
+        for appearance in account["report_appearances"]
+        for role in appearance["roles"]
     } == {"发布者", "评论者"}
-    assert data["shared_account_count"] == 2
-    pair = data["pairwise_comparisons"][0]
-    assert pair["common_account_count"] == 2
-    assert pair["common_publisher_count"] == 1
-    assert pair["common_commenter_count"] == 1
+    assert data["matched_account_count"] == 2
+    assert data["common_account_count"] == 2
+    assert data["common_publisher_count"] == 1
+    assert data["common_commenter_count"] == 1
+    for account in data["accounts"]:
+        overview = json.loads(service.dispatch(
+            "get_account_overview", {"account_ref": account["account_ref"]},
+            session_id="compare-reports-session",
+        ))
+        assert overview["ok"], overview
+    directory = json.loads(service.dispatch(
+        "list_report_accounts", {"report_ref": report_refs[0], "role": "comment_author"},
+        session_id="compare-reports-session",
+    ))
+    assert directory["ok"], directory
+    assert directory["data"]["account_count"] == 1
+    ranking = json.loads(service.dispatch(
+        "get_report_account_statistics", {}, session_id="compare-reports-session",
+    ))
+    assert ranking["ok"], ranking
+    stats = ranking["data"]["statistics"]
+    assert stats["comment_count"] == 1 and stats["commenter_account_count"] == 1
+    report = json.loads(service.dispatch("read_report", {}, session_id="compare-reports-session"))
+    assert report["ok"], report
+    assert all(report["data"]["account_entry_statistics"][key] == value for key, value in stats.items())
+    ranked_account = ranking["data"]["accounts"][0]["account_ref"]
+    followup = json.loads(service.dispatch(
+        "get_account_overview", {"account_ref": ranked_account}, session_id="compare-reports-session",
+    ))
+    assert followup["ok"], followup
+    assert followup["data"]["statistics"]["comment_count"] == 3  # still full authorized scope
     encoded = json.dumps(comparison, ensure_ascii=False)
-    assert "account_ref" not in encoded
+    assert all(account["account_ref"].startswith("account") for account in data["accounts"])
     assert "account:v2:" not in encoded
     assert "stable-author" not in encoded
     assert "stable-shared-commenter" not in encoded

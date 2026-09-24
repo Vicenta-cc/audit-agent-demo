@@ -77,12 +77,15 @@ class InvestigationCreationService:
         return self._resource_management
 
     def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str, turn_id: str,
-                            principal: Principal, tool_call_id: str = "", runtime_turn_id: str = "") -> InvestigationDraft:
+                            principal: Principal, tool_call_id: str = "", runtime_turn_id: str = "",
+                            resource_ref: str | None = None) -> InvestigationDraft:
         if self.conversation_store is None or not turn_id or not tool_call_id:
             reject("PROPOSAL_APPROVAL_REQUIRED", "An authoritative current conversation turn is required.")
         if self.resource_service is None:
             raise ConfigurationValidationError("investigation resource service is not configured")
         with self.resource_service.authoritative_draft_fence() as resource_connection:
+            if resource_ref:
+                self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, connection=resource_connection)
             def normalize(configuration: InvestigationDraftConfiguration, *, previous) -> InvestigationDraftConfiguration:
                 self._reject_legacy_creation_platform(configuration)
                 sources = self._temporary_provenance(configuration)
@@ -138,7 +141,7 @@ class InvestigationCreationService:
         return RuleSetContent.model_validate(content)
 
     def create_draft(
-        self, command: CreateDraftCommand, *, principal: Principal
+        self, command: CreateDraftCommand, *, principal: Principal, resource_ref: str | None = None
     ) -> InvestigationDraft:
         command = CreateDraftCommand.model_validate(
             command.model_dump(mode="json", warnings=False)
@@ -152,6 +155,8 @@ class InvestigationCreationService:
                     "investigation resource service is not configured"
                 )
             with self.resource_service.authoritative_draft_fence() as resource_connection:
+                if resource_ref:
+                    self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, connection=resource_connection)
                 sources = self._temporary_provenance(configuration)
                 if sources:
                     self.resource_service.validate_temporary_provenance(
@@ -176,7 +181,7 @@ class InvestigationCreationService:
         )
 
     def update_draft(
-        self, command: UpdateDraftCommand, *, principal: Principal
+        self, command: UpdateDraftCommand, *, principal: Principal, resource_ref: str | None = None
     ) -> InvestigationDraft:
         command = UpdateDraftCommand.model_validate(
             command.model_dump(mode="json", warnings=False)
@@ -202,6 +207,8 @@ class InvestigationCreationService:
                     "investigation resource service is not configured"
                 )
             with self.resource_service.authoritative_draft_fence() as resource_connection:
+                if resource_ref:
+                    self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, connection=resource_connection)
                 sources = self._temporary_provenance(effective_configuration)
                 if sources and sources != self._temporary_provenance(draft.configuration):
                     self.resource_service.validate_temporary_provenance(

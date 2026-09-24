@@ -149,6 +149,8 @@ def redact_internal_account_references(value: str) -> tuple[str, bool]:
     redacted = _INTERNAL_ACCOUNT_FIELD.sub("内部账号引用", redacted)
     redacted = _INTERNAL_RUNTIME_BRAND.sub("研判助手", redacted)
     redacted = re.sub(r"(?<=我是)\s+(?=研判助手)", "", redacted)
+    redacted = re.sub(r"(?i)\breport\d+_[0-9a-z-]+\b", "内部报告引用已隐藏", redacted)
+    redacted = re.sub(r"(?i)\breport_refs?\b", "内部报告引用", redacted)
     return redacted, redacted != original
 
 

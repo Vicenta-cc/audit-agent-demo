@@ -2195,9 +2195,14 @@ def test_creation_prompt_preserves_literal_short_search_terms() -> None:
 
 
 def test_resource_prompt_generates_covert_variants_as_search_terms() -> None:
-    normalized_prompt = " ".join(RESOURCE_PROMPT.split())
-    assert "主词是主题和语义归类" in normalized_prompt
-    assert "变体词是主要的实际召回表达" in normalized_prompt
+    from backend.resource_management.generation import generation_messages
+    from backend.resource_management.generation_contracts import ResourceGenerationRequest
+
+    normalized_prompt = " ".join(generation_messages("lexicon", ResourceGenerationRequest(
+        objective="调查", platform="dy"))[0]["content"].split())
+    assert "主词是主题和语义归类" in RESOURCE_PROMPT
+    assert "变体词是主要的实际召回表达" in RESOURCE_PROMPT
+    assert "主词表达主题" in normalized_prompt
     assert "默认只生成 5 至 10 个最终可直接搜索的实际搜索词" in normalized_prompt
     assert "主题主词按语义归类需要生成" in normalized_prompt
     assert "不要以“生成但默认关闭”的形式输出" in normalized_prompt
@@ -2213,9 +2218,13 @@ def test_temporary_and_structured_recall_share_one_generation_policy() -> None:
     from backend.resource_management.tools import RESOURCE_DESCRIPTIONS
 
     system_prompt = CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT
-    assert system_prompt.count(RECALL_GENERATION_PROMPT) == 1
-    assert RECALL_GENERATION_PROMPT in RESOURCE_DESCRIPTIONS['create_lexicon_edit']
-    assert "displayed alongside a ruleset Proposal without create_lexicon_edit" in CREATION_SYSTEM_PROMPT
+    assert RECALL_GENERATION_PROMPT not in system_prompt
+    from backend.resource_management.generation import generation_messages
+    from backend.resource_management.generation_contracts import ResourceGenerationRequest
+    assert generation_messages("lexicon", ResourceGenerationRequest(
+        objective="调查", platform="dy"))[0]["content"].count(RECALL_GENERATION_PROMPT) == 1
+    assert "Even for temporary-only use" in CREATION_SYSTEM_PROMPT
+    assert "不强制增加资源工具" not in system_prompt
     assert "临时搜索词与完整黑话库共用" in RECALL_GENERATION_PROMPT
     assert "不是每个主题各生成 5 至 10 个" in RECALL_GENERATION_PROMPT
     assert "可靠候选不足时宁可少于 5 个" in RECALL_GENERATION_PROMPT
@@ -3270,13 +3279,18 @@ def test_t1_missing_recall_conversation_contract(creation_stack, preauthorized):
 
 
 def test_t1_generation_guidance_preserves_conversation_authority():
+    from backend.resource_management.generation import generation_messages
+    from backend.resource_management.generation_contracts import ResourceGenerationRequest
+
     prompt = " ".join((CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT).split())
     assert "Without that authorization" in prompt
     assert "no Draft and no generated terms" in prompt
     assert "do not list even illustrative example terms or candidate terms" in prompt
-    assert "新生成的中文查询使用自然连续文本" in prompt
-    assert "不含空格、加号、逗号或布尔分隔符" in prompt
-    assert "审核规则 Proposal, then show its 审核规则 and the complete search-term list, and END this turn" in prompt
+    authoring = generation_messages("lexicon", ResourceGenerationRequest(
+        objective="调查", platform="dy"))[0]["content"]
+    assert "新生成的中文查询使用自然连续文本" in authoring
+    assert "不含空格、加号、逗号或布尔分隔符" in authoring
+    assert "审核规则 Proposal and a lexicon edit via create_lexicon_edit, then show their actual contents, and END this turn" in prompt
     assert "create the Draft in the same turn" in prompt
     assert "Do not ask again for permission to generate terms" in prompt
     assert "real recall 黑话库 when it is sufficiently suitable" in prompt
@@ -3378,8 +3392,8 @@ def test_resource_generation_and_normal_turns_use_separate_providers(
     conversation.fake_runtime = False
     conversation.runtime_binding = Runtime()
     monkeypatch.setattr(settings, "resource_generation_api_key", "")
-    assert conversation._provider_route("帮我生成审核规则") == "resource_generation"
-    with pytest.raises(RuntimeError, match="provider is not configured"):
+    assert conversation._provider_route("帮我生成审核规则") == "default"
+    with pytest.raises(ValueError, match="inside its business tool"):
         conversation._agent(
             "unconfigured-resource-provider",
             provider_route="resource_generation",
@@ -3396,15 +3410,14 @@ def test_resource_generation_and_normal_turns_use_separate_providers(
         "dashscope_base_url",
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
-    assert conversation._provider_route("帮我生成审核规则") == "resource_generation"
+    assert conversation._provider_route("帮我生成审核规则") == "default"
     assert conversation._provider_route("保存这套审核规则") == "default"
     resource_agent = conversation._agent(
-        "provider-routing-session", provider_route="resource_generation"
+        "provider-routing-session", provider_route=conversation._provider_route("生成黑话库但不保存")
     )
     default_agent = conversation._agent("provider-routing-session")
 
-    assert resource_agent is not default_agent
-    assert calls[0]["base_url"] == "https://www.dmxapi.cn/v1"
-    assert calls[0]["api_key"] == "dmx-test-key"
-    assert calls[1]["base_url"].startswith("https://dashscope.aliyuncs.com/")
-    assert calls[1]["api_key"] == "official-test-key"
+    assert resource_agent is default_agent
+    assert len(calls) == 1
+    assert calls[0]["base_url"].startswith("https://dashscope.aliyuncs.com/")
+    assert calls[0]["api_key"] == "official-test-key"

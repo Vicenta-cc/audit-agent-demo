@@ -239,6 +239,9 @@ class ReportTaskInvestigationToolService:
                 "read_account_occurrence",
                 "read_account_post",
                 "compare_authorized_report_accounts",
+                "list_authorized_reports",
+                "list_report_accounts",
+                "get_report_account_statistics",
             }:
                 return handler(session_id, args, tool_name=tool_name)
             return handler(session_id, args)

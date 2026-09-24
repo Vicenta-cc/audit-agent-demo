@@ -163,9 +163,17 @@ def test_ruleset_save_update_keeps_frozen_old_revision(service):
 
 def test_ethnic_guidance_and_compilation_are_preserved(service):
     from backend.investigation_creation.conversation import CREATION_SYSTEM_PROMPT
+    from backend.investigation_creation.tools import M3_TOOL_DESCRIPTIONS
     from backend.rulesets.compiler import compile_ruleset_content
     fixture = Path(__file__).parent/'fixtures/resource_lifecycle'
-    assert (fixture/'ethnic-authoring-guidance.txt').read_text() in CREATION_SYSTEM_PROMPT
+    guidance = (fixture/'ethnic-authoring-guidance.txt').read_text()
+    assert guidance not in CREATION_SYSTEM_PROMPT
+    from backend.resource_management.generation import generation_messages
+    from backend.resource_management.generation_contracts import ResourceGenerationRequest
+    assert guidance in generation_messages("ruleset", ResourceGenerationRequest(
+        objective="民族关系", platform="dy"))[0]["content"]
+    for name in ("update_ruleset_proposal", "update_resource_edit"):
+        assert guidance in M3_TOOL_DESCRIPTIONS[name]
     body = json.loads((fixture/'ethnic-ruleset.json').read_text())
     proposal = service.app.create_ruleset_proposal(body, session_id=CTX['session_id'])
     before = compile_ruleset_content(body)

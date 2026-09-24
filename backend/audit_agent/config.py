@@ -64,7 +64,7 @@ class Settings:
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     ).rstrip("/")
     qwen_text_model = os.getenv("QWEN_TEXT_MODEL", "qwen3.7-plus")
-    # Only explicit RuleSet/Lexicon generation turns use this provider. Every
+    # Only the dedicated RuleSet/Lexicon authoring calls use this provider. Every
     # other creation, audit and reporting call remains on DASHSCOPE_*.
     resource_generation_api_key = os.getenv("RESOURCE_GENERATION_API_KEY", "")
     resource_generation_base_url = os.getenv(

@@ -14,6 +14,9 @@ from pydantic import (
     model_validator,
 )
 from backend.rulesets.contracts import RuleSetContent
+from backend.resource_management.authoring_guidance import RULESET_AUTHORING_GUIDANCE
+from backend.resource_management.generation_contracts import ResourceGenerationRequest
+from backend.resource_management.generation import ResourceGenerator
 
 from .contracts import (
     ConfirmAndQueueCommand,
@@ -27,6 +30,10 @@ from .contracts import (
 from .errors import IdempotencyConflictError
 from .principal import Principal
 from .approval import UseRuleSetProposalInput
+from .resource_ref_inputs import (
+    ToolDraftConfiguration, ToolUseRuleSetProposalInput, resolve_arguments,
+    hide_legacy_hash_input,
+)
 from backend.resource_management.tools import RESOURCE_TOOL_INPUTS, RESOURCE_MUTATIONS, RESOURCE_DESCRIPTIONS, execute_resource
 
 
@@ -62,7 +69,7 @@ class HermesToolExecutionIdentity:
 class CreateInvestigationDraftInput(StrictModel):
     title: str = Field(min_length=1, max_length=300)
     objective: str = Field(min_length=1, max_length=4_000)
-    configuration: InvestigationDraftConfiguration
+    configuration: ToolDraftConfiguration
 
     @field_validator("title", "objective", mode="before")
     @classmethod
@@ -75,7 +82,7 @@ class UpdateInvestigationDraftInput(StrictModel):
     expected_revision: int = Field(ge=1)
     title: str | None = Field(default=None, min_length=1, max_length=300)
     objective: str | None = Field(default=None, min_length=1, max_length=4_000)
-    configuration: InvestigationDraftConfiguration | None = None
+    configuration: ToolDraftConfiguration | None = None
 
     @field_validator("draft_id", "title", "objective", mode="before")
     @classmethod
@@ -121,7 +128,14 @@ class GetInvestigationRunInput(StrictModel):
 
 
 class CreateRuleSetProposalInput(StrictModel):
-    content: RuleSetContent
+    content: RuleSetContent | None = None
+    generation_request: ResourceGenerationRequest | None = None
+
+    @model_validator(mode="after")
+    def one_input(self):
+        if (self.content is None) == (self.generation_request is None):
+            raise ValueError("provide exactly one of content or generation_request")
+        return self
 
 
 class GetRuleSetProposalInput(StrictModel):
@@ -134,7 +148,7 @@ class UpdateRuleSetProposalInput(GetRuleSetProposalInput):
 
 
 M3_TOOL_INPUTS: dict[str, type[StrictModel]] = {
-    "use_ruleset_proposal": UseRuleSetProposalInput,
+    "use_ruleset_proposal": ToolUseRuleSetProposalInput,
     "query_investigation_options": QueryInvestigationOptions,
     "create_investigation_draft": CreateInvestigationDraftInput,
     "update_investigation_draft": UpdateInvestigationDraftInput,
@@ -171,7 +185,11 @@ M3_TOOL_DESCRIPTIONS = {
         "never just replace expected_revision to force a retry. This binds a temporary Draft, not formal save or execution."
     ),
     "create_ruleset_proposal": (
-        "Author a temporary candidate 审核规则 directly as canonical 审核规则完整内容 JSON when "
+        "Generate a temporary candidate 审核规则 using generation_request (objective/platform/requirements, "
+        "requested_count only when explicitly specified). The dedicated author receives the complete "
+        "rule-authoring instructions and returns validated content. Use content instead only to import "
+        "an already supplied exact canonical resource, never to bypass a generation failure. "
+        "Supply exactly one of generation_request or content. Use this tool when "
         "the user asks to generate 审核规则 or another candidate. Application validates, compiles "
         "and persists it in this Session. Generation is not approval or use: it never binds "
         "Draft Judgement, publishes or saves a formal 审核规则. No prior options query is required. "
@@ -212,10 +230,10 @@ M3_TOOL_DESCRIPTIONS = {
         "Create an editable Investigation Draft when the user wants the currently defined "
         "configuration captured as an investigation. Use current real resource candidates. "
         "Select a published 审核规则已发布版本 directly as judgement. "
-        "Search Drafts prefer a suitable real existing_lexicon ID, hash, and the server-projected "
-        "variant-first search snapshot (stored in the legacy enabled_main_terms field). If none is "
-        "sufficiently suitable and the conversation authorizes generating missing Recall, supply "
-        "focused, covert, platform-plausible search strings directly in temporary_terms.terms; "
+        "Search Drafts prefer a suitable formal lexicon: use the resource_ref recall_plan returned "
+        "by read_resource or save_resource; the backend binds its exact search snapshot. If none is "
+        "sufficiently suitable and the conversation authorizes generating missing Recall, first call "
+        "create_lexicon_edit and use its exact recall_plan including lexicon_content; "
         "otherwise explain the gap and propose generation without creating a Draft or listing "
         "any candidate/example search terms in the reply. Prefer hidden-language variants over "
         "explicit risk labels. source_lexicon_ids are write-time checked provenance, not runtime "
@@ -229,7 +247,7 @@ M3_TOOL_DESCRIPTIONS = {
         "Update an editable Investigation Draft at its expected revision. User changes "
         "to platform, 审核规则 judgement, 黑话库, or terms are allowed before confirmation; edited "
         "黑话库 terms must be represented as temporary_terms. Authorized generation of missing "
-        "Recall supplies actual search terms directly as a flat list, without formal save. "
+        "Recall first creates a session lexicon edit and uses its exact structured recall_plan, without formal save. "
         "Changed source_lexicon_ids must reference real 黑话库; unchanged provenance needs no "
         "resource refresh. Each temporary term must be comma-free. This command never confirms "
         "or starts an investigation. A PUBLISHED Run cannot be replaced or supplemented in the "
@@ -254,6 +272,7 @@ M3_TOOL_DESCRIPTIONS = {
 
 def _creation_tool_schema(schema: type[StrictModel]) -> dict[str, Any]:
     parameters = schema.model_json_schema()
+    hide_legacy_hash_input(parameters)
     # Per-run task parameters are part of the editable Draft contract. Keep them
     # visible to the dialogue tools so explicit user choices (for example
     # collect_media=false) survive preview and confirmation. Account selection
@@ -279,6 +298,9 @@ def _creation_tool_schema(schema: type[StrictModel]) -> dict[str, Any]:
 M3_TOOL_INPUTS.update(RESOURCE_TOOL_INPUTS)
 M3_MUTATION_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | RESOURCE_MUTATIONS
 M3_RECORDED_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | {"get_resource_edit", "get_ruleset_proposal"}
+for _authoring_tool in ("update_ruleset_proposal",):
+    M3_TOOL_DESCRIPTIONS[_authoring_tool] += "\n" + RULESET_AUTHORING_GUIDANCE
+
 M3_TOOL_DESCRIPTIONS.update(RESOURCE_DESCRIPTIONS)
 
 # Attach guidance before freezing the schemas used by deferred discovery.
@@ -296,9 +318,11 @@ M3_PARAMETER_GUIDANCE = {
         'ID。'
     ),
     'create_ruleset_proposal': (
-        '参数只有 content，其值是完整 审核规则完整内容 对象；不要用 canonical_content。分类和规则的名称字段均叫 name；风险字段叫 '
+        '新生成传 generation_request，包含 objective、platform、requirements 和用户明确要求的 requested_count。'
+        '不要把完整历史传入专用生成步骤。仅原样导入已给定内容才传 content；两者不能同时提供。'
+        'content 是完整 审核规则完整内容 对象；不要用 canonical_content。分类和规则的名称字段均叫 name；风险字段叫 '
         'suggested_risk_level；分类和规则均须有 order，规则还须有 adjudication_notes。具体必填项先读 '
-        'schema。成功后展示规则及搜索词并结束本轮，等用户采用。'
+        'schema。成功后展示规则及搜索词，等后续明确采用；本轮已明确授权保存时可以先完成保存，不自动采用或启动。'
     ),
     'update_ruleset_proposal': (
         '参数为 proposal_id、expected_version、content（完整新内容）。先读取当前提案，按 rule_id 修改目标并保持其他规则。不是局部 '
@@ -360,8 +384,9 @@ HERMES_M3_TOOL_SCHEMAS = tuple(
 class InvestigationCreationToolService:
     """Hermes-facing adapter over stable M3 Application commands and queries."""
 
-    def __init__(self, application_service: Any) -> None:
+    def __init__(self, application_service: Any, *, resource_generator=None) -> None:
         self.application_service = application_service
+        self.resource_generator = resource_generator or ResourceGenerator()
         self._conversation_turns: dict[str, str] = {}
         self._conversation_lock = RLock()
         self._tool_start_observer: Callable[[str, str, str], None] | None = None
@@ -413,6 +438,16 @@ class InvestigationCreationToolService:
         if schema is None:
             raise ValueError("Hermes M3 tool name is not allowed")
         parsed = schema.model_validate(arguments)
+        resource_ref = None
+        if tool_name in {'create_investigation_draft', 'update_investigation_draft', 'use_ruleset_proposal'}:
+            resolved, resource_ref = resolve_arguments(tool_name, parsed.model_dump(mode='json'),
+                                         lambda: self.application_service.resource_management,
+                                         principal=principal)
+            parsed = (UseRuleSetProposalInput if tool_name == 'use_ruleset_proposal' else schema).model_validate(resolved)
+        if tool_name in {"create_ruleset_proposal", "create_lexicon_edit"} and parsed.generation_request is not None:
+            kind = "ruleset" if tool_name == "create_ruleset_proposal" else "lexicon"
+            content = self.resource_generator.generate(kind, parsed.generation_request)
+            parsed = schema.model_validate({"content": content.model_dump(mode="json")})
         if tool_name in RESOURCE_TOOL_INPUTS:
             return execute_resource(self.application_service.resource_management, tool_name, parsed,
                                     session_id=session_id, principal=principal)
@@ -423,6 +458,7 @@ class InvestigationCreationToolService:
                 parsed, session_id=session_id, turn_id=turn_id, principal=principal,
                 runtime_turn_id=runtime_identity.turn_id if runtime_identity else "",
                 tool_call_id=runtime_identity.tool_call_id if runtime_identity and runtime_identity.session_id == session_id else "",
+                **({'resource_ref': resource_ref} if resource_ref else {}),
             )
             result = InvestigationDraftView(
                 draft=draft,
@@ -451,6 +487,7 @@ class InvestigationCreationToolService:
             draft = self.application_service.create_draft(
                 CreateDraftCommand.model_validate(parsed.model_dump(mode="json")),
                 principal=principal,
+                **({'resource_ref': resource_ref} if resource_ref else {}),
             )
             result = self.application_service.get_draft_view(
                 draft.id, principal=principal
@@ -459,6 +496,7 @@ class InvestigationCreationToolService:
             draft = self.application_service.update_draft(
                 UpdateDraftCommand.model_validate(parsed.model_dump(mode="json")),
                 principal=principal,
+                **({'resource_ref': resource_ref} if resource_ref else {}),
             )
             result = self.application_service.get_draft_view(
                 draft.id, principal=principal

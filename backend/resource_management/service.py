@@ -12,6 +12,7 @@ from backend.rulesets.compiler import compile_ruleset_content, content_hash
 from backend.rulesets.trial_profiles import TRIAL_BUNDLES, apply_trial_profile
 from .contracts import LexiconContent, LexiconEntry, ResourceError
 from .lexicon_versions import canonical, digest, content as lexicon_content, synchronize
+from . import snapshot_refs
 
 
 def now():
@@ -53,6 +54,7 @@ class ResourceManagementService:
                     PRIMARY KEY(edit_id,version));
             ''')
         with self.lexicons._connect() as conn:
+            snapshot_refs.initialize(conn)
             conn.execute('''CREATE TABLE IF NOT EXISTS resource_save_receipts (
                 principal_id TEXT NOT NULL, operation_id TEXT NOT NULL, session_id TEXT NOT NULL,
                 request_hash TEXT NOT NULL, result_json TEXT NOT NULL, created_at TEXT NOT NULL,
@@ -73,7 +75,7 @@ class ResourceManagementService:
             body = {key: item[key] for key in RuleSetContent.model_fields}
             return {'id': resource_id, 'kind': kind, 'content': body, 'version': item['draft_revision'], 'published_revision_id': item['published_revision_id'], 'published_version': item['published_version'], 'editable': item['owner_id'] == principal.id and resource_id not in TRIAL_BUNDLES, 'content_hash': content_hash(body)}
         with self.lexicons._connect() as conn:
-            conn.execute('BEGIN')
+            conn.execute('BEGIN IMMEDIATE')
             body = lexicon_content(conn, resource_id)
             if body.get('deleted'):
                 raise ResourceError('词库不存在。', code='RESOURCE_NOT_FOUND')
@@ -81,10 +83,18 @@ class ResourceManagementService:
             terms = self.lexicons.enabled_search_terms(resource_id, connection=conn)
             runtime_hash = self.lexicons.runtime_content_hash(resource_id, connection=conn)
             return {'id': resource_id, 'kind': kind, 'content': body, 'version': revision['version'],
+                    'resource_ref': snapshot_refs.issue(conn, self.lexicons, resource_id, principal=principal),
                     'content_hash': revision['content_hash'], 'editable': True, 'search_terms': terms,
                     'runtime_content_hash': runtime_hash,
                     'recall_plan': {'strategy': 'existing_lexicon', 'lexicon_id': resource_id,
                                     'expected_runtime_content_hash': runtime_hash, 'enabled_main_terms': terms}}
+
+    def resolve_lexicon_ref(self, resource_ref, *, principal, connection=None):
+        if connection is not None:
+            return snapshot_refs.resolve(connection, self.lexicons, resource_ref, principal=principal)
+        with self.lexicons._connect() as conn:
+            conn.execute('BEGIN')
+            return snapshot_refs.resolve(conn, self.lexicons, resource_ref, principal=principal)
 
     def save_library(self, kind, resource_id, content, expected_version, operation_id, *, principal):
         """Publish a complete editor submission in one transaction, with retry receipts."""
@@ -116,6 +126,8 @@ class ResourceManagementService:
                 if kind == 'ruleset':
                     source['published_revision_id'] = row['published_revision_id']
             formal = self._save_ruleset(conn, resource_id, parsed, source, principal) if kind == 'ruleset' else self._save_lexicon(conn, resource_id, parsed, source)
+            if kind == 'lexicon':
+                formal['resource_ref'] = snapshot_refs.issue(conn, self.lexicons, resource_id, principal=principal)
             result = {'id': resource_id, 'kind': kind, 'content': parsed.model_dump(mode='json'), 'editable': True,
                       **formal, 'version': formal['resource_version'],
                       'published_revision_id': formal.get('revision_id'), 'published_version': formal['version']}
@@ -349,7 +361,7 @@ class ResourceManagementService:
             exact = next((r for r in reversed(same_edit) if r['edit_version'] == expected_version and r['edit_content_hash'] == edit['content_hash']), None)
             if exact:
                 identifier = exact['resource_id']
-                formal = {k: exact[k] for k in ('resource_version', 'version', 'content_hash', 'revision_id', 'search_terms') if k in exact}
+                formal = {k: exact[k] for k in ('resource_version', 'version', 'content_hash', 'revision_id', 'search_terms', 'resource_ref') if k in exact}
             else:
                 if same_edit and mode == 'new':
                     raise ResourceError('本次内容已有其他保存操作，请重新读取保存回执。', code='RESOURCE_VERSION_CONFLICT')
@@ -357,6 +369,7 @@ class ResourceManagementService:
                     formal = self._save_ruleset(conn, identifier, parsed, source if mode == 'update' else None, principal)
                 else:
                     formal = self._save_lexicon(conn, identifier, parsed, source if mode == 'update' else None)
+                    formal['resource_ref'] = snapshot_refs.issue(conn, self.lexicons, identifier, principal=principal)
             result = dict(status='saved', operation_id=operation_id, kind=edit['kind'], edit_id=edit_id, edit_version=expected_version, edit_content_hash=edit['content_hash'], resource_id=identifier, **formal)
             conn.execute('INSERT INTO resource_save_receipts VALUES (?,?,?,?,?,?)', (principal.id, operation_id, session_id, request_hash, canonical(result), now()))
         return result

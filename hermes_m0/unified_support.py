@@ -49,20 +49,67 @@ LIST_REPORT_POSTS = {
 }
 
 
+REPORT_QUERY_PAGING = {
+    "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 10},
+    "cursor": {"type": "string", "description": "同一报告选择和角色筛选下上一页返回的续页引用。"},
+}
+REPORT_ACCOUNT_ROLE = {
+    "type": "string", "enum": ["any", "post_author", "comment_author"], "default": "any",
+    "description": "any为任意角色，post_author为发布者，comment_author为评论者。",
+}
+LIST_AUTHORIZED_REPORTS = {
+    "name": "list_authorized_reports",
+    "description": "分页读取已授权新增统一报告的标题、目录序号和会话引用，不读取账号名单。"
+                   "比较前从此目录选择用户指定报告；同名或指代不明时请用户选择。此目录不改变当前报告绑定。",
+    "parameters": {"type": "object", "properties": deepcopy(REPORT_QUERY_PAGING),
+                   "additionalProperties": False},
+}
 COMPARE_AUTHORIZED_REPORT_ACCOUNTS = {
     "name": "compare_authorized_report_accounts",
-    "description": (
-        "完整枚举并比较当前用户已授权的所有已发布新增统一审核报告中的稳定账号。"
-        "当用户询问两份或多份新增报告是否存在共同发布者、共同评论者、共同账号，"
-        "或要求列出各报告全部发布者和评论者时，直接调用本工具，不要用昵称搜索逐个拼接。"
-        "结果按抖音稳定账号标识确定性计算，同时给出每份报告的完整稳定账号目录、"
-        "任意角色交集、共同发布者、共同评论者以及无法稳定识别的活动数量。"
-        "同昵称不会合并；结果不返回任何内部账号引用或平台身份原值。"
-    ),
+    "description": "比较明确选定的2至10份已授权新增报告，仅返回共同账号总数和分页交集，不返回各报告完整账号目录。"
+                   "report_refs必须来自list_authorized_reports；共同指在每份所选报告都出现，"
+                   "post_author/comment_author要求在每份报告均具备该角色。默认最多10个账号，最多20个。"
+                   "计数基于完整稳定账号集合；同昵称不合并，未识别活动不参与比较。"
+                   "结果account_ref可继续查询账号活动，不向用户展示引用。无参数不会默认比较所有报告。",
     "parameters": {
         "type": "object",
-        "properties": {},
-        "additionalProperties": False,
+        "properties": {
+            "report_refs": {"type": "array", "items": {"type": "string"},
+                            "minItems": 2, "maxItems": 10, "uniqueItems": True},
+            "role": deepcopy(REPORT_ACCOUNT_ROLE), **deepcopy(REPORT_QUERY_PAGING),
+        },
+        "required": ["report_refs"], "additionalProperties": False,
+    },
+}
+LIST_REPORT_ACCOUNTS = {
+    "name": "list_report_accounts",
+    "description": "仅当用户要查看某份报告的账号目录时使用；按所选报告和角色筛选后分页，返回完整计数。"
+                   "report_ref取自list_authorized_reports，默认10个、最多20个账号。"
+                   "与比较共同账号分开；account_ref可用于后续账号穿透，不展示给用户。",
+    "parameters": {
+        "type": "object",
+        "properties": {"report_ref": {"type": "string"}, "role": deepcopy(REPORT_ACCOUNT_ROLE),
+                       **deepcopy(REPORT_QUERY_PAGING)},
+        "required": ["report_ref"], "additionalProperties": False,
+    },
+}
+
+GET_REPORT_ACCOUNT_STATISTICS = {
+    "name": "get_report_account_statistics",
+    "description": "查询一份报告的账号人数、评论总数、最活跃评论者或发布者TopN时使用。"
+                   "直接返回完整快照的精确统计及具体账号排名，不需要逐帖读取评论后自行计数。"
+                   "不传report_ref即当前报告；其他报告引用取自list_authorized_reports。"
+                   "按稳定账号身份去重，活动数降序、并列按稳定身份固定排序；最多返回top_n个具体账号，"
+                   "并列人数单独注明，不用‘其余人并列’代替具体账号。无法识别身份的活动单列，账号数不含这些活动。"
+                   "account_ref可继续查询账号概览和评论明细；明细仍在原已授权任务范围，不能把全域数量当本报告数量。",
+    "parameters": {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "report_ref": {"type": "string", "description": "省略时仅统计当前报告，绝不默认所有报告。"},
+            "role": {"type": "string", "enum": ["comment_author", "post_author"],
+                     "default": "comment_author", "description": "评论者按评论数排名；发布者按发帖数排名。"},
+            "top_n": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5},
+        },
     },
 }
 
@@ -80,9 +127,9 @@ class UnifiedAuditReportToolService(PassReportToolService):
         ):
             self._handlers.pop(tool_name, None)
         if self.account_activity is not None:
-            self._handlers["compare_authorized_report_accounts"] = (
-                self._dispatch_account_activity
-            )
+            for name in ("compare_authorized_report_accounts", "list_authorized_reports", "list_report_accounts",
+                         "get_report_account_statistics"):
+                self._handlers[name] = self._dispatch_account_activity
 
     def _read_real_report(self, session_id, args):
         if args:
@@ -215,18 +262,8 @@ class UnifiedAuditReportToolService(PassReportToolService):
             seen.add(account_ref)
             selected.append(item)
 
-        full_entries = tuple(self.repository.report_account_entries())
-        count_source = full_entries or tuple(available)
-
-        def roles(item):
-            return item.get("report_roles", ()) if isinstance(item, dict) else item.roles
-
-        publisher_count = sum("post_author" in roles(item) for item in count_source)
-        commenter_count = sum("comment_author" in roles(item) for item in count_source)
         return selected, {
-            "publisher_account_count": publisher_count,
-            "commenter_account_count": commenter_count,
-            "distinct_account_count": len(count_source),
+            **self.account_activity.current_report_account_statistics(),
             "displayed_publisher_count": len(publishers),
             "displayed_commenter_count": len(commenters),
         }
@@ -275,7 +312,9 @@ def unified_tool_schemas():
         schema for schema in pass_tool_schemas() if schema["name"] != "search_posts"
     ]
     schemas.extend(
-        [deepcopy(LIST_REPORT_POSTS), deepcopy(COMPARE_AUTHORIZED_REPORT_ACCOUNTS)]
+        [deepcopy(LIST_REPORT_POSTS), deepcopy(LIST_AUTHORIZED_REPORTS),
+         deepcopy(COMPARE_AUTHORIZED_REPORT_ACCOUNTS), deepcopy(LIST_REPORT_ACCOUNTS),
+         deepcopy(GET_REPORT_ACCOUNT_STATISTICS)]
     )
     for schema in schemas:
         if schema["name"] == "read_report":
@@ -284,6 +323,8 @@ def unified_tool_schemas():
                 "冻结帖子预览，以及最多5个默认发帖者和5个活跃评论者入口。"
                 "回答报告概况时先使用本工具；帖子超过10条时使用list_report_posts读取"
                 "其他目录页。预览包含可供read_posts继续读取的当前会话引用。"
+                "账号总数来自完整快照，displayed字段仅表示本次入口展示量；"
+                "查询评论者/发布者人数和TopN直接用get_report_account_statistics，不展开评论明细计数。"
                 + REPORT_STATISTICS_DESCRIPTION
             )
         elif schema["name"] == "read_posts":
@@ -303,5 +344,5 @@ UNIFIED_REPORT_SYSTEM_PROMPT = f"""你是新增统一审核报告的问答助手
 用户询问某帖的风险评论时，调用list_post_comments并使用risk_filter=risk；筛选和计数由服务器在分页前完成。用户要求全部匹配评论时，沿相同筛选读取所有分页。评论结果中的账号引用可以继续查询该评论者的账号概览与活动。
 询问评论统计时，重新调用read_report取得当前汇总。完成审核数、评论自身风险数和报告引用评论材料数含义不同，不能混用；范围限当前报告冻结帖子下的已存评论，不代表平台全部评论。
 只有昵称时先调用search_accounts。唯一精确匹配可以继续查看账号概览和活动；同名或模糊匹配必须请用户选择，不能按昵称强行合并。报告内容范围与账号活动授权范围分别说明，账号没有整体审核决定，不能把帖子或评论通过说成“账号审核通过”。
-用户询问两份或多份新增统一报告是否存在共同发布者、共同评论者、共同账号，或要求穷举各报告全部发布者和评论者时，必须调用compare_authorized_report_accounts。该工具已按稳定账号标识完整枚举授权新增报告，不要再用search_accounts逐个猜测或根据已读帖子自行补齐。回答时区分“任意角色共同账号”“共同发布者”“共同评论者”；如果存在无法稳定识别的活动，明确说明它们没有参与账号合并，不能按昵称强行归并。不得在回答中复述任何账号引用或稳定标识原值。
+比较共同账号时，从list_authorized_reports选择用户指定报告，调用compare_authorized_report_accounts；同名或指代不明先澄清，不擅自扩大到全部报告。比较只返回交集；各报告账号目录另用list_report_accounts。按用户问题选择角色，默认展示首批并说明总数；明确要求全部才续页，未读完不能声称全部。结果账号引用可直接穿透，详情仍按原授权范围查询。无法稳定识别的活动不参与合并，同昵称不合并。报告引用失效时重读报告目录；内部引用不向用户展示。
 引用失效时重新读取当前报告取得入口，不猜引用。连续追问可以复用当前会话已经验证的引用和资料；需要新细节必须调用相应工具。回答使用中文、自然名称和可理解的依据，不展示工具名、内部ID、引用token、数据库路径或配置字段。"""

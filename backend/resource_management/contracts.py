@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from pydantic import Field, StrictBool, StrictInt, field_validator, model_validator
 from backend.rulesets.contracts import StrictModel
+from .generation_contracts import ResourceGenerationRequest
 
 
 class ResourceError(ValueError):
@@ -100,7 +101,14 @@ class ReadResourceInput(StrictModel):
 
 
 class CreateLexiconInput(StrictModel):
-    content: LexiconContent
+    content: LexiconContent | None = None
+    generation_request: ResourceGenerationRequest | None = None
+
+    @model_validator(mode='after')
+    def one_input(self):
+        if (self.content is None) == (self.generation_request is None):
+            raise ValueError('provide exactly one of content or generation_request')
+        return self
 
 
 class OpenResourceInput(StrictModel):

@@ -219,7 +219,7 @@ def _replace_tokens(value: Any, aliases: dict) -> Any:
     return value
 
 
-_NAVIGATION_TOKEN = re.compile(r"(?:[gfpcerq]|account|activity|target|post|page)[0-9]+_[0-9a-f]{6}\b")
+_NAVIGATION_TOKEN = re.compile(r"(?:[gfpcerq]|account|activity|target|post|page|report)[0-9]+_[0-9a-f]{6}\b")
 
 
 def prepare_conversation_history(service: Any, session_id: str, history: list[dict]) -> list[dict]:
