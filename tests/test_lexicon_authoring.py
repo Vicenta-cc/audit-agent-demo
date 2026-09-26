@@ -45,6 +45,48 @@ def test_model_schema_has_no_mechanical_storage_fields():
     assert actual_schema == schema
 
 
+@pytest.mark.parametrize('rating', [None, '', '  '])
+def test_absent_or_blank_risk_is_unassessed_not_inherited(rating):
+    body = authoring_lexicon(2)
+    body['themes'][0]['risk_level'] = '高'
+    body['themes'][0]['variants'][0]['risk_level'] = rating
+    result = parse(body)
+    assert [e.risk_level for e in result.entries] == ['高', '未评估', '未评估']
+    assert result.search_terms() == ['招聘押金0', '招聘押金1']
+    assert LexiconContent.model_validate(result.model_dump()) == result
+
+
+def test_explicit_ratings_preserved_and_unknown_searches_last():
+    body = authoring_lexicon(5)
+    for term, level in zip(body['themes'][0]['variants'], ['低', '高', '中', '高', '未评估']):
+        term['risk_level'] = level
+    result = parse(body)
+    original = result.model_dump()
+    assert [e.risk_level for e in result.entries[1:]] == ['低', '高', '中', '高', '未评估']
+    assert result.prioritize_search_terms(result.search_terms()) == [
+        '招聘押金1', '招聘押金3', '招聘押金2', '招聘押金0', '招聘押金4']
+    assert result.model_dump() == original
+
+
+def test_same_ratings_are_valid_and_existing_import_default_unchanged():
+    body = authoring_lexicon(2)
+    for term in body['themes'][0]['variants']:
+        term['risk_level'] = '中'
+    assert all(e.risk_level == '中' for e in parse(body).entries[1:])
+    assert all(e.risk_level == '中' for e in LexiconContent.model_validate(lexicon(2)).entries)
+
+
+def test_actual_generation_contract_explains_ratings_without_making_missing_fatal():
+    system = generation_messages('lexicon', ResourceGenerationRequest(**REQUEST))[0]['content']
+    schema = json.loads(system.split('JSON Schema:\n', 1)[1])
+    term = schema['$defs']['GeneratedTerm']
+    assert term['properties']['risk_level']['default'] == '未评估'
+    assert 'risk_level' not in term['required']
+    assert '逐词 risk_level' in system
+    assert '不是命中帖子的违规结论' in term['properties']['risk_level']['description']
+    assert '等级依据' in term['properties']['note']['description']
+
+
 @pytest.mark.parametrize('field,value', [('id', 'model-id'), ('enabled', False), ('parent_id', 'wrong'), ('kind', 'tag')])
 def test_model_cannot_override_mechanical_fields(field, value):
     body = authoring_lexicon()
@@ -112,7 +154,7 @@ def test_diagnostics_log_fields_not_raw_response_and_optional_private_sink(caplo
         gen.generate('lexicon', ResourceGenerationRequest(**REQUEST))
     details = caught.value.details
     assert details['http_status'] == 200 and details['finish_reason'] == 'stop'
-    assert details['authoring_version'] == '2'
+    assert details['authoring_version'] == '3'
     assert details['provider_request_id'] == 'provider-request'
     assert len(details['response_hash']) == 64 and details['diagnostic_id']
     assert marker not in json.dumps(details) and marker not in caplog.text

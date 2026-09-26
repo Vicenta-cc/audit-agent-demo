@@ -1,8 +1,32 @@
 """Optional, versioned authoring guidance, not a topic classifier or permission."""
 from dataclasses import dataclass
 from typing import Literal
+from .keyword_profile_catalog import MARKDOWN_PROFILES
 
-KeywordProfileName = Literal['sexual_service_leadgen', 'gambling_financial_abuse']
+KeywordProfileName = Literal[
+    'sexual_service_leadgen',
+    'gambling_financial_abuse',
+    'religion_content_risk',
+    'public_policy_content',
+    'geographic_public_discourse',
+    'public_figure_media',
+    'historical_material_claims',
+    'confidentiality_claims',
+    'public_event_authenticity',
+    'group_hate_content',
+    'terrorism_content_samples',
+    'cultural_work_adaptation',
+    'public_official_impersonation',
+    'crime_glorification',
+    'false_efficacy_fraud',
+    'community_behavior_risk',
+    'substance_abuse_content',
+    'harassment_privacy_abuse',
+    'charity_staging_fraud',
+    'minor_protection_content',
+    'war_extremism_narratives',
+    'traffic_privacy_piracy',
+]
 
 
 @dataclass(frozen=True)
@@ -21,13 +45,113 @@ _COMMON = '''
 
 PROFILES = {
     'sexual_service_leadgen': KeywordProfile(
-        'sexual_service_leadgen', '1', '''
-主题指导：色情服务引流内容调查，供审核人员收集候选样本并区分正常生活服务内容。
-模板提供的候选表达示例包括：“00后新老师”“非绿”“地陪”“门槛验牌”。
-围绕调查主题选择候选，兼顾身份或角色描述、生活服务场景、联系与预约流程等不同表达方向。
-不要通过替换年龄、职业或修饰词机械拼接新词。
-不得将年龄、职业、普通服务名称本身视为违规证据。
-''' + _COMMON),
+        'sexual_service_leadgen', '2', '''
+任务：
+根据用户描述的具体调查场景，生成用于内容安全审核和候选样本发现的搜索词。
+结合下列历史参考表达选择适合的词；必要时提出待验证的新候选。
+搜索词只用于发现内容，命中本身不能作为违规判定依据。
+
+类目范围：
+色情资源导流、招嫖引流、软色情服务包装、低俗交友、
+偷拍视频噱头、成人资源推广，以及通过主页、评论、私信
+或站外渠道完成导流的内容。
+
+先确定本次调查涉及哪些子场景，仅选择相关方向。
+例如仅调查服务引流时，不为覆盖类目而额外加入资源售卖或偷拍视频方向。
+
+历史参考表达：
+以下词例来自调研材料，其具体含义取决于上下文；
+未提供对应样本的，不视为已核验，也不保证适用于当前平台。
+
+参考样本：门槛验牌、非绿地陪、hk互看、00后新出道老师。
+
+表达特点：
+调研材料涉及商品、汽车、餐饮、配送、交友人设、生活服务、
+逆向提示和资源完整性等表达方向。
+这些方向用于理解可能的语境关联，不是生成新暗语的拼接公式。
+不能把普通词固定解释为违规服务，也不能把任意数字解释成价格或等级。
+
+生成要求：
+1. 根据本次主题和平台筛选最终搜索词，不要求输出全部参考表达，
+   不要求覆盖所有方向。
+
+2. 合适的已有表达可以直接使用，不要求必须生成新变体。
+   用户提供真实样本时，优先提取样本中实际出现的表达。
+
+3. 提出新候选时，在 note 中说明参考表达或样本依据，
+   并明确其关联仍待验证。不得仅因能够解释变化路径，
+   就声称该词真实流通、具有固定含义或已验证有效。
+
+4. 不通过替换年龄、职业、数字或修饰词机械拼接候选；
+   不为追求隐晦而制造无人使用的伪暗语。
+
+5. 每项应是可独立输入平台搜索框的自然表达。
+   过于宽泛、重复或仅靠系统不支持的组合查询才有价值的候选，
+   不纳入最终搜索词。
+
+6. 每个候选的 note 简要说明：
+   与本次调查的可能关联；样本依据或待验证假设；主要正常语境噪声。
+   结合词义说明饮茶、汽车、餐饮、养生、正常交友、
+   新闻报道或反诈科普等相关误报场景，不机械重复所有场景。
+
+7. 默认整组生成 5–10 个实际搜索词，可靠候选不足允许更少，
+   不凑数。用户明确指定的范围和词表优先。
+
+8. 不生成联系方式、网址、交易指引或违法服务实施细节。
+   不以规避平台审核为目标，不承诺任何词能够避开检测。
+
+输出：
+遵循系统提供的现有词库 JSON Schema，不另建输出格式。
+主题用于归类，实际搜索词放入 variants，说明写入 note。
+ID、父子关联和默认启用状态由后端构造。
+'''),
+    'religion_content_risk': KeywordProfile(
+        'religion_content_risk', '1', '''
+任务：
+根据用户描述的具体调查场景，生成宗教相关内容的候选搜索词，
+供审核人员发现和复核样本。
+
+类目范围：
+宗教极端主义宣传、仇恨或暴力煽动，以及借宗教、养生、
+修行或传统文化名义实施的欺诈、胁迫性招募等。
+只选择与传入调查目标相关的方向，不要求覆盖整个类目。
+
+参考样本：
+常受教、能力主、实际神、旷野窄门、属灵教、灵灵派、
+华藏宗门、养生邪教。
+
+这些词来自调研材料，供选择参考，不是必选词表；
+词语命中本身不代表相关内容违规。
+
+生成要求：
+1. 优先选用与本次调查相关的参考原词，也可补充相关候选。
+   不要求全部照抄，不要求必须生成新变体。
+
+2. 不机械拼接多个名称，不通过换字、谐音或添加修饰词
+   编造组织名称、别名或贬称。
+
+3. 补充候选时，可结合活动名称、宣传表述、功效承诺、
+   收费或招募行为等与本次目标相关的线索。
+   有真实样本时，优先提取样本中实际出现的表达。
+
+4. 每个候选应是可独立输入平台搜索框的自然表达，
+   避免过宽、重复或冗长的拼装词。
+
+5. 每个候选的 note 简要说明检索关联和主要噪声。
+   没有样本依据的词义或别名关系标为待验证，不编造解释。
+   正常宗教、民俗、新闻、学术及反诈科普等相关语境应予区分。
+
+6. 默认整组 5–10 个实际搜索词，候选不足允许更少，
+   不凑数；用户明确指定的范围和词表优先。
+
+7. 不生成联络信息、加入方法或暴力宣传内容，
+   不推断个人信仰或组织成员身份。
+
+输出：
+遵循系统已有的词库 JSON Schema。
+主题放入 themes，实际搜索词放入 variants，说明写入 note。
+ID、父子关联和默认启用状态由后端构造。
+'''),
     'gambling_financial_abuse': KeywordProfile(
         'gambling_financial_abuse', '1', '''
 主题指导：网络赌博与金融助诈相关调查。依据本次目标选择相关方向，不要求覆盖所有方向。
@@ -40,6 +164,51 @@ PROFILES = {
 不提供投注参与、平台接入、资金转移、账户获取、规避风控或诈骗实施的操作指导。
 ''' + _COMMON),
 }
+
+
+# Preserve the three existing templates and add the other 19 Markdown topics.
+PROFILES.update({
+    name: KeywordProfile(name, item['version'], item['guidance'])
+    for name, item in MARKDOWN_PROFILES.items()
+})
+
+# This is the pre-selection index, not additional authoring guidance. Keep the
+# full profiles above unchanged and load only the selected profile in generation.
+# Product category titles alone do not describe their actual applicable scopes.
+KEYWORD_PROFILE_ROUTING_SUMMARIES = {
+    'sexual_service_leadgen': '色情服务、成人资源或低俗交友的引流样本发现；只取本次相关子场景，不把正常生活服务当作违规。',
+    'gambling_financial_abuse': '网络赌博推广、拉客与平台导流，或金融黑产、电诈助诈、异常资金流转招募；只选本次方向，不扩展到刷量或盗版。',
+    'religion_content_risk': '宗教相关极端主义、仇恨或暴力煽动，以及借宗教、修行名义实施的欺诈或胁迫招募；目标明确是宗教修行名义的收费或胁迫招募时，优先本项而不是 false_efficacy_fraud。正常宗教、建筑艺术、民俗和学术资料发现不套此风险模板。',
+    'public_policy_content': '公共政策、制度议题相关讨论样本与事实核查，包括伪造政策原文、冒充来源、篡改材料；不以政治立场、批评或讽刺作为风险依据。',
+    'geographic_public_discourse': '地域称谓、地图、两岸等公共议题及相关历史叙事的样本发现与事实核查；不据此推断政治归属，不把政治主张直接视为违规。',
+    'public_figure_media': '国家象征使用、公共人物影像、冒充公众人物牟利、伪造讲话或合成剪辑内容；区别批评、模仿和戏仿，公务身份冒充办事另见 public_official_impersonation。',
+    'historical_material_claims': '具体历史人物、纪念事件、争议叙事及史料真实性核查，包括伪造档案或冒充原始材料；正常历史研究和评价分歧不作为风险。',
+    'confidentiality_claims': '公开帖文中声称持有、展示、传播或出售非公开文件、内部资料及保密信息的线索，包括借内部资料名义诈骗；不获取或复述秘密正文。',
+    'public_event_authenticity': '具体公共事件的信源冒充、旧闻当新闻、伪造通报、误导剪辑或捏造事实；政策原文核查优先 public_policy_content，不以普通诉求或批评判断虚假。',
+    'group_hate_content': '针对民族、地域、宗教、性别等群体的非人化、排斥、仇恨或暴力威胁内容；不识别或追踪群体成员，针对具体个人的网暴另见 harassment_privacy_abuse。',
+    'terrorism_content_samples': '从本次提供、可核对的材料提取恐怖主义宣传或美化恐袭相关非操作性表达；保留材料性质，不凭模型记忆造词，区分新闻、研究及谴责暴力。',
+    'cultural_work_adaptation': '指定文化作品、人物或事件的 AI 改编、剧情改写、误导性原作宣称或伪造出处；不把正常改编、戏仿和观点差异直接视为违规。',
+    'public_official_impersonation': '冒充军警或公务身份诈骗、收费办事、伪造执法影像或官方通知，以及针对人员的威胁和待核查事实；正常监督、投诉及批评不作为风险。',
+    'crime_glorification': '具体案件或场景中赞美、美化犯罪与暴力行为、鼓动模仿或招募的内容；不是按人物绰号、负面经历作判断，不生成犯罪方法。',
+    'false_efficacy_fraud': '借运势、仪式、国学、传统文化或养生包装的欺诈、胁迫收费、虚假疗效和确定性收益承诺；目标明确是宗教修行名义的收费或胁迫招募时用 religion_content_risk，未限定宗教的改运、养生及传统文化功效骗局用本项。民俗或信仰本身不是欺诈。',
+    'community_behavior_risk': '饭圈集资欺诈、粉丝社群组织骚扰、虚假财富宣传或自伤鼓动等具体行为；正常追星、财富分享和心理困扰不作为风险。',
+    'substance_abuse_content': '涉毒及物质滥用的宣传、招揽和引流线索；区分医疗、新闻与反毒教育，不扩展暴力或赌博方向。',
+    'harassment_privacy_abuse': '针对个人的网暴动员、隐私曝光、威胁和具体攻击行为；不搜索受害者个人资料，不把负面评价或戏仿直接当诽谤。',
+    'charity_staging_fraud': '虚构慈善、虚假求助带货、冒用公益骗捐、隐瞒剧情的欺骗性摆拍或骚扰羞辱；区别真实求助、公益和已标注剧情。',
+    'minor_protection_content': '涉及未成年人的欺骗诱导、隐私侵害、危险模仿、暴力惊吓及不适龄公开内容；不识别或定位未成年人，不把普通兴趣社交视为风险。',
+    'war_extremism_narratives': '具体战争事件或材料中的侵略正当化、种族优越、屠杀或极端主义暴力赞美等叙事；区分新闻、批判与学术引用。',
+    'traffic_privacy_piracy': '虚假流量招募与刷量刷赞服务、隐私侵害或盗版传播；只选用户指定方向，不作其他风险兜底，金融赌博另用 gambling_financial_abuse，网暴曝光另见 harassment_privacy_abuse。',
+}
+
+KEYWORD_PROFILE_CATALOG_DESCRIPTION = (
+    '可选主题指导。根据完整调查目标对照下列适用范围，匹配时选择最贴近的一项；'
+    '类目标题不是匹配条件，不需要用户说出模板名。以下是选择前可用的范围摘要，'
+    '选中后后端才加载该模板完整指导与参考样本：\n'
+    + '\n'.join(f'{name}：{summary}' for name, summary in KEYWORD_PROFILE_ROUTING_SUMMARIES.items())
+    + '\n'
+    '无匹配模板时省略或填null，仍按通用要求自主生成，不强行套类。'
+    '不改变调查范围；exact_terms原样词表请求不加载主题示例。'
+)
 
 
 def selected_keyword_profile(kind, request):

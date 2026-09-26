@@ -40,7 +40,9 @@ def generation_messages(kind: str, request: ResourceGenerationRequest) -> list[d
                 else RULESET_AUTHORING_GUIDANCE)
     if kind == "lexicon":
         guidance += ("\n生成输出使用 themes，每个主题下用 variants 列出实际搜索词。"
-                     "只写主题、候选及语义备注，不填写 id、kind、parent_id、enabled；"
+                     "填写主题、候选、语义备注及逐词 risk_level，按 Schema 中的分级含义判断，"
+                     "依据不足填未评估，不统一套用默认中风险。"
+                     "不填写 id、kind、parent_id、enabled；"
                      "这些存储字段由后端构造，主题和 variants 默认启用，tags 不参与搜索。"
                      "仅用户明确要求停用备选时放入 alternatives，后端将其停用。")
     # Profiles do not replace shared quality guidance or the user's original requirements.

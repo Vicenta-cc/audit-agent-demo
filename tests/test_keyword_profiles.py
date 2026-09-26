@@ -69,6 +69,32 @@ def test_rules_messages_never_receive_keyword_guidance():
     assert generation_messages('ruleset', new) == generation_messages('ruleset', old)
 
 
+def test_selected_templates_and_versions_match_product_choice():
+    sexual = PROFILES['sexual_service_leadgen']
+    assert sexual.version == '2'
+    assert '门槛验牌、非绿地陪、hk互看、00后新出道老师' in sexual.guidance
+    assert '不为覆盖类目而额外加入资源售卖或偷拍视频方向' in sexual.guidance
+    assert '不是生成新暗语的拼接公式' in sexual.guidance
+    assert '模板提供的候选表达示例' not in sexual.guidance
+    religion = PROFILES['religion_content_risk']
+    assert religion.version == '1'
+    assert '不推断个人信仰或组织成员身份' in religion.guidance
+    assert '没有样本依据的词义或别名关系标为待验证' in religion.guidance
+    assert '不得仅凭词语命中认定违规' not in religion.guidance  # no appended _COMMON duplicate
+    assert PROFILES['gambling_financial_abuse'].version == '1'
+
+
+def test_coordinator_tool_schema_exposes_all_profiles_and_religion_scope():
+    definitions = {s['name']: s for s in HERMES_M3_TOOL_SCHEMAS}
+    schema = json.dumps(definitions['create_lexicon_edit'], ensure_ascii=False)
+    for name in PROFILES:
+        assert name in schema
+        assert name in definitions['create_lexicon_edit']['description']
+    assert '借宗教、修行名义实施的欺诈或胁迫招募' in schema
+    assert '正常宗教、建筑艺术、民俗和学术资料发现不套此风险模板' in schema
+    assert 'religion_content_risk' not in json.dumps(definitions['create_ruleset_proposal'])
+
+
 @pytest.mark.parametrize('name', [None, *PROFILES])
 def test_profile_receipt_replay_save_and_read_do_not_regenerate(creation_stack, name, caplog):
     tools = creation_stack['tool_service']
