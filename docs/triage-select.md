@@ -2,7 +2,7 @@
 
 ## 模式
 - `TRIAGE_MODE=off`：默认，采集逻辑与现状一致（每词取搜索排第一）。
-- `select`：每词采 10 条文本候选，规则加 flash 打分，选最可疑的 1 条按 ID 补采媒体与评论，再精审。规则层不把本次搜索词自身的命中计分（搜出来的帖子必然含搜索词），只计其他词库词、变体与导流模板；搜索词自身命中的候选走模型判断。
+- `select`：每词采 10 条文本候选，规则加 flash 打分，选最可疑的 1 条按 ID 补采媒体与评论，再精审。初筛只依据平台的两份基础数据——黑话库与判定规则。规则层只使用任务所属词库的条目（精确、模糊、正则），每处命中按词条的风险等级计分（高 `TRIAGE_RULE_SCORE_HIGH`=300、中 `TRIAGE_RULE_SCORE_MEDIUM`=100、低 `TRIAGE_RULE_SCORE_LOW`=50，未标等级按中），求和封顶 `TRIAGE_RULE_SCORE_CAP`=900；用某个词搜索时，它所在词条（主词及全部变体）以及被搜索词包含的词条命中都不计分，只计其他词条的命中。每条未被身份丢弃的候选都调一次模型，词库命中（最多 5 处）作为事实写进提示词；总分 = 规则分 + 模型分（strong 200、weak 100、none 0），模型判 none 时规则分归零，模型故障按 weak 计并保留规则分；band 取模型结论；模型同时输出 0-100 的可疑分（risk_score）；排序：总分降序；总分相同按模型可疑分（0-100）降序；再同分取搜索排位靠后、互动少者；正则条目只用于匹配，不作为搜索词；词库按任务全部 library_ids 加载，与搜索词来源无关（关键词任务配了 library_ids 时同样生效）。需要「加微信、看主页」这类引流用语参与初筛时，在词库里以正则或模糊条目维护，不在代码里写死。模型层的提示词由任务分类的判定规则（审核目标与证据规则）构成，按其中的高危/中危/低危/放行定义答 strong/weak/none。初筛先做身份丢弃：官方与机构类蓝V（媒体、政务、公安、事业单位等，按 `TRIAGE_OFFICIAL_VERIFY_PATTERNS` 识别）一律不进精审；商家/企业认证按普通账号打分，只受粉丝阈值约束；个人黄V粉丝超过 `TRIAGE_MAX_FOLLOWERS_PERSONAL_VERIFIED`、无认证账号（含商家/企业蓝V）粉丝超过 `TRIAGE_MAX_FOLLOWERS_UNVERIFIED` 的不进精审；丢弃的候选记录在 candidates.json 的 band=discard。候选采集时对每个作者补一次资料请求（粉丝数、签名、认证），同一作者只请求一次；粉丝阈值与签名命中依赖它。任务日志的「初筛判定规则：<prompt_version>」一行记录本次用的是哪一版判定规则，任务没带判定规则时写「未提供」，提示词里就没有规则段。
 - `compare`：每个词随机选用"排第一"或"初筛选中"策略，记录在 candidates.json 的 strategy 字段，用于对照验证。
 
 ## 证据
@@ -14,9 +14,12 @@
 
 ## 已知限制
 
+- **爬虫表结构**：爬虫 `douyin_aweme` 行新增 `custom_verify`、`enterprise_verify_reason`、`follower_count`、`verification_type`、`max_follower_count` 五个字段。本平台用 jsonl 存储不受影响；若某个环境用爬虫的 db/sqlite/postgres 存储且已有旧表，需手动 `ALTER TABLE` 加这五列，`create_all` 不会给旧表加列。
+
 - **任务采集上限**：一次任务最多采多少条由请求参数 `max_total_notes` 决定（当前契约上限 5），它同时决定 `analyze_limit`。词数超过上限时，靠后的词不会被搜索，任务日志里有「已达本任务采集上限 N 条，以下词未搜索：…」一行列出这些词。
 - **精采不完整**：补采媒体或评论的子步骤失败（`CrawlerCollectionIncompleteError`）与 `TRIAGE_MODE=off` 时一致，整个任务失败并提示查看 `douyin/collection_status`；不会把已经流式入库的半条内容当成「本词无产出」。
 - **恢复采集与切换账号**：按 `candidates.json` 的 `collected` 标记跳过已经精采成功的词，所以续采或换账号重跑不会让同一个词出两条。非流式入库配置下（`STREAM_CRAWL_ANALYSIS=false`），切换账号前采到的内容不会被再次读取，也不会再次采集，因此会从本次任务产出中丢失；默认的流式入库配置不受影响。
+- **作者资料请求失败**：该候选按搜索结果里的作者信息打分（粉丝数为 0、没有签名），不会让整个词失败。
 
 ## 回滚
 `TRIAGE_MODE=off` 并重启。无数据结构变更。

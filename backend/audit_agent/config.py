@@ -4,6 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from .limits import MAX_SUPPORTED_INVESTIGATION_POSTS
+from .triage import OFFICIAL_VERIFY_PATTERNS
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -142,6 +143,21 @@ class Settings:
     triage_candidate_comments = max(0, min(200, int(os.getenv("TRIAGE_CANDIDATE_COMMENTS", "60"))))
     triage_model = os.getenv("TRIAGE_MODEL", "").strip() or qwen_contact_sheet_model
     triage_request_timeout = max(5, int(os.getenv("TRIAGE_REQUEST_TIMEOUT", "60")))
+    # 身份丢弃阈值：0 = 该类账号不限粉丝数
+    triage_max_followers_personal_verified = max(0, int(os.getenv("TRIAGE_MAX_FOLLOWERS_PERSONAL_VERIFIED", "500000")))
+    triage_max_followers_unverified = max(0, int(os.getenv("TRIAGE_MAX_FOLLOWERS_UNVERIFIED", "1000000")))
+    # 词库命中按词条风险等级计分（高/中/低，未标按中），规则分封顶后再加模型分
+    triage_rule_score_high = max(0, int(os.getenv("TRIAGE_RULE_SCORE_HIGH", "300")))
+    triage_rule_score_medium = max(0, int(os.getenv("TRIAGE_RULE_SCORE_MEDIUM", "100")))
+    triage_rule_score_low = max(0, int(os.getenv("TRIAGE_RULE_SCORE_LOW", "50")))
+    triage_rule_score_cap = max(0, int(os.getenv("TRIAGE_RULE_SCORE_CAP", "900")))
+    # 官方/机构类蓝V识别片段：逗号分隔，留空用内置列表（triage.OFFICIAL_VERIFY_PATTERNS）
+    _triage_official_verify_patterns_value = os.getenv("TRIAGE_OFFICIAL_VERIFY_PATTERNS", "").strip()
+    triage_official_verify_patterns = (
+        tuple(item.strip() for item in _triage_official_verify_patterns_value.split(",") if item.strip())
+        if _triage_official_verify_patterns_value
+        else OFFICIAL_VERIFY_PATTERNS
+    )
     asr_translate_model = os.getenv("ASR_TRANSLATE_MODEL", qwen_text_model).strip()
     asr_translate_max_tokens = int(os.getenv("ASR_TRANSLATE_MAX_TOKENS", "6000"))
     asr_translate_enable_thinking = (
