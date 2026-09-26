@@ -1432,6 +1432,7 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
             "expected_revision": 2,
             "confirmed": True,
             "idempotency_key": "real-hermes-confirm",
+            "expected_task_settings_revision": updated["data"]["confirmation_preview"]["task_settings_revision"],
         },
         turn_id="turn:confirm",
         tool_call_id="call:confirm",
@@ -1443,6 +1444,7 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
             "expected_revision": 2,
             "confirmed": True,
             "idempotency_key": "real-hermes-confirm",
+            "expected_task_settings_revision": updated["data"]["confirmation_preview"]["task_settings_revision"],
         },
         turn_id="turn:confirm",
         tool_call_id="call:confirm",
@@ -2520,6 +2522,9 @@ def test_existing_draft_get_update_and_confirm_do_not_create_second_draft(
                     "expected_revision": 2,
                     "confirmed": True,
                     "idempotency_key": "conversation-first-confirm",
+                    "expected_task_settings_revision": creation_stack["app_service"].get_confirmation_preview(
+                        draft["id"], principal=Principal("principal-a")
+                    ).task_settings_revision,
                 },
             )
         ],

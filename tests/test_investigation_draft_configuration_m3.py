@@ -3155,6 +3155,9 @@ def test_confirmation_is_idempotent_and_tool_queries_do_not_start_work(m3_stack:
         "expected_revision": 1,
         "confirmed": True,
         "idempotency_key": "tool-confirm:1",
+        "expected_task_settings_revision": m3_stack["service"].get_confirmation_preview(
+            draft.id, principal=principal
+        ).task_settings_revision,
     }
     first = tools.execute(
         "confirm_and_queue_investigation", arguments, principal=principal

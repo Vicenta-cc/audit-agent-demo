@@ -288,7 +288,8 @@ def test_preview_compile_blocker_and_tool_confirm(creation_stack, content):
         preview = stack['app_service'].get_confirmation_preview(draft.id, principal=PRINCIPAL)
         assert not preview.can_confirm and any(b.code == 'INVALID_RULESET_REFERENCE' for b in preview.blockers)
     result = stack['tool_service'].execute_with_identity('confirm_and_queue_investigation',
-        {'draft_id':draft.id,'expected_revision':1,'confirmed':True,'idempotency_key':'t5-tool'}, principal=PRINCIPAL,
+        {'draft_id':draft.id,'expected_revision':1,'confirmed':True,'idempotency_key':'t5-tool',
+         'expected_task_settings_revision': preview.task_settings_revision}, principal=PRINCIPAL,
         identity=HermesToolExecutionIdentity('session-test','turn-test','confirm-test'))
     assert result['status'] == 'ok', result
     assert len(rows(stack['creation_store'], 'investigation_runs')) == 1

@@ -107,7 +107,14 @@ class GetInvestigationDraftInput(StrictModel):
 
 
 class ConfirmAndQueueInvestigationInput(StrictModel):
-    expected_task_settings_revision: int | None = Field(default=None, ge=0)
+    expected_task_settings_revision: StrictInt = Field(
+        ge=0,
+        description=(
+            "Copy confirmation_preview.task_settings_revision from the Draft preview "
+            "reviewed by the user. Required even when it is 0; do not guess or substitute "
+            "a newer revision without renewed user confirmation."
+        ),
+    )
     draft_id: str = Field(min_length=1, max_length=160)
     expected_revision: int = Field(ge=1)
     confirmed: StrictBool
@@ -261,6 +268,9 @@ M3_TOOL_DESCRIPTIONS = {
     "confirm_and_queue_investigation": (
         "Freeze and queue one Investigation Run only after the user explicitly asks to "
         "confirm and start. Pass confirmed=true; never infer confirmation from a Draft edit. "
+        "Copy expected_task_settings_revision from confirmation_preview.task_settings_revision "
+        "and expected_revision from that Draft. If settings changed since user review, "
+        "show the refreshed preview and obtain confirmation again. "
         "If this creation Session already has a PUBLISHED Run, do not confirm another Run; "
         "preserve the published report and direct the user to a new Session."
     ),
@@ -347,8 +357,10 @@ M3_PARAMETER_GUIDANCE = {
         '执行参数时，在 configuration.task_parameters 中写入并在后续完整配置更新中保留；不要传 crawler_account_id、patch 或 expected_version。'
     ),
     'confirm_and_queue_investigation': (
-        '用户明确启动后调用。参数为 draft_id、expected_revision、confirmed:true、idempotency_key。revision '
-        '取最新草案；只采用或只创建草案不等于启动授权。'
+        '用户明确启动后调用。参数为 draft_id、expected_revision、expected_task_settings_revision、confirmed:true、idempotency_key。'
+        '版本取用户已核对草案及 confirmation_preview.task_settings_revision（0 也是有效值，不能猜测）。'
+        '缺参数且未创建回执时，补齐后保留原 idempotency_key 重试；设置已变化则展示新预览并请用户重新确认。'
+        '只采用或只创建草案不等于启动授权。'
     ),
     'get_investigation_run': (
         '参数只有 run_id，使用确认工具返回的真实 ID。'
@@ -578,6 +590,20 @@ class InvestigationCreationToolService:
                             "recovery": (
                                 "Draft was not created. Correct the arguments using the "
                                 "Tool schema and retry create_investigation_draft."
+                            ),
+                        }
+                    )
+                elif tool_name == "confirm_and_queue_investigation":
+                    details.update(
+                        {
+                            "run_created": False,
+                            "recovery": (
+                                "Run was not created. Correct the arguments and retry with "
+                                "the same idempotency_key. Copy expected_task_settings_revision "
+                                "from the user-reviewed confirmation_preview.task_settings_revision; "
+                                "do not guess. If the preview is unavailable, read get_investigation_draft. "
+                                "If settings changed since user review, show the new preview "
+                                "and obtain user confirmation again before starting."
                             ),
                         }
                     )

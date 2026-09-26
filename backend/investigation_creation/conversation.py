@@ -459,6 +459,7 @@ class FakeCreationHermesAgent:
         )
         confirm_call_id = f"{task_id}:confirm-run"
         confirm_args = {
+            "expected_task_settings_revision": view["confirmation_preview"]["task_settings_revision"],
             "draft_id": str((view.get("draft") or {}).get("id") or ""),
             "expected_revision": int(
                 (view.get("draft") or {}).get("current_revision") or 0
