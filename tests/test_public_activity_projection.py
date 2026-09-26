@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from backend.audit_agent.config import settings
 from backend.api.investigation import public_activity_events_for_turns
 from backend.hermes_runtime.service import HermesInvestigationAgentService
@@ -48,6 +50,35 @@ def test_every_product_tool_has_an_explicit_public_activity_mapping():
         for schema in catalog
     } | set(M3_TOOL_INPUTS)
     assert set(PUBLIC_TOOL_ACTIVITIES) == expected
+
+
+@pytest.mark.parametrize(
+    ("phase", "result", "status", "summary"),
+    [
+        ("started", None, "running", "正在执行该步骤。"),
+        ("completed", {"status": "ok"}, "succeeded", "已读取已展示评论记录。"),
+        ("completed", {"status": "error"}, "failed", "该步骤未完成，系统会按原有流程继续处理或给出安全提示。"),
+        ("interrupted", None, "interrupted", "该步骤因本轮执行中断而停止。"),
+    ],
+)
+def test_comment_delivery_activity_uses_fixed_copy(phase, result, status, summary):
+    if result is not None:
+        result = {**result, "data": {"text": "private-comment-body", "account_ref": "private-account-ref"}}
+    event = public_activity_event(
+        turn_id="turn:comment-delivery",
+        tool_call_id="call:comment-delivery",
+        tool_name="read_comment_delivery",
+        phase=phase,
+        arguments={"batch_ref": "private-batch-ref", "position": 3},
+        result=result,
+    )
+    assert event is not None
+    payload, _ = event
+    assert payload["label"] == "读取已展示评论记录"
+    assert payload["status"] == status
+    assert payload["summary"] == summary
+    for private_value in ("private-comment-body", "private-account-ref", "private-batch-ref"):
+        assert private_value not in str(event)
 
 
 def test_projection_uses_only_fixed_public_copy_and_hashed_identifiers():

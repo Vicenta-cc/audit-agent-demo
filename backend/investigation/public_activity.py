@@ -33,6 +33,9 @@ PUBLIC_TOOL_ACTIVITIES: dict[str, PublicActivitySpec] = {
     "read_posts": PublicActivitySpec("读取帖子详情", "已读取帖子详情。"),
     "list_post_risk_comments": PublicActivitySpec("查看帖子风险评论", "已读取帖子风险评论。"),
     "list_post_comments": PublicActivitySpec("查看帖子评论", "已读取帖子评论。"),
+    "read_comment_delivery": PublicActivitySpec(
+        "读取已展示评论记录", "已读取已展示评论记录。"
+    ),
     "list_evidence": PublicActivitySpec("查看证据目录", "已读取证据目录。"),
     "read_evidence": PublicActivitySpec("读取证据内容", "已读取证据内容。"),
     "search_accounts": PublicActivitySpec("查找报告中的账号", "已完成报告账号查找。"),
