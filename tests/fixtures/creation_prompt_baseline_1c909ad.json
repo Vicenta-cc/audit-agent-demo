@@ -8,6 +8,30 @@
   "changed_lines": [
     {
       "source": "CREATION_SYSTEM_PROMPT",
+      "line": 157,
+      "text": "If temporary_terms.lexicon_content exists, pass that exact content unchanged to create_lexicon_edit and",
+      "reason": "2026-09-24 保存任务关键词改用已有服务的 save_draft_lexicon 引用工具，避免模型重抄全文；精确版本、原样保存及权限要求不变。"
+    },
+    {
+      "source": "CREATION_SYSTEM_PROMPT",
+      "line": 158,
+      "text": "then save_resource. Do not reconstruct, regroup, rename, or add terms from conversation memory. If the",
+      "reason": "草案快照由后端保存；未采用的编辑稿仍用 save_resource，禁止从记忆重建内容的约束保留。"
+    },
+    {
+      "source": "RESOURCE_PROMPT",
+      "line": 33,
+      "text": "用户请求完整词库、词库变体或独立保存词库时使用 create_lexicon_edit。主词是主题和语义归类，",
+      "reason": "区分生成与保存：生成用 create_lexicon_edit，已有编辑稿用 save_resource，草案保存用 save_draft_lexicon；不重复生成。"
+    },
+    {
+      "source": "RESOURCE_PROMPT",
+      "line": 63,
+      "text": "temporary_terms.lexicon_content，逐字段原样传给 create_lexicon_edit，再调用 save_resource。不得根据扁平",
+      "reason": "通过草案 ID 和版本调用 save_draft_lexicon，由后端提取精确结构，保留禁止从扁平词表猜测内容的约束。"
+    },
+    {
+      "source": "CREATION_SYSTEM_PROMPT",
       "line": 88,
       "text": "the complete lexicon_content edited in the Drawer, its exact variant-first terms projection, and the",
       "reason": "临时编辑稿采用改用版本引用；完整内容、主变体关系与投影由后端保留，不再要求模型重抄。"

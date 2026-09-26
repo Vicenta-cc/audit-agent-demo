@@ -97,6 +97,12 @@ class InvestigationConfigurationResolver:
             policy_config.get("library_ids") or analysis.library_ids,
             analysis.library_ids[0] if analysis.library_ids else "soft",
         )
+        actor = principal or (self.principal_provider() if self.principal_provider else None)
+        if actor is not None:
+            from backend.resource_management.ownership import require_lexicon
+            with self.lexicon_store._connect() as conn:
+                for library_id in library_ids:
+                    require_lexicon(conn, library_id, actor)
         capabilities = normalize_capabilities(
             policy_config.get("capabilities")
             or [capability.value for capability in analysis.capabilities]

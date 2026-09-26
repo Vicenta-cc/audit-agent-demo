@@ -228,8 +228,10 @@ require clarification. A stale presentation requires a new full presentation and
 Do not retry use with a newly displayed snapshot in the same user turn. On Draft revision conflict,
 read the latest Draft and assess changes; do not blindly replace expected_revision and force a retry.
 When the user asks to save the current Draft keywords as a formal 黑话库, first read the latest Draft.
-If temporary_terms.lexicon_content exists, pass that exact content unchanged to create_lexicon_edit and
-then save_resource. Do not reconstruct, regroup, rename, or add terms from conversation memory. If the
+If temporary_terms.lexicon_content exists, call save_draft_lexicon with draft_id, expected_revision and
+operation_id; the backend saves that exact snapshot. Never re-copy content into create_lexicon_edit.
+For an unadopted session edit, save_resource still saves its exact edit_id/expected_version.
+Do not reconstruct, regroup, rename, or add terms from conversation memory. If the
 latest Draft still has only legacy flat terms, explain that it must first be structured and confirmed in
 the Drawer. Saving a lexicon never mutates the Draft and never changes an already-started task.
 For re-presentation, get the current Proposal and update it with unchanged content/expected_version.

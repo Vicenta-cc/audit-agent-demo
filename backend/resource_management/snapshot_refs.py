@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from .contracts import ResourceError
 from .lexicon_versions import canonical, content, digest
+from .ownership import require_lexicon
 
 
 def initialize(conn):
@@ -15,6 +16,7 @@ def initialize(conn):
 
 
 def issue(conn, store, resource_id, *, principal):
+    require_lexicon(conn, resource_id, principal)
     revision = conn.execute('SELECT version,content_hash FROM lexicon_content_versions '
                             'WHERE category_id=? ORDER BY version DESC LIMIT 1', (resource_id,)).fetchone()
     if revision is None or content(conn, resource_id).get('deleted'):
@@ -37,8 +39,6 @@ def resolve(conn, store, ref, *, principal):
     if row is None:
         raise ResourceError('资源引用无效或当前用户无权使用，请重新读取有权访问的资源。',
                             code='RESOURCE_REF_INVALID', details={'mutation_applied': False, 'retryable': False})
-    # Formal lexicons currently have shared read access. A handle is additionally
-    # principal-bound; it never grants shared-write or Proposal-adoption rights.
     body = content(conn, row['resource_id'])
     revision = conn.execute('SELECT version FROM lexicon_content_versions WHERE category_id=? '
                             'ORDER BY version DESC LIMIT 1', (row['resource_id'],)).fetchone()
@@ -47,6 +47,7 @@ def resolve(conn, store, ref, *, principal):
             or store.runtime_content_hash(row['resource_id'], connection=conn) != row['runtime_hash']):
         raise ResourceError('所引用的词库版本已变化或删除；请重新读取并核对差异后再决定是否采用。',
                             code='RESOURCE_REF_STALE', details={'mutation_applied': False, 'retryable': False})
+    require_lexicon(conn, row['resource_id'], principal)
     return {'strategy': 'existing_lexicon', 'lexicon_id': row['resource_id'],
             'expected_runtime_content_hash': row['runtime_hash'],
             'enabled_main_terms': json.loads(row['terms_json'])}

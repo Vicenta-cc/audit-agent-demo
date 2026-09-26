@@ -7,6 +7,7 @@ import type {
   PublicInvestigationDraft
 } from "../../types/investigationCreation";
 import { InvestigationKeywordEditor } from "./InvestigationKeywordEditor";
+import { DraftResourceSave } from "./DraftResourceSave";
 
 export type DrawerType =
   | "task_config"
@@ -101,6 +102,9 @@ export function InvestigationContextDrawer({
       </div>
 
       <div className="inv-drawer-body">
+        {creationDraft && (type === "task_config" || type === "ruleset") && (
+          <DraftResourceSave key={`${creationDraft.id}:${creationDraft.current_revision}`} draft={creationDraft} />
+        )}
         {type === "keyword_editor" && draft && creationDraft && confirmationPreview && onApplyLexicon && onSaveLexicon ? (
           <InvestigationKeywordEditor
             draft={draft}

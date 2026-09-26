@@ -150,6 +150,12 @@ class GetRuleSetProposalInput(StrictModel):
     proposal_id: str = Field(min_length=1, max_length=160)
 
 
+class SaveDraftLexiconInput(StrictModel):
+    draft_id: str = Field(min_length=1, max_length=160)
+    expected_revision: StrictInt = Field(ge=1)
+    operation_id: str = Field(min_length=1, max_length=200)
+
+
 class UpdateRuleSetProposalInput(GetRuleSetProposalInput):
     expected_version: StrictInt = Field(ge=1)
     content: RuleSetContent
@@ -161,6 +167,8 @@ M3_TOOL_INPUTS: dict[str, type[StrictModel]] = {
     "create_investigation_draft": CreateInvestigationDraftInput,
     "update_investigation_draft": UpdateInvestigationDraftInput,
     "get_investigation_draft": GetInvestigationDraftInput,
+    "save_draft_lexicon": SaveDraftLexiconInput,
+    "save_draft_ruleset": SaveDraftLexiconInput,
     "confirm_and_queue_investigation": ConfirmAndQueueInvestigationInput,
     "get_investigation_run": GetInvestigationRunInput,
     "create_ruleset_proposal": CreateRuleSetProposalInput,
@@ -176,11 +184,29 @@ M3_MUTATION_TOOL_NAMES = frozenset(
         "create_investigation_draft",
         "update_investigation_draft",
         "confirm_and_queue_investigation",
+        "save_draft_lexicon",
+        "save_draft_ruleset",
     }
 )
 
 
 M3_TOOL_DESCRIPTIONS = {
+    "save_draft_ruleset": (
+        "用户明确要求保存当前调查中使用的规则时，先读取当前 Draft，再传 draft_id、expected_revision、operation_id。"
+        "后端直接将该版本规则快照保存到当前用户的私有规则库，不传 content 或 hash，不重新生成。"
+        "已存在的正式规则无需再次保存；仅用户明确要求另存任务快照时复制。临时规则在任务启动后仍可保存。"
+        "保存不修改草案、运行任务或报告，不启动采集；响应丢失查询 get_resource_save，不重复生成。"
+    ),
+    "save_draft_lexicon": (
+        "用户明确要求保存当前调查/任务/卡片中的临时关键词为正式黑话库时使用。先 get_investigation_draft，"
+        "只传该草案的 draft_id、expected_revision 和 operation_id。后端提取这一版本的完整结构化词库，"
+        "包括卡片修改过的词、启停、风险等级及备注；不需要 content、hash 或重新 create_lexicon_edit。"
+        "任务排队、运行或失败后仍可保存，保存不会改变草案或任务冻结快照，也不会启动采集。"
+        "operation_id 标识本次逻辑保存；响应丢失后用完全相同的参数重试，不能换 operation_id 重复另存。"
+        "版本冲突先重新读取并核对，不强行采用新版。旧版仅扁平词表需先在卡片中结构化确认，不能猜测生成。"
+        "已是正式词库时先 read_resource 确认保存状态，不自动复制。只有会话编辑稿且未用于草案时，"
+        "仍用 save_resource(edit_id, expected_version)。保存到当前用户的私有词库，普通用户也可保存自己的资源。"
+    ),
     "use_ruleset_proposal": (
         "You decide whether the CURRENT user explicitly intends adoption; Application validates structural facts, "
         "not natural-language approval. Select presentation_id ONLY from the trusted completed presentation context. "
@@ -524,6 +550,29 @@ class InvestigationCreationToolService:
             result = self.application_service.get_draft_view(
                 parsed.draft_id, principal=principal
             )
+        elif tool_name == "save_draft_ruleset":
+            saved = self.application_service.save_draft_ruleset(
+                **parsed.model_dump(mode='json'), principal=principal, session_id=session_id,
+            )
+            return {key: saved[key] for key in (
+                'status', 'kind', 'resource_id', 'version', 'revision_id', 'operation_id')}
+        elif tool_name == "save_draft_lexicon":
+            saved = self.application_service.save_draft_lexicon(
+                **parsed.model_dump(mode="json"), principal=principal,
+                session_id=session_id,
+            )
+            # Save the exact server snapshot, then return a compact factual receipt.
+            # Echoing the full notes would recreate the large model payload we avoid.
+            from backend.resource_management.contracts import LexiconContent
+            content = LexiconContent.model_validate(saved['content'])
+            return {
+                'status': 'saved', 'kind': 'lexicon', 'resource_id': saved['resource_id'],
+                'version': saved['version'], 'title': content.title,
+                'search_terms': content.search_terms(), 'operation_id': parsed.operation_id,
+                'draft_id': parsed.draft_id, 'draft_revision': parsed.expected_revision,
+                'resource_ref': saved['resource_ref'],
+                'recall_plan': {'strategy': 'resource_ref', 'resource_ref': saved['resource_ref']},
+            }
         elif tool_name == "confirm_and_queue_investigation":
             run = self.application_service.confirm_and_queue(
                 ConfirmAndQueueCommand.model_validate(parsed.model_dump(mode="json")),

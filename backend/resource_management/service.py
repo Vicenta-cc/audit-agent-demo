@@ -13,6 +13,7 @@ from backend.rulesets.trial_profiles import TRIAL_BUNDLES, apply_trial_profile
 from .contracts import LexiconContent, LexiconEntry, ResourceError
 from .lexicon_versions import canonical, digest, content as lexicon_content, synchronize
 from . import snapshot_refs, edit_refs
+from .ownership import require_lexicon, recover_lexicon_owners
 
 
 def now():
@@ -32,9 +33,8 @@ class ResourceManagementService:
         shared_lexicon_writes_require_admin=False,
     ):
         self.app = application
-        self.shared_lexicon_writes_require_admin = bool(
-            shared_lexicon_writes_require_admin
-        )
+        # Retain the constructor argument for old launchers only. Ownership,
+        # not administrator role, now controls every formal-resource write.
         resources = application.resource_service
         self.lexicons = resources.lexicon_store
         self.rulesets = resources.ruleset_service
@@ -60,10 +60,16 @@ class ResourceManagementService:
                 principal_id TEXT NOT NULL, operation_id TEXT NOT NULL, session_id TEXT NOT NULL,
                 request_hash TEXT NOT NULL, result_json TEXT NOT NULL, created_at TEXT NOT NULL,
                 PRIMARY KEY(principal_id,operation_id))''')
+            from backend.audit_agent.lexicon_store import DEFAULT_LEXICON
+            recover_lexicon_owners(conn, {item['id'] for item in DEFAULT_LEXICON})
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='resource_library_writes'").fetchone():
+                for row in conn.execute('SELECT * FROM resource_library_writes').fetchall():
+                    conn.execute('INSERT OR IGNORE INTO resource_save_receipts VALUES (?,?,?,?,?,?)',
+                                 (row['principal_id'], row['operation_id'], '', row['request_hash'], row['result_json'], now()))
 
     def read(self, kind, resource_id='', query='', offset=0, limit=20, *, principal):
         if not resource_id:
-            values = self.rulesets.list(principal=principal) if kind == 'ruleset' else self.lexicons.list_categories()
+            values = self.rulesets.list(principal=principal) if kind == 'ruleset' else self.lexicons.list_categories(principal=principal)
             items = []
             for value in values:
                 title = value.get('name') or value.get('title') or ''
@@ -77,6 +83,7 @@ class ResourceManagementService:
             return {'id': resource_id, 'kind': kind, 'content': body, 'version': item['draft_revision'], 'published_revision_id': item['published_revision_id'], 'published_version': item['published_version'], 'editable': item['owner_id'] == principal.id and resource_id not in TRIAL_BUNDLES, 'content_hash': content_hash(body)}
         with self.lexicons._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            owner = require_lexicon(conn, resource_id, principal)
             body = lexicon_content(conn, resource_id)
             if body.get('deleted'):
                 raise ResourceError('词库不存在。', code='RESOURCE_NOT_FOUND')
@@ -85,7 +92,7 @@ class ResourceManagementService:
             runtime_hash = self.lexicons.runtime_content_hash(resource_id, connection=conn)
             return {'id': resource_id, 'kind': kind, 'content': body, 'version': revision['version'],
                     'resource_ref': snapshot_refs.issue(conn, self.lexicons, resource_id, principal=principal),
-                    'content_hash': revision['content_hash'], 'editable': True, 'search_terms': terms,
+                    'content_hash': revision['content_hash'], 'editable': owner == principal.id, 'search_terms': terms,
                     'runtime_content_hash': runtime_hash,
                     'recall_plan': {'strategy': 'existing_lexicon', 'lexicon_id': resource_id,
                                     'expected_runtime_content_hash': runtime_hash, 'enabled_main_terms': terms}}
@@ -102,9 +109,9 @@ class ResourceManagementService:
             conn.execute('BEGIN')
             return snapshot_refs.resolve(conn, self.lexicons, resource_ref, principal=principal)
 
-    def save_library(self, kind, resource_id, content, expected_version, operation_id, *, principal):
+    def save_library(self, kind, resource_id, content, expected_version, operation_id, *, principal,
+                     session_id='', source_key=''):
         """Publish a complete editor submission in one transaction, with retry receipts."""
-        self._require_shared_lexicon_writer(kind, principal)
         parsed = RuleSetContent.model_validate(content) if kind == 'ruleset' else LexiconContent.model_validate(content)
         if kind == 'ruleset':
             self.rulesets._validate_operator_content(parsed)
@@ -112,12 +119,34 @@ class ResourceManagementService:
         request_hash = digest({'kind': kind, 'id': resource_id, 'content': content, 'version': expected_version})
         with self.lexicons._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            receipt = conn.execute('SELECT * FROM resource_save_receipts WHERE principal_id=? AND operation_id=?',
+                                   (principal.id, operation_id)).fetchone()
+            if receipt:
+                if receipt['request_hash'] != request_hash or receipt['session_id'] != session_id:
+                    raise ResourceError('保存操作已用于其他内容。', code='RESOURCE_IDEMPOTENCY_CONFLICT')
+                return json.loads(receipt['result_json'])
             conn.execute('CREATE TABLE IF NOT EXISTS resource_library_writes (principal_id TEXT, operation_id TEXT, request_hash TEXT NOT NULL, result_json TEXT NOT NULL, PRIMARY KEY(principal_id, operation_id))')
             previous = conn.execute('SELECT * FROM resource_library_writes WHERE principal_id=? AND operation_id=?', (principal.id, operation_id)).fetchone()
             if previous:
                 if previous['request_hash'] != request_hash:
                     raise ResourceError('保存操作已用于其他内容。', code='RESOURCE_IDEMPOTENCY_CONFLICT')
-                return json.loads(previous['result_json'])
+                result = json.loads(previous['result_json'])
+                conn.execute('INSERT INTO resource_save_receipts VALUES (?,?,?,?,?,?)',
+                             (principal.id, operation_id, session_id, request_hash, canonical(result), now()))
+                return result
+            # A frozen Draft source has one save, even when a recovery turn uses
+            # a fresh tool-call/operation ID. Explicit copies use the editor path.
+            if source_key:
+                for saved in conn.execute('SELECT result_json FROM resource_save_receipts WHERE principal_id=?',
+                                          (principal.id,)):
+                    result = json.loads(saved[0])
+                    if result.get('source_key') == source_key:
+                        if result.get('kind') != kind or result.get('content') != parsed.model_dump(mode='json'):
+                            raise ResourceError('保存来源版本冲突。', code='RESOURCE_VERSION_CONFLICT')
+                        result = {**result, 'operation_id': operation_id}
+                        conn.execute('INSERT INTO resource_save_receipts VALUES (?,?,?,?,?,?)',
+                                     (principal.id, operation_id, session_id, request_hash, canonical(result), now()))
+                        return result
             table = 'rule_sets' if kind == 'ruleset' else 'lexicon_categories'
             row = conn.execute(f'SELECT * FROM {table} WHERE id=?', (resource_id,)).fetchone()
             if expected_version == 0:
@@ -131,20 +160,25 @@ class ResourceManagementService:
                 source = {'version': expected_version}
                 if kind == 'ruleset':
                     source['published_revision_id'] = row['published_revision_id']
-            formal = self._save_ruleset(conn, resource_id, parsed, source, principal) if kind == 'ruleset' else self._save_lexicon(conn, resource_id, parsed, source)
+            formal = self._save_ruleset(conn, resource_id, parsed, source, principal) if kind == 'ruleset' else self._save_lexicon(conn, resource_id, parsed, source, principal)
             if kind == 'lexicon':
                 formal['resource_ref'] = snapshot_refs.issue(conn, self.lexicons, resource_id, principal=principal)
-            result = {'id': resource_id, 'kind': kind, 'content': parsed.model_dump(mode='json'), 'editable': True,
+            result = {'id': resource_id, 'resource_id': resource_id, 'kind': kind,
+                      'status': 'saved', 'operation_id': operation_id, 'source_key': source_key,
+                      'content': parsed.model_dump(mode='json'), 'editable': True,
                       **formal, 'version': formal['resource_version'],
                       'published_revision_id': formal.get('revision_id'), 'published_version': formal['version']}
             conn.execute('INSERT INTO resource_library_writes VALUES (?,?,?,?)', (principal.id, operation_id, request_hash, canonical(result)))
+            conn.execute('INSERT INTO resource_save_receipts VALUES (?,?,?,?,?,?)',
+                         (principal.id, operation_id, session_id, request_hash, canonical(result), now()))
             return result
 
     def delete_library(self, kind, resource_id, expected_version, *, principal):
-        self._require_shared_lexicon_writer(kind, principal)
         if kind == 'lexicon':
+            with self.lexicons._connect() as conn:
+                require_lexicon(conn, resource_id, principal, write=True)
             try:
-                self.lexicons.delete_category_atomically(resource_id, expected_version=expected_version)
+                self.lexicons.delete_category_atomically(resource_id, expected_version=expected_version, principal=principal)
             except KeyError as exc:
                 raise ResourceError('词库已删除。', code='RESOURCE_NOT_FOUND') from exc
             except LexiconCategoryReferenceConflictError as exc:
@@ -158,9 +192,7 @@ class ResourceManagementService:
             row = conn.execute('SELECT * FROM rule_sets WHERE id=?', (resource_id,)).fetchone()
             if not row or row['status'] == 'deleted':
                 raise ResourceError('规则已删除。', code='RESOURCE_NOT_FOUND')
-            # System templates are shared; the explicit local operator may remove
-            # them from this single-user installation, but never rewrite a snapshot.
-            if row['owner_id'] != principal.id and not (row['owner_id'] == 'system' and principal.id == 'local-user'):
+            if row['owner_id'] != principal.id or row['owner_id'] == 'system':
                 raise ResourceError('无权删除这套规则。', code='RESOURCE_FORBIDDEN')
             require_version(row['draft_revision'], expected_version)
             revision_ids = {r[0] for r in conn.execute('SELECT id FROM rule_set_revisions WHERE ruleset_id=?', (resource_id,))}
@@ -321,7 +353,7 @@ class ResourceManagementService:
 
     def get_save(self, operation_id, *, session_id, principal):
         with self.lexicons._connect() as conn:
-            row = conn.execute('SELECT result_json FROM resource_save_receipts WHERE principal_id=? AND operation_id=? AND session_id=?', (principal.id, operation_id, session_id)).fetchone()
+            row = conn.execute("SELECT result_json FROM resource_save_receipts WHERE principal_id=? AND operation_id=? AND session_id IN (?, '')", (principal.id, operation_id, session_id)).fetchone()
         return json.loads(row[0]) if row else {'status': 'not_found', 'operation_id': operation_id}
 
     def save(self, edit_id, expected_version, mode, operation_id, *, session_id, principal):
@@ -334,7 +366,6 @@ class ResourceManagementService:
                 raise ResourceError('操作 ID 已用于其他保存请求。', code='RESOURCE_IDEMPOTENCY_CONFLICT')
             return json.loads(previous['result_json'])
         edit = self.get_edit(edit_id, session_id=session_id, principal=principal)
-        self._require_shared_lexicon_writer(edit['kind'], principal)
         require_version(edit['version'], expected_version)
         source = edit['source']
         if mode == 'new' and edit['saves']:
@@ -364,7 +395,7 @@ class ResourceManagementService:
             if request['mode'] == 'new':
                 for row in conn.execute('SELECT result_json FROM resource_save_receipts WHERE principal_id=? AND session_id=? ORDER BY created_at', (principal.id, session_id)):
                     receipt = json.loads(row[0])
-                    if receipt['edit_id'] == edit_id:
+                    if receipt.get('edit_id') == edit_id:
                         same_edit.append(receipt)
             exact = next((r for r in reversed(same_edit) if r['edit_version'] == expected_version and r['edit_content_hash'] == edit['content_hash']), None)
             if exact:
@@ -376,22 +407,11 @@ class ResourceManagementService:
                 if edit['kind'] == 'ruleset':
                     formal = self._save_ruleset(conn, identifier, parsed, source if mode == 'update' else None, principal)
                 else:
-                    formal = self._save_lexicon(conn, identifier, parsed, source if mode == 'update' else None)
+                    formal = self._save_lexicon(conn, identifier, parsed, source if mode == 'update' else None, principal)
                     formal['resource_ref'] = snapshot_refs.issue(conn, self.lexicons, identifier, principal=principal)
             result = dict(status='saved', operation_id=operation_id, kind=edit['kind'], edit_id=edit_id, edit_version=expected_version, edit_content_hash=edit['content_hash'], resource_id=identifier, **formal)
             conn.execute('INSERT INTO resource_save_receipts VALUES (?,?,?,?,?,?)', (principal.id, operation_id, session_id, request_hash, canonical(result), now()))
         return result
-
-    def _require_shared_lexicon_writer(self, kind, principal):
-        if (
-            self.shared_lexicon_writes_require_admin
-            and kind == 'lexicon'
-            and not getattr(principal, 'is_admin', False)
-        ):
-            raise ResourceError(
-                '只有管理员可以保存或删除共享词库。',
-                code='RESOURCE_FORBIDDEN',
-            )
 
     def _save_ruleset(self, conn, identifier, body, source, principal):
         if identifier in TRIAL_BUNDLES:
@@ -417,14 +437,17 @@ class ResourceManagementService:
         return {'resource_version': revision, 'version': version, 'revision_id': revision_id, 'content_hash': hashed}
 
     @staticmethod
-    def _save_lexicon(conn, identifier, body, source):
+    def _save_lexicon(conn, identifier, body, source, principal):
         if source:
+            require_lexicon(conn, identifier, principal, write=True)
             last = conn.execute('SELECT version FROM lexicon_content_versions WHERE category_id=? ORDER BY version DESC LIMIT 1', (identifier,)).fetchone()
             if not last or not conn.execute('SELECT 1 FROM lexicon_categories WHERE id=?', (identifier,)).fetchone():
                 raise ResourceError('词库已删除。', code='RESOURCE_NOT_FOUND')
             require_version(last[0], source['version'])
         stamp = now()
         conn.execute('INSERT INTO lexicon_categories (id,title,risk_label,description,sort_order,created_at,updated_at) VALUES (?,?,?,?,0,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,risk_label=excluded.risk_label,description=excluded.description,updated_at=excluded.updated_at', (identifier, body.title, body.risk_label, body.description, stamp, stamp))
+        if not source:
+            conn.execute('UPDATE lexicon_categories SET owner_id=? WHERE id=?', (principal.id, identifier))
         # Remove deleted entries only; retained rows keep statistics and stable identity.
         retained = {e.id for e in body.entries}
         old = conn.execute('SELECT id,entry_id FROM lexicon_keywords WHERE category_id=?', (identifier,)).fetchall()

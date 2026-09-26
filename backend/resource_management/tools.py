@@ -39,7 +39,8 @@ RESOURCE_DESCRIPTIONS["create_lexicon_edit"] = (
     "专用生成步骤携带完整原有质量指导，返回经校验的会话编辑稿、search_terms 和 resource_ref recall_plan。"
     "创建草案直接传该 recall_plan，不重抄词库内容；临时使用无需正式保存。"
     "默认整组5–10个实际词，可靠候选不足不凑数；用户指定数量/原文优先。"
-    "仅原样导入已有完整内容（如保存 Draft 词库）使用 content，不调用生成模型。两种输入只能选一种。"
+    "仅原样导入用户提供的完整结构化内容使用 content，不调用生成模型。两种输入只能选一种。"
+    "保存当前 Draft 词库请用 save_draft_lexicon，只传草案引用和版本，不重抄 content。"
     "content.entries 含稳定 id、term、kind(main/variant/tag)、parent_id、enabled；变体指向主词。"
     "这是同一编辑稿生命周期，不是临时/正式两套词库。不正式保存、不采用、不启动。"
     "生成失败时不得改走 content 编造成功；如实报告错误，保留此前成功操作。"
@@ -60,7 +61,7 @@ create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资�
 生成本身不正式保存；后续正式保存仍需明确授权。
 生成规则仍调用 create_ruleset_proposal，沿用原有领域指导和结构；保存时直接引用 proposal_id
 作为 edit_id，不重复生成规则。只要求查看或生成时不调用 save_resource。
-用户请求完整词库、词库变体或独立保存词库时使用 create_lexicon_edit。主词是主题和语义归类，
+用户请求生成完整词库或词库变体时使用 create_lexicon_edit；保存已有编辑稿使用 save_resource，不重新生成。主词是主题和语义归类，
 变体词是主要的实际召回表达；每个启用主词有启用变体时，search_terms 使用这些变体，没有启用
 变体时才为兼容旧词库回退到主词。标签不参与搜索。生成完整黑话库时默认需要生成变体。
 
@@ -70,7 +71,8 @@ create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资�
 临时搜索词与完整黑话库都通过 create_lexicon_edit 先建立会话编辑稿。
 新增词库可以不正式保存，直接用于本次任务；纯讨论、示例不要求创建资源。
 当用户要求把当前调查 Draft 的关键词正式保存时，必须先读取最新 Draft revision；若其中已有
-temporary_terms.lexicon_content，逐字段原样传给 create_lexicon_edit，再调用 save_resource。不得根据扁平
+temporary_terms.lexicon_content，调用 save_draft_lexicon，只传 draft_id、expected_revision、operation_id，
+由后端保存该版本内容，不让模型重抄整份词库，也不再创建编辑稿。不得根据扁平
 terms 或对话记忆重新猜测主题归属。仍是旧版扁平 terms 时先让用户在结构化 Drawer 中确认主题与变体。
 保存正式词库不修改 Draft，也不改变已经启动任务的冻结搜索词。
 当用户明确说“搜索主词 X”“只用 X”或给出一组召回词，但没有要求扩展时，这就是本次临时词库的

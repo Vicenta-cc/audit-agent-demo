@@ -55,16 +55,20 @@ def test_changed_or_deleted_resource_never_upgrades_old_handle(service, change):
     assert service.save(saved['edit_id'], 1, 'new', 'save-1', **CTX) == saved
 
 
-def test_handles_are_principal_bound_even_for_shared_readable_lexicons(service):
+def test_private_resources_and_handles_are_principal_bound(service):
     saved = save(service, service.create_lexicon(lexicon(), **CTX))
     other = Principal('other-user')
     for token, principal in [(saved['resource_ref'], other), ('resource-ref:' + '0' * 32, P)]:
         with pytest.raises(ResourceError) as caught:
             service.resolve_lexicon_ref(token, principal=principal)
         assert caught.value.code == 'RESOURCE_REF_INVALID'
-    read = service.read('lexicon', saved['resource_id'], principal=other)
-    assert read['resource_ref'] != saved['resource_ref']
-    assert service.resolve_lexicon_ref(read['resource_ref'], principal=other)['lexicon_id'] == saved['resource_id']
+    with pytest.raises(ResourceError):
+        service.read('lexicon', saved['resource_id'], principal=other)
+    # Public system templates remain readable, but the issued handles are private.
+    first = service.read('lexicon', 'soft', principal=P)
+    read = service.read('lexicon', 'soft', principal=other)
+    assert first['resource_ref'] != read['resource_ref']
+    assert service.resolve_lexicon_ref(read['resource_ref'], principal=other)['lexicon_id'] == 'soft'
 
 
 def test_new_tool_schema_does_not_advertise_hash_inputs_but_keeps_temporary_terms():

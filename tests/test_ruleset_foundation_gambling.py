@@ -987,13 +987,11 @@ class RuleSetStoreAndApiTests(unittest.TestCase):
             idempotency_key="owner-publish",
             principal=PRINCIPAL,
         )
-        self.assertEqual(
+        with self.assertRaises(RuleSetNotFoundError):
             self.service.get_published(
                 shared_revision["id"],
                 principal=OTHER_PRINCIPAL,
-            )["id"],
-            shared_revision["id"],
-        )
+            )
 
         system = self.service.get(GAMBLING_RULESET_ID, principal=PRINCIPAL)
         self.assertEqual(system["owner_id"], "system")
@@ -1257,9 +1255,9 @@ class AuditPolicyVersioningTests(unittest.TestCase):
                 patch.object(backend_main, "lexicon_store", lexicon_store),
                 self.assertRaises(backend_main.HTTPException) as raised,
             ):
-                backend_main.delete_lexicon_category("gambling")
+                backend_main.delete_lexicon_category("gambling", principal=Principal('local-user'))
 
-            self.assertEqual(raised.exception.status_code, 409)
+            self.assertEqual(raised.exception.status_code, 403)  # system templates are read-only
             self.assertEqual(policy_store.list(), policies_before)
             self.assertEqual(lexicon_store.get_category("gambling"), category_before)
             references = policy_store.find_library_references("gambling")
@@ -1292,7 +1290,7 @@ class AuditPolicyVersioningTests(unittest.TestCase):
                 patch.object(backend_main, "lexicon_store", lexicon_store),
                 self.assertRaises(backend_main.HTTPException) as raised,
             ):
-                backend_main.delete_lexicon_category("draft_only_library")
+                backend_main.delete_lexicon_category("draft_only_library", principal=Principal('local-user'))
 
             self.assertEqual(raised.exception.status_code, 409)
             self.assertEqual(policy_store.list(), policies_before)
@@ -1324,7 +1322,7 @@ class AuditPolicyVersioningTests(unittest.TestCase):
                 patch.object(backend_main, "lexicon_store", lexicon_store),
             ):
                 result = backend_main.delete_lexicon_category(
-                    "unreferenced_library"
+                    "unreferenced_library", principal=Principal('local-user')
                 )
 
             self.assertTrue(result["ok"])

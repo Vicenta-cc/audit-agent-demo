@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import nullcontext
 from typing import Protocol
 
 from .compiler import (
@@ -112,8 +113,7 @@ class RuleSetService:
         principal: Principal,
         ruleset_id: str = "",
     ) -> list[dict]:
-        del principal
-        return self.store.list_published(ruleset_id=ruleset_id)
+        return self._visible_revisions(self.store.list_published(ruleset_id=ruleset_id), principal)
 
     def list_current_published(
         self,
@@ -121,8 +121,7 @@ class RuleSetService:
         principal: Principal,
         ruleset_id: str = "",
     ) -> list[dict]:
-        del principal
-        return self.store.list_current_published(ruleset_id=ruleset_id)
+        return self._visible_revisions(self.store.list_current_published(ruleset_id=ruleset_id), principal)
 
     def get_published(
         self,
@@ -131,8 +130,10 @@ class RuleSetService:
         principal: Principal,
         connection: sqlite3.Connection | None = None,
     ) -> dict:
-        del principal
-        return self.store.get_published(revision_id, connection=connection)
+        revision = self.store.get_published(revision_id, connection=connection)
+        if not self._visible_revisions([revision], principal, connection):
+            raise RuleSetNotFoundError('RuleSet revision not found')
+        return revision
 
     def get_current_published(
         self,
@@ -141,10 +142,18 @@ class RuleSetService:
         principal: Principal,
         connection: sqlite3.Connection | None = None,
     ) -> dict | None:
-        del principal
-        return self.store.get_current_published(
+        revision = self.store.get_current_published(
             revision_id, connection=connection
         )
+        if revision is not None and not self._visible_revisions([revision], principal, connection):
+            raise RuleSetNotFoundError('RuleSet revision not found')
+        return revision
+
+    def _visible_revisions(self, revisions, principal, connection=None):
+        with (nullcontext(connection) if connection is not None else self.store._connect()) as conn:
+            allowed = {r[0] for r in conn.execute(
+                "SELECT id FROM rule_sets WHERE owner_id IN (?, 'system')", (principal.id,))}
+            return [revision for revision in revisions if revision['ruleset_id'] in allowed]
 
     def compile_preview(
         self,

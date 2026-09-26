@@ -680,7 +680,7 @@ export function KnowledgeCenterPage({
                     <Sparkles size={14} />
                     <span>返回调查对话</span>
                   </button> : null}
-                  {!isPreview ? <button type="button" className="recall-delete-button" disabled={busy} onClick={() => { setDeleteError(''); setDeleteOpen(true); }}><Trash2 size={14} />删除审核规则</button> : null}
+                  {!isPreview && source?.editable ? <button type="button" className="recall-delete-button" disabled={busy} onClick={() => { setDeleteError(''); setDeleteOpen(true); }}><Trash2 size={14} />删除审核规则</button> : null}
                   {!isPreview ? <button
                     type="button"
                     style={{

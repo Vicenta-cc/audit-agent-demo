@@ -18,7 +18,7 @@ from .api.investigation_creation import create_investigation_creation_router
 from .api.investigation_execution import InvestigationTurnExecutor
 from .api.reporting import create_reporting_router
 from .rulesets.api import create_ruleset_router
-from .rulesets.errors import RuleSetRevisionNotFoundError
+from .rulesets.errors import RuleSetRevisionNotFoundError, RuleSetNotFoundError
 from .rulesets.service import RuleSetService
 from .rulesets.store import RuleSetStore
 from .audit_agent.audit_policy_store import (
@@ -368,7 +368,6 @@ investigation_creation_service = InvestigationCreationService(
     configuration_resolver=investigation_configuration_resolver,
     resource_service=investigation_resource_service,
     run_projector=investigation_run_projector,
-    shared_lexicon_writes_require_admin=_authz_enabled(),
 )
 investigation_creation_tool_service = InvestigationCreationToolService(
     investigation_creation_service
@@ -779,6 +778,8 @@ def prepare_prompt_context(
     force_composite: bool = False,
 ) -> dict:
     normalized_library_ids = normalize_library_ids(library_ids, lexicon_category or "soft")
+    for resource_id in normalized_library_ids:
+        _require_lexicon_access(resource_id, principal_provider())
     normalized_capabilities = normalize_capabilities(capabilities)
     if force_composite:
         libraries = lexicon_store.get_knowledge_packages(normalized_library_ids)
@@ -1003,7 +1004,7 @@ def validate_audit_policy_ruleset_reference(config: dict) -> None:
             },
             principal=principal_provider(),
         )
-    except RuleSetRevisionNotFoundError as exc:
+    except (RuleSetRevisionNotFoundError, RuleSetNotFoundError) as exc:
         raise HTTPException(status_code=404, detail="Published RuleSetRevision not found") from exc
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -1755,15 +1756,30 @@ def create_comment_user_relation(
     return {"relation": relation}
 
 
+def _policy_resources_visible(policy: dict, principal: Principal) -> bool:
+    # Legacy policies may refer to personal libraries/revisions. They must not
+    # become a back door for discovering another user's formal resources.
+    try:
+        for config in (policy.get('config') or {}, policy.get('published_config') or {}):
+            for resource_id in config.get('library_ids') or []:
+                _require_lexicon_access(resource_id, principal)
+            if config.get('ruleset_revision_id'):
+                ruleset_service.get_published(config['ruleset_revision_id'], principal=principal)
+        return True
+    except (HTTPException, RuleSetNotFoundError, RuleSetRevisionNotFoundError):
+        return False
+
+
 @app.get("/api/audit-policies")
-def list_audit_policies(include_drafts: bool = True):
-    return {"items": audit_policy_store.list(include_drafts=include_drafts)}
+def list_audit_policies(include_drafts: bool = True, principal: Principal = Depends(principal_provider)):
+    return {"items": [p for p in audit_policy_store.list(include_drafts=include_drafts)
+                      if _policy_resources_visible(p, principal)]}
 
 
 @app.get("/api/audit-policies/{policy_id}")
-def get_audit_policy(policy_id: str):
+def get_audit_policy(policy_id: str, principal: Principal = Depends(principal_provider)):
     policy = audit_policy_store.get(policy_id)
-    if not policy:
+    if not policy or not _policy_resources_visible(policy, principal):
         raise HTTPException(status_code=404, detail="Audit policy not found")
     return policy
 
@@ -1863,8 +1879,24 @@ def delete_audit_policy(
 
 
 @app.get("/api/lexicons")
-def list_lexicons():
-    return {"categories": lexicon_store.list_categories()}
+def list_lexicons(principal: Principal = Depends(principal_provider)):
+    return {"categories": lexicon_store.list_categories(principal=principal)}
+
+
+def _require_lexicon_access(category_id, principal, *, write=False, keyword_id=None):
+    from .resource_management.ownership import require_lexicon
+    from .resource_management.contracts import ResourceError
+    with lexicon_store._connect() as conn:
+        if keyword_id is not None:
+            row = conn.execute('SELECT category_id FROM lexicon_keywords WHERE id=?', (keyword_id,)).fetchone()
+            if row is None:
+                raise HTTPException(404, detail='Keyword not found')
+            category_id = row[0]
+        try:
+            require_lexicon(conn, category_id, principal, write=write)
+        except ResourceError as exc:
+            raise HTTPException(403 if exc.code == 'RESOURCE_FORBIDDEN' else 404,
+                                detail={'code': exc.code, 'message': str(exc)}) from exc
 
 
 @app.post("/api/lexicons")
@@ -1872,7 +1904,11 @@ def create_lexicon_category(
     request: LexiconCategoryRequest,
     principal: Principal = Depends(principal_provider),
 ):
-    _require_admin(principal)
+    if request.id:
+        with lexicon_store._connect() as conn:
+            exists = conn.execute('SELECT 1 FROM lexicon_categories WHERE id=?', (request.id,)).fetchone()
+        if exists:
+            _require_lexicon_access(request.id, principal, write=True)
     try:
         category = lexicon_store.upsert_category(
             category_id=request.id,
@@ -1883,10 +1919,12 @@ def create_lexicon_category(
             platform_keywords=request.platform_keywords,
             platform_tags=request.platform_tags,
             entries=request.entries,
+            owner_id=principal.id,
+            principal=principal,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"category": category, "categories": lexicon_store.list_categories()}
+    return {"category": category, "categories": lexicon_store.list_categories(principal=principal)}
 
 
 @app.patch("/api/lexicons/{category_id}")
@@ -1895,29 +1933,29 @@ def update_lexicon_category(
     request: LexiconCategoryRequest,
     principal: Principal = Depends(principal_provider),
 ):
-    _require_admin(principal)
+    _require_lexicon_access(category_id, principal, write=True)
     try:
         from .resource_management.legacy_lexicon import save_editor
         from .resource_management.contracts import ResourceError
         if request.entries is None:
             raise ResourceError('请通过完整词库编辑接口提交内容。', code='RESOURCE_VERSION_REQUIRED')
-        category = save_editor(lexicon_store, category_id, request.title, request.risk_label, request.entries, request.expected_version, description=request.description)
+        category = save_editor(lexicon_store, category_id, request.title, request.risk_label, request.entries, request.expected_version, principal=principal, description=request.description)
 
     except KeyError:
         raise HTTPException(status_code=404, detail="Lexicon category not found")
     except ValueError as exc:
         code = getattr(exc, 'code', '')
         raise HTTPException(status_code=428 if code == 'RESOURCE_VERSION_REQUIRED' else 409 if 'CONFLICT' in code else 400, detail={'code':code,'message':str(exc)})
-    return {"category": category, "categories": lexicon_store.list_categories()}
+    return {"category": category, "categories": lexicon_store.list_categories(principal=principal)}
 
 
 @app.delete("/api/lexicons/{category_id}")
 def delete_lexicon_category(
     category_id: str, principal: Principal = Depends(principal_provider)
 ):
-    _require_admin(principal)
+    _require_lexicon_access(category_id, principal, write=True)
     try:
-        category = lexicon_store.delete_category_atomically(category_id)
+        category = lexicon_store.delete_category_atomically(category_id, principal=principal)
     except KeyError:
         raise HTTPException(status_code=404, detail="Lexicon category not found")
     except LexiconCategoryReferenceConflictError as exc:
@@ -1936,7 +1974,7 @@ def delete_lexicon_category(
         "id": category_id,
         "category": category,
         "affected_policy_count": 0,
-        "categories": lexicon_store.list_categories(),
+        "categories": lexicon_store.list_categories(principal=principal),
     }
 
 
@@ -1945,9 +1983,10 @@ def create_lexicon_keyword(
     request: LexiconKeywordRequest,
     principal: Principal = Depends(principal_provider),
 ):
-    _require_admin(principal)
+    _require_lexicon_access(request.category_id, principal, write=True)
     try:
         keyword = lexicon_store.add_keyword(
+            principal=principal,
             category_id=request.category_id,
             keyword=request.keyword,
             match_type=request.match_type,
@@ -1960,7 +1999,7 @@ def create_lexicon_keyword(
         raise HTTPException(status_code=404, detail="Lexicon category not found")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"keyword": keyword, "categories": lexicon_store.list_categories()}
+    return {"keyword": keyword, "categories": lexicon_store.list_categories(principal=principal)}
 
 
 @app.patch("/api/lexicon-keywords/{keyword_id}")
@@ -1969,28 +2008,28 @@ def update_lexicon_keyword(
     request: LexiconKeywordRequest,
     principal: Principal = Depends(principal_provider),
 ):
-    _require_admin(principal)
+    _require_lexicon_access(None, principal, write=True, keyword_id=keyword_id)
     payload = request.dict(exclude_unset=True)
     payload.pop("category_id", None)
     try:
-        keyword = lexicon_store.update_keyword(keyword_id, **payload)
+        keyword = lexicon_store.update_keyword(keyword_id, principal=principal, **payload)
     except KeyError:
         raise HTTPException(status_code=404, detail="Lexicon keyword not found")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"keyword": keyword, "categories": lexicon_store.list_categories()}
+    return {"keyword": keyword, "categories": lexicon_store.list_categories(principal=principal)}
 
 
 @app.delete("/api/lexicon-keywords/{keyword_id}")
 def delete_lexicon_keyword(
     keyword_id: int, principal: Principal = Depends(principal_provider)
 ):
-    _require_admin(principal)
+    _require_lexicon_access(None, principal, write=True, keyword_id=keyword_id)
     try:
-        lexicon_store.delete_keyword(keyword_id)
+        lexicon_store.delete_keyword(keyword_id, principal=principal)
     except KeyError:
         raise HTTPException(status_code=404, detail="Lexicon keyword not found")
-    return {"ok": True, "categories": lexicon_store.list_categories()}
+    return {"ok": True, "categories": lexicon_store.list_categories(principal=principal)}
 
 
 @app.put("/api/lexicons/{category_id}/prompt-profile")
@@ -1999,10 +2038,11 @@ def update_lexicon_prompt_profile(
     request: LexiconPromptProfileRequest,
     principal: Principal = Depends(principal_provider),
 ):
-    _require_admin(principal)
+    _require_lexicon_access(category_id, principal, write=True)
     try:
         profile = lexicon_store.update_prompt_profile(
             category_id,
+            principal=principal,
             image_prompt=request.image_prompt,
             frame_prompt=request.frame_prompt,
             fusion_prompt_template=request.fusion_prompt_template,
@@ -2011,19 +2051,19 @@ def update_lexicon_prompt_profile(
         raise HTTPException(status_code=404, detail="Lexicon category not found")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"prompt_profile": profile, "categories": lexicon_store.list_categories()}
+    return {"prompt_profile": profile, "categories": lexicon_store.list_categories(principal=principal)}
 
 
 @app.post("/api/lexicons/{category_id}/prompt-profile/reset")
 def reset_lexicon_prompt_profile(
     category_id: str, principal: Principal = Depends(principal_provider)
 ):
-    _require_admin(principal)
+    _require_lexicon_access(category_id, principal, write=True)
     try:
-        profile = lexicon_store.reset_prompt_profile(category_id)
+        profile = lexicon_store.reset_prompt_profile(category_id, principal=principal)
     except KeyError:
         raise HTTPException(status_code=404, detail="Lexicon category not found")
-    return {"prompt_profile": profile, "categories": lexicon_store.list_categories()}
+    return {"prompt_profile": profile, "categories": lexicon_store.list_categories(principal=principal)}
 
 
 @app.get("/api/health/gpu")

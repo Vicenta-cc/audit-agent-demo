@@ -3334,6 +3334,8 @@ def test_hermes_creation_product_mode_registers_only_m3_application_tools():
         "create_investigation_draft",
         "update_investigation_draft",
         "get_investigation_draft",
+        "save_draft_lexicon",
+        "save_draft_ruleset",
         "confirm_and_queue_investigation",
         "get_investigation_run",
         "create_ruleset_proposal",

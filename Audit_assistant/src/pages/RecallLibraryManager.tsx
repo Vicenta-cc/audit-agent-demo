@@ -263,7 +263,8 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
       const signature = JSON.stringify({ id: draft.id, content, version: source?.version || 0 });
       const operation = saveAttempt?.signature === signature ? saveAttempt.id : crypto.randomUUID();
       setSaveAttempt({ signature, id: operation });
-      const saved = await saveResource('lexicon', draft.id, content, source?.version || 0, operation);
+      const copy = source && !source.editable;
+      const saved = await saveResource('lexicon', copy ? `custom_${operation}` : draft.id, content, copy ? 0 : source?.version || 0, operation);
       setResources(current => ({ ...current, [saved.id]: saved }));
       setLibraries(current => [libraryView(saved), ...current.filter(r => r.id !== saved.id)]);
       setSaveAttempt(null);
@@ -440,7 +441,7 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
             <button type="button" className="recall-secondary-button" disabled={busy} onClick={closeEditor}>{preview ? "返回词库对话" : "取消"}</button>
             <button type="button" className="recall-primary-button recall-save-button" disabled={busy} onClick={saveLibrary}>
               <Save size={15} />
-              <span>{busy ? "正在保存…" : isAppendPreview ? "确认添加到词库" : preview ? "创建黑话库" : "保存配置"}</span>
+              <span>{busy ? "正在保存…" : isAppendPreview ? "确认添加到词库" : preview ? "创建黑话库" : resources[draft.id] && !resources[draft.id].editable ? "另存到我的词库" : "保存配置"}</span>
             </button>
           </div>
         </fieldset>
@@ -490,7 +491,7 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
               <div className="recall-library-card-footer">
                 <span>更新时间：{library.updatedAt}</span>
                 <div className="recall-library-card-actions">
-                  <button type="button" className="recall-delete-button" aria-label={`删除${library.name}`} onClick={() => { setDeleteError(''); setDeleteTarget(library); }}><Trash2 size={14} />删除</button>
+                  {resources[library.id]?.editable && <button type="button" className="recall-delete-button" aria-label={`删除${library.name}`} onClick={() => { setDeleteError(''); setDeleteTarget(library); }}><Trash2 size={14} />删除</button>}
                   <button
                     type="button"
                     aria-label={`管理${library.name}`}

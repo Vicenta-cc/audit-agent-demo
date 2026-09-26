@@ -2719,7 +2719,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         confirmationPreview={activeSession.creationBinding?.confirmationPreview}
         onApplyLexicon={handleApplyCreationLexicon}
         onSaveLexicon={handleSaveCreationLexicon}
-        canPublishLexicon={!applicationUser || applicationUser.role === "admin"}
+        canPublishLexicon={true}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 from typing import Any, Callable
 
 from backend.rulesets.compiler import compile_ruleset_content, content_hash
@@ -91,7 +92,7 @@ class InvestigationCreationService:
                 sources = self._temporary_provenance(configuration)
                 if sources and sources != self._temporary_provenance(previous):
                     self.resource_service.validate_temporary_provenance(
-                        sources, resource_connection=resource_connection,
+                        sources, resource_connection=resource_connection, principal=principal,
                     )
                 return self.resource_service.resolve_authoritative_draft(
                     configuration, principal=principal, resource_connection=resource_connection,
@@ -173,7 +174,7 @@ class InvestigationCreationService:
                 sources = self._temporary_provenance(configuration)
                 if sources:
                     self.resource_service.validate_temporary_provenance(
-                        sources, resource_connection=resource_connection
+                        sources, resource_connection=resource_connection, principal=principal
                     )
                 resolution = self.resource_service.resolve_authoritative_draft(
                     configuration,
@@ -227,7 +228,7 @@ class InvestigationCreationService:
                 sources = self._temporary_provenance(effective_configuration)
                 if sources and sources != self._temporary_provenance(draft.configuration):
                     self.resource_service.validate_temporary_provenance(
-                        sources, resource_connection=resource_connection
+                        sources, resource_connection=resource_connection, principal=principal
                     )
                 resolution = self.resource_service.resolve_authoritative_draft(
                     effective_configuration,
@@ -277,6 +278,7 @@ class InvestigationCreationService:
         expected_revision: int,
         operation_id: str,
         principal: Principal,
+        session_id: str = '',
     ) -> dict[str, Any]:
         draft = self.get_draft(draft_id, principal=principal)
         if draft.current_revision != expected_revision:
@@ -299,9 +301,8 @@ class InvestigationCreationService:
         # formal write. The deterministic resource ID makes network retries with
         # the same operation ID resolve to the same save receipt.
         content = plan.lexicon_content.model_dump(mode="json")
-        resource_key = hashlib.sha256(
-            f"{principal.id}:{draft.id}:{expected_revision}:{operation_id}".encode("utf-8")
-        ).hexdigest()[:16]
+        source_key = f"draft:{draft.id}:r{expected_revision}:lexicon"
+        resource_key = hashlib.sha256(f"{principal.id}:{source_key}".encode("utf-8")).hexdigest()[:16]
         saved = self.resource_management.save_library(
             "lexicon",
             f"custom_{resource_key}",
@@ -309,8 +310,38 @@ class InvestigationCreationService:
             0,
             operation_id,
             principal=principal,
+            session_id=session_id,
+            source_key=source_key,
         )
         return {**saved, "status": "saved", "resource_id": saved["id"]}
+
+    def save_draft_ruleset(
+        self, draft_id: str, *, expected_revision: int, operation_id: str,
+        principal: Principal, session_id: str = '',
+    ) -> dict[str, Any]:
+        """Save the selected immutable rule content, without adopting or rerunning it."""
+        draft = self.get_draft(draft_id, principal=principal)
+        if draft.current_revision != expected_revision:
+            raise DraftRevisionConflictError('Draft version changed; read and review it again')
+        if not isinstance(draft.configuration, InvestigationDraftConfiguration):
+            raise ConfigurationValidationError('legacy Draft has no structured rule source')
+        judgement = draft.configuration.judgement
+        if judgement.strategy == 'temporary_ruleset':
+            content = judgement.content.model_dump(mode='json')
+        else:
+            # Published revisions, unlike mutable resource heads, are immutable.
+            revision = self.resource_service.ruleset_service.get_published(
+                judgement.ruleset_revision_id, principal=principal)
+            from backend.rulesets.contracts import RuleSetContent
+            content = {key: revision[key] for key in RuleSetContent.model_fields}
+            # Legacy compiler provenance is not operator-authored rule content.
+            content = self.resource_service.ruleset_service._without_legacy_sources(deepcopy(content))
+        source_key = f'draft:{draft.id}:r{expected_revision}:ruleset'
+        resource_key = hashlib.sha256(f'{principal.id}:{source_key}'.encode()).hexdigest()[:16]
+        return self.resource_management.save_library(
+            'ruleset', f'ruleset.{resource_key}', content, 0, operation_id,
+            principal=principal, session_id=session_id, source_key=source_key,
+        )
 
     def get_confirmation_preview(
         self, draft_id: str, *, principal: Principal

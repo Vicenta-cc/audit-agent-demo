@@ -95,7 +95,7 @@ def test_lexicon_editor_preserves_disabled_entries_description_variants_and_tomb
         put(service, 'lexicon', body, 0, 'resurrect')
 
 
-def test_shared_lexicon_formal_writes_require_admin_when_enabled(service):
+def test_ordinary_users_save_privately_even_with_legacy_admin_flag(service):
     guarded = ResourceManagementService(
         service.app,
         shared_lexicon_writes_require_admin=True,
@@ -104,18 +104,16 @@ def test_shared_lexicon_formal_writes_require_admin_when_enabled(service):
     ordinary_context = {'session_id': 'ordinary-session', 'principal': ordinary}
     edit = guarded.create_lexicon(lexicon(), **ordinary_context)
 
-    with pytest.raises(ResourceError) as error:
-        guarded.save(
+    own = guarded.save(
             edit['edit_id'],
             edit['version'],
             'new',
             'ordinary-save',
             **ordinary_context,
         )
-    assert error.value.code == 'RESOURCE_FORBIDDEN'
+    assert own['status'] == 'saved'
 
-    with pytest.raises(ResourceError) as error:
-        guarded.save_library(
+    direct = guarded.save_library(
             'lexicon',
             'ordinary-direct-write',
             lexicon(),
@@ -123,7 +121,7 @@ def test_shared_lexicon_formal_writes_require_admin_when_enabled(service):
             'ordinary-direct-save',
             principal=ordinary,
         )
-    assert error.value.code == 'RESOURCE_FORBIDDEN'
+    assert direct['status'] == 'saved'
 
     admin = Principal('administrator', role='admin')
     admin_context = {'session_id': 'admin-session', 'principal': admin}
@@ -136,6 +134,10 @@ def test_shared_lexicon_formal_writes_require_admin_when_enabled(service):
         **admin_context,
     )
     assert saved['status'] == 'saved'
+    with pytest.raises(ResourceError):
+        guarded.read('lexicon', own['resource_id'], principal=admin)
+    with pytest.raises(ResourceError):
+        guarded.read('lexicon', saved['resource_id'], principal=ordinary)
 
 
 def test_validation_and_owner_failures_do_not_change_published_rules(service, client):

@@ -113,6 +113,19 @@ class InvestigationResourceService:
                 "task_parameters": InvestigationTaskParameters.model_validate(saved["parameters"])})
         return configuration, saved["revision"]
 
+    def require_lexicon_access(self, resource_id, principal, connection=None):
+        from backend.resource_management.ownership import require_lexicon
+        from backend.resource_management.contracts import ResourceError
+        try:
+            if connection is not None:
+                return require_lexicon(connection, resource_id, principal)
+            with self.lexicon_store._connect() as conn:
+                return require_lexicon(conn, resource_id, principal)
+        except ResourceError as exc:
+            raise ConfigurationValidationError('词库不存在或当前用户无权使用。',
+                code='INVALID_RESOURCE_REFERENCE', details={'resource_id': resource_id,
+                    'resource_type': 'recall_lexicon', 'mutation_applied': False}) from exc
+
     def lexicon_editor_content(
         self,
         category_id: str,
@@ -237,7 +250,7 @@ class InvestigationResourceService:
         include_terms = set(query.include_lexicon_terms_for_ids)
         lexicons: list[tuple[int, RecallLexiconSummary]] = []
         categories = (
-            self.lexicon_store.list_categories()
+            self.lexicon_store.list_categories(principal=principal)
             if query.mode == "search"
             else []
         )
@@ -458,14 +471,16 @@ class InvestigationResourceService:
         source_lexicon_ids: list[str],
         *,
         resource_connection: sqlite3.Connection | None,
+        principal: Principal,
     ) -> None:
         """Check new provenance at the mutation boundary, under the resource fence."""
         for source_lexicon_id in source_lexicon_ids:
             try:
+                self.require_lexicon_access(source_lexicon_id, principal, resource_connection)
                 self.lexicon_store.get_category(
                     source_lexicon_id, connection=resource_connection
                 )
-            except KeyError as exc:
+            except (KeyError, ConfigurationValidationError) as exc:
                 raise ConfigurationValidationError(
                     "A source recall lexicon does not exist.",
                     code="INVALID_SOURCE_LEXICON_REFERENCE",
@@ -612,6 +627,7 @@ class InvestigationResourceService:
             plan = configuration.investigation.recall_plan
             if plan.strategy == "existing_lexicon":
                 try:
+                    self.require_lexicon_access(plan.lexicon_id, principal, resource_connection)
                     recall_summary = self._lexicon_summary(
                         plan.lexicon_id,
                         include_terms=True,

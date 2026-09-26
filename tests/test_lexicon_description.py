@@ -80,12 +80,12 @@ def test_legacy_editor_omission_preserves_description_and_empty_clears(service):
     identifier = formal['resource_id']
     before = service.read('lexicon', identifier, principal=P)
     entries = editor_entries(before['content'])
-    save_editor(service.lexicons, identifier, before['content']['title'], '', entries, before['version'])
+    save_editor(service.lexicons, identifier, before['content']['title'], '', entries, before['version'], principal=P)
     assert service.read('lexicon', identifier, principal=P) == before
-    save_editor(service.lexicons, identifier, before['content']['title'], '', entries, before['version'], description='页面的新说明')
+    save_editor(service.lexicons, identifier, before['content']['title'], '', entries, before['version'], principal=P, description='页面的新说明')
     after = service.read('lexicon', identifier, principal=P)
     assert after['content'] == {**before['content'], 'description': '页面的新说明'}
-    save_editor(service.lexicons, identifier, before['content']['title'], '', entries, after['version'], description='')
+    save_editor(service.lexicons, identifier, before['content']['title'], '', entries, after['version'], principal=P, description='')
     assert service.lexicons.get_category(identifier)['description'] == ''
 
 

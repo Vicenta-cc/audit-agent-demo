@@ -96,6 +96,12 @@ PUBLIC_TOOL_ACTIVITIES: dict[str, PublicActivitySpec] = {
     "save_resource": PublicActivitySpec(
         "正式保存审核资源", "审核资源已正式保存。"
     ),
+    "save_draft_lexicon": PublicActivitySpec(
+        "保存任务关键词为黑话库", "任务关键词已正式保存为黑话库，任务配置未改变。"
+    ),
+    "save_draft_ruleset": PublicActivitySpec(
+        "保存任务规则到个人规则库", "任务规则已保存到个人规则库，任务配置未改变。"
+    ),
     "get_resource_save": PublicActivitySpec(
         "查询审核资源保存结果", "已读取审核资源保存结果。"
     ),

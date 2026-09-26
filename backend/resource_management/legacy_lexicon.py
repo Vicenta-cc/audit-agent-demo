@@ -6,9 +6,12 @@ from .lexicon_versions import content as read_content
 from .service import ResourceManagementService
 
 
-def save_editor(store, category_id, title, risk_label, entries, expected_version, *, description=None):
+def save_editor(store, category_id, title, risk_label, entries, expected_version, *, principal, description=None):
     with store._connect() as conn:
         conn.execute('BEGIN IMMEDIATE')
+        if category_id:
+            from .ownership import require_lexicon
+            require_lexicon(conn, category_id, principal, write=True)
         current = read_content(conn, category_id) if category_id else {'deleted': True}
         if category_id and current.get('deleted'):
             raise ResourceError('词库已删除。', code='RESOURCE_NOT_FOUND')
@@ -36,5 +39,5 @@ def save_editor(store, category_id, title, risk_label, entries, expected_version
                 output.extend(deepcopy(old) if old else [LexiconEntry(term=term,kind='variant',parent_id=row['id']).model_dump(mode='json')])
         body = LexiconContent(title=title, risk_label=risk_label or current.get('risk_label',''), description=current.get('description', '') if description is None else description, entries=output)
         identifier = category_id or 'custom_' + uuid4().hex[:16]
-        ResourceManagementService._save_lexicon(conn, identifier, body, {'version':expected_version} if category_id else None)
+        ResourceManagementService._save_lexicon(conn, identifier, body, {'version':expected_version} if category_id else None, principal)
     return store.get_category(identifier)

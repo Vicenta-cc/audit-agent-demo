@@ -185,6 +185,9 @@ class LexiconStore:
                 conn.execute("ALTER TABLE lexicon_categories ADD COLUMN description TEXT NOT NULL DEFAULT ''")
             if "risk_label" not in category_columns:
                 conn.execute("ALTER TABLE lexicon_categories ADD COLUMN risk_label TEXT NOT NULL DEFAULT ''")
+            if "owner_id" not in category_columns:
+                conn.execute("ALTER TABLE lexicon_categories ADD COLUMN owner_id TEXT NOT NULL DEFAULT ''")
+            conn.execute('CREATE INDEX IF NOT EXISTS ix_lexicon_owner ON lexicon_categories(owner_id)')
 
         from backend.resource_management.lexicon_versions import initialize
         with self._connect() as conn:
@@ -213,8 +216,8 @@ class LexiconStore:
             for order, category in enumerate(DEFAULT_LEXICON):
                 conn.execute(
                     """
-                    INSERT INTO lexicon_categories (id, title, risk_label, sort_order, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO lexicon_categories (id, title, risk_label, sort_order, created_at, updated_at, owner_id)
+                    VALUES (?, ?, ?, ?, ?, ?, 'system')
                     ON CONFLICT(id) DO NOTHING
                     """,
                     (category["id"], category["title"], self._default_risk_label(category["id"], category["title"]), order, now, now),
@@ -269,7 +272,7 @@ class LexiconStore:
                     ELSE risk_label
                 END,
                 updated_at = ?
-            WHERE id = 'hate'
+            WHERE id = 'hate' AND owner_id = 'system'
               AND (
                 title IN ('民族宗教仇恨风险知识包', '仇恨歧视词库')
                 OR risk_label IN ('', '仇恨歧视', '民族宗教仇恨风险', '民族语言与宗教仇恨', '民族语言')
@@ -355,12 +358,14 @@ class LexiconStore:
             )
 
     def list_categories(
-        self, *, connection: sqlite3.Connection | None = None
+        self, *, connection: sqlite3.Connection | None = None, principal=None
     ) -> list[dict]:
         if connection is not None:
-            return self._list_categories_with_connection(connection)
+            values = self._list_categories_with_connection(connection)
+            return values if principal is None else [v for v in values if v.get('owner_id') in {principal.id, 'system'}]
         with self._lock, self._connect() as conn:
-            return self._list_categories_with_connection(conn)
+            values = self._list_categories_with_connection(conn)
+            return values if principal is None else [v for v in values if v.get('owner_id') in {principal.id, 'system'}]
 
     def _list_categories_with_connection(
         self, connection: sqlite3.Connection
@@ -390,6 +395,8 @@ class LexiconStore:
             profile = profiles_by_category.get(row["id"]) or self._default_prompt_profile(row["id"])
             out.append({
                 "id": row["id"],
+                "owner_id": row['owner_id'],
+                "editable": row['owner_id'] not in {'', 'system'},
                 "version": connection.execute('SELECT MAX(version) FROM lexicon_content_versions WHERE category_id=?', (row['id'],)).fetchone()[0],
                 "title": row["title"],
                 "risk_label": row["risk_label"] or self._default_risk_label(row["id"], row["title"]),
@@ -413,8 +420,12 @@ class LexiconStore:
         platform_keywords: list[str] | None = None,
         platform_tags: list[str] | None = None,
         entries: list[dict] | None = None,
+        owner_id: str = 'local-user',
+        principal=None,
     ) -> dict:
         cleaned_title = str(title or "").strip() or "自定义词库"
+        if principal is not None:
+            owner_id = principal.id
         cleaned_risk_label = str(risk_label or "").strip() or cleaned_title.replace("词库", "").replace("知识库", "").strip()
         cleaned_id = str(category_id or "").strip() or f"custom_{uuid4().hex[:10]}"
         term_values = self._dedupe_terms(terms or [])
@@ -422,8 +433,12 @@ class LexiconStore:
         tag_values = self._dedupe_terms(platform_tags or [])
         now = datetime.now().isoformat(timespec="seconds")
         with self._lock, self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
             existing = conn.execute("SELECT id FROM lexicon_categories WHERE id = ?", (cleaned_id,)).fetchone()
             if existing:
+                if principal is not None:
+                    from backend.resource_management.ownership import require_lexicon
+                    require_lexicon(conn, cleaned_id, principal, write=True)
                 conn.execute(
                     """
                     UPDATE lexicon_categories
@@ -436,10 +451,10 @@ class LexiconStore:
                 max_order = conn.execute("SELECT COALESCE(MAX(sort_order), 0) AS sort_order FROM lexicon_categories").fetchone()
                 conn.execute(
                     """
-                    INSERT INTO lexicon_categories (id, title, risk_label, description, sort_order, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO lexicon_categories (id, title, risk_label, description, sort_order, created_at, updated_at, owner_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (cleaned_id, cleaned_title, cleaned_risk_label, description or "", int(max_order["sort_order"] or 0) + 1, now, now),
+                    (cleaned_id, cleaned_title, cleaned_risk_label, description or "", int(max_order["sort_order"] or 0) + 1, now, now, owner_id),
                 )
             conn.execute(
                 """
@@ -609,6 +624,7 @@ class LexiconStore:
         image_prompt: str,
         frame_prompt: str,
         fusion_prompt_template: str,
+        principal=None,
     ) -> dict:
         cleaned = {
             "image_prompt": image_prompt,
@@ -620,6 +636,10 @@ class LexiconStore:
             raise ValueError(f"{', '.join(missing)} is required")
         now = datetime.now().isoformat(timespec="seconds")
         with self._lock, self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            if principal is not None:
+                from backend.resource_management.ownership import require_lexicon
+                require_lexicon(conn, category_id, principal, write=True)
             category = conn.execute(
                 "SELECT id FROM lexicon_categories WHERE id = ?",
                 (category_id,),
@@ -674,12 +694,16 @@ class LexiconStore:
             ).fetchone()
         return self._prompt_profile_row(row)
 
-    def reset_prompt_profile(self, category_id: str) -> dict:
+    def reset_prompt_profile(self, category_id: str, *, principal=None) -> dict:
         default = DEFAULT_PROMPT_PROFILES.get(category_id)
         if not default:
             raise KeyError(category_id)
         now = datetime.now().isoformat(timespec="seconds")
         with self._lock, self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            if principal is not None:
+                from backend.resource_management.ownership import require_lexicon
+                require_lexicon(conn, category_id, principal, write=True)
             category = conn.execute(
                 "SELECT id FROM lexicon_categories WHERE id = ?",
                 (category_id,),
@@ -949,12 +973,17 @@ class LexiconStore:
         risk_level: str = "中",
         enabled: bool = True,
         note: str = "",
+        principal=None,
     ) -> dict:
         cleaned = keyword.strip()
         if not cleaned:
             raise ValueError("keyword is required")
         now = datetime.now().isoformat(timespec="seconds")
         with self._lock, self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            if principal is not None:
+                from backend.resource_management.ownership import require_lexicon
+                require_lexicon(conn, category_id, principal, write=True)
             category = conn.execute(
                 "SELECT id FROM lexicon_categories WHERE id = ?",
                 (category_id,),
@@ -998,7 +1027,7 @@ class LexiconStore:
             ).fetchone()
         return self._keyword_row(row)
 
-    def update_keyword(self, keyword_id: int, **kwargs) -> dict:
+    def update_keyword(self, keyword_id: int, *, principal=None, **kwargs) -> dict:
         allowed = {"keyword", "match_type", "platform", "risk_level", "enabled", "note"}
         updates = []
         values = []
@@ -1014,6 +1043,7 @@ class LexiconStore:
         values.append(keyword_id)
         with self._lock, self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            self._require_keyword_owner(conn, keyword_id, principal)
             conn.execute(
                 f"UPDATE lexicon_keywords SET {', '.join(updates)} WHERE id = ?",
                 values,
@@ -1038,8 +1068,19 @@ class LexiconStore:
             raise KeyError(str(keyword_id))
         return self._keyword_row(row)
 
-    def delete_keyword(self, keyword_id: int) -> None:
+    @staticmethod
+    def _require_keyword_owner(conn, keyword_id, principal):
+        if principal is not None:
+            from backend.resource_management.ownership import require_lexicon
+            row = conn.execute('SELECT category_id FROM lexicon_keywords WHERE id=?', (keyword_id,)).fetchone()
+            if row is None:
+                raise KeyError(str(keyword_id))
+            require_lexicon(conn, row['category_id'], principal, write=True)
+
+    def delete_keyword(self, keyword_id: int, *, principal=None) -> None:
         with self._lock, self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            self._require_keyword_owner(conn, keyword_id, principal)
             cursor = conn.execute("DELETE FROM lexicon_keywords WHERE id = ?", (keyword_id,))
         if cursor.rowcount <= 0:
             raise KeyError(str(keyword_id))
@@ -1047,7 +1088,7 @@ class LexiconStore:
     def delete_category(self, category_id: str) -> dict:
         return self.delete_category_atomically(category_id)
 
-    def delete_category_atomically(self, category_id: str, *, expected_version: int | None = None) -> dict:
+    def delete_category_atomically(self, category_id: str, *, expected_version: int | None = None, principal=None) -> dict:
         """Delete an unreferenced category and its dependent rows atomically."""
         cleaned_id = str(category_id or "").strip()
         if not cleaned_id:
@@ -1060,6 +1101,9 @@ class LexiconStore:
             ).fetchone()
             if not row:
                 raise KeyError(cleaned_id)
+            if principal is not None:
+                from backend.resource_management.ownership import require_lexicon
+                require_lexicon(conn, cleaned_id, principal, write=True)
             if expected_version is not None:
                 from backend.resource_management.service import require_version
                 version = conn.execute('SELECT MAX(version) FROM lexicon_content_versions WHERE category_id=?', (cleaned_id,)).fetchone()[0]

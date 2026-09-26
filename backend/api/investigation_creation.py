@@ -208,6 +208,17 @@ def create_investigation_creation_router(
         except Exception as exc:
             _raise_public_error(exc)
 
+    @router.post('/api/investigation-drafts/{draft_id}/save-ruleset')
+    def save_draft_ruleset(
+        draft_id: str, request: SaveDraftLexiconRequest,
+        principal: Principal = Depends(provide_principal),
+    ) -> dict[str, Any]:
+        try:
+            return service.save_draft_ruleset(draft_id, expected_revision=request.expected_revision,
+                                             operation_id=request.operation_id, principal=principal)
+        except Exception as exc:
+            _raise_public_error(exc)
+
     @router.post(
         "/api/investigation-drafts/{draft_id}/confirm-and-queue",
         response_model=PublicInvestigationRunProjection,

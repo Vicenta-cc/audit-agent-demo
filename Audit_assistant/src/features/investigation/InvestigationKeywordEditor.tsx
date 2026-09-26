@@ -250,8 +250,8 @@ export function InvestigationKeywordEditor({
       </div>
       {legacyFallback ? <p className="keyword-structure-footnote">旧版词必须先“应用到本次任务”，形成结构化 Draft 后才能正式保存。</p> : null}
       {!legacyFallback && !canSave ? <p className="keyword-structure-footnote">请先应用结构化编辑，再保存为正式黑话库。</p> : null}
-      {!canPublish ? <p className="keyword-structure-footnote">当前账号可保留和使用 Draft 编辑结果；只有管理员可以发布共享黑话库。</p> : null}
-      {!canEdit ? <p className="keyword-structure-footnote">任务已启动，搜索配置保持冻结；当前结构仍会保留在 Draft 中，管理员可另存供未来任务使用。</p> : null}
+      {!canPublish ? <p className="keyword-structure-footnote">当前无法保存，请确认登录状态和资源访问权限。</p> : null}
+      {!canEdit ? <p className="keyword-structure-footnote">任务已启动，搜索配置保持冻结；仍可保存到自己的词库，供未来任务使用。</p> : null}
     </div>
   );
 }

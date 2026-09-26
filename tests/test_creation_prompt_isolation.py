@@ -79,7 +79,8 @@ def test_guidance_is_available_through_native_deferred_describe(tmp_path):
             assert result["parameters"].get("required", []) == schema["parameters"].get("required", [])
             assert result["description"] == schema["description"]
             described[name] = result["description"]
-    assert len(described) == 17
+    assert len(described) == 19
+    assert 'save_draft_lexicon' in described
     assert "generation_request" in described["create_lexicon_edit"]
     assert "generation_request" in described["create_ruleset_proposal"]
     request = ResourceGenerationRequest(objective="调查", platform="dy")

@@ -181,6 +181,18 @@ export function saveInvestigationDraftLexicon(
   });
 }
 
+export function saveInvestigationDraftRuleset(
+  draftId: string,
+  request: { expectedRevision: number; operationId: string }
+) {
+  return apiRequest<{ status: "saved"; resource_id: string; version: number }>(
+    `/api/investigation-drafts/${encodeURIComponent(draftId)}/save-ruleset`, {
+      method: "POST",
+      body: JSON.stringify({ expected_revision: request.expectedRevision, operation_id: request.operationId })
+    }
+  );
+}
+
 export function confirmAndQueueInvestigation(
   draftId: string,
   request: { expectedRevision: number; idempotencyKey: string; taskSettingsRevision?: number }

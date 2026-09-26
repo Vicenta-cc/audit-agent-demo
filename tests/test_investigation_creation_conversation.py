@@ -2106,6 +2106,8 @@ def test_creation_mode_keeps_legacy_tools_and_adds_resource_tools() -> None:
         "create_investigation_draft",
         "update_investigation_draft",
         "get_investigation_draft",
+        "save_draft_lexicon",
+        "save_draft_ruleset",
         "confirm_and_queue_investigation",
         "get_investigation_run",
     }

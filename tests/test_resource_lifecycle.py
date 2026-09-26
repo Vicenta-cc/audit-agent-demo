@@ -314,6 +314,17 @@ def test_four_resource_combinations_freeze_precise_configuration(creation_stack,
     assert '维族文化' in json.dumps(frozen,ensure_ascii=False)
     assert '维吾尔族文化' not in json.dumps(frozen,ensure_ascii=False)
     assert job_before['keyword'] == '维族文化'
+    if not formal_rule:
+        saved_snapshot_rule = app.save_draft_ruleset(
+            draft.id, expected_revision=draft.current_revision,
+            operation_id='save-task-temporary-rule', principal=principal)
+        assert saved_snapshot_rule['content'] == draft.configuration.judgement.content.model_dump(mode='json')
+        assert manager.read('ruleset', saved_snapshot_rule['resource_id'], principal=principal)['editable']
+    if not formal_lexicon:
+        saved_snapshot_lexicon = app.save_draft_lexicon(
+            draft.id, expected_revision=draft.current_revision,
+            operation_id='save-task-temporary-lexicon', principal=principal)
+        assert saved_snapshot_lexicon['content'] == draft.configuration.investigation.recall_plan.lexicon_content.model_dump(mode='json')
     if saved_lex:
         edit=manager.open('lexicon',saved_lex['resource_id'],**ctx)
         edit=manager.update(edit['edit_id'],1,[{'operation':'upsert_entry','target_id':'main-1','values':{'term':'维汉日常交往'}}],**ctx)
@@ -404,12 +415,12 @@ def test_legacy_full_editor_preserves_variant_identity_and_rejects_stale_save(se
     entries=[{'id':'main-1','main_term':'维吾尔族语言文化','variants':['维族文化'],'enabled':True,'query_type':'keyword'},
              {'id':'main-2','main_term':'维汉婚恋','variants':[],'enabled':False,'query_type':'keyword'},
              {'id':'tag-1','main_term':'文化讨论','variants':[],'enabled':True,'query_type':'tag'}]
-    save_editor(service.lexicons,saved['resource_id'],'民族关系讨论','',entries,1)
+    save_editor(service.lexicons,saved['resource_id'],'民族关系讨论','',entries,1,principal=P)
     actual=service.read('lexicon',saved['resource_id'],principal=P)
     variant=next(e for e in actual['content']['entries'] if e['kind']=='variant')
     assert variant['id']=='variant-1' and variant['parent_id']=='main-1'
     with pytest.raises(ResourceError,match='已经变化'):
-        save_editor(service.lexicons,saved['resource_id'],'旧页面覆盖','',entries,1)
+        save_editor(service.lexicons,saved['resource_id'],'旧页面覆盖','',entries,1,principal=P)
 
 
 def test_formal_projection_matches_explicit_entry_kinds(service):
@@ -450,7 +461,7 @@ def test_legacy_editor_keeps_same_text_variants_with_distinct_metadata(service):
     entries=[{'id':'main-1','main_term':'维吾尔族文化','variants':['维族文化'],'enabled':True,'query_type':'keyword'},
              {'id':'main-2','main_term':'维汉婚恋','variants':[],'enabled':False,'query_type':'keyword'},
              {'id':'tag-1','main_term':'文化讨论','variants':[],'enabled':True,'query_type':'tag'}]
-    save_editor(service.lexicons,receipt['resource_id'],'保存名称更改','',entries,1)
+    save_editor(service.lexicons,receipt['resource_id'],'保存名称更改','',entries,1,principal=P)
     content=service.read('lexicon',receipt['resource_id'],principal=P)['content']
     variants=[e for e in content['entries'] if e['kind']=='variant']
     assert len(variants)==2
