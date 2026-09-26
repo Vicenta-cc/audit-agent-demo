@@ -281,8 +281,21 @@ class QwenClient:
                 logger.warning("Qwen request timed out on attempt 1/2; retrying once")
                 time.sleep(1)
             else:
+                if (isinstance(result, requests.Response)
+                        and result.status_code in {429, 500, 502, 503, 504}
+                        and attempt == 1):
+                    # Same total attempt budget as timeouts; never retry safety
+                    # refusals or authentication errors. Bound Retry-After.
+                    try:
+                        delay = min(30, max(1, float(result.headers.get("Retry-After", "1"))))
+                    except ValueError:
+                        delay = 1
+                    logger.warning("Qwen transient HTTP %s; retrying once", result.status_code)
+                    result.close()
+                    time.sleep(delay)
+                    continue
                 if attempt == 2:
-                    logger.info("Qwen request succeeded on timeout retry 2/2")
+                    logger.info("Qwen request retry 2/2 returned")
                 return result
         raise AssertionError("unreachable")
 

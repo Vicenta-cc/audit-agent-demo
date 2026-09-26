@@ -97,13 +97,48 @@ def test_pipeline_does_not_stack_more_retries_after_client_exhaustion(client, mo
     pipeline.job_id = "isolated-timeout-test"
     pipeline.authoritative_m3 = True
     pipeline._render_comment_audit_prompt = Mock(return_value="comment batch")
-    with pytest.raises(AuditProviderCallError, match="timed out"):
-        if stage == "comments":
-            pipeline._audit_comment_batch_with_fallback(
-                AuditSubject(platform="dy", note_id="note", url="", title="", desc="",
-                             author={}, image_urls=[], video_urls=[], comments=[]),
-                "context", [{"comment_id": str(i), "source_text": "comment"} for i in range(20)],
-            )
-        else:
+    if stage == "comments":
+        result = pipeline._audit_comment_batch_with_fallback(
+            AuditSubject(platform="dy", note_id="note", url="", title="", desc="",
+                         author={}, image_urls=[], video_urls=[], comments=[]),
+            "context", [{"comment_id": str(i), "source_text": "comment"} for i in range(20)],
+        )
+        assert len(result) == 20
+        assert all(row["audit_status"] == "failed" and "risk_score" not in row for row in result.values())
+    else:
+        with pytest.raises(AuditProviderCallError, match="timed out"):
             pipeline._run_fusion_audit("note", "fusion prompt")
     assert post.call_count == 2
+
+
+@pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+@pytest.mark.parametrize("recover", [True, False])
+def test_transient_http_has_one_retry_total(client, monkeypatch, status, recover):
+    import json
+    def http_reply(code):
+        value = requests.Response()
+        value.status_code = code
+        value._content = json.dumps({"choices": [{"message": {"content": '{"comments":[]}'}}]}).encode()
+        value._content_consumed = True
+        value.headers["Retry-After"] = "2"
+        return value
+    post = Mock(side_effect=[http_reply(status), http_reply(200 if recover else status)])
+    monkeypatch.setattr("backend.audit_agent.qwen_client.requests.post", post)
+    if recover:
+        assert client.audit_text("comment")["comments"] == []
+    else:
+        with pytest.raises(QwenProviderError):
+            client.audit_text("comment")
+    assert post.call_count == 2
+    assert post.call_args_list[0] == post.call_args_list[1]
+
+
+@pytest.mark.parametrize("status", [400, 401, 403])
+def test_rejections_are_never_http_retried(client, monkeypatch, status):
+    reply = requests.Response(); reply.status_code = status
+    reply._content = b'{"code":"data_inspection_failed"}'
+    post = Mock(return_value=reply)
+    monkeypatch.setattr("backend.audit_agent.qwen_client.requests.post", post)
+    with pytest.raises(QwenProviderError):
+        client.audit_text("comment")
+    assert post.call_count == 1

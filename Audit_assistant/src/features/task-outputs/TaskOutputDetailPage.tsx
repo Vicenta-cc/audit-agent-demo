@@ -231,7 +231,13 @@ export function TaskOutputDetailPage() {
   const publishedAt = getPublishedAt(result);
   const batchLabel = firstText(stringField(result, "batch_id"), stringField(result, "batch"), result.job_id, "--");
   const commentTotal = Number(result.comments_count || result.comment_count || comments.length);
-  const verdictSummary = firstText(item.summary, result.desc, result.title, "暂无内容摘要");
+  const unreviewedComments = comments.filter(comment => comment.auditStatus !== "completed").length;
+  const reviewedComments = comments.length - unreviewedComments;
+  const rawVerdictSummary = firstText(item.summary, result.desc, result.title, "暂无内容摘要");
+  // The saved summary retains coverage for reports; this page presents it in a dedicated notice.
+  const verdictSummary = unreviewedComments > 0
+    ? rawVerdictSummary.replace(/^部分完成：评论 \d+\/\d+ 条已审核，\d+ 条未完成、需人工复核；结论仅覆盖已审核内容。/, "") || "暂无已审核内容的结论摘要"
+    : rawVerdictSummary;
   const fallbackReturnTo = task ? `/tasks/${encodeURIComponent(task.id)}/outputs` : "/risk";
   const returnLabel = returnNavigation?.returnLabel || (task ? "监控任务" : "风险研判");
   const returnTitle = returnNavigation?.returnTitle || (task?.name || "风险研判工作台");
@@ -366,6 +372,24 @@ export function TaskOutputDetailPage() {
         </div>
       </section>
 
+      {unreviewedComments > 0 ? (
+        <section className="detail-audit-notice" role="status" aria-label="评论审核进度提醒">
+          <CircleAlert className="detail-audit-notice-icon" size={20} aria-hidden="true" />
+          <div className="detail-audit-notice-content">
+            <div className="detail-audit-notice-heading">
+              <h2>部分评论尚未审核</h2>
+              <span>待人工复核</span>
+            </div>
+            <div className="detail-audit-notice-counts">
+              <span>已采集 <b>{comments.length}</b> 条</span>
+              <span>已审核 <b>{reviewedComments}</b> 条</span>
+              <span className="detail-audit-notice-pending">未审核 <b>{unreviewedComments}</b> 条</span>
+            </div>
+            <p>未审核评论已保留，不计入无风险结果。以下研判结论仅覆盖已审核内容。</p>
+          </div>
+        </section>
+      ) : null}
+
       <section className="detail-main-grid" aria-label="原始内容与研判证据">
         <article className="detail-card original-card">
           <header className="detail-card-header">
@@ -448,6 +472,8 @@ export function TaskOutputDetailPage() {
             ) : null}
           </div>
         </article>
+
+
 
         <article className="detail-card judgement-card">
           <header className="detail-card-header">

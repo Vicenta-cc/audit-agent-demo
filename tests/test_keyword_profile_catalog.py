@@ -10,6 +10,7 @@ import pytest
 from backend.resource_management.keyword_profiles import (
     PROFILES, KeywordProfileName, keyword_profile_metadata,
     KEYWORD_PROFILE_ROUTING_SUMMARIES, KEYWORD_PROFILE_CATALOG_DESCRIPTION,
+    KEYWORD_PROFILE_TITLES,
 )
 from backend.resource_management.keyword_profile_catalog import MARKDOWN_PROFILES
 from backend.resource_management.generation_contracts import LexiconGenerationRequest
@@ -39,12 +40,17 @@ def test_all_19_topics_registered_without_replacing_existing_three():
 
 def test_routing_scopes_are_shared_by_tool_and_argument_schema():
     assert set(KEYWORD_PROFILE_ROUTING_SUMMARIES) == set(PROFILES)
+    assert set(KEYWORD_PROFILE_TITLES) == set(PROFILES)
     field = LexiconGenerationRequest.model_json_schema()['properties']['keyword_profile']
     assert field['description'] == KEYWORD_PROFILE_CATALOG_DESCRIPTION
     assert KEYWORD_PROFILE_CATALOG_DESCRIPTION in RESOURCE_DESCRIPTIONS['create_lexicon_edit']
     for name, summary in KEYWORD_PROFILE_ROUTING_SUMMARIES.items():
         assert summary.strip()
-        assert f'{name}：{summary}' in field['description']
+        title = KEYWORD_PROFILE_TITLES[name]
+        assert title.strip()
+        assert f'{name}｜类别标题：{title}｜适用范围：{summary}' in field['description']
+    for name, item in MARKDOWN_PROFILES.items():
+        assert KEYWORD_PROFILE_TITLES[name] == item['title']
 
 
 def test_route_index_is_not_injected_into_dedicated_author():

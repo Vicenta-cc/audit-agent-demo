@@ -2644,6 +2644,11 @@ class AuditPipeline:
         )
         has_risk = bool(risk_evidence) or bool(risk_frames) or bool(risk_images) or decision in ("review", "reject")
 
+        comment_stats = self._comment_audit_stats(audited_comments)
+        summary = audit.get("summary", "")
+        if comment_stats["failed"]:
+            summary = (f"部分完成：评论 {comment_stats['completed']}/{comment_stats['total']} 条已审核，"
+                       f"{comment_stats['failed']} 条未完成、需人工复核；结论仅覆盖已审核内容。" + summary)
         result = {
             "note_id": subject.note_id,
             "url": subject.url,
@@ -2655,7 +2660,7 @@ class AuditPipeline:
             "prompt_category": self.prompt_set.category,
             "prompt_version": self.prompt_set.prompt_version,
             "content_title": audit.get("content_title", ""),
-            "summary": audit.get("summary", ""),
+            "summary": summary,
             "decision": decision,
             "risk_level": risk_level,
             "risk_score": risk_score,
@@ -2678,7 +2683,8 @@ class AuditPipeline:
             "video_results": video_results,
             "comments": audited_comments,
             "comments_count": len(audited_comments),
-            "comment_audit_stats": self._comment_audit_stats(audited_comments),
+            "comment_audit_stats": comment_stats,
+            "audit_completion_status": "partial" if comment_stats["failed"] else "completed",
             "raw_audit": audit,
         }
         if getattr(self, "authoritative_m3", False):
@@ -5313,6 +5319,8 @@ class AuditPipeline:
                 f"需翻译={translation_required_count}",
             )
 
+        # Do not clear an earlier media/provider failure when isolating comments.
+        self._assert_authoritative_provider_healthy()
         audited_by_id: dict[str, dict] = {}
         comments_for_model = []
         for comment in prepared:
@@ -5346,12 +5354,23 @@ class AuditPipeline:
 
         def audit_batch(index_and_batch: tuple[int, list[dict]]) -> dict[str, dict]:
             batch_index, batch = index_and_batch
-            return self._audit_comment_batch_with_fallback(
+            result = self._audit_comment_batch_with_fallback(
                 subject,
                 media_summary,
                 batch,
                 batch_label=f"{batch_index}/{len(batches)}",
             )
+            # Persist each batch before another batch or fusion can fail. These
+            # receipts are evidence, not an automatic cross-configuration cache.
+            folder = settings.outputs_dir / self.job_id / "comment_audit_batches"
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / f"{subject.note_id}-{batch_index}-{time_ns()}.json"
+            payload = {"note_id": subject.note_id, "batch": batch_index,
+                       "results": result}
+            with path.open("x", encoding="utf-8") as handle:
+                path.chmod(0o600)
+                json.dump(payload, handle, ensure_ascii=False)
+            return result
 
         batch_workers = max(1, min(4, settings.comment_audit_concurrency, len(batches)))
         indexed_batches = list(enumerate(batches, start=1))
@@ -5362,6 +5381,9 @@ class AuditPipeline:
                 batch_results = list(executor.map(audit_batch, indexed_batches))
         for result in batch_results:
             audited_by_id.update(result)
+        # All futures have joined. Only explicitly isolated failures reach this
+        # boundary; authentication/configuration errors still propagate.
+        self._begin_subject_audit()
 
         output = []
         for comment in prepared:
@@ -5558,11 +5580,26 @@ class AuditPipeline:
                         reason="评论审核请求超时且重试已耗尽",
                         error_code="comment_audit_timeout",
                         retryable=False,
-                        action="stop_comment_audit",
+                        action="mark_batch_unreviewed",
                     )
-                    raise AuditProviderCallError("text Provider request timed out after one retry") from exc
+                    normalized.update(self._unreviewed_comment_batch(
+                        requested, "comment_audit_timeout"))
+                    round_completed.update({str(c["comment_id"]): normalized[str(c["comment_id"])] for c in requested})
+                    continue
                 except QwenProviderError as exc:
-                    raise AuditProviderCallError("comment Provider request failed") from exc
+                    code = self._isolatable_comment_provider_error(exc)
+                    if not code:
+                        raise AuditProviderCallError("comment Provider request failed") from exc
+                    normalized.update(self._unreviewed_comment_batch(requested, code))
+                    round_completed.update({str(c["comment_id"]): normalized[str(c["comment_id"])] for c in requested})
+                    job_store.log(
+                        self.job_id,
+                        f"笔记 {subject.note_id}：评论批次 {batch_label} 未完成，"
+                        f"{len(requested)} 条转人工复核，其余批次继续",
+                        level="warning", error_code=code, retryable=False,
+                        action="mark_batch_unreviewed",
+                    )
+                    continue
                 except Exception as exc:
                     current = {}
                     error = str(exc)
@@ -5634,8 +5671,35 @@ class AuditPipeline:
         return normalized
 
     @staticmethod
+    def _isolatable_comment_provider_error(exc: Exception) -> str:
+        seen = set()
+        while exc is not None and id(exc) not in seen:
+            seen.add(id(exc))
+            if isinstance(exc, requests.HTTPError) and exc.response is not None:
+                response = exc.response
+                if "data_inspection_failed" in response.text.lower():
+                    return "audit_content_blocked"
+                if response.status_code in {429, 500, 502, 503, 504}:
+                    return "comment_provider_transient_exhausted"
+            exc = exc.__cause__ or exc.__context__
+        return ""
+
+    @staticmethod
+    def _unreviewed_comment_batch(comments: list[dict], code: str) -> dict[str, dict]:
+        result = {}
+        for comment in comments:
+            item = {"audit_status": "failed", "audit_error": code,
+                    "manual_review_required": True}
+            if comment.get("translation_required") and not comment.get("translation_zh"):
+                item.update(translation_status="failed", translation_error=code)
+            result[str(comment["comment_id"])] = item
+        return result
+
+    @staticmethod
     def _comment_id_instructions() -> str:
-        return ("\n评论编号约束：输入 comment_id 是本次请求内短编号 C01、C02 等。"
+        return ("\n单条无法审核时，输出该条 id、audit_status=unreviewed，省略评分及风险字段；"
+                "其余评论继续独立审核，不得将无法审核写成零分或无风险。\n"
+                "评论编号约束：输入 comment_id 是本次请求内短编号 C01、C02 等。"
                 "输出 id 只能逐字选择本次给定编号，每个编号恰好一次；不得输出平台长 ID、"
                 "猜测编号或按输出顺序省略编号。补试请求的编号以该次输入为准。\n")
 
@@ -5978,6 +6042,9 @@ class AuditPipeline:
             comment_id = str(row.get("id") or row.get("comment_id") or "")
             source = valid.get(comment_id)
             if not source or comment_id in output:
+                continue
+            if row.get("audit_status") == "unreviewed":
+                output.update(self._unreviewed_comment_batch([source], "model_abstained"))
                 continue
             try:
                 raw_score = row["s"] if "s" in row else row["score"]

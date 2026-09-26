@@ -128,6 +128,9 @@ class PassReportGraph(IntegrationReportGraph):
         comment_note = f"本次资料包含 {comments['total']} 条评论，其中 {comments['completed']} 条完成独立审核并判定为无风险。"
         if comments["unreviewed"]:
             comment_note += f"其余 {comments['unreviewed']} 条评论尚无完整审核结果，不纳入无风险结论。"
+        if comments["unreviewed"]:
+            summary = (f"本次纳入 {count} 条帖子，已审核部分未检出所用规则覆盖的风险；"
+                       f"{comments['unreviewed']} 条评论未完成审核，需人工复核，不能据此认定整帖均无风险。")
         sections = []
 
         def section(number, kind, title, paragraphs, parent=None):
@@ -155,11 +158,11 @@ class PassReportGraph(IntegrationReportGraph):
         findings = {finding.post_ref: finding for finding in snapshot.findings}
         for post in snapshot.posts[:SAMPLE_LIMIT]:
             result = findings[post.ref].payload
-            text = f"{post.payload.get('title') or '未命名帖子'}：审核通过。{result.get('summary') or '原审核结果未提供文字说明。'}"
+            text = f"{post.payload.get('title') or '未命名帖子'}：已审核部分通过。{result.get('summary') or '原审核结果未提供文字说明。'}"
             sections[-1]["paragraphs"].append({"text": text, "claim_ids": []})
             sections[-1]["body"] += "\n\n" + text
         section("4", "synthesis", "综合研判", [summary, SCOPE, comment_note])
-        section("5", "conclusion", "调查结论与建议", [f"本次 {count} 条已审核帖子均通过审核，未形成需要展开的风险事项。", "本报告保留原有审核结论与原文入口供核对；如需扩大结论范围，应补充样本并完成对应审核。"])
+        section("5", "conclusion", "调查结论与建议", [summary if comments["unreviewed"] else f"本次 {count} 条已审核帖子均通过审核，未形成需要展开的风险事项。", "本报告保留原有审核结论与原文入口供核对；如需扩大结论范围，应补充样本并完成对应审核。"])
         return {"section_drafts": sections, "outline": {"report_title": snapshot.display_name + "调查报告"},
                 "investigation_findings": [], "standalone_risk_posts": []}
 

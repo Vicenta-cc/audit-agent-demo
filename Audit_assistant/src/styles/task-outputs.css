@@ -1482,6 +1482,75 @@
   font-size: 13px;
 }
 
+.detail-audit-notice {
+  margin-bottom: 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid #fde3ae;
+  border-radius: 16px;
+  background: #fffbf2;
+  color: #475569;
+}
+
+.detail-audit-notice-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: #b7791f;
+}
+
+.detail-audit-notice-content {
+  min-width: 0;
+}
+
+.detail-audit-notice-heading,
+.detail-audit-notice-counts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.detail-audit-notice-heading h2 {
+  margin: 0;
+  color: #744210;
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 650;
+}
+
+.detail-audit-notice-heading > span {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #fef0ce;
+  color: #8a5b16;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.detail-audit-notice-counts {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 22px;
+}
+
+.detail-audit-notice-counts b {
+  margin: 0 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-audit-notice-pending {
+  color: #946014;
+}
+
+.detail-audit-notice-content p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 20px;
+  color: #64748b;
+}
+
 .judgement-card {
   gap: 8px;
   padding-top: 14px;

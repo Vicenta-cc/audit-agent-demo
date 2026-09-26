@@ -141,6 +141,9 @@ def test_pending_comments_are_reported_as_unreviewed(tmp_path):
     document = store.get_frontend_report(result.report_version_id)
     assert document["comment_audit_coverage"] == {"total": 1, "completed": 0, "unreviewed": 1}
     assert "不纳入无风险结论" in json.dumps(document, ensure_ascii=False)
+    summary = store.get_presentation_projection(result.report_version_id)["investigation_summary"]["paragraphs"][0]
+    assert "不能据此认定整帖均无风险" in summary
+    assert "全部判定为通过" not in summary
 
 
 @pytest.mark.parametrize("status", ["failed", "pending", "queued"])
@@ -156,6 +159,9 @@ def test_missing_comment_verdict_does_not_block_publication(tmp_path, status, ri
     document = store.get_frontend_report(result.report_version_id)
     assert document["comment_audit_coverage"] == {"total": 2, "completed": 1, "unreviewed": 1}
     assert "不纳入无风险结论" in json.dumps(document, ensure_ascii=False)
+    summary = store.get_presentation_projection(result.report_version_id)["investigation_summary"]["paragraphs"][0]
+    assert "不能据此认定整帖均无风险" in summary
+    assert "全部判定为通过" not in summary
     with store._connect() as connection:
         payload = json.loads(connection.execute("SELECT payload_json FROM report_snapshot_posts WHERE report_version_id=?", (result.report_version_id,)).fetchone()[0])
         raw = json.loads(connection.execute("SELECT result_json FROM audit_results").fetchone()[0])

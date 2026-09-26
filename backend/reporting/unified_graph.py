@@ -283,6 +283,14 @@ class UnifiedAuditReportGraph(PassReportGraph):
             if count:
                 outcome_parts.append(f"{count} {label}")
 
+        coverage_note = []
+        if comment_coverage.get("available"):
+            missing = (comment_coverage.get("total") or 0) - (comment_coverage.get("completed") or 0)
+            if missing:
+                coverage_note.append(
+                    f"部分完成：{missing} 条评论未完成审核，需人工复核；"
+                    "以下结论仅覆盖已审核内容，不能据此认定整帖均无风险。"
+                )
         self._section(
             sections,
             number="1",
@@ -291,6 +299,7 @@ class UnifiedAuditReportGraph(PassReportGraph):
             paragraphs=[
                 f"本报告汇总任务“{snapshot.display_name}”在{platform}平台完成的 "
                 f"{len(snapshot.posts)} 条帖子审核结果：{'、'.join(outcome_parts)}。",
+                *coverage_note,
             ],
         )
 
@@ -367,7 +376,7 @@ class UnifiedAuditReportGraph(PassReportGraph):
                 "报告正文展示当前报告内的发布与评论活动；同昵称不会被强行合并。"
             ],
         )
-        recommendations = []
+        recommendations = list(coverage_note)
         if counts["reject"]:
             recommendations.append("优先复核并处置建议拒绝的帖子及其直接证据。")
         if counts["review"]:

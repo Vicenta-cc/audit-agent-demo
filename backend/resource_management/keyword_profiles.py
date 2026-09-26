@@ -174,7 +174,14 @@ PROFILES.update({
 
 # This is the pre-selection index, not additional authoring guidance. Keep the
 # full profiles above unchanged and load only the selected profile in generation.
-# Product category titles alone do not describe their actual applicable scopes.
+# Titles identify product categories; scopes still constrain their use.
+KEYWORD_PROFILE_TITLES = {
+    'sexual_service_leadgen': '淫秽色情与低俗趣味',
+    'gambling_financial_abuse': '赌博与金融助诈',
+    'religion_content_risk': '违背国家宗教政策',
+    **{name: item['title'] for name, item in MARKDOWN_PROFILES.items()},
+}
+
 KEYWORD_PROFILE_ROUTING_SUMMARIES = {
     'sexual_service_leadgen': '色情服务、成人资源或低俗交友的引流样本发现；只取本次相关子场景，不把正常生活服务当作违规。',
     'gambling_financial_abuse': '网络赌博推广、拉客与平台导流，或金融黑产、电诈助诈、异常资金流转招募；只选本次方向，不扩展到刷量或盗版。',
@@ -201,10 +208,17 @@ KEYWORD_PROFILE_ROUTING_SUMMARIES = {
 }
 
 KEYWORD_PROFILE_CATALOG_DESCRIPTION = (
-    '可选主题指导。根据完整调查目标对照下列适用范围，匹配时选择最贴近的一项；'
-    '类目标题不是匹配条件，不需要用户说出模板名。以下是选择前可用的范围摘要，'
+    '可选主题指导。用户明确点名下列中文类别（包括同义表述）时，优先识别对应模板；'
+    '未点名类别时，根据完整调查目标对照适用范围，选择最贴近的一项。'
+    '类别标题用于识别模板，不扩大适用范围，也不作为违规判定依据。'
+    '只有类别名称时，按对应模板的适用范围生成并向用户说明范围，不自行补充其他调查方向；'
+    '用户明确的具体目标与该范围冲突时先澄清，不静默改走通用生成。'
+    '以下是选择前可用的类别标题与范围摘要，'
     '选中后后端才加载该模板完整指导与参考样本：\n'
-    + '\n'.join(f'{name}：{summary}' for name, summary in KEYWORD_PROFILE_ROUTING_SUMMARIES.items())
+    + '\n'.join(
+        f'{name}｜类别标题：{KEYWORD_PROFILE_TITLES[name]}｜适用范围：{summary}'
+        for name, summary in KEYWORD_PROFILE_ROUTING_SUMMARIES.items()
+    )
     + '\n'
     '无匹配模板时省略或填null，仍按通用要求自主生成，不强行套类。'
     '不改变调查范围；exact_terms原样词表请求不加载主题示例。'
