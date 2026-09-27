@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 
 
@@ -79,3 +80,44 @@ def redact_creation_internal_references(value: str) -> tuple[str, bool]:
     for pattern, replacement in _PUBLIC_TERMS:
         redacted = pattern.sub(replacement, redacted)
     return redacted, redacted != original
+
+
+def has_failed_ruleset_update(messages: list[dict]) -> bool:
+    """Only inspect explicit update failures in the current turn's tool results.
+
+    Deferred tool_call schema rejections never reach the business service, so
+    correlate the original invocation instead of relying on a mutation receipt.
+    A later success only resolves failure for that same proposal.
+    """
+    calls = {}
+    failed = {}
+    for message in messages:
+        if message.get("role") == "assistant":
+            for call in message.get("tool_calls") or []:
+                function = call.get("function") or {}
+                name = function.get("name")
+                args = function.get("arguments") or {}
+                try:
+                    args = json.loads(args) if isinstance(args, str) else args
+                except (ValueError, TypeError):
+                    continue
+                if not isinstance(args, dict):
+                    continue
+                if name == "tool_call":
+                    name, args = args.get("name"), args.get("arguments") or {}
+                if name == "update_ruleset_proposal" and isinstance(args, dict):
+                    calls[call.get("id")] = str(args.get("proposal_id") or call.get("id"))
+        elif message.get("role") == "tool" and message.get("tool_call_id") in calls:
+            try:
+                result = json.loads(message.get("content") or "{}")
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(result, dict):
+                continue
+            proposal = calls[message["tool_call_id"]]
+            if result.get("status") == "error" or result.get("error"):
+                failed[proposal] = True
+            elif result.get("status") == "ok" and isinstance(result.get("data"), dict):
+                if result["data"].get("proposal_id") == proposal:
+                    failed.pop(proposal, None)
+    return any(failed.values())

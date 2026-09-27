@@ -363,7 +363,8 @@ M3_PARAMETER_GUIDANCE = {
     ),
     'update_ruleset_proposal': (
         '参数为 proposal_id、expected_version、content（完整新内容）。先读取当前提案，按 rule_id 修改目标并保持其他规则。不是局部 '
-        'patch，也不传 ruleset_id。'
+        'patch，也不传 ruleset_id。expected_version 必须逐字取自 get_ruleset_proposal 返回的 version，不可省略或自行加一。'
+        '只有修改工具返回 status=ok 才能宣称修改完成，版本以返回结果为准；报错时如实说明未完成，不把拟修改文字当作已写入。'
     ),
     'get_ruleset_proposal': (
         '参数只有 proposal_id，使用工具返回的真实 ID。'

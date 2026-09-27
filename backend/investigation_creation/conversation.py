@@ -47,7 +47,7 @@ from .errors import (
 )
 from .principal import Principal
 from .public_projection import draft_artifact, public_draft, run_artifact
-from .public_answer import redact_creation_internal_references
+from .public_answer import has_failed_ruleset_update, redact_creation_internal_references
 from .tools import (
     HermesToolExecutionIdentity,
     InvestigationCreationToolService,
@@ -1722,6 +1722,17 @@ class InvestigationCreationConversationService:
             for item in transcript[history_count:]
             if item.get("role") in {"assistant", "tool"}
         ]
+        if has_failed_ruleset_update(trace_messages):
+            answer = ("本次规则修改未成功，不能按已修改处理。"
+                      "请以实际编辑稿及规则卡片显示的版本为准。")
+            # Keep the failed-call evidence, but do not preserve the model's
+            # false final success claim as conversation history for the next turn.
+            transcript = [dict(item) for item in transcript]
+            if (transcript and transcript[-1].get("role") == "assistant"
+                    and not transcript[-1].get("tool_calls")):
+                transcript[-1]["content"] = answer
+            trace_messages = [item for item in transcript[history_count:]
+                              if item.get("role") in {"assistant", "tool"}]
         notice = self._binding_failure_notice(turn, trace_messages)
         if notice:
             answer = "\n\n".join(filter(None, [answer, notice]))
