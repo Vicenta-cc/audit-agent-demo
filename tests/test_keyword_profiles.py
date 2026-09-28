@@ -78,8 +78,11 @@ def test_rules_messages_never_receive_keyword_guidance():
 
 def test_selected_templates_and_versions_match_product_choice():
     sexual = PROFILES['sexual_service_leadgen']
-    assert sexual.version == '4'
-    assert '门槛验牌、非绿地陪、hk互看、00后新出道老师' in sexual.guidance
+    assert sexual.version == '5'
+    assert '验证与互动话术：门槛验牌、hk互看。' in sexual.guidance
+    assert '陪同与服务招揽表达：非绿陪聊、00后新出道老师来报道了紧张、西湖杭房揽翠。' in sexual.guidance
+    assert '服务暗语：92/95/98、非绿。' in sexual.guidance
+    assert '非绿地陪' not in sexual.guidance
     assert '不为覆盖类目而额外加入资源售卖或偷拍视频方向' in sexual.guidance
     assert '不是生成新暗语的拼接公式' in sexual.guidance
     assert '模板提供的候选表达示例' not in sexual.guidance
