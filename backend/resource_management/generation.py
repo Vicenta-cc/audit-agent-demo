@@ -1,6 +1,7 @@
 """One bounded authoring call inside an existing receipt-fenced business tool.
 
-No Agent loop, history, tools, automatic retry, saving, adoption or execution.
+No Agent loop, history, tools, saving, adoption or execution.
+Qwen input-inspection rejections retry the same provider request at most five times.
 Both input forms ultimately use the same existing persistence/validation path.
 """
 import hashlib
@@ -12,6 +13,7 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from backend.audit_agent.config import settings
+from backend.hermes_runtime.input_retry import is_input_inspection_rejected, retry_input_request
 from backend.rulesets.contracts import RuleSetContent
 from .authoring_guidance import LEXICON_DOMAIN_GUIDANCE, RULESET_AUTHORING_GUIDANCE
 from .contracts import ResourceError
@@ -131,13 +133,17 @@ class ResourceGenerator:
             with factory(api_key=config.resource_generation_api_key,
                          base_url=config.resource_generation_base_url,
                          max_retries=0, timeout=90) as client:
-                response = client.chat.completions.create(
-                    model=config.resource_generation_model, messages=messages,
-                    stream=False, max_tokens=8192,
-                    response_format={"type": "json_object"},
-                    **({"extra_body": {"enable_thinking": False}}
-                       if config.resource_generation_model.lower().startswith("qwen") else {}),
-                )
+                def author_request():
+                    return client.chat.completions.create(
+                        model=config.resource_generation_model, messages=messages,
+                        stream=False, max_tokens=8192,
+                        response_format={"type": "json_object"},
+                        **({"extra_body": {"enable_thinking": False}}
+                           if config.resource_generation_model.lower().startswith("qwen") else {}),
+                    )
+                response = (retry_input_request(author_request)
+                            if config.resource_generation_model.lower().startswith("qwen")
+                            else author_request())
             request_id = getattr(response, "_request_id", None)
             http_status = 200
             if not response.choices:
@@ -181,11 +187,13 @@ class ResourceGenerator:
             request_id = getattr(exc, "request_id", request_id)
             # Inspect upstream errors; never log response bodies or credentials.
             error_text = str(exc).lower()
-            if "data_inspection_failed" in error_text or "datainspectionfailed" in error_text:
-                code = ("OUTPUT_CONTENT_BLOCKED" if "output" in error_text
+            if (is_input_inspection_rejected(exc) or "data_inspection_failed" in error_text
+                    or "datainspectionfailed" in error_text):
+                code = ("INPUT_CONTENT_BLOCKED" if is_input_inspection_rejected(exc)
+                        else "OUTPUT_CONTENT_BLOCKED" if "output" in error_text
                         else "INPUT_CONTENT_BLOCKED" if "input" in error_text
                         else "PROVIDER_CONTENT_BLOCKED")
-                message = "资源生成请求被供应商内容检查拦截，未自动重试，未创建资源。"
+                message = "资源生成请求被供应商内容检查拦截，未创建资源。"
             else:
                 code, message = "RESOURCE_GENERATION_PROVIDER_ERROR", "资源生成接口失败，未创建资源。"
             outcome = code

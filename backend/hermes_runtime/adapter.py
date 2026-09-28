@@ -289,6 +289,10 @@ class HermesRuntimeBinding:
             from .creation_prompt import install_creation_prompt
 
             install_creation_prompt(agent)
+            if options["provider"] == "alibaba" and options["api_mode"] == "chat_completions":
+                from .input_retry import install_creation_input_retries
+
+                install_creation_input_retries(agent)
         if product_mode == "unified-report":
             try:
                 self.validate_report_tools(agent, enabled_toolsets=options["enabled_toolsets"])
