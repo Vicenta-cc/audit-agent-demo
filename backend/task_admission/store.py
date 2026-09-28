@@ -280,7 +280,7 @@ class AdmissionStore:
         digest = request_hash or fingerprint(payload)
         self.validate_user(db, owner, payload.get("crawler_account_id") or "")
         user = self.user_record(db, owner)
-        unlimited = bool(user) and user["role"] == "admin"
+        unlimited = user is not None and user["role"] == "admin"
         previous = db.execute(
             "SELECT * FROM task_admissions WHERE owner_id=? AND request_key=?",
             (owner, key),
