@@ -110,6 +110,20 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
       authenticationRequest.current = controller;
       const result = await login(username.trim(), password, controller.signal);
       if (version !== generation.current) { clearAuthenticationState(); return; }
+      // A fresh login may still be on a deleted or another account's workspace URL.
+      // Resolve only a confirmed 404 before mounting the workspace and its notices.
+      const workspacePath = routeLocation.pathname.match(/^\/investigation\/(investigation-session(?::|%3a)[^/]+)\/?$/i);
+      if (workspacePath) {
+        try {
+          await apiRequest(`/api/investigation-workspaces/${workspacePath[1]}/state`, { signal: controller.signal });
+        } catch (error) {
+          if (version === generation.current && error instanceof ApiError && error.status === 404) {
+            navigate("/investigation", { replace: true });
+          }
+          // Other failures remain visible through the normal workspace recovery path.
+        }
+        if (version !== generation.current) { clearAuthenticationState(); return; }
+      }
       announce(); setUser(result); setPassword("");
       if (result.role !== "admin" && routeLocation.pathname.startsWith("/admin/")) navigate("/investigation", { replace: true });
     } catch (error) {

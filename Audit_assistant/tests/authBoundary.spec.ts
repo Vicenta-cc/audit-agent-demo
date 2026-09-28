@@ -242,3 +242,29 @@ test("admin quota is unlimited and retains active task navigation", async ({page
   await page.getByRole("button",{name:"返回当前任务"}).click();
   await expect(page.getByTestId("path")).toHaveText("/investigation/workspace-a");
 });
+
+test("fresh login from an unavailable workspace returns home without a deletion warning", async ({ page, context }) => {
+  await server(context);
+  await context.route("**/api/investigation-workspaces?*", route => route.fulfill({ json: { items: [], has_more: false } }));
+  const stalePath = "/investigation/investigation-session%3Aunavailable";
+  const stateRequest = page.waitForResponse(response => response.url().includes("investigation-session%3Aunavailable/state"));
+  await page.goto(stalePath);
+  await signIn(page);
+  await stateRequest;
+  await expect(page).toHaveURL(/\/investigation$/);
+  await expect(page.getByRole("heading", { name: "暂无调查会话" })).toBeVisible();
+  await expect(page.getByText("会话不存在或已删除。", { exact: true })).toHaveCount(0);
+});
+
+for (const status of [200, 503]) {
+  test(`fresh login preserves the requested workspace on status ${status}`, async ({ page, context }) => {
+    await server(context);
+    const requestedPath = "/investigation/investigation-session%3Arequested";
+    await context.route("**/api/investigation-workspaces/investigation-session%3Arequested/state", route => route.fulfill({ status, json: {} }));
+    await page.goto(entry);
+    await page.evaluate(path => { history.replaceState({}, "", path); window.dispatchEvent(new PopStateEvent("popstate")); }, requestedPath);
+    await signIn(page);
+    await expect(page.getByTestId("owner")).toHaveText("alice");
+    await expect(page.getByTestId("path")).toHaveText(requestedPath);
+  });
+}
