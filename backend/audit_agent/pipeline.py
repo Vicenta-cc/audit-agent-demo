@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import queue
 import random
@@ -44,7 +45,7 @@ from .lexicon_store import LexiconStore
 from .models import AuditSubject
 from .ocr_processor import VideoOCRTracker
 from .prompts import get_prompt_set
-from .qwen_client import QwenClient, QwenTimeoutError, QwenProviderError
+from .qwen_client import QwenClient, QwenTimeoutError, QwenProviderError, QwenContentBlockedError, is_content_blocked
 from .rule_compiler import DEFAULT_THRESHOLDS, compact_library_policy
 from .translation import TranslationProcessor
 from .triage import (TriageEngine, load_collected_selections, mark_candidates_collected, rank_candidates,
@@ -1364,7 +1365,7 @@ class AuditPipeline:
         messages.extend(e.response.text.lower() for e in chain
                         if isinstance(e, requests.HTTPError) and e.response is not None)
         oom = any(isinstance(e, ASROutOfMemoryError) or is_asr_oom(e) for e in chain) or any(is_asr_oom(m) for m in messages)
-        content_blocked = any("data_inspection_failed" in m for m in messages)
+        content_blocked = is_content_blocked(exc)
         self._begin_subject_audit()
         folder = settings.outputs_dir / self.job_id / "post_failures"
         folder.mkdir(parents=True, exist_ok=True)
@@ -1429,6 +1430,58 @@ class AuditPipeline:
         provider_failure = str(getattr(qwen, "provider_failure", "") or "")
         if provider_failure:
             raise AuditProviderCallError(provider_failure)
+
+    def _record_audit_gap(self, exc: Exception, *, stage: str, label: str,
+                          source: str = "", start=None, end=None,
+                          note_id: str = "", **metadata) -> dict:
+        """Only an explicit provider refusal may become a partial result."""
+        if not is_content_blocked(exc):
+            raise exc
+        def seconds(value):
+            if isinstance(value, bool) or value is None or value == "":
+                return None
+            try:
+                number = float(value)
+                return number if math.isfinite(number) and number >= 0 else None
+            except (ValueError, TypeError):
+                return None
+        start, end = seconds(start), seconds(end)
+        if start is not None and end is not None and end < start:
+            start, end = None, None
+        gap = {
+            "stage": stage, "label": label, "source": source,
+            "status": "unreviewed", "error_code": "audit_content_blocked",
+            "reason": "模型供应商内容安全检查拦截，需人工复核；不代表已判定违规",
+            "manual_review_required": True, "start": start, "end": end,
+            **metadata,
+        }
+        # Initialized before any per-post worker threads start.
+        if not hasattr(self, "_audit_gaps"):
+            self._audit_gaps = []
+        self._audit_gaps.append(gap)
+        note_id = note_id or getattr(self, "_audit_note_id", "")
+        folder = settings.outputs_dir / self.job_id / "audit_gaps"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{note_id or 'content'}-{time_ns()}.json").write_text(
+            json.dumps({"note_id": note_id, "action": "skip_unit", **gap}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        job_store.log(self.job_id, f"笔记 {note_id}：{label}被供应商拦截，已记录待人工复核；继续其余部分",
+                      level="warning", error_code="audit_content_blocked", retryable=False, action="skip_unit")
+        return gap
+
+    def _partial_fusion_result(self, subject: AuditSubject, evidence_index: dict) -> dict:
+        # No replacement model call and no invented verdict. Keep validated
+        # stage evidence for manual review; fusion has not confirmed context.
+        return {
+            "content_title": self._fallback_content_title({}, subject),
+            "summary": "整帖汇总未完成；保留已完成阶段的证据，需人工复核整体语境。",
+            "decision_suggestion": "review", "risk_level_suggestion": "unknown",
+            "evidence_items": [dict(item, fusion_status="unreviewed")
+                               for item in evidence_index.get("evidence_catalog", [])
+                               if item.get("evidence_risk_level") in {"low", "medium", "high"}],
+            "rule_matches": [], "completion_status": "unreviewed",
+        }
 
     def resume_pending_analysis(self, analyze_limit: int = 0, analysis_batch_size: int = 5) -> None:
         if settings.app_auth_mode == "required":
@@ -2423,6 +2476,8 @@ class AuditPipeline:
 
     def _analyze_subject_with_capacity(self, subject: AuditSubject) -> dict:
         authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
+        self._audit_gaps = []
+        self._audit_note_id = subject.note_id
         note_dir = settings.outputs_dir / self.job_id / "assets" / subject.note_id
         started_at = perf_counter()
         job_store.log(
@@ -2464,20 +2519,24 @@ class AuditPipeline:
         evidence_index_path = self._write_evidence_index(subject.note_id, evidence_index)
         prompt = self._render_compact_fusion_prompt(subject, evidence_index, audited_comments)
         self._current_audit_stage = "fusion_audit"
-        audit = self._run_fusion_audit(
-            subject.note_id,
-            prompt,
-            contract_validator=(
-                lambda value: self._validate_v2_fusion_contract(
-                    self._decode_fusion_wire_codes(
-                        self._recover_truncated_fusion_audit(value),
-                        self._fusion_wire_codebook(),
-                    ),
-                    evidence_index,
-                    visible_evidence_ids=self._fusion_visible_ids(prompt),
-                )
-            ) if self._is_ruleset_v2() else None,
-        )
+        try:
+            audit = self._run_fusion_audit(
+                subject.note_id,
+                prompt,
+                contract_validator=(
+                    lambda value: self._validate_v2_fusion_contract(
+                        self._decode_fusion_wire_codes(
+                            self._recover_truncated_fusion_audit(value),
+                            self._fusion_wire_codebook(),
+                        ),
+                        evidence_index,
+                        visible_evidence_ids=self._fusion_visible_ids(prompt),
+                    )
+                ) if self._is_ruleset_v2() else None,
+            )
+        except Exception as exc:
+            self._record_audit_gap(exc, stage="fusion_audit", label="整帖汇总审核", source="post")
+            audit = self._partial_fusion_result(subject, evidence_index)
         audit = self._recover_truncated_fusion_audit(audit)
         audit["content_title"] = self._ensure_content_title(audit, subject, evidence_index)
         elapsed = perf_counter() - started_at
@@ -2642,10 +2701,24 @@ class AuditPipeline:
             if self._is_ruleset_v2() and risk_level == "none"
             else self._collect_risk_images(image_analyses, job_root)
         )
-        has_risk = bool(risk_evidence) or bool(risk_frames) or bool(risk_images) or decision in ("review", "reject")
+        audit_gaps = list(self._audit_gaps)
+        fusion_incomplete = any(gap["stage"] == "fusion_audit" for gap in audit_gaps)
+        if audit_gaps:
+            if fusion_incomplete or decision == "pass":
+                decision = "review"
+            if risk_level in {"none", "pass", "unknown", ""}:
+                risk_level, risk_score, risk_basis = "unknown", None, "incomplete_audit"
+            elif fusion_incomplete:
+                risk_basis = "stage_evidence_pending_fusion"
+        has_risk = bool(risk_evidence) or bool(risk_frames) or bool(risk_images) or (
+            not audit_gaps and decision in ("review", "reject")
+        )
 
         comment_stats = self._comment_audit_stats(audited_comments)
         summary = audit.get("summary", "")
+        if audit_gaps:
+            summary = (f"部分完成：{len(audit_gaps)} 个审核环节被供应商拦截、需人工复核；"
+                       "结论仅覆盖已审核内容。" + summary)
         if comment_stats["failed"]:
             summary = (f"部分完成：评论 {comment_stats['completed']}/{comment_stats['total']} 条已审核，"
                        f"{comment_stats['failed']} 条未完成、需人工复核；结论仅覆盖已审核内容。" + summary)
@@ -2684,18 +2757,24 @@ class AuditPipeline:
             "comments": audited_comments,
             "comments_count": len(audited_comments),
             "comment_audit_stats": comment_stats,
-            "audit_completion_status": "partial" if comment_stats["failed"] else "completed",
+            "audit_completion_status": "partial" if comment_stats["failed"] or audit_gaps else "completed",
+            "audit_gaps": audit_gaps,
+            "manual_review_required": bool(audit_gaps or comment_stats["failed"]),
             "raw_audit": audit,
         }
         if getattr(self, "authoritative_m3", False):
             provenance = dict(audit.get("_provider_provenance") or {})
-            completed_modalities = ["text"]
+            completed_modalities = [] if fusion_incomplete else ["text"]
+            provenance["audit_completion_status"] = result["audit_completion_status"]
+            provenance["incomplete_stages"] = sorted({gap["stage"] for gap in audit_gaps})
             vision_models: list[str] = []
-            if image_analyses:
+            if any(item.get("audit_status") != "unreviewed" for item in image_analyses):
                 completed_modalities.append("vision")
                 vision_models.append(str(settings.qwen_image_audit_model or ""))
             if video_results:
-                if "vision" not in completed_modalities:
+                if "vision" not in completed_modalities and not any(
+                    gap["stage"] in {"video_segment_audit", "ocr_extraction"} for gap in audit_gaps
+                ):
                     completed_modalities.append("vision")
                 vision_models.append(str(settings.qwen_contact_sheet_model or ""))
                 if any(
@@ -2966,6 +3045,10 @@ class AuditPipeline:
         try:
             translated = qwen.audit_text(prompt, max_tokens=512, enable_thinking=False)
         except Exception as exc:
+            if is_content_blocked(exc):
+                self._record_audit_gap(exc, stage="post_translation", label="标题/正文翻译", source="text",
+                                       note_id=subject.note_id)
+                return
             job_store.log(self.job_id, f"笔记 {subject.note_id}：标题/正文翻译失败：{exc}")
             return
 
@@ -4449,6 +4532,7 @@ class AuditPipeline:
         for image_index, image in enumerate(image_analyses, start=1):
             source = f"image:{image_index}"
             unit = {
+                "audit_status": image.get("audit_status", "completed"),
                 "evidence_id": image.get("evidence_id") or source,
                 "index": image.get("index", image_index - 1),
                 "source": source,
@@ -4573,6 +4657,7 @@ class AuditPipeline:
             for segment in video.get("segment_reviews") or []:
                 analysis = segment.get("analysis") or {}
                 compact_segment = {
+                    "audit_status": analysis.get("audit_status", "completed"),
                     "source": segment.get("segment_id"),
                     "video_source": video_ref,
                     "segment_id": segment.get("segment_id"),
@@ -4603,6 +4688,7 @@ class AuditPipeline:
                     library_prefix = f"{risk_library_id}/" if risk_library_id else ""
                     evidence_catalog.append({
                         "evidence_id": f"{segment.get('segment_id')}/{library_prefix}visual-risk:{risk_index}",
+                        "rule_id": risk.get("rule_id", ""),
                         "source": (frame or {}).get("source") or segment.get("segment_id"),
                         "primary_modality": "vision",
                         "frame_ids": frame_ids,
@@ -4632,6 +4718,7 @@ class AuditPipeline:
                     )
                     evidence_catalog.append({
                         "evidence_id": f"{segment.get('segment_id')}/{library_prefix}ocr-risk:{risk_index}",
+                        "rule_id": risk.get("rule_id", ""),
                         "source": (frame or {}).get("source") or segment.get("segment_id"),
                         "primary_modality": "ocr",
                         "ocr_chunk_id": risk.get("ocr_chunk_id"),
@@ -4659,6 +4746,7 @@ class AuditPipeline:
                     library_prefix = f"{risk_library_id}/" if risk_library_id else ""
                     evidence_catalog.append({
                         "evidence_id": f"{segment.get('segment_id')}/{library_prefix}asr-risk:{risk_index}",
+                        "rule_id": risk.get("rule_id", ""),
                         "source": f"video_audio:{self._time_range(chunk.get('start'), chunk.get('end')).replace('s', '')}",
                         "video_source": video_ref,
                         "primary_modality": "asr",
@@ -5672,13 +5760,13 @@ class AuditPipeline:
 
     @staticmethod
     def _isolatable_comment_provider_error(exc: Exception) -> str:
+        if is_content_blocked(exc):
+            return "audit_content_blocked"
         seen = set()
         while exc is not None and id(exc) not in seen:
             seen.add(id(exc))
             if isinstance(exc, requests.HTTPError) and exc.response is not None:
                 response = exc.response
-                if "data_inspection_failed" in response.text.lower():
-                    return "audit_content_blocked"
                 if response.status_code in {429, 500, 502, 503, 504}:
                     return "comment_provider_transient_exhausted"
             exc = exc.__cause__ or exc.__context__
@@ -6821,7 +6909,8 @@ class AuditPipeline:
             "source": item.get("source"),
             "summary": self._truncate_text(item.get("segment_summary", ""), 120),
             "score": item.get("segment_score", 0),
-        } for item in evidence_index.get("segment_reviews") or [])
+        } for item in evidence_index.get("segment_reviews") or []
+            if item.get("audit_status") != "unreviewed")
         catalog_ids = {entry.get("evidence_id") for entry in catalog}
         completed_comments = [
             item for item in comments if item.get("audit_status") == "completed"
@@ -6891,6 +6980,9 @@ class AuditPipeline:
             ],
             "scoring_rules": scoring_rules,
         }
+        if getattr(self, "_audit_gaps", []):
+            payload["audit_gaps"] = self._audit_gaps
+            payload["coverage_instruction"] = "未审核部分不能视为无风险；只归纳已完成结果，不补造缺失阶段的判断。"
         fusion_template = str(
             (getattr(self, "prompt_profile_snapshot", {}) or {}).get(
                 "fusion_prompt_template"
@@ -7383,6 +7475,10 @@ class AuditPipeline:
                     f"{attempt}/{attempts}，phase={phase}，error_type={type(exc).__name__}，"
                     + (f"诊断={saved}" if saved else "诊断写入失败"),
                 )
+                if is_content_blocked(exc):
+                    gap = self._record_audit_gap(exc, stage="image_audit", label=f"图片 {evidence_id} 审核",
+                                                 source=evidence_id, note_id=subject.note_id)
+                    return {"audit_status": "unreviewed", "audit_gap": gap}, []
                 if not retry:
                     if contract_error is not None and contract_error is not exc:
                         normalized = FusionAuditContractError(str(contract_error))
@@ -7648,6 +7744,9 @@ class AuditPipeline:
                 try:
                     _, result = future.result()
                 except Exception as exc:
+                    if is_content_blocked(exc):
+                        self._record_audit_gap(exc, stage="ocr_extraction", label=f"图片 {idx + 1} OCR 识别",
+                                               source=f"image:{idx}", note_id=note_id)
                     result = {
                         "text": "",
                         "text_zh": "",
@@ -7656,6 +7755,9 @@ class AuditPipeline:
                         "confidence": 0.0,
                         "error": str(exc),
                     }
+                if result.get("error_code") == "audit_content_blocked":
+                    self._record_audit_gap(QwenContentBlockedError(), stage="ocr_extraction",
+                                           label=f"图片 {idx + 1} OCR 识别", source=f"image:{idx}", note_id=note_id)
                 results[idx] = result
         return results
 
@@ -7829,7 +7931,11 @@ class AuditPipeline:
                     errors.append(f"audio extraction failed: {detail}")
                     job_store.log(self.job_id, f"{video_label}：音频抽取失败：{detail}，跳过转写")
         except Exception as exc:
-            if audio_phase == "audio_extraction":
+            if is_content_blocked(exc) and audio_phase == "asr":
+                self._record_audit_gap(exc, stage="asr_transcription", label=f"{video_label}语音转写",
+                                       source=f"video:{index + 1}")
+                transcript = {"text": "", "segments": [], "completion_status": "unreviewed"}
+            elif audio_phase == "audio_extraction":
                 diagnostic = dict(getattr(self.audio, "last_extract_diagnostic", {}) or {})
                 diagnostic.setdefault("input_path", str(video_path))
                 diagnostic.setdefault("last_extract_error", getattr(self.audio, "last_extract_error", "") or str(exc))
@@ -7849,7 +7955,7 @@ class AuditPipeline:
                     if failure is exc:
                         raise
                     raise failure from exc
-            if authoritative_m3:
+            if authoritative_m3 and not is_content_blocked(exc):
                 if isinstance(
                     exc, (AuditProviderUnavailableError, AuditProviderCallError)
                 ):
@@ -7984,7 +8090,15 @@ class AuditPipeline:
                 mode = "remote_vlm" if settings.use_remote_vlm else ("dashscope_api" if self.qwen.enabled else "mock")
                 job_store.log(self.job_id, f"{video_label}：Sheet {segment_idx} · {library_label} 审核开始，mode={mode}")
                 vlm_started = perf_counter()
-                analysis = self._audit_review_sheet(job, authoritative_m3=authoritative_m3)
+                try:
+                    analysis = self._audit_review_sheet(job, authoritative_m3=authoritative_m3)
+                except Exception as exc:
+                    gap = self._record_audit_gap(
+                        exc, stage="video_segment_audit", label=f"{video_label}第 {segment_idx} 段联合审核（画面/OCR/ASR）",
+                        source=sheet["segment_id"], start=sheet.get("start"), end=sheet.get("end"),
+                        risk_library_id=library_policy.get("id", ""), risk_library_label=library_label,
+                    )
+                    return {**job, "analysis": {"audit_status": "unreviewed", "audit_gap": gap}}
                 job_store.log(
                     self.job_id,
                     f"{video_label}：Sheet {segment_idx} · {library_label} 审核完成，"
@@ -8023,10 +8137,11 @@ class AuditPipeline:
                     "analysis": merged_analysis,
                     "library_reviews": [
                         {
+                            "audit_status": analysis.get("audit_status", "completed"),
                             "risk_library_id": analysis.get("risk_library_id", ""),
                             "risk_library_label": analysis.get("risk_library_label", ""),
-                            "segment_score": analysis.get("segment_score", 0),
-                            "segment_level": analysis.get("segment_level", "none"),
+                            "segment_score": analysis.get("segment_score"),
+                            "segment_level": analysis.get("segment_level", "unknown"),
                             "segment_summary": analysis.get("segment_summary", ""),
                             **(
                                 {
@@ -8120,13 +8235,22 @@ class AuditPipeline:
                 f"(source {frame_idx}/{len(frame_infos)})",
             )
             frame_ts = float(frame.get("timestamp") or 0.0)
-            result = self.ocr.scan_image(
-                Path(frame["path"]),
-                timestamp=frame_ts,
-                frame_num=frame.get("frame_number"),
-                state_id=f"video_{video_index + 1}_frame_{frame_idx:04d}",
-                log=lambda message: job_store.log(self.job_id, f"{video_label}：{message}"),
-            )
+            try:
+                result = self.ocr.scan_image(
+                    Path(frame["path"]),
+                    timestamp=frame_ts,
+                    frame_num=frame.get("frame_number"),
+                    state_id=f"video_{video_index + 1}_frame_{frame_idx:04d}",
+                    log=lambda message: job_store.log(self.job_id, f"{video_label}：{message}"),
+                )
+            except Exception as exc:
+                if not is_content_blocked(exc):
+                    raise
+                result = {"error_code": "audit_content_blocked", "text": "", "text_zh": ""}
+            if result.get("error_code") == "audit_content_blocked":
+                self._record_audit_gap(QwenContentBlockedError(), stage="ocr_extraction",
+                                       label=f"{video_label} OCR 识别", source=f"video:{video_index + 1}",
+                                       start=frame.get("timestamp"), end=frame.get("timestamp"), frame_id=frame.get("frame_id"))
             return frame_idx, result
 
         if workers <= 1 or len(ocr_frames) <= 1:
@@ -8774,7 +8898,12 @@ class AuditPipeline:
 
     def _merge_segment_reviews(self, analyses: list[dict]) -> dict:
         thresholds = self._active_thresholds()
-        cleaned = [analysis for analysis in analyses if isinstance(analysis, dict)]
+        gaps = [analysis["audit_gap"] for analysis in analyses if analysis.get("audit_gap")]
+        cleaned = [analysis for analysis in analyses if isinstance(analysis, dict)
+                   and analysis.get("audit_status") != "unreviewed"]
+        if gaps and not cleaned:
+            return {"audit_status": "unreviewed", "audit_gaps": gaps,
+                    "segment_score": None, "segment_level": "unknown"}
         if not cleaned:
             return {
                 "segment_summary": "",
@@ -8810,6 +8939,8 @@ class AuditPipeline:
             else self._level_from_score(segment_score, thresholds)
         )
         merged = {
+            "audit_status": "partial" if gaps else "completed",
+            "audit_gaps": gaps,
             "segment_summary": self._truncate_text(
                 top.get("segment_summary")
                 or next((item.get("segment_summary") for item in cleaned if item.get("segment_summary")), ""),
@@ -9172,6 +9303,9 @@ class AuditPipeline:
                 context_segments=segments,
             )
         except Exception as exc:
+            if is_content_blocked(exc):
+                self._record_asr_translation_gap(exc, transcript, segments)
+                return {"translated": False, "text": "", "error": "audit_content_blocked", "provider": "qwen_text"}
             return {"translated": False, "text": "", "error": str(exc), "provider": "qwen_text"}
 
         translation = self._normalize_asr_translation(result, segments)
@@ -9256,11 +9390,23 @@ class AuditPipeline:
                 context_segments=context_segments,
             )
         except Exception as exc:
+            if is_content_blocked(exc):
+                self._record_asr_translation_gap(exc, transcript, segments)
             record = {"indexes": indexes, "error": str(exc), "result": {}}
             return [record], [record], 0
 
         record = {"indexes": indexes, "result": result}
         return [record], [record], prompt_chars
+
+    def _record_asr_translation_gap(self, exc, transcript, segments):
+        # Use original ASR timing, not synthetic zero timestamps from a text-only fallback.
+        selected = [item for i, item in enumerate(transcript.get("segments") or [], 1)
+                    if i in {seg["index"] for seg in segments}]
+        self._record_audit_gap(
+            exc, stage="asr_translation", label="ASR 翻译", source="video:1",
+            start=selected[0].get("start") if selected else None,
+            end=selected[-1].get("end") if selected else None,
+        )
 
     @staticmethod
     def _asr_translation_result_complete(result: dict, source_segments: list[dict]) -> bool:

@@ -80,6 +80,7 @@ export function getRiskLevel(output: AuditResult): RiskLevel {
 }
 
 export function isNoRiskOutput(output: AuditResult) {
+  if (output.audit_gaps?.length) return false;
   const decision = String(output.decision || "").toLowerCase();
   const riskLevel = String(output.risk_level || "").toLowerCase();
   return decision === "pass" || noRiskValues.has(riskLevel);

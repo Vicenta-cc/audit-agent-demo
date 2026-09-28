@@ -5,6 +5,7 @@ import { getReturnNavigationState } from "../../app/listNavigation";
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -51,6 +52,7 @@ import type {
 } from "../../types/jobs";
 import type { RiskLevel, TaskOutputItem } from "../../types/taskOutputs";
 import { getOutputKey, isNoRiskOutput, mapAuditResultToTaskOutput } from "./taskOutputUtils";
+import { evidenceSeconds, formatEvidenceTime, formatEvidenceRange, formatFramePosition, frameTimeRange } from "./evidenceTime";
 
 type EvidenceType = "text" | "ocr" | "asr" | "comment" | "vision";
 
@@ -227,6 +229,7 @@ export function TaskOutputDetailPage() {
   }
 
   const result = detail.audit_result;
+  const auditGaps = result.audit_gaps || [];
   const activeGroup = groupsByType.get(activeEvidenceType) || emptyGroup(activeEvidenceType);
   const publishedAt = getPublishedAt(result);
   const batchLabel = firstText(stringField(result, "batch_id"), stringField(result, "batch"), result.job_id, "--");
@@ -372,22 +375,52 @@ export function TaskOutputDetailPage() {
         </div>
       </section>
 
-      {unreviewedComments > 0 ? (
-        <section className="detail-audit-notice" role="status" aria-label="评论审核进度提醒">
-          <CircleAlert className="detail-audit-notice-icon" size={20} aria-hidden="true" />
+      {auditGaps.length > 0 || unreviewedComments > 0 ? (
+        <details className="detail-audit-notice" key={outputId}>
+          <summary className="detail-audit-notice-summary">
+            <span className="detail-audit-notice-icon"><CircleAlert size={18} aria-hidden="true" /></span>
+            <span className="detail-audit-notice-title">待人工复核</span>
+            <span className="detail-audit-notice-counts">
+              {auditGaps.length > 0 ? <span>审核环节 <b>{auditGaps.length}</b> 项未完成</span> : null}
+              {unreviewedComments > 0 ? <span>评论 <b>{unreviewedComments}</b> 条未审核</span> : null}
+            </span>
+            <span className="detail-audit-notice-toggle">
+              <span className="detail-audit-notice-expand">查看详情</span>
+              <span className="detail-audit-notice-collapse">收起详情</span>
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </summary>
           <div className="detail-audit-notice-content">
-            <div className="detail-audit-notice-heading">
-              <h2>部分评论尚未审核</h2>
-              <span>待人工复核</span>
-            </div>
-            <div className="detail-audit-notice-counts">
-              <span>已采集 <b>{comments.length}</b> 条</span>
-              <span>已审核 <b>{reviewedComments}</b> 条</span>
-              <span className="detail-audit-notice-pending">未审核 <b>{unreviewedComments}</b> 条</span>
-            </div>
-            <p>未审核评论已保留，不计入无风险结果。以下研判结论仅覆盖已审核内容。</p>
+            <p>{auditGaps.length > 0 ? "以下环节被模型供应商内容安全检查拦截，已跳过并保留记录。" : "未审核评论已保留。"}未完成部分不代表违规，也不计入无风险结论。</p>
+            <ul className="detail-audit-notice-items">
+              {auditGaps.map((gap, index) => {
+                const start = evidenceSeconds(gap.start);
+                const isVideo = gap.source?.startsWith("video:");
+                return (
+                  <li key={`${gap.stage}-${gap.source}-${index}`}>
+                    <div className="detail-audit-notice-item-label">
+                      <span>{gap.label}</span>
+                      {gap.risk_library_label ? <small>{gap.risk_library_label}</small> : null}
+                    </div>
+                    {isVideo ? <span className="detail-audit-notice-time">{start === null ? "时间范围未提供" : formatEvidenceRange(start, gap.end ?? start)}</span> : null}
+                    {isVideo && start !== null && mediaItems.some(media => media.type === "video") ? (
+                      <button type="button" className="detail-audit-notice-action" onClick={() => playEvidenceAt(start)} aria-label={`定位 ${formatEvidenceTime(start)} 人工复核`}>
+                        <Play size={14} aria-hidden="true" />定位视频
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+              {unreviewedComments > 0 ? (
+                <li>
+                  <div className="detail-audit-notice-item-label"><span>评论审核</span><small>已采集 {comments.length} 条 · 已审核 {reviewedComments} 条 · 未审核 {unreviewedComments} 条</small></div>
+                  <button type="button" className="detail-audit-notice-action" onClick={() => commentsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })}>查看评论<ChevronRight size={14} aria-hidden="true" /></button>
+                </li>
+              ) : null}
+            </ul>
+            <p>结论仅覆盖已审核内容；整帖汇总未完成时，阶段证据仍需人工结合语境复核。</p>
           </div>
-        </section>
+        </details>
       ) : null}
 
       <section className="detail-main-grid" aria-label="原始内容与研判证据">
@@ -543,6 +576,7 @@ export function TaskOutputDetailPage() {
                     onLinkComment={handleLinkComment}
                     onAnalyzeCommentUser={handleAnalyzeCommentUser}
                     onPlayAt={playEvidenceAt}
+                    hasVideo={mediaItems.some((media) => media.type === "video")}
                   />
                 ))}
               </div>
@@ -825,7 +859,8 @@ function EvidenceDetail({
   comment,
   onLinkComment,
   onAnalyzeCommentUser,
-  onPlayAt
+  onPlayAt,
+  hasVideo
 }: {
   evidence: AuditEvidenceGroupItem;
   group: AuditEvidenceGroup;
@@ -835,6 +870,7 @@ function EvidenceDetail({
   onLinkComment: (comment: DetailComment) => Promise<void>;
   onAnalyzeCommentUser: (comment: DetailComment) => void;
   onPlayAt: (seconds: number) => void;
+  hasVideo: boolean;
 }) {
   const type = normalizeEvidenceType(group.type || evidence.primary_modality || evidence.source || "") || "text";
   const library = firstText(evidence.risk_library_label, group.risk_libraries?.map((item) => item.label).filter(Boolean).join("、"), "--");
@@ -848,12 +884,15 @@ function EvidenceDetail({
     evidence.local_path,
     evidence.url
   ));
-  const start = finiteNumber(evidence.start ?? evidence.timestamp);
-  const end = finiteNumber(evidence.end);
+  const frameRange = frameTimeRange(evidence);
+  const start = type === "ocr" ? frameRange.start : evidenceSeconds(evidence.start) ?? evidenceSeconds(evidence.timestamp);
+  const end = type === "ocr" ? frameRange.end : evidenceSeconds(evidence.end);
   const position = type === "vision" || type === "ocr"
-    ? [evidence.frame_number !== undefined ? `帧 ${evidence.frame_number}` : "", evidence.timestamp !== undefined ? formatEvidenceTime(evidence.timestamp) : ""].filter(Boolean).join(" · ")
+    ? formatFramePosition(evidence)
     : firstText(evidence.position, evidence.source_label, evidence.source, "--");
   const ocrContext = formatOcrContext(evidence.ocr_context);
+  const ocrOriginal = firstText(evidence.ocr_text, ocrContextText(evidence.ocr_context, "source_text"), evidence.text, "--");
+  const ocrTranslation = firstText(evidence.ocr_text_zh, evidence.translation_zh, ocrContextText(evidence.ocr_context, "translation_zh"), evidence.text_zh, "--");
   const evidenceTitle = firstText(evidence.evidence_type, `${evidenceLabel(type)}命中`);
   const commentId = firstText(comment?.id, evidence.comment_id, evidence.id?.replace(/^comment:/, ""), "--");
   const commentName = firstText(comment?.name, evidence.nickname, "评论用户");
@@ -889,8 +928,8 @@ function EvidenceDetail({
         {type === "ocr" ? (
           <>
             {ocrContext ? <div><dt>帧上下文</dt><dd>{ocrContext}</dd></div> : null}
-            <div><dt>OCR 原文</dt><dd>{firstText(evidence.ocr_text, content)}</dd></div>
-            <div><dt>中文译文</dt><dd>{firstText(evidence.ocr_text_zh, evidence.translation_zh, "--")}</dd></div>
+            <div><dt>OCR 原文</dt><dd>{ocrOriginal}</dd></div>
+            <div><dt>中文译文</dt><dd>{ocrTranslation}</dd></div>
           </>
         ) : null}
         {type === "asr" ? (
@@ -921,10 +960,10 @@ function EvidenceDetail({
           <dd>{position || "--"}</dd>
         </div>
       </dl>
-      {type === "asr" && start !== null ? (
+      {(type === "asr" || (type === "ocr" && hasVideo)) && start !== null ? (
         <button className="detail-evidence-play" type="button" onClick={() => onPlayAt(start)}>
           <Play size={14} />
-          从 {formatEvidenceTime(start)} 播放{end !== null ? `，至 ${formatEvidenceTime(end)}` : ""}
+          从 {formatEvidenceTime(start)} 播放{end !== null && end > start ? `，至 ${formatEvidenceTime(end)}` : ""}
         </button>
       ) : null}
     </article>
@@ -1263,44 +1302,23 @@ function formatCommentTime(value: string | number | undefined) {
   return formatDateTime(String(value));
 }
 
-function finiteNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function formatEvidenceTime(value: unknown) {
-  const seconds = finiteNumber(value);
-  if (seconds === null) return "--";
-  const rounded = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(rounded / 3600);
-  const minutes = Math.floor((rounded % 3600) / 60);
-  const rest = rounded % 60;
-  return hours > 0
-    ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`
-    : `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
-}
-
-function formatEvidenceRange(start: unknown, end: unknown) {
-  const startText = formatEvidenceTime(start);
-  const endText = formatEvidenceTime(end);
-  if (startText === "--") return endText;
-  return endText === "--" ? startText : `${startText} - ${endText}`;
-}
-
 function formatOcrContext(context: AuditEvidenceGroupItem["ocr_context"]) {
   if (!Array.isArray(context)) return "";
   return context
+    .filter((item) => item && typeof item === "object")
     .map((item) => {
       const frameIds = Array.isArray(item.frame_ids) ? item.frame_ids.map(String).join("、") : "";
-      const source = recordText(item, "source_text");
-      const translation = recordText(item, "translation_zh");
-      return [frameIds ? `[${frameIds}]` : "", source ? `原文：${source}` : "", translation ? `译文：${translation}` : ""]
-        .filter(Boolean)
-        .join("\n");
+      const time = formatEvidenceRange(item.start, item.end);
+      return time === "--" ? `时间未知${frameIds ? `（关键帧 ${frameIds}）` : ""}` : time;
     })
     .filter(Boolean)
     .join("\n\n");
+}
+
+function ocrContextText(context: AuditEvidenceGroupItem["ocr_context"], key: "source_text" | "translation_zh") {
+  // Legacy records can store recognized text only on the context items.
+  // Keep source and translation separate; a translation is never OCR original.
+  return recordArray(context).map((item) => recordText(item, key).trim()).filter(Boolean).join("\n\n");
 }
 
 function platformCode(value: string) {

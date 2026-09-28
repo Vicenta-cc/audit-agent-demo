@@ -244,6 +244,17 @@ export interface RawJob {
 }
 
 export interface AuditResult {
+  audit_completion_status?: string;
+  manual_review_required?: boolean;
+  audit_gaps?: Array<{
+    stage: string;
+    label: string;
+    source?: string;
+    start?: number | null;
+    end?: number | null;
+    reason?: string;
+    risk_library_label?: string;
+  }>;
   report_snapshot_source?: boolean;
   published_at?: string;
   id?: number;
@@ -266,7 +277,7 @@ export interface AuditResult {
   duration_seconds?: number;
   decision?: string;
   risk_level?: string;
-  risk_score?: number;
+  risk_score?: number | null;
   primary_risk?: string;
   categories?: string[];
   prompt_category?: string;
