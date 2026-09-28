@@ -17,6 +17,7 @@ import requests
 
 from .config import settings
 from .remote_inference import RemoteInferenceClient
+from .qwen_client import is_content_blocked
 
 cv2 = None
 np = None
@@ -644,6 +645,7 @@ class VideoOCRTracker:
                 "text": "",
                 "confidence": 0.0,
                 "error": str(exc),
+                "error_code": "audit_content_blocked" if is_content_blocked(exc) else "",
                 "engine": settings.ocr_engine,
                 "language_hint": settings.ocr_language_hint,
             }
@@ -680,6 +682,7 @@ class VideoOCRTracker:
             "prompt_override_installed": result.get("prompt_override_installed", False),
             "elapsed_seconds": result.get("elapsed_seconds") or (perf_counter() - started),
             "error": result.get("error", ""),
+            "error_code": result.get("error_code", ""),
         }
         allow_translation_fallback = state["engine"] != "vlm_ocr_translate"
         if text and not state["text_zh"] and settings.ocr_translate and allow_translation_fallback and self.translator is not None:

@@ -35,6 +35,25 @@ class QwenTimeoutError(QwenProviderError):
     """The request and its one timeout retry both timed out."""
 
 
+class QwenContentBlockedError(QwenProviderError):
+    """This request was refused by the provider's content inspection."""
+
+
+def is_content_blocked(exc: BaseException) -> bool:
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        if isinstance(exc, QwenContentBlockedError):
+            return True
+        if isinstance(exc, requests.HTTPError) and exc.response is not None:
+            # Authentication/permission errors must still fail, even if a
+            # gateway includes an unrelated inspection marker in its body.
+            if exc.response.status_code == 400 and "data_inspection_failed" in exc.response.text.lower():
+                return True
+        exc = exc.__cause__ or exc.__context__
+    return False
+
+
 class QwenClient:
     def __init__(self):
         self.api_key = settings.dashscope_api_key
@@ -256,6 +275,8 @@ class QwenClient:
             "total_tokens": usage.get("total_tokens"),
         }
         metadata = {key: value for key, value in metadata.items() if value is not None}
+        if choice.get("finish_reason") == "content_filter":
+            raise QwenContentBlockedError("Provider content inspection blocked this request")
         return ChatCompletionText(choice["message"]["content"], metadata)
 
     def _capture_http_response(self, response) -> None:
@@ -300,6 +321,10 @@ class QwenClient:
         raise AssertionError("unreachable")
 
     def _provider_error(self, message: str, exc: BaseException) -> QwenProviderError:
+        if is_content_blocked(exc):
+            # A request-local refusal is raised to its owner, not stored in
+            # the shared health flag (parallel media requests use this client).
+            return QwenContentBlockedError("Provider content inspection blocked this request")
         self.provider_failure = message
         return QwenProviderError(message)
 
