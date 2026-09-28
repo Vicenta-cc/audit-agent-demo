@@ -22,8 +22,8 @@ from backend.resource_management.tools import RESOURCE_DESCRIPTIONS
 DOC = Path(__file__).resolve().parents[1] / "docs/search-keyword-prompts-candidate-20260926.md"
 EXISTING_HASHES = {
     "sexual_service_leadgen": "a3122cf2b3a281f623cbab14acd93ecd948d188b893a59ebe838dd3234f50ee8",
-    "gambling_financial_abuse": "c25959988a7af0dc3059917c35d54dd368753fb61671d87ef9e79d0c9b518534",
-    "religion_content_risk": "db500f8808b2027140a2f96c540406f8a3e99fbcd10181f9d8e7b50cb1143af6",
+    "gambling_financial_abuse": "35bf84c181a29f173a2864d16c2086dc1dcfbaf91aa795fe58af65e8c010d907",
+    "religion_content_risk": "7417ec7ccb6d6d928497a35d1bb04248069db4ca12dfddad55b9b33ff78ef0b7",
 }
 
 
@@ -82,7 +82,8 @@ def test_new_guidance_is_verbatim_markdown_and_has_version(name):
     item = MARKDOWN_PROFILES[name]
     assert (item["title"], item["guidance"]) == blocks[item["number"]]
     assert PROFILES[name].guidance == item["guidance"]
-    assert PROFILES[name].version == item["version"] == "1"
+    expected_version = "3" if name == "substance_abuse_content" else "2"
+    assert PROFILES[name].version == item["version"] == expected_version
 
 
 def test_sample_based_profile_is_registered_and_uses_same_validation():
