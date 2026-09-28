@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ListPlus, Plus, Save, Search, Trash2 } from "lucide-react";
 import { deleteResource, listResources, saveResource, type Resource, type LexiconContent, type LexiconEntry } from '../services/resourceLibrary';
 import { ResourceDialog } from './ResourceDialog';
+import { RecallVariantEditor, splitRecallVariants } from './RecallVariantEditor';
 import type { RuleAssistantCandidateLexicon } from "../features/rule-assistant/types";
 import type { RecallLibraryItem } from "../types/investigation";
 
@@ -246,7 +247,7 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
           enabled: term.enabled, platform: old?.platform || '全平台', match_type: old?.match_type || '黑话词', risk_level: old?.risk_level || '中', note: old?.note || '' };
         if ((entry.kind === 'tag') !== ['tag', '平台标签'].includes(entry.match_type)) entry.match_type = entry.kind === 'tag' ? '平台标签' : '黑话词';
         entries.push(entry);
-        const variants = [...new Set(term.variants.split(/[,，\n]/).map(v => v.trim()).filter(Boolean))];
+        const variants = splitRecallVariants(term.variants);
         if (entry.kind === 'tag' && variants.length) throw new Error(`标签“${term.primary}”不能带搜索词变体，请改为关键词或清空变体。`);
         variants.forEach((variant, index) => {
           const oldVariant = previous.find(e => e.kind === 'variant' && e.parent_id === term.id && e.term === variant);
@@ -402,12 +403,10 @@ export function RecallLibraryManager({ onEditorStateChange, preview }: RecallLib
                         </button>
                       ))}
                     </div>
-                    <input
-                      type="text"
+                    <RecallVariantEditor
                       value={term.variants}
-                      onChange={(event) => updateTerm(term.id, { variants: event.target.value })}
-                      placeholder="使用逗号分隔多个变体"
-                      aria-label={`${term.primary || "新词条"}变体`}
+                      onChange={(variants) => updateTerm(term.id, { variants })}
+                      label={`${term.primary || "新词条"}变体`}
                     />
                     <div className="recall-term-status">
                       <button
