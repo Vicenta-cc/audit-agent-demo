@@ -360,6 +360,10 @@ class InvestigationCreationService:
                 message,
                 code="CONFIGURATION_INVALID",
             )
+        run = self.store.find_run_for_draft(draft.id, principal=principal.id)
+        if run is not None:
+            from .frozen_preview import confirmed_run_preview
+            return confirmed_run_preview(run)
         if self.resource_service is None:
             raise ConfigurationValidationError(
                 "investigation resource service is not configured"

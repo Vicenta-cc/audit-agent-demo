@@ -872,8 +872,11 @@ class InvestigationCreationConversationService:
         application = self.tool_service.application_service
         view = verified_view if verified_view is not None else application.get_draft_view(draft_id, principal=principal)
         configuration = view.draft.configuration
-        if (isinstance(configuration, InvestigationDraftConfiguration)
-                and configuration.judgement.strategy == "temporary_ruleset"):
+        # Confirmed previews already come from the run snapshot. Do not re-query
+        # mutable resource options while presenting this read-only history.
+        if (view.draft.confirmed_revision is not None
+                or (isinstance(configuration, InvestigationDraftConfiguration)
+                    and configuration.judgement.strategy == "temporary_ruleset")):
             from .resources import (
                 _CREATION_PLATFORM_ORDER,
                 _ENABLED_CREATION_PLATFORMS,
