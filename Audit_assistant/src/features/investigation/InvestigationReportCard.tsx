@@ -45,7 +45,7 @@ export function InvestigationReportCard({
       <div className="inv-report-metrics">
         {publishedMetrics.length ? publishedMetrics.slice(0, 4).map((metric) => (
           <div className="inv-metric-block" key={`${metric.label}-${metric.value}`}>
-            <span className={`inv-metric-val ${metric.label.includes("风险") ? "text-danger" : metric.label.includes("复审") ? "text-warning" : ""}`}>
+            <span className={`inv-metric-val ${metric.label === "未发现明显风险" ? "text-success" : metric.label.includes("风险") ? "text-danger" : metric.label.includes("复审") ? "text-warning" : ""}`}>
               {metric.value}
             </span>
             <span className="inv-metric-lbl">{metric.label}</span>

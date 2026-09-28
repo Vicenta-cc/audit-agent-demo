@@ -839,7 +839,7 @@ function EvidenceDetail({
   const type = normalizeEvidenceType(group.type || evidence.primary_modality || evidence.source || "") || "text";
   const library = firstText(evidence.risk_library_label, group.risk_libraries?.map((item) => item.label).filter(Boolean).join("、"), "--");
   const content = firstText(evidence.content, evidence.text, evidence.ocr_text_zh, evidence.ocr_text, "--");
-  const explanation = firstText(evidence.hit_explanation, evidence.reason, evidence.context, "暂无命中解释");
+  const explanation = firstText(evidence.hit_explanation, evidence.reason, evidence.context, "暂无风险原因");
   const status = evidenceStatus(evidence.evidence_risk_level);
   const assetUrl = resolveMediaUrl(jobId, firstText(
     evidence.frame_asset_rel,
@@ -913,7 +913,7 @@ function EvidenceDetail({
         {type === "text" || type === "vision" ? <div><dt>{type === "vision" ? "画面描述" : "原文"}</dt><dd>{content}</dd></div> : null}
         {type === "text" && evidence.translation_zh ? <div><dt>中文译文</dt><dd>{evidence.translation_zh}</dd></div> : null}
         <div>
-          <dt>命中解释</dt>
+          <dt>风险原因</dt>
           <dd>{explanation}</dd>
         </div>
         <div className="detail-evidence-inline">

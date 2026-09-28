@@ -3130,6 +3130,7 @@
 
 .inv-metric-val.text-danger { color: #dc2626; }
 .inv-metric-val.text-warning { color: #d97706; }
+.inv-metric-val.text-success { color: #16a34a; }
 
 .inv-metric-lbl {
   font-size: 12px;
