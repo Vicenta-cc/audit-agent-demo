@@ -81,7 +81,7 @@ def test_selected_templates_and_versions_match_product_choice():
     assert '不推断个人信仰或组织成员身份' in religion.guidance
     assert '没有样本依据的词义或别名关系标为待验证' in religion.guidance
     assert '不得仅凭词语命中认定违规' not in religion.guidance  # no appended _COMMON duplicate
-    assert PROFILES['gambling_financial_abuse'].version == '1'
+    assert PROFILES['gambling_financial_abuse'].version == '2'
 
 
 def test_coordinator_tool_schema_exposes_all_profiles_and_religion_scope():
