@@ -21,7 +21,7 @@ from backend.resource_management.tools import RESOURCE_DESCRIPTIONS
 
 DOC = Path(__file__).resolve().parents[1] / "docs/search-keyword-prompts-candidate-20260926.md"
 EXISTING_HASHES = {
-    "sexual_service_leadgen": "f308f9ec04eac3915d34e51704a855a10fbad28e038da2c4d9263f1dd1d54e4d",
+    "sexual_service_leadgen": "a72af17841fc0152f05d407d062bb37d0b827d21d31a3bfe4cc28375db8ac2b5",
     "gambling_financial_abuse": "c25959988a7af0dc3059917c35d54dd368753fb61671d87ef9e79d0c9b518534",
     "religion_content_risk": "7de8a221403ee8a3b3e87c36d8d7f3041c34ae1317864425cb25174d400cdbf6",
 }
