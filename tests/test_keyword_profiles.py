@@ -71,7 +71,7 @@ def test_rules_messages_never_receive_keyword_guidance():
 
 def test_selected_templates_and_versions_match_product_choice():
     sexual = PROFILES['sexual_service_leadgen']
-    assert sexual.version == '2'
+    assert sexual.version == '4'
     assert '门槛验牌、非绿地陪、hk互看、00后新出道老师' in sexual.guidance
     assert '不为覆盖类目而额外加入资源售卖或偷拍视频方向' in sexual.guidance
     assert '不是生成新暗语的拼接公式' in sexual.guidance
