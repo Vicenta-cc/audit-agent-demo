@@ -39,7 +39,7 @@ RESOURCE_DESCRIPTIONS["create_lexicon_edit"] = (
     "模板示例由后端加载，不必自行抄写。"
     "专用生成步骤携带完整原有质量指导，返回经校验的会话编辑稿、search_terms 和 resource_ref recall_plan。"
     "创建草案直接传该 recall_plan，不重抄词库内容；临时使用无需正式保存。"
-    f"整组1至{SEARCH_TERMS_MAX}个实际词，可靠候选不足不凑数；用户指定数量/原文优先，但最多{SEARCH_TERMS_MAX}个。"
+    f"默认整组1至{SEARCH_TERMS_MAX}个实际词（上限{SEARCH_TERMS_MAX}个），可靠候选不足不凑数；上限内用户指定数量/原文优先。"
     "结果含 search_terms_cap 时，按其 message 向用户说明上限和未使用的词。"
     "仅原样导入用户提供的完整结构化内容使用 content，不调用生成模型。两种输入只能选一种。"
     "保存当前 Draft 词库请用 save_draft_lexicon，只传草案引用和版本，不重抄 content。"
@@ -67,7 +67,7 @@ create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资�
 变体词是主要的实际召回表达；每个启用主词有启用变体时，search_terms 使用这些变体，没有启用
 变体时才为兼容旧词库回退到主词。标签不参与搜索。生成完整黑话库时默认需要生成变体。
 
-整组 1 至 {SEARCH_TERMS_MAX} 个实际搜索词，可靠候选不足不凑数；用户明确数量/原文优先，不裁剪已有资源。
+默认整组 1 至 {SEARCH_TERMS_MAX} 个实际搜索词（上限 {SEARCH_TERMS_MAX} 个），不足不凑数；上限内用户明确数量/原文优先，不裁剪已有资源。
 原有统一召回质量指导完整保留在专用词库生成步骤中。
 
 临时搜索词与完整黑话库都通过 create_lexicon_edit 先建立会话编辑稿。

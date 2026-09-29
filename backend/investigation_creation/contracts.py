@@ -876,6 +876,8 @@ class ConfirmationResolutionV3(StrictModel):
 class FrozenRuleSetSource(StrictModel):
     ruleset_revision: RuleSetRevisionSummary | None = None
     temporary_ruleset: TemporaryRuleSetJudgement | None = None
+    # Display-only record of terms beyond the per-task cap; outside config_hash.
+    unused_search_terms: list[StrictStr] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_source(self) -> "FrozenRuleSetSource":
@@ -893,6 +895,8 @@ class FrozenRuleSetSource(StrictModel):
         # Preserve the exact historical formal shape and hash input.
         data = handler(self)
         data.pop("temporary_ruleset" if self.temporary_ruleset is None else "ruleset_revision", None)
+        if not self.unused_search_terms:
+            data.pop("unused_search_terms", None)
         return data
 
 
@@ -1031,6 +1035,8 @@ class ConfirmedConfigurationSnapshotV4(FrozenRuleSetSource):
         payload.pop("temporary_ruleset" if self.temporary_ruleset is None else "ruleset_revision", None)
         if self.requested_parameters is None:
             payload.pop("requested_parameters", None)
+        if not self.unused_search_terms:
+            payload.pop("unused_search_terms", None)
         return payload
     schema_version: Literal["investigation-run-config-v4"]
     draft_id: StrictStr

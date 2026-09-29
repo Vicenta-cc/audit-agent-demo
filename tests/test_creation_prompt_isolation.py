@@ -137,7 +137,7 @@ def test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes():
 
 # The frozen baseline fixture stays untouched; these lines changed with the
 # 2026-09-29 per-task search-term cap (SEARCH_TERMS_MAX, default 10).
-_CAP_REASON = "2026-09-29 单任务搜索词上限 SEARCH_TERMS_MAX：生成要求改为 1–N 个，候选不足允许更少。"
+_CAP_REASON = "2026-09-29 单任务搜索词上限 SEARCH_TERMS_MAX：生成要求改为 1–N 个，候选不足允许更少；明确数量和原文词表以 N 为上限，超出按顺序截取。"
 SEARCH_TERMS_CAP_CHANGED_LINES = [
     {"source": source, "line": line, "text": text, "reason": _CAP_REASON}
     for offset, source in ((0, "RECALL_GENERATION_PROMPT"), (36, "RESOURCE_PROMPT"))
@@ -145,6 +145,8 @@ SEARCH_TERMS_CAP_CHANGED_LINES = [
         (4 + offset, "用户未指定数量时，默认只生成 5 至 10 个最终可直接搜索的实际搜索词，按整组去重后计数，"),
         (5 + offset, "不是每个主题各生成 5 至 10 个。主题主词按语义归类需要生成，不计入搜索词数量，标签也不计入。"),
         (7 + offset, "可靠候选不足时宁可少于 5 个，也不能用停用词或低价值词凑数。"),
+        (8 + offset, "用户明确指定数量时按指定数量生成；用户给出确切词表且未要求扩展时，严格保留该词表和原文，"),
+        (9 + offset, "不为达到默认数量补词、截断或改写。读取、复用或忠实编辑已有词库时，不因默认数量裁剪已有内容。"),
     )
 ]
 

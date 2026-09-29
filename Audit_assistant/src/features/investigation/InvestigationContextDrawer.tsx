@@ -105,6 +105,9 @@ export function InvestigationContextDrawer({
         {creationDraft && (type === "task_config" || type === "ruleset") && (
           <DraftResourceSave key={`${creationDraft.id}:${creationDraft.current_revision}`} draft={creationDraft} />
         )}
+        {type === "keyword_editor" && confirmationPreview?.search_terms_notice ? (
+          <p style={{ fontSize: "12px", lineHeight: "1.7", color: "#64748b" }}>{confirmationPreview.search_terms_notice}</p>
+        ) : null}
         {type === "keyword_editor" && draft && creationDraft && confirmationPreview && onApplyLexicon && onSaveLexicon ? (
           <InvestigationKeywordEditor
             draft={draft}
@@ -135,6 +138,9 @@ export function InvestigationContextDrawer({
             <div>
               <div style={{ fontSize: "12.5px", fontWeight: "750", marginBottom: "6px" }}>{draft.historicalConfiguration?.length ? "实际返回内容的来源词" : "本次搜索词"}</div>
               <div style={{ color: "#334155", fontSize: "13px", lineHeight: "1.65" }}>{draft.keywords.join("、")}</div>
+              {confirmationPreview?.search_terms_notice ? (
+                <p style={{ fontSize: "12px", lineHeight: "1.7", color: "#64748b", marginTop: "6px" }}>{confirmationPreview.search_terms_notice}</p>
+              ) : null}
             </div>
 
             {draft.historyNotice ? <p style={{ fontSize: "12px", lineHeight: "1.7", color: "#64748b" }}>{draft.historyNotice}</p> : null}

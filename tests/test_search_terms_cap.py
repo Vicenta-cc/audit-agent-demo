@@ -69,9 +69,17 @@ def test_prompts_are_formatted_with_the_setting(value):
     assert f"单任务实际搜索词上限为 {value} 个" in prompts["recall"]
     assert f"整组 1 至 {value} 个实际搜索词" in prompts["resource"]
     assert f"整组1至{value}个实际词" in prompts["tool"]
-    assert f"1 to {value} actual search terms" in prompts["creation"]
+    assert f"by default 1 to {value} actual search" in prompts["creation"]
+    assert f"exact terms are honoured up to {value}" in prompts["creation"]
+    assert f"默认只生成 1 至 {value} 个" in prompts["recall"]
+    assert f"用户明确指定数量时按指定数量生成，最多 {value} 个" in prompts["recall"]
+    # No sentence may still claim that counts or word lists override the cap.
+    assert "take precedence" not in prompts["creation"]
+    assert "截断" not in prompts["recall"]
+    assert f"上限内用户明确数量/原文优先" in prompts["resource"]
     # Every template with a count line (all but the sample-extraction one) carries N.
-    counted = [g for g in prompts["profiles"] if f"1–{value} 个实际搜索词（上限 {value} 个）" in g]
+    counted = [g for g in prompts["profiles"] if f"默认整组" in g
+               and f"1–{value} 个实际搜索词（上限 {value} 个）" in g and "优先，但不超过上限。" in g]
     assert len(counted) == len(prompts["profiles"]) - 1
     assert not any("{search_terms_max}" in g for g in prompts["profiles"])
     texts = [prompts["recall"], prompts["resource"], prompts["tool"], prompts["creation"],
@@ -256,3 +264,82 @@ def test_task_creation_caps_search_terms_for_every_source(creation_stack, source
         assert frozen["execution"]["library_ids"] == [plan["lexicon_id"]]
     else:
         assert frozen["recall_plan"]["temporary_terms"] == kept
+    assert frozen["unused_search_terms"] == unused
+
+    # After confirmation the frozen card keeps the notice and the real term count.
+    frozen_preview = app.get_confirmation_preview(draft.id, principal=principal)
+    assert frozen_preview.resolved_search_terms == kept
+    assert frozen_preview.unused_search_terms == unused
+    assert frozen_preview.search_terms_notice == preview.search_terms_notice
+    if source == "saved":
+        assert frozen_preview.recall_plan.enabled_main_term_count == 38
+
+
+def test_frozen_snapshot_without_cut_keeps_its_historical_shape(creation_stack):
+    app = creation_stack["app_service"]
+    principal = Principal("principal-a")
+    args = _t1_temporary_arguments(creation_stack)
+    draft = app.create_draft(CreateDraftCommand.model_validate(args), principal=principal)
+    run = app.confirm_and_queue(ConfirmAndQueueCommand(
+        draft_id=draft.id, expected_revision=draft.current_revision,
+        confirmed=True, idempotency_key="cap-none"), principal=principal)
+    assert "unused_search_terms" not in run.confirmed_configuration
+    frozen_preview = app.get_confirmation_preview(draft.id, principal=principal)
+    assert frozen_preview.search_terms_notice == ""
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_draft_answer_always_carries_the_cap_notice(creation_stack, failed):
+    args = _t1_temporary_arguments(creation_stack)
+    args["configuration"]["investigation"]["recall_plan"]["terms"] = PLAIN
+    run = _run_scripted_creation_turn(
+        creation_stack, content="用这些词创建调查",
+        actions=[("create_investigation_draft", args)],
+        final_response="草案已创建。", completed=not failed, failed=failed,
+        client_message_id=f"cap-answer-{failed}",
+    )
+    notice = "已截取为前 10 个搜索词，未使用：" + "、".join(PLAIN[10:])
+    assert run["turn"].status == "completed"
+    assert run["result"].answer.count(notice) == 1
+
+
+def _legacy_resolver(tmp_path):
+    from backend.audit_agent.audit_policy_store import AuditPolicyStore
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    from backend.audit_agent.lexicon_store import LexiconStore
+    from backend.investigation_creation.adapters import InvestigationConfigurationResolver
+    db_path = tmp_path / "audit.sqlite3"
+    return InvestigationConfigurationResolver(
+        lexicon_store=LexiconStore(db_path), policy_store=AuditPolicyStore(db_path),
+        crawler_account_store=CrawlerAccountStore(db_path),
+    )
+
+
+def _legacy_configuration(keyword_source, keywords):
+    from backend.investigation_creation.contracts import InvestigationConfiguration
+    return InvestigationConfiguration.model_validate({
+        "platform": "xhs",
+        "collection": {"crawl_mode": "search", "keyword_source": keyword_source,
+                       "keywords": keywords, "run_crawler": True},
+        "analysis": {"library_ids": ["soft"], "capabilities": ["text", "comment"],
+                     "scoring_template": "balanced"},
+    })
+
+
+def test_legacy_resolver_caps_keyword_and_lexicon_sources(tmp_path, monkeypatch):
+    resolver = _legacy_resolver(tmp_path)
+    resolved = resolver.resolve(_legacy_configuration("keyword", PLAIN))
+    assert resolved["keyword"].split(",") == PLAIN[:10]
+    assert resolved["library_ids"] == ["soft"]
+    monkeypatch.setattr(resolver, "_enabled_keywords", lambda library_ids: list(PLAIN))
+    resolved = resolver.resolve(_legacy_configuration("lexicon", []))
+    assert resolved["keyword"].split(",") == PLAIN[:10]
+    assert resolved["lexicon_keywords"] == PLAIN[:10]
+    assert resolved["library_ids"] == ["soft"]
+
+
+def test_legacy_resolver_leaves_lists_within_the_cap_untouched(tmp_path):
+    # The contract already rejects duplicate keywords; at or under N nothing changes.
+    resolver = _legacy_resolver(tmp_path)
+    assert resolver.resolve(_legacy_configuration("keyword", ["乙", "甲"]))["keyword"] == "乙,甲"
+    assert resolver.resolve(_legacy_configuration("keyword", PLAIN[:10]))["keyword"].split(",") == PLAIN[:10]

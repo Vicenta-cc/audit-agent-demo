@@ -912,6 +912,12 @@ class InvestigationResourceService:
                 )
         execution = ResolvedExecutionConfiguration.model_validate(resolved)
         resolved_search_terms = list(collection_keywords) if mode == "search" else []
+        unused_search_terms: list[str] = []
+        if mode == "search":
+            plan = configuration.investigation.recall_plan
+            _, unused_search_terms = cap_search_terms(
+                plan.enabled_main_terms if plan.strategy == "existing_lexicon" else plan.terms
+            )
         creator_url = (
             configuration.investigation.creator_url if mode == "creator" else ""
         )
@@ -933,6 +939,7 @@ class InvestigationResourceService:
         return ConfirmationResolution(
             **hash_payload,
             requested_parameters=configuration.task_parameters,
+            unused_search_terms=unused_search_terms,
             config_hash=confirmed_configuration_hash(hash_payload),
         )
 

@@ -181,11 +181,10 @@ Do not call create_investigation_draft, update_investigation_draft or use_rulese
 generation turn. Generating or displaying temporary terms does not require a Draft. Wait for a
 LATER explicit adoption; then use_ruleset_proposal creates the Draft with the displayed terms.
 Do not ask again for permission to generate terms that the user already requested.
-Temporary and complete lexicons share the same generation policy: 1 to {settings.search_terms_max} actual search terms
-across the whole set, not per theme; fewer reliable terms are acceptable. Explicit user counts and
-exact terms take precedence; never trim existing resources to satisfy a generation default.
-Every task (any user) searches at most {settings.search_terms_max} terms; longer lists keep the first {settings.search_terms_max} in
-order. Tell the user any search_terms_cap message or preview search_terms_notice.
+Temporary and complete lexicons share the same generation policy: by default 1 to {settings.search_terms_max} actual search
+terms across the whole set, not per theme; fewer reliable terms are acceptable. Explicit user counts and
+exact terms are honoured up to {settings.search_terms_max} (any task or user keeps the first {settings.search_terms_max}); never trim existing
+resources to satisfy a generation default. Relay search_terms_cap.
 Before generating, read create_lexicon_edit's complete schema. Send generation_request containing
 the complete objective, platform and relevant user constraints; the dedicated author carries the
 original “统一召回词生成要求”. Do not invent content in the coordinator.
@@ -1743,6 +1742,10 @@ class InvestigationCreationConversationService:
         notice = self._binding_failure_notice(turn, trace_messages)
         if notice:
             answer = "\n\n".join(filter(None, [answer, notice]))
+        # The cap notice is authoritative preview data; never rely on the model to relay it.
+        cap_notice = str((artifact.get("confirmation_preview") or {}).get("search_terms_notice") or "")
+        if cap_notice and cap_notice not in answer:
+            answer = "\n\n".join(filter(None, [answer, cap_notice]))
         if settings.creation_answer_stream_enabled:
             public_transcript = []
             for message in transcript:

@@ -1,4 +1,5 @@
 """Read-only configuration cards for runs that have already been confirmed."""
+from backend.audit_agent.search_terms_cap import unused_terms_notice
 from .contracts import (
     ConfirmationPreview,
     ConfirmedConfigurationSnapshotV4,
@@ -15,10 +16,13 @@ def confirmed_run_preview(run: InvestigationRun) -> ConfirmationPreview:
     execution = snapshot.execution
     recall = snapshot.recall_plan
     recall_preview = RecallPlanPreview(strategy="none")
+    unused = list(snapshot.unused_search_terms)
     if recall is not None:
         recall_preview = RecallPlanPreview(
             **recall.model_dump(mode="json"),
-            enabled_main_term_count=len(recall.enabled_main_terms),
+            # Searched terms plus the ones cut by the cap: the lexicon's real count.
+            enabled_main_term_count=len(recall.enabled_main_terms) + (
+                len(unused) if recall.strategy == "existing_lexicon" else 0),
         )
 
     # Never read today's global settings, account availability or resource library.
@@ -43,6 +47,9 @@ def confirmed_run_preview(run: InvestigationRun) -> ConfirmationPreview:
         mode=snapshot.mode,
         platform=snapshot.platform,
         resolved_search_terms=list(snapshot.resolved_search_terms),
+        unused_search_terms=unused,
+        # The cap in force at confirmation, never today's setting.
+        search_terms_notice=unused_terms_notice(unused, len(snapshot.resolved_search_terms)),
         creator_url=snapshot.creator_url,
         recall_plan=recall_preview,
         ruleset_revision=snapshot.ruleset_revision,

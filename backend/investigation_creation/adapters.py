@@ -196,9 +196,12 @@ class InvestigationConfigurationResolver:
             keywords = lexicon_keywords
         if crawl_mode == "search":
             # Only the searched terms are capped; library_ids keep the full lexicon.
-            keywords, _ = cap_search_terms(keywords)
-            if lexicon_keywords:
-                lexicon_keywords = keywords
+            # Lists within the cap pass through untouched.
+            capped, unused = cap_search_terms(keywords)
+            if unused:
+                keywords = capped
+                if lexicon_keywords:
+                    lexicon_keywords = capped
         if crawl_mode == "search" and not keywords:
             raise ConfigurationValidationError("at least one search keyword is required")
 
@@ -347,7 +350,9 @@ class InvestigationConfigurationResolver:
         crawl_mode = collection.crawl_mode.value
         keywords = list(collection.keywords)
         if crawl_mode == "search":
-            keywords, _ = cap_search_terms(keywords)
+            capped, unused = cap_search_terms(keywords)
+            if unused:
+                keywords = capped
         if crawl_mode == "search" and not keywords:
             raise ConfigurationValidationError("at least one search keyword is required")
         creator_url = collection.creator_url
