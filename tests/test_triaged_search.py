@@ -723,3 +723,157 @@ def test_selection_log_includes_the_model_risk_score_when_present(tmp_path: Path
     )
     [selected_log_plain] = [m for m in logs if "选中" in m and "a1" in m]
     assert "可疑分" not in selected_log_plain
+
+
+class RecordingCrawler(FakeCrawler):
+    """同时记录精采调用的参数，核对任务设置有没有传到每次 run_detail。"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.detail_kwargs = []
+
+    def run_detail(self, platform, content_id, **kwargs):
+        self.detail_kwargs.append(kwargs)
+        return super().run_detail(platform, content_id, **kwargs)
+
+
+def _settings_sweep(monkeypatch, crawler, request, *, save_root, max_total_notes=10, logs=None):
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log",
+                        lambda job_id, message, *a, **k: logs.append(message) if logs is not None else None)
+    pipeline = _new_pipeline("job-settings", crawler, FakeIngestion(analyzed=set()), FakeEngine())
+    return pipeline._run_triaged_search(
+        request=request, save_root=save_root, start_page=1, max_total_notes=max_total_notes,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+
+
+def test_per_keyword_limit_sets_how_many_picks_each_word_sends_to_detail(tmp_path: Path, monkeypatch):
+    logs: list[str] = []
+    # 同分时取搜索排位靠后的：a3、a2 进精审，a1 留在候选里
+    crawler = RecordingCrawler({"词A": [("a1", "今晚上分"), ("a2", "上分群"), ("a3", "上分"), ("a4", "普通")]})
+    output = _settings_sweep(monkeypatch, crawler, _base_request(keyword="词A", max_notes=2),
+                             save_root=tmp_path, logs=logs)
+    assert crawler.detail_calls == [("词A", "a3"), ("词A", "a2")]
+    assert [(c["aweme_id"], c["source_keyword"]) for c in output.contents] == [("a3", "词A"), ("a2", "词A")]
+    assert len([m for m in logs if m.startswith("词「词A」选中")]) == 2
+    assert "初筛候选采集：词A，目标 10 条，选 2 条" in logs
+    payload = json.loads((tmp_path / "candidates" / "01-词A" / "candidates.json").read_text(encoding="utf-8"))
+    assert payload["selected"] == "a3" and payload["selected_keys"] == ["a3", "a2"]
+    assert payload["collected"] is True and payload["collected_keys"] == ["a3", "a2"]
+
+    # 只有正分候选能进精审（R9）：可疑的不够每词上限时少选，不拿正常内容凑数
+    crawler_few = RecordingCrawler({"词A": [("a1", "今晚上分"), ("a4", "普通")]})
+    _settings_sweep(monkeypatch, crawler_few, _base_request(keyword="词A", max_notes=3), save_root=tmp_path / "few")
+    assert crawler_few.detail_calls == [("词A", "a1")]
+
+
+def test_task_total_still_caps_picks_across_keywords(tmp_path: Path, monkeypatch):
+    crawler = RecordingCrawler({"词A": [("a1", "上分"), ("a2", "上分"), ("a3", "上分")],
+                                "词B": [("b1", "上分"), ("b2", "上分")]})
+    _settings_sweep(monkeypatch, crawler, _base_request(keyword="词A,词B", max_notes=2),
+                    save_root=tmp_path, max_total_notes=3)
+    assert crawler.detail_calls == [("词A", "a3"), ("词A", "a2"), ("词B", "b2")]
+
+
+def test_compare_rank1_arm_takes_the_first_n_by_search_rank(tmp_path: Path, monkeypatch):
+    crawler = RecordingCrawler({"词G": [("g1", "普通"), ("g2", "今晚上分"), ("g3", "普通")]})
+    monkeypatch.setattr(pipeline_module.random, "random", lambda: 0.1)
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "compare")
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidates_per_keyword", 10)
+    monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
+    monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
+    pipeline = _new_pipeline("job-rank1-n", crawler, FakeIngestion(analyzed=set()), FakeEngine())
+    pipeline._run_triaged_search(
+        request=_base_request(keyword="词G", max_notes=2), save_root=tmp_path, start_page=1, max_total_notes=10,
+        crawler_concurrency=1, account_auth_state=None, crawler_account_id="acc",
+        content_callback=lambda c, m: None, stream_items=True,
+        stop_checker=lambda: False, started_callback=None, progress_callback=None,
+    )
+    assert crawler.detail_calls == [("词G", "g1"), ("词G", "g2")]
+
+
+@pytest.mark.parametrize("max_notes, expected", [(None, 10), (1, 10), (2, 10), (12, 12)])
+def test_candidate_count_is_at_least_the_per_keyword_limit(tmp_path: Path, monkeypatch, max_notes, expected):
+    crawler = RecordingCrawler({"词A": [("a1", "普通")]})
+    request = _base_request(keyword="词A") if max_notes is None else _base_request(keyword="词A", max_notes=max_notes)
+    _settings_sweep(monkeypatch, crawler, request, save_root=tmp_path)
+    [call] = crawler.search_calls
+    assert call["max_notes"] == call["max_total_notes"] == expected
+
+
+@pytest.mark.parametrize("collect, limit, expected_max, expected_collect", [
+    (False, 300, 0, False),     # 关闭评论：候选也不抓评论
+    (True, 20, 20, True),       # 每帖评论上限比候选评论数小：取任务设置
+    (True, 200, 60, True),      # 每帖评论上限更大：候选评论数不超过 TRIAGE_CANDIDATE_COMMENTS
+    (True, 0, 0, False),        # 每帖评论上限 0：候选不抓评论
+])
+def test_candidate_comments_follow_the_task_comment_settings(tmp_path: Path, monkeypatch, collect, limit,
+                                                             expected_max, expected_collect):
+    crawler = RecordingCrawler({"词A": [("a1", "普通")]})
+    _settings_sweep(monkeypatch, crawler, _base_request(keyword="词A", collect_comments=collect, max_comments=limit),
+                    save_root=tmp_path)
+    [call] = crawler.search_calls
+    assert call["max_comments"] == expected_max
+    assert call["collect_comments"] is expected_collect
+    assert call["get_sub_comment"] is False and call["collect_media"] is False
+
+
+def test_candidate_comments_default_to_none_when_the_request_has_no_limit(tmp_path: Path, monkeypatch):
+    crawler = RecordingCrawler({"词A": [("a1", "普通")]})
+    request = _base_request(keyword="词A")
+    del request.max_comments
+    _settings_sweep(monkeypatch, crawler, request, save_root=tmp_path)
+    [call] = crawler.search_calls
+    assert call["max_comments"] == 0 and call["collect_comments"] is False
+
+
+def test_precise_collection_keeps_a_zero_comment_limit(tmp_path: Path, monkeypatch):
+    crawler = RecordingCrawler({"词A": [("a1", "上分")]})
+    _settings_sweep(monkeypatch, crawler, _base_request(keyword="词A", max_comments=0), save_root=tmp_path)
+    [detail] = crawler.detail_kwargs
+    assert detail["max_comments"] == 0                   # 以前 0 会被当成 300
+
+    crawler_set = RecordingCrawler({"词A": [("a1", "上分")]})
+    _settings_sweep(monkeypatch, crawler_set, _base_request(keyword="词A", max_comments=45, collect_comments=False),
+                    save_root=tmp_path / "set")
+    [detail_set] = crawler_set.detail_kwargs
+    assert detail_set["max_comments"] == 45 and detail_set["collect_comments"] is False
+
+
+def test_resume_skips_a_word_from_an_old_format_evidence_file(tmp_path: Path, monkeypatch):
+    # 旧文件只有 selected + collected: true，没有 collected_keys：不管每词上限多少都算这个词已采完
+    crawl_dir = tmp_path / "crawler"
+    old = crawl_dir / "candidates" / "01-词A"
+    old.mkdir(parents=True)
+    (old / "candidates.json").write_text(json.dumps(
+        {"keyword": "词A", "strategy": "triage", "selected": "a1", "collected": True, "candidates": []},
+        ensure_ascii=False), encoding="utf-8")
+    crawler = RecordingCrawler({"词A": [("a2", "上分")]}, existing_rows=["a1"])
+    output = _settings_sweep(monkeypatch, crawler, _base_request(keyword="词A", max_notes=2), save_root=crawl_dir)
+    assert crawler.search_calls == [] and crawler.detail_calls == []
+    assert [(c["aweme_id"], c["source_keyword"]) for c in output.contents] == [("a1", "词A")]
+
+
+def test_resume_collects_only_the_remaining_picks_of_a_partial_word(tmp_path: Path, monkeypatch):
+    crawl_dir = tmp_path / "crawler"
+    directory = crawl_dir / "candidates" / "01-词A"
+    picks = [CandidateScore("a1", 1, 300, "rule", "命中", [], None, 0),
+             CandidateScore("a2", 2, 300, "rule", "命中", [], None, 0)]
+    write_candidates_file(directory, "词A", picks, picks, "triage")
+    mark_candidates_collected(directory, "a1")           # 上次只精采成功了 a1
+    crawler = RecordingCrawler({"词A": [("a1", "上分"), ("a2", "上分")]}, existing_rows=["a1"])
+    output = _settings_sweep(monkeypatch, crawler, _base_request(keyword="词A", max_notes=2), save_root=crawl_dir)
+    assert crawler.detail_calls == [("词A", "a2")]
+    assert [(c["aweme_id"], c["source_keyword"]) for c in output.contents] == [("a1", "词A"), ("a2", "词A")]
+    payload = json.loads((directory / "candidates.json").read_text(encoding="utf-8"))
+    assert payload["collected_keys"] == ["a1", "a2"]     # 重写候选文件不能丢掉上次已采的 a1
+
+    # 再续一次：两条都采到了，这个词不再搜索
+    crawler_again = RecordingCrawler({"词A": [("a3", "上分")]}, existing_rows=["a1", "a2"])
+    _settings_sweep(monkeypatch, crawler_again, _base_request(keyword="词A", max_notes=2), save_root=crawl_dir)
+    assert crawler_again.search_calls == []

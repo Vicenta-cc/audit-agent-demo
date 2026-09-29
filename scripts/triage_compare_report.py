@@ -14,8 +14,11 @@ def load_selections(outputs_dir: Path, job_id: str) -> list[tuple[str, str]]:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if payload.get("selected"):
-            selections.append((str(payload.get("strategy") or "triage"), str(payload["selected"])))
+        strategy = str(payload.get("strategy") or "triage")
+        keys = payload.get("selected_keys")
+        if keys is None:
+            keys = [payload.get("selected")]
+        selections.extend((strategy, str(key)) for key in keys if key)
     return selections
 
 

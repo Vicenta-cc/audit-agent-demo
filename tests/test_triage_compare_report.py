@@ -50,3 +50,11 @@ def test_load_selections_with_rotation():
         assert len(selections) == 2
         assert ("rank1", "content-1") in selections
         assert ("triage", "content-2") in selections
+
+
+def test_load_selections_counts_every_selected_key(tmp_path: Path):
+    directory = tmp_path / "job" / "crawler" / "candidates" / "01-a"
+    directory.mkdir(parents=True)
+    (directory / "candidates.json").write_text(
+        json.dumps({"strategy": "triage", "selected": "k1", "selected_keys": ["k1", "k2"]}), encoding="utf-8")
+    assert load_selections(tmp_path, "job") == [("triage", "k1"), ("triage", "k2")]

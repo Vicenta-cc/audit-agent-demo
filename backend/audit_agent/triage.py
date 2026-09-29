@@ -321,13 +321,16 @@ def select_candidate(ranked: list[CandidateScore], *, exclude_keys: set[str]) ->
 
 
 def write_candidates_file(directory: Path, keyword: str, ranked: list[CandidateScore],
-                          selected: CandidateScore | None, strategy: str) -> Path:
+                          selected: list[CandidateScore] | CandidateScore | None, strategy: str) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "candidates.json"
+    picks = [selected] if isinstance(selected, CandidateScore) else list(selected or [])
+    selected_keys = [item.content_key for item in picks]
     path.write_text(json.dumps({
         "keyword": keyword,
         "strategy": strategy,
-        "selected": selected.content_key if selected else None,
+        "selected": selected_keys[0] if selected_keys else None,     # 对比报表等旧读者只看第一条
+        "selected_keys": selected_keys,
         "collected": False,
         "candidates": [asdict(item) for item in ranked],
     }, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -342,28 +345,49 @@ def _read_candidates_file(path: Path) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
-def mark_candidates_collected(candidate_root: Path) -> None:
-    """Record that this keyword's pick was precisely collected, so a resumed run skips the word."""
+def mark_candidates_collected(candidate_root: Path, content_key: str | None = None) -> None:
+    """Record a precisely collected pick of this keyword, so a resumed run only collects the remaining picks."""
     path = candidate_root / "candidates.json"
     payload = _read_candidates_file(path)
     if payload is None:
         return
     payload["collected"] = True
+    if content_key:
+        keys = [str(key) for key in payload.get("collected_keys") or []]
+        if content_key not in keys:
+            keys.append(content_key)
+        payload["collected_keys"] = keys
     try:
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError:
         return
 
 
-def load_collected_selections(job_crawl_dir: Path) -> dict[str, str]:
-    """keyword -> content_key for every word already collected in this job, rotation dirs included."""
-    collected: dict[str, str] = {}
+def _collected_files(job_crawl_dir: Path):
     for path in sorted(Path(job_crawl_dir).rglob("candidates.json")):
         payload = _read_candidates_file(path)
         if payload is None or not payload.get("collected"):
             continue
         keyword = str(payload.get("keyword") or "").strip()
-        selected = str(payload.get("selected") or "").strip()
-        if keyword and selected:
-            collected[keyword] = selected
+        if keyword:
+            yield keyword, payload
+
+
+def load_collected_selections(job_crawl_dir: Path) -> dict[str, str]:
+    """content_key -> keyword for every pick already collected in this job, rotation dirs included."""
+    collected: dict[str, str] = {}
+    for keyword, payload in _collected_files(job_crawl_dir):
+        keys = payload.get("collected_keys")
+        if keys is None:                        # 旧文件：每词只选一条，collected 指的就是 selected
+            keys = [payload.get("selected")]
+        for key in keys:
+            key = str(key or "").strip()
+            if key:
+                collected[key] = keyword
     return collected
+
+
+def legacy_collected_keywords(job_crawl_dir: Path) -> set[str]:
+    """Keywords whose old-format file says collected without collected_keys: they were finished one-pick words."""
+    return {keyword for keyword, payload in _collected_files(job_crawl_dir)
+            if "collected_keys" not in payload and str(payload.get("selected") or "").strip()}

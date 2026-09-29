@@ -468,20 +468,41 @@ def test_collected_marker_is_written_off_and_read_back_across_rotation_dirs(tmp_
     assert json.loads((first / "candidates.json").read_text(encoding="utf-8"))["collected"] is False
     assert load_collected_selections(crawl_dir) == {}      # 精采未完成前不算已选定
 
-    mark_candidates_collected(first)
-    assert load_collected_selections(crawl_dir) == {"词A": "a1"}
+    mark_candidates_collected(first, "a1")
+    assert load_collected_selections(crawl_dir) == {"a1": "词A"}
 
     # 切换账号后的候选目录也要读到
     second = crawl_dir / "rotation-acc2" / "candidates" / "02-词B"
     write_candidates_file(second, "词B", [_score("b1")], _score("b1"), "triage")
-    mark_candidates_collected(second)
-    assert load_collected_selections(crawl_dir) == {"词A": "a1", "词B": "b1"}
+    mark_candidates_collected(second, "b1")
+    assert load_collected_selections(crawl_dir) == {"a1": "词A", "b1": "词B"}
 
     # 没选中的词即使被标记也不算已采
     third = crawl_dir / "candidates" / "03-词C"
     write_candidates_file(third, "词C", [], None, "triage")
     mark_candidates_collected(third)
-    assert "词C" not in load_collected_selections(crawl_dir)
+    assert "词C" not in load_collected_selections(crawl_dir).values()
+
+
+def test_collected_keys_record_every_pick_and_old_files_fall_back_to_selected(tmp_path: Path):
+    crawl_dir = tmp_path / "crawler"
+    multi = crawl_dir / "candidates" / "01-词A"
+    path = write_candidates_file(multi, "词A", [_score("a1"), _score("a2")], [_score("a1"), _score("a2")], "triage")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["selected"] == "a1" and payload["selected_keys"] == ["a1", "a2"]
+    mark_candidates_collected(multi, "a1")
+    mark_candidates_collected(multi, "a1")                         # 重复标记不重复记
+    mark_candidates_collected(multi, "a2")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["collected"] is True and payload["collected_keys"] == ["a1", "a2"]
+    assert load_collected_selections(crawl_dir) == {"a1": "词A", "a2": "词A"}
+
+    # 旧格式：只有 selected + collected: true
+    old = crawl_dir / "candidates" / "02-词B"
+    write_candidates_file(old, "词B", [_score("b1")], _score("b1"), "triage")
+    mark_candidates_collected(old)
+    assert "collected_keys" not in json.loads((old / "candidates.json").read_text(encoding="utf-8"))
+    assert load_collected_selections(crawl_dir)["b1"] == "词B"
 
 
 def test_collected_helpers_tolerate_missing_and_broken_files(tmp_path: Path):

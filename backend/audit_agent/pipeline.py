@@ -48,8 +48,8 @@ from .prompts import get_prompt_set
 from .qwen_client import QwenClient, QwenTimeoutError, QwenProviderError, QwenContentBlockedError, is_content_blocked
 from .rule_compiler import DEFAULT_THRESHOLDS, compact_library_policy
 from .translation import TranslationProcessor
-from .triage import (TriageEngine, load_collected_selections, mark_candidates_collected, rank_candidates,
-                     select_candidate, write_candidates_file)
+from .triage import (TriageEngine, legacy_collected_keywords, load_collected_selections,
+                     mark_candidates_collected, rank_candidates, select_candidate, write_candidates_file)
 from .video_processor import DemoAudioProcessor, DemoFrameExtractor
 
 
@@ -1981,7 +1981,7 @@ class AuditPipeline:
                             crawler_concurrency: int,
                             account_auth_state, crawler_account_id: str, content_callback, stream_items: bool,
                             stop_checker, started_callback, progress_callback):
-        """Per keyword: text-only candidates → score → pick one → detail collect into save_root."""
+        """Per keyword: text-only candidates → score → pick up to max_notes → detail collect into save_root."""
         platform = str(getattr(request, "platform", "") or "")
         terms = list(dict.fromkeys(t.strip() for t in str(getattr(request, "keyword", "") or "").split(",") if t.strip()))
         if not terms:
@@ -1997,9 +1997,19 @@ class AuditPipeline:
         rules = dict(profile_snapshot) if isinstance(profile_snapshot, dict) else {}
         job_store.log(self.job_id, f"初筛判定规则：{rules.get('prompt_version') or '未提供'}")
         mode = str(getattr(settings, "triage_mode", "off") or "off")
+        # 初筛只能在任务的采集与分析设置之内收紧：每词上限即每词进精审的条数，
+        # 候选评论受评论开关与每帖评论上限约束；候选只用于挑选，不入库、不计入条数
+        per_keyword = max(1, int(getattr(request, "max_notes", 1) or 1))
+        candidate_count = max(settings.triage_candidates_per_keyword, per_keyword)
+        collect_comments = bool(getattr(request, "collect_comments", True))
+        comment_limit = int(getattr(request, "max_comments", 0) or 0)
+        candidate_comments = min(settings.triage_candidate_comments, comment_limit) if collect_comments else 0
+        detail_comments = getattr(request, "max_comments", 300)
+        detail_comments = 300 if detail_comments is None else int(detail_comments)
         # 切换账号后 save_root 是 crawler/rotation-<账号>，证据要从整个任务的采集目录回读
         job_crawl_dir = save_root.parent if save_root.name.startswith("rotation-") else save_root
-        collected = load_collected_selections(job_crawl_dir)
+        selected_by_key: dict[str, str] = load_collected_selections(job_crawl_dir)  # content_key -> 选中它的词
+        legacy_words = legacy_collected_keywords(job_crawl_dir)
         # A crash can occur after a complete snapshot is published but before the
         # callback/keyword marker. Recover the complete payload, not the attempt's
         # intermediate files. Existing task rows must agree; never silently bless
@@ -2017,38 +2027,46 @@ class AuditPipeline:
                 raise CrawlerCollectionIncompleteError(f"已入库评论与精采完成快照不一致：{key}；需复核后重新审核")
             if existing is None and content_callback:
                 content_callback([item], payload["comments"])
-            collected[word] = key
-        selected_by_key: dict[str, str] = {key: word for word, key in collected.items()}  # content_key -> 选中它的词
-        if collected:
-            job_store.log(self.job_id, f"恢复采集：{len(collected)} 个词已在之前的采集中选定，跳过")
+            selected_by_key[key] = word
+
+        def picked(word: str) -> list[str]:
+            return [key for key, source in selected_by_key.items() if source == word]
+
+        # 旧证据文件没有 collected_keys：那时每词只选一条，标记过就算采完
+        done = {word for word in terms if word in legacy_words or len(picked(word)) >= per_keyword}
+        if done:
+            job_store.log(self.job_id, f"恢复采集：{len(done)} 个词已在之前的采集中选定，跳过")
         crawler_started = False
         visited = 0
         last_command: list[str] = []
         for index, keyword in enumerate(terms, start=1):
             if stop_checker and stop_checker():
                 break
-            # 续采或切换账号后重跑：已经精采成功的词不再搜索，避免一个词出两条（R2/R3）
-            if keyword in collected:
-                job_store.log(self.job_id, f"词「{keyword}」已选定 {collected[keyword]}，跳过重复采集")
+            # 续采或切换账号后重跑：已经精采够每词上限的词不再搜索，避免一个词超出上限（R2/R3）
+            already = picked(keyword)
+            if keyword in done:
+                job_store.log(self.job_id, f"词「{keyword}」已选定 {'、'.join(already)}，跳过重复采集")
                 continue
             # 本任务采集上限沿用旧路径的 max_total_notes：达到上限就不再搜索后面的词，
             # 避免采到 analyze_limit 之外、永远排队的内容（R8）。
             if len(selected_by_key) >= max_total_notes:
-                remaining = [term for term in terms[index - 1:] if term not in collected]
+                remaining = [term for term in terms[index - 1:] if term not in done]
                 job_store.log(self.job_id,
                               f"已达本任务采集上限 {max_total_notes} 条，以下词未搜索：{', '.join(remaining)}")
                 break
             visited += 1
             candidate_root = save_root / "candidates" / self._keyword_slug(index, keyword)
-            job_store.log(self.job_id, f"初筛候选采集：{keyword}，目标 {settings.triage_candidates_per_keyword} 条")
+            # 上次部分采集过的词只补剩下的名额
+            wanted = min(per_keyword - len(already), max_total_notes - len(selected_by_key))
+            job_store.log(self.job_id, f"初筛候选采集：{keyword}，目标 {candidate_count} 条，选 {wanted} 条")
             try:
                 candidates = self.crawler.run_search(
                     platform=platform, keyword=keyword, start_page=start_page,
-                    max_notes=settings.triage_candidates_per_keyword,
-                    max_total_notes=settings.triage_candidates_per_keyword,
-                    max_comments=settings.triage_candidate_comments, max_concurrency=crawler_concurrency,
+                    max_notes=candidate_count, max_total_notes=candidate_count,
+                    max_comments=candidate_comments, max_concurrency=crawler_concurrency,
                     max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                    get_sub_comment=False, collect_comments=True, collect_media=False, save_root=candidate_root,
+                    get_sub_comment=False, collect_comments=collect_comments and candidate_comments > 0,
+                    collect_media=False, save_root=candidate_root,
                     fetch_author_profile=True,
                     stream_items=False, stop_checker=stop_checker, auth_state=account_auth_state,
                     account_id=crawler_account_id,
@@ -2073,11 +2091,19 @@ class AuditPipeline:
                 if mode == "compare" and random.random() < 0.5:
                     strategy = "rank1"
                     ranked = sorted(ranked, key=lambda s: s.rank)
-                    selected = next((c for c in ranked if c.content_key not in exclude), None)
+                    picks = [c for c in ranked if c.content_key not in exclude][:wanted]
                 else:
-                    selected = select_candidate(ranked, exclude_keys=exclude)
-                write_candidates_file(candidate_root, keyword, ranked, selected, strategy)
-                if selected is None:
+                    picks = []
+                    while len(picks) < wanted:
+                        selected = select_candidate(ranked, exclude_keys=exclude)
+                        if selected is None:
+                            break
+                        picks.append(selected)
+                        exclude.add(selected.content_key)
+                write_candidates_file(candidate_root, keyword, ranked, picks, strategy)
+                for key in already:     # 重写的候选文件要保留上次已采的条目，否则再续采会重复补
+                    mark_candidates_collected(candidate_root, key)
+                if not picks:
                     excluded = len(exclude & {s.content_key for s in ranked})
                     positive = sum(1 for s in ranked if s.score > 0)
                     discarded = sum(1 for s in ranked if s.band == "discard")
@@ -2085,30 +2111,31 @@ class AuditPipeline:
                                                f"身份丢弃 {discarded} 条，"
                                                f"排除重复或已审 {excluded} 条，换下一个词")
                     continue
-                risk_note = f"，可疑分 {selected.model_risk}" if selected.model_risk is not None else ""
-                job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}"
-                                           f"（{strategy}，{selected.band}，分 {selected.score}{risk_note}）：{selected.reason}")
                 # run_detail 内部只会报 1/1，外层进度条要看到"第几个词/共几个词"
                 keyword_progress = ((lambda _done, _total, _index=index: progress_callback(_index, len(terms)))
                                     if progress_callback else None)
-                detail_output = self.crawler.run_detail(
-                    platform, selected.content_key, source_keyword=keyword,
-                    max_comments=int(getattr(request, "max_comments", 300) or 300), max_concurrency=crawler_concurrency,
-                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                    get_sub_comment=bool(getattr(request, "get_sub_comment", False)), save_root=save_root,
-                    progress_callback=keyword_progress, content_callback=content_callback, stream_items=stream_items,
-                    stop_checker=stop_checker, auth_state=account_auth_state, started_callback=None,
-                    account_id=crawler_account_id, collect_comments=bool(getattr(request, "collect_comments", True)),
-                    collect_media=bool(getattr(request, "collect_media", True)),
-                )
-                if detail_output.command:
-                    last_command = list(detail_output.command)
-                if detail_output.contents:
-                    selected_by_key[selected.content_key] = keyword
-                    mark_candidates_collected(candidate_root)
-                    job_store.log(self.job_id, f"精采完成并交付：{selected.content_key}，评论 {len(detail_output.comments)} 条")
-                else:
-                    job_store.log(self.job_id, f"词「{keyword}」精采未返回内容：{selected.content_key}，本词无产出")
+                for selected in picks:
+                    risk_note = f"，可疑分 {selected.model_risk}" if selected.model_risk is not None else ""
+                    job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}"
+                                               f"（{strategy}，{selected.band}，分 {selected.score}{risk_note}）：{selected.reason}")
+                    detail_output = self.crawler.run_detail(
+                        platform, selected.content_key, source_keyword=keyword,
+                        max_comments=detail_comments, max_concurrency=crawler_concurrency,
+                        max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                        get_sub_comment=bool(getattr(request, "get_sub_comment", False)), save_root=save_root,
+                        progress_callback=keyword_progress, content_callback=content_callback, stream_items=stream_items,
+                        stop_checker=stop_checker, auth_state=account_auth_state, started_callback=None,
+                        account_id=crawler_account_id, collect_comments=collect_comments,
+                        collect_media=bool(getattr(request, "collect_media", True)),
+                    )
+                    if detail_output.command:
+                        last_command = list(detail_output.command)
+                    if detail_output.contents:
+                        selected_by_key[selected.content_key] = keyword
+                        mark_candidates_collected(candidate_root, selected.content_key)
+                        job_store.log(self.job_id, f"精采完成并交付：{selected.content_key}，评论 {len(detail_output.comments)} 条")
+                    else:
+                        job_store.log(self.job_id, f"词「{keyword}」精采未返回内容：{selected.content_key}，本词无产出")
             # 精采不完整沿用 off 模式：整任务失败并提示查看 collection_status，
             # 否则流式入库已经写进 DB 的内容会被当成"本词无产出"
             except (CrawlerVerificationError, CrawlerAuthenticationError, CrawlerRateLimitError,
