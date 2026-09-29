@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,6 +22,20 @@ def account_is_cooling_down(account: dict, *, now: datetime | None = None) -> bo
         return datetime.fromisoformat(cooldown_until) > (now or datetime.now())
     except ValueError:
         return False
+
+
+def account_in_slow_mode(account: dict, *, now: datetime | None = None) -> bool:
+    """New logins and accounts probing after a risk cooldown crawl at reduced pace."""
+    if int(account.get("risk_count") or 0) > 0:
+        return True
+    login_at = str(account.get("auth_state_updated_at") or "").strip()
+    if not login_at:
+        return False
+    try:
+        logged_in = datetime.fromisoformat(login_at)
+    except ValueError:
+        return False
+    return (now or datetime.now()) - logged_in < timedelta(days=settings.crawler_new_account_days)
 
 
 class CrawlerAccountStore:
@@ -80,6 +94,10 @@ class CrawlerAccountStore:
             conn.execute(
                 "ALTER TABLE crawler_accounts ADD COLUMN access_scope TEXT NOT NULL DEFAULT 'private'"
             )
+        if "risk_count" not in columns:
+            conn.execute("ALTER TABLE crawler_accounts ADD COLUMN risk_count INTEGER NOT NULL DEFAULT 0")
+        if "last_risk_at" not in columns:
+            conn.execute("ALTER TABLE crawler_accounts ADD COLUMN last_risk_at TEXT")
 
     def list(
         self,
@@ -340,6 +358,31 @@ class CrawlerAccountStore:
                 (str(message or "账号进入冷却")[:500], str(failure_kind), str(until), datetime.now().isoformat(timespec="seconds"), account_id),
             )
 
+    def record_risk(self, account_id: str, *, window: timedelta = timedelta(hours=24)) -> int:
+        """Count a risk signal; a signal after ``window`` of quiet starts over at 1."""
+        now = datetime.now()
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT risk_count, last_risk_at FROM crawler_accounts WHERE id=?", (account_id,)
+            ).fetchone()
+            if not row:
+                return 0
+            count = int(row["risk_count"] or 0)
+            try:
+                recent = bool(row["last_risk_at"]) and now - datetime.fromisoformat(row["last_risk_at"]) <= window
+            except ValueError:
+                recent = False
+            count = count + 1 if recent else 1
+            conn.execute(
+                "UPDATE crawler_accounts SET risk_count=?, last_risk_at=? WHERE id=?",
+                (count, now.isoformat(timespec="seconds"), account_id),
+            )
+            return count
+
+    def reset_risk(self, account_id: str) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute("UPDATE crawler_accounts SET risk_count=0 WHERE id=? AND risk_count<>0", (account_id,))
+
     def available_accounts(self, platform: str, *, exclude_ids=()) -> list[dict]:
         now = datetime.now().isoformat(timespec="seconds")
         excluded = tuple(str(value) for value in exclude_ids if str(value))
@@ -417,6 +460,8 @@ class CrawlerAccountStore:
             "failure_kind": row["failure_kind"] or "",
             "has_auth_state": bool(row["auth_state_ciphertext"]),
             "auth_state_updated_at": row["auth_state_updated_at"] or "",
+            "risk_count": int(row["risk_count"] or 0),
+            "last_risk_at": row["last_risk_at"] or "",
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }

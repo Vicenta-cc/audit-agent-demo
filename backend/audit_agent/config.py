@@ -143,6 +143,8 @@ class Settings:
     triage_candidate_comments = max(0, min(200, int(os.getenv("TRIAGE_CANDIDATE_COMMENTS", "60"))))
     triage_model = os.getenv("TRIAGE_MODEL", "").strip() or qwen_contact_sheet_model
     triage_request_timeout = max(5, int(os.getenv("TRIAGE_REQUEST_TIMEOUT", "60")))
+    # 初筛任务最多同时持有的空闲账号数（串行轮换，每词一个账号）；1 = 单账号
+    triage_accounts_per_task = max(1, int(os.getenv("TRIAGE_ACCOUNTS_PER_TASK", "3")))
     # 身份丢弃阈值：0 = 该类账号不限粉丝数
     triage_max_followers_personal_verified = max(0, int(os.getenv("TRIAGE_MAX_FOLLOWERS_PERSONAL_VERIFIED", "500000")))
     triage_max_followers_unverified = max(0, int(os.getenv("TRIAGE_MAX_FOLLOWERS_UNVERIFIED", "1000000")))
@@ -252,6 +254,14 @@ class Settings:
         60,
         int(os.getenv("CRAWLER_LOGIN_TIMEOUT_SECONDS", "180")),
     )
+    # 单出口 IP 下按账号限速（传给爬虫），新登录/刚解除风控的账号按慢速系数降速
+    crawler_account_requests_per_minute = max(1, int(os.getenv("CRAWLER_ACCOUNT_REQUESTS_PER_MINUTE", "20")))
+    crawler_account_min_interval = max(0.0, float(os.getenv("CRAWLER_ACCOUNT_MIN_INTERVAL", "3.0")))
+    crawler_new_account_days = max(0, int(os.getenv("CRAWLER_NEW_ACCOUNT_DAYS", "3")))
+    crawler_slow_factor = max(1, int(os.getenv("CRAWLER_SLOW_FACTOR", "3")))
+    # 风控冷却逐级翻倍：base × 2^(次数-1)，封顶 max；24 小时内没有再触发则重新计数
+    crawler_risk_cooldown_base_seconds = max(1, int(os.getenv("CRAWLER_RISK_COOLDOWN_BASE_SECONDS", "1800")))
+    crawler_risk_cooldown_max_seconds = max(1, int(os.getenv("CRAWLER_RISK_COOLDOWN_MAX_SECONDS", "21600")))
     crawler_login_headed = os.getenv("CRAWLER_LOGIN_HEADED", "false").lower() == "true"
     crawler_login_interactive = os.getenv("CRAWLER_LOGIN_INTERACTIVE", "false").lower() == "true"
     crawler_login_interactive_timeout_seconds = max(180, min(1800, int(os.getenv("CRAWLER_LOGIN_INTERACTIVE_TIMEOUT_SECONDS", "600"))))

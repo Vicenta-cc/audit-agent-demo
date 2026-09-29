@@ -3,8 +3,17 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 from .auth_state_cipher import AuthStateCipher, auth_state_cipher
+from .config import settings
 from .crawler_account_store import CrawlerAccountStore, crawler_account_store
 from .crawler_adapter import CrawlerVerificationError
+
+
+def risk_cooldown_seconds(risk_count: int) -> float:
+    """Escalating cooldown: base × 2^(count-1), capped at the configured maximum."""
+    exponent = max(0, int(risk_count) - 1)
+    base = settings.crawler_risk_cooldown_base_seconds
+    ceiling = settings.crawler_risk_cooldown_max_seconds
+    return min(ceiling, base * 2 ** min(exponent, 32))
 
 
 class AccountRotationManager:
@@ -17,6 +26,12 @@ class AccountRotationManager:
     def cool_down(self, account_id: str, *, reason: str, cooldown_seconds: float = 300.0) -> None:
         until = (datetime.now() + timedelta(seconds=max(0.0, cooldown_seconds))).isoformat(timespec="seconds")
         self.store.mark_cooldown(account_id, reason, until, failure_kind=reason)
+
+    def cool_down_after_risk(self, account_id: str, *, reason: str = "verify") -> float:
+        """Record a verification/silent-risk signal and apply the escalated cooldown."""
+        seconds = risk_cooldown_seconds(self.store.record_risk(account_id))
+        self.cool_down(account_id, reason=reason, cooldown_seconds=seconds)
+        return seconds
 
     def rotate(self, platform: str, current_account_id: str, *, reason: str, cooldown_seconds: float = 300.0) -> tuple[dict, dict] | None:
         self.cool_down(current_account_id, reason=reason, cooldown_seconds=cooldown_seconds)

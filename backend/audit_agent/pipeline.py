@@ -12,7 +12,7 @@ import shlex
 import threading
 import tempfile
 import traceback
-from contextlib import nullcontext
+from contextlib import ExitStack, nullcontext
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from time import perf_counter, time_ns
@@ -23,7 +23,7 @@ from .auth_state_cipher import auth_state_cipher
 from .asr_chunks import ASROutOfMemoryError, is_asr_oom
 from .asset_utils import download_url_with_error, safe_filename_from_url, split_csv_urls
 from .config import settings
-from .crawler_account_store import crawler_account_store
+from .crawler_account_store import account_in_slow_mode, crawler_account_store
 from .crawler_adapter import (
     IMAGE_EXTENSIONS,
     PLATFORM_DATA_DIRS,
@@ -817,15 +817,20 @@ class AuditPipeline:
                             ):
                                 crawler_start_page, _resume_keyword, _resume_page = latest_resume_parameters()
                                 job_store.log(self.job_id, f"启动逐词十选一采集 {request.platform}: {request.keyword}")
-                                return self._run_triaged_search(
-                                    request=request, save_root=save_root, start_page=crawler_start_page,
-                                    max_total_notes=crawl_total_notes,
-                                    crawler_concurrency=crawler_concurrency, account_auth_state=account_auth_state,
-                                    crawler_account_id=crawler_account_id,
-                                    content_callback=enqueue_stream_batch if stream_callback_enabled else None,
-                                    stream_items=stream_callback_enabled, stop_checker=crawl_stop_requested,
-                                    started_callback=mark_crawler_started, progress_callback=log_crawl_progress,
-                                )
+                                # 额外账号的租约只在本轮逐词采集期间持有
+                                with ExitStack() as rotation_leases:
+                                    rotation = self._triage_account_rotation(
+                                        request.platform, account, account_auth_state, rotation_leases
+                                    )
+                                    return self._run_triaged_search(
+                                        request=request, save_root=save_root, start_page=crawler_start_page,
+                                        max_total_notes=crawl_total_notes,
+                                        crawler_concurrency=crawler_concurrency, account_auth_state=account_auth_state,
+                                        crawler_account_id=crawler_account_id, rotation=rotation,
+                                        content_callback=enqueue_stream_batch if stream_callback_enabled else None,
+                                        stream_items=stream_callback_enabled, stop_checker=crawl_stop_requested,
+                                        started_callback=mark_crawler_started, progress_callback=log_crawl_progress,
+                                    )
                             if getattr(request, "keyword_source", "keyword") == "lexicon":
                                 job_store.log(
                                     self.job_id,
@@ -898,6 +903,7 @@ class AuditPipeline:
                                             self.job_id,
                                             f"执行账号：{account.get('display_name') or crawler_account_id}",
                                         )
+                                    self._log_slow_mode(account)
                                 else:
                                     account_auth_state = None
 
@@ -910,10 +916,11 @@ class AuditPipeline:
                                     candidate_output = run_with_current_account(save_root)
                                 except CrawlerVerificationError as exc:
                                     last_account_error = exc
-                                    if crawler_account_id:
-                                        AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down(
-                                            crawler_account_id, reason="verify", cooldown_seconds=300
+                                    if crawler_account_id and not getattr(exc, "account_risk_recorded", False):
+                                        AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down_after_risk(
+                                            crawler_account_id
                                         )
+                                        exc.account_risk_recorded = True
                                     remaining = len(candidates) - candidate_index - 1
                                     job_store.log(
                                         self.job_id,
@@ -923,8 +930,9 @@ class AuditPipeline:
                                     continue
                                 except CrawlerAuthenticationError as exc:
                                     last_account_error = exc
-                                    if crawler_account_id:
+                                    if crawler_account_id and not getattr(exc, "account_risk_recorded", False):
                                         crawler_account_store.mark_expired(crawler_account_id, str(exc))
+                                        exc.account_risk_recorded = True
                                     remaining = len(candidates) - candidate_index - 1
                                     job_store.log(
                                         self.job_id,
@@ -948,6 +956,14 @@ class AuditPipeline:
                                     )
                                     job_store.log(self.job_id, "搜索结果为空，使用账号池中的下一账号复核")
                                     continue
+                                if (
+                                    crawler_account_id
+                                    and not crawl_stop_requested()
+                                    and str(getattr(settings, "triage_mode", "off") or "off") not in {"select", "compare"}
+                                    and (crawler_account_store.get(crawler_account_id) or {}).get("risk_count")
+                                ):
+                                    # 逐词采集在轮换内按账号清零；这里只处理单账号路径
+                                    crawler_account_store.reset_risk(crawler_account_id)
                                 output = candidate_output
                                 break
 
@@ -1298,12 +1314,12 @@ class AuditPipeline:
                 job_store.log(self.job_id, f"旧采集轮次异常结束，未覆盖当前轮次状态：{exc}")
                 return
             if isinstance(exc, CrawlerVerificationError):
-                if crawler_account_id:
-                    AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down(
-                        crawler_account_id, reason="verify", cooldown_seconds=300)
+                if crawler_account_id and not getattr(exc, "account_risk_recorded", False):
+                    AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down_after_risk(
+                        crawler_account_id)
                 exc = RuntimeError("crawler_account_verification_required: 采集账号需要平台验证，请完成验证后再继续；登录态未判定失效。")
             elif isinstance(exc, CrawlerAuthenticationError):
-                if crawler_account_id:
+                if crawler_account_id and not getattr(exc, "account_risk_recorded", False):
                     crawler_account_store.mark_expired(crawler_account_id, "登录态已失效")
                 exc = RuntimeError("crawler_account_login_required: 采集账号登录态已失效，请重新登录。")
             elif isinstance(exc, CrawlerRateLimitError):
@@ -1977,10 +1993,87 @@ class AuditPipeline:
         safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in keyword)[:40] or "kw"
         return f"{index:02d}-{safe}"
 
+    def _log_slow_mode(self, account: dict | None) -> None:
+        if account and account_in_slow_mode(account):
+            name = account.get("display_name") or account.get("id")
+            job_store.log(self.job_id, f"账号 {name} 处于慢速模式（新登录/刚解除风控）")
+
+    def _accounts_reserved_for_waiting_tasks(self) -> int:
+        """One idle account per other queued task that is waiting for an account."""
+        execution = getattr(self, "_admission_execution", None)
+        if not execution:
+            return 0
+        admission_store, task_id, _token = execution
+        with admission_store.connect() as db:
+            row = db.execute(
+                "SELECT COUNT(*) FROM task_admissions WHERE state='RESERVED' "
+                "AND waiting_reason='account_busy' AND task_id<>?",
+                (task_id,),
+            ).fetchone()
+        return int(row[0] or 0)
+
+    def _triage_account_rotation(self, platform: str, primary: dict | None, primary_auth,
+                                 leases: ExitStack) -> list[dict]:
+        """The leased account plus idle permitted accounts, leased on ``leases`` until the sweep ends."""
+        from backend.task_admission.resources import account_lease
+        primary_id = str((primary or {}).get("id") or "")
+        rotation = [{"id": primary_id, "display_name": str((primary or {}).get("display_name") or primary_id),
+                     "auth_state": primary_auth}]
+        wanted = max(1, int(settings.triage_accounts_per_task)) - 1
+        # Only Douyin profiles are account-bound; other platforms share one browser lease.
+        if not primary_id or wanted <= 0 or platform != "dy":
+            return rotation
+        reserve = self._accounts_reserved_for_waiting_tasks()
+        allowed = _authorized_crawler_account_ids(self.job_id)
+        # Lease at most what we may keep plus the reserve, then hand the reserve back.
+        acquired: list[tuple[dict, ExitStack]] = []
+        for account in crawler_account_store.available_accounts(platform, exclude_ids=(primary_id,)):
+            if len(acquired) >= wanted + reserve:
+                break
+            if allowed is not None and account["id"] not in allowed:
+                continue
+            lease = ExitStack()
+            if not lease.enter_context(account_lease(platform, account["id"])):
+                lease.close()
+                continue
+            # Recheck after lease acquisition; login/maintenance may have changed it.
+            if account["id"] not in {item["id"] for item in crawler_account_store.available_accounts(platform)}:
+                lease.close()
+                continue
+            acquired.append((account, lease))
+        keep = max(0, min(wanted, len(acquired) - reserve))
+        for _account, lease in reversed(acquired[keep:]):      # LIFO: leases share a context stack
+            lease.close()
+        for account, lease in acquired[:keep]:
+            leases.enter_context(lease.pop_all())
+            try:
+                auth_state = auth_state_cipher.decrypt(crawler_account_store.get_auth_state_ciphertext(account["id"]))
+            except Exception as exc:
+                crawler_account_store.mark_expired(account["id"], str(exc))
+                continue
+            self._log_slow_mode(account)
+            rotation.append({"id": account["id"], "display_name": str(account.get("display_name") or account["id"]),
+                             "auth_state": auth_state})
+        job_store.log(self.job_id, "本任务轮换账号：" + "、".join(item["display_name"] for item in rotation))
+        return rotation
+
+    def _retire_rotation_account(self, account: dict, exc: Exception) -> None:
+        """Cool down (verification) or expire (auth) an account that leaves this task's rotation."""
+        account_id = account["id"]
+        name = account.get("display_name") or account_id
+        if isinstance(exc, CrawlerVerificationError):
+            seconds = AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down_after_risk(account_id)
+            job_store.log(self.job_id, f"账号 {name} 触发平台验证，退出本任务轮换")
+            job_store.log(self.job_id, f"账号 {name} 冷却 {int(seconds // 60)} 分钟")
+        else:
+            crawler_account_store.mark_expired(account_id, str(exc))
+            job_store.log(self.job_id, f"账号 {name} 登录态已失效，退出本任务轮换")
+        exc.account_risk_recorded = True
+
     def _run_triaged_search(self, *, request, save_root: Path, start_page: int, max_total_notes: int,
                             crawler_concurrency: int,
                             account_auth_state, crawler_account_id: str, content_callback, stream_items: bool,
-                            stop_checker, started_callback, progress_callback):
+                            stop_checker, started_callback, progress_callback, rotation: list[dict] | None = None):
         """Per keyword: text-only candidates → score → pick up to max_notes → detail collect into save_root."""
         platform = str(getattr(request, "platform", "") or "")
         terms = list(dict.fromkeys(t.strip() for t in str(getattr(request, "keyword", "") or "").split(",") if t.strip()))
@@ -2039,6 +2132,97 @@ class AuditPipeline:
         crawler_started = False
         visited = 0
         last_command: list[str] = []
+        # 单出口 IP：账号串行轮换，每个词（候选采集 + 该词的精采）只用一个账号
+        rotation = list(rotation or [{"id": crawler_account_id, "display_name": crawler_account_id,
+                                      "auth_state": account_auth_state}])
+        primary_account_id = rotation[0]["id"]
+        cursor = 0
+        used_account_ids: set[str] = set()
+
+        def crawl_keyword(index: int, keyword: str, candidate_root: Path, account: dict) -> None:
+            nonlocal crawler_started, last_command
+            already = picked(keyword)
+            # 上次部分采集过的词只补剩下的名额
+            wanted = min(per_keyword - len(already), max_total_notes - len(selected_by_key))
+            job_store.log(self.job_id, f"初筛候选采集：{keyword}，目标 {candidate_count} 条，选 {wanted} 条")
+            candidates = self.crawler.run_search(
+                platform=platform, keyword=keyword, start_page=start_page,
+                max_notes=candidate_count, max_total_notes=candidate_count,
+                max_comments=candidate_comments, max_concurrency=crawler_concurrency,
+                max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                get_sub_comment=False, collect_comments=collect_comments and candidate_comments > 0,
+                collect_media=False, save_root=candidate_root,
+                fetch_author_profile=True,
+                skip_profile_verify_regex="|".join(settings.triage_official_verify_patterns),
+                stream_items=False, stop_checker=stop_checker, auth_state=account["auth_state"],
+                account_id=account["id"],
+                started_callback=None if crawler_started else started_callback,
+                reusable_content_db=self.ingestion.db_path if platform == "dy" else None,
+                current_task_id=self.job_id,
+                search_sort=str(getattr(request, "search_sort", "general") or "general"),
+            )
+            crawler_started = True
+            comments_by_key: dict[str, list[dict]] = {}
+            for comment in candidates.comments:
+                comments_by_key.setdefault(comment_content_identity(comment, platform), []).append(comment)
+            scores = []
+            for rank, item in enumerate(candidates.contents, start=1):
+                key = content_identity(item, platform)
+                if key:
+                    scores.append(engine.score(key, rank, item, comments_by_key.get(key, []), lexicon_terms,
+                                               search_keyword=keyword, rules=rules))
+            ranked = rank_candidates(scores)
+            exclude = set(selected_by_key) | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked])
+            strategy = "triage"
+            if mode == "compare" and random.random() < 0.5:
+                strategy = "rank1"
+                ranked = sorted(ranked, key=lambda s: s.rank)
+                picks = [c for c in ranked if c.content_key not in exclude][:wanted]
+            else:
+                picks = []
+                while len(picks) < wanted:
+                    selected = select_candidate(ranked, exclude_keys=exclude)
+                    if selected is None:
+                        break
+                    picks.append(selected)
+                    exclude.add(selected.content_key)
+            write_candidates_file(candidate_root, keyword, ranked, picks, strategy)
+            for key in already:     # 重写的候选文件要保留上次已采的条目，否则再续采会重复补
+                mark_candidates_collected(candidate_root, key)
+            if not picks:
+                excluded = len(exclude & {s.content_key for s in ranked})
+                positive = sum(1 for s in ranked if s.score > 0)
+                discarded = sum(1 for s in ranked if s.band == "discard")
+                job_store.log(self.job_id, f"词「{keyword}」跳过：候选 {len(scores)} 条，可疑 {positive} 条，"
+                                           f"身份丢弃 {discarded} 条，"
+                                           f"排除重复或已审 {excluded} 条，换下一个词")
+                return
+            # run_detail 内部只会报 1/1，外层进度条要看到"第几个词/共几个词"
+            keyword_progress = ((lambda _done, _total, _index=index: progress_callback(_index, len(terms)))
+                                if progress_callback else None)
+            for selected in picks:
+                risk_note = f"，可疑分 {selected.model_risk}" if selected.model_risk is not None else ""
+                job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}"
+                                           f"（{strategy}，{selected.band}，分 {selected.score}{risk_note}）：{selected.reason}")
+                detail_output = self.crawler.run_detail(
+                    platform, selected.content_key, source_keyword=keyword,
+                    max_comments=detail_comments, max_concurrency=crawler_concurrency,
+                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                    get_sub_comment=bool(getattr(request, "get_sub_comment", False)), save_root=save_root,
+                    progress_callback=keyword_progress, content_callback=content_callback, stream_items=stream_items,
+                    stop_checker=stop_checker, auth_state=account["auth_state"], started_callback=None,
+                    account_id=account["id"], collect_comments=collect_comments,
+                    collect_media=bool(getattr(request, "collect_media", True)),
+                )
+                if detail_output.command:
+                    last_command = list(detail_output.command)
+                if detail_output.contents:
+                    selected_by_key[selected.content_key] = keyword
+                    mark_candidates_collected(candidate_root, selected.content_key)
+                    job_store.log(self.job_id, f"精采完成并交付：{selected.content_key}，评论 {len(detail_output.comments)} 条")
+                else:
+                    job_store.log(self.job_id, f"词「{keyword}」精采未返回内容：{selected.content_key}，本词无产出")
+
         for index, keyword in enumerate(terms, start=1):
             if stop_checker and stop_checker():
                 break
@@ -2056,94 +2240,42 @@ class AuditPipeline:
                 break
             visited += 1
             candidate_root = save_root / "candidates" / self._keyword_slug(index, keyword)
-            # 上次部分采集过的词只补剩下的名额
-            wanted = min(per_keyword - len(already), max_total_notes - len(selected_by_key))
-            job_store.log(self.job_id, f"初筛候选采集：{keyword}，目标 {candidate_count} 条，选 {wanted} 条")
-            try:
-                candidates = self.crawler.run_search(
-                    platform=platform, keyword=keyword, start_page=start_page,
-                    max_notes=candidate_count, max_total_notes=candidate_count,
-                    max_comments=candidate_comments, max_concurrency=crawler_concurrency,
-                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                    get_sub_comment=False, collect_comments=collect_comments and candidate_comments > 0,
-                    collect_media=False, save_root=candidate_root,
-                    fetch_author_profile=True,
-                    stream_items=False, stop_checker=stop_checker, auth_state=account_auth_state,
-                    account_id=crawler_account_id,
-                    started_callback=None if crawler_started else started_callback,
-                    reusable_content_db=self.ingestion.db_path if platform == "dy" else None,
-                    current_task_id=self.job_id,
-                    search_sort=str(getattr(request, "search_sort", "general") or "general"),
-                )
-                crawler_started = True
-                comments_by_key: dict[str, list[dict]] = {}
-                for comment in candidates.comments:
-                    comments_by_key.setdefault(comment_content_identity(comment, platform), []).append(comment)
-                scores = []
-                for rank, item in enumerate(candidates.contents, start=1):
-                    key = content_identity(item, platform)
-                    if key:
-                        scores.append(engine.score(key, rank, item, comments_by_key.get(key, []), lexicon_terms,
-                                                   search_keyword=keyword, rules=rules))
-                ranked = rank_candidates(scores)
-                exclude = set(selected_by_key) | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked])
-                strategy = "triage"
-                if mode == "compare" and random.random() < 0.5:
-                    strategy = "rank1"
-                    ranked = sorted(ranked, key=lambda s: s.rank)
-                    picks = [c for c in ranked if c.content_key not in exclude][:wanted]
-                else:
-                    picks = []
-                    while len(picks) < wanted:
-                        selected = select_candidate(ranked, exclude_keys=exclude)
-                        if selected is None:
-                            break
-                        picks.append(selected)
-                        exclude.add(selected.content_key)
-                write_candidates_file(candidate_root, keyword, ranked, picks, strategy)
-                for key in already:     # 重写的候选文件要保留上次已采的条目，否则再续采会重复补
-                    mark_candidates_collected(candidate_root, key)
-                if not picks:
-                    excluded = len(exclude & {s.content_key for s in ranked})
-                    positive = sum(1 for s in ranked if s.score > 0)
-                    discarded = sum(1 for s in ranked if s.band == "discard")
-                    job_store.log(self.job_id, f"词「{keyword}」跳过：候选 {len(scores)} 条，可疑 {positive} 条，"
-                                               f"身份丢弃 {discarded} 条，"
-                                               f"排除重复或已审 {excluded} 条，换下一个词")
+            while True:
+                position = cursor % len(rotation)
+                account = rotation[position]
+                if account["id"] and account["id"] != primary_account_id and account["id"] not in used_account_ids:
+                    crawler_account_store.mark_used(account["id"])
+                try:
+                    crawl_keyword(index, keyword, candidate_root, account)
+                # 触发验证或登录失效的账号退出本任务轮换，同一个词换下一个账号重试；
+                # 全部退出后按原来的方式整任务失败。限流是出口 IP 级别的，换账号没有用。
+                except (CrawlerVerificationError, CrawlerAuthenticationError) as exc:
+                    if not account["id"]:
+                        raise
+                    self._retire_rotation_account(account, exc)
+                    rotation.pop(position)
+                    if not rotation:
+                        raise
+                    cursor = position
+                    retry_with = rotation[cursor % len(rotation)]
+                    job_store.log(self.job_id, f"词「{keyword}」改用账号 {retry_with['display_name']} 重试")
                     continue
-                # run_detail 内部只会报 1/1，外层进度条要看到"第几个词/共几个词"
-                keyword_progress = ((lambda _done, _total, _index=index: progress_callback(_index, len(terms)))
-                                    if progress_callback else None)
-                for selected in picks:
-                    risk_note = f"，可疑分 {selected.model_risk}" if selected.model_risk is not None else ""
-                    job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}"
-                                               f"（{strategy}，{selected.band}，分 {selected.score}{risk_note}）：{selected.reason}")
-                    detail_output = self.crawler.run_detail(
-                        platform, selected.content_key, source_keyword=keyword,
-                        max_comments=detail_comments, max_concurrency=crawler_concurrency,
-                        max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                        get_sub_comment=bool(getattr(request, "get_sub_comment", False)), save_root=save_root,
-                        progress_callback=keyword_progress, content_callback=content_callback, stream_items=stream_items,
-                        stop_checker=stop_checker, auth_state=account_auth_state, started_callback=None,
-                        account_id=crawler_account_id, collect_comments=collect_comments,
-                        collect_media=bool(getattr(request, "collect_media", True)),
-                    )
-                    if detail_output.command:
-                        last_command = list(detail_output.command)
-                    if detail_output.contents:
-                        selected_by_key[selected.content_key] = keyword
-                        mark_candidates_collected(candidate_root, selected.content_key)
-                        job_store.log(self.job_id, f"精采完成并交付：{selected.content_key}，评论 {len(detail_output.comments)} 条")
-                    else:
-                        job_store.log(self.job_id, f"词「{keyword}」精采未返回内容：{selected.content_key}，本词无产出")
-            # 精采不完整沿用 off 模式：整任务失败并提示查看 collection_status，
-            # 否则流式入库已经写进 DB 的内容会被当成"本词无产出"
-            except (CrawlerVerificationError, CrawlerAuthenticationError, CrawlerRateLimitError,
-                    CrawlerCollectionIncompleteError):
-                raise
-            except Exception as exc:
-                job_store.log(self.job_id, f"词「{keyword}」采集或初筛失败：{exc}，跳过该词")
-                continue
+                # 精采不完整沿用 off 模式：整任务失败并提示查看 collection_status，
+                # 否则流式入库已经写进 DB 的内容会被当成"本词无产出"
+                except (CrawlerRateLimitError, CrawlerCollectionIncompleteError):
+                    raise
+                except Exception as exc:
+                    job_store.log(self.job_id, f"词「{keyword}」采集或初筛失败：{exc}，跳过该词")
+                used_account_ids.add(account["id"])
+                cursor += 1
+                break
+        # 本任务里没有触发风控就完成采集的账号，风控计数清零（退出慢速模式）
+        if not (stop_checker and stop_checker()):
+            for account in rotation:
+                if account["id"] in used_account_ids:
+                    stored = crawler_account_store.get(account["id"])
+                    if stored and stored.get("risk_count"):
+                        crawler_account_store.reset_risk(account["id"])
         output = self.crawler._load_platform_output(save_root, platform)
         # 重新读盘拿到的是爬虫原始行：抖音 detail 模式不写 source_keyword，按选中它的词补回（R7）
         output.contents = [item | {"source_keyword": selected_by_key[key]} for item in output.contents

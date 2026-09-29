@@ -80,8 +80,23 @@ class CrawlerRateLimitError(RuntimeError):
 
 
 class MediaCrawlerAdapter:
-    def __init__(self, media_crawler_dir: Path | None = None):
+    def __init__(self, media_crawler_dir: Path | None = None, account_store=None):
         self.media_crawler_dir = media_crawler_dir or settings.media_crawler_dir
+        self.account_store = account_store
+
+    def _account_pacing(self, account_id: str, max_items_per_minute: int) -> tuple[int, list[str]]:
+        """Per-account crawler limits; slow mode divides the rates and stretches the interval."""
+        if not account_id:
+            return max_items_per_minute, []
+        from .crawler_account_store import account_in_slow_mode, crawler_account_store
+        account = (self.account_store or crawler_account_store).get(account_id)
+        factor = settings.crawler_slow_factor if account and account_in_slow_mode(account) else 1
+        requests_per_minute = max(1, settings.crawler_account_requests_per_minute // factor)
+        min_interval = settings.crawler_account_min_interval * factor
+        return max(1, int(max_items_per_minute) // factor), [
+            "--account_requests_per_minute", str(requests_per_minute),
+            "--account_min_interval", str(min_interval),
+        ]
 
     def run_search(
         self,
@@ -113,8 +128,10 @@ class MediaCrawlerAdapter:
         max_total_notes: int | None = None,
         query_correct_type: int | None = None,
         fetch_author_profile: bool = False,
+        skip_profile_verify_regex: str = "",
     ) -> CrawlOutput:
         self._validate_platform(platform)
+        max_items_per_minute, account_pacing = self._account_pacing(account_id, max_items_per_minute)
         effective_max_comments = max_comments if collect_comments else 0
         terms = list(
             dict.fromkeys(term.strip() for term in keyword.split(",") if term.strip())
@@ -207,6 +224,10 @@ class MediaCrawlerAdapter:
             if fetch_author_profile:
                 # 搜索结果里的 author 粉丝数恒为 0 且没有签名，只有初筛候选需要这一轮补充请求
                 command.extend(["--dy_fetch_author_profile", "true"])
+                if skip_profile_verify_regex:
+                    # 官方/机构号在初筛里直接丢弃，不必为它们多发一次资料请求
+                    command.extend(["--dy_skip_profile_verify_regex", skip_profile_verify_regex])
+            command.extend(account_pacing)
             if skip_content_ids_file:
                 command.extend(["--skip_aweme_ids_file", str(skip_content_ids_file)])
             if reusable_content_db:
@@ -298,6 +319,7 @@ class MediaCrawlerAdapter:
         collect_media: bool = True,
     ) -> CrawlOutput:
         self._validate_platform(platform)
+        max_items_per_minute, account_pacing = self._account_pacing(account_id, max_items_per_minute)
         effective_max_comments = max_comments if collect_comments else 0
         command = [
             *self._base_command(platform),
@@ -331,6 +353,7 @@ class MediaCrawlerAdapter:
             "jsonl",
             "--save_data_path",
             str(save_root),
+            *account_pacing,
         ]
         return self._run_command(
             command=command,
@@ -386,6 +409,7 @@ class MediaCrawlerAdapter:
             return stopped
 
         effective_max_comments = max_comments if collect_comments else 0
+        max_items_per_minute, account_pacing = self._account_pacing(account_id, max_items_per_minute)
         command = [
             *self._base_command(platform),
             "--platform", platform,
@@ -403,6 +427,7 @@ class MediaCrawlerAdapter:
             "--stream_items", "true" if stream_items else "false",
             "--save_data_option", "jsonl",
             "--save_data_path", str(attempt_root),
+            *account_pacing,
         ]
 
         def only_target(contents: list[dict]) -> list[dict]:

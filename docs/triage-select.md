@@ -22,6 +22,19 @@
 - 候选评论数取 `TRIAGE_CANDIDATE_COMMENTS` 与每帖评论上限的较小值；关闭评论时候选不抓评论。精采按任务的评论开关与每帖评论上限，上限 0 就是 0 条。
 - 候选只用于挑选，不入库、不计入条数。
 
+## 多账号轮换与账号安全
+
+服务器只有一个出口 IP，所以多账号只做串行轮换，不并发采集。
+
+- **分配**：调度器照旧先租一个账号（主账号）。逐词采集开始时，再从本任务可用的空闲账号里租额外账号，本任务最多 `TRIAGE_ACCOUNTS_PER_TASK` 个（默认 3，设 1 即单账号）。可用范围与调度器一致：公共账号和任务所有者自己的私有账号，排除冷却中和登录失效的。每个正在排队等账号的其它任务（`task_admissions` 中 `RESERVED` 且 `waiting_reason=account_busy`）预留一个空闲账号。例如 9 个账号 3 个任务，每个任务 3 个；只有 1 个空闲账号时，任务直接用这 1 个，不等待。额外账号的租约在本轮逐词采集结束时释放。日志：「本任务轮换账号：A、B、C」。
+- **串行轮换**：第 i 个词（候选采集和该词的精采）用轮换表里的下一个账号，A、B、C、A……，同一时刻只有一个账号在发请求；平台级限流（每 IP）照旧由爬虫的共享闸门控制。
+- **触发验证/登录失效**：该账号冷却（验证）或标记失效（登录态），日志「账号 X 触发平台验证，退出本任务轮换」，从轮换表移除，同一个词换下一个账号重试；轮换表空了则任务按原逻辑失败。平台限流（`CrawlerRateLimitError`）是 IP 级别的，不换账号，直接失败。证据与续采逻辑不变，候选目录都在任务采集目录下，与哪个账号采的无关。
+- **冷却逐级延长**：每个账号记录 `risk_count` 和 `last_risk_at`。验证或静默风控（爬虫连续空响应，按验证处理）时计数加 1（距上次超过 24 小时则从 1 重新计），冷却时长 = min(`CRAWLER_RISK_COOLDOWN_MAX_SECONDS`, `CRAWLER_RISK_COOLDOWN_BASE_SECONDS` × 2^(计数-1))，默认 30 分钟、1 小时、2 小时……封顶 6 小时。账号在一次任务里没有触发风控并完成采集，计数清零。
+- **慢速模式**：登录（写入登录态）不满 `CRAWLER_NEW_ACCOUNT_DAYS` 天，或 `risk_count > 0`（冷却刚结束的试探期）的账号进入慢速模式，日志「账号 X 处于慢速模式（新登录/刚解除风控）」。
+- **按账号限速**：每条带账号的爬虫命令（搜索、精采、博主）都带 `--account_requests_per_minute`（`CRAWLER_ACCOUNT_REQUESTS_PER_MINUTE`，默认 20）和 `--account_min_interval`（`CRAWLER_ACCOUNT_MIN_INTERVAL`，默认 3 秒）。慢速模式下每分钟请求数和 `max_items_per_minute` 除以 `CRAWLER_SLOW_FACTOR`（默认 3，最少 1），最小间隔乘以它。
+- **官方号不补资料**：初筛候选采集带 `--dy_skip_profile_verify_regex`，值为 `TRIAGE_OFFICIAL_VERIFY_PATTERNS`（留空用内置列表）各片段原样用 `|` 连接；认证理由命中的作者不再请求主页资料，反正会被身份丢弃。
+- **部署顺序**：这些参数需要爬虫 `feat/dy-safety-pacing` 及以后的版本，爬虫要先于本平台更新。
+
 ## 已知限制
 
 - **爬虫表结构**：爬虫 `douyin_aweme` 行新增 `custom_verify`、`enterprise_verify_reason`、`follower_count`、`verification_type`、`max_follower_count` 五个字段。本平台用 jsonl 存储不受影响；若某个环境用爬虫的 db/sqlite/postgres 存储且已有旧表，需手动 `ALTER TABLE` 加这五列，`create_all` 不会给旧表加列。
@@ -32,7 +45,7 @@
 - **作者资料请求失败**：该候选按搜索结果里的作者信息打分（粉丝数为 0、没有签名），不会让整个词失败。
 
 ## 回滚
-`TRIAGE_MODE=off` 并重启。无数据结构变更。
+`TRIAGE_MODE=off` 并重启。多账号轮换可单独回退：`TRIAGE_ACCOUNTS_PER_TASK=1`。`crawler_accounts` 表新增 `risk_count`、`last_risk_at` 两列（启动时自动补列），回退代码不需要删列。
 
 ## 纠错参数 A/B（待执行）
 
