@@ -107,36 +107,31 @@ def test_provider_error_is_classified_without_replay_or_secret_echo(text, code, 
 
 
 @pytest.mark.parametrize("count", [1, 4, 5, 10, 11, 15, 30])
-def test_count_below_cap_is_guidance_and_above_cap_keeps_first_n(count):
+def test_default_count_is_guidance_not_failure_or_silent_trimming(count):
     gen, client, _ = generator(authoring_lexicon(count))
-    reports = []
-    parsed = gen.generate("lexicon", ResourceGenerationRequest(**REQUEST),
-                          on_search_terms_capped=reports.append)
-    assert parsed.search_terms() == [f"招聘押金{i}" for i in range(min(count, 10))]
+    parsed = gen.generate("lexicon", ResourceGenerationRequest(**REQUEST))
+    assert parsed.search_terms() == [f"招聘押金{i}" for i in range(count)]
     assert client.chat.completions.create.call_count == 1
-    assert [r["unused_terms"] for r in reports] == (
-        [[f"招聘押金{i}" for i in range(10, count)]] if count > 10 else [])
-    # Importing existing structured content is not generation and is never trimmed.
     assert len(CreateLexiconInput(content=lexicon(count)).content.search_terms()) == count
 
 
-def test_explicit_count_remains_strict_below_the_cap():
-    gen, _, _ = generator(authoring_lexicon(6))
-    assert len(gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=6)).search_terms()) == 6
+def test_explicit_count_remains_strict_even_when_default_range_is_soft():
+    gen, _, _ = generator(authoring_lexicon(11))
+    assert len(gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=11)).search_terms()) == 11
     with pytest.raises(ResourceError) as error:
-        gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=5))
+        gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=10))
     assert error.value.details['validation_errors'][0]['constraint'] == 'requested_count_mismatch'
 
 
-def test_default_over_cap_creates_capped_edit_and_can_save_without_regeneration(creation_stack):
+def test_default_over_ten_creates_real_edit_and_can_save_without_regeneration(creation_stack):
     tools = creation_stack['tool_service']
     gen, client, _ = generator(authoring_lexicon(11))
     tools.resource_generator = gen
     ctx = dict(session_id='soft-count-session', principal=PRINCIPAL)
     edit = tools.execute('create_lexicon_edit', {'generation_request': REQUEST}, **ctx)
-    assert edit['search_terms'] == [f"招聘押金{i}" for i in range(10)]
-    assert edit['search_terms_cap']['unused_terms'] == ["招聘押金10"]
-    assert "已截取为前 10 个搜索词，未使用：招聘押金10" in edit['search_terms_cap']['message']
+    assert len(edit['search_terms']) == 11
+    # The lexicon keeps all 11; only a task built from it searches the first 10.
+    assert edit['search_terms_cap']['unsearched_terms'] == ["招聘押金10"]
     assert edit['recall_plan']['strategy'] == 'resource_ref'
     saved = tools.execute('save_resource', {'edit_id': edit['edit_id'],
         'expected_version': edit['version'], 'operation_id': 'save-eleven'}, **ctx)

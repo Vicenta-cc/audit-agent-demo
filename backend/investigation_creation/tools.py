@@ -16,6 +16,7 @@ from pydantic import (
 from backend.rulesets.contracts import RuleSetContent
 from backend.resource_management.authoring_guidance import RULESET_AUTHORING_GUIDANCE
 from backend.resource_management.generation_contracts import ResourceGenerationRequest
+from backend.audit_agent.search_terms_cap import lexicon_cap_note
 from backend.resource_management.generation import ResourceGenerator
 from backend.resource_management.keyword_profiles import keyword_profile_metadata
 
@@ -480,7 +481,6 @@ class InvestigationCreationToolService:
         parsed = schema.model_validate(arguments)
         resource_ref = None
         generation_profile = None
-        search_terms_cap: list[dict] = []
         if tool_name in {'create_investigation_draft', 'update_investigation_draft', 'use_ruleset_proposal'}:
             resolved, resource_ref = resolve_arguments(tool_name, parsed.model_dump(mode='json'),
                                          lambda: self.application_service.resource_management,
@@ -490,18 +490,19 @@ class InvestigationCreationToolService:
             kind = "ruleset" if tool_name == "create_ruleset_proposal" else "lexicon"
             if kind == "lexicon":
                 generation_profile = keyword_profile_metadata(parsed.generation_request)
-            content = self.resource_generator.generate(
-                kind, parsed.generation_request,
-                **({"on_search_terms_capped": search_terms_cap.append} if kind == "lexicon" else {}),
-            )
+            content = self.resource_generator.generate(kind, parsed.generation_request)
             parsed = schema.model_validate({"content": content.model_dump(mode="json")})
         if tool_name in RESOURCE_TOOL_INPUTS:
             result = execute_resource(self.application_service.resource_management, tool_name, parsed,
                                       session_id=session_id, principal=principal)
             if generation_profile is not None:
                 result = {**result, "generation_profile": generation_profile}
-            if search_terms_cap:
-                result = {**result, "search_terms_cap": search_terms_cap[0]}
+            # Saved lexicons keep every term; only task creation caps the search.
+            # generation_profile is set exactly for generated lexicons.
+            cap_note = (lexicon_cap_note(result.get("search_terms") or [])
+                        if generation_profile is not None else None)
+            if cap_note is not None:
+                result = {**result, "search_terms_cap": cap_note}
             return result
         if tool_name == "use_ruleset_proposal":
             with self._conversation_lock:

@@ -2,7 +2,6 @@
 from pydantic import Field, StrictInt, field_validator, model_validator
 from backend.rulesets.contracts import StrictModel
 from .keyword_profiles import KeywordProfileName, KEYWORD_PROFILE_CATALOG_DESCRIPTION
-from .recall_prompt import SEARCH_TERMS_MAX
 
 
 class ResourceGenerationRequest(StrictModel):
@@ -12,9 +11,9 @@ class ResourceGenerationRequest(StrictModel):
     requirements: str = Field(default="", max_length=8000,
                               description="保留相关用户约束，不传完整会话、保存/启动指令或工具回执")
     requested_count: StrictInt | None = Field(default=None, ge=1, le=200,
-        description=f"仅用户明确指定的搜索词数或规则数；不是采集量。未指定留空。搜索词超过 {SEARCH_TERMS_MAX} 个时按 {SEARCH_TERMS_MAX} 个生成")
+        description="仅用户明确指定的搜索词数或规则数；不是采集量。未指定留空")
     exact_terms: list[str] | None = Field(default=None, min_length=1, max_length=200,
-        description=f"仅词库：用户给定且不得扩展的完整原文词表；无此要求留空。超过 {SEARCH_TERMS_MAX} 个时只用前 {SEARCH_TERMS_MAX} 个")
+        description="仅词库：用户给定且不得扩展的完整原文词表；无此要求留空")
 
     @field_validator("objective", "platform")
     @classmethod

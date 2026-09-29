@@ -65,23 +65,22 @@ print(json.dumps({"recall": RECALL_GENERATION_PROMPT, "resource": RESOURCE_PROMP
 @pytest.mark.parametrize("value", ["10", "6"])
 def test_prompts_are_formatted_with_the_setting(value):
     prompts = json.loads(_fresh_python(PROMPT_SOURCES, value))
-    assert f"只生成 1 至 {value} 个最终可直接搜索的实际搜索词" in prompts["recall"]
-    assert f"单任务实际搜索词上限为 {value} 个" in prompts["recall"]
-    assert f"整组 1 至 {value} 个实际搜索词" in prompts["resource"]
-    assert f"整组1至{value}个实际词" in prompts["tool"]
+    assert f"默认只生成 1 至 {value} 个最终可直接搜索的实际搜索词" in prompts["recall"]
+    assert f"每个任务只搜索前 {value} 个实际搜索词" in prompts["recall"]
+    assert "词库全部保留、全部用于研判" in prompts["recall"]
+    assert f"默认整组 1 至 {value} 个实际搜索词" in prompts["resource"]
+    assert f"每个任务只搜索前 {value} 个" in prompts["resource"]
+    assert f"默认整组1至{value}个实际词" in prompts["tool"]
+    assert f"但每个任务只搜索前{value}个" in prompts["tool"]
     assert f"by default 1 to {value} actual search" in prompts["creation"]
-    assert f"exact terms are honoured up to {value}" in prompts["creation"]
-    assert f"默认只生成 1 至 {value} 个" in prompts["recall"]
-    assert f"用户明确指定数量时按指定数量生成，最多 {value} 个" in prompts["recall"]
-    # No sentence may still claim that counts or word lists override the cap.
-    assert "take precedence" not in prompts["creation"]
-    assert "截断" not in prompts["recall"]
-    assert f"上限内用户明确数量/原文优先" in prompts["resource"]
+    assert f"searches only the first {value} terms" in prompts["creation"]
+    # Saved lexicons are never cut, so user counts and word lists keep precedence.
+    assert "用户明确指定数量时按指定数量生成；" in prompts["recall"]
+    assert "exact terms take precedence" in prompts["creation"]
     # Every template with a count line (all but the sample-extraction one) carries N.
-    counted = [g for g in prompts["profiles"] if f"默认整组" in g
-               and f"1–{value} 个实际搜索词（上限 {value} 个）" in g and "优先，但不超过上限。" in g]
+    counted = [g for g in prompts["profiles"] if f"默认整组" in g and f"1–{value} 个实际搜索词，" in g]
     assert len(counted) == len(prompts["profiles"]) - 1
-    assert not any("{search_terms_max}" in g for g in prompts["profiles"])
+    assert not any("{search_terms_max}" in g or "上限" in g for g in prompts["profiles"])
     texts = [prompts["recall"], prompts["resource"], prompts["tool"], prompts["creation"],
              *prompts["profiles"]]
     for text in texts:
@@ -108,83 +107,64 @@ def three_themes():
     ]}
 
 
-def test_generation_keeps_first_n_and_drops_emptied_theme():
-    gen, _, _ = generator(three_themes())
-    reports = []
-    content = gen.generate("lexicon", ResourceGenerationRequest(**REQUEST),
-                           on_search_terms_capped=reports.append)
-    expected = [f"主题{t}词{i}" for t in (0, 1) for i in range(5)]
-    assert content.search_terms() == expected
-    assert "主题2" not in {entry.term for entry in content.entries}
-    assert all(entry.parent_id != "generated-main-3" for entry in content.entries)
-    assert reports[0]["unused_terms"] == [f"主题2词{i}" for i in range(4)]
-    assert reports[0]["limit"] == 10
-    assert "已截取为前 10 个搜索词，未使用：主题2词0、主题2词1、主题2词2、主题2词3" in reports[0]["message"]
-
-
-def test_generation_partial_theme_keeps_its_first_variants(monkeypatch):
-    monkeypatch.setattr(settings, "search_terms_max", 7)
+def test_generation_keeps_every_term_over_the_cap():
     gen, _, _ = generator(three_themes())
     content = gen.generate("lexicon", ResourceGenerationRequest(**REQUEST))
-    assert content.search_terms() == [*(f"主题0词{i}" for i in range(5)), "主题1词0", "主题1词1"]
-    assert [e.term for e in content.entries if e.kind == "main"] == ["主题0", "主题1"]
+    assert content.search_terms() == [f"主题{t}词{i}" for t, n in ((0, 5), (1, 5), (2, 4)) for i in range(n)]
 
 
-def test_requested_count_over_cap_is_capped_and_reported():
+def test_requested_count_over_cap_is_generated_in_full_and_strict():
     gen, client, _ = generator(three_themes())
-    reports = []
-    content = gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=20),
-                           on_search_terms_capped=reports.append)
-    assert len(content.search_terms()) == 10
-    assert reports[0]["requested_count"] == 20
-    assert "用户要求 20 个，已按上限生成 10 个" in reports[0]["message"]
+    assert len(gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=14)).search_terms()) == 14
     sent = json.loads(client.chat.completions.create.call_args.kwargs["messages"][1]["content"])
-    assert sent["requested_count"] == 10
-
-
-def test_requested_count_over_cap_with_fewer_outputs_is_still_reported():
-    gen, _, _ = generator({"title": "t", "themes": [
-        {"term": "主题", "variants": [{"term": f"词{i}"} for i in range(10)]}]})
-    reports = []
-    gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=15),
-                 on_search_terms_capped=reports.append)
-    assert reports[0]["unused_terms"] == []
+    assert sent["requested_count"] == 14
     with pytest.raises(ResourceError):
-        generator({"title": "t", "themes": [{"term": "主题", "variants": [{"term": "词"}]}]})[0].generate(
-            "lexicon", ResourceGenerationRequest(**REQUEST, requested_count=15))
+        gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, requested_count=20))
 
 
-@pytest.mark.parametrize("echo_all", [True, False])
-def test_exact_terms_over_cap_keep_first_n_and_report_rest(echo_all):
-    terms = [f"原文{i}" for i in range(12)]
-    returned = terms if echo_all else terms[:10]
-    gen, client, _ = generator({"title": "原文", "themes": [
-        {"term": "原文主题", "variants": [{"term": t} for t in returned]}]})
-    reports = []
-    content = gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, exact_terms=terms),
-                           on_search_terms_capped=reports.append)
-    assert content.search_terms() == terms[:10]
-    assert reports[0]["unused_terms"] == terms[10:]
-    sent = json.loads(client.chat.completions.create.call_args.kwargs["messages"][1]["content"])
-    assert sent["exact_terms"] == terms[:10]
-
-
-def test_exact_terms_reordered_are_still_rejected():
+def test_exact_terms_over_cap_are_preserved_in_full():
     terms = [f"原文{i}" for i in range(12)]
     gen, _, _ = generator({"title": "原文", "themes": [
-        {"term": "原文主题", "variants": [{"term": t} for t in reversed(terms)]}]})
+        {"term": "原文主题", "variants": [{"term": t} for t in terms]}]})
+    assert gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, exact_terms=terms)).search_terms() == terms
+    gen, _, _ = generator({"title": "原文", "themes": [
+        {"term": "原文主题", "variants": [{"term": t} for t in terms[:10]]}]})
     with pytest.raises(ResourceError):
         gen.generate("lexicon", ResourceGenerationRequest(**REQUEST, exact_terms=terms))
 
 
-def test_tool_result_carries_cap_message(creation_stack):
+def test_generated_lexicon_over_cap_is_saved_whole_and_task_searches_first_n(creation_stack):
     tools = creation_stack["tool_service"]
+    app = creation_stack["app_service"]
     gen, _, _ = generator(three_themes())
     tools.resource_generator = gen
+    ctx = dict(session_id="cap-session", principal=Principal("principal-a"))
+    edit = tools.execute("create_lexicon_edit", {"generation_request": REQUEST}, **ctx)
+    everything = [f"主题{t}词{i}" for t, n in ((0, 5), (1, 5), (2, 4)) for i in range(n)]
+    assert edit["search_terms"] == everything
+    note = edit["search_terms_cap"]
+    assert note["unsearched_terms"] == everything[10:] and note["search_term_count"] == 14
+    assert "已全部保留" in note["message"] and "只搜索前 10 个" in note["message"]
+    saved = tools.execute("save_resource", {"edit_id": edit["edit_id"], "expected_version": edit["version"],
+                                            "operation_id": "cap-save-whole"}, **ctx)
+    read = tools.execute("read_resource", {"kind": "lexicon", "resource_id": saved["resource_id"]}, **ctx)
+    assert read["search_terms"] == everything
+    # A task built from the saved lexicon searches only the first N.
+    args = _t1_temporary_arguments(creation_stack)
+    args["configuration"]["investigation"]["recall_plan"] = app.resource_management.resolve_lexicon_ref(
+        saved["resource_ref"], **ctx)
+    draft = app.create_draft(CreateDraftCommand.model_validate(args), principal=ctx["principal"])
+    preview = app.get_confirmation_preview(draft.id, principal=ctx["principal"])
+    assert preview.resolved_search_terms == everything[:10]
+    assert preview.unused_search_terms == everything[10:]
+
+
+def test_small_generated_lexicon_has_no_cap_note(creation_stack):
+    tools = creation_stack["tool_service"]
+    tools.resource_generator = generator()[0]
     edit = tools.execute("create_lexicon_edit", {"generation_request": REQUEST},
-                         session_id="cap-session", principal=Principal("principal-a", role="admin"))
-    assert len(edit["search_terms"]) == 10
-    assert edit["search_terms_cap"]["unused_terms"] == [f"主题2词{i}" for i in range(4)]
+                         session_id="cap-small", principal=Principal("principal-a"))
+    assert "search_terms_cap" not in edit
 
 
 def big_lexicon():

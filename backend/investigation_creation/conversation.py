@@ -183,8 +183,8 @@ LATER explicit adoption; then use_ruleset_proposal creates the Draft with the di
 Do not ask again for permission to generate terms that the user already requested.
 Temporary and complete lexicons share the same generation policy: by default 1 to {settings.search_terms_max} actual search
 terms across the whole set, not per theme; fewer reliable terms are acceptable. Explicit user counts and
-exact terms are honoured up to {settings.search_terms_max} (any task or user keeps the first {settings.search_terms_max}); never trim existing
-resources to satisfy a generation default. Relay search_terms_cap.
+exact terms take precedence; never trim existing resources to satisfy a generation default. Every task
+(any user) searches only the first {settings.search_terms_max} terms; relay search_terms_cap.
 Before generating, read create_lexicon_edit's complete schema. Send generation_request containing
 the complete objective, platform and relevant user constraints; the dedicated author carries the
 original “统一召回词生成要求”. Do not invent content in the coordinator.

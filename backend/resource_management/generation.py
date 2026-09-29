@@ -8,13 +8,11 @@ import hashlib
 import json
 import logging
 import time
-from typing import Callable
 from uuid import uuid4
 
 from pydantic import ValidationError
 
 from backend.audit_agent.config import settings
-from backend.audit_agent.search_terms_cap import cap_search_terms, search_terms_max, unused_terms_notice
 from backend.hermes_runtime.input_retry import is_input_inspection_rejected, retry_input_request
 from backend.rulesets.contracts import RuleSetContent
 from .authoring_guidance import LEXICON_DOMAIN_GUIDANCE, RULESET_AUTHORING_GUIDANCE
@@ -51,13 +49,6 @@ def generation_messages(kind: str, request: ResourceGenerationRequest) -> list[d
                      "仅用户明确要求停用备选时放入 alternatives，后端将其停用。")
     # Profiles do not replace shared quality guidance or the user's original requirements.
     payload = request.model_dump(mode="json", exclude={"keyword_profile"})
-    if kind == "lexicon":
-        # The author only ever sees a target within the per-task search-term cap.
-        limit = search_terms_max()
-        if request.requested_count is not None and request.requested_count > limit:
-            payload["requested_count"] = limit
-        if request.exact_terms is not None:
-            payload["exact_terms"] = request.exact_terms[:limit]
     profile = selected_keyword_profile(kind, request)
     if profile is not None:
         payload["requirements"] = (
@@ -77,43 +68,9 @@ def _failure(code: str, message: str, **details) -> ResourceError:
     })
 
 
-def _cap_generated_terms(content, limit: int):
-    """Keep the first N projected search terms; drop themes left without variants."""
-    kept, dropped = cap_search_terms(content.search_terms(), limit)
-    if not dropped:
-        return content, []
-    keep = set(kept)
-    entries = [e for e in content.entries
-               if not (e.kind == "variant" and e.enabled and e.term not in keep)]
-    live = {e.parent_id for e in entries if e.kind == "variant" and e.enabled}
-    emptied = {e.id for e in entries if e.kind == "main" and e.enabled and e.id not in live}
-    entries = [e for e in entries if e.id not in emptied and e.parent_id not in emptied]
-    capped = content.model_validate({**content.model_dump(mode="json"),
-                                     "entries": [e.model_dump(mode="json") for e in entries]})
-    return capped, dropped
-
-
-def _search_terms_cap_report(request: ResourceGenerationRequest, dropped: list[str], limit: int):
-    over_count = request.requested_count is not None and request.requested_count > limit
-    if not dropped and not over_count:
-        return None
-    message = f"单任务搜索词上限为 {limit} 个。"
-    if over_count:
-        message += f"用户要求 {request.requested_count} 个，已按上限生成 {limit} 个。"
-    if dropped:
-        message += unused_terms_notice(dropped, limit) + "。"
-    return {"limit": limit, "requested_count": request.requested_count,
-            "unused_terms": list(dropped), "message": message + "请如实告知用户。"}
-
-
 def _validate_content(kind: str, content: str, request: ResourceGenerationRequest):
-    return _validate_with_cap_report(kind, content, request)[0]
-
-
-def _validate_with_cap_report(kind: str, content: str, request: ResourceGenerationRequest):
     schema = GeneratedLexicon if kind == "lexicon" else RuleSetContent
     stage = "authoring_schema"
-    cap_report = None
     try:
         parsed = schema.model_validate_json(content)
         if kind == "lexicon":
@@ -129,32 +86,23 @@ def _validate_with_cap_report(kind: str, content: str, request: ResourceGenerati
                     for v in parsed.entries
                 ):
                     raise ValueError("generated enabled themes require enabled variants")
-            limit = search_terms_max()
             if request.exact_terms is not None:
-                # The author receives only the first N; a full echo is also accepted.
-                if terms not in (request.exact_terms, request.exact_terms[:limit]):
+                if terms != request.exact_terms:
                     raise ValueError("original terms or order were changed")
-            # Below the cap the count is authoring guidance, not a rejection
-            # threshold. Above it, keep the first N in output order.
-            parsed, dropped = _cap_generated_terms(parsed, limit)
-            if request.exact_terms is not None:
-                dropped = request.exact_terms[limit:]
-            cap_report = _search_terms_cap_report(request, dropped, limit)
-            count = len(parsed.search_terms())
-            expected = (None if request.requested_count is None
-                        else min(request.requested_count, limit))
+            # The default 5–10 range is authoring guidance, not a rejection
+            # threshold. Preserve valid output; never trim it to fit the target.
+            count = len(terms)
         else:
             stage = "rule_constraints"
             count = sum(len(category.rules) for category in parsed.categories)
-            expected = request.requested_count
-        if expected is not None and count != expected:
+        if request.requested_count is not None and count != request.requested_count:
             raise ValueError("explicit resource count was not preserved")
     except (ValidationError, ValueError) as exc:
         # Never include an unvalidated model payload in the next Agent request.
         details = validation_details(exc, stage)
         raise _failure("RESOURCE_GENERATION_INVALID", "生成内容未通过结构或数量校验，未创建资源。",
                        **details) from exc
-    return parsed, cap_report
+    return parsed
 
 
 class ResourceGenerator:
@@ -164,8 +112,7 @@ class ResourceGenerator:
         # Explicit injection for private acceptance evidence only. No default raw dumps.
         self.diagnostic_sink = diagnostic_sink
 
-    def generate(self, kind: str, request: ResourceGenerationRequest, *,
-                 on_search_terms_capped: Callable[[dict], None] | None = None):
+    def generate(self, kind: str, request: ResourceGenerationRequest):
         if kind == "ruleset" and request.exact_terms is not None:
             raise _failure("RESOURCE_GENERATION_INVALID", "exact_terms 仅用于黑话库。")
         config = self.config
@@ -210,13 +157,8 @@ class ResourceGenerator:
             if finish != "stop":
                 raise _failure("RESOURCE_GENERATION_INCOMPLETE", "生成响应未正常结束，未创建资源。")
             raw_content = choice.message.content or ""
-            parsed, cap_report = _validate_with_cap_report(kind, raw_content, request)
+            parsed = _validate_content(kind, raw_content, request)
             outcome = "validated"
-            if cap_report is not None:
-                logger.info("resource_generation_search_terms_capped limit=%s unused=%s",
-                            cap_report["limit"], len(cap_report["unused_terms"]))
-                if on_search_terms_capped is not None:
-                    on_search_terms_capped(cap_report)
             return parsed
         except ResourceError as exc:
             outcome = exc.code
