@@ -75,6 +75,43 @@ class JobRequestValidationTest(unittest.TestCase):
         settings_store.save({'max_notes': 1}, 1)
         self.assertEqual(jobs.get(job['id'])['max_notes'], 2)
 
+    def _create_capped_job(self, **request_fields):
+        from fastapi import BackgroundTasks
+        from backend.audit_agent.job_store import JobStore
+        jobs = JobStore(self.store.db_path)
+        account = self.store.create(platform='dy', display_name='available')
+        self.store.save_auth_state(account['id'], 'encrypted-state')
+        terms = [f'词{i}' for i in range(14)]
+        with patch.object(main, 'job_store', jobs), \
+             patch.object(main, 'AuditPipeline'), \
+             patch.object(main, 'enrich_job', side_effect=lambda job: job), \
+             patch.object(main, 'create_revision_from_payload', return_value={'version': 1}), \
+             patch.object(main, 'enabled_keywords_for_categories', return_value=terms), \
+             patch.object(main.settings, 'search_terms_max', 10):
+            job = main.create_job(main.CrawlRequest(platform='dy', max_notes=1, max_total_notes=30,
+                                                    **request_fields), BackgroundTasks())
+        return job, terms
+
+    def test_legacy_keyword_list_is_capped_to_first_n(self):
+        job, terms = self._create_capped_job(keyword=','.join(f'词{i}' for i in range(14)))
+        self.assertEqual(job['keyword'].split(','), terms[:10])
+        self.assertEqual(job['effective_config']['keyword_count'], 10)
+        self.assertEqual(job['effective_config']['max_total_notes'], 10)
+        self.assertEqual(job['effective_config']['unused_search_terms'], terms[10:])
+        self.assertEqual(job['effective_config']['search_terms_max'], 10)
+
+    def test_legacy_lexicon_source_is_capped_to_first_n(self):
+        job, terms = self._create_capped_job(keyword_source='lexicon')
+        self.assertEqual(job['keyword'].split(','), terms[:10])
+        self.assertEqual(job['lexicon_keywords'], terms[:10])
+        self.assertEqual(job['effective_config']['keyword_count'], 10)
+        self.assertEqual(job['effective_config']['unused_search_terms'], terms[10:])
+
+    def test_legacy_keyword_list_within_cap_is_unchanged(self):
+        job, _ = self._create_capped_job(keyword='甲, 乙')
+        self.assertEqual(job['keyword'], '甲, 乙')
+        self.assertNotIn('unused_search_terms', job['effective_config'])
+
     def test_rejects_missing_and_platform_mismatched_accounts(self):
         self.assert_http_error("missing", "xhs", 404)
         account = self.store.create(platform="dy", display_name="抖音账号")

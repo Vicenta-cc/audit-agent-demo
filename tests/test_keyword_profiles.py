@@ -35,7 +35,7 @@ def test_selected_profile_only_changes_dedicated_user_requirements(name):
     for constraint in (
         '保留原始写法，包括数字、符号和空格',
         '用户提供真实样本时，优先使用用户提供的相关原词，不擅自截短、改写或拼接',
-        '已有样本足够时不新增候选；不足时允许少于 5 个，不为凑数扩写',
+        '已有样本足够时不新增候选；不足时允许更少，不为凑数扩写',
         '只有用户明确要求扩展时，才补充待验证候选',
     ):
         assert constraint in payload['requirements']
@@ -78,7 +78,7 @@ def test_rules_messages_never_receive_keyword_guidance():
 
 def test_selected_templates_and_versions_match_product_choice():
     sexual = PROFILES['sexual_service_leadgen']
-    assert sexual.version == '5'
+    assert sexual.version == '6'
     assert '验证与互动话术：门槛验牌、hk互看。' in sexual.guidance
     assert '陪同与服务招揽表达：非绿陪聊、00后新出道老师来报道了紧张、西湖杭房揽翠。' in sexual.guidance
     assert '服务暗语：92/95/98、非绿。' in sexual.guidance
@@ -87,11 +87,11 @@ def test_selected_templates_and_versions_match_product_choice():
     assert '不是生成新暗语的拼接公式' in sexual.guidance
     assert '模板提供的候选表达示例' not in sexual.guidance
     religion = PROFILES['religion_content_risk']
-    assert religion.version == '2'
+    assert religion.version == '3'
     assert '不推断个人信仰或组织成员身份' in religion.guidance
     assert '没有样本依据的词义或别名关系标为待验证' in religion.guidance
     assert '不得仅凭词语命中认定违规' not in religion.guidance  # no appended _COMMON duplicate
-    assert PROFILES['gambling_financial_abuse'].version == '3'
+    assert PROFILES['gambling_financial_abuse'].version == '4'
 
 
 def test_coordinator_tool_schema_exposes_all_profiles_and_religion_scope():

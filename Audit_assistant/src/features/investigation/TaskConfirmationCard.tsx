@@ -60,6 +60,12 @@ export function TaskConfirmationCard({
             ) : null}
           </div>
         </div>
+        {view.searchTermsNotice ? (
+          <div className="task-final-field">
+            <span>搜索词上限</span>
+            <strong>{view.searchTermsNotice}</strong>
+          </div>
+        ) : null}
         {preview ? (
           <>
             <div className="task-final-field">

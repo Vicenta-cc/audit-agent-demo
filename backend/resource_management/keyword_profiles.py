@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from typing import Literal
 from .keyword_profile_catalog import MARKDOWN_PROFILES
+from .recall_prompt import SEARCH_TERMS_MAX
 
 KeywordProfileName = Literal[
     'sexual_service_leadgen',
@@ -33,7 +34,12 @@ KeywordProfileName = Literal[
 class KeywordProfile:
     name: KeywordProfileName
     version: str
-    guidance: str
+    template: str
+
+    @property
+    def guidance(self) -> str:
+        # Templates stay verbatim; only the search-term cap is filled in.
+        return self.template.replace('{search_terms_max}', str(SEARCH_TERMS_MAX))
 
 
 _COMMON = '''
@@ -45,7 +51,7 @@ _COMMON = '''
 
 PROFILES = {
     'sexual_service_leadgen': KeywordProfile(
-        'sexual_service_leadgen', '5', '''
+        'sexual_service_leadgen', '6', '''
 任务：
 根据用户描述的具体调查场景，生成用于内容安全审核和候选样本发现的搜索词。
 优先从下列历史参考表达中选择适合的原词；只有用户明确要求扩展时，才提出待验证的新候选。
@@ -82,7 +88,7 @@ PROFILES = {
 生成要求：
 1. 优先从参考样本中选择符合本次调查范围的原词，保留原始写法，包括数字、符号和空格。
    用户提供真实样本时，优先使用用户提供的相关原词，不擅自截短、改写或拼接。
-   已有样本足够时不新增候选；不足时允许少于 5 个，不为凑数扩写。
+   已有样本足够时不新增候选；不足时允许更少，不为凑数扩写。
    只有用户明确要求扩展时，才补充待验证候选。
 
 2. 提出新候选关键词时，在 note 中说明参考表达或样本依据，
@@ -101,7 +107,7 @@ PROFILES = {
    结合词义说明饮茶、汽车、餐饮、养生、正常交友、
    新闻报道或反诈科普等相关误报场景，不机械重复所有场景。
 
-6. 默认整组生成 5–10 个实际搜索词，可靠候选不足允许更少，
+6. 整组生成 1–{search_terms_max} 个实际搜索词（上限 {search_terms_max} 个），可靠候选不足允许更少，
    不凑数。用户明确指定的范围和词表优先。
 
 7. 不生成联系方式、网址、交易指引或违法服务实施细节。
@@ -113,7 +119,7 @@ PROFILES = {
 ID、父子关联和默认启用状态由后端构造。
 '''),
     'religion_content_risk': KeywordProfile(
-        'religion_content_risk', '2', '''
+        'religion_content_risk', '3', '''
 任务：
 根据用户描述的具体调查场景，生成宗教相关内容的候选搜索词，
 供审核人员发现和复核样本。
@@ -133,7 +139,7 @@ ID、父子关联和默认启用状态由后端构造。
 生成要求：
 1. 优先从参考样本中选择符合本次调查范围的原词，保留原始写法，包括数字、符号和空格。
    用户提供真实样本时，优先使用用户提供的相关原词，不擅自截短、改写或拼接。
-   已有样本足够时不新增候选；不足时允许少于 5 个，不为凑数扩写。
+   已有样本足够时不新增候选；不足时允许更少，不为凑数扩写。
    只有用户明确要求扩展时，才补充待验证候选。
 
 2. 不机械拼接多个名称，不通过换字、谐音或添加修饰词
@@ -150,7 +156,7 @@ ID、父子关联和默认启用状态由后端构造。
    没有样本依据的词义或别名关系标为待验证，不编造解释。
    正常宗教、民俗、新闻、学术及反诈科普等相关语境应予区分。
 
-6. 默认整组 5–10 个实际搜索词，候选不足允许更少，
+6. 整组 1–{search_terms_max} 个实际搜索词（上限 {search_terms_max} 个），候选不足允许更少，
    不凑数；用户明确指定的范围和词表优先。
 
 7. 不生成联络信息、加入方法或暴力宣传内容，
@@ -162,7 +168,7 @@ ID、父子关联和默认启用状态由后端构造。
 ID、父子关联和默认启用状态由后端构造。
 '''),
     'gambling_financial_abuse': KeywordProfile(
-        'gambling_financial_abuse', '3', '''
+        'gambling_financial_abuse', '4', '''
 任务：
 根据用户描述的具体调查场景，生成用于内容安全审核和候选样本发现的搜索词。
 优先从下列参考表达中选择适合的原词；只有用户明确要求扩展时，才提出待验证的新候选。
@@ -194,7 +200,7 @@ bc、菠菜、bc料、k9187.ccK91粸牌、一道二道、跑分、u换现、跑u
 
 1. 优先从参考样本中选择符合本次调查范围的原词，保留原始写法，包括数字、符号和空格。
    用户提供真实样本时，优先使用用户提供的相关原词，不擅自截短、改写或拼接。
-   已有样本足够时不新增候选；不足时允许少于 5 个，不为凑数扩写。
+   已有样本足够时不新增候选；不足时允许更少，不为凑数扩写。
    只有用户明确要求扩展时，才补充待验证候选。
 
 3. 提出新候选时，在 note 中说明参考表达或样本依据，
@@ -215,7 +221,7 @@ bc、菠菜、bc料、k9187.ccK91粸牌、一道二道、跑分、u换现、跑u
    根据具体词语说明正常游戏、体育讨论、资料分享、合法兼职、
    新闻报道或反诈科普等相关误报场景，不机械重复所有场景。
 
-7. 默认整组生成 5–10 个实际搜索词，可靠候选不足允许更少，
+7. 整组生成 1–{search_terms_max} 个实际搜索词（上限 {search_terms_max} 个），可靠候选不足允许更少，
    不凑数。用户明确指定的范围和词表优先。
 
 8. 不提供投注参与、平台接入、资金转移、账户获取、

@@ -28,6 +28,7 @@ from .audit_agent.audit_policy_store import (
     TaskAuditConfigRevisionStore,
 )
 from .audit_agent.config import settings
+from .audit_agent.search_terms_cap import cap_search_terms, search_terms_max
 from .audit_agent.requests import CrawlRequest, crawl_request_from_job
 from .audit_agent.crawler_account_store import account_is_cooling_down, crawler_account_store
 from .audit_agent.creator_url import (
@@ -2307,6 +2308,7 @@ def create_job(
     if request.crawl_mode != "search":
         request.keyword_source = "keyword"
         request.lexicon_keywords = []
+    unused_search_terms: list[str] = []
     if request.run_crawler and request.crawl_mode == "search":
         if request.keyword_source == "lexicon":
             seen_keywords = set()
@@ -2319,10 +2321,17 @@ def create_job(
                     keywords.append(cleaned)
             if not keywords:
                 raise HTTPException(status_code=400, detail="platform search keywords are required when keyword_source is lexicon")
+            keywords, unused_search_terms = cap_search_terms(keywords)
             request.lexicon_keywords = keywords
             request.keyword = ",".join(keywords)
         elif not request.keyword.strip():
             raise HTTPException(status_code=400, detail="keyword is required when crawl_mode is search")
+        else:
+            keywords, unused_search_terms = cap_search_terms(
+                [item.strip() for item in request.keyword.split(",") if item.strip()]
+            )
+            if unused_search_terms:
+                request.keyword = ",".join(keywords)
     if request.run_crawler and request.crawl_mode == "creator":
         creator_ref = request.creator_url.strip() or request.creator_id.strip()
         request.creator_url = validate_creator_url(
@@ -2395,6 +2404,8 @@ def create_job(
         "keyword": request.keyword,
         "keyword_source": request.keyword_source,
         "keyword_count": keyword_count,
+        **({"search_terms_max": search_terms_max(), "unused_search_terms": unused_search_terms}
+           if unused_search_terms else {}),
         "max_notes": request.max_notes,
         "max_total_notes": planned_content_count,
         "estimated_max_total": planned_content_count,

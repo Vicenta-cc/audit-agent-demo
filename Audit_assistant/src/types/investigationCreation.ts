@@ -168,6 +168,8 @@ export interface ConfirmationPreview {
   mode: "search" | "creator";
   platform: InvestigationPlatform;
   resolved_search_terms: string[];
+  unused_search_terms?: string[];
+  search_terms_notice?: string;
   creator_url: string;
   recall_plan: {
     strategy: "existing_lexicon" | "temporary_terms" | "none";

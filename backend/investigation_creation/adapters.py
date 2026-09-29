@@ -13,6 +13,7 @@ from backend.audit_agent.audit_policy_store import (
 )
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.config import settings
+from backend.audit_agent.search_terms_cap import cap_search_terms
 from backend.audit_agent.creator_url import validate_creator_url
 from backend.audit_agent.ingestion import AuditResultStore, IngestionStore
 from backend.audit_agent.job_store import JobStore
@@ -193,6 +194,11 @@ class InvestigationConfigurationResolver:
                     "platform search keywords are required for the selected recall libraries"
                 )
             keywords = lexicon_keywords
+        if crawl_mode == "search":
+            # Only the searched terms are capped; library_ids keep the full lexicon.
+            keywords, _ = cap_search_terms(keywords)
+            if lexicon_keywords:
+                lexicon_keywords = keywords
         if crawl_mode == "search" and not keywords:
             raise ConfigurationValidationError("at least one search keyword is required")
 
@@ -340,6 +346,8 @@ class InvestigationConfigurationResolver:
         collection = validated.collection
         crawl_mode = collection.crawl_mode.value
         keywords = list(collection.keywords)
+        if crawl_mode == "search":
+            keywords, _ = cap_search_terms(keywords)
         if crawl_mode == "search" and not keywords:
             raise ConfigurationValidationError("at least one search keyword is required")
         creator_url = collection.creator_url

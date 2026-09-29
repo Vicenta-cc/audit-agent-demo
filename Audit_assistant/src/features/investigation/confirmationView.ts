@@ -26,6 +26,7 @@ export function buildConfirmationCardView(
     termsOrCreator: preview?.mode === "creator"
       ? preview.creator_url
       : (preview?.resolved_search_terms || draft.keywords).join("、"),
+    searchTermsNotice: preview?.mode === "search" ? preview.search_terms_notice || "" : "",
     ruleSet: preview?.ruleset_revision
       ? preview.ruleset_revision.name
       : preview?.temporary_ruleset ? `本次使用临时规则：${preview.temporary_ruleset.content.name}` : "尚未绑定",

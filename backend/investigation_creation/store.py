@@ -10,6 +10,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 from backend.audit_agent.config import settings
+from backend.audit_agent.search_terms_cap import cap_search_terms
 from backend.rulesets.contracts import RuleSetContent
 from backend.rulesets.compiler import content_hash as ruleset_content_hash
 from .approval import UseRuleSetProposalInput, reject, resolve_approval
@@ -1128,7 +1129,9 @@ class InvestigationCreationStore:
                     creator_url = ""
                     if mode == "search":
                         plan = configuration.investigation.recall_plan
-                        terms = list(plan.enabled_main_terms if plan.strategy == "existing_lexicon" else plan.terms)
+                        terms, _ = cap_search_terms(
+                            plan.enabled_main_terms if plan.strategy == "existing_lexicon" else plan.terms
+                        )
                         if search_terms_resolver is not None:
                             # Recompute from this transaction's persisted Draft,
                             # with formal resource reads under the caller's fence.

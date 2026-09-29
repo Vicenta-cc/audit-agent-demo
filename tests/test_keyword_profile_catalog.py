@@ -21,9 +21,9 @@ from backend.resource_management.tools import RESOURCE_DESCRIPTIONS
 
 DOC = Path(__file__).resolve().parents[1] / "docs/search-keyword-prompts-candidate-20260926.md"
 EXISTING_HASHES = {
-    "sexual_service_leadgen": "dff3990a05fb53e24206a91b8c9c187bea5c54d572df16e28c789fab3d1734f0",
-    "gambling_financial_abuse": "35bf84c181a29f173a2864d16c2086dc1dcfbaf91aa795fe58af65e8c010d907",
-    "religion_content_risk": "7417ec7ccb6d6d928497a35d1bb04248069db4ca12dfddad55b9b33ff78ef0b7",
+    "sexual_service_leadgen": "7c3e8478e69cc6cc3d9b245922ea5a62cdf988c9431b7b982610ecf9bbf46b66",
+    "gambling_financial_abuse": "6f92fdf825ad393d160ac5c1633d425c5682b0e588d3301f954edc42c632c020",
+    "religion_content_risk": "b44227bed6897f2c4a373febbcb866c924721363c74623cd372086de162c42aa",
 }
 
 
@@ -35,7 +35,7 @@ def test_all_19_topics_registered_without_replacing_existing_three():
         f"{n:02}" for n in range(1, 22) if n not in (8, 16)
     }
     for name, expected in EXISTING_HASHES.items():
-        assert hashlib.sha256(PROFILES[name].guidance.encode()).hexdigest() == expected
+        assert hashlib.sha256(PROFILES[name].template.encode()).hexdigest() == expected
 
 
 def test_routing_scopes_are_shared_by_tool_and_argument_schema():
@@ -81,8 +81,8 @@ def test_new_guidance_is_verbatim_markdown_and_has_version(name):
     blocks = {number: (title, body) for number, title, body in sections}
     item = MARKDOWN_PROFILES[name]
     assert (item["title"], item["guidance"]) == blocks[item["number"]]
-    assert PROFILES[name].guidance == item["guidance"]
-    expected_version = "3" if name == "substance_abuse_content" else "2"
+    assert PROFILES[name].template == item["guidance"]
+    expected_version = "4" if name == "substance_abuse_content" else "3"
     assert PROFILES[name].version == item["version"] == expected_version
 
 

@@ -241,6 +241,8 @@ class Settings:
         MAX_SUPPORTED_INVESTIGATION_POSTS,
         max(1, int(os.getenv("INVESTIGATION_MAX_POSTS", "30"))),
     )
+    # 单任务实际搜索词上限：对所有来源和所有用户生效，按顺序保留前 N 个。
+    search_terms_max = min(200, max(1, int(os.getenv("SEARCH_TERMS_MAX", "10"))))
     # Compatibility aliases for older diagnostics during the migration.
     m3_posts_per_keyword = investigation_max_posts
     m3_analyze_limit = investigation_max_posts

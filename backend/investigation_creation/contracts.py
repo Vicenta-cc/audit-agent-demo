@@ -711,6 +711,9 @@ class ConfirmationPreview(StrictModel):
     mode: Literal["search", "creator"]
     platform: Platform
     resolved_search_terms: list[StrictStr] = Field(default_factory=list)
+    # Terms beyond the per-task cap, in original order; never searched.
+    unused_search_terms: list[StrictStr] = Field(default_factory=list)
+    search_terms_notice: StrictStr = ""
     creator_url: StrictStr = ""
     recall_plan: RecallPlanPreview
     ruleset_revision: RuleSetRevisionSummary | None = None

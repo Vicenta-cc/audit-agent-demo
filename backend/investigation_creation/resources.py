@@ -14,6 +14,7 @@ from backend.audit_agent.crawler_account_store import (
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
 from backend.audit_agent.crawler_adapter import SUPPORTED_PLATFORMS
 from backend.audit_agent.config import settings
+from backend.audit_agent.search_terms_cap import cap_search_terms, unused_terms_notice
 from backend.audit_agent.lexicon_store import LexiconStore
 from backend.resource_management.contracts import LexiconContent
 from backend.resource_management.lexicon_versions import content as stored_lexicon_content
@@ -384,6 +385,7 @@ class InvestigationResourceService:
             )
 
         resolved_terms: list[str] = []
+        unused_terms: list[str] = []
         creator_url = ""
         recall_preview = RecallPlanPreview(strategy="none")
         if mode == "search":
@@ -423,8 +425,9 @@ class InvestigationResourceService:
                     source_lexicon_ids=list(plan.source_lexicon_ids),
                     lexicon_content=plan.lexicon_content,
                 )
-            # Sort only the execution projection, not the stored draft or its
-            # resource fingerprint. Invalid/stale formal resources remain blocked.
+            # Cap and sort only the execution projection, not the stored draft or
+            # its resource fingerprint. Invalid/stale formal resources remain blocked.
+            resolved_terms, unused_terms = cap_search_terms(resolved_terms)
             if recall_preview.lexicon_content is not None:
                 resolved_terms = recall_preview.lexicon_content.prioritize_search_terms(resolved_terms)
             terms_field = "enabled_main_terms" if plan.strategy == "existing_lexicon" else "temporary_terms"
@@ -452,6 +455,8 @@ class InvestigationResourceService:
             mode=mode,
             platform=effective_configuration.platform,
             resolved_search_terms=resolved_terms,
+            unused_search_terms=unused_terms,
+            search_terms_notice=unused_terms_notice(unused_terms),
             creator_url=creator_url,
             recall_plan=recall_preview,
             max_notes=planned_content_count,
@@ -718,7 +723,9 @@ class InvestigationResourceService:
         if configuration.investigation.mode != "search":
             return []
         plan = configuration.investigation.recall_plan
-        terms = list(plan.enabled_main_terms if plan.strategy == "existing_lexicon" else plan.terms)
+        terms, _ = cap_search_terms(
+            plan.enabled_main_terms if plan.strategy == "existing_lexicon" else plan.terms
+        )
         content = (
             self.lexicon_editor_content(plan.lexicon_id, connection=resource_connection)
             if plan.strategy == "existing_lexicon"

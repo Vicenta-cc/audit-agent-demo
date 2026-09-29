@@ -2,6 +2,7 @@
 from .contracts import ReadResourceInput, CreateLexiconInput, OpenResourceInput, GetEditInput, UpdateEditInput, SaveResourceInput, GetSaveInput
 from .snapshot_refs import tool_view
 from .keyword_profiles import KEYWORD_PROFILE_CATALOG_DESCRIPTION
+from .recall_prompt import SEARCH_TERMS_MAX
 from .authoring_guidance import (
     RESOURCE_EDIT_GUIDANCE, RULESET_AUTHORING_GUIDANCE,
 )
@@ -38,7 +39,8 @@ RESOURCE_DESCRIPTIONS["create_lexicon_edit"] = (
     "模板示例由后端加载，不必自行抄写。"
     "专用生成步骤携带完整原有质量指导，返回经校验的会话编辑稿、search_terms 和 resource_ref recall_plan。"
     "创建草案直接传该 recall_plan，不重抄词库内容；临时使用无需正式保存。"
-    "默认整组5–10个实际词，可靠候选不足不凑数；用户指定数量/原文优先。"
+    f"整组1至{SEARCH_TERMS_MAX}个实际词，可靠候选不足不凑数；用户指定数量/原文优先，但最多{SEARCH_TERMS_MAX}个。"
+    "结果含 search_terms_cap 时，按其 message 向用户说明上限和未使用的词。"
     "仅原样导入用户提供的完整结构化内容使用 content，不调用生成模型。两种输入只能选一种。"
     "保存当前 Draft 词库请用 save_draft_lexicon，只传草案引用和版本，不重抄 content。"
     "content.entries 含稳定 id、term、kind(main/variant/tag)、parent_id、enabled；变体指向主词。"
@@ -46,7 +48,7 @@ RESOURCE_DESCRIPTIONS["create_lexicon_edit"] = (
     "生成失败时不得改走 content 编造成功；如实报告错误，保留此前成功操作。"
 )
 
-RESOURCE_PROMPT = """
+RESOURCE_PROMPT = f"""
 资源管理扩展：保持原有自然语言任务入口、规则生成质量、展示后采用、确认后执行边界。
 面向用户展示资源名称、正式版本、保存状态、规则条件和主词/变体/标签；不要展示内部 ID、
 edit_id、哈希、接口字段名或机器配置。内部标识仅供工具调用，不能代替完整的业务内容。
@@ -65,7 +67,7 @@ create_ruleset_proposal / create_lexicon_edit。会话编辑内容与正式资�
 变体词是主要的实际召回表达；每个启用主词有启用变体时，search_terms 使用这些变体，没有启用
 变体时才为兼容旧词库回退到主词。标签不参与搜索。生成完整黑话库时默认需要生成变体。
 
-默认整组 5–10 个实际搜索词，可靠候选不足不凑数；用户明确数量/原文优先，不裁剪已有资源。
+整组 1 至 {SEARCH_TERMS_MAX} 个实际搜索词，可靠候选不足不凑数；用户明确数量/原文优先，不裁剪已有资源。
 原有统一召回质量指导完整保留在专用词库生成步骤中。
 
 临时搜索词与完整黑话库都通过 create_lexicon_edit 先建立会话编辑稿。

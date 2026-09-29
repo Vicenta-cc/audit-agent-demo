@@ -135,6 +135,20 @@ def test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes():
         assert instruction in CREATION_SYSTEM_PROMPT
 
 
+# The frozen baseline fixture stays untouched; these lines changed with the
+# 2026-09-29 per-task search-term cap (SEARCH_TERMS_MAX, default 10).
+_CAP_REASON = "2026-09-29 单任务搜索词上限 SEARCH_TERMS_MAX：生成要求改为 1–N 个，候选不足允许更少。"
+SEARCH_TERMS_CAP_CHANGED_LINES = [
+    {"source": source, "line": line, "text": text, "reason": _CAP_REASON}
+    for offset, source in ((0, "RECALL_GENERATION_PROMPT"), (36, "RESOURCE_PROMPT"))
+    for line, text in (
+        (4 + offset, "用户未指定数量时，默认只生成 5 至 10 个最终可直接搜索的实际搜索词，按整组去重后计数，"),
+        (5 + offset, "不是每个主题各生成 5 至 10 个。主题主词按语义归类需要生成，不计入搜索词数量，标签也不计入。"),
+        (7 + offset, "可靠候选不足时宁可少于 5 个，也不能用停用词或低价值词凑数。"),
+    )
+]
+
+
 def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
     """A wording move cannot silently delete an old behavioral/quality constraint."""
     from backend.investigation_creation.tools import M3_TOOL_DESCRIPTIONS
@@ -146,7 +160,8 @@ def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
         RULESET_AUTHORING_GUIDANCE, LEXICON_DOMAIN_GUIDANCE, RESOURCE_EDIT_GUIDANCE,
         *M3_TOOL_DESCRIPTIONS.values(),
     ]))
-    changes = {(item["source"], item["line"]): item for item in baseline["changed_lines"]}
+    changes = {(item["source"], item["line"]): item
+               for item in baseline["changed_lines"] + SEARCH_TERMS_CAP_CHANGED_LINES}
     for name, original in baseline["prompts"].items():
         for index, line in enumerate(original.splitlines()):
             if not line.strip():

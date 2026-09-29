@@ -2208,10 +2208,10 @@ def test_resource_prompt_generates_covert_variants_as_search_terms() -> None:
     assert "变体词是主要的实际召回表达" in RESOURCE_PROMPT
     assert "每个主题下用 variants 列出实际搜索词" in normalized_prompt
     assert "主题只用于归类，不额外参与搜索" in normalized_prompt
-    assert "默认只生成 5 至 10 个最终可直接搜索的实际搜索词" in normalized_prompt
+    assert "只生成 1 至 10 个最终可直接搜索的实际搜索词" in normalized_prompt
     assert "主题主词按语义归类需要生成" in normalized_prompt
     assert "不要以“生成但默认关闭”的形式输出" in normalized_prompt
-    assert "可靠候选不足时宁可少于 5 个" in normalized_prompt
+    assert "可靠候选不足时宁可更少" in normalized_prompt
     assert "谐音、拼音/字母缩写" in normalized_prompt
     assert "正常生活场景伪装" in normalized_prompt
     assert "主页看" in normalized_prompt
@@ -2231,10 +2231,10 @@ def test_temporary_and_structured_recall_share_one_generation_policy() -> None:
     assert "Even for temporary-only use" in CREATION_SYSTEM_PROMPT
     assert "不强制增加资源工具" not in system_prompt
     assert "临时搜索词与完整黑话库共用" in RECALL_GENERATION_PROMPT
-    assert "不是每个主题各生成 5 至 10 个" in RECALL_GENERATION_PROMPT
-    assert "可靠候选不足时宁可少于 5 个" in RECALL_GENERATION_PROMPT
+    assert "不是每个主题各生成 1 至 10 个" in RECALL_GENERATION_PROMPT
+    assert "可靠候选不足时宁可更少" in RECALL_GENERATION_PROMPT
     assert "回复前核对整组数量" in RECALL_GENERATION_PROMPT
-    for obsolete in ("5 至 7", "5–7", "5-7", "many concrete variants"):
+    for obsolete in ("5 至 7", "5–7", "5-7", "5 至 10", "5–10", "many concrete variants"):
         assert obsolete not in system_prompt
         assert obsolete not in RESOURCE_DESCRIPTIONS['create_lexicon_edit']
 
