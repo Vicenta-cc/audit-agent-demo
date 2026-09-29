@@ -24,13 +24,14 @@ class AdmissionStub:
     def __init__(self, path: Path, waiting=0):
         self.path = path
         with sqlite3.connect(path) as db:
-            db.execute("CREATE TABLE IF NOT EXISTS task_admissions (task_id TEXT, state TEXT, waiting_reason TEXT)")
+            db.execute("CREATE TABLE IF NOT EXISTS task_admissions (task_id TEXT, state TEXT, waiting_reason TEXT,"
+                       " decision TEXT NOT NULL DEFAULT 'ADMITTED')")
             db.execute("DELETE FROM task_admissions")
-            db.execute("INSERT INTO task_admissions VALUES ('self','RESERVED','')")
-            db.execute("INSERT INTO task_admissions VALUES ('running','RESERVED','')")
-            db.execute("INSERT INTO task_admissions VALUES ('done','COMPLETED','account_busy')")
+            db.execute("INSERT INTO task_admissions (task_id, state, waiting_reason) VALUES ('self','RESERVED','')")
+            db.execute("INSERT INTO task_admissions (task_id, state, waiting_reason) VALUES ('running','RESERVED','')")
+            db.execute("INSERT INTO task_admissions (task_id, state, waiting_reason) VALUES ('done','COMPLETED','account_busy')")
             for index in range(waiting):
-                db.execute("INSERT INTO task_admissions VALUES (?, 'RESERVED', 'account_busy')", (f"q{index}",))
+                db.execute("INSERT INTO task_admissions (task_id, state, waiting_reason) VALUES (?, 'RESERVED', 'account_busy')", (f"q{index}",))
 
     def connect(self):
         db = sqlite3.connect(self.path)
@@ -411,3 +412,102 @@ def test_creator_task_under_triage_mode_resets_risk_count(env, monkeypatch):
     job = _run_pipeline(env, monkeypatch, crawler, a)
     assert [kw["account_id"] for kw in crawler.search_kwargs] == [a["id"]], job.get("error")
     assert env.store.get(a["id"])["risk_count"] == 0
+
+
+def test_cancelled_waiting_task_reserves_no_account(env):
+    accounts = [env.add(name) for name in "ABC"]
+    pipeline = _pipeline(env, waiting=1)
+    admission_store = pipeline._admission_execution[0]
+    with sqlite3.connect(admission_store.path) as db:
+        db.execute("UPDATE task_admissions SET decision='CANCELLED' WHERE task_id='q0'")
+    with ExitStack() as leases:
+        assert len(_rotation(env, pipeline, accounts[0], leases)) == 3
+
+
+def test_each_keyword_logs_the_account_it_uses(env, monkeypatch):
+    a, b, c = (env.add(name) for name in "ABC")
+    crawler = RotationCrawler(fail={(b["id"], "词2"): CrawlerVerificationError("verify")})
+    _sweep(env, monkeypatch, crawler, _as_rotation([a, b, c]), keywords="词1,词2,词3")
+    assert [line for line in env.logs if "使用账号" in line] == [
+        "词「词1」使用账号 A", "词「词2」使用账号 B", "词「词2」使用账号 C", "词「词3」使用账号 A"]
+
+
+def test_only_accounts_that_crawled_successfully_get_their_risk_reset(env, monkeypatch):
+    a, b, c = (env.add(name) for name in "ABC")
+    with env.store._connect() as conn:
+        conn.execute("UPDATE crawler_accounts SET risk_count=1")
+
+    class BrokenForB(RotationCrawler):
+        def run_search(self, *, platform, keyword, save_root, account_id="", **kwargs):
+            if account_id == b["id"]:
+                raise RuntimeError("MediaCrawler failed with exit code 2")
+            return super().run_search(platform=platform, keyword=keyword, save_root=save_root,
+                                      account_id=account_id, **kwargs)
+
+    _sweep(env, monkeypatch, BrokenForB(), _as_rotation([a, b, c]), keywords="词1,词2,词3")
+    assert [env.store.get(x["id"])["risk_count"] for x in (a, b, c)] == [0, 1, 0]
+
+
+class TwoCandidateCrawler(RotationCrawler):
+    """词1 has two suspicious candidates; precise collection of p1 on account A hits verification."""
+
+    def __init__(self, failing_account):
+        super().__init__()
+        self.failing_account = failing_account
+        self.searches = 0
+        self.details: list[tuple[str, str]] = []
+
+    def run_search(self, *, platform, keyword, save_root, account_id="", **kwargs):
+        self.searches += 1
+        items = [{"aweme_id": "p1", "desc": "上分", "source_keyword": keyword},
+                 {"aweme_id": "p2", "desc": "上分", "source_keyword": keyword}]
+        return CrawlOutput(platform=platform, contents=items, comments=[], output_dir=Path(save_root))
+
+    def run_detail(self, platform, content_id, *, source_keyword, save_root=None, account_id="", **kwargs):
+        if account_id == self.failing_account and content_id == "p1":
+            raise CrawlerVerificationError("verify during detail")
+        self.details.append((content_id, account_id))
+        self.detail_accounts.append((source_keyword, account_id))
+        item = {"aweme_id": content_id, "desc": "full", "source_keyword": source_keyword}
+        return CrawlOutput(platform=platform, contents=[item], comments=[], output_dir=Path(save_root))
+
+    def _load_platform_output(self, save_root, platform):
+        items = [{"aweme_id": cid, "source_keyword": ""} for cid, _ in self.details]
+        return CrawlOutput(platform=platform, contents=items, comments=[], output_dir=Path(save_root))
+
+
+class RankedEngine(ScoreAll):
+    def score(self, content_key, rank, item, comments, terms, *, search_keyword="", rules=None):
+        return CandidateScore(content_key, rank, 400 - rank, "rule", "", [], None, 0)
+
+
+def test_detail_verification_retries_with_the_next_candidate(env, monkeypatch):
+    import json
+    a, b = env.add("A"), env.add("B")
+    crawler = TwoCandidateCrawler(failing_account=a["id"])
+    monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
+    pipeline = _pipeline(env, crawler=crawler)
+    pipeline.ingestion = NoIngestion()
+    engine = RankedEngine()
+    scored = []
+    engine_score = engine.score
+    engine.score = lambda *args, **kw: scored.append(args[0]) or engine_score(*args, **kw)
+    pipeline._triage_engine = engine
+    request = SimpleNamespace(platform="dy", keyword="词1", lexicon_category="", keyword_source="keyword",
+                              max_comments=0, get_sub_comment=False, collect_comments=False, collect_media=False,
+                              max_items_per_minute=5, search_sort="general", max_notes=1)
+    save_root = env.tmp / "crawler"
+    save_root.mkdir()
+    output = pipeline._run_triaged_search(
+        request=request, save_root=save_root, start_page=1, max_total_notes=10, crawler_concurrency=1,
+        account_auth_state=None, crawler_account_id=a["id"], rotation=_as_rotation([a, b]),
+        content_callback=None, stream_items=False, stop_checker=lambda: False, started_callback=None,
+        progress_callback=None,
+    )
+    assert crawler.details == [("p2", b["id"])]
+    assert [item["aweme_id"] for item in output.contents] == ["p2"]
+    assert crawler.searches == 1 and scored == ["p1", "p2"]      # 沿用已打分的候选，不重搜不重打分
+    [candidates_file] = save_root.glob("candidates/*/candidates.json")
+    saved = json.loads(candidates_file.read_text(encoding="utf-8"))
+    assert "p1" not in json.dumps(saved.get("collected_keys", []))
+    assert env.store.get(a["id"])["risk_count"] == 1

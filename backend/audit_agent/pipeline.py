@@ -2014,7 +2014,7 @@ class AuditPipeline:
         with admission_store.connect() as db:
             row = db.execute(
                 "SELECT COUNT(*) FROM task_admissions WHERE state='RESERVED' "
-                "AND waiting_reason='account_busy' AND task_id<>?",
+                "AND waiting_reason='account_busy' AND decision<>'CANCELLED' AND task_id<>?",
                 (task_id,),
             ).fetchone()
         return int(row[0] or 0)
@@ -2150,45 +2150,59 @@ class AuditPipeline:
                                       "auth_state": account_auth_state}])
         primary_account_id = rotation[0]["id"]
         cursor = 0
-        used_account_ids: set[str] = set()
+        marked_used_ids: set[str] = set()
+        # 只有真正采集成功过的账号才在任务结束时清零风控计数
+        clean_account_ids: set[str] = set()
 
-        def crawl_keyword(index: int, keyword: str, candidate_root: Path, account: dict) -> None:
+        def crawl_keyword(index: int, keyword: str, candidate_root: Path, account: dict, state: dict) -> None:
+            """``state`` survives a rotation retry of this keyword: the scored candidates, the compare arm
+            and picks whose precise collection hit verification (never picked again for this keyword)."""
             nonlocal crawler_started, last_command
             already = picked(keyword)
             # 上次部分采集过的词只补剩下的名额
             wanted = min(per_keyword - len(already), max_total_notes - len(selected_by_key))
-            job_store.log(self.job_id, f"初筛候选采集：{keyword}，目标 {candidate_count} 条，选 {wanted} 条")
-            candidates = self.crawler.run_search(
-                platform=platform, keyword=keyword, start_page=start_page,
-                max_notes=candidate_count, max_total_notes=candidate_count,
-                max_comments=candidate_comments, max_concurrency=crawler_concurrency,
-                max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                get_sub_comment=False, collect_comments=collect_comments and candidate_comments > 0,
-                collect_media=False, save_root=candidate_root,
-                fetch_author_profile=True,
-                skip_profile_verify_regex="|".join(settings.triage_official_verify_patterns),
-                stream_items=False, stop_checker=stop_checker, auth_state=account["auth_state"],
-                account_id=account["id"],
-                started_callback=None if crawler_started else started_callback,
-                reusable_content_db=self.ingestion.db_path if platform == "dy" else None,
-                current_task_id=self.job_id,
-                search_sort=str(getattr(request, "search_sort", "general") or "general"),
-            )
-            crawler_started = True
-            comments_by_key: dict[str, list[dict]] = {}
-            for comment in candidates.comments:
-                comments_by_key.setdefault(comment_content_identity(comment, platform), []).append(comment)
-            scores = []
-            for rank, item in enumerate(candidates.contents, start=1):
-                key = content_identity(item, platform)
-                if key:
-                    scores.append(engine.score(key, rank, item, comments_by_key.get(key, []), lexicon_terms,
-                                               search_keyword=keyword, rules=rules))
-            ranked = rank_candidates(scores)
-            exclude = set(selected_by_key) | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked])
-            strategy = "triage"
-            if mode == "compare" and random.random() < 0.5:
-                strategy = "rank1"
+            if account["id"]:
+                job_store.log(self.job_id, f"词「{keyword}」使用账号 {account['display_name']}")
+            if "ranked" not in state:
+                job_store.log(self.job_id, f"初筛候选采集：{keyword}，目标 {candidate_count} 条，选 {wanted} 条")
+                candidates = self.crawler.run_search(
+                    platform=platform, keyword=keyword, start_page=start_page,
+                    max_notes=candidate_count, max_total_notes=candidate_count,
+                    max_comments=candidate_comments, max_concurrency=crawler_concurrency,
+                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                    get_sub_comment=False, collect_comments=collect_comments and candidate_comments > 0,
+                    collect_media=False, save_root=candidate_root,
+                    fetch_author_profile=True,
+                    skip_profile_verify_regex="|".join(settings.triage_official_verify_patterns),
+                    stream_items=False, stop_checker=stop_checker, auth_state=account["auth_state"],
+                    account_id=account["id"],
+                    started_callback=None if crawler_started else started_callback,
+                    reusable_content_db=self.ingestion.db_path if platform == "dy" else None,
+                    current_task_id=self.job_id,
+                    search_sort=str(getattr(request, "search_sort", "general") or "general"),
+                )
+                crawler_started = True
+                clean_account_ids.add(account["id"])
+                comments_by_key: dict[str, list[dict]] = {}
+                for comment in candidates.comments:
+                    comments_by_key.setdefault(comment_content_identity(comment, platform), []).append(comment)
+                scores = []
+                for rank, item in enumerate(candidates.contents, start=1):
+                    key = content_identity(item, platform)
+                    if key:
+                        scores.append(engine.score(key, rank, item, comments_by_key.get(key, []), lexicon_terms,
+                                                   search_keyword=keyword, rules=rules))
+                state["ranked"], state["scored"] = rank_candidates(scores), len(scores)
+                # 对照组分组按词固定，换账号重试不重新抽签
+                state["strategy"] = "rank1" if mode == "compare" and random.random() < 0.5 else "triage"
+            else:
+                job_store.log(self.job_id, f"词「{keyword}」沿用已打分的候选重新挑选，排除精采触发验证的 "
+                                           f"{'、'.join(sorted(state['failed_picks'])) or '无'}")
+            ranked = state["ranked"]
+            exclude = (set(selected_by_key) | state["failed_picks"]
+                       | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked]))
+            strategy = state["strategy"]
+            if strategy == "rank1":
                 ranked = sorted(ranked, key=lambda s: s.rank)
                 picks = [c for c in ranked if c.content_key not in exclude][:wanted]
             else:
@@ -2206,7 +2220,7 @@ class AuditPipeline:
                 excluded = len(exclude & {s.content_key for s in ranked})
                 positive = sum(1 for s in ranked if s.score > 0)
                 discarded = sum(1 for s in ranked if s.band == "discard")
-                job_store.log(self.job_id, f"词「{keyword}」跳过：候选 {len(scores)} 条，可疑 {positive} 条，"
+                job_store.log(self.job_id, f"词「{keyword}」跳过：候选 {state['scored']} 条，可疑 {positive} 条，"
                                            f"身份丢弃 {discarded} 条，"
                                            f"排除重复或已审 {excluded} 条，换下一个词")
                 return
@@ -2217,16 +2231,21 @@ class AuditPipeline:
                 risk_note = f"，可疑分 {selected.model_risk}" if selected.model_risk is not None else ""
                 job_store.log(self.job_id, f"词「{keyword}」选中 {selected.content_key}"
                                            f"（{strategy}，{selected.band}，分 {selected.score}{risk_note}）：{selected.reason}")
-                detail_output = self.crawler.run_detail(
-                    platform, selected.content_key, source_keyword=keyword,
-                    max_comments=detail_comments, max_concurrency=crawler_concurrency,
-                    max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
-                    get_sub_comment=bool(getattr(request, "get_sub_comment", False)), save_root=save_root,
-                    progress_callback=keyword_progress, content_callback=content_callback, stream_items=stream_items,
-                    stop_checker=stop_checker, auth_state=account["auth_state"], started_callback=None,
-                    account_id=account["id"], collect_comments=collect_comments,
-                    collect_media=bool(getattr(request, "collect_media", True)),
-                )
+                try:
+                    detail_output = self.crawler.run_detail(
+                        platform, selected.content_key, source_keyword=keyword,
+                        max_comments=detail_comments, max_concurrency=crawler_concurrency,
+                        max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
+                        get_sub_comment=bool(getattr(request, "get_sub_comment", False)), save_root=save_root,
+                        progress_callback=keyword_progress, content_callback=content_callback, stream_items=stream_items,
+                        stop_checker=stop_checker, auth_state=account["auth_state"], started_callback=None,
+                        account_id=account["id"], collect_comments=collect_comments,
+                        collect_media=bool(getattr(request, "collect_media", True)),
+                    )
+                except (CrawlerVerificationError, CrawlerAuthenticationError):
+                    # 换账号重试这个词时不再挑这一条，也不把它记成已选
+                    state["failed_picks"].add(selected.content_key)
+                    raise
                 if detail_output.command:
                     last_command = list(detail_output.command)
                 if detail_output.contents:
@@ -2254,13 +2273,16 @@ class AuditPipeline:
             visited += 1
             candidate_root = save_root / "candidates" / self._keyword_slug(index, keyword)
             retried = False
+            keyword_state: dict = {"failed_picks": set()}
             while True:
                 position = cursor % len(rotation)
                 account = rotation[position]
-                if account["id"] and account["id"] != primary_account_id and account["id"] not in used_account_ids:
+                if account["id"] and account["id"] != primary_account_id and account["id"] not in marked_used_ids:
                     crawler_account_store.mark_used(account["id"])
+                    marked_used_ids.add(account["id"])
                 try:
-                    crawl_keyword(index, keyword, candidate_root, account)
+                    crawl_keyword(index, keyword, candidate_root, account, keyword_state)
+                    clean_account_ids.add(account["id"])
                 # 触发验证或登录失效的账号退出本任务轮换，同一个词只换下一个账号重试一次；
                 # 重试也失败（一个高风险词最多连累两个账号）或轮换表空了，就按原来的方式整任务失败。
                 # 限流是出口 IP 级别的，换账号没有用。
@@ -2284,13 +2306,12 @@ class AuditPipeline:
                     raise
                 except Exception as exc:
                     job_store.log(self.job_id, f"词「{keyword}」采集或初筛失败：{exc}，跳过该词")
-                used_account_ids.add(account["id"])
                 cursor += 1
                 break
         # 本任务里没有触发风控就完成采集的账号，风控计数清零（退出慢速模式）
         if not (stop_checker and stop_checker()):
             for account in rotation:
-                if account["id"] in used_account_ids:
+                if account["id"] in clean_account_ids:
                     stored = crawler_account_store.get(account["id"])
                     if stored and stored.get("risk_count"):
                         crawler_account_store.reset_risk(account["id"])
