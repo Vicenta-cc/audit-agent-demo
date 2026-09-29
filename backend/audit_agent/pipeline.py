@@ -915,6 +915,8 @@ class AuditPipeline:
                                 try:
                                     candidate_output = run_with_current_account(save_root)
                                 except CrawlerVerificationError as exc:
+                                    if getattr(exc, "triage_rotation_stop", False):
+                                        raise
                                     last_account_error = exc
                                     if crawler_account_id and not getattr(exc, "account_risk_recorded", False):
                                         AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down_after_risk(
@@ -929,6 +931,8 @@ class AuditPipeline:
                                     )
                                     continue
                                 except CrawlerAuthenticationError as exc:
+                                    if getattr(exc, "triage_rotation_stop", False):
+                                        raise
                                     last_account_error = exc
                                     if crawler_account_id and not getattr(exc, "account_risk_recorded", False):
                                         crawler_account_store.mark_expired(crawler_account_id, str(exc))
@@ -959,7 +963,10 @@ class AuditPipeline:
                                 if (
                                     crawler_account_id
                                     and not crawl_stop_requested()
-                                    and str(getattr(settings, "triage_mode", "off") or "off") not in {"select", "compare"}
+                                    and not (
+                                        request.crawl_mode == "search"
+                                        and str(getattr(settings, "triage_mode", "off") or "off") in {"select", "compare"}
+                                    )
                                     and (crawler_account_store.get(crawler_account_id) or {}).get("risk_count")
                                 ):
                                     # 逐词采集在轮换内按账号清零；这里只处理单账号路径
@@ -2027,25 +2034,31 @@ class AuditPipeline:
         allowed = _authorized_crawler_account_ids(self.job_id)
         # Lease at most what we may keep plus the reserve, then hand the reserve back.
         acquired: list[tuple[dict, ExitStack]] = []
-        for account in crawler_account_store.available_accounts(platform, exclude_ids=(primary_id,)):
-            if len(acquired) >= wanted + reserve:
-                break
-            if allowed is not None and account["id"] not in allowed:
-                continue
-            lease = ExitStack()
-            if not lease.enter_context(account_lease(platform, account["id"])):
+        try:
+            for account in crawler_account_store.available_accounts(platform, exclude_ids=(primary_id,)):
+                if len(acquired) >= wanted + reserve:
+                    break
+                if allowed is not None and account["id"] not in allowed:
+                    continue
+                lease = ExitStack()
+                acquired.append((account, lease))
+                if not lease.enter_context(account_lease(platform, account["id"])):
+                    acquired.pop()[1].close()
+                    continue
+                # Recheck after lease acquisition; login/maintenance may have changed it.
+                if account["id"] not in {item["id"] for item in crawler_account_store.available_accounts(platform)}:
+                    acquired.pop()[1].close()
+                    continue
+        except BaseException:
+            for _account, lease in reversed(acquired):     # LIFO: leases share a context stack
                 lease.close()
-                continue
-            # Recheck after lease acquisition; login/maintenance may have changed it.
-            if account["id"] not in {item["id"] for item in crawler_account_store.available_accounts(platform)}:
-                lease.close()
-                continue
-            acquired.append((account, lease))
+            raise
         keep = max(0, min(wanted, len(acquired) - reserve))
         for _account, lease in reversed(acquired[keep:]):      # LIFO: leases share a context stack
             lease.close()
-        for account, lease in acquired[:keep]:
+        for _account, lease in acquired[:keep]:
             leases.enter_context(lease.pop_all())
+        for account, _lease in acquired[:keep]:
             try:
                 auth_state = auth_state_cipher.decrypt(crawler_account_store.get_auth_state_ciphertext(account["id"]))
             except Exception as exc:
@@ -2257,6 +2270,8 @@ class AuditPipeline:
                     self._retire_rotation_account(account, exc)
                     rotation.pop(position)
                     if retried or not rotation:
+                        # 外层账号循环不能再换账号重跑同一个词，否则一个高风险词会连累所有空闲账号
+                        exc.triage_rotation_stop = True
                         raise
                     retried = True
                     cursor = position

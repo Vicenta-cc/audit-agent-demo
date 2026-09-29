@@ -293,31 +293,27 @@ def test_rate_limit_is_not_rotated(env, monkeypatch):
     assert env.store.get(a["id"])["risk_count"] == 0
 
 
-def test_pipeline_run_counts_each_account_risk_once_when_rotation_is_exhausted(env, monkeypatch):
+def _run_pipeline(env, monkeypatch, crawler, primary):
     from backend.audit_agent.ingestion import AuditResultStore, IngestionStore
     from backend.audit_agent.job_store import JobStore
 
     jobs = JobStore(env.tmp / "jobs.sqlite3")
-    ingestion = IngestionStore(env.tmp / "ingestion.sqlite3")
-    a, b = env.add("A"), env.add("B")
     config = {'platform': 'dy', 'display_name': 'rotation', 'crawl_mode': 'search', 'keyword': '词1,词2',
               'keyword_source': 'keyword', 'lexicon_category': 'soft', 'library_ids': [], 'capabilities': ['text'],
               'scoring_template': 'balanced', 'rule_snapshot': {}, 'lexicon_keywords': [], 'creator_url': '',
               'creator_id': '', 'start_page': 0, 'max_notes': 1, 'max_comments': 0, 'max_concurrency': 1,
-              'max_items_per_minute': 1, 'crawler_account_id': a['id'], 'get_sub_comment': False, 'analyze_limit': 0,
-              'run_crawler': True, 'source_output_id': None, 'analysis_batch_size': 1,
+              'max_items_per_minute': 1, 'crawler_account_id': primary['id'], 'get_sub_comment': False,
+              'analyze_limit': 0, 'run_crawler': True, 'source_output_id': None, 'analysis_batch_size': 1,
               'prompt_profile_snapshot': {}, 'policy_id': ''}
     jobs.create(job_id="job-rot", **config)
     monkeypatch.setattr(pipeline_module, "job_store", jobs)
     monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
     monkeypatch.setattr(pipeline_module.settings, "outputs_dir", env.tmp / "outputs")
     monkeypatch.setattr(pipeline_module.settings, "auto_analyze_crawled_content", False)
-    crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerVerificationError("verify"),
-                                    (b["id"], "词1"): CrawlerVerificationError("verify")})
     pipeline = pipeline_module.AuditPipeline.__new__(pipeline_module.AuditPipeline)
     pipeline.job_id = "job-rot"
     pipeline.crawler = crawler
-    pipeline.ingestion = ingestion
+    pipeline.ingestion = IngestionStore(env.tmp / "ingestion.sqlite3")
     pipeline.audit_results = AuditResultStore(env.tmp / "ingestion.sqlite3")
     pipeline.qwen = SimpleNamespace(provider_failure='')
     pipeline.prompt_profile_snapshot = {}
@@ -326,9 +322,92 @@ def test_pipeline_run_counts_each_account_risk_once_when_rotation_is_exhausted(e
     pipeline.authoritative_m3 = False
     pipeline._triage_engine = ScoreAll()
     pipeline.run(SimpleNamespace(**config, _authoritative_m3_contract=False))
-    job = jobs.get("job-rot")
+    return jobs.get("job-rot")
+
+
+def test_pipeline_run_counts_each_account_risk_once_when_rotation_is_exhausted(env, monkeypatch):
+    a, b = env.add("A"), env.add("B")
+    crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerVerificationError("verify"),
+                                    (b["id"], "词1"): CrawlerVerificationError("verify")})
+    job = _run_pipeline(env, monkeypatch, crawler, a)
     assert job["status"] == "failed"
     assert job["error"].startswith("crawler_account_verification_required:")
     assert env.store.get(a["id"])["risk_count"] == 1
     assert env.store.get(b["id"])["risk_count"] == 1
     assert crawler.search_accounts == []
+
+
+@pytest.mark.parametrize("per_task", [2, 3])
+def test_pipeline_run_stops_after_two_accounts_fail_one_keyword(env, monkeypatch, per_task):
+    # 外层账号循环不得换上第三个账号重跑同一个词：一个高风险词最多连累两个账号
+    monkeypatch.setattr(pipeline_module.settings, "triage_accounts_per_task", per_task)
+    a, b, c, d = (env.add(name) for name in "ABCD")
+    crawler = RotationCrawler(fail={(acc["id"], "词1"): CrawlerVerificationError("verify") for acc in (a, b, c, d)})
+    job = _run_pipeline(env, monkeypatch, crawler, a)
+    assert job["status"] == "failed"
+    assert job["error"].startswith("crawler_account_verification_required:")
+    tried = [kw["account_id"] for kw in crawler.search_kwargs]
+    assert len(tried) == 2 and tried[0] == a["id"] and len(set(tried)) == 2
+    for account in (a, b, c, d):
+        stored = env.store.get(account["id"])
+        if account["id"] in tried:
+            assert stored["risk_count"] == 1
+        else:
+            assert stored["risk_count"] == 0 and not stored["cooldown_until"]
+    assert not any("继续尝试剩余" in log["message"] for log in job["logs"])
+
+
+def test_rotation_releases_leases_when_acquisition_fails(env, monkeypatch):
+    accounts = [env.add(name) for name in "ABC"]
+    original = env.store.available_accounts
+    calls = {"n": 0}
+
+    def flaky(platform, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 3:       # recheck after the second extra lease
+            raise RuntimeError("database is locked")
+        return original(platform, **kwargs)
+
+    monkeypatch.setattr(env.store, "available_accounts", flaky)
+    with pytest.raises(RuntimeError):
+        with ExitStack() as leases:
+            _rotation(env, _pipeline(env), accounts[0], leases)
+    for account in accounts[1:]:
+        handle = acquire_account_handle("dy", account["id"])
+        assert handle is not None
+        handle.close()
+    from backend.task_admission.resources import inherited_fds
+    assert inherited_fds() == ()
+
+
+def test_creator_task_under_triage_mode_resets_risk_count(env, monkeypatch):
+    class CreatorCrawler(RotationCrawler):
+        def run_creator(self, *, platform, save_root, account_id="", **kwargs):
+            self.search_kwargs.append({**kwargs, "account_id": account_id})
+            item = {"aweme_id": "c-1", "desc": "x"}
+            return CrawlOutput(platform=platform, contents=[item], comments=[], output_dir=Path(save_root),
+                               command=["fake"])
+
+    a = env.add("A")
+    with env.store._connect() as conn:
+        conn.execute("UPDATE crawler_accounts SET risk_count=1 WHERE id=?", (a["id"],))
+    crawler = CreatorCrawler()
+
+    from backend.audit_agent.job_store import JobStore
+    real_create = JobStore.create
+
+    def creator_create(self, **kwargs):
+        return real_create(self, **{**kwargs, "crawl_mode": "creator", "creator_id": "u1"})
+
+    monkeypatch.setattr(JobStore, "create", creator_create)
+    original_run = pipeline_module.AuditPipeline.run
+
+    def run_as_creator(self, request, crawl_epoch=None):
+        request.crawl_mode = "creator"
+        request.creator_id = "u1"
+        return original_run(self, request, crawl_epoch)
+
+    monkeypatch.setattr(pipeline_module.AuditPipeline, "run", run_as_creator)
+    job = _run_pipeline(env, monkeypatch, crawler, a)
+    assert [kw["account_id"] for kw in crawler.search_kwargs] == [a["id"]], job.get("error")
+    assert env.store.get(a["id"])["risk_count"] == 0
