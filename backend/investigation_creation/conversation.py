@@ -63,6 +63,8 @@ PUBLISHED_SESSION_NOTICE = (
 
 logger = logging.getLogger(__name__)
 
+DRAFT_TERM_TOOLS = frozenset({"create_investigation_draft", "update_investigation_draft", "use_ruleset_proposal"})
+
 CREATION_SYSTEM_PROMPT = f"""You are the investigation configuration and resource assistant for a
 content-audit platform. Application appends the complete authoritative 审核规则 Proposal snapshot
 to the public assistant message after successful Proposal creation or update. Your natural-language
@@ -1743,8 +1745,11 @@ class InvestigationCreationConversationService:
         if notice:
             answer = "\n\n".join(filter(None, [answer, notice]))
         # The cap notice is authoritative preview data; never rely on the model to relay it.
+        # Only a turn that set the draft's terms repeats it; reads rely on the card.
         cap_notice = str((artifact.get("confirmation_preview") or {}).get("search_terms_notice") or "")
-        if cap_notice and cap_notice not in answer:
+        sets_terms = any(call["name"] in DRAFT_TERM_TOOLS
+                         for call in HermesInvestigationAgentService._tool_calls(trace_messages))
+        if cap_notice and sets_terms and cap_notice not in answer:
             answer = "\n\n".join(filter(None, [answer, cap_notice]))
         if settings.creation_answer_stream_enabled:
             public_transcript = []

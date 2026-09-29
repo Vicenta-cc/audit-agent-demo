@@ -323,3 +323,22 @@ def test_legacy_resolver_leaves_lists_within_the_cap_untouched(tmp_path):
     resolver = _legacy_resolver(tmp_path)
     assert resolver.resolve(_legacy_configuration("keyword", ["乙", "甲"]))["keyword"] == "乙,甲"
     assert resolver.resolve(_legacy_configuration("keyword", PLAIN[:10]))["keyword"].split(",") == PLAIN[:10]
+
+
+def test_cap_notice_is_not_repeated_on_read_only_turns(creation_stack):
+    args = _t1_temporary_arguments(creation_stack)
+    args["configuration"]["investigation"]["recall_plan"]["terms"] = PLAIN
+    created = _run_scripted_creation_turn(
+        creation_stack, content="用这些词创建调查", actions=[("create_investigation_draft", args)],
+        final_response="草案已创建。", client_message_id="cap-once-create",
+    )
+    notice = "已截取为前 10 个搜索词，未使用：" + "、".join(PLAIN[10:])
+    assert notice in created["result"].answer
+    draft_id = created["turn"].public_artifact["draft_id"]
+    read = _run_scripted_creation_turn(
+        creation_stack, content="看看草案", session_id=created["session_id"],
+        actions=[("get_investigation_draft", {"draft_id": draft_id})],
+        final_response="这是当前草案。", client_message_id="cap-once-read",
+    )
+    assert read["turn"].public_artifact["confirmation_preview"]["search_terms_notice"] == notice
+    assert notice not in read["result"].answer
