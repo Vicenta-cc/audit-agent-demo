@@ -2240,6 +2240,7 @@ class AuditPipeline:
                 break
             visited += 1
             candidate_root = save_root / "candidates" / self._keyword_slug(index, keyword)
+            retried = False
             while True:
                 position = cursor % len(rotation)
                 account = rotation[position]
@@ -2247,15 +2248,17 @@ class AuditPipeline:
                     crawler_account_store.mark_used(account["id"])
                 try:
                     crawl_keyword(index, keyword, candidate_root, account)
-                # 触发验证或登录失效的账号退出本任务轮换，同一个词换下一个账号重试；
-                # 全部退出后按原来的方式整任务失败。限流是出口 IP 级别的，换账号没有用。
+                # 触发验证或登录失效的账号退出本任务轮换，同一个词只换下一个账号重试一次；
+                # 重试也失败（一个高风险词最多连累两个账号）或轮换表空了，就按原来的方式整任务失败。
+                # 限流是出口 IP 级别的，换账号没有用。
                 except (CrawlerVerificationError, CrawlerAuthenticationError) as exc:
                     if not account["id"]:
                         raise
                     self._retire_rotation_account(account, exc)
                     rotation.pop(position)
-                    if not rotation:
+                    if retried or not rotation:
                         raise
+                    retried = True
                     cursor = position
                     retry_with = rotation[cursor % len(rotation)]
                     job_store.log(self.job_id, f"词「{keyword}」改用账号 {retry_with['display_name']} 重试")

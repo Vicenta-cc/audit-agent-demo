@@ -261,6 +261,29 @@ def test_all_accounts_failing_raises_and_marks_risk_as_recorded(env, monkeypatch
     assert env.store.get(b["id"])["risk_count"] == 1
 
 
+def test_keyword_failing_on_two_accounts_stops_without_touching_the_third(env, monkeypatch):
+    a, b, c = (env.add(name) for name in "ABC")
+    crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerVerificationError("verify"),
+                                    (b["id"], "词1"): CrawlerVerificationError("verify")})
+    with pytest.raises(CrawlerVerificationError) as raised:
+        _sweep(env, monkeypatch, crawler, _as_rotation([a, b, c]))
+    assert raised.value.account_risk_recorded is True
+    assert [kw["account_id"] for kw in crawler.search_kwargs] == [a["id"], b["id"]]
+    assert crawler.search_accounts == [] and crawler.detail_accounts == []
+    assert env.store.get(a["id"])["risk_count"] == 1
+    assert env.store.get(b["id"])["risk_count"] == 1
+    untouched = env.store.get(c["id"])
+    assert untouched["risk_count"] == 0 and not untouched["cooldown_until"]
+
+
+def test_single_retry_is_per_keyword(env, monkeypatch):
+    a, b, c, d = (env.add(name) for name in "ABCD")
+    crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerVerificationError("verify"),
+                                    (c["id"], "词2"): CrawlerVerificationError("verify")})
+    _sweep(env, monkeypatch, crawler, _as_rotation([a, b, c, d]), keywords="词1,词2,词3")
+    assert crawler.search_accounts == [("词1", b["id"]), ("词2", d["id"]), ("词3", b["id"])]
+
+
 def test_rate_limit_is_not_rotated(env, monkeypatch):
     a, b = env.add("A"), env.add("B")
     crawler = RotationCrawler(fail={(a["id"], "词1"): CrawlerRateLimitError("gate")})
