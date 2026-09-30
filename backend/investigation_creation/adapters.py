@@ -823,6 +823,7 @@ class InvestigationRunProjector:
         actions: dict[str, bool] = {}
         crawl_status = "pending"
         analysis_status = "pending"
+        no_suspicious_content = False
         if run.job_id:
             job = self.job_store.get(run.job_id)
             if job is None:
@@ -835,6 +836,7 @@ class InvestigationRunProjector:
                 )
                 crawl_status, analysis_status = self._job_projection(job, task_stats)
                 logs = _public_job_logs(job.get("logs") or [])
+                no_suspicious_content = (job.get("control") or {}).get("no_suspicious_content") is True
                 actions = available_job_actions(
                     {**job, "crawl_status": crawl_status, "analysis_status": analysis_status},
                     task_stats,
@@ -855,6 +857,14 @@ class InvestigationRunProjector:
         report_status = self._report_status(run)
         if run.status == RunStatus.AUDIT_COMPLETED and int(task_stats.get("failed_analysis_count") or 0) > 0:
             report_status = "blocked_by_failed_posts"
+        elif (
+            run.status == RunStatus.AUDIT_COMPLETED
+            and no_suspicious_content
+            and int(task_stats.get("ingested_count") or 0) == 0
+        ):
+            # 初筛所有词都没有可疑内容：没有内容进入精审，也不会生成报告
+            report_status = "no_content"
+            analysis_status = "no_content"
         return {
             "crawl_status": crawl_status,
             "analysis_status": analysis_status,

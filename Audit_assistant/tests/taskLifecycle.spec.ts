@@ -93,3 +93,11 @@ test("natural outcomes and user stops have distinct colors and controls", async 
   await page.getByRole("button", { name: "暂停分析", exact: true }).click();
   await expect.poll(() => action).toBe("pause_analysis");
 });
+
+test("all-skipped triage run says no suspicious content instead of a pending report", () => {
+  const run = { status: "AUDIT_COMPLETED", crawl_status: "completed", analysis_status: "no_content",
+    report_status: "no_content", task_stats: {} } as unknown as InvestigationRunProjection;
+  const view = mapInvestigationRunState(run);
+  expect(view.terminal).toBe("completed");
+  expect(view.label).toBe("处理结束，未发现可疑内容，未生成报告");
+});

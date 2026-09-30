@@ -229,6 +229,7 @@ export interface InvestigationRunProjection {
     backfill_analysis?: boolean;
     delete_job?: boolean;
   };
+  /** Includes "no_content": triage found nothing suspicious, so no report is generated (analysis_status is "no_content" too). */
   report_status: string;
   report_version_id: string;
   error_code: string;

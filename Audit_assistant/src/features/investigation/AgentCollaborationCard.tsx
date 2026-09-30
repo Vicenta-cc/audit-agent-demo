@@ -627,11 +627,11 @@ export function AgentCollaborationCard({
 }
 
 function statusLabel(status: string) {
-  return ({ completed: "完成", partial: "处理完成，部分帖子失败", pending: "待处理", queued: "排队中", running: "进行中", pausing: "正在暂停", stopping: "正在停止", interrupted: "已中断", idle: "未启动", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || "处理中";
+  return ({ completed: "完成", partial: "处理完成，部分帖子失败", pending: "待处理", queued: "排队中", running: "进行中", pausing: "正在暂停", stopping: "正在停止", interrupted: "已中断", idle: "未启动", no_content: "无可疑内容", failed: "失败", stopped: "已停止", paused: "已暂停", skipped: "跳过" } as Record<string, string>)[status] || "处理中";
 }
 
 function reportStatusLabel(status: string) {
-  return ({ cancelled: "已结束，未生成报告", blocked_by_failed_posts: "本轮处理结束，无可发布报告", pending: "待生成", generating: "生成中", published: "已生成", failed: "失败", interrupted: "已中断" } as Record<string, string>)[status] || "待处理";
+  return ({ cancelled: "已结束，未生成报告", blocked_by_failed_posts: "本轮处理结束，无可发布报告", no_content: "无可疑内容，未生成", pending: "待生成", generating: "生成中", published: "已生成", failed: "失败", interrupted: "已中断" } as Record<string, string>)[status] || "待处理";
 }
 
 function controlErrorMessage(error: unknown) {

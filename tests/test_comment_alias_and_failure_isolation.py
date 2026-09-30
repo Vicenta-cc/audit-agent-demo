@@ -178,6 +178,24 @@ def test_partial_result_projection_does_not_promise_pending_report():
     assert result['report_status'] == 'blocked_by_failed_posts'
 
 
+@pytest.mark.parametrize('flag, status, expected', [
+    (True, 'AUDIT_COMPLETED', ('no_content', 'no_content')),
+    (False, 'AUDIT_COMPLETED', ('pending', 'idle')),
+    (True, 'RUNNING', ('pending', 'idle')),
+])
+def test_all_skipped_projection_says_no_content_instead_of_pending_report(flag, status, expected):
+    from backend.investigation_creation.adapters import InvestigationRunProjector
+    from backend.investigation_creation.contracts import RunStatus
+    p = InvestigationRunProjector.__new__(InvestigationRunProjector)
+    p.job_store = SimpleNamespace(get=lambda _: {'status': 'completed', 'run_crawler': True,
+                                                 'crawl_status': 'completed', 'analysis_status': 'idle',
+                                                 'control': {'no_suspicious_content': flag}})
+    p.ingestion_store = SimpleNamespace(stats_for_task=lambda _: {'ingested_count': 0})
+    p.audit_result_store = SimpleNamespace(list_results=lambda **_: {'items': []})
+    result = p.project(SimpleNamespace(job_id='job', status=RunStatus(status), report_version_id=''))
+    assert (result['report_status'], result['analysis_status']) == expected
+
+
 def test_resumed_authoritative_audit_cannot_persist_provider_fallback(tmp_path, monkeypatch):
     jobs = JobStore(tmp_path / 'audit.sqlite3')
     ingestion = IngestionStore(tmp_path / 'audit.sqlite3')

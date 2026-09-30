@@ -44,6 +44,9 @@ export function mapInvestigationRunState(
     if (Number(run.task_stats?.failed_analysis_count) > 0 && Number(run.task_stats?.completed_analysis_count) === 0) {
       return { phase: "audit_completed", terminal: "completed", label: "处理结束，帖子审核失败，未生成报告", step: 3, activity: "completed" };
     }
+    if (run.report_status === "no_content") {
+      return { phase: "audit_completed", terminal: "completed", label: "处理结束，未发现可疑内容，未生成报告", step: 3, activity: "completed" };
+    }
     return { phase: "audit_completed", terminal: "completed", label: run.analysis_status === "partial" ? "处理结束，部分帖子审核失败" : "审核完成", step: 3, activity: "completed" };
   }
   if (run.status === "PUBLISHED") {
