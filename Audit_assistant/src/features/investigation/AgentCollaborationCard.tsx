@@ -229,7 +229,7 @@ export function AgentCollaborationCard({
     return () => {
       current = false;
     };
-  }, [authoritative, run?.run_id, run?.status, run?.crawl_status, run?.report_version_id, run?.updated_at, run?.audit_results.length]);
+  }, [authoritative, run?.run_id, run?.status, run?.crawl_status, run?.available_actions?.resume_crawl, run?.report_version_id, run?.updated_at, run?.audit_results.length]);
 
   useEffect(() => {
     if (phase !== "collection_waking") return;

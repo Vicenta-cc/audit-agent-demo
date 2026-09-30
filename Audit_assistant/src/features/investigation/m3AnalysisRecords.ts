@@ -158,23 +158,23 @@ export function readRunAnalysisCounts(run: InvestigationRunProjection): M3Analys
   return analysisCounts(run, readRunCount(run, "completed_analysis_count"));
 }
 
-// While collection runs the denominator is the task's planned post count;
-// once it finishes, only the posts actually ingested can still complete.
+// Until collection has really finished (or can no longer resume) the
+// denominator is the task's planned post count and the badge never turns
+// complete. Afterwards only the posts actually ingested can still complete.
 function analysisCounts(run: InvestigationRunProjection, completedCount: number): M3AnalysisCounts {
   const ingested = readRunCount(run, "ingested_count");
-  const collecting = isCollecting(run);
-  const totalCount = collecting ? Math.max(readRunCount(run, "planned_count"), ingested) : ingested;
+  const resumable = run.available_actions?.resume_crawl === true;
+  const finished = ["completed", "skipped"].includes(run.crawl_status) && !resumable;
+  const unfinished = !finished && (resumable || ACTIVE_CRAWL_STATUSES.includes(run.crawl_status));
+  const totalCount = unfinished ? Math.max(readRunCount(run, "planned_count"), ingested) : ingested;
   return {
     completedCount,
     totalCount,
-    isComplete: !collecting && totalCount > 0 && completedCount === totalCount
+    isComplete: finished && totalCount > 0 && completedCount === totalCount
   };
 }
 
-function isCollecting(run: InvestigationRunProjection) {
-  return (run.status === "QUEUED" || run.status === "RUNNING")
-    && ["pending", "queued", "running", "pausing", "stopping"].includes(run.crawl_status);
-}
+const ACTIVE_CRAWL_STATUSES = ["pending", "queued", "running", "pausing", "stopping"];
 
 function readRunCount(run: InvestigationRunProjection, key: string) {
   const value = run.task_stats[key];

@@ -343,3 +343,23 @@ def test_run_projection_exposes_the_planned_post_count(tmp_path):
     assert projected["crawl_status"] == "running"
     assert projected["task_stats"]["planned_count"] == 7
     assert projected["task_stats"]["ingested_count"] == 0
+
+
+def test_run_projection_reads_the_planned_count_before_the_job_exists(tmp_path):
+    projector = InvestigationRunProjector(
+        job_store=JobStore(tmp_path / "audit.sqlite3"),
+        ingestion_store=IngestionStore(tmp_path / "audit.sqlite3"),
+        crawler_account_store=SimpleNamespace(available_accounts=lambda _platform: []),
+    )
+
+    projected = projector.project(
+        SimpleNamespace(
+            job_id="",
+            status=RunStatus.QUEUED,
+            report_version_id="",
+            confirmed_configuration={"execution": {"max_total_notes": 7}},
+        )
+    )
+
+    assert projected["crawl_status"] == "pending"
+    assert projected["task_stats"] == {"planned_count": 7}

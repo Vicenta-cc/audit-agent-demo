@@ -1028,6 +1028,49 @@ test("analysis progress uses the planned post count until collection finishes", 
   }))).toEqual({ completedCount: 4, totalCount: 5, isComplete: false });
 });
 
+test("analysis progress keeps the planned denominator while collection can still resume", () => {
+  const stats = { planned_count: 7, ingested_count: 3, completed_analysis_count: 3 };
+  const unfinished = { completedCount: 3, totalCount: 7, isComplete: false };
+  // Paused: the crawl is stopped but can resume while the run is still RUNNING.
+  expect(readRunAnalysisCounts(run("RUNNING", {
+    crawl_status: "stopped",
+    available_actions: { resume_crawl: true },
+    task_stats: stats
+  }))).toEqual(unfinished);
+  // Resumed: the run stays INTERRUPTED while the job crawls again.
+  expect(readRunAnalysisCounts(run("INTERRUPTED", {
+    crawl_status: "running",
+    task_stats: stats
+  }))).toEqual(unfinished);
+  // Recoverable failure: login or rate limit, resume is offered.
+  expect(readRunAnalysisCounts(run("FAILED", {
+    crawl_status: "failed",
+    available_actions: { resume_crawl: true },
+    task_stats: stats
+  }))).toEqual(unfinished);
+  // A completed crawl that still offers resume has not really finished.
+  expect(readRunAnalysisCounts(run("INTERRUPTED", {
+    crawl_status: "completed",
+    available_actions: { resume_crawl: true },
+    task_stats: stats
+  }))).toEqual(unfinished);
+});
+
+test("analysis progress on a cancelled run counts ingested posts but is never complete", () => {
+  expect(readRunAnalysisCounts(run("FAILED", {
+    crawl_status: "stopped",
+    available_actions: { resume_crawl: false },
+    task_stats: { planned_count: 7, ingested_count: 3, completed_analysis_count: 3 }
+  }))).toEqual({ completedCount: 3, totalCount: 3, isComplete: false });
+});
+
+test("analysis progress shows the planned count before the job exists", () => {
+  expect(readRunAnalysisCounts(run("QUEUED", {
+    job_id: "",
+    task_stats: { planned_count: 7 }
+  }))).toEqual({ completedCount: 0, totalCount: 7, isComplete: false });
+});
+
 test("streamed audit results keep the planned denominator while collection runs", async () => {
   const result = await loadM3AnalysisRecords(run("RUNNING", {
     crawl_status: "running",
