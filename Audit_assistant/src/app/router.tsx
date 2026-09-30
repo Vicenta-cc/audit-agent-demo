@@ -4,7 +4,6 @@ import { ConfigCenterPage } from "../features/config-center/ConfigCenterPage";
 import { CrawlerAccountsPage } from "../features/crawler-accounts/CrawlerAccountsPage";
 import { FocusUsersPage } from "../features/focus-users/FocusUsersPage";
 import { MonitorTasksPage } from "../features/monitor-tasks/MonitorTasksPage";
-import { CreateTaskPage } from "../features/monitor-tasks/create-task/CreateTaskPage";
 import { AnalysisRecordsPage } from "../features/investigation/AnalysisRecordsPage";
 import { InvestigationEvidenceAppendixPage } from "../features/investigation/InvestigationEvidenceAppendixPage";
 import { InvestigationPage } from "../features/investigation/InvestigationPage";
@@ -49,7 +48,7 @@ export function AppRouter() {
       <Route path="/rule-assistant/lexicon-preview/:conversationId" element={<LexiconCandidatePreviewPage />} />
       <Route path="/rule-assistant/structure/:ruleSetId" element={<RuleAssistantStructurePage />} />
       <Route path="/tasks" element={<MonitorTasksPage />} />
-      <Route path="/tasks/new" element={<CreateTaskPage />} />
+      <Route path="/tasks/new" element={<Navigate to="/investigation" replace />} />
       <Route path="/tasks/chat-new" element={<InvestigationPage />} />
       <Route path="/tasks/chat" element={<InvestigationPage />} />
       <Route path="/tasks/:taskId/outputs" element={<TaskOutputsPage />} />

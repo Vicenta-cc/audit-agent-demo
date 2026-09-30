@@ -1,12 +1,10 @@
-import { Plus, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/common/Button";
 
-interface MonitorPageHeaderProps {
-  onCreate: () => void;
-}
-
-export function MonitorPageHeader({ onCreate }: MonitorPageHeaderProps) {
+// The legacy create page is hidden: tasks are created in the conversation and
+// always use 采集与分析设置.
+export function MonitorPageHeader() {
   const navigate = useNavigate();
 
   return (
@@ -23,10 +21,6 @@ export function MonitorPageHeader({ onCreate }: MonitorPageHeaderProps) {
         >
           <Sparkles size={16} />
           对话式任务创建
-        </Button>
-        <Button type="button" variant="primary" onClick={onCreate}>
-          <Plus size={18} />
-          新建监控任务
         </Button>
       </div>
     </section>

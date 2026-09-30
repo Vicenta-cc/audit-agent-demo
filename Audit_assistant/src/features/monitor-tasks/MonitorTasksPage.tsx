@@ -192,8 +192,6 @@ export function MonitorTasksPage() {
     setToast({ message, tone });
   };
 
-  const handleCreate = () => navigate("/tasks/new");
-
   const handleControl = async (task: MonitorTask, action: string, label: string, confirmed = false) => {
     setOpenMenuId(null);
     if (action === "stop_all" && !confirmed) { setEndTarget(task); return; }
@@ -241,7 +239,7 @@ export function MonitorTasksPage() {
 
   return (
     <main className="monitor-tasks-page">
-      <MonitorPageHeader onCreate={handleCreate} />
+      <MonitorPageHeader />
       <TaskStatsStrip stats={snapshot.stats} loading={loading} />
 
       <section className="task-list-panel">

@@ -3,7 +3,7 @@ import { apiRequest } from "../../services/apiClient";
 import type { InvestigationTaskParameters } from "../../types/investigationCreation";
 import { TaskParametersForm } from "./TaskParametersForm";
 
-type SavedSettings = { revision: number; parameters: InvestigationTaskParameters; effective_parameters?: InvestigationTaskParameters; max_post_limit?: number };
+type SavedSettings = { revision: number; parameters: InvestigationTaskParameters; effective_parameters?: InvestigationTaskParameters; max_post_limit?: number; max_comment_limit: number };
 const ignoreDirty = () => {};
 
 export function TaskSettingsPage() {
@@ -25,7 +25,7 @@ export function TaskSettingsPage() {
     <p>应用级统一设置，不属于某一个调查会话。每个任务在确认启动时留存实际生效参数，后续恢复仍使用该快照。</p>
     {error ? <p role="alert">{error}</p> : null}
     <button type="button" className="mt-button mt-button-secondary" onClick={() => void reload()}>重新读取已保存设置</button>
-    {preview && saved ? <TaskParametersForm preview={preview} globalSettings onDirty={ignoreDirty} onSave={async parameters => {
+    {preview && saved ? <TaskParametersForm preview={preview} commentLimit={saved.max_comment_limit} globalSettings onDirty={ignoreDirty} onSave={async parameters => {
       const result = await apiRequest<SavedSettings>("/api/task-settings", {
         method: "PUT", body: JSON.stringify({ expected_revision: saved.revision, parameters }),
       });
