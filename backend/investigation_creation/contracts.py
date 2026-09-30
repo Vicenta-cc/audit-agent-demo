@@ -309,7 +309,7 @@ class InvestigationTaskParameters(StrictModel):
         default=1, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
     )
     max_total_notes: StrictInt = Field(
-        default=5, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
+        default=10, ge=1, le=MAX_SUPPORTED_INVESTIGATION_POSTS
     )
     max_comments: StrictInt = Field(default=1, ge=0, le=1000)
     collect_comments: StrictBool = True

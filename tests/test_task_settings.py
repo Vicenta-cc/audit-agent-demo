@@ -13,7 +13,7 @@ def test_unsaved_settings_match_service_execution_defaults(tmp_path, monkeypatch
 
     assert current["revision"] == 0
     assert current["parameters"]["max_notes"] == 1
-    assert current["parameters"]["max_total_notes"] == 5
+    assert current["parameters"]["max_total_notes"] == 10
     assert current["parameters"]["max_comments"] == 123
     assert current["parameters"]["search_sort"] == "general"
     assert current["parameters"]["max_items_per_minute"] == 5

@@ -16,7 +16,7 @@ def default_task_parameters() -> InvestigationTaskParameters:
     post_limit = int(settings.investigation_max_posts)
     return InvestigationTaskParameters(
         max_notes=1,
-        max_total_notes=min(5, post_limit),
+        max_total_notes=min(10, post_limit),
         max_comments=min(1000, max(0, int(settings.m3_comments_per_post))),
         max_items_per_minute=5,
         analyze_limit=1,
