@@ -8,6 +8,14 @@ import type {
 } from "../../types/investigationCreation";
 import { InvestigationKeywordEditor } from "./InvestigationKeywordEditor";
 import { DraftResourceSave } from "./DraftResourceSave";
+import { reportMetricTone, type ReportMetricTone } from "./reportMetricTone";
+
+const METRIC_TONE_COLORS: Record<ReportMetricTone, string> = {
+  danger: "#dc2626",
+  warning: "#d97706",
+  success: "#16a34a",
+  "": "#0f172a"
+};
 
 export type DrawerType =
   | "task_config"
@@ -182,7 +190,7 @@ export function InvestigationContextDrawer({
                   {report.presentation.key_metrics.map((metric) => (
                     <div key={`${metric.label}-${metric.value}`}>
                       <span style={{ fontSize: "11px", color: "#64748b" }}>{metric.label}</span>
-                      <div style={{ fontSize: "16px", fontWeight: "800", color: metric.label.includes("风险") ? "#dc2626" : "#0f172a" }}>{metric.value}</div>
+                      <div style={{ fontSize: "16px", fontWeight: "800", color: METRIC_TONE_COLORS[reportMetricTone(metric.label)] }}>{metric.value}</div>
                       {metric.detail ? <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{metric.detail}</div> : null}
                     </div>
                   ))}

@@ -7,6 +7,14 @@ import {
   ShieldAlert
 } from "lucide-react";
 import type { ReportSummary } from "../../types/investigation";
+import { reportMetricTone, type ReportMetricTone } from "./reportMetricTone";
+
+const METRIC_TONE_CLASSES: Record<ReportMetricTone, string> = {
+  danger: "text-danger",
+  warning: "text-warning",
+  success: "text-success",
+  "": ""
+};
 
 interface InvestigationReportCardProps {
   report: ReportSummary;
@@ -45,7 +53,7 @@ export function InvestigationReportCard({
       <div className="inv-report-metrics">
         {publishedMetrics.length ? publishedMetrics.slice(0, 4).map((metric) => (
           <div className="inv-metric-block" key={`${metric.label}-${metric.value}`}>
-            <span className={`inv-metric-val ${metric.label === "未发现明显风险" ? "text-success" : metric.label.includes("风险") ? "text-danger" : metric.label.includes("复审") ? "text-warning" : ""}`}>
+            <span className={`inv-metric-val ${METRIC_TONE_CLASSES[reportMetricTone(metric.label)]}`.trim()}>
               {metric.value}
             </span>
             <span className="inv-metric-lbl">{metric.label}</span>

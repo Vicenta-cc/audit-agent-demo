@@ -13,6 +13,12 @@ from backend.reporting.contracts import (
 )
 from backend.reporting.identity import make_report_claim_id
 
+DECISION_METRIC_LABELS = (
+    ("reject", "建议拦截"),
+    ("review", "进入复审"),
+    ("pass", "审核通过"),
+)
+
 
 class HumanReportAssembler:
     def assemble(self, state: dict[str, Any]) -> tuple[HumanReportDTO, str]:
@@ -128,17 +134,6 @@ class HumanReportAssembler:
             ),
             None,
         )
-        review_count = first(name="count", group_key="decision", group_value="review")
-        review_percentage = first(
-            name="percentage", group_key="decision", group_value="review"
-        )
-        medium = first(name="count", group_key="risk_level", group_value="medium")
-        high = first(name="count", group_key="risk_level", group_value="high")
-        none_count = first(name="count", group_key="risk_level", group_value="none")
-        none_percentage = first(
-            name="percentage", group_key="risk_level", group_value="none"
-        )
-
         output = []
         if total:
             output.append(
@@ -148,46 +143,30 @@ class HumanReportAssembler:
                     metric_refs=(total["metric_key"],),
                 )
             )
-        if review_count:
-            detail = (
-                f"约{self._format_percentage(review_percentage['value'])}"
-                if review_percentage
-                else ""
+        # Decisions are mutually exclusive, so these rows sum to the total.
+        # Aggregations only emit rows for decisions that occurred; a missing
+        # decision is shown as 0 so the card layout stays stable.
+        for decision, label in DECISION_METRIC_LABELS:
+            count = first(name="count", group_key="decision", group_value=decision)
+            if not count:
+                if total:
+                    output.append(HumanReportKeyMetric(label=label, value="0条"))
+                continue
+            percentage = first(
+                name="percentage", group_key="decision", group_value=decision
             )
-            refs = [review_count["metric_key"]]
-            if review_percentage:
-                refs.append(review_percentage["metric_key"])
+            refs = [count["metric_key"]]
+            if percentage:
+                refs.append(percentage["metric_key"])
             output.append(
                 HumanReportKeyMetric(
-                    label="进入复审",
-                    value=f"{int(review_count['value'])}条",
-                    detail=detail,
-                    metric_refs=tuple(refs),
-                )
-            )
-        if medium and high:
-            output.append(
-                HumanReportKeyMetric(
-                    label="中高风险",
-                    value=f"{int(medium['value'] + high['value'])}条",
-                    detail=f"中风险{int(medium['value'])}条，高风险{int(high['value'])}条",
-                    metric_refs=(medium["metric_key"], high["metric_key"]),
-                )
-            )
-        if none_count:
-            detail = (
-                f"约{self._format_percentage(none_percentage['value'])}"
-                if none_percentage
-                else ""
-            )
-            refs = [none_count["metric_key"]]
-            if none_percentage:
-                refs.append(none_percentage["metric_key"])
-            output.append(
-                HumanReportKeyMetric(
-                    label="未发现明显风险",
-                    value=f"{int(none_count['value'])}条",
-                    detail=detail,
+                    label=label,
+                    value=f"{int(count['value'])}条",
+                    detail=(
+                        f"约{self._format_percentage(percentage['value'])}"
+                        if percentage
+                        else ""
+                    ),
                     metric_refs=tuple(refs),
                 )
             )

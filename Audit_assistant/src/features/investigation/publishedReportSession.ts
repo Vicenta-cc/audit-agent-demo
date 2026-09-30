@@ -23,7 +23,7 @@ export function buildPublishedReportSummary(report: PublishedReportDetail): Repo
     id: report.report_version_id,
     title: report.presentation.title,
     totalCollected: numericMetric(metrics, ["分析内容", "研判内容", "总量", "采集"]),
-    suspectedRisks: numericMetric(metrics, ["中高风险", "风险内容", "风险线索"]),
+    suspectedRisks: numericMetric(metrics, ["建议拦截", "中高风险", "风险内容", "风险线索"]),
     suggestedReview: numericMetric(metrics, ["进入复审", "人工复核", "建议复核"]),
     keyAuthorCandidates: numericMetric(metrics, ["重点作者", "重点对象"]),
     findings: reportFindings(report),
