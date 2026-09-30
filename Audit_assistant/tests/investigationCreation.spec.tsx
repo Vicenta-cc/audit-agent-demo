@@ -999,9 +999,53 @@ test("analysis progress counts come only from Run task statistics", () => {
       batch_item_count: 10,
       total: 20
     }
-  }))).toEqual({ completedCount: 1, totalCount: 1 });
+  }))).toEqual({ completedCount: 1, totalCount: 1, isComplete: false });
   expect(readRunAnalysisCounts(run("RUNNING", { task_stats: {} })))
-    .toEqual({ completedCount: 0, totalCount: 0 });
+    .toEqual({ completedCount: 0, totalCount: 0, isComplete: false });
+});
+
+test("analysis progress uses the planned post count until collection finishes", () => {
+  const collecting = { crawl_status: "running" };
+  expect(readRunAnalysisCounts(run("RUNNING", {
+    ...collecting,
+    task_stats: { planned_count: 7, ingested_count: 6, completed_analysis_count: 6 }
+  }))).toEqual({ completedCount: 6, totalCount: 7, isComplete: false });
+  expect(readRunAnalysisCounts(run("RUNNING", {
+    ...collecting,
+    task_stats: { planned_count: 7, ingested_count: 0, completed_analysis_count: 0 }
+  }))).toEqual({ completedCount: 0, totalCount: 7, isComplete: false });
+  expect(readRunAnalysisCounts(run("RUNNING", {
+    crawl_status: "completed",
+    task_stats: { planned_count: 7, ingested_count: 6, completed_analysis_count: 6 }
+  }))).toEqual({ completedCount: 6, totalCount: 6, isComplete: true });
+  expect(readRunAnalysisCounts(run("AUDIT_COMPLETED", {
+    crawl_status: "completed",
+    task_stats: { planned_count: 7, ingested_count: 5, completed_analysis_count: 5 }
+  }))).toEqual({ completedCount: 5, totalCount: 5, isComplete: true });
+  expect(readRunAnalysisCounts(run("RUNNING", {
+    crawl_status: "completed",
+    task_stats: { planned_count: 7, ingested_count: 5, completed_analysis_count: 4 }
+  }))).toEqual({ completedCount: 4, totalCount: 5, isComplete: false });
+});
+
+test("streamed audit results keep the planned denominator while collection runs", async () => {
+  const result = await loadM3AnalysisRecords(run("RUNNING", {
+    crawl_status: "running",
+    task_stats: { planned_count: 7, ingested_count: 6, completed_analysis_count: 6 },
+    audit_results: Array.from({ length: 6 }, (_, index) => ({
+      audit_result_id: `audit-result-${index}`,
+      content_key: `content-${index}`,
+      platform: "dy",
+      content_title: "内容",
+      author_display_name: "作者",
+      decision: "pass",
+      risk_level: "none",
+      summary: "",
+      analyzed_at: "2026-09-01T08:00:00Z",
+      evidence: []
+    }))
+  }));
+  expect(result).toMatchObject({ completedCount: 6, totalCount: 7, isComplete: false });
 });
 
 test("run progress exposes only curated business counts and sanitizes provider failures", () => {
@@ -1069,7 +1113,7 @@ test(`${status} records come directly from the current Job projection`, async ()
   }));
 
   expect(fetchCalls).toBe(0);
-  expect(result).toMatchObject({ completedCount: 1, totalCount: 1 });
+  expect(result).toMatchObject({ completedCount: 1, totalCount: 1, isComplete: true });
   expect(result.records[0]).toMatchObject({
     source: "m3-job",
     taskId: "job-1",

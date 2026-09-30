@@ -16,10 +16,14 @@ import type {
   AnalysisRisk
 } from "./analysisRecords";
 
-export interface M3AnalysisRecordsResult {
-  records: AnalysisRecord[];
+export interface M3AnalysisCounts {
   completedCount: number;
   totalCount: number;
+  isComplete: boolean;
+}
+
+export interface M3AnalysisRecordsResult extends M3AnalysisCounts {
+  records: AnalysisRecord[];
 }
 
 export async function loadM3AnalysisRecords(
@@ -54,18 +58,10 @@ export async function loadM3AnalysisRecords(
         outputId: item.audit_result_id
       };
     }).reverse();
-    return {
-      records,
-      completedCount: records.length,
-      totalCount: readRunTotal(run)
-    };
+    return { records, ...analysisCounts(run, records.length) };
   }
   if (run.status !== "PUBLISHED" || !run.report_version_id) {
-    return {
-      records: [],
-      completedCount: readRunCount(run, "completed_analysis_count"),
-      totalCount: readRunTotal(run)
-    };
+    return { records: [], ...readRunAnalysisCounts(run) };
   }
 
   const [presentation, page] = await Promise.all([
@@ -95,7 +91,8 @@ export async function loadM3AnalysisRecords(
   return {
     records,
     completedCount: records.length,
-    totalCount: page.matched_count
+    totalCount: page.matched_count,
+    isComplete: records.length === page.matched_count
   };
 }
 
@@ -157,15 +154,26 @@ export function mapReportEvidence(evidence: ReportEvidencePresentation): Analysi
   };
 }
 
-export function readRunAnalysisCounts(run: InvestigationRunProjection) {
+export function readRunAnalysisCounts(run: InvestigationRunProjection): M3AnalysisCounts {
+  return analysisCounts(run, readRunCount(run, "completed_analysis_count"));
+}
+
+// While collection runs the denominator is the task's planned post count;
+// once it finishes, only the posts actually ingested can still complete.
+function analysisCounts(run: InvestigationRunProjection, completedCount: number): M3AnalysisCounts {
+  const ingested = readRunCount(run, "ingested_count");
+  const collecting = isCollecting(run);
+  const totalCount = collecting ? Math.max(readRunCount(run, "planned_count"), ingested) : ingested;
   return {
-    completedCount: readRunCount(run, "completed_analysis_count"),
-    totalCount: readRunTotal(run)
+    completedCount,
+    totalCount,
+    isComplete: !collecting && totalCount > 0 && completedCount === totalCount
   };
 }
 
-function readRunTotal(run: InvestigationRunProjection) {
-  return readRunCount(run, "ingested_count");
+function isCollecting(run: InvestigationRunProjection) {
+  return (run.status === "QUEUED" || run.status === "RUNNING")
+    && ["pending", "queued", "running", "pausing", "stopping"].includes(run.crawl_status);
 }
 
 function readRunCount(run: InvestigationRunProjection, key: string) {

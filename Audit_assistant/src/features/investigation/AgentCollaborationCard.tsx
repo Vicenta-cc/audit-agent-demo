@@ -179,7 +179,7 @@ export function AgentCollaborationCard({
   const [feedRevision, setFeedRevision] = useState(0);
   const [selectedRecord, setSelectedRecord] = useState<AnalysisRecord | null>(null);
   const [authoritativeCounts, setAuthoritativeCounts] = useState(() => (
-    run ? readRunAnalysisCounts(run) : { completedCount: 0, totalCount: 0 }
+    run ? readRunAnalysisCounts(run) : { completedCount: 0, totalCount: 0, isComplete: false }
   ));
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [recordsError, setRecordsError] = useState("");
@@ -215,7 +215,8 @@ export function AgentCollaborationCard({
         setAnalysisRecords(result.records);
         setAuthoritativeCounts({
           completedCount: result.completedCount,
-          totalCount: result.totalCount
+          totalCount: result.totalCount,
+          isComplete: result.isComplete
         });
         setRecordsLoading(false);
       })
@@ -228,7 +229,7 @@ export function AgentCollaborationCard({
     return () => {
       current = false;
     };
-  }, [authoritative, run?.run_id, run?.status, run?.report_version_id, run?.updated_at, run?.audit_results.length]);
+  }, [authoritative, run?.run_id, run?.status, run?.crawl_status, run?.report_version_id, run?.updated_at, run?.audit_results.length]);
 
   useEffect(() => {
     if (phase !== "collection_waking") return;
@@ -544,7 +545,7 @@ export function AgentCollaborationCard({
           <div className="analysis-feed-heading">
             <strong>最新分析进展</strong>
             {authoritative && authoritativeCounts.totalCount > 0 ? (
-              <span className={`analysis-feed-count${authoritativeCounts.completedCount === authoritativeCounts.totalCount ? " is-complete" : ""}`}>
+              <span className={`analysis-feed-count${authoritativeCounts.isComplete ? " is-complete" : ""}`}>
                 已完成 {authoritativeCounts.completedCount} / {authoritativeCounts.totalCount}
               </span>
             ) : isEthnicRelationsDemo ? (

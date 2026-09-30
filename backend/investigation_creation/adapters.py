@@ -831,6 +831,9 @@ class InvestigationRunProjector:
                 analysis_status = "unknown"
             else:
                 task_stats = self.ingestion_store.stats_for_task(run.job_id)
+                # Posts the task may send to 精审; the progress badge uses it
+                # as the denominator until collection finishes.
+                task_stats["planned_count"] = int(job.get("max_total_notes") or 0)
                 audit_results = _public_audit_results(
                     self.audit_result_store, run.job_id
                 )

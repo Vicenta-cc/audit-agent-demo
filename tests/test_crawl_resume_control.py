@@ -320,3 +320,26 @@ def test_continue_collection_projection_waits_for_an_eligible_account(
         )
     )
     assert projected["available_actions"]["resume_crawl"] is False
+
+
+def test_run_projection_exposes_the_planned_post_count(tmp_path):
+    jobs = JobStore(tmp_path / "audit.sqlite3")
+    ingestion = IngestionStore(tmp_path / "audit.sqlite3")
+    job = jobs.create(
+        job_id="planned-dy",
+        **{**_job_payload(), "max_notes": 1, "max_total_notes": 7, "analyze_limit": 7},
+    )
+    jobs.update(job["id"], status="running", crawl_status="running")
+    projector = InvestigationRunProjector(
+        job_store=jobs,
+        ingestion_store=ingestion,
+        crawler_account_store=SimpleNamespace(available_accounts=lambda _platform: []),
+    )
+
+    projected = projector.project(
+        SimpleNamespace(job_id=job["id"], status=RunStatus.RUNNING, report_version_id="")
+    )
+
+    assert projected["crawl_status"] == "running"
+    assert projected["task_stats"]["planned_count"] == 7
+    assert projected["task_stats"]["ingested_count"] == 0
