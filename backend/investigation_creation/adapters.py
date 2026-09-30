@@ -858,9 +858,10 @@ class InvestigationRunProjector:
                 ):
                     actions["resume_crawl"] = False
         else:
-            # Before the job exists the confirmed snapshot already holds the plan.
+            # Before the job exists the confirmed snapshot already holds the plan;
+            # a run that ended before its job was created has nothing pending.
             execution = (getattr(run, "confirmed_configuration", None) or {}).get("execution") or {}
-            if execution.get("max_total_notes"):
+            if run.status in {RunStatus.QUEUED, RunStatus.RUNNING} and execution.get("max_total_notes"):
                 task_stats = {"planned_count": int(execution["max_total_notes"])}
         report_status = self._report_status(run)
         if run.status == RunStatus.AUDIT_COMPLETED and int(task_stats.get("failed_analysis_count") or 0) > 0:
