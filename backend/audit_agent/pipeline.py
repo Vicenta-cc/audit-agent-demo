@@ -2164,8 +2164,10 @@ class AuditPipeline:
         marked_used_ids: set[str] = set()
         # 只有真正采集成功过的账号才在任务结束时清零风控计数
         clean_account_ids: set[str] = set()
-        # 候选采集成功、有打分、最终走「跳过」分支的词；只有全部访问过的词都在这里才算「未发现可疑内容」
+        # 干净跳过的词：候选采集成功且有打分，没有精采失败的选中，可疑候选要么没有、要么都已被此前任务审核过。
+        # 只有全部访问过的词都干净跳过才算「未发现可疑内容」；其中可疑内容此前已审核的词另记
         clean_skipped: set[str] = set()
+        previously_audited_terms: set[str] = set()
         visited_terms: list[str] = []
 
         def crawl_keyword(index: int, keyword: str, candidate_root: Path, account: dict, state: dict) -> None:
@@ -2213,8 +2215,8 @@ class AuditPipeline:
                 job_store.log(self.job_id, f"词「{keyword}」沿用已打分的候选重新挑选，排除精采触发验证的 "
                                            f"{'、'.join(sorted(state['failed_picks'])) or '无'}")
             ranked = state["ranked"]
-            exclude = (set(selected_by_key) | state["failed_picks"]
-                       | self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked]))
+            already_audited = self.ingestion.analyzed_content_keys(platform, [s.content_key for s in ranked])
+            exclude = set(selected_by_key) | state["failed_picks"] | already_audited
             strategy = state["strategy"]
             if strategy == "rank1":
                 ranked = sorted(ranked, key=lambda s: s.rank)
@@ -2231,10 +2233,13 @@ class AuditPipeline:
             for key in already:     # 重写的候选文件要保留上次已采的条目，否则再续采会重复补
                 mark_candidates_collected(candidate_root, key)
             if not picks:
-                if state["scored"] > 0:
+                positive_keys = {s.content_key for s in ranked if s.score > 0}
+                if state["scored"] > 0 and not state["failed_picks"] and positive_keys <= already_audited:
                     clean_skipped.add(keyword)
+                    if positive_keys:
+                        previously_audited_terms.add(keyword)
                 excluded = len(exclude & {s.content_key for s in ranked})
-                positive = sum(1 for s in ranked if s.score > 0)
+                positive = len(positive_keys)
                 discarded = sum(1 for s in ranked if s.band == "discard")
                 job_store.log(self.job_id, f"词「{keyword}」跳过：候选 {state['scored']} 条，可疑 {positive} 条，"
                                            f"身份丢弃 {discarded} 条，"
@@ -2350,7 +2355,12 @@ class AuditPipeline:
             and not (stop_checker and stop_checker())
         )
         if self.triage_found_nothing:
-            job_store.log(self.job_id, f"未发现可疑内容：{len(terms)} 个搜索词均无可疑候选，本任务没有内容进入精审")
+            audited = len(previously_audited_terms & set(visited_terms))
+            if audited:
+                job_store.log(self.job_id, f"未发现新的可疑内容：{len(visited_terms)} 个搜索词无新的可疑候选"
+                                           f"（其中 {audited} 个词的可疑内容此前已审核），本任务没有内容进入精审")
+            else:
+                job_store.log(self.job_id, f"未发现可疑内容：{len(visited_terms)} 个搜索词均无可疑候选，本任务没有内容进入精审")
         return output
 
     def _mark_subject_skipped(self, platform: str, content_key: str, subject: AuditSubject) -> None:

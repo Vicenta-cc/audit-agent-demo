@@ -379,6 +379,70 @@ class ZeroCandidateCrawler(RotationCrawler):
 
 
 @_PATHS
+def test_already_audited_suspicious_content_ends_normally_with_truthful_wording(env, monkeypatch, snapshot):
+    # 可疑候选都已被此前任务审核：没有新内容，正常结束，但措辞说明是「无新的」
+    from backend.audit_agent.ingestion import IngestionStore
+    monkeypatch.setattr(IngestionStore, "analyzed_content_keys", lambda self, platform, keys: set(keys))
+    a = env.add("A")
+    crawler = RotationCrawler()
+    job = _run_pipeline(env, monkeypatch, crawler, a, engine=ScoreAll(), max_total_notes=2,
+                        settings_auto_analyze=True, **snapshot)
+    assert job["status"] == "completed"
+    assert job["control"]["no_suspicious_content"] is True
+    assert crawler.detail_accounts == []
+    messages = [log["message"] for log in job["logs"]]
+    assert any(m.startswith("未发现新的可疑内容：2 个搜索词无新的可疑候选（其中 2 个词的可疑内容此前已审核）")
+               for m in messages)
+    assert not any(m.startswith("未发现可疑内容") for m in messages)
+
+
+class VerifyOnFirstAccountDetailCrawler(RotationCrawler):
+    """The only suspicious pick hits verification on account A; the retry on B has no alternative."""
+    def __init__(self, first_account_id):
+        super().__init__()
+        self.first_account_id = first_account_id
+
+    def run_search(self, *, platform, keyword, save_root, account_id="", **kwargs):
+        if keyword != "词1":
+            self.search_kwargs.append({**kwargs, "account_id": account_id})
+            return CrawlOutput(platform=platform, contents=[{"aweme_id": f"{keyword}-1", "desc": "正常",
+                                                            "source_keyword": keyword}],
+                               comments=[], output_dir=Path(save_root))
+        return super().run_search(platform=platform, keyword=keyword, save_root=save_root,
+                                  account_id=account_id, **kwargs)
+
+    def run_detail(self, platform, content_id, *, source_keyword, save_root=None, account_id="", **kwargs):
+        if account_id == self.first_account_id:
+            raise CrawlerVerificationError("verify")
+        return super().run_detail(platform, content_id, source_keyword=source_keyword, save_root=save_root,
+                                  account_id=account_id, **kwargs)
+
+
+class ScoreOnlyWord1(ScoreAll):
+    def score(self, content_key, rank, item, comments, terms, *, search_keyword="", rules=None):
+        value = 300 if search_keyword == "词1" else 0
+        return CandidateScore(content_key, rank, value, "rule" if value else "none", "", [], None, 0)
+
+
+@_PATHS
+def test_pick_lost_to_verification_is_not_reported_as_no_suspicious_content(env, monkeypatch, snapshot):
+    a, b = env.add("A"), env.add("B")
+    crawler = VerifyOnFirstAccountDetailCrawler(a["id"])
+    job = _run_pipeline(env, monkeypatch, crawler, a, engine=ScoreOnlyWord1(), max_total_notes=2,
+                        settings_auto_analyze=True, **snapshot)
+    messages = [log["message"] for log in job["logs"]]
+    assert any("改用账号" in m for m in messages)
+    assert crawler.detail_accounts == []
+    assert job["control"]["no_suspicious_content"] is False
+    assert not any(m.startswith("未发现") for m in messages)
+    if "_confirmed_analyze_limit" in snapshot:
+        assert job["status"] == "failed"
+        assert job["error"].startswith("no_valid_content_selected:")
+    else:
+        assert job["status"] == "completed"
+
+
+@_PATHS
 @pytest.mark.parametrize("crawler, engine", [
     (lambda: RaisingSearchCrawler({"词1", "词2"}), ScoreNone),     # 采集失败，不是「无可疑」
     (EmptyDetailCrawler, ScoreAll),                                 # 选中了但精采无产出
