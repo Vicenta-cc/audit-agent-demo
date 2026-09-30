@@ -820,7 +820,7 @@ class AuditPipeline:
                                     rotation = self._triage_account_rotation(
                                         request.platform, account, account_auth_state, rotation_leases
                                     )
-                                    return self._run_triaged_search(
+                                    triaged_output = self._run_triaged_search(
                                         request=request, save_root=save_root, start_page=crawler_start_page,
                                         max_total_notes=crawl_total_notes,
                                         crawler_concurrency=crawler_concurrency, account_auth_state=account_auth_state,
@@ -829,6 +829,10 @@ class AuditPipeline:
                                         stream_items=stream_callback_enabled, stop_checker=crawl_stop_requested,
                                         started_callback=mark_crawler_started, progress_callback=log_crawl_progress,
                                     )
+                                    job_store.update_control(
+                                        self.job_id, no_suspicious_content=bool(getattr(self, "triage_found_nothing", False))
+                                    )
+                                    return triaged_output
                             if getattr(request, "keyword_source", "keyword") == "lexicon":
                                 job_store.log(
                                     self.job_id,
@@ -1068,7 +1072,11 @@ class AuditPipeline:
                             output.platform,
                             selection_limit,
                         )
-                if request.run_crawler and not selected_memberships:
+                if (
+                    request.run_crawler
+                    and not selected_memberships
+                    and not job_store.control(self.job_id).get("no_suspicious_content")
+                ):
                     raise RuntimeError(
                         "no_valid_content_selected: crawler returned no content "
                         "with a valid content identity"
@@ -1090,7 +1098,12 @@ class AuditPipeline:
                     self.job_id,
                     f"已从采集结果中选取 {len(output.contents)} 条内容进行研判",
                 )
-            if request.run_crawler and not output.contents and not output.comments:
+            if (
+                request.run_crawler
+                and not output.contents
+                and not output.comments
+                and not job_store.control(self.job_id).get("no_suspicious_content")
+            ):
                 job_store.log(self.job_id, self._empty_crawl_hint(crawl_dir, request.platform))
             ingested_refs_by_key = {}
             if selection_limit is not None and request.run_crawler:
@@ -2322,6 +2335,10 @@ class AuditPipeline:
         # 诊断行 "MediaCrawler command:" 读的是 output.command，逐词模式下补上最后一次精采命令
         output.command = last_command or ["triage-select", str(len(terms)), "keywords"]
         job_store.log(self.job_id, f"初筛完成：{visited} 个词，选中 {len(selected_by_key)} 条，本次精采 {len(output.contents)} 条进入精审")
+        # 所有词都没有可疑候选：由调用方把任务记为正常结束（不算失败，也不生成报告）
+        self.triage_found_nothing = not selected_by_key and not (stop_checker and stop_checker())
+        if self.triage_found_nothing:
+            job_store.log(self.job_id, f"未发现可疑内容：{len(terms)} 个搜索词均无可疑候选，本任务没有内容进入精审")
         return output
 
     def _mark_subject_skipped(self, platform: str, content_key: str, subject: AuditSubject) -> None:

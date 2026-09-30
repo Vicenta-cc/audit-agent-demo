@@ -294,7 +294,7 @@ def test_rate_limit_is_not_rotated(env, monkeypatch):
     assert env.store.get(a["id"])["risk_count"] == 0
 
 
-def _run_pipeline(env, monkeypatch, crawler, primary):
+def _run_pipeline(env, monkeypatch, crawler, primary, engine=None, auto_analyze=False, **overrides):
     from backend.audit_agent.ingestion import AuditResultStore, IngestionStore
     from backend.audit_agent.job_store import JobStore
 
@@ -306,11 +306,12 @@ def _run_pipeline(env, monkeypatch, crawler, primary):
               'max_items_per_minute': 1, 'crawler_account_id': primary['id'], 'get_sub_comment': False,
               'analyze_limit': 0, 'run_crawler': True, 'source_output_id': None, 'analysis_batch_size': 1,
               'prompt_profile_snapshot': {}, 'policy_id': ''}
-    jobs.create(job_id="job-rot", **config)
+    config.update(overrides)
+    jobs.create(job_id="job-rot", **{k: v for k, v in config.items() if not k.startswith("_")})
     monkeypatch.setattr(pipeline_module, "job_store", jobs)
     monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
     monkeypatch.setattr(pipeline_module.settings, "outputs_dir", env.tmp / "outputs")
-    monkeypatch.setattr(pipeline_module.settings, "auto_analyze_crawled_content", False)
+    monkeypatch.setattr(pipeline_module.settings, "auto_analyze_crawled_content", auto_analyze)
     pipeline = pipeline_module.AuditPipeline.__new__(pipeline_module.AuditPipeline)
     pipeline.job_id = "job-rot"
     pipeline.crawler = crawler
@@ -321,9 +322,41 @@ def _run_pipeline(env, monkeypatch, crawler, primary):
     pipeline.audit_config_revision_id = ''
     pipeline.rule_snapshot = {}
     pipeline.authoritative_m3 = False
-    pipeline._triage_engine = ScoreAll()
+    pipeline._triage_engine = engine or ScoreAll()
     pipeline.run(SimpleNamespace(**config, _authoritative_m3_contract=False))
     return jobs.get("job-rot")
+
+
+class ScoreNone(ScoreAll):
+    def score(self, content_key, rank, item, comments, terms, *, search_keyword="", rules=None):
+        return CandidateScore(content_key, rank, 0, "none", "", [], None, 0)
+
+
+@pytest.mark.parametrize("snapshot", [
+    {},
+    # 旧快照没有 auto_analyze 字段：走「按冻结条数选取」的路径
+    {"_confirmed_analyze_limit": 2, "analyze_limit": 2},
+], ids=["stream", "confirmed-selection"])
+def test_all_terms_without_suspicious_candidates_end_normally(env, monkeypatch, snapshot):
+    # 选择模式下所有词都没有可疑候选：任务正常结束，不是 no_valid_content_selected 失败
+    a = env.add("A")
+    crawler = RotationCrawler()
+    job = _run_pipeline(env, monkeypatch, crawler, a, engine=ScoreNone(), max_total_notes=2,
+                        auto_analyze=bool(snapshot), **snapshot)
+    assert job["status"] == "completed"
+    assert not job["error"]
+    assert job["control"]["no_suspicious_content"] is True
+    assert crawler.detail_accounts == []
+    messages = [log["message"] for log in job["logs"]]
+    assert any(m.startswith("未发现可疑内容：2 个搜索词均无可疑候选") for m in messages)
+    assert not any("no_valid_content_selected" in m for m in messages)
+
+
+def test_partial_selection_keeps_the_flag_off(env, monkeypatch):
+    a = env.add("A")
+    job = _run_pipeline(env, monkeypatch, RotationCrawler(), a, max_total_notes=2)
+    assert job["status"] == "completed"
+    assert job["control"]["no_suspicious_content"] is False
 
 
 def test_pipeline_run_counts_each_account_risk_once_when_rotation_is_exhausted(env, monkeypatch):

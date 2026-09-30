@@ -1218,6 +1218,31 @@ class WorkerRecoveryAndFencingTest(M3TestCase):
                     self.assertEqual(result.error_code, expected_code)
                     self.assertEqual(report.generate_calls, 0)
 
+    def test_triage_with_no_suspicious_content_completes_without_report(self):
+        _, run = self.queue_run(key="no-suspicious-content")
+        state = FakeExecutionAdapter.completed_state(ingested=0, completed=0)
+        state["control"] = {"no_suspicious_content": True}
+        report = FakeReportAdapter()
+        session = FakeSessionAdapter()
+
+        result = self.worker(FakeExecutionAdapter(state), report, session).run_once()
+
+        self.assertEqual(result.status, RunStatus.AUDIT_COMPLETED)
+        self.assertEqual(result.error_code, "")
+        self.assertEqual(result.error_message, "")
+        self.assertEqual(report.generate_calls, 0)
+        self.assertEqual(session.calls, 0)
+
+    def test_no_suspicious_flag_never_hides_selected_content(self):
+        _, run = self.queue_run(key="flag-with-content")
+        state = FakeExecutionAdapter.completed_state(ingested=1, completed=0, pending=1)
+        state["control"] = {"no_suspicious_content": True}
+
+        result = self.worker(FakeExecutionAdapter(state)).run_once()
+
+        self.assertEqual(result.status, RunStatus.FAILED)
+        self.assertEqual(result.error_code, "analysis_not_drained")
+
     def test_missing_completed_payload_fails_before_report_projection(self):
         _, run = self.queue_run(key="missing-payload-before-report")
         ingestion = IngestionStore(Path(self.temp_dir.name) / "m3.sqlite3")

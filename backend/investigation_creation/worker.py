@@ -304,6 +304,12 @@ class InvestigationWorker:
         if snapshot.execution.auto_analyze is not None and int((state.get("task_stats") or {}).get("queued_analysis_count") or 0) > 0:
             return self.store.mark_interrupted(run.id, run.claim_token,
                 error_code="analysis_pending", error_message="采集已完成，仍有待分析内容，可继续分析。")
+        if (
+            int((state.get("task_stats") or {}).get("ingested_count") or 0) == 0
+            and (state.get("control") or {}).get("no_suspicious_content") is True
+        ):
+            # 初筛所有词都没有可疑内容：正常结束，没有可生成报告的内容
+            return self.store.mark_audit_completed(run.id, run.claim_token)
         gate_failure = self._completion_gate_failure(run, state=state, allow_failed_posts=failed_posts > 0)
         if gate_failure is not None:
             error_code, error_message = gate_failure
