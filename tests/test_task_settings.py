@@ -46,13 +46,50 @@ def test_settings_keep_supported_collection_boundary(tmp_path, value):
     assert store.get()['revision'] == 0
 
 
-def test_one_live_cap_clamps_both_saved_post_limits(tmp_path, monkeypatch):
+def test_one_live_cap_clamps_the_task_total_and_pins_one_pick_per_term(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "investigation_max_posts", 10)
     saved = TaskSettingsStore(tmp_path / "audit.sqlite3").save(
         {"max_notes": 30, "max_total_notes": 30, "analyze_limit": 30},
         0,
     )
 
-    assert saved["parameters"]["max_notes"] == 10
+    assert saved["parameters"]["max_notes"] == 1
     assert saved["parameters"]["max_total_notes"] == 10
     assert saved["parameters"]["analyze_limit"] == 10
+
+
+def test_code_default_cap_is_ten_and_dead_aliases_are_gone():
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    env = {key: value for key, value in os.environ.items()
+           if key not in {"INVESTIGATION_MAX_POSTS", "SEARCH_TERMS_MAX"}}
+    code = ("import dotenv; dotenv.load_dotenv = lambda *a, **k: None; "
+            "from backend.audit_agent.config import settings as s; "
+            "print(s.investigation_max_posts, s.search_terms_max, hasattr(s, 'm3_posts_per_keyword'), "
+            "hasattr(s, 'm3_analyze_limit'))")
+    output = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True,
+                            cwd=Path(__file__).resolve().parents[1], check=True).stdout.split()
+
+    assert output == ["10", "10", "False", "False"]
+
+
+def test_effective_parameters_pin_one_pick_fixed_batch_and_server_concurrency(monkeypatch):
+    from backend.audit_agent.task_settings import effective_parameters
+
+    monkeypatch.setattr(settings, "investigation_max_posts", 10)
+    monkeypatch.setattr(settings, "crawler_max_concurrency", 1)
+    monkeypatch.setattr(settings, "m3_comments_per_post", 300)
+    effective = effective_parameters({
+        "max_notes": 5, "max_total_notes": 30, "max_concurrency": 3,
+        "analysis_batch_size": 20, "max_comments": 1000,
+    })
+
+    assert effective.max_notes == 1
+    assert effective.max_total_notes == 10
+    assert effective.analyze_limit == 10
+    assert effective.max_concurrency == 1
+    assert effective.analysis_batch_size == 5
+    assert effective.max_comments == 300

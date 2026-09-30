@@ -686,9 +686,11 @@ def test_failed_model_turn_recovers_successful_draft_checkpoint(creation_stack: 
         "investigation_draft"
     )
     assert _draft_count(creation_stack["creation_store"]) == 1
-    assert "每关键词上限：30 条" in recovered["result"].answer
-    assert "单任务总量：30 条" in recovered["result"].answer
-    assert "自动分析上限：30 条" in recovered["result"].answer
+    # 聊天里要的 30 条不生效：摘要显示采集与分析设置的生效值（每词 1 条 × 2 个词）
+    assert "每关键词上限：1 条" in recovered["result"].answer
+    assert "单任务总量：2 条" in recovered["result"].answer
+    assert "30 条" not in recovered["result"].answer
+    assert "自动分析上限" not in recovered["result"].answer
     assert "模型在最终回复阶段" not in recovered["result"].answer
 
     state = creation_stack["conversation"].get_workspace_state(
@@ -2252,11 +2254,17 @@ def test_recall_generation_defaults_preserve_explicit_and_existing_content() -> 
         assert boundary in RECALL_GENERATION_PROMPT
 
 
-def test_creation_prompt_preserves_explicit_per_run_parameters() -> None:
+def test_creation_prompt_routes_parameter_requests_to_task_settings() -> None:
     normalized_prompt = " ".join(CREATION_SYSTEM_PROMPT.split())
-    assert "configuration.task_parameters" in normalized_prompt
-    assert "collect_media=false" in normalized_prompt
+    assert "cannot be changed in conversation" in normalized_prompt
+    assert "omit task_parameters" in normalized_prompt
+    assert "采集与分析设置" in normalized_prompt
+    assert "configuration.task_parameters" not in normalized_prompt
+    assert "collect_media=false" not in normalized_prompt
     assert "crawler_account_id remains application-managed" in normalized_prompt
+    for name in ("create_investigation_draft", "update_investigation_draft", "use_ruleset_proposal"):
+        assert "不传 task_parameters" in M3_TOOL_DESCRIPTIONS[name]
+        assert "必须把这些值写入" not in M3_TOOL_DESCRIPTIONS[name]
 
 
 def test_creation_prompt_defaults_only_editable_fields_from_real_resources() -> None:
@@ -3330,6 +3338,7 @@ def test_collection_limits_are_previewed_and_frozen_with_all_posts_audited(creat
         principal=Principal('principal-a'),
     ).model_dump(mode='json')
     arguments = _search_draft_from_options([options])
+    # 聊天里给的数量不生效，设置表未保存时用代码默认值
     arguments['configuration']['task_parameters'] = {
         'max_notes': 30,
         'max_total_notes': 30,
@@ -3340,21 +3349,21 @@ def test_collection_limits_are_previewed_and_frozen_with_all_posts_audited(creat
     assert response.status_code == 201, response.text
     draft = response.json()
     endpoint = '/api/investigation-drafts/' + draft['id']
+    terms = len(draft['configuration']['investigation']['recall_plan']['enabled_main_terms'])
     monkeypatch.setattr(settings, 'm3_comments_per_post', 1000)
     preview = stack['client'].get(endpoint + '/confirmation-preview').json()
-    assert preview['max_post_limit'] == 30
-    assert preview['max_notes'] == 30
-    assert preview['max_posts_per_keyword'] == 30
+    assert preview['max_post_limit'] == 10
+    assert preview['max_notes'] == min(10, terms)
+    assert preview['max_posts_per_keyword'] == 1
     assert preview['max_comments_per_post'] == 1000
     assert preview['get_sub_comment'] is False
     queued = stack['client'].post(endpoint + '/confirm-and-queue', json={'expected_revision': draft['current_revision'], 'confirmed': True}, headers={'Idempotency-Key': 'production-limits'})
     assert queued.status_code == 202, queued.text
     run = stack['creation_store'].get_run(queued.json()['run_id'], principal='principal-a')
     snapshot = ConfirmedConfigurationSnapshotV4.model_validate(run.confirmed_configuration)
-    assert snapshot.max_notes == snapshot.execution.max_notes == 30
-    assert snapshot.execution.max_total_notes == 30
-    assert snapshot.execution.analyze_limit == 30
-    assert snapshot.execution.max_comments == 1000
+    assert snapshot.max_notes == snapshot.execution.max_notes == 1
+    assert snapshot.execution.max_total_notes == min(10, terms)
+    assert snapshot.execution.analyze_limit == min(10, terms)
     assert snapshot.execution.max_concurrency == 1
     assert snapshot.execution.get_sub_comment is False
     from backend.investigation_creation.adapters import AuditPipelineExecutionAdapter
@@ -3362,12 +3371,11 @@ def test_collection_limits_are_previewed_and_frozen_with_all_posts_audited(creat
     adapter.crawler_account_store = CrawlerAccountStore(stack['resource_db'])
     adapter._provider_validator = lambda configuration: None
     adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
-    monkeypatch.setattr(settings, 'investigation_max_posts', 10)
-    # Frozen v4 task settings use the compatibility contract and are not
-    # retroactively rejected when the live new-task limit changes to 10.
-    adapter.validate_m3_configuration(snapshot.execution.model_dump(mode='json'))
+    # An older frozen snapshot confirmed with 5 per term and 30 in total still validates.
+    legacy = snapshot.execution.model_dump(mode='json') | {'max_notes': 5, 'max_total_notes': 30, 'analyze_limit': 30}
+    adapter.validate_m3_configuration(legacy)
     changed = snapshot.model_dump(mode='json')
-    changed['max_notes'] = 1
+    changed['max_notes'] = 2
     with pytest.raises(ValidationError):
         ConfirmedConfigurationSnapshotV4.model_validate(changed)
 

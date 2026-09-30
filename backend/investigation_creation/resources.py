@@ -62,6 +62,16 @@ _ENABLED_CREATION_PLATFORMS = frozenset({"dy"})
 _RULES_MANAGEMENT_PATH = "/rule-assistant/rulesets?return_to=/investigation"
 
 
+def planned_contents(parameters: InvestigationTaskParameters, mode: str, search_terms) -> int:
+    """Posts that may enter 精审: one per search term up to the task cap; creator tasks use the task cap."""
+    if mode != "search":
+        return parameters.max_total_notes
+    return min(
+        parameters.max_total_notes,
+        parameters.max_notes * max(1, len(search_terms)),
+    )
+
+
 def effective_task_parameters(configuration) -> InvestigationTaskParameters:
     from backend.audit_agent.task_settings import (
         default_task_parameters,
@@ -108,10 +118,10 @@ class InvestigationResourceService:
         self.task_settings = TaskSettingsStore(self.resource_db_path)
 
     def task_configuration(self, configuration, connection=None):
+        # 采集与分析设置是任务参数的唯一来源：未保存过时用代码默认值，草案里的 task_parameters 一律不生效。
         saved = self.task_settings.get(connection)
-        if saved["revision"]:
-            configuration = configuration.model_copy(update={
-                "task_parameters": InvestigationTaskParameters.model_validate(saved["parameters"])})
+        configuration = configuration.model_copy(update={
+            "task_parameters": InvestigationTaskParameters.model_validate(saved["parameters"])})
         return configuration, saved["revision"]
 
     def require_lexicon_access(self, resource_id, principal, connection=None):
@@ -437,10 +447,7 @@ class InvestigationResourceService:
 
         effective_configuration, settings_revision = self.task_configuration(effective_configuration, resource_connection)
         parameters = effective_task_parameters(effective_configuration)
-        planned_content_count = min(
-            parameters.max_total_notes,
-            parameters.max_notes * max(1, len(resolved_terms)),
-        )
+        planned_content_count = planned_contents(parameters, mode, resolved_terms)
         blockers = self._dedupe_blockers(blockers)
         return ConfirmationPreview(
             max_post_limit=settings.investigation_max_posts,
@@ -460,7 +467,9 @@ class InvestigationResourceService:
             creator_url=creator_url,
             recall_plan=recall_preview,
             max_notes=planned_content_count,
-            max_posts_per_keyword=parameters.max_notes,
+            max_posts_per_keyword=(
+                parameters.max_notes if mode == "search" else planned_content_count
+            ),
             max_comments_per_post=parameters.max_comments,
             get_sub_comment=parameters.get_sub_comment,
             ruleset_revision=(
@@ -796,9 +805,8 @@ class InvestigationResourceService:
             collection_keywords = self.execution_search_terms(
                 configuration, resource_connection=resource_connection
             )
-            planned_content_count = min(
-                parameters.max_total_notes,
-                parameters.max_notes * max(1, len(collection_keywords)),
+            planned_content_count = planned_contents(
+                parameters, mode, collection_keywords
             )
             collection = {
                 "crawl_mode": "search",
@@ -810,16 +818,13 @@ class InvestigationResourceService:
                 "run_crawler": True,
             }
         else:
-            planned_content_count = min(
-                parameters.max_total_notes,
-                parameters.max_notes,
-            )
+            planned_content_count = planned_contents(parameters, mode, [])
             collection = {
                 "crawl_mode": "creator",
                 "keyword_source": "keyword",
                 "keywords": [],
                 "creator_url": configuration.investigation.creator_url,
-                "max_notes": parameters.max_notes,
+                "max_notes": planned_content_count,
                 "max_total_notes": planned_content_count,
                 "crawler_account_id": selected_account["id"],
                 "run_crawler": True,
@@ -864,7 +869,7 @@ class InvestigationResourceService:
         )
         resolved.update(
             {
-                "max_notes": parameters.max_notes,
+                "max_notes": collection["max_notes"],
                 "max_total_notes": planned_content_count,
                 "analyze_limit": planned_content_count,
                 "crawler_account_id": selected_account["id"],

@@ -125,12 +125,10 @@ enabled_main_terms), that authoritative term snapshot is the recall
 configuration; do not ask the user to enter separate search keywords before creating the Draft. The
 user can review and edit these recommended values on the Draft afterward.
 
-Draft configuration may include task_parameters for per-run execution choices. Preserve every
-explicit user choice for post count, comments per post, sub-comments, concurrency, media collection,
-automatic analysis, analysis limit, batch size, page, or rate limit in configuration.task_parameters.
-In particular, an explicit request not to collect media must set collect_media=false; never report
-that such a choice cannot be represented. Omit task_parameters only when the user did not specify
-per-run execution choices. crawler_account_id remains application-managed and must not be supplied.
+Execution parameters (post counts, comments, media collection, sort, rate) come only from the
+application-wide 采集与分析设置 and cannot be changed in conversation; omit task_parameters from Draft
+configuration. If the user asks for other values, say in one short line that they are set in 采集与分析设置.
+crawler_account_id remains application-managed and must not be supplied.
 
 Judge recall suitability from the actual enabled search terms, not the lexicon title, risk label,
 or the fact that its domain matches the Judgement rules. Ask whether searching those exact terms
@@ -1468,7 +1466,6 @@ class InvestigationCreationConversationService:
         draft = artifact.get("draft") or {}
         preview = artifact.get("confirmation_preview") or {}
         configuration = draft.get("configuration") or {}
-        task_parameters = configuration.get("task_parameters") or {}
         platform_names = {"dy": "抖音", "xhs": "小红书", "ks": "快手", "wb": "微博"}
         platform = str(preview.get("platform") or configuration.get("platform") or "")
         terms = [str(item) for item in preview.get("resolved_search_terms") or []]
@@ -1485,15 +1482,14 @@ class InvestigationCreationConversationService:
             lines.append(f"- 实际搜索词：{term_summary}")
         if preview.get("search_terms_notice"):
             lines.append(f"- {preview['search_terms_notice']}")
+        # 数量取预览里的生效值（来自采集与分析设置），不取草案里的请求值
         lines.extend(
             [
                 f"- 每关键词上限：{preview.get('max_posts_per_keyword', 1)} 条",
-                f"- 单任务总量：{task_parameters.get('max_total_notes', preview.get('max_notes', 1))} 条",
+                f"- 单任务总量：{preview.get('max_notes', 1)} 条",
             ]
         )
-        if "analyze_limit" in task_parameters:
-            lines.append(f"- 自动分析上限：{task_parameters['analyze_limit']} 条")
-        lines.append("\n可以继续确认并启动任务，或先修改草案参数。")
+        lines.append("\n可以继续确认并启动任务，或先修改草案。")
         return "\n".join(lines)
 
     def _binding_failure_notice(self, turn: InvestigationTurn, trace_messages: list[dict] | None = None) -> str:

@@ -44,7 +44,7 @@ def configure():
     keep = {k: v for k, v in os.environ.items() if k in ('HOME', 'TMPDIR', 'LANG', 'USER')}
     environment = {**keep, **json.loads((RUNTIME / 'environment.json').read_text()),
                    **{k: v for k, v in dotenv_values(RUNTIME / 'secrets.env').items() if v is not None}}
-    investigation_max_posts = int(environment.get('INVESTIGATION_MAX_POSTS') or 30)
+    investigation_max_posts = int(environment.get('INVESTIGATION_MAX_POSTS') or 10)
     if not 1 <= investigation_max_posts <= 30:
         raise RuntimeError('INVESTIGATION_MAX_POSTS 必须在 1 到 30 之间。')
     environment.update(

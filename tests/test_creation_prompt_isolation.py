@@ -148,6 +148,20 @@ SEARCH_TERMS_CAP_CHANGED_LINES = [
     )
 ]
 
+# 2026-09-30: task parameters come only from 采集与分析设置; chat can no longer change them.
+_LIMITS_REASON = "2026-09-30 采集与分析设置为唯一来源，聊天不能改参数：删除把用户所说数量写入 task_parameters 的要求。"
+TASK_SETTINGS_ONLY_CHANGED_LINES = [
+    {"source": "CREATION_SYSTEM_PROMPT", "line": line, "text": text, "reason": _LIMITS_REASON}
+    for line, text in (
+        (61, "Draft configuration may include task_parameters for per-run execution choices. Preserve every"),
+        (62, "explicit user choice for post count, comments per post, sub-comments, concurrency, media collection,"),
+        (63, "automatic analysis, analysis limit, batch size, page, or rate limit in configuration.task_parameters."),
+        (64, "In particular, an explicit request not to collect media must set collect_media=false; never report"),
+        (65, "that such a choice cannot be represented. Omit task_parameters only when the user did not specify"),
+        (66, "per-run execution choices. crawler_account_id remains application-managed and must not be supplied."),
+    )
+]
+
 
 def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
     """A wording move cannot silently delete an old behavioral/quality constraint."""
@@ -161,7 +175,8 @@ def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
         *M3_TOOL_DESCRIPTIONS.values(),
     ]))
     changes = {(item["source"], item["line"]): item
-               for item in baseline["changed_lines"] + SEARCH_TERMS_CAP_CHANGED_LINES}
+               for item in baseline["changed_lines"] + SEARCH_TERMS_CAP_CHANGED_LINES
+               + TASK_SETTINGS_ONLY_CHANGED_LINES}
     for name, original in baseline["prompts"].items():
         for index, line in enumerate(original.splitlines()):
             if not line.strip():

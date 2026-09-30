@@ -24,16 +24,22 @@ def default_task_parameters() -> InvestigationTaskParameters:
     )
 
 
+# 每个搜索词只选 1 条进精审，页面不再提供这个字段；博主主页任务改用单任务总采集上限。
+PICKS_PER_SEARCH_TERM = 1
+
+
 def effective_parameters(requested):
     requested = InvestigationTaskParameters.model_validate(requested)
     post_limit = int(settings.investigation_max_posts)
     max_total_notes = min(requested.max_total_notes, post_limit)
     return requested.model_copy(update={
-        "max_notes": min(requested.max_notes, post_limit),
+        "max_notes": PICKS_PER_SEARCH_TERM,
         "max_total_notes": max_total_notes,
         "max_comments": min(requested.max_comments, settings.m3_comments_per_post) if requested.collect_comments else 0,
         "get_sub_comment": requested.get_sub_comment and requested.collect_comments and requested.max_comments > 0 and settings.m3_comments_per_post > 0,
+        # 页面已不显示分析批次和采集并发：批次固定为默认值，并发只取服务端上限内的值，仅为兼容快照保留。
         "max_concurrency": min(requested.max_concurrency, max(1, settings.crawler_max_concurrency)),
+        "analysis_batch_size": default_task_parameters().analysis_batch_size,
         # Every collected post is audited. The exact per-task limit is frozen
         # later, after the final keyword count is known.
         "analyze_limit": max_total_notes,
@@ -46,7 +52,7 @@ def requested_parameters_within_current_limit(requested):
     requested = InvestigationTaskParameters.model_validate(requested)
     post_limit = int(settings.investigation_max_posts)
     return requested.model_copy(update={
-        "max_notes": min(requested.max_notes, post_limit),
+        "max_notes": PICKS_PER_SEARCH_TERM,
         "max_total_notes": min(requested.max_total_notes, post_limit),
         "analyze_limit": min(requested.analyze_limit, post_limit),
     })

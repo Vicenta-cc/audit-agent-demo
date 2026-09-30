@@ -60,20 +60,72 @@ class JobRequestValidationTest(unittest.TestCase):
              patch.object(main, 'AuditPipeline'), \
              patch.object(main, 'enrich_job', side_effect=lambda job: job), \
              patch.object(main, 'create_revision_from_payload', return_value={'version': 1}), \
-             patch.object(main.settings, 'm3_posts_per_keyword', 5), \
-             patch.object(main.settings, 'm3_comments_per_post', 3), \
-             patch.object(main.settings, 'm3_analyze_limit', 10):
+             patch.object(main.settings, 'm3_comments_per_post', 3):
             background = BackgroundTasks()
             job = main.create_job(main.CrawlRequest(platform='dy', keyword='维汉夫妻',
                 crawler_account_id='stale-per-task-account', max_notes=5), background)
-        self.assertEqual(job['max_notes'], 2)
+        # 每个搜索词只选 1 条：保存值 2 与请求值 5 都不生效
+        self.assertEqual(job['max_notes'], 1)
         self.assertEqual(job['crawler_account_id'], account['id'])
         self.assertEqual(job['effective_config']['max_comments'], 1)
         self.assertEqual(job['search_sort'], 'most_liked')
         self.assertEqual(job['effective_config']['search_sort'], 'most_liked')
         self.assertEqual(len(background.tasks), 1)
-        settings_store.save({'max_notes': 1}, 1)
-        self.assertEqual(jobs.get(job['id'])['max_notes'], 2)
+        settings_store.save({'max_comments': 2}, 1)
+        self.assertEqual(jobs.get(job['id'])['effective_config']['max_comments'], 1)
+
+    def test_unsaved_settings_override_request_counts_one_pick_per_term(self):
+        from fastapi import BackgroundTasks
+        from backend.audit_agent.job_store import JobStore
+        jobs = JobStore(self.store.db_path)
+        account = self.store.create(platform='dy', display_name='available')
+        self.store.save_auth_state(account['id'], 'encrypted-state')
+        with patch.object(main, 'job_store', jobs), \
+             patch.object(main, 'AuditPipeline'), \
+             patch.object(main, 'enrich_job', side_effect=lambda job: job), \
+             patch.object(main, 'create_revision_from_payload', return_value={'version': 1}), \
+             patch.object(main.settings, 'investigation_max_posts', 10), \
+             patch.object(main.settings, 'm3_comments_per_post', 300):
+            job = main.create_job(main.CrawlRequest(
+                platform='dy', keyword=','.join(f'词{i}' for i in range(12)), max_notes=5,
+                max_total_notes=5, max_comments=100, analysis_batch_size=1), BackgroundTasks())
+        self.assertEqual(job['max_notes'], 1)
+        self.assertEqual(job['max_total_notes'], 10)
+        self.assertEqual(job['analyze_limit'], 10)
+        self.assertEqual(job['effective_config']['max_comments'], 300)
+        self.assertEqual(job['analysis_batch_size'], 5)
+
+    def test_creator_job_uses_task_total_as_its_post_cap(self):
+        from fastapi import BackgroundTasks
+        from backend.audit_agent.job_store import JobStore
+        from backend.audit_agent.task_settings import TaskSettingsStore
+        jobs = JobStore(self.store.db_path)
+        TaskSettingsStore(self.store.db_path).save({'max_total_notes': 7}, 0)
+        account = self.store.create(platform='dy', display_name='available')
+        self.store.save_auth_state(account['id'], 'encrypted-state')
+        with patch.object(main, 'job_store', jobs), \
+             patch.object(main, 'AuditPipeline'), \
+             patch.object(main, 'enrich_job', side_effect=lambda job: job), \
+             patch.object(main, 'create_revision_from_payload', return_value={'version': 1}), \
+             patch.object(main.settings, 'investigation_max_posts', 10):
+            job = main.create_job(main.CrawlRequest(
+                platform='dy', crawl_mode='creator', max_notes=2,
+                creator_url='https://www.douyin.com/user/MS4wLjABAAAA-valid'), BackgroundTasks())
+        self.assertEqual(job['max_notes'], 7)
+        self.assertEqual(job['max_total_notes'], 7)
+        self.assertEqual(job['analyze_limit'], 7)
+
+    def test_task_settings_response_carries_the_server_comment_cap(self):
+        from backend.audit_agent.job_store import JobStore
+        jobs = JobStore(self.store.db_path)
+        with patch.object(main, 'job_store', jobs), \
+             patch.object(main.settings, 'investigation_max_posts', 10), \
+             patch.object(main.settings, 'm3_comments_per_post', 250):
+            response = main.get_task_settings()
+        self.assertEqual(response['max_post_limit'], 10)
+        self.assertEqual(response['max_comment_limit'], 250)
+        self.assertEqual(response['effective_parameters']['max_notes'], 1)
+        self.assertEqual(response['effective_parameters']['max_total_notes'], 10)
 
     def _create_capped_job(self, **request_fields):
         from fastapi import BackgroundTasks

@@ -2146,9 +2146,14 @@ class TaskSettingsRequest(BaseModel):
 @app.get("/api/task-settings")
 def get_task_settings():
     saved = TaskSettingsStore(job_store.db_path).get()
+    return _task_settings_response(saved)
+
+
+def _task_settings_response(saved):
     return {
         **saved,
         "max_post_limit": settings.investigation_max_posts,
+        "max_comment_limit": settings.m3_comments_per_post,
         "effective_parameters": effective_parameters(saved["parameters"]).model_dump(mode="json"),
     }
 
@@ -2162,11 +2167,7 @@ def save_task_settings(
     try:
         saved = TaskSettingsStore(job_store.db_path).save(
             request.parameters.model_dump(mode="json"), request.expected_revision)
-        return {
-            **saved,
-            "max_post_limit": settings.investigation_max_posts,
-            "effective_parameters": effective_parameters(saved["parameters"]).model_dump(mode="json"),
-        }
+        return _task_settings_response(saved)
     except TaskSettingsConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -2189,11 +2190,15 @@ def create_job(
     explicitly_selected_account = bool(
         str(request.crawler_account_id or "").strip()
     )
-    saved_settings = TaskSettingsStore(job_store.db_path).get()
-    if saved_settings["revision"] and request.run_crawler:
-        effective = effective_parameters(saved_settings["parameters"])
-        request = CrawlRequest.model_validate({**request.model_dump(), **effective.model_dump(mode="json"),
-                                              "crawler_account_id": effective.crawler_account_id})
+    if request.run_crawler:
+        # 采集与分析设置是唯一来源（未保存时为代码默认值）；请求里的数量、评论、并发、账号等一律不生效。
+        effective = effective_parameters(TaskSettingsStore(job_store.db_path).get()["parameters"])
+        request = CrawlRequest.model_validate({
+            **request.model_dump(), **effective.model_dump(mode="json"),
+            "crawler_account_id": effective.crawler_account_id,
+            # 博主主页任务没有「每词」概念，本任务采集上限就是单任务总采集上限
+            **({"max_notes": effective.max_total_notes} if request.crawl_mode == "creator" else {}),
+        })
         if not request.crawler_account_id:
             account = next(
                 (

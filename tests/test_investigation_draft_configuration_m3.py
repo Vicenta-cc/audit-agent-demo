@@ -342,50 +342,73 @@ def test_main_workspace_rejects_invalid_per_keyword_limit(m3_stack, value):
         InvestigationDraftConfiguration.model_validate(configuration)
 
 
-@pytest.mark.parametrize("limit", [1, 5])
-def test_main_workspace_parameters_are_previewed_frozen_and_applied(m3_stack, monkeypatch, limit):
-    monkeypatch.setattr(audit_pipeline_module.settings, "m3_posts_per_keyword", 5)
-    monkeypatch.setattr(audit_pipeline_module.settings, "m3_analyze_limit", 10)
+@pytest.mark.parametrize("saved", [False, True])
+def test_draft_task_parameters_are_ignored_and_settings_are_previewed_frozen_and_applied(m3_stack, monkeypatch, saved):
+    # 聊天不能改参数：草案里的 task_parameters 无论设置表是否保存过都不生效
     monkeypatch.setattr(audit_pipeline_module.settings, "crawler_max_concurrency", 1)
+    monkeypatch.setattr(audit_pipeline_module.settings, "investigation_max_posts", 10)
+    if saved:
+        m3_stack["resources"].task_settings.save(
+            {"max_notes": 5, "max_total_notes": 30, "max_comments": 7, "analysis_batch_size": 1}, 0)
     configuration = _douyin_configuration(m3_stack)
     configuration["investigation"]["recall_plan"]["terms"] = ["上分", "盘口"]
     configuration["task_parameters"] = {
-        "max_notes": limit, "max_comments": 2, "collect_comments": False,
+        "max_notes": 5, "max_comments": 2, "collect_comments": False,
         "max_total_notes": 5,
         "get_sub_comment": True, "collect_media": False, "max_concurrency": 3,
         "auto_analyze": False, "analyze_limit": 5, "analysis_batch_size": 2,
         "max_items_per_minute": 2, "start_page": 2,
-        "crawler_account_id": _account_for_platform(m3_stack, "dy")["id"],
     }
     draft = _create_draft(m3_stack, configuration)
     preview = m3_stack["service"].get_draft_view(draft.id, principal=_principal(m3_stack)).confirmation_preview
-    expected_total = min(limit * 2, 5)
-    assert preview.estimated_max_contents == expected_total
+    # 每词 1 条 × 2 个词，受单任务上限 10 约束
+    assert preview.estimated_max_contents == 2
+    assert preview.max_notes == 2
+    assert preview.max_posts_per_keyword == 1
+    assert preview.max_post_limit == 10
+    assert preview.effective_parameters.max_notes == 1
+    assert preview.effective_parameters.max_total_notes == 10
     assert preview.effective_parameters.max_concurrency == 1
-    assert preview.effective_parameters.max_comments == 0
-    assert preview.effective_parameters.get_sub_comment is False
-    assert preview.max_notes == expected_total
-    assert preview.effective_parameters.auto_analyze is True
-    assert preview.effective_parameters.analyze_limit == 5
+    assert preview.effective_parameters.collect_media is True
+    assert preview.effective_parameters.collect_comments is True
+    assert preview.effective_parameters.start_page == 1
+    assert preview.effective_parameters.max_comments == (7 if saved else 300)
+    assert preview.effective_parameters.analysis_batch_size == 5
+    assert preview.requested_parameters.collect_media is True
     run = m3_stack["service"].confirm_and_queue(ConfirmAndQueueCommand(
         draft_id=draft.id, expected_revision=draft.current_revision, confirmed=True,
-        idempotency_key=f"parameters-{limit}"), principal=_principal(m3_stack))
+        expected_task_settings_revision=1 if saved else 0,
+        idempotency_key=f"parameters-{saved}"), principal=_principal(m3_stack))
+    execution = run.confirmed_configuration["execution"]
+    assert execution["max_notes"] == 1
+    assert execution["max_total_notes"] == execution["analyze_limit"] == 2
+    assert execution["collect_media"] is True
     resource_db = m3_stack["resources"].resource_db_path
     adapter = AuditPipelineExecutionAdapter(job_store=JobStore(resource_db),
         ingestion_store=IngestionStore(resource_db), revision_store=TaskAuditConfigRevisionStore(resource_db),
         crawler_account_store=m3_stack["crawler_accounts"], test_provider_validator=lambda _: None)
     job_id = adapter.ensure_job(run)
     job = adapter.job_store.get(job_id)
-    assert job["requested_config"]["max_concurrency"] == 3
     assert job["effective_config"]["max_concurrency"] == 1
     assert job["auto_analyze"] is True
-    assert job["collect_media"] is False
-    assert job["max_notes"] == limit
-    assert job["max_total_notes"] == expected_total
-    assert job["analyze_limit"] == expected_total
-    assert job["start_page"] == 2
-    assert job["analysis_batch_size"] == 2
+    assert job["collect_media"] is True
+    assert job["max_notes"] == 1
+    assert job["max_total_notes"] == 2
+    assert job["analyze_limit"] == 2
+    assert job["start_page"] == 1
+    assert job["analysis_batch_size"] == 5
     assert adapter.ensure_job(run) == job_id
+
+
+def test_search_terms_beyond_the_task_total_are_capped_at_planned_count(m3_stack, monkeypatch):
+    monkeypatch.setattr(audit_pipeline_module.settings, "investigation_max_posts", 10)
+    m3_stack["resources"].task_settings.save({"max_total_notes": 3}, 0)
+    configuration = _douyin_configuration(m3_stack)
+    configuration["investigation"]["recall_plan"]["terms"] = ["上分", "盘口", "彩金", "返水", "代理"]
+    draft = _create_draft(m3_stack, configuration)
+    preview = m3_stack["service"].get_confirmation_preview(draft.id, principal=_principal(m3_stack))
+    assert preview.estimated_max_contents == 3
+    assert preview.max_posts_per_keyword == 1
 
 
 def test_existing_draft_payload_without_account_remains_readable(m3_stack: dict):
@@ -538,6 +561,8 @@ def test_v3_snapshot_accepts_analyze_limit_greater_than_one(m3_stack: dict):
         "available": True,
     }
     snapshot["execution"]["analyze_limit"] = 2
+    # v3 snapshots predate requested_parameters
+    snapshot.pop("requested_parameters", None)
     snapshot["config_hash"] = confirmed_configuration_hash(
         {
             key: snapshot[key]
@@ -2272,6 +2297,7 @@ def test_creator_mode_has_no_recall_and_reports_platform_mismatch(m3_stack: dict
     assert preview.creator_url.startswith("https://www.douyin.com/user/")
     assert preview.resolved_search_terms == []
     assert preview.recall_plan.strategy == "none"
+    assert preview.estimated_max_contents == preview.max_notes == 10
 
     run = m3_stack["service"].confirm_and_queue(
         ConfirmAndQueueCommand(
@@ -2293,9 +2319,11 @@ def test_creator_mode_has_no_recall_and_reports_platform_mismatch(m3_stack: dict
     assert snapshot["execution"]["crawler_account_id"] == account["id"]
     assert snapshot["execution"]["crawler_account_display_name"] == account["display_name"]
     assert snapshot["execution"]["crawler_account_confirmed_state"]["has_auth_state"] is True
-    assert snapshot["execution"]["max_notes"] == 1
+    # 博主主页任务以单任务总采集上限（默认 10）为本任务采集上限
+    assert snapshot["execution"]["max_notes"] == 10
+    assert snapshot["execution"]["max_total_notes"] == 10
     assert snapshot["execution"]["max_comments"] == 300
-    assert snapshot["execution"]["analyze_limit"] == 1
+    assert snapshot["execution"]["analyze_limit"] == 10
 
     mismatched = dict(configuration)
     mismatched["platform"] = "xhs"
@@ -3498,26 +3526,26 @@ def test_t1_changed_provenance_validates_all_new_refs_after_source_deletion(m3_s
 def test_global_parameters_override_draft_and_freeze_only_at_confirmation(m3_stack, monkeypatch):
     from backend.audit_agent.config import settings
     from backend.investigation_creation.errors import ResourceStaleError
-    monkeypatch.setattr(settings, 'm3_posts_per_keyword', 5)
-    monkeypatch.setattr(settings, 'm3_analyze_limit', 5)
     service = m3_stack['service']
     global_store = m3_stack['resources'].task_settings
     draft = _create_draft(m3_stack, _temporary_configuration(m3_stack, ['维汉夫妻']))
-    global_store.save({'max_notes': 2, 'analysis_batch_size': 1, 'search_sort': 'most_liked'}, 0)
+    global_store.save({'max_total_notes': 2, 'analysis_batch_size': 1, 'search_sort': 'most_liked'}, 0)
     preview = service.get_confirmation_preview(draft.id, principal=_principal(m3_stack))
     assert preview.task_settings_revision == 1
-    assert preview.effective_parameters.max_notes == 2
+    assert preview.effective_parameters.max_notes == 1
+    assert preview.effective_parameters.max_total_notes == 2
     assert preview.effective_parameters.search_sort == 'most_liked'
-    global_store.save({'max_notes': 3, 'analysis_batch_size': 2, 'search_sort': 'latest'}, 1)
+    global_store.save({'max_total_notes': 3, 'max_comments': 9, 'analysis_batch_size': 2, 'search_sort': 'latest'}, 1)
     command = ConfirmAndQueueCommand(draft_id=draft.id, expected_revision=1,
         expected_task_settings_revision=1, confirmed=True, idempotency_key='global-settings-test')
     with pytest.raises(ResourceStaleError):
         service.confirm_and_queue(command, principal=_principal(m3_stack))
     run = service.confirm_and_queue(command.model_copy(update={'expected_task_settings_revision': 2}), principal=_principal(m3_stack))
-    assert run.confirmed_configuration['execution']['max_notes'] == 3
+    assert run.confirmed_configuration['execution']['max_notes'] == 1
+    assert run.confirmed_configuration['execution']['max_comments'] == 9
     assert run.confirmed_configuration['execution']['search_sort'] == 'latest'
     assert run.confirmed_configuration['requested_parameters']['analysis_batch_size'] == 2
-    global_store.save({'max_notes': 1}, 2)
+    global_store.save({'max_comments': 1}, 2)
     replay = service.confirm_and_queue(command, principal=_principal(m3_stack))
     assert replay.id == run.id
     assert replay.confirmed_configuration == run.confirmed_configuration
@@ -3541,10 +3569,12 @@ def test_real_m3_frozen_job_survives_account_rotation_and_resumes_same_account(m
     accounts.save_auth_state(second['id'], cipher.encrypt({'account': 'second'}))
     config = _temporary_configuration(m3_stack, ['维汉夫妻'])
     config['platform'] = 'dy'
-    config['task_parameters'] = {'crawler_account_id': first['id'], 'auto_analyze': False, 'analyze_limit': 0}
+    # 采集账号同样来自采集与分析设置
+    m3_stack['resources'].task_settings.save({'crawler_account_id': first['id']}, 0)
     draft = _create_draft(m3_stack, config)
     run = m3_stack['service'].confirm_and_queue(ConfirmAndQueueCommand(draft_id=draft.id,
-        expected_revision=1, confirmed=True, idempotency_key='frozen-rotation'), principal=_principal(m3_stack))
+        expected_revision=1, expected_task_settings_revision=1, confirmed=True,
+        idempotency_key='frozen-rotation'), principal=_principal(m3_stack))
     original = run.confirmed_configuration
     jobs = JobStore(accounts.db_path)
     ingestion = IngestionStore(accounts.db_path)

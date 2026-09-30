@@ -311,9 +311,8 @@ M3_TOOL_DESCRIPTIONS = {
 def _creation_tool_schema(schema: type[StrictModel]) -> dict[str, Any]:
     parameters = schema.model_json_schema()
     hide_legacy_hash_input(parameters)
-    # Per-run task parameters are part of the editable Draft contract. Keep them
-    # visible to the dialogue tools so explicit user choices (for example
-    # collect_media=false) survive preview and confirmation. Account selection
+    # task_parameters stays in the Draft contract for stored drafts, but preview and
+    # confirmation always use 采集与分析设置; chat values are ignored. Account selection
     # remains application-managed and is intentionally hidden below.
     task_schema = parameters.get("$defs", {}).get("InvestigationTaskParameters", {})
     task_schema.get("properties", {}).pop("crawler_account_id", None)
@@ -346,8 +345,8 @@ M3_PARAMETER_GUIDANCE = {
     'use_ruleset_proposal': (
         '新建草案时 arguments 结构为 '
         '{"presentation_id":"展示记录返回的真实ID","create_draft":{"title":"任务标题","objective":"任务目标","configuration":{"platform":"dy","investigation":{"mode":"search","recall_plan":{"strategy":"resource_ref","resource_ref":"词库回执返回的真实引用"}}}}}。title/objective/configuration'
-        ' 必须放在 create_draft 内；临时或正式词库均直接使用回执中的 recall_plan，不重抄内容。configuration 也可包含 task_parameters；'
-        '用户明确指定执行参数时须写入并保留，不要传 crawler_account_id。已有草案则传 '
+        ' 必须放在 create_draft 内；临时或正式词库均直接使用回执中的 recall_plan，不重抄内容。执行参数只来自采集与分析设置，'
+        '不传 task_parameters，不要传 crawler_account_id。已有草案则传 '
         'presentation_id、draft_id、expected_revision，不传 create_draft。'
     ),
     'query_investigation_options': (
@@ -374,15 +373,15 @@ M3_PARAMETER_GUIDANCE = {
         '参数只有 draft_id，使用工具返回的真实 ID。'
     ),
     'create_investigation_draft': (
-        'configuration 可包含 task_parameters。用户明确指定帖子数、每帖评论数、并发、是否采集媒体或是否自动审核时，必须把这些值写入 '
-        'configuration.task_parameters；未明确指定时可省略并使用统一设置。已有临时或正式词库时直接使用其 resource_ref recall_plan，'
+        '执行参数（帖子数、评论数、媒体采集等）只来自采集与分析设置，聊天不能修改，不传 task_parameters。'
+        '已有临时或正式词库时直接使用其 resource_ref recall_plan，'
         '不重新填写内容、词条或 hash；主词归属、启用变体与搜索投影由后端保留。不要传 crawler_account_id。'
     ),
     'update_investigation_draft': (
         '参数须有 draft_id、expected_revision，另传需要修改的 title、objective 或完整 configuration。先读当前草案；修改搜索词时保留 '
-        'platform、judgement 和未要求改变的 task_parameters。词库编辑后使用最新编辑稿的 resource_ref recall_plan，'
-        '不得只改扁平 terms 而丢失主题归属；完整内容与启用变体投影由后端绑定。用户明确指定帖子数、评论数、并发、媒体采集等'
-        '执行参数时，在 configuration.task_parameters 中写入并在后续完整配置更新中保留；不要传 crawler_account_id、patch 或 expected_version。'
+        'platform 和 judgement。词库编辑后使用最新编辑稿的 resource_ref recall_plan，'
+        '不得只改扁平 terms 而丢失主题归属；完整内容与启用变体投影由后端绑定。执行参数只来自采集与分析设置，'
+        '不传 task_parameters；不要传 crawler_account_id、patch 或 expected_version。'
     ),
     'confirm_and_queue_investigation': (
         '用户明确启动后调用。参数为 draft_id、expected_revision、expected_task_settings_revision、confirmed:true、idempotency_key。'
@@ -402,7 +401,7 @@ M3_ADOPTION_GUIDANCE = {
     'use_ruleset_proposal': (
         '本工具既能采用临时规则，也能直接创建 Draft，无需先调用 create_investigation_draft。用户明确采用已展示 Proposal 且尚无 Draft '
         '时，直接传 presentation_id 和 create_draft（title、objective、configuration；configuration 只有 '
-        'platform、investigation 与可选 task_parameters，不传 judgement）。 '
+        'platform 与 investigation，不传 judgement）。 '
     ),
 }
 for _name in M3_TOOL_DESCRIPTIONS:

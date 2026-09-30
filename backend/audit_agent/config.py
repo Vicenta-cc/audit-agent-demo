@@ -235,17 +235,14 @@ class Settings:
     auto_analyze_crawled_content = os.getenv("AUTO_ANALYZE_CRAWLED_CONTENT", "true").lower() == "true"
     analysis_media_scope = os.getenv("ANALYSIS_MEDIA_SCOPE", "all").strip().lower()
     stream_crawl_analysis = os.getenv("STREAM_CRAWL_ANALYSIS", "true").lower() == "true"
-    # One deployment switch controls both per-keyword and per-task limits for
-    # newly configured tasks. Frozen snapshots retain their confirmed values.
+    # 新任务「单任务总采集上限」的最大值，对所有用户（含管理员）生效；
+    # 已冻结的快照保留确认时的值。
     investigation_max_posts = min(
         MAX_SUPPORTED_INVESTIGATION_POSTS,
-        max(1, int(os.getenv("INVESTIGATION_MAX_POSTS", "30"))),
+        max(1, int(os.getenv("INVESTIGATION_MAX_POSTS", "10"))),
     )
     # 单任务实际搜索词上限：对所有来源和所有用户生效，按顺序保留前 N 个。
     search_terms_max = min(200, max(1, int(os.getenv("SEARCH_TERMS_MAX", "10"))))
-    # Compatibility aliases for older diagnostics during the migration.
-    m3_posts_per_keyword = investigation_max_posts
-    m3_analyze_limit = investigation_max_posts
     m3_comments_per_post = min(
         1000,
         max(0, int(os.getenv("M3_COMMENTS_PER_POST", "300"))),

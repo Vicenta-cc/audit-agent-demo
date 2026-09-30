@@ -789,13 +789,11 @@ class AuditPipeline:
                             if request.crawl_mode == "creator":
                                 creator_ref = request.creator_url or request.creator_id
                                 job_store.log(self.job_id, f"启动 MediaCrawler 博主主页爬取 {request.platform}: {creator_ref}")
+                                # 博主主页任务以单任务总采集上限为本任务采集上限
                                 return self.crawler.run_creator(
                                     platform=request.platform,
                                     creator_id=creator_ref,
-                                    max_notes=min(
-                                        request.max_notes,
-                                        crawl_total_notes,
-                                    ),
+                                    max_notes=crawl_total_notes,
                                     max_comments=request.max_comments,
                                     max_concurrency=crawler_concurrency,
                                     max_items_per_minute=int(getattr(request, "max_items_per_minute", 5) or 5),
@@ -2103,7 +2101,7 @@ class AuditPipeline:
         rules = dict(profile_snapshot) if isinstance(profile_snapshot, dict) else {}
         job_store.log(self.job_id, f"初筛判定规则：{rules.get('prompt_version') or '未提供'}")
         mode = str(getattr(settings, "triage_mode", "off") or "off")
-        # 初筛只能在任务的采集与分析设置之内收紧：每词上限即每词进精审的条数，
+        # 每词进精审的条数取冻结快照：新任务固定为 1（每词 10 选 1），旧快照按确认时的值续跑；
         # 候选评论受评论开关与每帖评论上限约束；候选只用于挑选，不入库、不计入条数
         per_keyword = max(1, int(getattr(request, "max_notes", 1) or 1))
         candidate_count = max(settings.triage_candidates_per_keyword, per_keyword)
