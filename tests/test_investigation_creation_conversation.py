@@ -658,8 +658,9 @@ def test_failed_creation_requirements_survive_followup_without_failed_claims(cre
 def test_failed_model_turn_recovers_successful_draft_checkpoint(creation_stack: dict):
     def draft_with_limits(results: list[dict[str, Any]]) -> dict[str, Any]:
         arguments = _search_draft_from_options(results)
+        # Out of range on purpose: model-filled task_parameters are dropped, never validated.
         arguments["configuration"]["task_parameters"] = {
-            "max_notes": 30,
+            "max_notes": 50,
             "max_total_notes": 30,
             "analyze_limit": 30,
         }
@@ -690,6 +691,7 @@ def test_failed_model_turn_recovers_successful_draft_checkpoint(creation_stack: 
     assert "每关键词上限：1 条" in recovered["result"].answer
     assert "单任务总量：2 条" in recovered["result"].answer
     assert "30 条" not in recovered["result"].answer
+    assert "50 条" not in recovered["result"].answer
     assert "自动分析上限" not in recovered["result"].answer
     assert "模型在最终回复阶段" not in recovered["result"].answer
 
@@ -2132,8 +2134,9 @@ def test_creation_mode_keeps_legacy_tools_and_adds_resource_tools() -> None:
         if schema["name"] == "use_ruleset_proposal"
     )
     serialized_proposal = json.dumps(proposal_schema["parameters"], sort_keys=True)
-    assert "task_parameters" in serialized_proposal
-    assert "collect_media" in serialized_proposal
+    # Task parameters come only from 采集与分析设置: hidden from every draft tool.
+    assert "task_parameters" not in serialized_proposal
+    assert "collect_media" not in serialized_proposal
     assert "crawler_account_id" not in serialized_proposal
     for tool_name in (
         "create_investigation_draft",
@@ -2145,8 +2148,8 @@ def test_creation_mode_keeps_legacy_tools_and_adds_resource_tools() -> None:
         )
         serialized = json.dumps(mutation_schema["parameters"], sort_keys=True)
         assert "judgement" in serialized
-        assert "task_parameters" in serialized
-        assert "collect_media" in serialized
+        assert "task_parameters" not in serialized
+        assert "collect_media" not in serialized
         for forbidden in (
             "audit_policy",
             "capabilities",

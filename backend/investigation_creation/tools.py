@@ -308,14 +308,37 @@ M3_TOOL_DESCRIPTIONS = {
 }
 
 
+_DRAFT_CONFIGURATION_TOOLS = frozenset({
+    "create_investigation_draft", "update_investigation_draft", "use_ruleset_proposal",
+})
+
+
+def _without_task_parameters(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Drop model-supplied task_parameters: they are ignored anyway and an
+    out-of-range value must not reject the whole Draft mutation."""
+    if tool_name not in _DRAFT_CONFIGURATION_TOOLS or not isinstance(arguments, dict):
+        return arguments
+    cleaned = dict(arguments)
+    for holder in (cleaned, cleaned.get("create_draft")):
+        if isinstance(holder, dict) and isinstance(holder.get("configuration"), dict):
+            configuration = dict(holder["configuration"])
+            configuration.pop("task_parameters", None)
+            if holder is cleaned:
+                cleaned["configuration"] = configuration
+            else:
+                cleaned["create_draft"] = {**holder, "configuration": configuration}
+    return cleaned
+
+
 def _creation_tool_schema(schema: type[StrictModel]) -> dict[str, Any]:
     parameters = schema.model_json_schema()
     hide_legacy_hash_input(parameters)
-    # task_parameters stays in the Draft contract for stored drafts, but preview and
-    # confirmation always use 采集与分析设置; chat values are ignored. Account selection
-    # remains application-managed and is intentionally hidden below.
-    task_schema = parameters.get("$defs", {}).get("InvestigationTaskParameters", {})
-    task_schema.get("properties", {}).pop("crawler_account_id", None)
+    # Task parameters come only from 采集与分析设置, so the dialogue tools do not
+    # expose them at all (stored drafts keep the field; see _without_task_parameters).
+    definitions = parameters.get("$defs", {})
+    for definition in definitions.values():
+        definition.get("properties", {}).pop("task_parameters", None)
+    definitions.pop("InvestigationTaskParameters", None)
 
     def remove_legacy_platform(node: Any) -> None:
         if isinstance(node, dict):
@@ -477,7 +500,7 @@ class InvestigationCreationToolService:
         schema = M3_TOOL_INPUTS.get(tool_name)
         if schema is None:
             raise ValueError("Hermes M3 tool name is not allowed")
-        parsed = schema.model_validate(arguments)
+        parsed = schema.model_validate(_without_task_parameters(tool_name, arguments))
         resource_ref = None
         generation_profile = None
         if tool_name in {'create_investigation_draft', 'update_investigation_draft', 'use_ruleset_proposal'}:
@@ -613,7 +636,7 @@ class InvestigationCreationToolService:
                 # Public activity is a display projection and must never alter
                 # validation, receipt fencing, replay, or mutation execution.
                 pass
-        raw_arguments = dict(arguments or {})
+        raw_arguments = _without_task_parameters(tool_name, dict(arguments or {}))
         if tool_name in M3_MUTATION_TOOL_NAMES:
             try:
                 M3_TOOL_INPUTS[tool_name].model_validate(raw_arguments)

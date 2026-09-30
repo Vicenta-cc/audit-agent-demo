@@ -90,12 +90,13 @@ def test_binding_snapshot_preview_confirm_audit_and_replay(creation_stack, conte
     assert len(rows(stack["creation_store"], "investigation_draft_revisions")) == 1
 
 
-def test_proposal_created_draft_preserves_explicit_task_parameters(creation_stack, content):
+def test_proposal_created_draft_drops_model_supplied_task_parameters(creation_stack, content):
+    # 采集与分析设置是唯一来源：模型填的 task_parameters（哪怕越界）被丢弃，不会让草案创建失败
     stack = creation_stack
     first = run(stack, content)
     create_draft = creation()
     create_draft["configuration"]["task_parameters"] = {
-        "max_notes": 3,
+        "max_notes": 50,
         "max_comments": 10,
         "collect_media": False,
     }
@@ -107,10 +108,7 @@ def test_proposal_created_draft_preserves_explicit_task_parameters(creation_stac
     )
 
     assert result["status"] == "ok", result
-    parameters = result["data"]["draft"]["configuration"]["task_parameters"]
-    assert parameters["max_notes"] == 3
-    assert parameters["max_comments"] == 10
-    assert parameters["collect_media"] is False
+    assert "task_parameters" not in result["data"]["draft"]["configuration"]
 
 
 def test_temporary_lexicon_edit_reference_can_be_corrected_before_receipt(creation_stack, content):
