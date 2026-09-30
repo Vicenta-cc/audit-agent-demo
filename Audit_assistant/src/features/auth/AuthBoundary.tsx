@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { BookOpen, ChevronRight } from "lucide-react";
 import { Button } from "../../components/common/Button";
 import { ApiError, apiRequest, clearAuthenticationState } from "../../services/apiClient";
 import { bootstrapAuthentication, login, logout, type ApplicationUser } from "../../services/auth";
@@ -152,6 +153,11 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     {notice ? <p role="alert">{notice}</p> : null}
     <Button type="submit" variant="primary" loading={busy}>登录</Button>
     <small>账号默认首次登录起七天有效；到期请联系管理员。不开放自行注册。</small>
+    <a className="auth-manual-link" href="/manual.html" target="_blank" rel="noopener">
+      <span className="auth-manual-icon" aria-hidden="true"><BookOpen size={18} /></span>
+      <span className="auth-manual-text"><strong>平台用户操作手册</strong><small>第一次使用？先了解账号限制与调查流程</small></span>
+      <ChevronRight size={16} aria-hidden="true" />
+    </a>
   </form></main>;
   return <AuthContext.Provider value={{ user, signOut }}><div key={`${user.id}:${user.role}`}>{children}</div></AuthContext.Provider>;
 }
