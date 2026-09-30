@@ -294,7 +294,7 @@ def test_rate_limit_is_not_rotated(env, monkeypatch):
     assert env.store.get(a["id"])["risk_count"] == 0
 
 
-def _run_pipeline(env, monkeypatch, crawler, primary, engine=None, auto_analyze=False, **overrides):
+def _run_pipeline(env, monkeypatch, crawler, primary, engine=None, settings_auto_analyze=False, **overrides):
     from backend.audit_agent.ingestion import AuditResultStore, IngestionStore
     from backend.audit_agent.job_store import JobStore
 
@@ -311,7 +311,7 @@ def _run_pipeline(env, monkeypatch, crawler, primary, engine=None, auto_analyze=
     monkeypatch.setattr(pipeline_module, "job_store", jobs)
     monkeypatch.setattr(pipeline_module.settings, "triage_mode", "select")
     monkeypatch.setattr(pipeline_module.settings, "outputs_dir", env.tmp / "outputs")
-    monkeypatch.setattr(pipeline_module.settings, "auto_analyze_crawled_content", auto_analyze)
+    monkeypatch.setattr(pipeline_module.settings, "auto_analyze_crawled_content", settings_auto_analyze)
     pipeline = pipeline_module.AuditPipeline.__new__(pipeline_module.AuditPipeline)
     pipeline.job_id = "job-rot"
     pipeline.crawler = crawler
@@ -332,17 +332,20 @@ class ScoreNone(ScoreAll):
         return CandidateScore(content_key, rank, 0, "none", "", [], None, 0)
 
 
-@pytest.mark.parametrize("snapshot", [
-    {},
-    # 旧快照没有 auto_analyze 字段：走「按冻结条数选取」的路径
+# 新任务冻结 auto_analyze=True 走流式分析；旧快照没有 auto_analyze，走「按冻结条数选取」
+_PATHS = pytest.mark.parametrize("snapshot", [
+    {"auto_analyze": True, "analyze_limit": 2},
     {"_confirmed_analyze_limit": 2, "analyze_limit": 2},
 ], ids=["stream", "confirmed-selection"])
+
+
+@_PATHS
 def test_all_terms_without_suspicious_candidates_end_normally(env, monkeypatch, snapshot):
     # 选择模式下所有词都没有可疑候选：任务正常结束，不是 no_valid_content_selected 失败
     a = env.add("A")
     crawler = RotationCrawler()
     job = _run_pipeline(env, monkeypatch, crawler, a, engine=ScoreNone(), max_total_notes=2,
-                        auto_analyze=bool(snapshot), **snapshot)
+                        settings_auto_analyze=True, **snapshot)
     assert job["status"] == "completed"
     assert not job["error"]
     assert job["control"]["no_suspicious_content"] is True
