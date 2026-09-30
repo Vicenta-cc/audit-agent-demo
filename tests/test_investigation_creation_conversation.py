@@ -3440,3 +3440,19 @@ def test_resource_generation_and_normal_turns_use_separate_providers(
     assert len(calls) == 1
     assert calls[0]["base_url"].startswith("https://dashscope.aliyuncs.com/")
     assert calls[0]["api_key"] == "official-test-key"
+
+
+@pytest.mark.parametrize("mode, per_task, expected, absent", [
+    ("search", 1, "- 每关键词上限：1 条", "本任务上限"),
+    ("creator", 10, "- 本任务上限：10 条", "每关键词上限"),
+])
+def test_draft_summary_limit_wording_follows_the_mode(mode, per_task, expected, absent):
+    answer = InvestigationCreationConversationService._checkpoint_completion_answer({
+        "artifact_type": "investigation_draft",
+        "draft": {"title": "限额核对", "configuration": {"platform": "dy"}},
+        "confirmation_preview": {"mode": mode, "platform": "dy", "max_posts_per_keyword": per_task,
+                                 "max_notes": per_task, "resolved_search_terms": ["bc料"] if mode == "search" else []},
+    })
+    assert expected in answer
+    assert absent not in answer
+    assert f"- 单任务总量：{per_task} 条" in answer

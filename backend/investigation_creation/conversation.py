@@ -1485,7 +1485,9 @@ class InvestigationCreationConversationService:
         # 数量取预览里的生效值（来自采集与分析设置），不取草案里的请求值
         lines.extend(
             [
-                f"- 每关键词上限：{preview.get('max_posts_per_keyword', 1)} 条",
+                (f"- 本任务上限：{preview.get('max_posts_per_keyword', 1)} 条"
+                 if preview.get("mode") == "creator"
+                 else f"- 每关键词上限：{preview.get('max_posts_per_keyword', 1)} 条"),
                 f"- 单任务总量：{preview.get('max_notes', 1)} 条",
             ]
         )
