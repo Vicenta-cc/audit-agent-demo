@@ -2164,6 +2164,9 @@ class AuditPipeline:
         marked_used_ids: set[str] = set()
         # 只有真正采集成功过的账号才在任务结束时清零风控计数
         clean_account_ids: set[str] = set()
+        # 候选采集成功、有打分、最终走「跳过」分支的词；只有全部访问过的词都在这里才算「未发现可疑内容」
+        clean_skipped: set[str] = set()
+        visited_terms: list[str] = []
 
         def crawl_keyword(index: int, keyword: str, candidate_root: Path, account: dict, state: dict) -> None:
             """``state`` survives a rotation retry of this keyword: the scored candidates, the compare arm
@@ -2228,6 +2231,8 @@ class AuditPipeline:
             for key in already:     # 重写的候选文件要保留上次已采的条目，否则再续采会重复补
                 mark_candidates_collected(candidate_root, key)
             if not picks:
+                if state["scored"] > 0:
+                    clean_skipped.add(keyword)
                 excluded = len(exclude & {s.content_key for s in ranked})
                 positive = sum(1 for s in ranked if s.score > 0)
                 discarded = sum(1 for s in ranked if s.band == "discard")
@@ -2282,6 +2287,7 @@ class AuditPipeline:
                               f"已达本任务采集上限 {max_total_notes} 条，以下词未搜索：{', '.join(remaining)}")
                 break
             visited += 1
+            visited_terms.append(keyword)
             candidate_root = save_root / "candidates" / self._keyword_slug(index, keyword)
             retried = False
             keyword_state: dict = {"failed_picks": set()}
@@ -2336,7 +2342,13 @@ class AuditPipeline:
         output.command = last_command or ["triage-select", str(len(terms)), "keywords"]
         job_store.log(self.job_id, f"初筛完成：{visited} 个词，选中 {len(selected_by_key)} 条，本次精采 {len(output.contents)} 条进入精审")
         # 所有词都没有可疑候选：由调用方把任务记为正常结束（不算失败，也不生成报告）
-        self.triage_found_nothing = not selected_by_key and not (stop_checker and stop_checker())
+        # 采集失败、精采无产出、候选为 0 的词都不算「无可疑」，仍按原来的 no_valid_content_selected 失败
+        self.triage_found_nothing = (
+            not selected_by_key
+            and bool(visited_terms)
+            and all(term in clean_skipped for term in visited_terms)
+            and not (stop_checker and stop_checker())
+        )
         if self.triage_found_nothing:
             job_store.log(self.job_id, f"未发现可疑内容：{len(terms)} 个搜索词均无可疑候选，本任务没有内容进入精审")
         return output

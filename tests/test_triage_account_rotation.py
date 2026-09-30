@@ -355,6 +355,51 @@ def test_all_terms_without_suspicious_candidates_end_normally(env, monkeypatch, 
     assert not any("no_valid_content_selected" in m for m in messages)
 
 
+class RaisingSearchCrawler(RotationCrawler):
+    def __init__(self, failing_words):
+        super().__init__()
+        self.failing_words = set(failing_words)
+
+    def run_search(self, *, platform, keyword, save_root, account_id="", **kwargs):
+        if keyword in self.failing_words:
+            raise RuntimeError("MediaCrawler failed with exit code 1")
+        return super().run_search(platform=platform, keyword=keyword, save_root=save_root,
+                                  account_id=account_id, **kwargs)
+
+
+class EmptyDetailCrawler(RotationCrawler):
+    def run_detail(self, platform, content_id, *, source_keyword, save_root=None, account_id="", **kwargs):
+        return CrawlOutput(platform=platform, contents=[], comments=[], output_dir=Path(save_root))
+
+
+class ZeroCandidateCrawler(RotationCrawler):
+    def run_search(self, *, platform, keyword, save_root, account_id="", **kwargs):
+        self.search_accounts.append((keyword, account_id))
+        return CrawlOutput(platform=platform, contents=[], comments=[], output_dir=Path(save_root))
+
+
+@_PATHS
+@pytest.mark.parametrize("crawler, engine", [
+    (lambda: RaisingSearchCrawler({"词1", "词2"}), ScoreNone),     # 采集失败，不是「无可疑」
+    (EmptyDetailCrawler, ScoreAll),                                 # 选中了但精采无产出
+    (ZeroCandidateCrawler, ScoreNone),                              # 搜不到候选
+    (lambda: RaisingSearchCrawler({"词2"}), ScoreNone),             # 一词干净跳过、一词出错
+], ids=["crawler-error", "detail-empty", "zero-candidates", "mixed-clean-and-error"])
+def test_failures_are_not_reported_as_no_suspicious_content(env, monkeypatch, snapshot, crawler, engine):
+    a = env.add("A")
+    job = _run_pipeline(env, monkeypatch, crawler(), a, engine=engine(), max_total_notes=2,
+                        settings_auto_analyze=True, **snapshot)
+    assert job["control"]["no_suspicious_content"] is False
+    messages = [log["message"] for log in job["logs"]]
+    assert not any(m.startswith("未发现可疑内容") for m in messages)
+    if "_confirmed_analyze_limit" in snapshot:
+        assert job["status"] == "failed"
+        assert job["error"].startswith("no_valid_content_selected:")
+    else:
+        # 流式路径由 worker 的完成门槛判为 no_valid_content_selected（见 test_investigation_creation_m3）
+        assert job["status"] == "completed"
+
+
 def test_partial_selection_keeps_the_flag_off(env, monkeypatch):
     a = env.add("A")
     job = _run_pipeline(env, monkeypatch, RotationCrawler(), a, max_total_notes=2)
