@@ -163,7 +163,7 @@ export function readRunAnalysisCounts(run: InvestigationRunProjection): M3Analys
 // complete. Afterwards only the posts actually ingested can still complete.
 function analysisCounts(run: InvestigationRunProjection, completedCount: number): M3AnalysisCounts {
   const ingested = readRunCount(run, "ingested_count");
-  const resumable = run.available_actions?.resume_crawl === true;
+  const resumable = run.available_actions?.resume_crawl === true || run.task_stats.collection_resumable === true;
   const finished = ["completed", "skipped"].includes(run.crawl_status) && !resumable;
   const unfinished = !finished && (resumable || ACTIVE_CRAWL_STATUSES.includes(run.crawl_status));
   const totalCount = unfinished ? Math.max(readRunCount(run, "planned_count"), ingested) : ingested;

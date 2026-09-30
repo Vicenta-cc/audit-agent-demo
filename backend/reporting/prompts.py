@@ -151,9 +151,9 @@ def _human_metric_label(metric: dict[str, Any]) -> str:
     if len(group) == 1:
         group_key, group_value = next(iter(group.items()))
         value_labels = {
-            "pass": "直接通过",
+            "pass": "审核通过",
             "review": "进入复审",
-            "reject": "拒绝",
+            "reject": "建议拦截",
             "none": "无明显风险",
             "low": "低风险",
             "medium": "中风险",

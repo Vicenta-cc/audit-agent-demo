@@ -844,6 +844,9 @@ class InvestigationRunProjector:
                     {**job, "crawl_status": crawl_status, "analysis_status": analysis_status},
                     task_stats,
                 )
+                # Whether collection itself can continue, independent of whether an
+                # account happens to be free right now (the progress badge uses it).
+                task_stats = {**task_stats, "collection_resumable": bool(actions.get("resume_crawl"))}
                 preferred_account_id = str(
                     (((job.get("control") or {}).get("execution_account") or {}).get("id"))
                     or job.get("crawler_account_id")

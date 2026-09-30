@@ -1048,6 +1048,13 @@ test("analysis progress keeps the planned denominator while collection can still
     available_actions: { resume_crawl: true },
     task_stats: stats
   }))).toEqual(unfinished);
+  // Paused while no account is free: resume is hidden until an account frees
+  // up, but collection itself can still continue, so the badge must not flip.
+  expect(readRunAnalysisCounts(run("RUNNING", {
+    crawl_status: "stopped",
+    available_actions: { resume_crawl: false },
+    task_stats: { ...stats, collection_resumable: true }
+  }))).toEqual(unfinished);
   // A completed crawl that still offers resume has not really finished.
   expect(readRunAnalysisCounts(run("INTERRUPTED", {
     crawl_status: "completed",

@@ -320,6 +320,9 @@ def test_continue_collection_projection_waits_for_an_eligible_account(
         )
     )
     assert projected["available_actions"]["resume_crawl"] is False
+    # The badge must not flip while no account is free: collection itself
+    # can still continue once an account is available.
+    assert projected["task_stats"]["collection_resumable"] is True
 
 
 def test_run_projection_exposes_the_planned_post_count(tmp_path):
