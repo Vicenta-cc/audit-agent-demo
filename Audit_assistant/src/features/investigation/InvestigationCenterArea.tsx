@@ -25,6 +25,7 @@ import { TaskConfirmationCard } from "./TaskConfirmationCard";
 import { InvestigationReportCard } from "./InvestigationReportCard";
 import { StreamingAssistantText } from "./StreamingAssistantText";
 import { GeneratedRulesMessage } from "./GeneratedRulesMessage";
+import { SessionResourceSelection } from "./SessionResourceSelection";
 import { AssistantMarkdown } from "./AssistantMarkdown";
 import { HistoricalProgressCard } from "./HistoricalProgressCard";
 import { HistoricalReportPendingStatus } from "./HistoricalReportPendingStatus";
@@ -309,6 +310,8 @@ export function InvestigationCenterArea({
       {/* Timeline Scroll Container */}
       <div ref={timelineRef} className="inv-timeline-container">
         <div className="inv-timeline-inner">
+          {import.meta.env.VITE_SESSION_RESOURCE_SELECTION_ENABLED === 'true' && session.creationBinding?.workspaceSessionId
+            ? <SessionResourceSelection key={session.creationBinding.workspaceSessionId} sessionId={session.creationBinding.workspaceSessionId} /> : null}
           {session.draft.historyNotice ? <p style={{ fontSize: 12, lineHeight: 1.65, color: "#64748b", margin: "0 0 18px" }}>{session.draft.historyNotice}</p> : null}
           {/* WELCOME BLANK STATE */}
           {session.messages.length === 0 ? (

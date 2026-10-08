@@ -196,3 +196,69 @@ tests/test_published_report_runtime_snapshot.py
 - 目前分页限制响应大小，但读取器会整理本会话及关联资源的版本再分页；超大历史量的负载测试尚未完成，不能称为大规模性能已验收。
 - 旧数据兼容测试使用合成副本；没有读取生产数据库做全量兼容检查。
 - 无新增表、迁移或持久化状态；回退本阶段代码即可移除新 GET 端点，不需要回滚数据库，不会撤销已有资源或任务。
+
+## 阶段 1B 实施与验收记录
+
+2026-10-08，基于 `b38fc36` 实施显式界面选择的记录和恢复。未修改 Qwen Prompt、模型工具集合、正常回答展示、五次 censor 请求预算、草案创建幂等实现、报告强制路由或任务冻结配置；没有推送、部署或操作线上数据。
+
+### 修改文件和数据影响
+
+| 文件 | 作用 |
+| --- | --- |
+| `backend/resource_management/selections.py` | 输入契约、附属表初始化、显式选择事务和只读投影 |
+| `backend/investigation_creation/store.py` | 在既有启动迁移事务中调用新表初始化；其余幂等逻辑不变 |
+| `backend/resource_management/session_state.py` | 在同一调查库读快照恢复选择，分页摘要包含选择；保持 GET 无写入 |
+| `backend/resource_management/api.py` | 新增认证的 POST `.../resource-selection`；不新增 Agent 工具 |
+| `Audit_assistant/src/services/sessionResources.ts` | 分页读取、精确版本预览及选择写入 |
+| `Audit_assistant/src/features/investigation/SessionResourceSelection.tsx`、对应 CSS | 本地验收面板，显式选择/取消、刷新、同操作重试；查看内容不自动选择 |
+| `Audit_assistant/src/features/investigation/InvestigationCenterArea.tsx` | 三行开关接线，默认关闭；只在 creation 工作区显示 |
+| `tests/test_resource_selections.py` | 17 项新增后端验收 |
+| `Audit_assistant/tests/sessionResourceSelection.*`、`sessionResourceSelectionMount.tsx` | 5 项浏览器交互验收及独立挂载页面 |
+
+只增加 `resource_selection_events` 表和查询索引。记录精确资源版本及用途，不复制资源正文，不回填旧聊天的“选择”。正常数据库读取不建表。规则/词库、编辑/查看分别有自己的前序事件；同一事件重放返回原回执，不能恢复成旧选择。旧标签页携带过期前序事件返回 409。
+
+已有采用审批、Draft 修订、Run 冻结快照继续作为任务采用事实的来源。普通生成、查看、编辑、保存不生成新的已确认选择。自然语言“刚才那个”的含义仍未接入新机制，不能称为已解决模型指代。
+
+### 验收结果
+
+| 场景 | 实际结果 |
+| --- | --- |
+| 选择编辑 B v4 → 读取/保存 A → 选择查看 A → 发布状态 → 新进程读取 | 编辑对象仍为 B v4；查看对象为 A v1；任务冻结 B v3；三个库读取前后 dump 相等 |
+| 真实聊天工具生成/更新/采用，但没有显式界面选择 | `selection.status=unknown`；未自动把活动变成编辑选择 |
+| 响应丢失、相同事件重放 | 返回原回执，表中不新增；之后已选择 A 时，重放旧 B 请求不能抢回当前选择 |
+| 两个页面同时选择；选择与编辑并发 | 一个选择成功、一个冲突；编辑后原版本标 stale，或选择因过期而拒绝；不静默升级 |
+| 历史 B v3、当前 B v4、取消选择 | 历史版可查看但不可选为当前编辑；取消也有独立事件，旧页面不能利用“未选中”覆盖后续状态 |
+| 权限、错误哈希、错误种类、伪造 source/采用用途 | 拒绝跨用户、管理员越权、同用户其他会话；不允许冒充聊天确认或采用审批 |
+| 资源来源消失 | unavailable，不替换成前一次选择或当前版本，不返回不可访问的目标 key/hash |
+| 旧库读取、真实 Store 重启升级、重复初始化、建索引中断 | 读取不迁移；升级后旧表完整 dump 不变；故障事务回滚，重试成功 |
+| 选择插入后触发故障 | 事务完整回滚，重试可以成功；不产生伪回执 |
+| 删除某个工作区 | 现有删除事务清掉该会话选择，其他会话保留；迟到的取消选择请求返回 404 |
+| 浏览器刷新、版本预览、断线、冲突、读取失败 | 恢复两种用途；预览不发 POST；重试沿用原事件和版本；冲突不自动重试；读取错误不假装空目录 |
+
+后端沿用 1A 的完整命令范围，增加 `tests/test_resource_selections.py`。最终实际结果：**457 passed，23 subtests passed，6 warnings，49.75 秒**。其中原有 440 项、1B 新增 17 项。全部使用临时数据库；没有真实 Qwen 或云端调用。
+
+前端命令（在 `Audit_assistant` 内）：
+
+```sh
+/Users/ext.wanghongtao6/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node node_modules/typescript/bin/tsc --noEmit
+PATH=/Users/ext.wanghongtao6/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH \
+PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' \
+node node_modules/@playwright/test/cli.js test tests/sessionResourceSelection.spec.ts tests/resourceConversationPresentation.spec.ts tests/resourceMarkdownRendering.spec.tsx
+```
+
+类型检查通过；前端 **14 passed，5.7 秒**（5 项新交互测试、9 项原回答展示回归）。首次运行因 Playwright 默认浏览器文件缺失，5 项浏览器用例未启动；明确指定已安装的 Chrome 后通过，未改用例跳过该问题。截图已人工核看。浏览器用例使用模拟 HTTP 响应；后端 API、事务与迁移另由真实 SQLite 集成测试验证，未宣称已跑真实模型全流程。
+
+### 扩展检查的两项既有失败
+
+额外运行 `tests/test_resource_selections.py tests/test_workspace_deletion.py` 时，删除模块出现以下问题；在独立临时目录用 `git archive b38fc36` 提取的未修改基线上，仅运行同样两项，得到相同失败。因此不能报告全项目测试全绿，也未扩大本轮修改到额度/历史报告模块。
+
+1. `test_workspace_deletion.py::test_historical_delete_survives_registration_restart`：缺两个 Gate 历史数据库样本，fixture 初始化失败。
+2. `test_workspace_deletion.py::test_end_waits_for_fence_and_deletion_preserves_charge_ledger`：`AdmissionStore.reserve` 使用 `user["role"]` 时收到字符串，抛出 TypeError。已在旧基线复现，尚未进一步定位或修复其来源。
+
+### 开关、回退和剩余边界
+
+- 本地开启方式：启动/构建前设置 `VITE_SESSION_RESOURCE_SELECTION_ENABLED=true`。默认关闭；模型并未消费新选择，不影响现有聊天。关闭开关或回退提交即可撤下入口；新增附属表可以保留，无需删除数据。
+- 明确界面选择可恢复；现有聊天采用事实可按既有记录恢复。通用聊天选择、用户消息依据与资源绑定、Agent 读取/使用选择、歧义追问及真实 Qwen 多轮行为留待阶段 2，不能拿本轮测试代替。
+- 本轮选择不会保存资源、修改任务、授予权限；后续工具仍必须验证目标版本，不得把旧选择当作写入授权。
+- 跨库原子快照、超大历史量性能、浏览器与真实 Qwen 的整体链路仍未覆盖。旧库测试使用合成隔离数据，没有扫描生产库。
+- 会话删除清理与权限测试通过；没有对真实服务进程做强制断电测试。本轮断线用例分别模拟提交后响应丢失、事务内注入失败及浏览器请求失败。

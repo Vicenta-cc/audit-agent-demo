@@ -61,8 +61,9 @@ class SessionResourceReader:
     def read(self, session_id, *, principal, limit=20, cursor=''):
         if not isinstance(limit, int) or not 1 <= limit <= 100:
             raise ResourceStateError('RESOURCE_STATE_INVALID', '分页数量必须为 1 至 100。', 422)
-        items, issues = self._load(session_id, principal)
-        token = digest({'session': session_id, 'principal': principal.id, 'items': items, 'issues': issues})
+        items, issues, selection = self._load(session_id, principal)
+        token = digest({'session': session_id, 'principal': principal.id, 'items': items, 'issues': issues,
+                        'selection': selection})
         offset = 0
         if cursor:
             try:
@@ -81,11 +82,11 @@ class SessionResourceReader:
         return dict(schema_version='session-resource-state-v1', session_id=session_id,
                     status='partial' if issues else 'complete', issues=issues,
                     consistency='per_database_snapshot', revalidate_before_write=True,
-                    selection={'status': 'unknown'}, snapshot=token,
+                    selection=selection, snapshot=token,
                     items=[_summary(i) for i in items[offset:end]], next_cursor=next_cursor)
 
     def detail(self, session_id, key, *, principal):
-        items, issues = self._load(session_id, principal)
+        items, issues, _ = self._load(session_id, principal)
         item = next((i for i in items if i['key'] == key), None)
         if item is None:
             raise ResourceStateError('RESOURCE_STATE_NOT_FOUND', '资源版本不存在或不属于当前会话。', 404)
@@ -97,17 +98,23 @@ class SessionResourceReader:
         try:
             with ExitStack() as stack:
                 conversation = stack.enter_context(_read_database(self.conversation_db))
-                session = conversation.execute(
-                    "SELECT owner_principal,scope_type FROM investigation_sessions WHERE id=?", (session_id,)
-                ).fetchone()
-                if not session or session['owner_principal'] != principal.id or session['scope_type'] != 'creation':
-                    raise ResourceStateError('RESOURCE_STATE_NOT_FOUND', '会话不存在或无权访问。', 404)
+                self.authorize(conversation, session_id, principal)
                 creation = stack.enter_context(_read_database(self.creation_db))
                 resources = stack.enter_context(_read_database(self.resource_db))
-                return self._project(creation, resources, session_id, principal)
+                items, issues = self._project(creation, resources, session_id, principal)
+                from .selections import project
+                return items, issues, project(creation, items, session_id=session_id, principal=principal)
         except (sqlite3.Error, ValueError, TypeError, KeyError, AttributeError) as exc:
             # Do not turn a failed source into an empty list or expose database paths.
             raise ResourceStateError('RESOURCE_STATE_UNAVAILABLE', '资源状态暂时无法读取，请稍后重试。', 503) from exc
+
+    @staticmethod
+    def authorize(conversation, session_id, principal):
+        session = conversation.execute(
+            "SELECT owner_principal,scope_type FROM investigation_sessions WHERE id=?", (session_id,)
+        ).fetchone()
+        if not session or session['owner_principal'] != principal.id or session['scope_type'] != 'creation':
+            raise ResourceStateError('RESOURCE_STATE_NOT_FOUND', '会话不存在或无权访问。', 404)
 
     def _project(self, db, resources, session_id, principal):
         tables = _tables(db)

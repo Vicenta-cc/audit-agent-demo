@@ -244,6 +244,8 @@ class InvestigationCreationStore:
                 connection.execute('DROP INDEX uq_creation_turn_mutation_tool')
                 connection.execute("CREATE UNIQUE INDEX uq_creation_turn_mutation_tool ON investigation_creation_tool_receipts(session_id,turn_id,tool_name) WHERE is_mutation=1 AND tool_name NOT IN ('create_lexicon_edit','open_resource_edit','update_resource_edit','save_resource')")
             draft_operations.initialize(connection)
+            from backend.resource_management.selections import initialize as initialize_selections
+            initialize_selections(connection)
             connection.execute("CREATE TABLE IF NOT EXISTS resource_edit_history (edit_id TEXT NOT NULL,version INTEGER NOT NULL,content_json TEXT NOT NULL,PRIMARY KEY(edit_id,version))")
             connection.execute("INSERT OR IGNORE INTO resource_edit_history SELECT proposal_id,version,content_json FROM ruleset_proposals")
         # Serialize additive upgrades so concurrent process initialization cannot

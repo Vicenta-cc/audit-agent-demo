@@ -7,6 +7,7 @@ from backend.rulesets.contracts import StrictModel
 from backend.rulesets.errors import RuleSetNotFoundError, RuleSetForbiddenError, RuleSetRevisionConflictError
 from .contracts import LexiconContent, OpenResourceInput, UpdateEditInput, EditChange
 from .session_state import SessionResourceReader, ResourceStateError
+from .selections import SelectionInput, ResourceSelectionWriter
 
 
 class CreateLexiconEditBody(StrictModel):
@@ -61,6 +62,16 @@ def create_resource_router(application, conversation, principal_provider=None):
     def resource_state_detail(session_id: str, key: str=Query(..., min_length=1, max_length=512),
                               principal: Principal=Depends(provide)):
         return read_state(session_id, principal, key=key)
+
+    @router.post('/api/investigation-workspaces/{session_id}/resource-selection')
+    def select_resource(session_id: str, body: SelectionInput, principal: Principal=Depends(provide)):
+        reader = SessionResourceReader(application.store.db_path,
+            application.resource_service.lexicon_store.db_path, conversation.store.db_path)
+        try:
+            return ResourceSelectionWriter(application.store, reader).record(
+                session_id, principal=principal, **body.model_dump())
+        except ResourceStateError as exc:
+            raise HTTPException(exc.status_code, detail={'code': exc.code, 'message': str(exc)}) from exc
 
     def invoke(method, *, session_id=None, principal, **kwargs):
         try:
