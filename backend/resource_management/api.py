@@ -1,11 +1,12 @@
 from __future__ import annotations
 from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field, StrictInt
 from backend.investigation_creation.principal import LocalPrincipalProvider, Principal
 from backend.rulesets.contracts import StrictModel
 from backend.rulesets.errors import RuleSetNotFoundError, RuleSetForbiddenError, RuleSetRevisionConflictError
 from .contracts import LexiconContent, OpenResourceInput, UpdateEditInput, EditChange
+from .session_state import SessionResourceReader, ResourceStateError
 
 
 class CreateLexiconEditBody(StrictModel):
@@ -38,6 +39,28 @@ class UpdateEditBody(StrictModel):
 def create_resource_router(application, conversation, principal_provider=None):
     router = APIRouter(tags=['resource-management'])
     provide = principal_provider or LocalPrincipalProvider()
+
+    def read_state(session_id, principal, **kwargs):
+        # Construct only the read-only projection, never a resource store whose
+        # initialization may migrate or populate the database.
+        reader = SessionResourceReader(application.store.db_path,
+            application.resource_service.lexicon_store.db_path, conversation.store.db_path)
+        try:
+            if 'key' in kwargs:
+                return reader.detail(session_id, principal=principal, **kwargs)
+            return reader.read(session_id, principal=principal, **kwargs)
+        except ResourceStateError as exc:
+            raise HTTPException(exc.status_code, detail={'code': exc.code, 'message': str(exc)}) from exc
+
+    @router.get('/api/investigation-workspaces/{session_id}/resource-state')
+    def resource_state(session_id: str, limit: int=Query(20, ge=1, le=100),
+                       cursor: str=Query('', max_length=512), principal: Principal=Depends(provide)):
+        return read_state(session_id, principal, limit=limit, cursor=cursor)
+
+    @router.get('/api/investigation-workspaces/{session_id}/resource-state/detail')
+    def resource_state_detail(session_id: str, key: str=Query(..., min_length=1, max_length=512),
+                              principal: Principal=Depends(provide)):
+        return read_state(session_id, principal, key=key)
 
     def invoke(method, *, session_id=None, principal, **kwargs):
         try:
