@@ -397,6 +397,9 @@ M3_PARAMETER_GUIDANCE = {
     ),
     'create_investigation_draft': (
         '执行参数（帖子数、评论数、媒体采集等）只来自采集与分析设置，聊天不能修改，不传 task_parameters。'
+        '失败恢复以工具回执为准：NOT_STARTED 且 retryable=true 表示未创建，可在本轮读取最新资源、核对变化后纠正重试；'
+        '审核内容实质变化时先请用户确认，不直接替换。COMMITTED 表示已创建，使用返回的 draft_id 读取草案，'
+        '或以相同参数重试取回结果；UNKNOWN 表示结果待核查，不另建操作或猜测创建成功。'
         '已有临时或正式词库时直接使用其 resource_ref recall_plan，'
         '不重新填写内容、词条或 hash；主词归属、启用变体与搜索投影由后端保留。不要传 crawler_account_id。'
     ),
@@ -496,6 +499,7 @@ class InvestigationCreationToolService:
         principal: Principal,
         session_id: str = "",
         runtime_identity: HermesToolExecutionIdentity | None = None,
+        create_operation: tuple[str, str] | None = None,
     ) -> dict[str, Any]:
         schema = M3_TOOL_INPUTS.get(tool_name)
         if schema is None:
@@ -562,6 +566,7 @@ class InvestigationCreationToolService:
             draft = self.application_service.create_draft(
                 CreateDraftCommand.model_validate(parsed.model_dump(mode="json")),
                 principal=principal,
+                create_operation=create_operation,
                 **({'resource_ref': resource_ref, 'session_id': session_id} if resource_ref else {}),
             )
             result = self.application_service.get_draft_view(
@@ -727,13 +732,22 @@ class InvestigationCreationToolService:
                             ),
                         },
                     }
-            payload = self.execute(
-                tool_name,
-                raw_arguments,
-                principal=principal,
-                session_id=identity.session_id,
-                **({"runtime_identity": identity} if tool_name == "use_ruleset_proposal" else {}),
-            )
+            if tool_name == 'create_investigation_draft' and receipt and receipt.get('draft_id'):
+                # The draft committed even if preview generation or delivery failed.
+                # Do not resolve resources or create anything again.
+                payload = self.application_service.get_draft_view(
+                    receipt['draft_id'], principal=principal,
+                ).model_dump(mode='json', warnings=False)
+            else:
+                payload = self.execute(
+                    tool_name,
+                    raw_arguments,
+                    principal=principal,
+                    session_id=identity.session_id,
+                    **({"runtime_identity": identity} if tool_name == "use_ruleset_proposal" else {}),
+                    **({'create_operation': (receipt['operation_id'], receipt['receipt_id'])}
+                       if tool_name == 'create_investigation_draft' and receipt else {}),
+                )
             result = {"status": "ok", "data": payload}
         except Exception as exc:
             result = {

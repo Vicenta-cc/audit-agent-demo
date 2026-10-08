@@ -14,6 +14,7 @@ from backend.audit_agent.search_terms_cap import cap_search_terms
 from backend.rulesets.contracts import RuleSetContent
 from backend.rulesets.compiler import content_hash as ruleset_content_hash
 from .approval import UseRuleSetProposalInput, reject, resolve_approval
+from . import draft_operations
 
 from .contracts import (
     ConfirmationResolution,
@@ -242,6 +243,7 @@ class InvestigationCreationStore:
             if index and 'NOT IN' not in index[0]:
                 connection.execute('DROP INDEX uq_creation_turn_mutation_tool')
                 connection.execute("CREATE UNIQUE INDEX uq_creation_turn_mutation_tool ON investigation_creation_tool_receipts(session_id,turn_id,tool_name) WHERE is_mutation=1 AND tool_name NOT IN ('create_lexicon_edit','open_resource_edit','update_resource_edit','save_resource')")
+            draft_operations.initialize(connection)
             connection.execute("CREATE TABLE IF NOT EXISTS resource_edit_history (edit_id TEXT NOT NULL,version INTEGER NOT NULL,content_json TEXT NOT NULL,PRIMARY KEY(edit_id,version))")
             connection.execute("INSERT OR IGNORE INTO resource_edit_history SELECT proposal_id,version,content_json FROM ruleset_proposals")
         # Serialize additive upgrades so concurrent process initialization cannot
@@ -458,6 +460,8 @@ class InvestigationCreationStore:
                 "durable tool execution identity is required",
                 code="TOOL_EXECUTION_IDENTITY_REQUIRED",
             )
+        if tool_name == draft_operations.TOOL and is_mutation:
+            return draft_operations.begin(self, identity, arguments, application_turn_id)
         fingerprint = self.tool_arguments_fingerprint(arguments)
         now = self.clock().isoformat()
         receipt_id = f"creation-tool-receipt:{uuid4().hex}"
@@ -533,6 +537,20 @@ class InvestigationCreationStore:
         succeeded: bool,
     ) -> None:
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            is_create_attempt = connection.execute(
+                'SELECT 1 FROM draft_creation_attempts WHERE receipt_id=?', (receipt_id,)
+            ).fetchone()
+            if is_create_attempt:
+                draft_operations.finish(connection, receipt_id, response)
+                existing = connection.execute(
+                    'SELECT status FROM investigation_creation_tool_receipts WHERE receipt_id=?',
+                    (receipt_id,),
+                ).fetchone()
+                if existing['status'] != 'STARTED':
+                    # Rebuilding a committed draft's response must not overwrite
+                    # the original terminal attempt history.
+                    return
             updated = connection.execute(
                 """
                 UPDATE investigation_creation_tool_receipts
@@ -876,6 +894,7 @@ class InvestigationCreationStore:
         objective: str,
         configuration: DraftConfiguration,
         before_write: Callable | None = None,
+        create_operation: tuple[str, str] | None = None,
     ) -> InvestigationDraft:
         self.protect_temporary_judgement(configuration)
         draft_id = f"investigation-draft:{uuid4().hex}"
@@ -913,6 +932,8 @@ class InvestigationCreationStore:
                 """,
                 (draft_id, title, objective, configuration_json, principal, now),
             )
+            if create_operation is not None:
+                draft_operations.bind_draft(connection, create_operation, principal, draft_id)
         return self.get_draft(draft_id, principal=principal)
 
     def update_draft(

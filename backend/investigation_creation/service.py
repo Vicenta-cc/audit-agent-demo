@@ -156,6 +156,7 @@ class InvestigationCreationService:
     def create_draft(
         self, command: CreateDraftCommand, *, principal: Principal, resource_ref: str | None = None,
         session_id: str = "",
+        create_operation: tuple[str, str] | None = None,
     ) -> InvestigationDraft:
         command = CreateDraftCommand.model_validate(
             command.model_dump(mode="json", warnings=False)
@@ -187,12 +188,14 @@ class InvestigationCreationService:
                     objective=command.objective,
                     configuration=resolution.normalized_configuration,
                     before_write=self._edit_ref_guard(resource_ref, session_id, principal),
+                    create_operation=create_operation,
                 )
         return self.store.create_draft(
             principal=principal.id,
             title=command.title,
             objective=command.objective,
             configuration=configuration,
+            create_operation=create_operation,
         )
 
     def update_draft(
