@@ -253,3 +253,566 @@ def test_qr_expiration_before_any_image_is_explicit_without_fake_qr():
         assert observation == {"phase": "qr_expired", "qr": None}
 
     asyncio.run(run())
+
+
+def test_sms_resend_deadline_is_stable_and_real_button_reenables(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_adapter as module
+
+    class Clock(datetime):
+        current = datetime(2026, 10, 9, tzinfo=timezone.utc)
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    monkeypatch.setattr(module, "datetime", Clock)
+
+    async def run():
+        adapter = module.DouyinLoginAdapter(None, SimpleNamespace(evaluate=AsyncMock()))
+        panel = SimpleNamespace(
+            inner_text=AsyncMock(return_value="短信验证码 60秒后重新获取")
+        )
+        request = SimpleNamespace(
+            is_visible=AsyncMock(return_value=True),
+            inner_text=AsyncMock(return_value="60秒后重新获取"),
+            is_enabled=AsyncMock(return_value=False),
+            evaluate=AsyncMock(return_value=True),
+        )
+        adapter.visible = AsyncMock(return_value=panel)
+        adapter.sms_controls = AsyncMock(return_value={"request": request})
+        adapter.sms_result = "pending"
+        assert await adapter.observe_sms_result() == "confirmed"
+        deadline = adapter.sms_resend_available_at
+        assert deadline == Clock.current + timedelta(seconds=60)
+        Clock.current += timedelta(seconds=10)
+        assert await adapter.observe_sms_result() == "confirmed"
+        assert adapter.sms_resend_available_at == deadline
+        Clock.current += timedelta(seconds=20)
+        request.inner_text.return_value = "30秒后重新获取"
+        await adapter.observe_sms_result()
+        assert adapter.sms_resend_seconds == 30
+        assert adapter.sms_resend_available_at == deadline
+        assert not adapter.sms_resend_allowed
+        Clock.current += timedelta(seconds=30)
+        request.inner_text.return_value = "0秒后重新获取"
+        await adapter.observe_sms_result()
+        assert adapter.sms_resend_available_at is None
+        assert (
+            not adapter.sms_resend_allowed
+        )  # Timer alone does not enable a disabled button.
+        request.inner_text.return_value = "重新发送"
+        request.is_enabled.return_value = True
+        request.evaluate.return_value = False
+        await adapter.observe_sms_result()
+        assert adapter.sms_resend_allowed
+        assert adapter.sms_resend_available_at is None
+        assert adapter.sms_result == "confirmed"
+        # Every snapshot reflects actual button state, driving frontend rerender.
+        assert adapter.sms_resend_seconds is None
+
+    asyncio.run(run())
+
+
+def test_sms_countdown_does_not_override_rejection_or_unknown():
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(evaluate=AsyncMock()))
+        panel = SimpleNamespace(
+            inner_text=AsyncMock(return_value="操作频繁 60秒后重新获取")
+        )
+        request = SimpleNamespace(
+            is_visible=AsyncMock(return_value=True),
+            inner_text=AsyncMock(return_value="60秒后重新获取"),
+            is_enabled=AsyncMock(return_value=False),
+            evaluate=AsyncMock(return_value=True),
+        )
+        adapter.visible = AsyncMock(return_value=panel)
+        adapter.sms_controls = AsyncMock(return_value={"request": request})
+        adapter.sms_result = "pending"
+        assert await adapter.observe_sms_result() == "rejected"
+        panel.inner_text.return_value = "60秒后重新获取"
+        assert await adapter.observe_sms_result() == "rejected"
+        adapter.sms_result = "unknown"
+        assert await adapter.observe_sms_result() == "unknown"
+        assert not adapter.sms_resend_allowed
+
+    asyncio.run(run())
+
+
+def test_stale_cookie_with_rendered_qr_enters_prepared_login(tmp_path):
+    from unittest.mock import AsyncMock
+
+    async def run():
+        left, right = __import__("socket").socketpair()
+        args = SimpleNamespace(
+            operation_id="op",
+            media_fd=left.detach(),
+            intent="check_or_login",
+            entry="home",
+            expected_platform_account_id="",
+        )
+        helper = DouyinLoginV2(args)
+        helper.profile = {"directory": tmp_path}
+        adapter = SimpleNamespace(
+            has_auth=AsyncMock(return_value=True),
+            navigate=AsyncMock(),
+            open_login=AsyncMock(),
+            identity="",
+            identity_source="",
+        )
+        observations = 0
+
+        async def observe():
+            nonlocal observations
+            observations += 1
+            if observations == 3:
+                helper.stopped.set()
+            return {
+                "phase": "qr_ready",
+                "qr": {"revision": "actual", "image_data_url": "observed"},
+            }
+
+        adapter.observe = observe
+        adapter.trusted_identity = AsyncMock(return_value="")
+        helper.adapter = adapter
+        helper.open_context = AsyncMock()
+        helper.handshake = AsyncMock()
+        helper.abort_gesture = AsyncMock()
+        helper.emit = lambda *args, **kwargs: None
+        phases = []
+        helper.publish = lambda snapshot: phases.append(snapshot["phase"])
+        try:
+            await helper.flow()
+            assert phases == ["qr_ready", "qr_ready"]
+            assert helper.credentials_changed
+            helper.handshake.assert_any_await("prepare_requested", "prepare_ready")
+            adapter.trusted_identity.assert_not_awaited()
+            assert adapter.navigate.await_count == 1
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())
+
+
+def test_recover_with_stale_cookie_and_qr_fails_without_reset(tmp_path):
+    from unittest.mock import AsyncMock
+    import socket
+
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(
+                operation_id="op",
+                media_fd=left.detach(),
+                intent="recover",
+                entry="self",
+                expected_platform_account_id="",
+            )
+        )
+        helper.profile = {"directory": tmp_path}
+        helper.adapter = SimpleNamespace(
+            navigate=AsyncMock(),
+            has_auth=AsyncMock(return_value=True),
+            observe=AsyncMock(return_value={"phase": "qr_ready"}),
+        )
+        helper.open_context = AsyncMock()
+        helper.handshake = AsyncMock()
+        try:
+            with __import__("pytest").raises(ValueError, match="REUSE_AUTH_INVALID"):
+                await helper.flow()
+            helper.handshake.assert_not_awaited()
+            assert not helper.credentials_changed
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())
+
+
+def test_authentication_resuming_after_cookie_check_prepares_wrong_identity_cleanup(
+    tmp_path, monkeypatch
+):
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_v2 as module
+    import socket
+
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(
+                operation_id="op",
+                media_fd=left.detach(),
+                intent="check_or_login",
+                entry="home",
+                expected_platform_account_id="correct-person",
+            )
+        )
+        helper.profile = {"directory": tmp_path}
+        helper.context = object()
+        adapter = SimpleNamespace(
+            navigate=AsyncMock(),
+            has_auth=AsyncMock(return_value=True),
+            observe=AsyncMock(
+                side_effect=[
+                    {"phase": "preparing"},
+                    {"phase": "qr_ready", "qr": {"revision": "observed"}},
+                    {"phase": "preparing"},
+                ]
+            ),
+            trusted_identity=AsyncMock(return_value="wrong-person"),
+            close=AsyncMock(),
+            identity="old-person",
+            identity_source="old-source",
+        )
+        helper.adapter = adapter
+        helper.open_context = AsyncMock()
+        helper.handshake = AsyncMock()
+        helper.abort_gesture = AsyncMock()
+        helper.publish = lambda _: None
+        events = []
+        helper.emit = lambda kind, **kwargs: events.append(kind)
+        reset = AsyncMock()
+        monkeypatch.setattr(module, "reset_douyin_credentials_v2", reset)
+        try:
+            with __import__("pytest").raises(ValueError, match="IDENTITY_MISMATCH"):
+                await helper.flow()
+            assert helper.credentials_changed
+            calls = [call.args for call in helper.handshake.await_args_list]
+            assert ("prepare_requested", "prepare_ready") in calls
+            assert ("cleanup_requested", "cleanup_ready") in calls
+            assert calls.index(("prepare_requested", "prepare_ready")) < calls.index(
+                ("cleanup_requested", "cleanup_ready")
+            )
+            reset.assert_awaited_once_with(helper.context, helper.profile)
+            assert "cleanup_done" in events and "identity_rejected" not in events
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())
+
+
+def test_real_sms_button_availability_changes_published_action_capabilities():
+    import socket
+
+    left, right = socket.socketpair()
+    helper = DouyinLoginV2(SimpleNamespace(operation_id="op", media_fd=left.detach()))
+    helper.adapter = SimpleNamespace(
+        identity="", page=SimpleNamespace(viewport_size={"width": 1000, "height": 760})
+    )
+    snapshots = []
+    helper.emit = lambda _, **payload: snapshots.append(payload)
+    try:
+        helper.publish(
+            {
+                "phase": "sms_required",
+                "sms": {"send_status": "confirmed", "resend_allowed": False},
+            }
+        )
+        assert "request_sms" not in snapshots[-1]["available_actions"]
+        helper.publish(
+            {
+                "phase": "sms_required",
+                "sms": {"send_status": "confirmed", "resend_allowed": True},
+            }
+        )
+        assert len(snapshots) == 2
+        assert "request_sms" in snapshots[-1]["available_actions"]
+        assert snapshots[-1]["sms"]["send_status"] == "confirmed"
+    finally:
+        helper.media.close()
+        right.close()
+
+
+def test_late_sms_confirmation_after_unknown_is_observed_without_replay():
+    import socket
+    import time
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(operation_id="op", media_fd=left.detach())
+        )
+        adapter = DouyinLoginAdapter(None, None)
+        panel = SimpleNamespace(inner_text=AsyncMock(return_value="请先完成图形验证"))
+        request = SimpleNamespace(
+            is_visible=AsyncMock(return_value=False),
+            inner_text=AsyncMock(return_value="60秒后重新发送"),
+            is_enabled=AsyncMock(return_value=False),
+            evaluate=AsyncMock(return_value=True),
+        )
+        adapter.visible = AsyncMock(return_value=panel)
+        adapter.sms_controls = AsyncMock(return_value={"request": request})
+        adapter.sms_result = "pending"
+        adapter.sms_request_observation_pending = True
+        helper.adapter = adapter
+        helper.pending_sms = {
+            "issued": {
+                "command": {"command_id": "issued"},
+                "action": "request_sms",
+                "started": time.monotonic() - 20,
+            }
+        }
+        results = []
+        helper.emit = lambda kind, **payload: results.append((kind, payload))
+        try:
+            await helper.observe_pending_commands({"phase": "challenge_required"})
+            assert results[-1][1]["platform_status"] == "unknown"
+            assert "issued" in helper.pending_sms
+            count = len(results)
+            await helper.observe_pending_commands({"phase": "challenge_required"})
+            assert len(results) == count
+            request.is_visible.return_value = True
+            panel.inner_text.return_value = "60秒后重新发送"
+            await helper.observe_pending_commands({"phase": "sms_required"})
+            assert results[-1][1]["platform_status"] == "confirmed"
+            assert results[-1][1]["command_id"] == "issued"
+            assert not helper.pending_sms
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())
+
+
+def test_historical_backup_without_marker_requires_explicit_migration(tmp_path):
+    from unittest.mock import AsyncMock
+    import socket
+
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(
+                operation_id="op",
+                media_fd=left.detach(),
+                intent="check_or_login",
+                entry="self",
+                expected_platform_account_id="",
+                has_auth_backup=True,
+            )
+        )
+        helper.profile = {"directory": tmp_path}
+        helper.adapter = SimpleNamespace(
+            navigate=AsyncMock(),
+            has_auth=AsyncMock(return_value=True),
+            observe=AsyncMock(return_value={"phase": "qr_ready"}),
+        )
+        helper.open_context = AsyncMock()
+        helper.handshake = AsyncMock()
+        try:
+            with __import__("pytest").raises(
+                ValueError, match="PROFILE_MIGRATION_REQUIRED"
+            ):
+                await helper.flow()
+            helper.handshake.assert_awaited_once_with(
+                "prepare_requested", "prepare_ready"
+            )
+            assert not (tmp_path / "auth-imported").exists()
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())
+
+
+def _gesture_helper():
+    import socket
+    from unittest.mock import AsyncMock
+
+    left, right = socket.socketpair()
+    helper = DouyinLoginV2(SimpleNamespace(operation_id="op", media_fd=left.detach()))
+    helper.adapter = SimpleNamespace(
+        identity="",
+        page=SimpleNamespace(
+            viewport_size={"width": 1000, "height": 760},
+            mouse=SimpleNamespace(up=AsyncMock()),
+        ),
+    )
+    helper.region = Region(10, 10, 200, 100)
+    helper.epoch = 1
+    helper.challenge_id = "challenge"
+    helper.area_version = 1
+    helper.phase = "challenge_required"
+    helper.available_actions = ["pointer_batch", "abort_gesture"]
+    helper.pointer_down = True
+    helper.emit = lambda *args, **kwargs: None
+    return helper, right
+
+
+def test_full_queue_cannot_leave_mouse_down_when_up_is_rejected():
+    async def run():
+        helper, right = _gesture_helper()
+        try:
+            for n in range(32):
+                await helper.enqueue_command(
+                    {"type": "pointer_batch", "command_id": str(n)}
+                )
+            await helper.enqueue_command({"type": "pointer_batch", "command_id": "up"})
+            helper.adapter.page.mouse.up.assert_awaited_once()
+            assert not helper.pointer_down
+            assert helper.commands.empty() and not helper.pending_trajectories
+            assert helper.results["up"]["platform_status"] == "not_applicable"
+            assert helper.area_version > 1
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())
+
+
+def test_abort_bypasses_full_queue_and_watchdog_only_expires_pending_work():
+    import time
+
+    async def run():
+        helper, right = _gesture_helper()
+        try:
+            for n in range(32):
+                await helper.enqueue_command(
+                    {"type": "pointer_batch", "command_id": str(n)}
+                )
+            await helper.enqueue_command(
+                {
+                    "type": "abort_gesture",
+                    "command_id": "abort",
+                    "operation_id": "op",
+                    "controller_epoch": 1,
+                    "sequence": 99,
+                    "challenge_id": "challenge",
+                    "area_version": 1,
+                }
+            )
+            assert helper.commands.empty()
+            assert helper.results["abort"]["execution_status"] == "executed"
+            helper.adapter.page.mouse.up.assert_awaited_once()
+            helper.adapter.page.mouse.up.reset_mock()
+            helper.pointer_down = True
+            watchdog = asyncio.create_task(helper.gesture_watchdog())
+            await asyncio.sleep(0.075)
+            helper.adapter.page.mouse.up.assert_not_awaited()  # Legitimate idle hold has no queued work.
+            helper.pending_trajectories["old"] = time.monotonic() - 1
+            await asyncio.sleep(0.05)
+            helper.adapter.page.mouse.up.assert_awaited_once()
+            assert not helper.pointer_down and not helper.pending_trajectories
+            helper.stopped.set()
+            await watchdog
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())
+
+
+def test_sms_button_disabled_before_execution_is_definitively_not_executed():
+    import socket
+    from unittest.mock import AsyncMock
+
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(operation_id="op", media_fd=left.detach())
+        )
+        phone = SimpleNamespace(fill=AsyncMock())
+        request = SimpleNamespace(click=AsyncMock())
+        helper.adapter = SimpleNamespace(
+            page=object(),
+            sms_controls=AsyncMock(return_value={"phone": phone, "request": request}),
+            observe_sms_result=AsyncMock(return_value="unknown"),
+            sms_resend_allowed=False,
+        )
+        helper.epoch = 1
+        helper.available_actions = ["request_sms"]
+        helper.emit = (
+            lambda kind, **payload: helper.stopped.set()
+            if kind == "command_result"
+            else None
+        )
+        helper.commands.put_nowait(
+            {
+                "type": "action",
+                "action": "request_sms",
+                "command_id": "request",
+                "operation_id": "op",
+                "controller_epoch": 1,
+                "sequence": 1,
+            }
+        )
+        try:
+            await helper.execute_commands()
+            assert helper.results["request"]["execution_status"] == "rejected"
+            assert helper.results["request"]["platform_status"] == "not_applicable"
+            phone.fill.assert_not_awaited()
+            request.click.assert_not_awaited()
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())
+
+
+def test_home_fallback_only_applies_before_any_actionable_login_step(
+    tmp_path, monkeypatch
+):
+    import socket
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_v2 as module
+
+    async def scenario(phases):
+        clock = {"now": 0}
+        monkeypatch.setattr(
+            module, "time", SimpleNamespace(monotonic=lambda: clock["now"])
+        )
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(
+                operation_id="op",
+                media_fd=left.detach(),
+                intent="check_or_login",
+                entry="self",
+                expected_platform_account_id="",
+            )
+        )
+        helper.profile = {"directory": tmp_path}
+        index = 0
+
+        async def observe():
+            nonlocal index
+            phase = phases[min(index, len(phases) - 1)]
+            clock["now"] = index * 10
+            index += 1
+            if index == len(phases):
+                helper.stopped.set()
+            return {"phase": phase}
+
+        adapter = SimpleNamespace(
+            navigate=AsyncMock(),
+            has_auth=AsyncMock(return_value=False),
+            open_login=AsyncMock(),
+            observe=observe,
+            identity="",
+            identity_source="",
+        )
+        helper.adapter = adapter
+        helper.open_context = AsyncMock()
+        helper.handshake = AsyncMock()
+        helper.abort_gesture = AsyncMock()
+        helper.emit = lambda *args, **kwargs: None
+        helper.publish = lambda _: None
+        try:
+            await helper.flow()
+            return [call.args[0] for call in adapter.navigate.await_args_list]
+        finally:
+            helper.media.close()
+            right.close()
+
+    assert asyncio.run(scenario(["preparing", "preparing", "preparing"])) == [
+        "self",
+        "home",
+    ]
+    assert asyncio.run(scenario(["qr_ready", "qr_ready", "preparing"])) == ["self"]

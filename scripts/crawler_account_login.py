@@ -616,6 +616,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--intent", choices=("check_or_login", "reauth", "recover"), default="check_or_login")
     parser.add_argument("--entry", choices=("self", "home"), default="self")
     parser.add_argument("--block-media", action="store_true")
+    parser.add_argument("--has-auth-backup", action="store_true")
     return parser.parse_args()
 
 

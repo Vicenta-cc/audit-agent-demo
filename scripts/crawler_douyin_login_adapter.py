@@ -66,6 +66,9 @@ class DouyinLoginAdapter:
         self.manual = False
         self.sms_form_seen = False
         self.sms_resend_seconds = None
+        self.sms_resend_available_at = None
+        self.sms_resend_allowed = False
+        self.sms_request_observation_pending = False
         self.network_bytes = 0
         self.request_count = 0
         self.blocked_documents = 0
@@ -319,7 +322,7 @@ class DouyinLoginAdapter:
         phone = panel.locator("input[placeholder*='手机号'], input[type='tel']").first
         code = panel.locator("input[placeholder*='验证码']").first
         request = panel.get_by_text(
-            re.compile(r"^(获取验证码|重新获取|重新发送|\d+\s*[sS秒].*)$")
+            re.compile(r"^(获取验证码|重新获取|重新发送|\d+\s*[sS秒]).*$")
         ).first
         submit = panel.get_by_text("登录", exact=True).first
         if await code.is_visible() and await submit.is_visible():
@@ -332,6 +335,44 @@ class DouyinLoginAdapter:
         if not panel:
             return self.sms_result
         text = await panel.inner_text()
+        controls = await self.sms_controls()
+        request_text = ""
+        request_enabled = False
+        if controls and await controls["request"].is_visible():
+            request_text = await controls["request"].inner_text()
+            request_enabled = await controls["request"].is_enabled()
+            disabled = await controls["request"].evaluate(
+                """e => e.getAttribute('aria-disabled') === 'true' || e.hasAttribute('disabled') || /(?:^|[ _-])disabled(?:$|[ _-])/.test(e.className || '')"""
+            )
+            request_enabled = request_enabled and not disabled
+        countdown = re.search(r"(\d{1,3})\s*(?:秒|[sS])", request_text)
+        if countdown:
+            seconds = int(countdown.group(1))
+            self.sms_resend_seconds = seconds
+            if seconds > 0:
+                observed_deadline = datetime.now(timezone.utc) + timedelta(
+                    seconds=seconds
+                )
+                # A repeated observation must not restart the cooldown. Platform
+                # availability remains authoritative if the displayed timer stalls.
+                if self.sms_resend_available_at is None:
+                    self.sms_resend_available_at = observed_deadline
+                else:
+                    self.sms_resend_available_at = min(
+                        self.sms_resend_available_at, observed_deadline
+                    )
+                self.sms_resend_allowed = False
+            else:
+                self.sms_resend_available_at = None
+                self.sms_resend_allowed = request_enabled
+        elif request_enabled and any(
+            term in request_text for term in ("获取验证码", "重新获取", "重新发送")
+        ):
+            self.sms_resend_seconds = None
+            self.sms_resend_available_at = None
+            self.sms_resend_allowed = True
+        else:
+            self.sms_resend_allowed = False
         if any(
             term in text
             for term in (
@@ -343,13 +384,11 @@ class DouyinLoginAdapter:
             )
         ):
             self.sms_result = "rejected"
-        elif self.sms_result == "pending":
-            countdown = re.search(
-                r"(?:重新发送|重新获取)?\s*(\d{1,3})\s*(?:秒|[sS])(?:后|重新|\b)", text
-            )
-            if countdown:
-                self.sms_resend_seconds = int(countdown.group(1))
+            self.sms_request_observation_pending = False
+        elif self.sms_result == "pending" or self.sms_request_observation_pending:
+            if countdown and int(countdown.group(1)) > 0:
                 self.sms_result = "confirmed"
+                self.sms_request_observation_pending = False
         return self.sms_result
 
     async def observe(self):
@@ -401,12 +440,10 @@ class DouyinLoginAdapter:
                 "sms": {
                     "fields": fields,
                     "send_status": self.sms_result,
-                    "resend_available_at": (
-                        datetime.now(timezone.utc)
-                        + timedelta(seconds=self.sms_resend_seconds)
-                    ).isoformat()
-                    if self.sms_resend_seconds
+                    "resend_available_at": self.sms_resend_available_at.isoformat()
+                    if self.sms_resend_available_at
                     else None,
+                    "resend_allowed": self.sms_resend_allowed,
                     "error": "平台未接受本次操作，请检查输入或稍后重试"
                     if self.sms_result == "rejected"
                     else None,

@@ -16,6 +16,18 @@ from scripts.crawler_login_media import LoginMediaWriter
 from scripts.crawler_login_pages import reset_douyin_credentials_v2
 
 MANUAL_ACTIONS = ["pointer_batch", "key", "text", "scroll", "abort_gesture"]
+AUTHENTICATION_PHASES = {
+    "qr_ready",
+    "qr_expired",
+    "phone_confirm",
+    "sms_required",
+    "challenge_required",
+    "manual_required",
+}
+
+
+class ActionNotExecuted(ValueError):
+    """A verified precondition failed before any browser input was dispatched."""
 
 
 class DouyinLoginV2:
@@ -54,6 +66,8 @@ class DouyinLoginV2:
         }
         self.stopped = asyncio.Event()
         self.commands = asyncio.Queue(maxsize=32)
+        self.pending_trajectories = {}
+        self.gesture_generation = 0
         self.results = {}
         self.pending_sms = {}
         self.last_snapshot = None
@@ -89,12 +103,74 @@ class DouyinLoginV2:
             raise ConnectionError("Parent disconnected")
 
     async def abort_gesture(self):
+        self.gesture_generation += 1
         if self.pointer_down and self.adapter:
             with suppress(Exception):
                 await asyncio.wait_for(self.adapter.page.mouse.up(), 2)
         self.pointer_down = False
         self.gesture_id = ""
         self.last_point_sequence = -1
+
+    async def discard_queued_trajectories(self, code):
+        retained = []
+        while not self.commands.empty():
+            queued = self.commands.get_nowait()
+            if queued["type"] == "action":
+                retained.append(queued)
+            else:
+                self.result(queued, "rejected", "not_applicable", code)
+        for queued in retained:
+            self.commands.put_nowait(queued)
+        self.pending_trajectories.clear()
+
+    async def interrupt_gesture(self, code):
+        await self.abort_gesture()
+        await self.discard_queued_trajectories(code)
+        self.emit("notice", code=code, message="操作未能及时完成，请重新操作验证控件")
+        if self.region and self.adapter:
+            self.area_version += 1
+            self.challenge_id = uuid.uuid4().hex
+            self.publish(
+                {
+                    "phase": self.phase,
+                    "region": self.region,
+                    "region_signature": self.region_signature,
+                }
+            )
+
+    async def enqueue_command(self, command):
+        if command["command_id"] in self.results:
+            self.emit("command_result", **self.results[command["command_id"]])
+            return
+        if (
+            command["type"] == "abort_gesture"
+            or command.get("action") == "abort_gesture"
+        ):
+            try:
+                self.check_command(command)
+            except ValueError as exc:
+                await self.interrupt_gesture(str(exc))
+                self.result(command, "rejected", "not_applicable", str(exc))
+                return
+            await self.interrupt_gesture("GESTURE_ABORTED")
+            self.result(command, "executed", "not_applicable")
+            return
+        if command["type"] != "action":
+            self.pending_trajectories[command["command_id"]] = time.monotonic()
+        try:
+            self.commands.put_nowait(command)
+        except asyncio.QueueFull:
+            await self.interrupt_gesture("INPUT_BACKPRESSURE")
+            self.result(command, "rejected", "not_applicable", "INPUT_BACKPRESSURE")
+
+    async def gesture_watchdog(self):
+        while not self.stopped.is_set():
+            if (
+                self.pending_trajectories
+                and time.monotonic() - min(self.pending_trajectories.values()) > 0.25
+            ):
+                await self.interrupt_gesture("GESTURE_EXPIRED")
+            await asyncio.sleep(0.025)
 
     async def read_controls(self):
         reader = asyncio.StreamReader(limit=65536)
@@ -123,17 +199,13 @@ class DouyinLoginV2:
                         self.result(
                             old, "rejected", "not_applicable", "CONTROLLER_REPLACED"
                         )
+                    self.pending_trajectories.clear()
                     self.emit("controller_ready", controller_epoch=self.epoch)
                 elif kind == "command":
                     command = validate_command(message["command"])
-                    try:
-                        self.commands.put_nowait(command)
-                    except asyncio.QueueFull:
-                        self.result(
-                            command, "rejected", "not_applicable", "INPUT_BACKPRESSURE"
-                        )
+                    await self.enqueue_command(command)
                 elif kind == "abort_gesture":
-                    await self.abort_gesture()
+                    await self.interrupt_gesture("GESTURE_ABORTED")
                 elif kind == "shutdown":
                     self.stopped.set()
                     break
@@ -192,11 +264,14 @@ class DouyinLoginV2:
         while not self.stopped.is_set():
             command = await self.commands.get()
             if command["command_id"] in self.results:
+                self.pending_trajectories.pop(command["command_id"], None)
                 self.emit("command_result", **self.results[command["command_id"]])
                 continue
             try:
                 self.check_command(command)
             except ValueError as exc:
+                if command["type"] != "action":
+                    await self.interrupt_gesture(str(exc))
                 self.result(command, "rejected", "not_applicable", str(exc))
                 continue
             self.last_sequence = command["sequence"]
@@ -212,6 +287,9 @@ class DouyinLoginV2:
                     if command.get("action") in {"request_sms", "submit_sms"}
                     else "unknown",
                 )
+            except ActionNotExecuted as exc:
+                await self.abort_gesture()
+                self.result(command, "rejected", "not_applicable", str(exc))
             except Exception as exc:
                 await self.abort_gesture()
                 # Never include Playwright exception text: it can contain entered phone/code.
@@ -223,6 +301,8 @@ class DouyinLoginV2:
                     if isinstance(exc, ValueError)
                     else "BROWSER_ACTION_FAILED",
                 )
+            finally:
+                self.pending_trajectories.pop(command["command_id"], None)
 
     async def apply_command(self, command):
         page = self.adapter.page
@@ -241,16 +321,23 @@ class DouyinLoginV2:
             elif action in {"request_sms", "submit_sms"}:
                 controls = await self.adapter.sms_controls()
                 if not controls:
-                    raise ValueError("SMS_FORM_UNAVAILABLE")
+                    raise ActionNotExecuted("SMS_FORM_UNAVAILABLE")
                 payload = command.get("payload", {})
                 if action == "request_sms":
+                    await self.adapter.observe_sms_result()
+                    if not self.adapter.sms_resend_allowed:
+                        raise ActionNotExecuted("SMS_RESEND_NOT_AVAILABLE")
                     if await controls["phone"].is_visible():
                         await controls["phone"].fill(payload.get("phone", ""))
                     await controls["request"].click(timeout=2000)
+                    self.adapter.sms_result = "pending"
+                    self.adapter.sms_request_observation_pending = True
+                    self.adapter.sms_resend_available_at = None
+                    self.adapter.sms_resend_seconds = None
+                    self.adapter.sms_resend_allowed = False
                 else:
                     await controls["code"].fill(payload["code"])
                     await controls["submit"].click(timeout=2000)
-                self.adapter.sms_result = "pending"
                 self.pending_sms[command["command_id"]] = {
                     "command": command,
                     "action": action,
@@ -273,10 +360,13 @@ class DouyinLoginV2:
                 await self.abort_gesture()
             if self.gesture_id != gesture_id:
                 self.gesture_id, self.last_point_sequence = gesture_id, -1
+            generation = self.gesture_generation
             for point in command["points"]:
                 # Authorization can change while a trajectory is in flight.
                 if command["controller_epoch"] != self.epoch:
                     raise ValueError("CONTROLLER_REPLACED")
+                if generation != self.gesture_generation:
+                    raise ValueError("GESTURE_ABORTED")
                 if command.get("area_version", self.area_version) != self.area_version:
                     raise ValueError("STALE_AREA")
                 point_sequence = point.get(
@@ -287,9 +377,11 @@ class DouyinLoginV2:
                 self.last_point_sequence = point_sequence
                 x, y = self.region.point(point["x"], point["y"])
                 await page.mouse.move(x, y)
+                if generation != self.gesture_generation:
+                    raise ValueError("GESTURE_ABORTED")
                 if point["event"] == "down":
-                    await page.mouse.down()
                     self.pointer_down = True
+                    await page.mouse.down()
                 elif point["event"] == "up":
                     await page.mouse.up()
                     self.pointer_down = False
@@ -333,7 +425,9 @@ class DouyinLoginV2:
         if phase in {"qr_ready", "qr_expired"}:
             actions += ["refresh_qr", "switch_to_sms"]
         elif phase == "sms_required":
-            actions += ["request_sms", "submit_sms"]
+            actions += ["submit_sms"]
+            if (observation.get("sms") or {}).get("resend_allowed"):
+                actions += ["request_sms"]
         elif phase in {"challenge_required", "manual_required"} and region:
             actions += MANUAL_ACTIONS + ["close_manual"]
         elif phase in {"identity_check", "profile_flush", "reuse_check", "db_commit"}:
@@ -481,6 +575,35 @@ class DouyinLoginV2:
             context, self.context = self.context, None
             await asyncio.wait_for(context.close(), 15)
 
+    async def observe_pending_commands(self, observation):
+        sms_status = (
+            await self.adapter.observe_sms_result() if self.pending_sms else "unknown"
+        )
+        for command_id, pending in list(self.pending_sms.items()):
+            status = (
+                sms_status
+                if pending["action"] == "request_sms"
+                else (
+                    "confirmed"
+                    if observation["phase"] not in AUTHENTICATION_PHASES
+                    and await self.adapter.has_auth()
+                    and await self.adapter.trusted_identity()
+                    else "rejected"
+                    if sms_status == "rejected"
+                    else "pending"
+                )
+            )
+            if status in {"confirmed", "rejected"}:
+                self.result(pending["command"], "executed", status)
+                del self.pending_sms[command_id]
+            elif time.monotonic() - pending["started"] > 10 and not pending.get(
+                "unknown_reported"
+            ):
+                self.result(pending["command"], "executed", "unknown")
+                if pending["action"] == "request_sms":
+                    self.adapter.sms_result = "unknown"
+                pending["unknown_reported"] = True
+
     async def flow(self):
         await self.open_context()
         if self.args.intent == "reauth":
@@ -497,21 +620,63 @@ class DouyinLoginV2:
             self.emit("reset_done")
         await self.adapter.navigate(self.args.entry)
         has_auth = await self.adapter.has_auth()
-        if not has_auth and self.args.intent != "reauth":
+        initial_observation = await self.adapter.observe()
+        needs_login = (
+            not has_auth or initial_observation["phase"] in AUTHENTICATION_PHASES
+        )
+        if needs_login and self.args.intent == "recover":
+            raise ValueError("REUSE_AUTH_INVALID")
+        missing_marker_with_backup = (
+            self.args.intent == "check_or_login"
+            and getattr(self.args, "has_auth_backup", False)
+            and not (self.profile["directory"] / "auth-imported").is_file()
+        )
+        if missing_marker_with_backup:
+            identity = ""
+            if not needs_login:
+                deadline = time.monotonic() + 3
+                while time.monotonic() < deadline:
+                    if (await self.adapter.observe())["phase"] in AUTHENTICATION_PHASES:
+                        break
+                    identity = await self.adapter.trusted_identity()
+                    if identity:
+                        break
+                    await asyncio.sleep(0.2)
+            if not identity:
+                await self.handshake("prepare_requested", "prepare_ready")
+                raise ValueError("PROFILE_MIGRATION_REQUIRED")
+        if needs_login and self.args.intent != "reauth":
             await self.handshake("prepare_requested", "prepare_ready")
             self.credentials_changed = True
+            self.adapter.identity = ""
+            self.adapter.identity_source = ""
         await self.handshake("guard_requested", "guard_ready")
         (self.profile["directory"] / "auth-imported").touch(mode=0o600)
         self.emit("guard_established")
         if not has_auth:
             await self.adapter.open_login()
         identity_probe = False
-        home_fallback = False
+        home_fallback = self.args.entry == "home"
+        fallback_retired = initial_observation["phase"] in AUTHENTICATION_PHASES
         entry_started = time.monotonic()
         stable_identity = ""
         stable_since = 0.0
         while not self.stopped.is_set():
             observation = await self.adapter.observe()
+            if (
+                observation["phase"] in AUTHENTICATION_PHASES
+                or getattr(self.adapter, "manual", False)
+                or getattr(self.adapter, "sms_selected", False)
+            ):
+                fallback_retired = True
+            if observation["phase"] in AUTHENTICATION_PHASES:
+                if self.args.intent == "recover":
+                    raise ValueError("REUSE_AUTH_INVALID")
+                if not self.credentials_changed:
+                    await self.handshake("prepare_requested", "prepare_ready")
+                    self.credentials_changed = True
+                    self.adapter.identity = ""
+                    self.adapter.identity_source = ""
             if (
                 observation.get("region") != self.region
                 or observation.get("region_signature", "") != self.region_signature
@@ -520,37 +685,16 @@ class DouyinLoginV2:
             if (
                 observation["phase"] == "preparing"
                 and not home_fallback
+                and not fallback_retired
+                and not await self.adapter.has_auth()
                 and time.monotonic() - entry_started > 8
             ):
                 home_fallback = True
                 await self.adapter.navigate("home")
                 await self.adapter.open_login()
-            sms_status = (
-                await self.adapter.observe_sms_result()
-                if self.pending_sms
-                else "unknown"
-            )
-            for command_id, pending in list(self.pending_sms.items()):
-                status = (
-                    sms_status
-                    if pending["action"] == "request_sms"
-                    else (
-                        "confirmed"
-                        if await self.adapter.has_auth()
-                        else "rejected"
-                        if sms_status == "rejected"
-                        else "pending"
-                    )
-                )
-                if status in {"confirmed", "rejected"}:
-                    self.result(pending["command"], "executed", status)
-                    del self.pending_sms[command_id]
-                elif time.monotonic() - pending["started"] > 10:
-                    self.result(pending["command"], "executed", "unknown")
-                    del self.pending_sms[command_id]
+            await self.observe_pending_commands(observation)
             if (
-                observation["phase"]
-                not in {"sms_required", "challenge_required", "manual_required"}
+                observation["phase"] not in AUTHENTICATION_PHASES
                 and await self.adapter.has_auth()
             ):
                 self.publish({"phase": "identity_check"})
@@ -591,13 +735,29 @@ class DouyinLoginV2:
         await self.adapter.navigate("self")
         deadline = time.monotonic() + 15
         identity = ""
+        reuse_stable_since = None
         while time.monotonic() < deadline and not self.stopped.is_set():
+            if (await self.adapter.observe())["phase"] in AUTHENTICATION_PHASES:
+                raise ValueError("REUSE_CHECK_FAILED")
             if await self.adapter.has_auth():
                 identity = await self.adapter.trusted_identity()
-                if identity:
+                if identity and identity != stable_identity:
+                    raise ValueError("REUSE_CHECK_FAILED")
+                if identity and reuse_stable_since is None:
+                    reuse_stable_since = time.monotonic()
+                elif identity and time.monotonic() - reuse_stable_since >= 3:
                     break
+                elif not identity:
+                    reuse_stable_since = None
+            else:
+                identity, reuse_stable_since = "", None
             await asyncio.sleep(0.4)
-        if identity != stable_identity or not identity:
+        if (
+            identity != stable_identity
+            or not identity
+            or reuse_stable_since is None
+            or time.monotonic() - reuse_stable_since < 3
+        ):
             raise ValueError("REUSE_CHECK_FAILED")
         state = await asyncio.wait_for(self.context.storage_state(), 15)
         await self.close_context()
@@ -620,6 +780,7 @@ class DouyinLoginV2:
             asyncio.create_task(self.read_controls()),
             asyncio.create_task(self.execute_commands()),
             asyncio.create_task(self.capture_frames()),
+            asyncio.create_task(self.gesture_watchdog()),
         ]
         flow = asyncio.create_task(self.flow())
         stop = asyncio.create_task(self.stopped.wait())
