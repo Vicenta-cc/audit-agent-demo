@@ -74,6 +74,7 @@ class DouyinLoginAdapter:
         self.platform_signal = ""
         self.sms_result = "unknown"
         self.last_qr_digest = ""
+        self.last_qr = None
         self._closed = False
 
     def task(self, coroutine):
@@ -419,12 +420,18 @@ class DouyinLoginAdapter:
                 "region_signature": await self.region_signature(),
             }
         if qr:
-            expired = any(
-                term in text
-                for term in ("二维码已失效", "二维码已过期", "二维码失效", "点击刷新")
-            )
-            qr["state"] = "expired" if expired else "valid"
-            return {"phase": "qr_expired" if expired else "qr_ready", "qr": qr}
+            self.last_qr = dict(qr)
+        expired = any(
+            term in text
+            for term in ("二维码已失效", "二维码已过期", "二维码失效", "点击刷新")
+        )
+        if expired:
+            # Douyin removes the image when it expires. Keep only an actually
+            # observed QR for invalid display; a first-load failure invents no image.
+            invalid_qr = {**self.last_qr, "state": "expired"} if self.last_qr else None
+            return {"phase": "qr_expired", "qr": invalid_qr}
+        if qr:
+            return {"phase": "qr_ready", "qr": qr}
         if "请在手机" in text or "手机上确认" in text:
             return {"phase": "phone_confirm"}
         return {"phase": "preparing"}

@@ -191,3 +191,65 @@ def test_capture_permanent_failure_stops_after_three_attempts():
             right.close()
 
     asyncio.run(run())
+
+
+def test_qr_expiration_without_image_preserves_real_revision_until_refresh():
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+    from unittest.mock import AsyncMock
+
+    async def run():
+        page = SimpleNamespace(evaluate=AsyncMock())
+        adapter = DouyinLoginAdapter(None, page)
+        panel = SimpleNamespace(inner_text=AsyncMock(return_value="扫码登录"))
+        adapter.region = AsyncMock(return_value=None)
+        adapter.visible = AsyncMock(return_value=panel)
+        adapter.qr = AsyncMock(
+            return_value={
+                "image_data_url": "data:image/png;base64,observed-first",
+                "revision": "actual-first",
+                "state": "valid",
+                "expires_at": None,
+            }
+        )
+        first = await adapter.observe()
+        assert first["phase"] == "qr_ready"
+        adapter.qr.return_value = None
+        panel.inner_text.return_value = "二维码失效 点击刷新"
+        expired = await adapter.observe()
+        assert expired["phase"] == "qr_expired"
+        assert expired["qr"]["revision"] == "actual-first"
+        assert expired["qr"]["image_data_url"] == first["qr"]["image_data_url"]
+        assert expired["qr"]["state"] == "expired"
+        # No new platform image yet: observation cannot manufacture a revision.
+        assert (await adapter.observe())["qr"] == expired["qr"]
+        adapter.qr.return_value = {
+            **first["qr"],
+            "revision": "actual-next",
+            "image_data_url": "data:image/png;base64,observed-next",
+        }
+        panel.inner_text.return_value = "扫码登录"
+        refreshed = await adapter.observe()
+        assert refreshed["phase"] == "qr_ready"
+        assert refreshed["qr"]["revision"] == "actual-next"
+        assert refreshed["qr"]["state"] == "valid"
+
+    asyncio.run(run())
+
+
+def test_qr_expiration_before_any_image_is_explicit_without_fake_qr():
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+    from unittest.mock import AsyncMock
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(evaluate=AsyncMock()))
+        adapter.region = AsyncMock(return_value=None)
+        adapter.visible = AsyncMock(
+            return_value=SimpleNamespace(
+                inner_text=AsyncMock(return_value="二维码已失效 点击刷新"),
+            )
+        )
+        adapter.qr = AsyncMock(return_value=None)
+        observation = await adapter.observe()
+        assert observation == {"phase": "qr_expired", "qr": None}
+
+    asyncio.run(run())
