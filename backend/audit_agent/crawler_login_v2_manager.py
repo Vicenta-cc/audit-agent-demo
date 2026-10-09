@@ -761,7 +761,21 @@ class CrawlerLoginV2Manager:
                     controller_epoch=c["controller_epoch"],
                     sequence=c["sequence"],
                 )
-            self._validate_runtime(s, c, epoch)
+            try:
+                self._validate_runtime(s, c, epoch)
+            except CommandRejected as exc:
+                # A current controller's stale release must still lift an already
+                # applied pointer. Obsolete controllers cannot affect its successor.
+                if (
+                    c["type"] != "action"
+                    and exc.code in {"STALE_STATE", "STALE_CHALLENGE"}
+                    and s.controller is not None
+                    and s.snapshot["controller_state"] == "attached"
+                    and c["controller_epoch"] == s.epoch
+                    and (epoch is None or epoch == s.epoch)
+                ):
+                    self._abort_pending_graphics(s, exc.code)
+                raise
             if s.commands.full():
                 if c["type"] != "action":
                     self._abort_pending_graphics(s, "INPUT_BACKPRESSURE")

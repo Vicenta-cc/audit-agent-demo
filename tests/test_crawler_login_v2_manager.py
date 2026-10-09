@@ -860,3 +860,104 @@ def test_control_writer_supports_pipe_descriptors_above_select_limit(manager):
         stream.close()
         os.close(read_fd)
     assert not writer.is_alive()
+
+
+@pytest.mark.parametrize("stale_kind", ["state", "challenge"])
+def test_current_controller_stale_up_reliably_aborts_without_accepting(
+    manager, stale_kind
+):
+    m, a = manager
+    s = start(m, a)
+    wait_until(lambda: m.sessions[s["id"]].snapshot["phase"] == "sms_required")
+    epoch = attach(m, s)
+    m.handle_event(
+        s["id"],
+        {
+            "type": "snapshot",
+            "phase": "challenge_required",
+            "available_actions": ["pointer_batch"],
+            "challenge": {"challenge_id": "current", "area_version": 2},
+        },
+    )
+    session = m.sessions[s["id"]]
+    command = dict(
+        type="pointer_batch",
+        command_id="stale-up",
+        operation_id=s["operation_id"],
+        controller_epoch=epoch,
+        sequence=1,
+        expected_state_revision=session.snapshot["state_revision"]
+        - (stale_kind == "state"),
+        challenge_id="old" if stale_kind == "challenge" else "current",
+        area_version=2,
+        gesture_id="applied-down",
+        mode="draw",
+        points=[{"point_sequence": 2, "x": 0.5, "y": 0.5, "dt_ms": 0, "event": "up"}],
+    )
+    with m._lock:
+        with pytest.raises(LoginV2Error) as error:
+            m.command(
+                s["id"],
+                command,
+                user_id="user",
+                app_session_id="app",
+                owner_token="x" * 32,
+            )
+        assert error.value.code == (
+            "STALE_STATE" if stale_kind == "state" else "STALE_CHALLENGE"
+        )
+        assert session.pending_abort and session.graph_generation == 1
+        assert m.operations.get_command(s["operation_id"], "stale-up") is None
+    # The child explicitly acknowledges the reliable abort channel in this fixture.
+    wait_until(
+        lambda: any(
+            result.get("type") == "notice" and result.get("code") == "GESTURE_EXPIRED"
+            for result in session.results
+        )
+    )
+    assert session.snapshot["phase"] == "challenge_required"
+
+
+def test_obsolete_controller_stale_up_cannot_abort_successor(manager):
+    m, a = manager
+    s = start(m, a)
+    wait_until(lambda: m.sessions[s["id"]].snapshot["phase"] == "sms_required")
+    old_epoch = attach(m, s)
+    current_epoch = attach(m, s)
+    m.handle_event(
+        s["id"],
+        {
+            "type": "snapshot",
+            "phase": "challenge_required",
+            "available_actions": ["pointer_batch"],
+            "challenge": {"challenge_id": "current", "area_version": 2},
+        },
+    )
+    session = m.sessions[s["id"]]
+    command = dict(
+        type="pointer_batch",
+        command_id="old-up",
+        operation_id=s["operation_id"],
+        controller_epoch=old_epoch,
+        sequence=1,
+        expected_state_revision=0,
+        challenge_id="old",
+        area_version=0,
+        gesture_id="old",
+        mode="draw",
+        points=[{"point_sequence": 2, "x": 0.5, "y": 0.5, "dt_ms": 0, "event": "up"}],
+    )
+    with m._lock:
+        with pytest.raises(LoginV2Error) as error:
+            m.command(
+                s["id"],
+                command,
+                user_id="user",
+                app_session_id="app",
+                owner_token="x" * 32,
+                epoch=old_epoch,
+            )
+        assert error.value.code == "CONTROLLER_REPLACED"
+        assert not session.pending_abort and session.graph_generation == 0
+        assert session.epoch == current_epoch
+        assert m.operations.get_command(s["operation_id"], "old-up") is None
