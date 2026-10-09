@@ -15,7 +15,7 @@ def definitions(names):
     return [{"type": "function", "function": {"name": name}} for name in sorted(names)]
 
 
-def construct(visible, catalog=None, deferred=None, valid=None):
+def construct(visible, catalog=None, deferred=None, valid=None, product_mode="unified-report"):
     agent = SimpleNamespace(
         tools=definitions(visible), valid_tool_names=visible if valid is None else valid,
         _api_max_retries=3, disabled_toolsets=None, close=Mock(), run_conversation=Mock(),
@@ -26,7 +26,7 @@ def construct(visible, catalog=None, deferred=None, valid=None):
     with patch("backend.hermes_runtime.adapter._load_module", side_effect=modules.__getitem__):
         try:
             result = HermesRuntimeBinding().create_agent(
-                session_id="report-tool-preflight", product_mode="unified-report",
+                session_id="report-tool-preflight", product_mode=product_mode,
                 agent_factory=lambda **_: agent,
             )
         except HermesReportToolsUnavailable:
@@ -68,3 +68,39 @@ def test_bridge_or_stale_schema_cannot_hide_missing_business_catalog(visible):
 def test_bridge_cannot_expose_tools_outside_its_deferred_scope():
     with pytest.raises(HermesReportToolsUnavailable, match="not callable"):
         construct(BRIDGE, deferred=NAMES - {"list_post_comments"})
+
+
+@pytest.mark.parametrize("case", ["entry", "catalog", "deferred", "valid"])
+def test_continuous_creation_requires_original_report_preflight(monkeypatch, case):
+    from backend.audit_agent.config import settings
+
+    monkeypatch.setattr(settings, "continuous_resource_session_enabled", True)
+    kwargs = {
+        "entry": {"visible": set()},
+        "catalog": {"visible": BRIDGE, "catalog": NAMES - {"read_report"}},
+        "deferred": {"visible": BRIDGE, "deferred": NAMES - {"read_report"}},
+        "valid": {"visible": BRIDGE, "valid": set()},
+    }[case]
+    with pytest.raises(HermesReportToolsUnavailable):
+        construct(**kwargs, product_mode="creation")
+
+
+def test_continuous_creation_accepts_real_deferred_report_catalog(monkeypatch):
+    from backend.audit_agent.config import settings
+
+    monkeypatch.setattr(settings, "continuous_resource_session_enabled", True)
+    construct(BRIDGE, product_mode="creation")
+
+
+def test_legacy_creation_does_not_require_report_tools(monkeypatch):
+    from backend.audit_agent.config import settings
+
+    monkeypatch.setattr(settings, "continuous_resource_session_enabled", False)
+    agent = SimpleNamespace(_api_max_retries=3, close=Mock())
+    with patch.object(HermesRuntimeBinding, "validate_report_tools") as validate:
+        result = HermesRuntimeBinding().create_agent(
+            session_id="legacy-creation", product_mode="creation", agent_factory=lambda **_: agent,
+        )
+    assert result is agent
+    validate.assert_not_called()
+    agent.close.assert_not_called()

@@ -229,6 +229,22 @@ export function restoreInvestigationWorkspace(
     state.activity_events
   ));
 
+  if (state.resource_continuity_enabled) {
+    // Creation and historical report turns now coexist. Restore their actual
+    // chronology, keeping activity cards immediately before their own answer.
+    const times = new Map<string, number>();
+    for (const message of [...state.messages, ...reportMessages]) {
+      const time = Date.parse(message.created_at);
+      times.set(message.message_id, Number.isFinite(time) ? time : 0);
+      if (message.role === "assistant") times.set(`msg-activity-${message.turn_id}`, Number.isFinite(time) ? time : 0);
+    }
+    if (run) {
+      times.set(`workspace-run:${run.run_id}`, Date.parse(run.created_at) || 0);
+      times.set(`msg-report-${run.report_version_id}`, Date.parse(run.updated_at) || 0);
+    }
+    messages.sort((a, b) => (times.get(a.id) || 0) - (times.get(b.id) || 0));
+  }
+
   const draft: TaskDraft = artifact && preview
     ? {
         ...taskDraftFromArtifact(artifact),
@@ -286,6 +302,7 @@ export function restoreInvestigationWorkspace(
         ? 75
         : 0,
     creationBinding: {
+      resourceContinuityEnabled: state.resource_continuity_enabled === true,
       workspaceSessionId,
       draft: artifact?.draft,
       confirmationPreview: preview,

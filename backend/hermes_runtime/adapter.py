@@ -345,7 +345,12 @@ class HermesRuntimeBinding:
                 from .input_retry import install_creation_input_retries
 
                 install_creation_input_retries(agent)
-        if product_mode == "unified-report":
+        from backend.audit_agent.config import settings
+
+        report_tools_required = product_mode == "unified-report" or (
+            product_mode == "creation" and settings.continuous_resource_session_enabled
+        )
+        if report_tools_required:
             try:
                 self.validate_report_tools(agent, enabled_toolsets=options["enabled_toolsets"])
             except Exception:

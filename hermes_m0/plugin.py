@@ -48,7 +48,7 @@ _M3_CREATION_TOOL_NAMES = frozenset(
 
 def _handler(tool_name: str):
     def handle(args: dict[str, Any], **kwargs: Any) -> str:
-        if tool_name in _M3_CREATION_TOOL_NAMES:
+        if tool_name in _M3_CREATION_TOOL_NAMES or tool_name in {"list_session_resources", "read_session_resource"}:
             return dispatch_hermes_investigation_creation_tool(
                 tool_name,
                 args,
@@ -65,7 +65,8 @@ def _handler(tool_name: str):
                 session_id=session_id,
                 turn_id=str(kwargs.get("task_id") or ""),
             )
-        if os.environ.get("HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE") == "1":
+        if (os.environ.get("HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE") == "1"
+                or os.environ.get("HERMES_INVESTIGATION_CREATION_MODE") == "1"):
             return error_result(
                 tool=tool_name,
                 code="product_session_unbound",
@@ -121,7 +122,8 @@ def _idempotent_tool_execution(**kwargs: Any) -> Any:
         runtime = report_task_runtime_for_session(session_id)
         if (
             runtime is None
-            and os.environ.get("HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE") == "1"
+            and (os.environ.get("HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE") == "1"
+                 or os.environ.get("HERMES_INVESTIGATION_CREATION_MODE") == "1")
         ):
             return error_result(
                 tool=tool_name,
@@ -182,6 +184,19 @@ def register(ctx: Any) -> None:
             + ", ".join(name for name, _ in active)
         )
     schemas = list(active[0][1]) if active else list(TOOLS)
+    if active and active[0][0] == "creation":
+        from backend.investigation_creation import continuity
+        from backend.audit_agent.config import settings
+        schemas.extend(continuity.schemas())
+        if settings.continuous_resource_session_enabled:
+            from .unified_support import unified_tool_schemas
+            from .unified_support import UNIFIED_REPORT_SYSTEM_PROMPT
+            from copy import deepcopy
+            report_schemas = deepcopy(unified_tool_schemas())
+            for schema in report_schemas:
+                if schema['name'] == 'read_report':
+                    schema['description'] += '\n报告查询能力的使用约定（仅作用于报告查询）：\n' + UNIFIED_REPORT_SYSTEM_PROMPT
+            schemas.extend(report_schemas)
     if active and active[0][0] == "account-activity":
         pass_report = os.environ.get("HERMES_INVESTIGATION_PASS_REPORT") == "1"
         unified_report = (

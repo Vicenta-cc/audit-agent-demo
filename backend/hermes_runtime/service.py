@@ -534,6 +534,23 @@ class HermesInvestigationAgentService:
             for name, observers in callbacks.items()
         }
 
+    def bind_workspace_report(self, session: InvestigationSession, *, workspace_session_id: str) -> None:
+        """Reuse report authorization/snapshots for an already authorized workspace.
+
+        The caller verifies the workspace's Run membership first. Navigation and
+        delivery state use the workspace ID, never another user's report session.
+        Call under product_mode_execution's registry lock.
+        """
+        self._validate_business_scope(session)
+        context = self.report_facade.get_published_report_context(session.report_version_id)
+        self.runtime_binding.bind_published_report_session(
+            session_id=workspace_session_id, database_path=self.report_facade.db_path,
+            report_version_id=session.report_version_id, content_hash=context.content_hash,
+            snapshot_hash=session.snapshot_hash,
+            ledger_path=self.hermes_state_dir / f"{workspace_session_id}.sqlite3",
+            additional_report_contexts=self._authorized_report_contexts(session),
+        )
+
     def _bind_session(self, session: InvestigationSession) -> None:
         if not self.bind_runtime:
             return

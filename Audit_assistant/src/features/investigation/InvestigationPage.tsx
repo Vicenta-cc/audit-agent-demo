@@ -2263,7 +2263,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const handleSendMessage = (text: string) => {
     const nowTime = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 
-    if (activeSession.reportBinding) {
+    if (activeSession.reportBinding && !activeSession.creationBinding?.resourceContinuityEnabled) {
       if (sendingMessageSessionId) return;
       const clientMessageId = createClientMessageId(activeSession.id);
       const session = activeSession;

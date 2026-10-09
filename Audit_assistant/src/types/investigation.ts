@@ -199,6 +199,7 @@ export interface InvestigationSession {
   executionProgress: number;
   keyUsers?: KeyUserProfile[];
   creationBinding?: {
+    resourceContinuityEnabled?: boolean;
     workspaceSessionId: string;
     draft?: PublicInvestigationDraft;
     confirmationPreview?: ConfirmationPreview;

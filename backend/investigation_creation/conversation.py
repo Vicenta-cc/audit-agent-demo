@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 from backend.audit_agent.config import settings
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
-from backend.hermes_runtime.adapter import HermesRuntimeBinding, prepare_creation_history, session_runtime_home
+from backend.hermes_runtime.adapter import HermesReportToolsUnavailable, HermesRuntimeBinding, prepare_creation_history, session_runtime_home
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 from backend.investigation.contracts import (
     InvestigationMessage,
@@ -28,6 +28,7 @@ from backend.investigation.errors import (
 )
 from backend.investigation.public_activity import PublicActivityEmitter
 from backend.investigation.public_answer import PublicAnswerStreamer
+from backend.hermes_runtime.comment_delivery import compose as compose_comment_delivery, live_model_text_allowed, prepared_runtime
 from backend.investigation.store import InvestigationStore
 
 from .contracts import (
@@ -679,8 +680,11 @@ class InvestigationCreationConversationService:
         fake_runtime: bool = False,
         hermes_state_dir: Path | None = None,
         principal_resolver: Callable[[str], Principal] | None = None,
+        report_service: HermesInvestigationAgentService | None = None,
     ) -> None:
         self.tool_service = tool_service
+        self.report_service = report_service
+        self.tool_service.session_run_resolver = lambda session_id, principal: self.get_workspace_state(session_id, principal=principal).run
         self.store = store or InvestigationStore()
         self.tool_service.application_service.conversation_store = self.store
         self.runtime_binding = runtime_binding or HermesRuntimeBinding()
@@ -700,13 +704,24 @@ class InvestigationCreationConversationService:
         self._answer_streamer = PublicAnswerStreamer(
             self.store,
             enabled=lambda: settings.creation_answer_stream_enabled,
-            sanitize=redact_creation_internal_references,
+            sanitize=self._redact_answer,
+            live_allowed=live_model_text_allowed,
         )
         set_tool_start_observer = getattr(
             self.tool_service, "set_tool_start_observer", None
         )
         if callable(set_tool_start_observer):
             set_tool_start_observer(self._activity_emitter.tool_started)
+
+    @staticmethod
+    def _redact_answer(value: str) -> tuple[str, bool]:
+        original = value
+        if settings.creation_answer_stream_enabled:
+            value, _ = redact_creation_internal_references(value)
+        if settings.continuous_resource_session_enabled:
+            from backend.hermes_runtime.service import redact_internal_account_references
+            value, _ = redact_internal_account_references(value)
+        return value, value != original
 
     def close(self) -> None:
         with self._agent_lock:
@@ -1157,7 +1172,8 @@ class InvestigationCreationConversationService:
         # published report. The UI normally sends report questions through the
         # report-turn endpoint; this guard protects retries and stale clients.
         workspace_state = self.get_workspace_state(session.id, principal=principal)
-        if workspace_state.run is not None and workspace_state.run.status.value == "PUBLISHED":
+        if (not settings.continuous_resource_session_enabled and workspace_state.run is not None
+                and workspace_state.run.status.value == "PUBLISHED"):
             transcript = list(history or [])
             transcript.extend(
                 [
@@ -1223,10 +1239,12 @@ class InvestigationCreationConversationService:
                 )
                 if self.fake_runtime:
                     agent = self._agent(session.id, provider_route=provider_route)
+                    from backend.hermes_runtime.adapter import turn_system_context
+                    public_streams.enter_context(turn_system_context(agent, self._turn_context(workspace_state)))
                     runtime_started = True
                     result = agent.run_conversation(
                         user_message,
-                        system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
+                        system_message=self._system_message(workspace_state),
                         conversation_history=deepcopy(history),
                         task_id=turn.id,
                     )
@@ -1235,14 +1253,25 @@ class InvestigationCreationConversationService:
                         session_runtime_home(self.hermes_state_dir, session.id),
                         product_mode="creation"
                     ):
+                        report_error = ""
+                        if settings.continuous_resource_session_enabled:
+                            from .continuity import prepare_report
+                            try:
+                                history = prepare_creation_history(prepare_report(self, workspace_state, principal, history))
+                            except Exception:
+                                self.runtime_binding.release_published_report_session(session.id)
+                                report_error = "本轮报告读取服务不可用，不能声称已读取或报告不存在；仍可处理独立词库和规则。"
+                                logger.exception("Report binding unavailable for workspace %s", session.id)
                         agent = self._agent(session.id, provider_route=provider_route)
+                        from backend.hermes_runtime.adapter import turn_system_context
                         runtime_started = True
-                        result = agent.run_conversation(
-                            user_message,
-                            system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
-                            conversation_history=deepcopy(history),
-                            task_id=turn.id,
-                        )
+                        with turn_system_context(agent, self._turn_context(workspace_state, report_error)):
+                            result = agent.run_conversation(
+                                user_message,
+                                system_message=self._system_message(workspace_state),
+                                conversation_history=deepcopy(history),
+                                task_id=turn.id,
+                            )
             runtime_finished = True
             if not isinstance(result, dict):
                 raise RuntimeError("Hermes returned a non-object Turn result")
@@ -1323,6 +1352,19 @@ class InvestigationCreationConversationService:
                 artifact,
                 history_count=len(history or []),
             )
+        except HermesReportToolsUnavailable:
+            # The agent was rejected before inference, so this is a known
+            # configuration failure, not an unknown business-write outcome.
+            self._answer_streamer.interrupt(turn.id)
+            self.store.fail_turn(
+                turn.id,
+                error_code="report_tools_unavailable",
+                safe_message="报告问答工具未加载完整，本轮未执行操作，已有数据和交付进度保留。请检查启动目录和插件配置后再试。",
+                retryable=False,
+                stop_reason="environment_preflight_failed",
+            )
+            self._answer_streamer.release(turn.id)
+            return self.store.turn_result(turn.id)
         except Exception as exc:
             current = self.store.get_turn(turn.id)
             if current.status == "completed":
@@ -1621,6 +1663,31 @@ class InvestigationCreationConversationService:
         turn = self.store.get_turn(turn_id)
         return self.store.get_session(turn.session_id).scope_type == "creation"
 
+    def _system_message(self, workspace):
+        prompt = CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT
+        if settings.continuous_resource_session_enabled:
+            from .continuity import GUIDANCE
+            start = prompt.index('会话边界必须服从应用状态：')
+            end = prompt.index('The user may want to query', start)
+            prompt = prompt[:start] + GUIDANCE + prompt[end:]
+        return prompt
+
+    def _turn_context(self, workspace, report_error=""):
+        context = ""
+        if settings.continuous_resource_session_enabled:
+            from .continuity import report_context
+            context += report_context(workspace.session.id)
+            if report_error:
+                context += "\n" + report_error
+            if workspace.run:
+                context += "\n服务端当前任务状态：" + workspace.run.status.value + "，原任务配置已冻结。"
+            # Old report-only turns are context for references, not evidence. Do
+            # not copy their tools/opaque aliases into this workspace namespace.
+            if workspace.report_messages:
+                context += "\n此前报告对话（仅帮助理解指代；具体证据重新查询）：" + json.dumps(
+                    [{'role': m.role, 'content': m.content[:2000]} for m in workspace.report_messages[-6:]], ensure_ascii=False)
+        return context
+
     @staticmethod
     def _provider_route(user_message: str) -> str:
         # The coordinator always uses the normal provider. Resource generation
@@ -1792,8 +1859,8 @@ class InvestigationCreationConversationService:
         answer = str(result.get("final_response") or "").strip()
         answer_was_redacted = False
         transcript_was_redacted = False
-        if settings.creation_answer_stream_enabled:
-            answer, answer_was_redacted = redact_creation_internal_references(answer)
+        if settings.creation_answer_stream_enabled or settings.continuous_resource_session_enabled:
+            answer, answer_was_redacted = self._redact_answer(answer)
         if history_count is None:
             history_count = len(self.store.hermes_conversation_history(turn.id) or [])
         trace_messages = [
@@ -1822,12 +1889,12 @@ class InvestigationCreationConversationService:
                          for call in HermesInvestigationAgentService._tool_calls(trace_messages))
         if cap_notice and sets_terms and cap_notice not in answer:
             answer = "\n\n".join(filter(None, [answer, cap_notice]))
-        if settings.creation_answer_stream_enabled:
+        if settings.creation_answer_stream_enabled or settings.continuous_resource_session_enabled:
             public_transcript = []
             for message in transcript:
                 projected = dict(message)
                 if projected.get("role") == "assistant":
-                    projected["content"], changed = redact_creation_internal_references(
+                    projected["content"], changed = self._redact_answer(
                         str(projected.get("content") or "")
                     )
                     transcript_was_redacted = transcript_was_redacted or changed
@@ -1838,6 +1905,31 @@ class InvestigationCreationConversationService:
                 for item in transcript[history_count:]
                 if item.get("role") in {"assistant", "tool"}
             ]
+        comment_runtime = None
+        if settings.continuous_resource_session_enabled:
+            from backend.hermes_runtime.service import redact_internal_account_references
+            comment_runtime = prepared_runtime(turn.session_id, turn.id)
+            if comment_runtime is not None:
+                # Recover committed save results independently of the model's
+                # explanatory draft. Never replay a write to recover its reply.
+                from .save_recovery import completion_answer
+                receipts = ""
+                try:
+                    checkpoints = self._checkpoint_messages_for_turn(
+                        turn, principal=self.principal_for_session(turn.session_id),
+                        include_recovery_instruction=False)
+                    receipts = completion_answer(self._saved_checkpoints(checkpoints))
+                except Exception:
+                    logger.exception("Could not verify save receipts for comment delivery %s", turn.id)
+                    receipts = "本轮资源保存结果暂时无法核实，请先查询操作结果，不要重复保存。"
+                answer, transcript, rejected = compose_comment_delivery(
+                    comment_runtime, turn.session_id, turn.id, answer, transcript, history_count,
+                    verified_receipts=receipts)
+                if rejected:
+                    answer = "\n\n".join(filter(None, [answer, notice, cap_notice]))
+                answer, _ = redact_internal_account_references(answer)
+                trace_messages = [item for item in transcript[history_count:]
+                                  if item.get("role") in {"assistant", "tool"}]
         tool_calls = HermesInvestigationAgentService._tool_calls(trace_messages)
         session = self.store.get_session(turn.session_id)
         try:
@@ -1862,7 +1954,7 @@ class InvestigationCreationConversationService:
                     ["internal_creation_reference_redacted"]
                     if answer_was_redacted
                     or (
-                        settings.creation_answer_stream_enabled
+                        (settings.creation_answer_stream_enabled or settings.continuous_resource_session_enabled)
                         and transcript_was_redacted
                     )
                     else []
@@ -1902,6 +1994,12 @@ class InvestigationCreationConversationService:
                 else []
             ),
         )
+        if comment_runtime is not None:
+            from hermes_m0.comment_batches import acknowledge
+            try:
+                acknowledge(comment_runtime, turn.session_id, turn.id)
+            except Exception:
+                logger.exception("Comment delivery acknowledgment deferred for %s", turn.id)
         self._answer_streamer.release(turn.id)
         self._notify(turn.id, "persist_turn")
         return self.store.turn_result(turn.id)

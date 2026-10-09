@@ -28,6 +28,7 @@ def parse_cors_allow_origins(value: str, *, auth_mode: str) -> list[str]:
 
 
 class Settings:
+    continuous_resource_session_enabled = environment_flag("CONTINUOUS_RESOURCE_SESSION_ENABLED")
     root_dir = ROOT
     data_dir = Path(os.getenv("XHS_AUDIT_DATA_DIR", str(ROOT / "data"))).expanduser()
     outputs_dir = Path(

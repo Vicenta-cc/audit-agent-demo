@@ -313,6 +313,7 @@ export interface InvestigationWorkspaceMessage {
 }
 
 export interface InvestigationWorkspaceState {
+  resource_continuity_enabled?: boolean;
   workspace: InvestigationWorkspaceSession;
   messages: InvestigationWorkspaceMessage[];
   latest_turn: InvestigationTurnResponse | null;

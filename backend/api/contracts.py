@@ -217,6 +217,7 @@ class InvestigationAnswerDraftResponse(PublicApiModel):
 
 
 class InvestigationWorkspaceStateResponse(PublicApiModel):
+    resource_continuity_enabled: bool = False
     workspace: InvestigationWorkspaceSessionResponse
     messages: tuple[InvestigationMessageResponse, ...] = ()
     latest_turn: InvestigationTurnStatusResponse | None = None

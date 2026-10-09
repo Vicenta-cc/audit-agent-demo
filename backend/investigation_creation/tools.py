@@ -30,7 +30,8 @@ from .contracts import (
     UpdateDraftCommand,
 )
 from .errors import IdempotencyConflictError
-from . import draft_operations
+from . import draft_operations, continuity
+from backend.audit_agent.config import settings
 from .principal import Principal
 from .approval import UseRuleSetProposalInput
 from .resource_ref_inputs import (
@@ -456,6 +457,7 @@ class InvestigationCreationToolService:
         self.resource_generator = resource_generator or ResourceGenerator()
         self._conversation_turns: dict[str, str] = {}
         self._conversation_lock = RLock()
+        self.session_run_resolver = None
         self._tool_start_observer: Callable[[str, str, str], None] | None = None
 
     def set_tool_start_observer(
@@ -478,7 +480,7 @@ class InvestigationCreationToolService:
 
     @property
     def allowed_tool_names(self) -> frozenset[str]:
-        return frozenset(M3_TOOL_INPUTS)
+        return frozenset(M3_TOOL_INPUTS) | (frozenset(continuity.INPUTS) if settings.continuous_resource_session_enabled else frozenset())
 
     def definitions(self) -> list[dict[str, Any]]:
         return [
@@ -489,7 +491,7 @@ class InvestigationCreationToolService:
                     "strict": True,
                 },
             }
-            for schema in HERMES_M3_TOOL_SCHEMAS
+            for schema in (*HERMES_M3_TOOL_SCHEMAS, *continuity.schemas())
         ]
 
     def execute(
@@ -502,6 +504,16 @@ class InvestigationCreationToolService:
         runtime_identity: HermesToolExecutionIdentity | None = None,
         create_operation: tuple[str, str] | None = None,
     ) -> dict[str, Any]:
+        if tool_name in continuity.INPUTS and settings.continuous_resource_session_enabled:
+            return continuity.read(self.application_service, tool_name, arguments,
+                                   session_id=session_id, principal=principal)
+        if (settings.continuous_resource_session_enabled and self.session_run_resolver
+                and tool_name in {'create_investigation_draft', 'use_ruleset_proposal'}):
+            with draft_operations.validation_phase(create_operation is not None):
+                if self.session_run_resolver(session_id, principal) is not None:
+                    from .errors import ConfigurationValidationError
+                    raise ConfigurationValidationError('本会话已有已启动调查；资源可以继续编辑保存，新调查请新建会话。',
+                                                       code='SESSION_INVESTIGATION_FROZEN')
         schema = M3_TOOL_INPUTS.get(tool_name)
         if schema is None:
             raise ValueError("Hermes M3 tool name is not allowed")

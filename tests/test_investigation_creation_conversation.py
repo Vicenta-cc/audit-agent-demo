@@ -588,7 +588,7 @@ def _publish_fake_run(stack: dict, result: dict, *, idempotency_key: str) -> dic
             "confirmed": True,
         },
     )
-    assert confirmed.status_code == 202
+    assert confirmed.status_code == 202, confirmed.text
     run_id = confirmed.json()["run_id"]
     with sqlite3.connect(stack["creation_store"].db_path) as connection:
         connection.execute(

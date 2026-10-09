@@ -376,6 +376,7 @@ investigation_creation_tool_service = InvestigationCreationToolService(
 investigation_creation_conversation_service = InvestigationCreationConversationService(
     tool_service=investigation_creation_tool_service,
     store=investigation_agent_service.store,
+    report_service=investigation_agent_service,
     fake_runtime=settings.hermes_creation_fake_runtime,
     principal_resolver=(
         auth_store.principal_for_user if _authz_enabled() else None
