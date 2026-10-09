@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import json
+import math
 from pathlib import Path
 import sqlite3
 from types import MappingProxyType
@@ -37,6 +38,23 @@ READ_ONLY_ACCESS_CONTRACT = "sqlite-mode=ro;immutable=1;query_only=ON"
 
 class PublishedReportLoadError(ValueError):
     pass
+
+
+def _evidence_times(payload: Mapping[str, Any]) -> tuple[float | None, float | None]:
+    """Read only the frozen payload; never guess times from frames or live data."""
+    def seconds(value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        try:
+            number = float(value)
+        except (OverflowError, ValueError):
+            return None
+        return number if math.isfinite(number) and number >= 0 else None
+    start = seconds(payload.get("timestamp_start"))
+    end = seconds(payload.get("timestamp_end"))
+    if start is not None and end is not None and end < start:
+        return None, None
+    return start, end
 
 
 def _project_task_configuration(
@@ -898,6 +916,7 @@ def _load_report_graph(
             payload = evidence_payloads[evidence_ref]
             evidence_type = _evidence_type(str(payload.get("evidence_type") or ""))
             evidence_type_counts[evidence_type] += 1
+            timestamp_start, timestamp_end = _evidence_times(payload)
             evidence.append(
                 Evidence(
                     id=evidence_ref,
@@ -910,8 +929,8 @@ def _load_report_graph(
                         original_text=str(payload.get("original_text") or ""),
                         translated_text=str(payload.get("translated_text") or ""),
                         summary=str(payload.get("reason") or payload.get("summary") or ""),
-                        timestamp_start=None,
-                        timestamp_end=None,
+                        timestamp_start=timestamp_start,
+                        timestamp_end=timestamp_end,
                         asset_path="",
                     ),
                     source=EvidenceSource(

@@ -553,6 +553,8 @@ def build_immutable_snapshot(
                 "evidence_type": evidence.evidence_type.value,
                 "original_text": evidence.original_text,
                 "translated_text": evidence.translated_text,
+                "timestamp_start": evidence.timestamp_start,
+                "timestamp_end": evidence.timestamp_end,
                 "summary": evidence.summary,
                 "reason": evidence.summary,
                 "source_json_path": evidence.source_json_path,
