@@ -36,6 +36,8 @@ from .audit_agent.creator_url import (
     validate_creator_url as validate_creator_url_contract,
 )
 from .audit_agent.crawler_login_manager import crawler_account_login_manager
+from .audit_agent.crawler_login_v2_manager import CrawlerLoginV2Manager, LoginV2Error
+from .audit_agent.crawler_login_v2_api import create_login_v2_router, fail as login_v2_http_error
 from .audit_agent.runtime_boundary import runtime_data_directory_error
 from .audit_agent.crawler_adapter import SUPPORTED_PLATFORMS, MediaCrawlerAdapter
 from .audit_agent.evidence_groups import build_evidence_groups
@@ -1317,6 +1319,8 @@ def validate_crawler_account_for_job(
 
 @app.on_event("startup")
 def recover_interrupted_jobs():
+    crawler_login_v2_manager.recover_interrupted()
+    crawler_login_v2_manager.operations.prune(retention_days=settings.crawler_login_v2_operation_retention_days)
     deleted_results = audit_result_store.delete_for_archived_jobs()
     if deleted_results:
         print(f"[startup] deleted results for archived jobs: {deleted_results}")
@@ -1339,6 +1343,7 @@ def recover_interrupted_jobs():
 @app.on_event("shutdown")
 def stop_crawler_account_login_sessions():
     crawler_account_login_manager.shutdown()
+    crawler_login_v2_manager.shutdown()
     investigation_turn_executor.shutdown(wait=True)
     investigation_creation_turn_executor.shutdown(wait=True)
     investigation_agent_service.close()
@@ -1605,8 +1610,22 @@ def delete_crawler_account(
             auth_store.unregister_crawler_account(account_id)
 
 
+crawler_login_v2_manager = CrawlerLoginV2Manager()
+app.include_router(
+    create_login_v2_router(
+        crawler_login_v2_manager,
+        principal_provider=principal_provider,
+        auth_store=auth_store,
+        require_account=_require_crawler_account,
+        auth_required=_authz_enabled,
+        cookie_name=settings.app_auth_cookie_name,
+        allowed_origins=lambda: settings.crawler_login_v2_origins,
+    )
+)
+
+
 @app.post("/api/crawler-accounts/{account_id}/login-sessions", status_code=201)
-def start_crawler_account_login(
+async def start_crawler_account_login(
     account_id: str,
     response: Response,
     request: Request,
@@ -1614,12 +1633,77 @@ def start_crawler_account_login(
 ):
     account = _require_crawler_account(account_id, principal, permission="manage")
     try:
-        session = crawler_account_login_manager.start(
-            account,
-            request.headers.get("x-login-token", ""),
-            owner_user_id=principal.id if _authz_enabled() else "",
-            owner_is_admin=False,
-        )
+        body = await request.json() if await request.body() else {}
+        if not isinstance(body, dict) or set(body) - {
+            "supported_protocols",
+            "intent",
+            "source_operation_id",
+            "browser_mode",
+        }:
+            raise LoginV2Error("INVALID_LOGIN_OPTIONS", status=400)
+        protocols = body.get("supported_protocols", [1])
+        if not isinstance(protocols, list) or any(
+            type(p) is not int or p not in (1, 2) for p in protocols
+        ):
+            raise LoginV2Error("INVALID_PROTOCOLS", status=400)
+        if (
+            account["platform"] == "dy"
+            and settings.crawler_login_v2_enabled
+            and 2 in protocols
+        ):
+            if any(
+                s.status
+                in {"starting", "waiting_scan", "scanned", "interactive", "finalizing"}
+                for s in crawler_account_login_manager._sessions.values()
+            ):
+                raise LoginV2Error("ACCOUNT_BUSY")
+            raw_cookie = request.cookies.get(settings.app_auth_cookie_name, "")
+
+            def authorize():
+                current = (
+                    auth_store.authenticate_session(raw_cookie)
+                    if _authz_enabled()
+                    else principal_provider()
+                )
+                if (
+                    current.id != principal.id
+                    or current.session_id != principal.session_id
+                ):
+                    raise LoginV2Error("SESSION_REPLACED", status=401)
+                return _require_crawler_account(
+                    account_id, current, permission="manage"
+                )
+
+            session, created = crawler_login_v2_manager.start(
+                account,
+                user_id=principal.id,
+                app_session_id=principal.session_id or "local",
+                owner_token=request.headers.get("x-login-token", ""),
+                request_key=request.headers.get("idempotency-key", ""),
+                intent=body.get("intent", "check_or_login"),
+                source_operation_id=body.get("source_operation_id"),
+                browser_mode=body.get("browser_mode", "default"),
+                authorize=authorize,
+            )
+            response.status_code = 201 if created else 200
+        else:
+            if body.get("intent") == "recover":
+                raise LoginV2Error("RECOVERY_REQUIRES_V2", status=400)
+            if 1 not in protocols:
+                raise LoginV2Error("PROTOCOL_NOT_AVAILABLE", status=409)
+            if any(
+                s.snapshot["phase"] not in {"done", "failed", "expired", "cancelled"}
+                for s in crawler_login_v2_manager.sessions.values()
+            ):
+                raise LoginV2Error("ACCOUNT_BUSY")
+            session = crawler_account_login_manager.start(
+                account,
+                request.headers.get("x-login-token", ""),
+                owner_user_id=principal.id if _authz_enabled() else "",
+                owner_is_admin=False,
+            )
+    except LoginV2Error as exc:
+        raise login_v2_http_error(exc) from exc
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -1637,6 +1721,24 @@ def get_crawler_account_login(
     request: Request,
     principal: Principal = Depends(principal_provider),
 ):
+    if crawler_login_v2_manager.owns(session_id):
+        try:
+            _require_crawler_account(
+                crawler_login_v2_manager.account_id(session_id),
+                principal,
+                permission="manage",
+            )
+            response.headers["Cache-Control"] = "no-store"
+            return {
+                "item": crawler_login_v2_manager.get(
+                    session_id,
+                    user_id=principal.id,
+                    app_session_id=principal.session_id or "local",
+                    owner_token=request.headers.get("x-login-token", ""),
+                )
+            }
+        except ValueError as exc:
+            raise login_v2_http_error(exc) from exc
     try:
         session = crawler_account_login_manager.get(
             session_id,
@@ -1658,6 +1760,24 @@ def cancel_crawler_account_login(
     request: Request,
     principal: Principal = Depends(principal_provider),
 ):
+    if crawler_login_v2_manager.owns(session_id):
+        from fastapi.responses import JSONResponse
+
+        try:
+            _require_crawler_account(
+                crawler_login_v2_manager.account_id(session_id),
+                principal,
+                permission="manage",
+            )
+            result = crawler_login_v2_manager.cancel(
+                session_id,
+                user_id=principal.id,
+                app_session_id=principal.session_id or "local",
+                owner_token=request.headers.get("x-login-token", ""),
+            )
+            return JSONResponse({"item": result}, headers={"Cache-Control": "no-store"})
+        except ValueError as exc:
+            raise login_v2_http_error(exc) from exc
     try:
         cancelled = crawler_account_login_manager.cancel(
             session_id,
@@ -1678,6 +1798,15 @@ def get_crawler_login_frame(
     after: int = 0,
     principal: Principal = Depends(principal_provider),
 ):
+    if crawler_login_v2_manager.owns(session_id):
+        _require_crawler_account(
+            crawler_login_v2_manager.account_id(session_id),
+            principal,
+            permission="manage",
+        )
+        raise HTTPException(
+            409, detail={"code": "V2_STREAM_REQUIRED", "message": "此登录使用实时连接"}
+        )
     try:
         frame, sequence = crawler_account_login_manager.get_frame(
             session_id,
@@ -1690,8 +1819,12 @@ def get_crawler_login_frame(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=410, detail=str(exc)) from exc
-    return Response(content=frame, status_code=200 if frame else 204, media_type="image/jpeg",
-                    headers={"Cache-Control": "no-store", "X-Frame-Sequence": str(sequence)})
+    return Response(
+        content=frame,
+        status_code=200 if frame else 204,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-store", "X-Frame-Sequence": str(sequence)},
+    )
 
 
 @app.post("/api/crawler-account-login-sessions/{session_id}/input", status_code=204)
@@ -1701,6 +1834,15 @@ def send_crawler_login_input(
     event: dict,
     principal: Principal = Depends(principal_provider),
 ):
+    if crawler_login_v2_manager.owns(session_id):
+        _require_crawler_account(
+            crawler_login_v2_manager.account_id(session_id),
+            principal,
+            permission="manage",
+        )
+        raise HTTPException(
+            409, detail={"code": "V2_STREAM_REQUIRED", "message": "此登录使用实时连接"}
+        )
     try:
         crawler_account_login_manager.send_input(
             session_id,
@@ -1713,7 +1855,6 @@ def send_crawler_login_input(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-
 
 @app.get("/api/monitored-users")
 def list_monitored_users(principal: Principal = Depends(principal_provider)):
