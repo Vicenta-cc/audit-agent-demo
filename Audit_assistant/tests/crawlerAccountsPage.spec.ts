@@ -7,7 +7,7 @@ const applicationUser = (role: "admin" | "user") => ({
   status: "active",
   activation_mode: "first_login",
   validity_started_at: "2026-09-21T00:00:00Z",
-  expires_at: role === "admin" ? null : "2026-09-28T00:00:00Z",
+  expires_at: role === "admin" ? null : "2099-09-28T00:00:00Z",
   created_at: "2026-09-21T00:00:00Z",
   updated_at: "2026-09-21T00:00:00Z"
 });

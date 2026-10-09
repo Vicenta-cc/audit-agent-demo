@@ -1190,3 +1190,19 @@
     padding: 24px 18px;
   }
 }
+
+.crawler-login-v2 { display: grid; gap: 18px; text-align: center; width: 100%; }
+.crawler-login-v2-status { display: grid; gap: 8px; }
+.crawler-login-v2-status small { color: var(--text-secondary, #64748b); }
+.crawler-login-v2-qr img { display: block; margin: auto; width: min(264px, 100%); aspect-ratio: 1; object-fit: contain; padding: 16px; background: white; image-rendering: pixelated; border: 1px solid #e2e8f0; border-radius: 12px; }
+.crawler-login-v2-qr img.is-expired { opacity: .3; }
+.crawler-login-v2 button { padding: 9px 16px; border: 1px solid #d5dce5; background: #fff; border-radius: 8px; cursor: pointer; color: #334155; }
+.crawler-login-v2 button:disabled { opacity: .5; cursor: default; }
+.crawler-login-v2-sms { display: grid; gap: 14px; text-align: left; max-width: 360px; width: 100%; margin: auto; }
+.crawler-login-v2 label { display: grid; gap: 8px; font-size: 14px; }
+.crawler-login-v2 input { min-width: 0; padding: 11px; border: 1px solid #d5dce5; border-radius: 8px; background: white; color: #0f172a; }
+.crawler-login-v2-sms > div { display: flex; justify-content: space-between; gap: 10px; }
+.crawler-login-v2-challenge canvas { width: 100%; height: auto; touch-action: none; outline-offset: 3px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; }
+.crawler-login-v2-challenge canvas.is-disabled { opacity: .5; pointer-events: none; }
+.crawler-login-v2-error { color: #b91c1c; font-size: 14px; }
+@media (max-width: 540px) { .crawler-login-v2-qr img { width: min(232px, 100%); } .crawler-login-v2-challenge p { font-size: 13px; } }
