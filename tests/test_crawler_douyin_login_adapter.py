@@ -889,3 +889,58 @@ def test_personal_header_conflicting_ids_fail_closed_and_self_response_has_prior
         locator.evaluate_all.assert_not_awaited()
 
     asyncio.run(run())
+
+
+def test_capture_freezes_input_ack_and_sends_one_final_same_pixel_confirmation():
+    import socket
+
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(operation_id="op", media_fd=left.detach())
+        )
+        screenshots = []
+        frames = []
+
+        class Page:
+            viewport_size = {"width": 1000, "height": 760}
+
+            async def screenshot(self, **kwargs):
+                screenshots.append(kwargs)
+                if len(screenshots) == 1:
+                    # The command finishes while screenshot is in flight. Its
+                    # old-started capture must not claim the new execution ACK.
+                    helper.applied_sequence = 5
+                    await asyncio.sleep(0)
+                elif len(screenshots) == 4:
+                    helper.stopped.set()
+                return b"same-final-pixels"
+
+        class Media:
+            async def send(self, payload, metadata, **kwargs):
+                frames.append((payload, metadata))
+
+        helper.adapter = SimpleNamespace(page=Page())
+        helper.region = Region(10, 10, 200, 100)
+        helper.epoch = 1
+        helper.area_version = 2
+        helper.controller_attached = True
+        helper.phase = "challenge_required"
+        helper.applied_sequence = 4
+        helper.capture_period = lambda: 0
+        actual_media = helper.media
+        helper.media = Media()
+        try:
+            await helper.capture_frames()
+            assert len(screenshots) == 4
+            assert len(frames) == 2  # Following identical idle frames are deduplicated.
+            assert [metadata["applied_input_sequence"] for _, metadata in frames] == [
+                4,
+                5,
+            ]
+            assert frames[0][0] == frames[1][0] == b"same-final-pixels"
+        finally:
+            actual_media.close()
+            right.close()
+
+    asyncio.run(run())

@@ -485,6 +485,7 @@ class DouyinLoginV2:
                 continue
             started = time.monotonic()
             epoch, region, area = self.epoch, self.region, self.area_version
+            applied_sequence = self.applied_sequence
             try:
                 jpeg = await self.adapter.page.screenshot(
                     type="jpeg",
@@ -493,7 +494,7 @@ class DouyinLoginV2:
                     timeout=2000,
                 )
                 consecutive_failures = 0
-                digest = (epoch, area, hashlib.sha256(jpeg).digest())
+                digest = (epoch, area, applied_sequence, hashlib.sha256(jpeg).digest())
                 if (
                     epoch == self.epoch
                     and region == self.region
@@ -511,7 +512,7 @@ class DouyinLoginV2:
                             "challenge_id": self.challenge_id,
                             "viewport": self.adapter.page.viewport_size,
                             "controller_epoch": epoch,
-                            "applied_input_sequence": self.applied_sequence,
+                            "applied_input_sequence": applied_sequence,
                         },
                         area_version=area,
                     )
