@@ -180,8 +180,9 @@ def complete_fixture_login(manager, account, requests, key='first'):
     epoch = connect(manager, snapshot)
     stale = dict(type='action', command_id='late', operation_id=snapshot['operation_id'], controller_epoch=epoch-1,
                  sequence=1, expected_state_revision=manager.sessions[sid].snapshot['state_revision'], action='switch_to_sms')
-    with pytest.raises(LoginV2Error, match='CONTROLLER_REPLACED'):
+    with pytest.raises(LoginV2Error) as error:
         manager.command(sid, stale, **OWNER)
+    assert error.value.code == 'CONTROLLER_REPLACED'
     dispatch(manager, snapshot, epoch, 1, 'switch_to_sms')
     wait_for(lambda: manager.sessions[sid].snapshot['phase'] == 'sms_required', manager, sid)
     assert {f['name'] for f in manager.sessions[sid].snapshot['sms']['fields']} == {'phone', 'code'}
