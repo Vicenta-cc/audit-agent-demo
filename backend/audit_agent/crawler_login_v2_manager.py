@@ -9,7 +9,7 @@ import json
 import os
 import queue
 import secrets
-import select
+import selectors
 import signal
 import socket
 import subprocess
@@ -886,9 +886,11 @@ class CrawlerLoginV2Manager:
 
     def _writer(self, s):
         deferred = None
+        readiness = selectors.DefaultSelector()
         try:
             fd = s.process.stdin.fileno()
             os.set_blocking(fd, False)
+            readiness.register(fd, selectors.EVENT_WRITE)
             while not s.stopped.is_set():
                 if deferred is None:
                     try:
@@ -940,8 +942,7 @@ class CrawlerLoginV2Manager:
                 while data and not s.stopped.is_set():
                     if time.monotonic() > deadline:
                         raise TimeoutError("control writer timed out")
-                    _, ready, _ = select.select([], [fd], [], 0.1)
-                    if ready:
+                    if readiness.select(timeout=0.1):
                         try:
                             count = os.write(fd, data)
                         except BlockingIOError:
@@ -951,6 +952,8 @@ class CrawlerLoginV2Manager:
                         data = data[count:]
         except Exception:
             self._finish(s, "failed", "CONTROL_CHANNEL_FAILED")
+        finally:
+            readiness.close()
 
     def _append_result(self, s, result):
         s.results.append(result)

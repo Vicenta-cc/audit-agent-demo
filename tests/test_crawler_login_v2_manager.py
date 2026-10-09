@@ -802,3 +802,61 @@ def test_cancel_clears_candidate_before_save_ready(manager):
         assert m.sessions[s["id"]].candidate is None
     wait_until(lambda: m.sessions[s["id"]].cleanup_done.is_set())
     assert m.sessions[s["id"]].candidate is None
+
+
+def test_control_writer_supports_pipe_descriptors_above_select_limit(manager):
+    import fcntl
+    import os
+    import resource
+    import threading
+    from types import SimpleNamespace
+    from backend.audit_agent.crawler_login_v2_manager import V2Session
+
+    soft, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if soft <= 1025:
+        pytest.skip("RLIMIT_NOFILE does not permit a descriptor above 1024")
+    m, _ = manager
+    read_fd, write_fd = os.pipe()
+    high_fd = fcntl.fcntl(write_fd, fcntl.F_DUPFD, 1024)
+    os.close(write_fd)
+    stream = os.fdopen(high_fd, "wb", buffering=0)
+    os.set_blocking(read_fd, False)
+    session = V2Session(
+        "high-fd",
+        "operation",
+        "account",
+        "user",
+        "app",
+        "owner",
+        {"phase": "checking"},
+        process=SimpleNamespace(stdin=stream),
+    )
+    assert stream.fileno() >= 1024
+    session.commands.put(
+        {"type": "controller_authorized", "controller_epoch": 1, "attached": True}
+    )
+    writer = threading.Thread(target=m._writer, args=(session,), daemon=True)
+    writer.start()
+    chunks = []
+
+    def received():
+        try:
+            chunks.append(os.read(read_fd, 4096))
+        except BlockingIOError:
+            pass
+        return b"\n" in b"".join(chunks)
+
+    try:
+        wait_until(received)
+        assert json.loads(b"".join(chunks)) == {
+            "type": "controller_authorized",
+            "controller_epoch": 1,
+            "attached": True,
+        }
+        assert session.snapshot["phase"] == "checking"
+    finally:
+        session.stopped.set()
+        writer.join(timeout=3)
+        stream.close()
+        os.close(read_fd)
+    assert not writer.is_alive()
