@@ -392,6 +392,11 @@ async def identify_logged_in_account(platform: str, context) -> str:
                     extract_platform_account_id("dy", candidate.get("href", ""))
                     for candidate in await rendered_link_candidates(candidate_page, selector)
                     if candidate_is_personal_link("dy", candidate, require_marker=True)
+                    and any(
+                        str(candidate.get(field) or "").strip()
+                        in {"我的主页", "个人主页", "我的抖音"}
+                        for field in ("text", "label")
+                    )
                 )
         personal_ids.discard("")
         return next(iter(personal_ids)) if len(personal_ids) == 1 else ""

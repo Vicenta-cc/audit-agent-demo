@@ -196,3 +196,37 @@ def test_non_douyin_identity_keeps_existing_current_url_behavior(monkeypatch):
         == "5f58bd990000000001003753"
     )
     render.assert_not_called()
+
+
+def test_douyin_author_homepage_label_is_not_personal_identity(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    import pytest
+
+    pytest.importorskip(
+        "playwright", reason="login helper runs in pinned crawler Python"
+    )
+    from scripts import crawler_account_login as login
+
+    page = SimpleNamespace(url="https://www.douyin.com/user/MS4wLjABAAAA_author")
+    for label in ("作者主页", "我关注的作者主页", "作者的个人主页"):
+        candidate = {
+            "href": page.url,
+            "visible": True,
+            "top": 40,
+            "hasImage": True,
+            "inContent": False,
+            "text": "",
+            "label": label,
+        }
+        monkeypatch.setattr(
+            login, "rendered_link_candidates", AsyncMock(return_value=[candidate])
+        )
+        assert (
+            asyncio.run(
+                login.identify_logged_in_account("dy", SimpleNamespace(pages=[page]))
+            )
+            == ""
+        )
