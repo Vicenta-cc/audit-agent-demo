@@ -1,4 +1,5 @@
 """Bounded binary IPC sender; no credentials travel through stdout or WebSocket."""
+
 from __future__ import annotations
 
 import asyncio
@@ -23,19 +24,33 @@ class LoginMediaWriter:
             raise ConnectionError("Media channel closed")
         async with self.lock:
             self.sequence += 1
-            packet = pack_packet(payload, metadata, kind=kind, sequence=self.sequence,
-                                 area_version=area_version, capture_mono_ns=time.monotonic_ns())
+            packet = pack_packet(
+                payload,
+                metadata,
+                kind=kind,
+                sequence=self.sequence,
+                area_version=area_version,
+                capture_mono_ns=time.monotonic_ns(),
+            )
             try:
-                await asyncio.wait_for(asyncio.get_running_loop().sock_sendall(
-                    self.socket, struct.pack("!I", len(packet)) + packet), 2)
+                await asyncio.wait_for(
+                    asyncio.get_running_loop().sock_sendall(
+                        self.socket, struct.pack("!I", len(packet)) + packet
+                    ),
+                    2,
+                )
             except BaseException:
                 # Never replace an already partly written packet.
                 self.close()
                 raise
 
     async def auth(self, candidate: dict, operation_id: str):
-        payload = json.dumps(candidate, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
-        await self.send(payload, {"operation_id": operation_id}, kind=KIND_AUTH_CANDIDATE)
+        payload = json.dumps(
+            candidate, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+        ).encode()
+        await self.send(
+            payload, {"operation_id": operation_id}, kind=KIND_AUTH_CANDIDATE
+        )
 
     def close(self):
         self.closed = True

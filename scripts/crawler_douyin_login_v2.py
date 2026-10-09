@@ -1,4 +1,5 @@
 """Account-bound QR-first login helper with conditional manual verification."""
+
 from __future__ import annotations
 
 import asyncio
@@ -41,7 +42,16 @@ class DouyinLoginV2:
         self.gesture_id = ""
         self.last_point_sequence = -1
         self.last_activity = 0.0
-        self.handshakes = {key: asyncio.Event() for key in ("reset_ready", "guard_ready", "prepare_ready", "save_committed", "cleanup_ready")}
+        self.handshakes = {
+            key: asyncio.Event()
+            for key in (
+                "reset_ready",
+                "guard_ready",
+                "prepare_ready",
+                "save_committed",
+                "cleanup_ready",
+            )
+        }
         self.stopped = asyncio.Event()
         self.commands = asyncio.Queue(maxsize=32)
         self.results = {}
@@ -56,8 +66,20 @@ class DouyinLoginV2:
         self.jpeg_quality = settings.crawler_login_v2_jpeg_quality
 
     def emit(self, kind, **payload):
-        print(json.dumps({"type": kind, "protocol_version": 2, "operation_id": self.operation_id, **payload},
-                         ensure_ascii=False, allow_nan=False, separators=(",", ":")), flush=True)
+        print(
+            json.dumps(
+                {
+                    "type": kind,
+                    "protocol_version": 2,
+                    "operation_id": self.operation_id,
+                    **payload,
+                },
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+            ),
+            flush=True,
+        )
 
     async def handshake(self, request, reply):
         self.handshakes[reply].clear()
@@ -77,7 +99,8 @@ class DouyinLoginV2:
     async def read_controls(self):
         reader = asyncio.StreamReader(limit=65536)
         transport, _ = await asyncio.get_running_loop().connect_read_pipe(
-            lambda: asyncio.StreamReaderProtocol(reader), sys.stdin)
+            lambda: asyncio.StreamReaderProtocol(reader), sys.stdin
+        )
         try:
             while line := await reader.readline():
                 if len(line) > 65536:
@@ -97,14 +120,18 @@ class DouyinLoginV2:
                     self.last_sequence = 0
                     while not self.commands.empty():
                         old = self.commands.get_nowait()
-                        self.result(old, "rejected", "not_applicable", "CONTROLLER_REPLACED")
+                        self.result(
+                            old, "rejected", "not_applicable", "CONTROLLER_REPLACED"
+                        )
                     self.emit("controller_ready", controller_epoch=self.epoch)
                 elif kind == "command":
                     command = validate_command(message["command"])
                     try:
                         self.commands.put_nowait(command)
                     except asyncio.QueueFull:
-                        self.result(command, "rejected", "not_applicable", "INPUT_BACKPRESSURE")
+                        self.result(
+                            command, "rejected", "not_applicable", "INPUT_BACKPRESSURE"
+                        )
                 elif kind == "abort_gesture":
                     await self.abort_gesture()
                 elif kind == "shutdown":
@@ -126,7 +153,11 @@ class DouyinLoginV2:
             transport.close()
 
     def result(self, command, execution_status, platform_status="unknown", error=None):
-        payload = {"command_id": command["command_id"], "execution_status": execution_status, "platform_status": platform_status}
+        payload = {
+            "command_id": command["command_id"],
+            "execution_status": execution_status,
+            "platform_status": platform_status,
+        }
         if error:
             payload["error_code"] = error
         self.results[command["command_id"]] = payload
@@ -136,14 +167,23 @@ class DouyinLoginV2:
         self.emit("command_result", **payload)
 
     def check_command(self, command):
-        if command["operation_id"] != self.operation_id or command["controller_epoch"] != self.epoch or self.epoch == 0:
+        if (
+            command["operation_id"] != self.operation_id
+            or command["controller_epoch"] != self.epoch
+            or self.epoch == 0
+        ):
             raise ValueError("CONTROLLER_REPLACED")
-        capability = command.get("action") if command["type"] == "action" else command["type"]
+        capability = (
+            command.get("action") if command["type"] == "action" else command["type"]
+        )
         if capability not in self.available_actions:
             raise ValueError("ACTION_NOT_AVAILABLE")
         if command["type"] != "action" or "challenge_id" in command:
-            if (not self.region or command.get("challenge_id") != self.challenge_id
-                    or command.get("area_version") != self.area_version):
+            if (
+                not self.region
+                or command.get("challenge_id") != self.challenge_id
+                or command.get("area_version") != self.area_version
+            ):
                 raise ValueError("STALE_AREA")
         if command["sequence"] <= self.last_sequence:
             raise ValueError("STALE_SEQUENCE")
@@ -165,11 +205,24 @@ class DouyinLoginV2:
                 await asyncio.wait_for(self.apply_command(command), 8)
                 self.applied_sequence = command["sequence"]
                 self.last_activity = time.monotonic()
-                self.result(command, "executed", "pending" if command.get("action") in {"request_sms", "submit_sms"} else "unknown")
+                self.result(
+                    command,
+                    "executed",
+                    "pending"
+                    if command.get("action") in {"request_sms", "submit_sms"}
+                    else "unknown",
+                )
             except Exception as exc:
                 await self.abort_gesture()
                 # Never include Playwright exception text: it can contain entered phone/code.
-                self.result(command, "failed", "unknown", str(exc) if isinstance(exc, ValueError) else "BROWSER_ACTION_FAILED")
+                self.result(
+                    command,
+                    "failed",
+                    "unknown",
+                    str(exc)
+                    if isinstance(exc, ValueError)
+                    else "BROWSER_ACTION_FAILED",
+                )
 
     async def apply_command(self, command):
         page = self.adapter.page
@@ -198,7 +251,11 @@ class DouyinLoginV2:
                     await controls["code"].fill(payload["code"])
                     await controls["submit"].click(timeout=2000)
                 self.adapter.sms_result = "pending"
-                self.pending_sms[command["command_id"]] = {"command": command, "action": action, "started": time.monotonic()}
+                self.pending_sms[command["command_id"]] = {
+                    "command": command,
+                    "action": action,
+                    "started": time.monotonic(),
+                }
             elif action == "refresh_challenge":
                 await self.abort_gesture()
                 # Only explicit refresh controls inside the currently selected panel.
@@ -222,7 +279,9 @@ class DouyinLoginV2:
                     raise ValueError("CONTROLLER_REPLACED")
                 if command.get("area_version", self.area_version) != self.area_version:
                     raise ValueError("STALE_AREA")
-                point_sequence = point.get("point_sequence", self.last_point_sequence + 1)
+                point_sequence = point.get(
+                    "point_sequence", self.last_point_sequence + 1
+                )
                 if point_sequence <= self.last_point_sequence:
                     raise ValueError("STALE_POINT")
                 self.last_point_sequence = point_sequence
@@ -243,9 +302,17 @@ class DouyinLoginV2:
             self.area_version += 1
         elif kind in {"key", "text"}:
             # Keyboard input must remain inside the current verification region.
-            box = await page.evaluate("""() => {let e=document.activeElement;if(!e||!e.matches('input,textarea,[contenteditable=true]'))return null;let r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}}""")
+            box = await page.evaluate(
+                """() => {let e=document.activeElement;if(!e||!e.matches('input,textarea,[contenteditable=true]'))return null;let r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}}"""
+            )
             r = self.region
-            if not box or box["x"] < r.x or box["y"] < r.y or box["x"] + box["w"] > r.x + r.width + 1 or box["y"] + box["h"] > r.y + r.height + 1:
+            if (
+                not box
+                or box["x"] < r.x
+                or box["y"] < r.y
+                or box["x"] + box["w"] > r.x + r.width + 1
+                or box["y"] + box["h"] > r.y + r.height + 1
+            ):
                 raise ValueError("INPUT_OUTSIDE_AREA")
             if kind == "text":
                 await page.keyboard.insert_text(command["text"])
@@ -273,51 +340,104 @@ class DouyinLoginV2:
             actions = []
         challenge = None
         if region:
-            challenge = {"challenge_id": self.challenge_id, "area_version": self.area_version,
-                         "clip_rect": region.clip(), "viewport": self.adapter.page.viewport_size,
-                         "kind": "unknown", "interaction_mode": "draw",
-                         "image_width": round(region.width), "image_height": round(region.height),
-                         "allowed_actions": MANUAL_ACTIONS}
-        snapshot = {**observation, "available_actions": actions, "challenge": challenge,
-                    "qr": observation.get("qr"), "sms": observation.get("sms"),
-                    "identity": {"status": "verified" if self.adapter and self.adapter.identity else "pending"}}
+            challenge = {
+                "challenge_id": self.challenge_id,
+                "area_version": self.area_version,
+                "clip_rect": region.clip(),
+                "viewport": self.adapter.page.viewport_size,
+                "kind": "unknown",
+                "interaction_mode": "draw",
+                "image_width": round(region.width),
+                "image_height": round(region.height),
+                "allowed_actions": MANUAL_ACTIONS,
+            }
+        snapshot = {
+            **observation,
+            "available_actions": actions,
+            "challenge": challenge,
+            "qr": observation.get("qr"),
+            "sms": observation.get("sms"),
+            "identity": {
+                "status": "verified"
+                if self.adapter and self.adapter.identity
+                else "pending"
+            },
+        }
         self.phase, self.available_actions = phase, actions
         if snapshot != self.last_snapshot:
             self.last_snapshot = snapshot
             self.emit("snapshot", **snapshot)
 
     def capture_period(self):
-        fps = self.active_fps if time.monotonic() - self.last_activity < 2 else self.idle_fps
+        fps = (
+            self.active_fps
+            if time.monotonic() - self.last_activity < 2
+            else self.idle_fps
+        )
         return 1 / fps
 
     async def capture_frames(self):
         previous = None
         consecutive_failures = 0
         while not self.stopped.is_set():
-            if not (self.region and self.epoch and self.controller_attached and self.capture_enabled and self.phase in {"challenge_required", "manual_required"}):
-                await asyncio.sleep(.1)
+            if not (
+                self.region
+                and self.epoch
+                and self.controller_attached
+                and self.capture_enabled
+                and self.phase in {"challenge_required", "manual_required"}
+            ):
+                await asyncio.sleep(0.1)
                 continue
             started = time.monotonic()
             epoch, region, area = self.epoch, self.region, self.area_version
             try:
-                jpeg = await self.adapter.page.screenshot(type="jpeg", quality=self.jpeg_quality, clip=region.clip(), timeout=2000)
+                jpeg = await self.adapter.page.screenshot(
+                    type="jpeg",
+                    quality=self.jpeg_quality,
+                    clip=region.clip(),
+                    timeout=2000,
+                )
                 consecutive_failures = 0
                 digest = (epoch, area, hashlib.sha256(jpeg).digest())
-                if epoch == self.epoch and region == self.region and area == self.area_version and digest != previous:
-                    await self.media.send(jpeg, {"operation_id": self.operation_id, "codec": "jpeg",
-                        "image_width": round(region.width), "image_height": round(region.height), "clip_rect": region.clip(),
-                        "challenge_id": self.challenge_id,
-                        "viewport": self.adapter.page.viewport_size, "controller_epoch": epoch,
-                        "applied_input_sequence": self.applied_sequence}, area_version=area)
+                if (
+                    epoch == self.epoch
+                    and region == self.region
+                    and area == self.area_version
+                    and digest != previous
+                ):
+                    await self.media.send(
+                        jpeg,
+                        {
+                            "operation_id": self.operation_id,
+                            "codec": "jpeg",
+                            "image_width": round(region.width),
+                            "image_height": round(region.height),
+                            "clip_rect": region.clip(),
+                            "challenge_id": self.challenge_id,
+                            "viewport": self.adapter.page.viewport_size,
+                            "controller_epoch": epoch,
+                            "applied_input_sequence": self.applied_sequence,
+                        },
+                        area_version=area,
+                    )
                     previous = digest
             except (ConnectionError, OSError, asyncio.TimeoutError):
-                self.emit("error", code="MEDIA_CHANNEL_FAILED", message="验证画面连接中断，请重新打开登录窗口")
+                self.emit(
+                    "error",
+                    code="MEDIA_CHANNEL_FAILED",
+                    message="验证画面连接中断，请重新打开登录窗口",
+                )
                 self.stopped.set()
             except Exception:
                 previous = None
                 consecutive_failures += 1
                 if consecutive_failures >= 3:
-                    self.emit("error", code="CAPTURE_FAILED", message="无法取得验证画面，请重新打开登录窗口")
+                    self.emit(
+                        "error",
+                        code="CAPTURE_FAILED",
+                        message="无法取得验证画面，请重新打开登录窗口",
+                    )
                     self.stopped.set()
                     break
                 # Navigation can replace the panel. Retry twice after observing
@@ -332,15 +452,25 @@ class DouyinLoginV2:
 
     async def open_context(self):
         from scripts.crawler_account_login import load_account_browser, settings
+
         browser = load_account_browser()
         if settings.crawler_login_browser_version:
-            browser.profile_for(self.args.account_id, settings.crawler_browser_profile_root, settings.crawler_login_browser_version)
+            browser.profile_for(
+                self.args.account_id,
+                settings.crawler_browser_profile_root,
+                settings.crawler_login_browser_version,
+            )
         self.context, self.profile = await browser.launch_account_context(
-            self.args.account_id, settings.crawler_browser_profile_root, headless=not self.args.headed)
+            self.args.account_id,
+            settings.crawler_browser_profile_root,
+            headless=not self.args.headed,
+        )
         page = await self.context.new_page()
         await page.set_viewport_size({"width": 1000, "height": 760})
         page.set_default_timeout(2000)
-        self.adapter = await DouyinLoginAdapter(self.context, page, block_media=getattr(self.args, "block_media", False)).install()
+        self.adapter = await DouyinLoginAdapter(
+            self.context, page, block_media=getattr(self.args, "block_media", False)
+        ).install()
 
     async def close_context(self):
         await self.abort_gesture()
@@ -360,7 +490,9 @@ class DouyinLoginV2:
             page = await self.context.new_page()
             await page.set_viewport_size({"width": 1000, "height": 760})
             page.set_default_timeout(2000)
-            self.adapter = await DouyinLoginAdapter(self.context, page, block_media=getattr(self.args, "block_media", False)).install()
+            self.adapter = await DouyinLoginAdapter(
+                self.context, page, block_media=getattr(self.args, "block_media", False)
+            ).install()
             self.credentials_changed = True
             self.emit("reset_done")
         await self.adapter.navigate(self.args.entry)
@@ -380,33 +512,63 @@ class DouyinLoginV2:
         stable_since = 0.0
         while not self.stopped.is_set():
             observation = await self.adapter.observe()
-            if observation.get("region") != self.region or observation.get("region_signature", "") != self.region_signature:
+            if (
+                observation.get("region") != self.region
+                or observation.get("region_signature", "") != self.region_signature
+            ):
                 await self.abort_gesture()
-            if observation["phase"] == "preparing" and not home_fallback and time.monotonic() - entry_started > 8:
+            if (
+                observation["phase"] == "preparing"
+                and not home_fallback
+                and time.monotonic() - entry_started > 8
+            ):
                 home_fallback = True
                 await self.adapter.navigate("home")
                 await self.adapter.open_login()
-            sms_status = await self.adapter.observe_sms_result() if self.pending_sms else "unknown"
+            sms_status = (
+                await self.adapter.observe_sms_result()
+                if self.pending_sms
+                else "unknown"
+            )
             for command_id, pending in list(self.pending_sms.items()):
-                status = sms_status if pending["action"] == "request_sms" else ("confirmed" if await self.adapter.has_auth() else "rejected" if sms_status == "rejected" else "pending")
+                status = (
+                    sms_status
+                    if pending["action"] == "request_sms"
+                    else (
+                        "confirmed"
+                        if await self.adapter.has_auth()
+                        else "rejected"
+                        if sms_status == "rejected"
+                        else "pending"
+                    )
+                )
                 if status in {"confirmed", "rejected"}:
                     self.result(pending["command"], "executed", status)
                     del self.pending_sms[command_id]
                 elif time.monotonic() - pending["started"] > 10:
                     self.result(pending["command"], "executed", "unknown")
                     del self.pending_sms[command_id]
-            if observation["phase"] not in {"sms_required", "challenge_required", "manual_required"} and await self.adapter.has_auth():
+            if (
+                observation["phase"]
+                not in {"sms_required", "challenge_required", "manual_required"}
+                and await self.adapter.has_auth()
+            ):
                 self.publish({"phase": "identity_check"})
                 identity = await self.adapter.trusted_identity()
                 if not identity and not identity_probe:
                     identity_probe = True
                     await self.adapter.navigate("self")
                 if identity:
-                    if self.args.expected_platform_account_id and identity != self.args.expected_platform_account_id:
+                    if (
+                        self.args.expected_platform_account_id
+                        and identity != self.args.expected_platform_account_id
+                    ):
                         if self.credentials_changed:
                             await self.handshake("cleanup_requested", "cleanup_ready")
                             await self.adapter.close()
-                            await reset_douyin_credentials_v2(self.context, self.profile)
+                            await reset_douyin_credentials_v2(
+                                self.context, self.profile
+                            )
                             self.emit("cleanup_done")
                         else:
                             self.emit("identity_rejected", cleanup=False)
@@ -418,7 +580,7 @@ class DouyinLoginV2:
             else:
                 stable_identity, stable_since = "", 0
                 self.publish(observation)
-            await asyncio.sleep(.4)
+            await asyncio.sleep(0.4)
         if self.stopped.is_set():
             return
         self.publish({"phase": "profile_flush"})
@@ -434,34 +596,54 @@ class DouyinLoginV2:
                 identity = await self.adapter.trusted_identity()
                 if identity:
                     break
-            await asyncio.sleep(.4)
+            await asyncio.sleep(0.4)
         if identity != stable_identity or not identity:
             raise ValueError("REUSE_CHECK_FAILED")
         state = await asyncio.wait_for(self.context.storage_state(), 15)
         await self.close_context()
         self.emit("phase", phase="db_commit", available_actions=[])
         self.capture_enabled = False
-        candidate = {"auth_state": state, "platform_account_id": identity, "identity_verified": True,
-                     "reuse_verified": True, "credentials_changed": self.credentials_changed}
+        candidate = {
+            "auth_state": state,
+            "platform_account_id": identity,
+            "identity_verified": True,
+            "reuse_verified": True,
+            "credentials_changed": self.credentials_changed,
+        }
         await self.media.auth(candidate, self.operation_id)
         del state, candidate
         await self.handshake("save_ready", "save_committed")
         # Parent owns success and eligibility. Only commit acknowledgement permits exit.
 
     async def run(self):
-        self.tasks = [asyncio.create_task(self.read_controls()), asyncio.create_task(self.execute_commands()),
-                      asyncio.create_task(self.capture_frames())]
+        self.tasks = [
+            asyncio.create_task(self.read_controls()),
+            asyncio.create_task(self.execute_commands()),
+            asyncio.create_task(self.capture_frames()),
+        ]
         flow = asyncio.create_task(self.flow())
         stop = asyncio.create_task(self.stopped.wait())
         try:
-            done, _ = await asyncio.wait({flow, stop}, timeout=self.args.timeout, return_when=asyncio.FIRST_COMPLETED)
+            done, _ = await asyncio.wait(
+                {flow, stop},
+                timeout=self.args.timeout,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
             if flow in done:
                 await flow
             elif stop not in done:
-                self.emit("error", code="IDENTITY_UNCONFIRMED" if self.phase == "identity_check" else "LOGIN_TIMEOUT", message="登录会话已超时，请重试")
+                self.emit(
+                    "error",
+                    code="IDENTITY_UNCONFIRMED"
+                    if self.phase == "identity_check"
+                    else "LOGIN_TIMEOUT",
+                    message="登录会话已超时，请重试",
+                )
         except Exception as exc:
             code = str(exc) if isinstance(exc, ValueError) else "BROWSER_LOGIN_FAILED"
-            self.emit("error", code=code, message="登录未完成，请重试或查看当前登录步骤")
+            self.emit(
+                "error", code=code, message="登录未完成，请重试或查看当前登录步骤"
+            )
         finally:
             self.stopped.set()
             for task in [flow, stop, *self.tasks]:
@@ -475,6 +657,7 @@ class DouyinLoginV2:
 async def run_login_v2(args):
     if args.headed and sys.platform == "linux":
         from scripts.crawler_interactive_login import virtual_display
+
         with virtual_display():
             await DouyinLoginV2(args).run()
     else:
