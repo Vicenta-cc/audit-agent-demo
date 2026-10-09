@@ -1,6 +1,10 @@
 import { formatCreationErrorMessage } from "./confirmationView";
 
-const technicalContent = /(schema_version|draft[_\s-]?id|toolresult|\[object object\]|\/rule-assistant\/|[A-Z]{3,}(?:_[A-Z0-9]+)+|\{\s*"|database|revision|(?:规则|词库|修订|编辑|操作)\s*ID|内容(?:哈希|指纹)|(?:ruleset-proposal|lexicon-edit|ruleset-presentation):)/i;
+const technicalContent = /(schema_version|draft[_\s-]?id|toolresult|\[object object\]|\/rule-assistant\/|\{\s*"|database|revision|(?:规则|词库|修订|编辑|操作)\s*ID|内容(?:哈希|指纹)|(?:ruleset-proposal|lexicon-edit|ruleset-presentation):)/i;
+// Error codes are uppercase. The case-insensitive metadata matcher must not
+// classify ordinary domain labels such as social_harmony as an error code.
+const technicalCode = /\b[A-Z]{3,}(?:_[A-Z0-9]+)+\b/;
+const hasTechnicalContent = (text: string) => technicalContent.test(text) || technicalCode.test(text);
 const technicalColumn = /(?:\bID\b|_id\b|哈希|指纹|schema_version|revision)/i;
 
 function publicTerms(text: string): string {
@@ -55,7 +59,7 @@ export function presentCreationAssistantContent(content: string): string {
       while (i < lines.length && lines[i].includes("|")) {
         const cells = tableCells(lines[i]);
         // A two-column field/value table may have metadata rows rather than metadata columns.
-        if (!technicalContent.test(cells[0] || "") && !technicalColumn.test(cells[0] || "")) rows.push(cells);
+        if (!hasTechnicalContent(cells[0] || "") && !technicalColumn.test(cells[0] || "")) rows.push(cells);
         i++;
       }
       i--;
@@ -66,11 +70,11 @@ export function presentCreationAssistantContent(content: string): string {
       continue;
     }
     const shown = publicTerms(line);
-    if (!technicalContent.test(shown)) output.push(shown);
+    if (!hasTechnicalContent(shown)) output.push(shown);
   }
   const shown = output.join("\n").trim();
   // Preserve the original text when projection made no substantive change.
-  if (shown === trimmed || (!technicalContent.test(trimmed) && publicTerms(trimmed) === trimmed && !technicalColumn.test(trimmed))) return trimmed;
+  if (shown === trimmed || (!hasTechnicalContent(trimmed) && publicTerms(trimmed) === trimmed && !technicalColumn.test(trimmed))) return trimmed;
   const hasBusinessText = output.some(line => !separator(line) && (line.match(/[\u3400-\u9fff]/g)?.length || 0) >= 2);
   return hasBusinessText ? shown : formatCreationErrorMessage(trimmed);
 }

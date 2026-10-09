@@ -80,3 +80,17 @@ test("comment items separate author, audit label, verbatim text and source time"
   expect(html).not.toContain('<script>');
   expect(html).toContain('发布于 2026-10-09 11:00:00（北京时间）');
 });
+
+test("published rule recommendation with a domain label remains visible", () => {
+  const raw = [
+    "**可用规则（已发布版本）**", "",
+    "- **《团结内容审核规则-本地验收》**（social_harmony，已发布 v2，7 条启用规则）——覆盖民族仇恨与群体歧视。",
+    "", "**现存黑话库（召回资源）**", "- 目前没有足够匹配的搜索词。",
+    "", "draft_id: investigation-draft:private", "RESOURCE_STALE"
+  ].join("\n");
+  const html = renderToStaticMarkup(createElement(AssistantMarkdown, { content: presentCreationAssistantContent(raw) }));
+  expect(html).toContain("<strong>《团结内容审核规则-本地验收》</strong>");
+  expect(html).toContain("已发布 v2，7 条启用规则");
+  expect(html).toContain("覆盖民族仇恨与群体歧视");
+  expect(html).not.toMatch(/draft_id|investigation-draft:private|RESOURCE_STALE/);
+});

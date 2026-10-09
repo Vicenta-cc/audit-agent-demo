@@ -202,6 +202,22 @@ PRECISE_EDIT_CHANGED_LINES = [
 ]
 
 
+
+# 2026-10-09: user-authorized prose simplification. Exact baseline lines remain
+# accounted for; authorization and version guards are not exempted by this list.
+READABILITY_CHANGED_RANGES = {
+    "CREATION_SYSTEM_PROMPT": [
+        (range(0, 4), "Chinese introduction retains application-owned proposal presentation; adds natural language and concrete coverage guidance."),
+        (range(68, 76), "Condensed suitability check retains independent rule/term assessment, explicit resource choice and missing-resource authorization."),
+        (range(97, 100), "Removed fixed reply example; preceding no-generation/no-Draft authorization boundary is unchanged."),
+        (range(105, 108), "Structured generation details remain in dedicated generation guidance and tool schema; coordinator consumes exact recall_plan."),
+    ],
+    "RESOURCE_PROMPT": [
+        ([62, 64, 65], "Removed duplicate Draft-save instructions; full latest-revision, exact-snapshot and frozen-task constraints remain in CREATION_SYSTEM_PROMPT."),
+    ],
+}
+
+
 def _current_fallback_wording(text):
     for old, new in SEARCH_FALLBACK_WORDING.items():
         text = text.replace(old, new)
@@ -219,9 +235,15 @@ def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
         RULESET_AUTHORING_GUIDANCE, LEXICON_DOMAIN_GUIDANCE, RESOURCE_EDIT_GUIDANCE,
         *M3_TOOL_DESCRIPTIONS.values(),
     ]))
+    readability_changes = [
+        {"source": source, "line": index,
+         "text": baseline["prompts"][source].splitlines()[index], "reason": reason}
+        for source, ranges in READABILITY_CHANGED_RANGES.items()
+        for indexes, reason in ranges for index in indexes
+    ]
     changes = {(item["source"], item["line"]): item
                for item in baseline["changed_lines"] + SEARCH_TERMS_CAP_CHANGED_LINES
-               + TASK_SETTINGS_ONLY_CHANGED_LINES + PRECISE_EDIT_CHANGED_LINES}
+               + TASK_SETTINGS_ONLY_CHANGED_LINES + PRECISE_EDIT_CHANGED_LINES + readability_changes}
     for name, original in baseline["prompts"].items():
         for index, line in enumerate(original.splitlines()):
             if not line.strip():
