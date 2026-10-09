@@ -8,6 +8,7 @@ not install the optional Hermes runtime (for example deterministic unit tests).
 from __future__ import annotations
 
 from contextlib import contextmanager
+from copy import deepcopy
 from dataclasses import dataclass
 from hashlib import sha256
 from importlib import import_module
@@ -63,6 +64,41 @@ def _load_module(name: str) -> Any:
         raise HermesRuntimeUnavailable(
             "Hermes Agent 0.20.4 is not installed; install requirements-hermes.txt"
         ) from exc
+
+
+def prepare_creation_history(history: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+    """Project legacy adjacent text replies using Hermes' own merge semantics.
+
+    Only plain assistant runs are eligible. Never give Hermes' broader repair
+    routine user messages or tool chains to drop/reorder. Persisted history is
+    untouched; callers use this projection for both validation and turn slicing.
+    """
+    if history is None:
+        return None
+    from backend.investigation.protocol import validate_hermes_transcript_messages
+
+    projected = deepcopy(history)
+    validate_hermes_transcript_messages(projected, require_final_assistant=False)
+    result = []
+    index = 0
+    while index < len(projected):
+        end = index
+        while end < len(projected):
+            message = projected[end]
+            if message.get("role") != "assistant" or set(message) != {"role", "content"}:
+                break
+            end += 1
+        if end - index > 1:
+            HermesRuntimeBinding()._verify_version()
+            helper = _load_module("agent.agent_runtime_helpers")
+            group = projected[index:end]
+            helper.repair_message_sequence(None, group)
+            result.extend(group)
+            index = end
+        else:
+            result.append(projected[index])
+            index += 1
+    return result
 
 
 @dataclass(frozen=True)

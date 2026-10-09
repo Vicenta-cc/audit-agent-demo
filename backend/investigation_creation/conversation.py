@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from contextlib import ExitStack
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
@@ -12,7 +13,7 @@ from urllib.parse import urlsplit
 
 from backend.audit_agent.config import settings
 from backend.audit_agent.creator_url import CreatorUrlValidationError, validate_creator_url
-from backend.hermes_runtime.adapter import HermesRuntimeBinding, session_runtime_home
+from backend.hermes_runtime.adapter import HermesRuntimeBinding, prepare_creation_history, session_runtime_home
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 from backend.investigation.contracts import (
     InvestigationMessage,
@@ -1205,6 +1206,9 @@ class InvestigationCreationConversationService:
         self.tool_service.begin_conversation_turn(session.id, turn.id)
         provider_route = self._provider_route(user_message)
         try:
+            # Keep one immutable reference projection for the prefix fence and
+            # this turn's slice. Hermes shallow-copies and may mutate its input.
+            history = prepare_creation_history(history)
             with ExitStack() as public_streams:
                 public_streams.enter_context(
                     self._activity_emitter.bind_turn(session.id, turn.id)
@@ -1217,7 +1221,7 @@ class InvestigationCreationConversationService:
                     result = agent.run_conversation(
                         user_message,
                         system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
-                        conversation_history=history,
+                        conversation_history=deepcopy(history),
                         task_id=turn.id,
                     )
                 else:
@@ -1229,7 +1233,7 @@ class InvestigationCreationConversationService:
                         result = agent.run_conversation(
                             user_message,
                             system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
-                            conversation_history=history,
+                            conversation_history=deepcopy(history),
                             task_id=turn.id,
                         )
             if not isinstance(result, dict):
@@ -1240,7 +1244,7 @@ class InvestigationCreationConversationService:
             if bool(result.get("failed")) or not bool(result.get("completed", True)):
                 self._answer_streamer.interrupt(turn.id)
                 checkpoint_messages = self._checkpoint_messages_for_turn(
-                    turn, principal=principal
+                    turn, principal=principal, include_recovery_instruction=False
                 )
                 artifact = self._verified_artifact(
                     checkpoint_messages,
@@ -1332,6 +1336,7 @@ class InvestigationCreationConversationService:
         turn: InvestigationTurn,
         *,
         principal: Principal,
+        include_recovery_instruction: bool = True,
     ) -> list[dict[str, Any]]:
         receipts = (
             self.tool_service.application_service.store
@@ -1372,18 +1377,20 @@ class InvestigationCreationConversationService:
                     ),
                 }
             )
-        return [
+        messages = [
             {"role": "assistant", "content": "", "tool_calls": calls},
             *results,
-            {
+        ]
+        if include_recovery_instruction:
+            messages.append({
                 "role": "assistant",
                 "content": (
                     "系统已从持久化检查点恢复以上成功操作。它们已经完成，不要因原回合失败而重复执行；"
                     "只继续尚未完成的后续步骤，原请求对这些未完成步骤仍然有效。只有当前用户明确要求"
                     "重新生成、替换或另存时，才重复已经完成的写操作。"
                 ),
-            },
-        ]
+            })
+        return messages
 
     def _failed_turn_checkpoint_history(
         self,

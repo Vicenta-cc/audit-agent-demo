@@ -13,8 +13,14 @@
   metadata, so R0.2 does not claim a new independent Git attestation; it does
   verify every critical runtime hash registered below.
 - Required Python: `>=3.11,<3.14`
-- Product imports only public `hermes_cli.plugins`, `model_tools` and
+- Product imports public `hermes_cli.plugins`, `model_tools` and
   `run_agent.AIAgent` through `backend/hermes_runtime/adapter.py`.
+- Creation-history compatibility additionally reuses the pinned runtime's
+  `agent.agent_runtime_helpers.repair_message_sequence` for adjacent plain-text
+  assistant replies only. This internal helper is isolated in the adapter;
+  user messages and tool chains are never passed to its repair path. Dependency
+  upgrades must run `tests/test_creation_history_recovery.py` with Hermes
+  installed, not rely on the version string or skipped dependency tests alone.
 
 The candidate must never depend on the audited absolute Hermes source path or
 on a foreign worktree virtual environment at runtime.
