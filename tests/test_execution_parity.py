@@ -10,6 +10,7 @@ from backend.audit_agent.auth_state_cipher import AuthStateCipher
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.crawler_adapter import (
     CrawlOutput, CrawlerAuthenticationError, CrawlerVerificationError, CrawlerRateLimitError,
+    CrawlerBrowserInitializationError,
 )
 from backend.audit_agent.ingestion import IngestionStore, AuditResultStore
 from backend.audit_agent.job_store import JobStore
@@ -27,7 +28,7 @@ def test_public_account_failure_logs_do_not_become_success_messages():
 
 
 @pytest.mark.parametrize('authoritative', [False, True])
-@pytest.mark.parametrize('scenario', ['auth', 'rate_limit', 'empty', 'stop_then_verify', 'empty_then_verify'])
+@pytest.mark.parametrize('scenario', ['auth', 'rate_limit', 'browser_init', 'empty', 'stop_then_verify', 'empty_then_verify'])
 def test_collection_failure_policy_is_not_selected_by_entry(tmp_path, monkeypatch, authoritative, scenario):
     jobs = JobStore(tmp_path / 'jobs.sqlite3')
     accounts = CrawlerAccountStore(tmp_path / 'accounts.sqlite3')
@@ -56,6 +57,8 @@ def test_collection_failure_policy_is_not_selected_by_entry(tmp_path, monkeypatc
             calls.append(kwargs)
             if scenario == 'auth':
                 raise CrawlerAuthenticationError('synthetic auth')
+            if scenario == 'browser_init':
+                raise CrawlerBrowserInitializationError()
             if scenario == 'rate_limit':
                 raise CrawlerRateLimitError('synthetic rate limit')
             if scenario == 'stop_then_verify':
@@ -74,6 +77,7 @@ def test_collection_failure_policy_is_not_selected_by_entry(tmp_path, monkeypatc
     expected_calls = {
         'auth': 3,
         'rate_limit': 1,
+        'browser_init': 1,
         'empty': 2,
         'stop_then_verify': 1,
         'empty_then_verify': 3,
@@ -82,6 +86,14 @@ def test_collection_failure_policy_is_not_selected_by_entry(tmp_path, monkeypatc
     if scenario == 'auth':
         assert all(accounts.get(account_id)['status'] == 'expired' for account_id in ids)
         assert jobs.get(job['id'])['error'].startswith('crawler_account_login_required:')
+    elif scenario == 'browser_init':
+        assert all(accounts.get(account_id)['status'] == 'active' for account_id in ids)
+        assert all(not accounts.get(account_id)['failure_kind'] for account_id in ids)
+        saved = jobs.get(job['id'])
+        assert saved['error'].startswith('crawler_browser_initialization_failed:')
+        assert saved['control']['failure']['recoverable'] is True
+        assert saved['crawl_status'] == 'failed'
+        assert saved['analysis_status'] == 'idle'
     elif scenario == 'rate_limit':
         assert accounts.get(ids[0])['status'] == 'active'
         assert jobs.get(job['id'])['error'].startswith('crawler_rate_limited:')

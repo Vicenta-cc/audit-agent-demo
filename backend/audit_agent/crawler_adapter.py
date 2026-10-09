@@ -42,6 +42,13 @@ class CrawlerCollectionIncompleteError(RuntimeError):
     """A required content stage failed; retain outputs without rotating accounts."""
 
 
+class CrawlerBrowserInitializationError(CrawlerCollectionIncompleteError):
+    """Browser startup failed; keep the current keyword pending and account intact."""
+
+    def __init__(self):
+        super().__init__("crawler_browser_initialization_failed: 浏览器初始化失败，本次采集未完成；可稍后继续采集，已完成结果保留")
+
+
 class CrawlerMediaDownloadError(CrawlerCollectionIncompleteError):
     """A recorded media failure, isolated before a complete detail is published."""
 
@@ -677,6 +684,8 @@ class MediaCrawlerAdapter:
                     raise CrawlerAuthenticationError("所选采集账号登录态已失效，请重新登录")
                 if "ACCOUNT_VERIFY" in stdout or "ACCOUNT_VERIFY" in stderr:
                     raise CrawlerVerificationError("采集账号触发平台验证")
+                if "BROWSER_INITIALIZATION_FAILED:" in stdout or "BROWSER_INITIALIZATION_FAILED:" in stderr:
+                    raise CrawlerBrowserInitializationError()
                 if "COLLECTION_INCOMPLETE" in stdout or "COLLECTION_INCOMPLETE" in stderr:
                     raise collection_incomplete_error(save_root, platform)
                 raise RuntimeError(
@@ -742,6 +751,9 @@ class MediaCrawlerAdapter:
                     encoding="utf-8", errors="replace"
                 ):
                     raise CrawlerVerificationError("采集账号触发平台验证")
+
+                if 'BROWSER_INITIALIZATION_FAILED:' in terminal_log:
+                    raise CrawlerBrowserInitializationError()
 
                 if 'COLLECTION_INCOMPLETE' in terminal_log:
                     raise collection_incomplete_error(save_root, platform)

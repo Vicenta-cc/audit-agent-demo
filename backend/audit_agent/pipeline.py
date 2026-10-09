@@ -1378,6 +1378,7 @@ class AuditPipeline:
                     "crawler_account_verification_required",
                     "crawler_account_login_required",
                     "crawler_rate_limited",
+                    "crawler_browser_initialization_failed",
                 },
                 action="retry_after_recovery",
             )

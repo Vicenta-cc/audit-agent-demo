@@ -120,3 +120,14 @@ test("failed posts are separate from queued posts, including old payloads", () =
   run.task_stats.queued_analysis_count = 2;
   expect(buildRunProgressItems(run)).toContainEqual({ label: "待分析", value: 2 });
 });
+
+
+test("browser initialization failure keeps the keyword pending without blaming login", () => {
+  const run = { error_code: "crawler_browser_initialization_failed", error_message: "internal traceback" } as InvestigationRunProjection;
+  const text = formatRunFailureMessage(run);
+  expect(text).toContain("初始化失败");
+  expect(text).toContain("可稍后继续采集");
+  expect(text).not.toContain("internal");
+  expect(text).not.toContain("登录");
+  expect(text).not.toContain("跳过");
+});
