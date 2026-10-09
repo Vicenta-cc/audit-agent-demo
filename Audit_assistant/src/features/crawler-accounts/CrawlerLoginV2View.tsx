@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Button } from "../../components/common/Button";
 import { apiRequest } from "../../services/apiClient";
 import { loginControlHeaders } from "../../services/crawlerAccounts";
 import {
@@ -122,7 +123,8 @@ export function CrawlerLoginV2View({
               ? Math.min(fallback, field.max_length)
               : fallback;
           };
-          const message = JSON.parse(event.data);
+          const terminal = ["success", "failed", "expired", "cancelled"].includes(snapshot.status);
+  const message = JSON.parse(event.data);
           if (message.type === "snapshot" || message.type === "state_changed") {
             const next = message.item as LoginSnapshot;
             if (next.id !== initial.id) return;
@@ -305,6 +307,7 @@ export function CrawlerLoginV2View({
       ? Math.min(fallback, field.max_length)
       : fallback;
   };
+  const terminal = ["success", "failed", "expired", "cancelled"].includes(snapshot.status);
   const message =
     typeof snapshot.error === "string"
       ? snapshot.error
@@ -313,7 +316,7 @@ export function CrawlerLoginV2View({
     <div className="crawler-login-v2">
       <div className="crawler-login-v2-status" role="status">
         <strong>{phases[snapshot.phase] || "正在确认登录步骤"}</strong>
-        <small>{connection}</small>
+        {!terminal ? <small>{connection}</small> : null}
       </div>
       {snapshot.qr && ["qr_ready", "qr_expired"].includes(snapshot.phase) ? (
         <div className="crawler-login-v2-qr">
@@ -323,13 +326,13 @@ export function CrawlerLoginV2View({
             className={snapshot.qr.state === "expired" ? "is-expired" : ""}
           />
           <p>扫码后在手机上确认</p>
-          {snapshot.available_actions.includes("refresh_qr") ? (
-            <button
+          {!terminal && snapshot.available_actions.includes("refresh_qr") ? (
+            <Button
               disabled={!available("refresh_qr")}
               onClick={() => action("refresh_qr")}
             >
               刷新二维码
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}
@@ -369,7 +372,7 @@ export function CrawlerLoginV2View({
             />
           </label>
           <div>
-            <button
+            <Button
               type="button"
               disabled={
                 !available("request_sms") ||
@@ -381,10 +384,10 @@ export function CrawlerLoginV2View({
               onClick={() => action("request_sms", phone ? { phone } : {})}
             >
               发送验证码
-            </button>
-            <button type="submit" disabled={!available("submit_sms") || !code}>
+            </Button>
+            <Button type="submit" variant="primary" disabled={!available("submit_sms") || !code}>
               提交验证码
-            </button>
+            </Button>
           </div>
           {snapshot.sms.error ? <p role="alert">{snapshot.sms.error}</p> : null}
         </form>
@@ -424,53 +427,52 @@ export function CrawlerLoginV2View({
                   disabled={!enabled}
                 />
               </label>
-              <button disabled={!enabled || !manualText}>输入</button>
+              <Button disabled={!enabled || !manualText}>输入</Button>
             </form>
           ) : null}
         </>
       ) : null}
       {snapshot.status === "success" ? (
         <p>
-          登录信息已保存
           {snapshot.result?.account_eligibility === "cooling_down"
-            ? "，账号仍处于冷却中"
+            ? "账号仍处于冷却中，登录不会解除冷却"
             : snapshot.result?.account_eligibility === "disabled"
-              ? "，账号仍为停用状态"
-              : ""}
+              ? "账号仍为停用状态"
+              : "登录状态已完成接续检查"}
           。
         </p>
       ) : null}
-      {pending ? <p role="status">正在等待平台处理结果，请勿重复提交</p> : null}
+      {pending && !terminal ? <p role="status">正在等待平台处理结果，请勿重复提交</p> : null}
       {error || message ? (
         <p role="alert" className="crawler-login-v2-error">
           {error || message}
         </p>
       ) : null}
-      {snapshot.available_actions.includes("switch_to_sms") ? (
-        <button
+      {!terminal && snapshot.available_actions.includes("switch_to_sms") ? (
+        <Button
           disabled={!available("switch_to_sms")}
           onClick={() => action("switch_to_sms")}
         >
           使用短信登录
-        </button>
+        </Button>
       ) : null}
-      {snapshot.available_actions.includes("refresh_challenge") ? (
-        <button
+      {!terminal && snapshot.available_actions.includes("refresh_challenge") ? (
+        <Button
           disabled={!available("refresh_challenge")}
           onClick={() => action("refresh_challenge")}
         >
           刷新验证题目
-        </button>
+        </Button>
       ) : null}
-      {snapshot.available_actions.includes("close_manual") ? (
-        <button disabled={!enabled} onClick={() => action("close_manual")}>
+      {!terminal && snapshot.available_actions.includes("close_manual") ? (
+        <Button disabled={!enabled} onClick={() => action("close_manual")}>
           返回扫码
-        </button>
+        </Button>
       ) : null}
-      {snapshot.available_actions.includes("open_manual") ? (
-        <button disabled={!enabled} onClick={() => action("open_manual")}>
+      {!terminal && snapshot.available_actions.includes("open_manual") ? (
+        <Button disabled={!enabled} onClick={() => action("open_manual")}>
           查看当前登录步骤
-        </button>
+        </Button>
       ) : null}
     </div>
   );

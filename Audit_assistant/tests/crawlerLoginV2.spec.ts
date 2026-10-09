@@ -242,8 +242,10 @@ for (const viewport of [
       }),
     );
     await expect(
-      page.getByText("登录信息已保存，账号仍处于冷却中。", { exact: true }),
+      page.getByText("账号仍处于冷却中，登录不会解除冷却。", { exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: "查看当前登录步骤" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "完成", exact: true })).toHaveClass(/mt-button-primary/);
     await page.screenshot({
       path: `/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-v2-result-${viewport.width}.png`,
     });

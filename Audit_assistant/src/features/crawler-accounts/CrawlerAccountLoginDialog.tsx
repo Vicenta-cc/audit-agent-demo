@@ -450,7 +450,7 @@ export function CrawlerAccountLoginDialog({
           )}
           {session?.v2 && session.status === "success" ? (
             <div className="crawler-login-v2-complete">
-              <Button type="button" onClick={onSuccess}>
+              <Button type="button" variant="primary" onClick={onSuccess}>
                 完成
               </Button>
               <Button type="button" onClick={() => void retry()}>

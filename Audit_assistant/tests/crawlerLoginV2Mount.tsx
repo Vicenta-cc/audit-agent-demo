@@ -1,5 +1,8 @@
 import { createRoot } from "react-dom/client";
 import { CrawlerAccountLoginDialog } from "../src/features/crawler-accounts/CrawlerAccountLoginDialog";
+import "../src/styles/tokens.css";
+import "../src/styles/global.css";
+import "../src/styles/monitor-tasks.css";
 import "../src/styles/crawler-accounts.css";
 import type { CrawlerAccount } from "../src/types/crawlerAccounts";
 const account: CrawlerAccount = {
