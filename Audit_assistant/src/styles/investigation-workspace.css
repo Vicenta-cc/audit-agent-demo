@@ -3424,6 +3424,63 @@
   margin-bottom: 0;
 }
 
+/* Server-delivered comments: author/status, verbatim quote, then source time.
+   Ordinary answer lists keep their existing compact layout. */
+.inv-assistant-markdown ol:has(> li > blockquote) {
+  gap: 0;
+  padding-left: 26px;
+}
+
+.inv-assistant-markdown ol > li:has(> blockquote) {
+  padding: 16px 0 16px 6px;
+  border-bottom: 1px solid #e8edf3;
+}
+
+.inv-assistant-markdown ol > li:has(> blockquote):last-child {
+  border-bottom: 0;
+}
+
+.inv-assistant-markdown ol > li:has(> blockquote)::marker {
+  color: #8491a3;
+  font-size: 12px;
+}
+
+.inv-assistant-markdown li:has(> blockquote) > p:first-child {
+  margin-bottom: 8px;
+}
+
+.inv-assistant-markdown li:has(> blockquote) > p:first-child code {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.inv-assistant-markdown li > blockquote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #243247;
+}
+
+.inv-assistant-markdown li > blockquote p {
+  white-space: pre-wrap;
+}
+
+.inv-assistant-markdown li > blockquote + p {
+  margin-top: 8px;
+  color: #7a8798;
+  font-size: 11.5px;
+}
+
+.inv-assistant-markdown li > blockquote + p em {
+  font-style: normal;
+}
+
 .inv-assistant-markdown hr {
   height: 1px;
   margin: 18px 0;

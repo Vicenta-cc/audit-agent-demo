@@ -304,7 +304,7 @@ def test_public_answer_is_full_batch_and_only_completion_acknowledges(setup, tmp
         result = product._persist_result(turn.id, {"final_response": model_answer, "completed": True},
             previous_message_count=0, transcript=[{"role": "user", "content": "全部逐条列出评论"},
                                                  {"role": "assistant", "content": model_answer}])
-    expected = model_answer + "\n\n---\n\n### 评论原文\n\n" + expected
+    expected = model_answer + "\n\n---\n\n" + expected
     assert result.answer == expected
     assert len(re.findall(r"^\d+\. ", result.answer, re.M)) == 100
     assert service.comment_batch_states[session.id]["pages"][turn.id]["acknowledged"]
@@ -491,14 +491,12 @@ def test_invented_or_duplicate_batch_never_survives_answer_or_history(setup, tmp
 
 
 @pytest.mark.parametrize("explanation", [
-    '已准备好第一批评论。\n**当前进度：**\n- ✅ 已展示：100 条\n- 📋 剩余：130 条\n- 📊 总计：230 条',
-    '已展示全部 230 条。\n如需进一步操作：\n- 查看某条评论的完整上下文\n- 按风险等级筛选评论\n- 查看其他帖子的评论',
-    '✅ **旅游审核规则 B** 已成功正式保存：\n- 资源名称：旅游审核规则 B\n- 资源版本：1\n- 保存状态：已完成\n以下展示本批评论原文。',
+    '✅ **旅游审核规则 B** 已成功正式保存：\n- 资源名称：旅游审核规则 B\n- 资源版本：1\n- 保存状态：已完成',
+    '这条评论涉及地域攻击，判定依据仍应结合上下文。',
+    '没有记录作者入口，无法打开主页。',
     '| 项目 | 数量 |\n| --- | --- |\n| 已展示 | 100 |\n| 剩余 | 130 |',
-    '可以继续：\n1. 查看原帖\n2. 筛选未审核评论',
-    '本批进度：\n1. 已展示：100 条\n2. 剩余：130 条',
 ])
-def test_batch_keeps_natural_progress_receipts_and_followups(setup, explanation):
+def test_batch_keeps_analysis_receipts_and_unknown_formats(setup, explanation):
     from backend.hermes_runtime.comment_delivery import compose
     runtime, post, *_ = setup
     invoke(runtime, post, batch_action="start")
@@ -508,3 +506,57 @@ def test_batch_keeps_natural_progress_receipts_and_followups(setup, explanation)
     assert public.startswith(explanation + "\n\n---")
     assert history[-1]["content"].startswith(explanation)
     assert re.findall(r"评论原文\d{3}", public) == [f"评论原文{i:03}" for i in range(100)]
+
+
+@pytest.mark.parametrize("intro", [
+    '以下按报告记录展示本批**风险评论**原文。',
+    '已展示风险评论第 1–5 条，共 5 条；该帖（《上海地铁冲突引地域对立》）中自身被判定有风险的评论共 66 条，还有 61 条。',
+    '需要接着看就说“继续”。另外可以切换：看**其他帖子**的风险评论，或改为只看**已判无风险**的评论作对照。',
+    '已准备好第一批评论。\n**当前进度：**\n- ✅ 已展示：100 条\n- 📋 剩余：130 条',
+    '已展示全部 230 条。\n如需进一步操作：\n- 查看其他帖子的评论',
+    '可以继续：\n1. 查看原帖\n2. 筛选未审核评论',
+    '本批进度：\n1. 已展示：100 条\n2. 剩余：130 条',
+    '每条原文含作者入口、时间与审核状态。',
+])
+def test_batch_compacts_only_delivery_logistics_and_missing_link_claims(setup, intro):
+    from backend.hermes_runtime.comment_delivery import compose
+    runtime, post, *_ = setup
+    invoke(runtime, post, batch_action="start", limit=5)
+    analysis = '审核规则已经保存为 v2；报告仍使用原来的冻结版本。'
+    answer, history, _ = compose(runtime, 'session', 't1', intro + '\n\n' + analysis,
+        [{'role': 'assistant', 'content': intro + '\n\n' + analysis}], 0)
+    assert intro not in answer and intro not in history[-1]['content']
+    assert analysis in answer and analysis in history[-1]['content']
+    assert answer.count('发送“继续”') == 1
+    assert len(re.findall(r'评论原文\d{3}', answer)) == 5
+
+
+def test_comment_presentation_matches_actual_audit_and_time_without_author_links(setup):
+    from hermes_m0.comment_batches import presentation
+    runtime, post, *_ = setup
+    receipt = invoke(runtime, post, batch_action='start', limit=3)
+    page = runtime.comment_batch_states['session']['pages']['t1']
+    assert receipt['data']['presentation'] == presentation(page)
+    assert receipt['data']['presentation']['author_links'] is False
+    assert receipt['data']['presentation']['batch_audit_labels'] == {'已审核未标风险': 2, '高风险': 1}
+    assert receipt['data']['presentation']['published_time_count'] == 3
+    page['comments'][0].update(audit_status='pending', risk_level='high', published_at=None)
+    page['comments'][1].update(published_at='invalid')
+    page['comments'][2].update(audit_status='completed', risk_level='other', published_at='2026-10-09T03:00:00Z')
+    shown = render(runtime, 'session', 't1')
+    assert '`待审核`' in shown and '`已审核 · 等级未记录`' in shown
+    assert shown.count('`高风险`') == 1
+    assert shown.count('发布于') == 1 and '11:00:00（北京时间）' in shown
+    assert 'account' not in shown and 'invalid' not in shown
+    assert presentation(page)['published_time_count'] == 1
+
+
+def test_comment_navigation_tail_is_removed_without_losing_analysis(setup):
+    from backend.hermes_runtime.comment_delivery import compose
+    runtime, post, *_ = setup
+    invoke(runtime, post, batch_action="start", limit=1)
+    analysis = "本批审核结果为高风险，原因是原文包含明确的攻击。"
+    answer, history, _ = compose(runtime, "session", "t1", analysis + '需要接着看就说“继续”。',
+        [{"role": "assistant", "content": analysis}], 0)
+    assert analysis in answer and analysis in history[-1]["content"]
+    assert '需要接着看' not in answer and '需要接着看' not in history[-1]["content"]

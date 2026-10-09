@@ -6,6 +6,8 @@ is saved with the existing authorized, snapshot-bound reference registry.
 from __future__ import annotations
 
 from copy import deepcopy
+from collections import Counter
+from datetime import datetime, timezone, timedelta
 from hashlib import sha256
 import html
 import json
@@ -48,6 +50,40 @@ def _summary(session_id, turn_id, page):
     return {"batch_ref": _batch_ref(session_id, turn_id),
             **{key: page[key] for key in ("post_ref", "risk_filter", "start", "end",
                 "returned_count", "matched_count", "remaining_count", "has_more")}}
+
+
+def _audit_label(comment):
+    if comment.get("audit_status") != "completed":
+        return {"failed": "审核失败", "pending": "待审核", "queued": "待审核"}.get(
+            comment.get("audit_status"), "审核状态未知")
+    return {"high": "高风险", "medium": "中风险", "low": "低风险", "none": "已审核未标风险"}.get(
+        comment.get("risk_level"), "已审核 · 等级未记录")
+
+
+def _published_time(comment):
+    value = comment.get("published_at")
+    if not value:
+        return ""
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        # A timestamp without an offset cannot safely be relabelled as local time.
+        if dt.tzinfo is None:
+            return dt.isoformat(sep=" ") + "（时区未记录）"
+        return dt.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S") + "（北京时间）"
+    except (ValueError, TypeError):
+        return ""
+
+
+def presentation(page):
+    """Describe exactly what render() delivers, without exposing comment bodies."""
+    return {
+        "fields": ["author", "content", "audit_status", "risk_level_when_audit_completed", "published_at_when_recorded"],
+        "author_links": False,
+        "published_time_count": sum(bool(_published_time(c)) for c in page["comments"]),
+        "batch_audit_labels": dict(Counter(_audit_label(c) for c in page["comments"])),
+        "statistics_scope": "this_batch_only",
+        "layout": "服务端展示作者、审核标签、原文及已记录的发布时间，并负责数量和翻页提示；无需重复介绍列表。",
+    }
 
 
 def _delivered(service, session_id):
@@ -161,6 +197,7 @@ def read_batch(service, session_id, args, turn_id):
             tool="list_post_comments", result_kind="comment_text_batch",
             content_state="batch_prepared_for_public_answer",
             data={"batch_ref": _batch_ref(session_id, turn_id),
+                  "presentation": presentation(page),
                   "matched_author_statistics": data.get("matched_author_statistics"),
                   **{k: page[k] for k in ("post_ref", "risk_filter", "matched_count", "start", "end",
                                       "returned_count", "remaining_count", "has_more")}},
@@ -219,10 +256,18 @@ def render(service, session_id, turn_id):
         return ("当前筛选下没有已存评论。" if not page["matched_count"] else
                 f"当前筛选下共 {page['matched_count']} 条已存评论，已分批列出完毕，没有更多评论。")
     label = {"all": "全部", "risk": "风险", "no_risk": "已审核无风险", "unknown": "审核未完成或未知"}[page["risk_filter"]]
-    lines = [f"该帖{label}已存评论共 {page['matched_count']} 条，本批列出第 {page['start']}–{page['end']} 条。",
-             "以下为冻结快照原文，不代表平台全部评论；未完成审核不等于无风险。", ""]
+    lines = [f"{label}评论 · 共 {page['matched_count']} 条 · 本次 {page['start']}–{page['end']} 条", ""]
     for index, comment in enumerate(page["comments"], page["start"]):
-        lines.append(f"{index}. {_literal(comment.get('author') or '未记录作者')}：{_literal(comment['content'])}\n")
-    lines.append(f"还有 {page['remaining_count']} 条；发送“继续”查看下一批（最多 {BATCH_SIZE} 条）。"
-                 if page["has_more"] else "当前筛选下的已存评论已全部列出。")
+        indent = " " * (len(str(index)) + 2)
+        author = _literal(comment.get('author') or '未记录作者').replace("\n", " ")
+        lines.append(f"{index}. **{author}** · `{_audit_label(comment)}`\n")
+        # Quote every source line, including blank ones, so untrusted content
+        # cannot escape the item or be rewritten by the report vocabulary plugin.
+        lines.extend(indent + "> " + _literal(line) for line in str(comment['content']).split("\n"))
+        lines.append("")
+        timestamp = _published_time(comment)
+        if timestamp:
+            lines.extend([indent + "*发布于 " + _literal(timestamp) + "*", ""])
+    lines.append("发送“继续”查看下一批。" if page["has_more"] else "已全部展示。")
+    lines.extend(["", "*来源：报告保存的评论快照，并非平台全部评论。*"])
     return "\n".join(lines)

@@ -59,3 +59,24 @@ test("tables without outer pipes retain both rows and numeric alignment", () => 
   expect(html).toContain('style="text-align:right">v3');
   expect(html).not.toContain("save-");
 });
+
+test("comment items separate author, audit label, verbatim text and source time", () => {
+  const content = [
+    "风险评论 · 共 66 条 · 本次 9–10 条", "",
+    "9. **读者甲** · `中风险`", "",
+    "   > 原文中的 term、high 和 revision 都不能改写。", "   > &lt;script&gt;alert(1)&lt;/script&gt;", "",
+    "   *发布于 2026-10-09 11:00:00（北京时间）*", "",
+    "10. **读者乙** · `待审核`", "",
+    "    > 第二条原文。", "", "发送“继续”查看下一批。"
+  ].join("\n");
+  const html = renderToStaticMarkup(createElement(AssistantMarkdown, { content: presentCreationAssistantContent(content) }));
+  expect(html).toContain('<ol start="9">');
+  expect(html.match(/<li>/g)).toHaveLength(2);
+  expect(html.match(/<blockquote>/g)).toHaveLength(2);
+  expect(html).toContain('<strong>读者甲</strong>');
+  expect(html).toContain('<code>中风险</code>');
+  expect(html).toContain('原文中的 term、high 和 revision 都不能改写。');
+  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  expect(html).not.toContain('<script>');
+  expect(html).toContain('发布于 2026-10-09 11:00:00（北京时间）');
+});
