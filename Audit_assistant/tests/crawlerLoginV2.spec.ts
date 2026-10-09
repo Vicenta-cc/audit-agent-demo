@@ -476,3 +476,37 @@ for (const executionStatus of ['not_executed', 'rejected']) {
     await expect.poll(() => queried).toBe(1); await expect(page.getByRole('button', { name: '发送验证码' })).toBeEnabled(); await expect(page.getByRole('alert')).toHaveText('上次操作未执行，可以重新提交'); expect(commands).toHaveLength(1);
   });
 }
+
+test('compatibility retry waits for cancelled cleanup then starts a new V2 intent', async ({ page }) => {
+  const events: string[] = []; const requests: any[] = []; const keys: string[] = []; let releaseCleanup: (() => void) | undefined;
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { events.push('start'); requests.push(route.request().postDataJSON()); keys.push(route.request().headers()['idempotency-key']); return route.fulfill({ json: { item: snapshot() } }); });
+  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }));
+  await page.route('**/api/crawler-account-login-sessions/login-fixture', async route => {
+    events.push('cancel'); await new Promise<void>(resolve => { releaseCleanup = resolve; }); events.push('cleanup'); await route.fulfill({ json: { item: { ...snapshot('cancelled'), status: 'cancelled', cleanup_state: 'complete' } } });
+  });
+  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('button', { name: '重新尝试兼容模式' })).toBeVisible();
+  await page.getByRole('button', { name: '重新尝试兼容模式' }).click(); await expect.poll(() => events).toEqual(['start', 'cancel']); expect(requests).toHaveLength(1);
+  releaseCleanup!(); await expect.poll(() => events).toEqual(['start', 'cancel', 'cleanup', 'start']);
+  expect(requests[1]).toMatchObject({ browser_mode: 'compatibility', intent: 'reauth', supported_protocols: [2] }); expect(keys[1]).not.toBe(keys[0]);
+});
+test('compatibility retry never starts when cancellation fails', async ({ page }) => {
+  let starts = 0;
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: snapshot() } }); });
+  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }));
+  await page.route('**/api/crawler-account-login-sessions/login-fixture', route => route.fulfill({ status: 503, json: { detail: { code: 'CLEANUP_TIMEOUT', message: '登录资源仍在释放，请稍后重试' } } }));
+  await page.goto('/tests/crawlerLoginV2.html'); await page.getByRole('button', { name: '重新尝试兼容模式' }).click();
+  await expect(page.getByRole('alert')).toHaveText('登录资源仍在释放，请稍后重试'); await expect(page.getByAltText('抖音登录二维码')).toBeVisible(); expect(starts).toBe(1);
+});
+
+test('gesture notice is visible and preserves manual retry without replay', async ({ page }) => {
+  let socket: WebSocketRoute; const commands: any[] = [];
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => route.fulfill({ json: { item: snapshot('challenge_required') } }));
+  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => { socket = ws; ws.onMessage(data => { const command = JSON.parse(String(data)); if (command.type === 'auth') { ws.send(JSON.stringify({ type: 'snapshot', item: snapshot('challenge_required') })); ws.send(packet()); } else commands.push(command); }); });
+  await page.goto('/tests/crawlerLoginV2.html'); const canvas = page.getByLabel('人工验证区域'); await expect(canvas).not.toHaveClass(/is-disabled/);
+  socket!.send(JSON.stringify({ type: 'notice', code: 'GESTURE_EXPIRED', message: '本次操作已超时，请重新拖动或画图' }));
+  await expect(page.getByRole('alert')).toHaveText('本次操作已超时，请重新拖动或画图'); expect(commands).toHaveLength(0);
+  const bounds = (await canvas.boundingBox())!; await page.mouse.click(bounds.x + 20, bounds.y + 20); await expect.poll(() => commands.filter(command => command.type === 'pointer_batch').length).toBe(2);
+});

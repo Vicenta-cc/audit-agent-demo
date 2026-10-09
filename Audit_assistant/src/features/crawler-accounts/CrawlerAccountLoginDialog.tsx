@@ -58,6 +58,7 @@ export function CrawlerAccountLoginDialog({
   const [recoveries, setRecoveries] = useState<
     Array<{ id: string; updated_at: string }>
   >([]);
+  const [compatibility, setCompatibility] = useState(false);
   const [closing, setClosing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -65,7 +66,7 @@ export function CrawlerAccountLoginDialog({
   const successHandledRef = useRef("");
 
   const beginLogin = useCallback(
-    async (resume = true, sourceOperationId?: string) => {
+    async (resume = true, sourceOperationId?: string, browserMode?: "compatibility") => {
       if (!account) return;
       requestedAccountRef.current = account.id;
       successHandledRef.current = "";
@@ -120,6 +121,7 @@ export function CrawlerAccountLoginDialog({
                   ? "check_or_login"
                   : "reauth",
               sourceOperationId,
+              browserMode,
             );
           }
         } else {
@@ -131,6 +133,7 @@ export function CrawlerAccountLoginDialog({
                 ? "check_or_login"
                 : "reauth",
             sourceOperationId,
+            browserMode,
           );
         }
         if (next.accountId !== account.id) {
@@ -265,12 +268,32 @@ export function CrawlerAccountLoginDialog({
   };
 
   const retry = async () => {
-    window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
-    if (session && activeLoginStatuses.includes(session.status)) {
-      await cancelCrawlerAccountLoginSession(session.id).catch(() => undefined);
-    }
-    requestedAccountRef.current = "";
-    void beginLogin(false);
+    if (closing || starting) return;
+    setClosing(true);
+    try {
+      if (session && (session.v2 || activeLoginStatuses.includes(session.status))) {
+        const cancelled = await cancelCrawlerAccountLoginSession(session.id);
+        if (session.v2 && !cancelled.cleanupComplete) throw new Error("原登录窗口仍在释放资源，请稍后再重试");
+      }
+      window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
+      requestedAccountRef.current = "";
+      await beginLogin(false, undefined, compatibility ? "compatibility" : undefined);
+    } catch (error) { setStartError(readApiError(error)); }
+    finally { setClosing(false); }
+  };
+
+  const retryCompatibility = async () => {
+    if (!session?.v2 || closing || starting) return;
+    setClosing(true);
+    setStartError("");
+    try {
+      const cancelled = await cancelCrawlerAccountLoginSession(session.id);
+      if (!cancelled.cleanupComplete) throw new Error("原登录窗口仍在释放资源，请稍后再尝试兼容模式");
+      window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
+      setCompatibility(true);
+      await beginLogin(false, undefined, "compatibility");
+    } catch (error) { setStartError(readApiError(error)); }
+    finally { setClosing(false); }
   };
 
   return (
@@ -442,7 +465,7 @@ export function CrawlerAccountLoginDialog({
                   </span>
                   <Button type="button" variant="primary" onClick={retry}>
                     <RefreshCw size={16} />
-                    重新获取二维码
+                    {compatibility ? "重试兼容模式" : "重新获取二维码"}
                   </Button>
                 </div>
               ) : null}
@@ -464,6 +487,7 @@ export function CrawlerAccountLoginDialog({
               重新扫码
             </Button>
           ) : null}
+          {session?.v2 && session.status !== "success" && !compatibility ? <div className="crawler-login-v2-compatibility"><p>当前步骤无法完成时，可重新尝试兼容模式。这会结束当前会话并重新开始登录；服务器需要支持有界面浏览器。</p><Button type="button" disabled={closing || starting} onClick={() => void retryCompatibility()}>重新尝试兼容模式</Button></div> : null}
           {closing ? <p role="status">正在结束登录会话…</p> : null}
           {session?.v2 && startError ? <p role="alert">{startError}</p> : null}
         </div>

@@ -38,6 +38,7 @@ export function CrawlerLoginV2View({
   const [snapshot, setSnapshot] = useState(initial);
   const [connection, setConnection] = useState("正在连接");
   const [error, setError] = useState("");
+  const [gestureReset, setGestureReset] = useState(0);
   const [frame, setFrame] = useState<LoginFrame | null>(null);
   const pendingStorageKey = `crawler-account-login-command:${initial.id}`;
   const [pending, setPending] = useState(
@@ -168,6 +169,7 @@ export function CrawlerLoginV2View({
                 .catch(() => setError("上次操作结果尚未确认，请勿重复提交"));
             }
           } else if (message.type === "command_result") {
+            if (["failed", "rejected", "not_executed"].includes(message.execution_status) && message.error_message) setError(message.error_message);
             if (message.command_id === pendingRef.current) {
               if (
                 !commandHasDefinitiveOutcome(message)
@@ -198,6 +200,9 @@ export function CrawlerLoginV2View({
               pendingRef.current = "";
               window.sessionStorage.removeItem(pendingStorageKey);
             }
+          } else if (message.type === "notice") {
+            if (["QUEUE", "GESTURE_EXPIRED", "INPUT_BACKPRESSURE"].includes(message.code)) setGestureReset(value => value + 1);
+            setError(message.message || "验证操作未完成，请根据当前画面重新操作");
           } else if (message.type === "ping")
             created.socket.send(JSON.stringify({ type: "pong" }));
         };
@@ -399,6 +404,7 @@ export function CrawlerLoginV2View({
       ["challenge_required", "manual_required"].includes(snapshot.phase) ? (
         <>
           <CrawlerLoginChallengeCanvas
+            key={`${snapshot.challenge.challenge_id}:${gestureReset}`}
             area={snapshot.challenge}
             frame={frame}
             enabled={
