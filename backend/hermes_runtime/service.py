@@ -493,8 +493,12 @@ class HermesInvestigationAgentService:
                     session_id=session_id,
                     agent_factory=self.agent_factory,
                     product_mode=self._product_mode(session_id),
-                    base_url=settings.dashscope_base_url,
-                    api_key=settings.dashscope_api_key,
+                    base_url=settings.conversation_base_url,
+                    api_key=settings.conversation_api_key,
+                    model=settings.conversation_model,
+                    **({"request_overrides": {
+                        "extra_body": {"thinking": {"type": "disabled"}},
+                    }} if settings.conversation_model.lower().startswith("deepseek") else {}),
                     **callbacks,
                 )
                 self._agents[session_id] = agent

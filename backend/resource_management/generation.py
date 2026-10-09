@@ -139,7 +139,9 @@ class ResourceGenerator:
                         stream=False, max_tokens=8192,
                         response_format={"type": "json_object"},
                         **({"extra_body": {"enable_thinking": False}}
-                           if config.resource_generation_model.lower().startswith("qwen") else {}),
+                           if config.resource_generation_model.lower().startswith("qwen")
+                           else {"extra_body": {"thinking": {"type": "disabled"}}}
+                           if config.resource_generation_model.lower().startswith("deepseek") else {}),
                     )
                 response = (retry_input_request(author_request)
                             if config.resource_generation_model.lower().startswith("qwen")

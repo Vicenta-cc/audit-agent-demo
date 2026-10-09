@@ -3424,6 +3424,9 @@ def test_resource_generation_and_normal_turns_use_separate_providers(
     )
     monkeypatch.setattr(settings, "resource_generation_model", "qwen3.7-plus")
     monkeypatch.setattr(settings, "dashscope_api_key", "official-test-key")
+    monkeypatch.setattr(settings, "conversation_api_key", "conversation-test-key")
+    monkeypatch.setattr(settings, "conversation_base_url", "https://conversation.example/v1")
+    monkeypatch.setattr(settings, "conversation_model", "deepseek-v4-1-flash-260910")
     monkeypatch.setattr(
         settings,
         "dashscope_base_url",
@@ -3438,8 +3441,9 @@ def test_resource_generation_and_normal_turns_use_separate_providers(
 
     assert resource_agent is default_agent
     assert len(calls) == 1
-    assert calls[0]["base_url"].startswith("https://dashscope.aliyuncs.com/")
-    assert calls[0]["api_key"] == "official-test-key"
+    assert calls[0]["base_url"] == "https://conversation.example/v1"
+    assert calls[0]["api_key"] == "conversation-test-key"
+    assert calls[0]["model"] == "deepseek-v4-1-flash-260910"
 
 
 @pytest.mark.parametrize("mode, per_task, expected, absent", [

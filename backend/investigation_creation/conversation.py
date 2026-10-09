@@ -1719,10 +1719,14 @@ class InvestigationCreationConversationService:
                     )
                 else:
                     provider_options = {
-                        "base_url": settings.dashscope_base_url,
-                        "api_key": settings.dashscope_api_key,
-                        "model": settings.qwen_text_model,
+                        "base_url": settings.conversation_base_url,
+                        "api_key": settings.conversation_api_key,
+                        "model": settings.conversation_model,
                     }
+                    if settings.conversation_model.lower().startswith("deepseek"):
+                        provider_options["request_overrides"] = {
+                            "extra_body": {"thinking": {"type": "disabled"}},
+                        }
                     agent = self.runtime_binding.create_agent(
                         session_id=session_id,
                         agent_factory=self.agent_factory,

@@ -74,6 +74,16 @@ def test_dedicated_request_has_two_messages_no_tools_no_retry():
     client.__exit__.assert_called_once()
 
 
+def test_deepseek_resource_request_disables_thinking_without_changing_budget():
+    gen, client, _ = generator()
+    gen.config.resource_generation_model = "deepseek-v4-1-flash-260910"
+    gen.generate("lexicon", ResourceGenerationRequest(**REQUEST))
+    args = client.chat.completions.create.call_args.kwargs
+    assert args["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert args["max_tokens"] == 8192
+    assert len(args["messages"]) == 2
+
+
 @pytest.mark.parametrize("finish,refusal,code", [
     ("length", None, "OUTPUT_LENGTH_TRUNCATED"),
     ("content_filter", None, "OUTPUT_CONTENT_BLOCKED"),
