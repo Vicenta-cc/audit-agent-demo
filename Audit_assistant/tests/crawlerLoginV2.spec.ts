@@ -244,8 +244,12 @@ for (const viewport of [
     await expect(
       page.getByText("账号仍处于冷却中，登录不会解除冷却。", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: "查看当前登录步骤" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "完成", exact: true })).toHaveClass(/mt-button-primary/);
+    await expect(
+      page.getByRole("button", { name: "查看当前登录步骤" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "完成", exact: true }),
+    ).toHaveClass(/mt-button-primary/);
     await page.screenshot({
       path: `/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-v2-result-${viewport.width}.png`,
     });
@@ -423,90 +427,498 @@ test("missing live session offers explicit recovery without resetting credential
   expect(intent).toBe("recover");
 });
 
-test('expired QR without an image can refresh, and rejected command shows safe server message', async ({ page }) => {
-  const expired = { ...snapshot('qr_expired'), qr: null };
+test("expired QR without an image can refresh, and rejected command shows safe server message", async ({
+  page,
+}) => {
+  const expired = { ...snapshot("qr_expired"), qr: null };
   let socket: WebSocketRoute;
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => route.fulfill({ json: { item: expired } }));
-  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'fixture-ticket', expires_in: 30 } }));
-  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => {
-    socket = ws;
-    ws.onMessage(data => {
-      const command = JSON.parse(String(data));
-      if (command.type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: expired }));
-      else if (command.action === 'refresh_qr') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() }));
-      else if (command.action === 'submit_sms') ws.send(JSON.stringify({ type: 'command_result', command_id: command.command_id, execution_status: 'rejected', platform_status: 'rejected', error_code: 'SOME_INTERNAL_CODE', error_message: '验证码不正确，请重新输入' }));
-    });
-  });
-  await page.goto('/tests/crawlerLoginV2.html');
-  await expect(page.getByText('二维码已过期', { exact: true })).toBeVisible(); await expect(page.getByAltText('抖音登录二维码')).toHaveCount(0);
-  await page.getByRole('button', { name: '刷新二维码' }).click(); await expect(page.getByAltText('抖音登录二维码')).toBeVisible();
-  socket!.send(JSON.stringify({ type: 'snapshot', item: snapshot('sms_required', 2) }));
-  await page.getByLabel('短信验证码').fill('123456'); await page.getByRole('button', { name: '提交验证码' }).click();
-  await expect(page.getByRole('alert')).toHaveText('验证码不正确，请重新输入'); await expect(page.getByText('SOME_INTERNAL_CODE')).toHaveCount(0);
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) => route.fulfill({ json: { item: expired } }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) =>
+      route.fulfill({ json: { ticket: "fixture-ticket", expires_in: 30 } }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) => {
+      socket = ws;
+      ws.onMessage((data) => {
+        const command = JSON.parse(String(data));
+        if (command.type === "auth")
+          ws.send(JSON.stringify({ type: "snapshot", item: expired }));
+        else if (command.action === "refresh_qr")
+          ws.send(JSON.stringify({ type: "snapshot", item: snapshot() }));
+        else if (command.action === "submit_sms")
+          ws.send(
+            JSON.stringify({
+              type: "command_result",
+              command_id: command.command_id,
+              execution_status: "rejected",
+              platform_status: "rejected",
+              error_code: "SOME_INTERNAL_CODE",
+              error_message: "验证码不正确，请重新输入",
+            }),
+          );
+      });
+    },
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await expect(page.getByText("二维码已过期", { exact: true })).toBeVisible();
+  await expect(page.getByAltText("抖音登录二维码")).toHaveCount(0);
+  await page.getByRole("button", { name: "刷新二维码" }).click();
+  await expect(page.getByAltText("抖音登录二维码")).toBeVisible();
+  socket!.send(
+    JSON.stringify({ type: "snapshot", item: snapshot("sms_required", 2) }),
+  );
+  await page.getByLabel("短信验证码").fill("123456");
+  await page.getByRole("button", { name: "提交验证码" }).click();
+  await expect(page.getByRole("alert")).toHaveText("验证码不正确，请重新输入");
+  await expect(page.getByText("SOME_INTERNAL_CODE")).toHaveCount(0);
 });
 
-test('stale state rejected before execution releases pending only for a new user retry', async ({ page }) => {
+test("stale state rejected before execution releases pending only for a new user retry", async ({
+  page,
+}) => {
   const commands: any[] = [];
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => route.fulfill({ json: { item: snapshot('sms_required') } }));
-  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => {
-    const command = JSON.parse(String(data));
-    if (command.type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot('sms_required') }));
-    else {
-      commands.push(command);
-      ws.send(JSON.stringify({ type: 'error', code: 'STALE_STATE', message: '登录步骤已变化，请重试', command_id: command.command_id, execution_status: 'rejected', platform_status: 'not_applicable' }));
-    }
-  }));
-  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByText('已连接', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '发送验证码' }).click(); await expect(page.getByRole('button', { name: '发送验证码' })).toBeEnabled();
-  await expect(page.getByRole('alert')).toHaveText('登录步骤已变化，请重试'); expect(commands).toHaveLength(1);
-  await page.getByRole('button', { name: '发送验证码' }).click(); await expect.poll(() => commands.length).toBe(2);
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) => route.fulfill({ json: { item: snapshot("sms_required") } }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) =>
+      ws.onMessage((data) => {
+        const command = JSON.parse(String(data));
+        if (command.type === "auth")
+          ws.send(
+            JSON.stringify({
+              type: "snapshot",
+              item: snapshot("sms_required"),
+            }),
+          );
+        else {
+          commands.push(command);
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              code: "STALE_STATE",
+              message: "登录步骤已变化，请重试",
+              command_id: command.command_id,
+              execution_status: "rejected",
+              platform_status: "not_applicable",
+            }),
+          );
+        }
+      }),
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await expect(page.getByText("已连接", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "发送验证码" }).click();
+  await expect(page.getByRole("button", { name: "发送验证码" })).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveText("登录步骤已变化，请重试");
+  expect(commands).toHaveLength(1);
+  await page.getByRole("button", { name: "发送验证码" }).click();
+  await expect.poll(() => commands.length).toBe(2);
   expect(commands[0].command_id).not.toBe(commands[1].command_id);
 });
-for (const executionStatus of ['not_executed', 'rejected']) {
-  test(`reconnect query ${executionStatus} not_applicable releases pending without replay`, async ({ page }) => {
-    let connections = 0; let queried = 0; const commands: any[] = [];
-    await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => route.fulfill({ json: { item: snapshot('sms_required') } }));
-    await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-    await page.route('**/api/crawler-accounts/account-fixture/login-operations/operation-fixture/commands/*', route => { queried++; return route.fulfill({ json: { item: { execution_status: executionStatus, platform_status: 'not_applicable', error_message: '上次操作未执行，可以重新提交' } } }); });
-    await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => {
-      connections++; ws.onMessage(data => { const command = JSON.parse(String(data)); if (command.type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('sms_required'), controller_epoch: connections } })); else { commands.push(command); ws.close({ code: 1011 }); } });
-    });
-    await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByText('已连接', { exact: true })).toBeVisible(); await page.getByRole('button', { name: '发送验证码' }).click();
-    await expect.poll(() => queried).toBe(1); await expect(page.getByRole('button', { name: '发送验证码' })).toBeEnabled(); await expect(page.getByRole('alert')).toHaveText('上次操作未执行，可以重新提交'); expect(commands).toHaveLength(1);
+for (const executionStatus of ["not_executed", "rejected"]) {
+  test(`reconnect query ${executionStatus} not_applicable releases pending without replay`, async ({
+    page,
+  }) => {
+    let connections = 0;
+    let queried = 0;
+    const commands: any[] = [];
+    await page.route(
+      "**/api/crawler-accounts/account-fixture/login-sessions",
+      (route) => route.fulfill({ json: { item: snapshot("sms_required") } }),
+    );
+    await page.route(
+      "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+      (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+    );
+    await page.route(
+      "**/api/crawler-accounts/account-fixture/login-operations/operation-fixture/commands/*",
+      (route) => {
+        queried++;
+        return route.fulfill({
+          json: {
+            item: {
+              execution_status: executionStatus,
+              platform_status: "not_applicable",
+              error_message: "上次操作未执行，可以重新提交",
+            },
+          },
+        });
+      },
+    );
+    await page.routeWebSocket(
+      "**/api/crawler-account-login-sessions/login-fixture/stream",
+      (ws) => {
+        connections++;
+        ws.onMessage((data) => {
+          const command = JSON.parse(String(data));
+          if (command.type === "auth")
+            ws.send(
+              JSON.stringify({
+                type: "snapshot",
+                item: {
+                  ...snapshot("sms_required"),
+                  controller_epoch: connections,
+                },
+              }),
+            );
+          else {
+            commands.push(command);
+            ws.close({ code: 1011 });
+          }
+        });
+      },
+    );
+    await page.goto("/tests/crawlerLoginV2.html");
+    await expect(page.getByText("已连接", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "发送验证码" }).click();
+    await expect.poll(() => queried).toBe(1);
+    await expect(
+      page.getByRole("button", { name: "发送验证码" }),
+    ).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveText(
+      "上次操作未执行，可以重新提交",
+    );
+    expect(commands).toHaveLength(1);
   });
 }
 
-test('compatibility retry waits for cancelled cleanup then starts a new V2 intent', async ({ page }) => {
-  const events: string[] = []; const requests: any[] = []; const keys: string[] = []; let releaseCleanup: (() => void) | undefined;
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { events.push('start'); requests.push(route.request().postDataJSON()); keys.push(route.request().headers()['idempotency-key']); return route.fulfill({ json: { item: snapshot() } }); });
-  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }));
-  await page.route('**/api/crawler-account-login-sessions/login-fixture', async route => {
-    events.push('cancel'); await new Promise<void>(resolve => { releaseCleanup = resolve; }); events.push('cleanup'); await route.fulfill({ json: { item: { ...snapshot('cancelled'), status: 'cancelled', cleanup_state: 'complete' } } });
+test("compatibility retry waits for cancelled cleanup then starts a new V2 intent", async ({
+  page,
+}) => {
+  const events: string[] = [];
+  const requests: any[] = [];
+  const keys: string[] = [];
+  let releaseCleanup: (() => void) | undefined;
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) => {
+      events.push("start");
+      requests.push(route.request().postDataJSON());
+      keys.push(route.request().headers()["idempotency-key"]);
+      return route.fulfill({ json: { item: snapshot() } });
+    },
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) =>
+      ws.onMessage((data) => {
+        if (JSON.parse(String(data)).type === "auth")
+          ws.send(JSON.stringify({ type: "snapshot", item: snapshot() }));
+      }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture",
+    async (route) => {
+      events.push("cancel");
+      await new Promise<void>((resolve) => {
+        releaseCleanup = resolve;
+      });
+      events.push("cleanup");
+      await route.fulfill({
+        json: {
+          item: {
+            ...snapshot("cancelled"),
+            status: "cancelled",
+            cleanup_state: "complete",
+          },
+        },
+      });
+    },
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await expect(
+    page.getByRole("button", { name: "重新尝试兼容模式" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "重新尝试兼容模式" }).click();
+  await expect.poll(() => events).toEqual(["start", "cancel"]);
+  expect(requests).toHaveLength(1);
+  releaseCleanup!();
+  await expect
+    .poll(() => events)
+    .toEqual(["start", "cancel", "cleanup", "start"]);
+  expect(requests[1]).toMatchObject({
+    browser_mode: "compatibility",
+    intent: "reauth",
+    supported_protocols: [2],
   });
-  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('button', { name: '重新尝试兼容模式' })).toBeVisible();
-  await page.getByRole('button', { name: '重新尝试兼容模式' }).click(); await expect.poll(() => events).toEqual(['start', 'cancel']); expect(requests).toHaveLength(1);
-  releaseCleanup!(); await expect.poll(() => events).toEqual(['start', 'cancel', 'cleanup', 'start']);
-  expect(requests[1]).toMatchObject({ browser_mode: 'compatibility', intent: 'reauth', supported_protocols: [2] }); expect(keys[1]).not.toBe(keys[0]);
+  expect(keys[1]).not.toBe(keys[0]);
 });
-test('compatibility retry never starts when cancellation fails', async ({ page }) => {
+test("compatibility retry never starts when cancellation fails", async ({
+  page,
+}) => {
   let starts = 0;
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: snapshot() } }); });
-  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }));
-  await page.route('**/api/crawler-account-login-sessions/login-fixture', route => route.fulfill({ status: 503, json: { detail: { code: 'CLEANUP_TIMEOUT', message: '登录资源仍在释放，请稍后重试' } } }));
-  await page.goto('/tests/crawlerLoginV2.html'); await page.getByRole('button', { name: '重新尝试兼容模式' }).click();
-  await expect(page.getByRole('alert')).toHaveText('登录资源仍在释放，请稍后重试'); await expect(page.getByAltText('抖音登录二维码')).toBeVisible(); expect(starts).toBe(1);
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) => {
+      starts++;
+      return route.fulfill({ json: { item: snapshot() } });
+    },
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) =>
+      ws.onMessage((data) => {
+        if (JSON.parse(String(data)).type === "auth")
+          ws.send(JSON.stringify({ type: "snapshot", item: snapshot() }));
+      }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture",
+    (route) =>
+      route.fulfill({
+        status: 503,
+        json: {
+          detail: {
+            code: "CLEANUP_TIMEOUT",
+            message: "登录资源仍在释放，请稍后重试",
+          },
+        },
+      }),
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await page.getByRole("button", { name: "重新尝试兼容模式" }).click();
+  await expect(page.getByRole("alert")).toHaveText(
+    "登录资源仍在释放，请稍后重试",
+  );
+  await expect(page.getByAltText("抖音登录二维码")).toBeVisible();
+  expect(starts).toBe(1);
 });
 
-test('gesture notice is visible and preserves manual retry without replay', async ({ page }) => {
-  let socket: WebSocketRoute; const commands: any[] = [];
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => route.fulfill({ json: { item: snapshot('challenge_required') } }));
-  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => { socket = ws; ws.onMessage(data => { const command = JSON.parse(String(data)); if (command.type === 'auth') { ws.send(JSON.stringify({ type: 'snapshot', item: snapshot('challenge_required') })); ws.send(packet()); } else commands.push(command); }); });
-  await page.goto('/tests/crawlerLoginV2.html'); const canvas = page.getByLabel('人工验证区域'); await expect(canvas).not.toHaveClass(/is-disabled/);
-  socket!.send(JSON.stringify({ type: 'notice', code: 'GESTURE_EXPIRED', message: '本次操作已超时，请重新拖动或画图' }));
-  await expect(page.getByRole('alert')).toHaveText('本次操作已超时，请重新拖动或画图'); expect(commands).toHaveLength(0);
-  const bounds = (await canvas.boundingBox())!; await page.mouse.click(bounds.x + 20, bounds.y + 20); await expect.poll(() => commands.filter(command => command.type === 'pointer_batch').length).toBe(2);
+test("gesture notice is visible and preserves manual retry without replay", async ({
+  page,
+}) => {
+  let socket: WebSocketRoute;
+  const commands: any[] = [];
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) =>
+      route.fulfill({ json: { item: snapshot("challenge_required") } }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) => {
+      socket = ws;
+      ws.onMessage((data) => {
+        const command = JSON.parse(String(data));
+        if (command.type === "auth") {
+          ws.send(
+            JSON.stringify({
+              type: "snapshot",
+              item: snapshot("challenge_required"),
+            }),
+          );
+          ws.send(packet());
+        } else commands.push(command);
+      });
+    },
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  const canvas = page.getByLabel("人工验证区域");
+  await expect(canvas).not.toHaveClass(/is-disabled/);
+  socket!.send(
+    JSON.stringify({
+      type: "notice",
+      code: "GESTURE_EXPIRED",
+      message: "本次操作已超时，请重新拖动或画图",
+    }),
+  );
+  await expect(page.getByRole("alert")).toHaveText(
+    "本次操作已超时，请重新拖动或画图",
+  );
+  expect(commands).toHaveLength(0);
+  const bounds = (await canvas.boundingBox())!;
+  await page.mouse.click(bounds.x + 20, bounds.y + 20);
+  await expect
+    .poll(
+      () =>
+        commands.filter((command) => command.type === "pointer_batch").length,
+    )
+    .toBe(2);
+});
+
+async function prepareDrawing(page: import("@playwright/test").Page) {
+  const commands: any[] = [];
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) =>
+      route.fulfill({ json: { item: snapshot("challenge_required") } }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) =>
+      ws.onMessage((data) => {
+        const command = JSON.parse(String(data));
+        if (command.type === "auth") {
+          ws.send(
+            JSON.stringify({
+              type: "snapshot",
+              item: snapshot("challenge_required"),
+            }),
+          );
+          ws.send(packet());
+        } else commands.push(command);
+      }),
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  const canvas = page.getByLabel("人工验证区域");
+  await expect(canvas).not.toHaveClass(/is-disabled/);
+  const bounds = (await canvas.boundingBox())!;
+  await page.mouse.move(bounds.x + 20, bounds.y + 20);
+  return { canvas, commands };
+}
+test("drawing human pause after flushed down still sends up without replaying elapsed time", async ({
+  page,
+}) => {
+  const { commands } = await prepareDrawing(page);
+  await page.mouse.down();
+  await expect.poll(() => commands.length).toBe(1);
+  await page.waitForTimeout(300);
+  await page.mouse.up();
+  await expect.poll(() => commands.length).toBe(2);
+  expect(commands[0].points[0].event).toBe("down");
+  expect(commands[1].points[0]).toMatchObject({ event: "up", dt_ms: 0 });
+  expect(
+    commands.some((command) => command.type === "abort_gesture"),
+  ).toBeFalsy();
+});
+test("drawing genuinely queued points older than 250ms aborts with visible retry message", async ({
+  page,
+}) => {
+  const { canvas, commands } = await prepareDrawing(page);
+  await page.mouse.down();
+  await expect.poll(() => commands.length).toBe(1);
+  await canvas.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const realNow = performance.now.bind(performance);
+    let offset = 0;
+    Object.defineProperty(performance, "now", {
+      configurable: true,
+      value: () => realNow() + offset,
+    });
+    const move = () =>
+      element.dispatchEvent(
+        new PointerEvent("pointermove", {
+          bubbles: true,
+          pointerId: 1,
+          clientX: rect.x + 30,
+          clientY: rect.y + 30,
+        }),
+      );
+    move();
+    offset = 300;
+    move();
+    Object.defineProperty(performance, "now", {
+      configurable: true,
+      value: realNow,
+    });
+  });
+  await expect(page.getByRole("alert")).toHaveText(
+    "操作发送积压，本次手势已停止，请重新拖动或画图",
+  );
+  await expect
+    .poll(() => commands.some((command) => command.type === "abort_gesture"))
+    .toBeTruthy();
+  expect(
+    commands.filter((command) => command.type === "pointer_batch"),
+  ).toHaveLength(1);
+  await page.mouse.up();
+});
+test("socket send backlog stops input and relies on disconnect for reliable release", async ({
+  page,
+}) => {
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) =>
+      route.fulfill({ json: { item: snapshot("challenge_required") } }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.addInitScript(
+    ({ state, bytes }) => {
+      (window as any).__testCommands = [];
+      class FixtureSocket {
+        static OPEN = 1;
+        static CLOSED = 3;
+        readyState = 0;
+        bufferedAmount = 0;
+        binaryType = "arraybuffer";
+        onopen: any;
+        onmessage: any;
+        onclose: any;
+        onerror: any;
+        constructor() {
+          (window as any).__testSocket = this;
+          setTimeout(() => {
+            this.readyState = 1;
+            this.onopen?.();
+          }, 0);
+        }
+        send(data: string) {
+          const command = JSON.parse(data);
+          if (command.type === "auth") {
+            this.onmessage?.({
+              data: JSON.stringify({ type: "snapshot", item: state }),
+            });
+            this.onmessage?.({ data: new Uint8Array(bytes).buffer });
+          } else (window as any).__testCommands.push(command);
+        }
+        close(code: number) {
+          this.readyState = 3;
+          this.onclose?.({ code });
+        }
+      }
+      window.WebSocket = FixtureSocket as any;
+    },
+    { state: snapshot("challenge_required"), bytes: Array.from(packet()) },
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  const canvas = page.getByLabel("人工验证区域");
+  await expect(canvas).not.toHaveClass(/is-disabled/);
+  await page.evaluate(() => {
+    (window as any).__testSocket.bufferedAmount = 65537;
+  });
+  const bounds = (await canvas.boundingBox())!;
+  await page.mouse.move(bounds.x + 20, bounds.y + 20);
+  await page.mouse.down();
+  await expect(page.getByRole("alert")).toHaveText(
+    "连接发送积压，本次操作已停止，恢复连接后请重新操作",
+  );
+  expect(await page.evaluate(() => (window as any).__testCommands.length)).toBe(
+    0,
+  );
+  expect(
+    await page.evaluate(() => (window as any).__testSocket.readyState),
+  ).toBe(3);
+  await page.mouse.up();
 });

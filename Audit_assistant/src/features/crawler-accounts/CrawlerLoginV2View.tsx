@@ -296,6 +296,11 @@ export function CrawlerLoginV2View({
     );
   const send = (input: Record<string, unknown>) => {
     if (!enabled || socket.current?.readyState !== WebSocket.OPEN) return;
+    if (socket.current.bufferedAmount > 64 * 1024) {
+      setError("连接发送积压，本次操作已停止，恢复连接后请重新操作");
+      socket.current.close(1011, "input congestion");
+      return;
+    }
     const commandId = crypto.randomUUID();
     socket.current.send(
       JSON.stringify({
@@ -453,6 +458,7 @@ export function CrawlerLoginV2View({
               frame?.area_version === snapshot.challenge.area_version
             }
             send={send}
+            onError={setError}
           />
           {snapshot.challenge.allowed_actions.includes("text") ? (
             <form

@@ -12,26 +12,37 @@ export function CrawlerLoginChallengeCanvas({
   frame,
   enabled,
   send,
+  onError,
 }: {
   area: ChallengeArea;
   frame: LoginFrame | null;
   enabled: boolean;
   send: (command: Record<string, unknown>) => void;
+  onError: (message: string) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const gesture = useRef("");
   const points = useRef<Point[]>([]);
   const pointSequence = useRef(0);
-  const started = useRef(0);
+  const oldestBufferedAt = useRef<number | null>(null);
   const previousPoint = useRef(0);
   const timer = useRef(0);
   const generation = useRef(0);
-  const latest = useRef({ area, enabled, send });
+  const latest = useRef({ area, enabled, send, onError });
   const queuedFrame = useRef<LoginFrame | null>(null);
   const decoding = useRef(false);
-  latest.current = { area, enabled, send };
+  latest.current = { area, enabled, send, onError };
   const flush = () => {
     if (!points.current.length || !gesture.current) return;
+    if (
+      oldestBufferedAt.current !== null &&
+      performance.now() - oldestBufferedAt.current > 250
+    ) {
+      abort();
+      latest.current.onError("操作发送积压，本次手势已停止，请重新拖动或画图");
+      return;
+    }
+    oldestBufferedAt.current = null;
     latest.current.send({
       type: "pointer_batch",
       challenge_id: latest.current.area.challenge_id,
@@ -45,6 +56,7 @@ export function CrawlerLoginChallengeCanvas({
     window.clearTimeout(timer.current);
     timer.current = 0;
     points.current = [];
+    oldestBufferedAt.current = null;
     if (gesture.current && latest.current.enabled)
       latest.current.send({
         type: "abort_gesture",
@@ -114,28 +126,41 @@ export function CrawlerLoginChallengeCanvas({
   };
   const append = (event: React.PointerEvent, kind: string) => {
     if (!enabled || !gesture.current) return;
+    const now = performance.now();
+    if (
+      oldestBufferedAt.current !== null &&
+      now - oldestBufferedAt.current > 250
+    ) {
+      abort();
+      latest.current.onError("操作发送积压，本次手势已停止，请重新拖动或画图");
+      return;
+    }
+    const firstInBatch = points.current.length === 0;
+    if (firstInBatch) oldestBufferedAt.current = now;
     const point = {
       ...position(event),
       event: kind,
       point_sequence: ++pointSequence.current,
-      dt_ms: Math.min(
-        1000,
-        Math.round(performance.now() - previousPoint.current),
-      ),
+      dt_ms: firstInBatch
+        ? 0
+        : Math.min(1000, Math.round(now - previousPoint.current)),
     };
-    previousPoint.current = performance.now();
+    previousPoint.current = now;
     if (
       kind === "move" &&
       area.kind === "slider" &&
       points.current[points.current.length - 1]?.event === "move"
-    )
-      points.current[points.current.length - 1] = point;
-    else points.current.push(point);
-    if (
-      points.current.length >= 64 ||
-      points.current.reduce((total, next) => total + next.dt_ms, 0) > 250
     ) {
+      const previous = points.current[points.current.length - 1];
+      point.dt_ms =
+        points.current.length === 1
+          ? 0
+          : Math.min(1000, previous.dt_ms + point.dt_ms);
+      points.current[points.current.length - 1] = point;
+    } else points.current.push(point);
+    if (points.current.length > 64) {
       abort();
+      latest.current.onError("操作轨迹发送积压，本次手势已停止，请重新操作");
       return;
     }
     if (kind !== "move") {
@@ -160,8 +185,7 @@ export function CrawlerLoginChallengeCanvas({
           if (!enabled) return;
           abort();
           gesture.current = crypto.randomUUID();
-          started.current = performance.now();
-          previousPoint.current = started.current;
+          previousPoint.current = performance.now();
           event.currentTarget.setPointerCapture(event.pointerId);
           append(event, "down");
         }}
