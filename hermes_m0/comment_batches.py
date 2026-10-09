@@ -113,8 +113,9 @@ def save(service, session_id):
 
 
 def read_batch(service, session_id, args, turn_id):
-    _require_exact_keys(args, {"post_ref", "risk_filter", "batch_action"},
+    _require_exact_keys(args, {"post_ref", "risk_filter", "batch_action", "limit"},
                         required={"post_ref", "batch_action"})
+    limit = _require_int(args.get("limit", BATCH_SIZE), "limit", minimum=1, maximum=BATCH_SIZE)
     _require_string(turn_id, "turn_id")
     if turn_id.startswith("reference-restore:"):
         raise ToolInputError("comment_batch_real_turn_required", "历史引用恢复不能创建评论交付批次。")
@@ -141,7 +142,7 @@ def read_batch(service, session_id, args, turn_id):
         if action == "continue" and previous is None:
             raise ToolInputError("comment_batch_not_started", "没有已完成交付的同帖同筛选批次；先恢复失败回合或开始第一批。")
         offset = previous["end"] if action == "continue" else 0
-        page_args = {"post_ref": post_ref, "risk_filter": risk, "limit": BATCH_SIZE}
+        page_args = {"post_ref": post_ref, "risk_filter": risk, "limit": limit}
         if action == "continue" and previous["cursor"]:
             page_args["cursor"] = previous["cursor"]
         if action == "continue" and not previous["has_more"]:

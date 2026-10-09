@@ -338,18 +338,22 @@ def unified_tool_schemas():
         if schema["name"] == "list_post_comments":
             schema["description"] += " " + COMMENT_SOURCE_CONTEXT
             schema["description"] += (
-                " 普通‘看看评论’默认预览5条，limit最多20；不要自动选择全部交付。"
-                "只有用户明确要求‘全部逐条列出/展示所有原文’时，batch_action=start。"
+                " 分析评论时省略batch_action，读取少量原文供模型分析，默认5条，limit最多20。"
+                "用户要求展示评论原文（含前几条）时，batch_action=start；前5条传limit=5，"
+                "全部逐条展示则省略limit，每轮最多100条。不要把少量查看扩成全部交付。"
                 "已开始分批交付后用户说‘继续’，同post_ref和risk_filter使用batch_action=continue；"
-                "不能再次start重头读取。分批模式每轮固定最多100条，不传limit/cursor。"
+                "不能再次start重头读取。可用limit指定本轮1至100条，不传cursor。"
                 "服务端保存交付进度并在聊天回答中直接列出原文，不产生Drawer、链接或卡片。"
                 "工具仅返回计数，不能声称模型已经阅读或分析了全部原文；本轮不再翻页，等待用户继续。"
             )
             schema["parameters"]["properties"]["batch_action"] = {
                 "type": "string", "enum": ["start", "continue"],
-                "description": "省略为少量预览；明确全部逐条展示才start，用户后续继续才continue。"
+                "description": "省略供模型分析；展示原文用start（前几条配合limit），接着展示用continue。"
             }
-            schema["parameters"]["properties"]["limit"]["default"] = 5
+            schema["parameters"]["properties"]["limit"].update(
+                maximum=100,
+                description="分析预览1至20条，默认5；原文交付1至100条，默认100，按用户要求指定。",
+            )
             schema["parameters"]["required"] = ["post_ref"]
         if schema["name"] == "read_report":
             schema["description"] = (

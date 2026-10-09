@@ -204,7 +204,8 @@ def test_known_synthetic_pre_fix_record_removed_without_advancing(setup):
     assert not invoke(service, post, "reference-restore:0", batch_action="start")["ok"]
 
 
-@pytest.mark.parametrize("extra", [{"limit": 100}, {"cursor": "fake"}, {"risk_filter": "bad"}, {"batch_action": "invalid"}])
+@pytest.mark.parametrize("extra", [{"limit": 0}, {"limit": 101}, {"limit": True}, {"limit": "5"},
+                                    {"cursor": "fake"}, {"risk_filter": "bad"}, {"batch_action": "invalid"}])
 def test_reject_invalid_batch_arguments(setup, extra):
     service, post, *_ = setup
     assert not invoke(service, post, **{"batch_action": "start", **extra})["ok"]
@@ -236,9 +237,47 @@ def test_plain_text_render_escapes_untrusted_markdown_and_html(setup):
 def test_batch_schema_only_changes_unified_tool():
     schema = next(s for s in unified_tool_schemas() if s["name"] == "list_post_comments")
     assert schema["parameters"]["required"] == ["post_ref"]
-    assert schema["parameters"]["properties"]["limit"]["maximum"] == 20
+    assert schema["parameters"]["properties"]["limit"]["maximum"] == 100
     legacy = next(s for s in pass_tool_schemas() if s["name"] == "list_post_comments")
     assert "batch_action" not in legacy["parameters"]["properties"]
+    assert legacy["parameters"]["properties"]["limit"]["maximum"] == 20
+
+
+@pytest.mark.parametrize("setup", [[
+    {"comment_id": f"c-{i:03}", "content": f"评论原文{i:03}：请核实票价公示。",
+     "nickname": f"读者{i:03}", "sec_uid": f"user-{i}",
+     "audit_status": "pending" if i >= 20 else "completed",
+     "risk_level": "high" if i < 10 else "none"}
+    for i in range(30)
+]], indirect=True)
+@pytest.mark.parametrize("risk,offset", [("no_risk", 10), ("unknown", 20)])
+def test_small_raw_delivery_filters_restores_and_continues_without_rewriting(setup, risk, offset):
+    from backend.hermes_runtime.comment_delivery import compose, live_model_text_allowed
+    runtime, post, reopen, *_ = setup
+    receipt = invoke(runtime, post, batch_action="start", risk_filter=risk, limit=5)
+    assert receipt["ok"] and receipt["data"]["returned_count"] == 5
+    assert receipt["data"]["matched_count"] == 10
+    assert "comments" not in receipt["data"]
+    # Replay the captured failure: Qwen drops the prefix from each raw body.
+    shortened = "| # | 作者 | 评论内容 |\n| --- | --- | --- |\n" + "\n".join(
+        f"| {n + 1} | 读者{i:03} | 请核实票价公示。 |" for n, i in enumerate(range(offset, offset + 5)))
+    with patch("hermes_m0.runtime.report_task_runtime_for_session", return_value=runtime):
+        assert not live_model_text_allowed("session", "t1")
+    answer, history, rejected = compose(runtime, "session", "t1", shortened,
+        [{"role": "assistant", "content": shortened}], 0)
+    assert rejected and "|" not in answer and "|" not in history[-1]["content"]
+    assert re.findall(r"评论原文\d{3}：请核实票价公示。", answer) == [
+        f"评论原文{i:03}：请核实票价公示。" for i in range(offset, offset + 5)]
+    assert "1–5" in history[-1]["content"]
+    runtime = reopen()
+    assert render(runtime, "session", "t1") in answer
+    assert not invoke(runtime, post, "failed-next", batch_action="continue", risk_filter=risk, limit=3)["ok"]
+    acknowledge(runtime, "session", "t1")
+    runtime = reopen()
+    next_page = invoke(runtime, post, "t2", batch_action="continue", risk_filter=risk, limit=3)["data"]
+    assert (next_page["start"], next_page["end"], next_page["returned_count"]) == (6, 8, 3)
+    assert re.findall(r"评论原文\d{3}", render(runtime, "session", "t2")) == [
+        f"评论原文{i:03}" for i in range(offset + 5, offset + 8)]
 
 
 def test_public_answer_is_full_batch_and_only_completion_acknowledges(setup, tmp_path):
