@@ -137,7 +137,7 @@ def test_owner_tickets_and_epoch_barrier(manager):
     c = command(m, s, first)
     second = attach(m, s)
     assert second > first
-    with pytest.raises(LoginV2Error, match="CONTROLLER_REPLACED"):
+    with pytest.raises(LoginV2Error, match="旧操作"):
         m.command(
             s["id"], c, user_id="user", app_session_id="app", owner_token="x" * 32
         )
@@ -332,12 +332,12 @@ def test_stale_area_and_state_rejected_before_dispatch(manager):
         challenge_id="old",
         area_version=2,
     )
-    with pytest.raises(LoginV2Error, match="STALE_CHALLENGE"):
+    with pytest.raises(LoginV2Error, match="验证码已刷新"):
         m.command(
             s["id"], c, user_id="user", app_session_id="app", owner_token="x" * 32
         )
     c.update(challenge_id="new", area_version=3, expected_state_revision=0)
-    with pytest.raises(LoginV2Error, match="STALE_STATE"):
+    with pytest.raises(LoginV2Error, match="登录步骤已变化"):
         m.command(
             s["id"], c, user_id="user", app_session_id="app", owner_token="x" * 32
         )
@@ -509,3 +509,56 @@ def test_legacy_douyin_rejects_unverified_identity(manager, identity):
     assert (
         account["failure_kind"] == "verify" and account["last_error"] == "risk message"
     )
+
+
+@pytest.mark.parametrize(
+    "mode,policy,headed,blocked",
+    [
+        ("compatibility", "precise", True, True),
+        ("headless", "conservative", False, False),
+    ],
+)
+def test_runtime_browser_and_resource_policy_reach_helper(
+    manager, monkeypatch, mode, policy, headed, blocked
+):
+    from backend.audit_agent.config import settings
+
+    m, a = manager
+    monkeypatch.setattr(settings, "crawler_login_v2_browser_mode", mode)
+    monkeypatch.setattr(settings, "crawler_login_v2_resource_policy", policy)
+    s = start(m, a)
+    args = m.sessions[s["id"]].process.args
+    assert ("--headed" in args) == headed
+    assert ("--block-media" in args) == blocked
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "CAPTURE_FAILED",
+        "IDENTITY_MISMATCH",
+        "AUTH_REVISION_CONFLICT",
+        "SAVE_FAILED",
+        "MEDIA_CHANNEL_FAILED",
+        "CONTROLLER_REPLACED",
+    ],
+)
+def test_terminal_messages_are_safe_chinese(manager, code):
+    m, a = manager
+    s = start(m, a)
+    m.handle_event(
+        s["id"], {"type": "error", "code": code, "message": "/private/path secret"}
+    )
+    error = m.sessions[s["id"]].snapshot["error"]
+    assert error["code"] == code
+    assert any("\u4e00" <= c <= "\u9fff" for c in error["message"])
+    assert "secret" not in error["message"] and "/private" not in error["message"]
+
+
+def test_unknown_exceptions_do_not_leak_details():
+    from backend.audit_agent.crawler_login_v2_api import fail
+
+    response = fail(ValueError("/private/path password=secret"))
+    assert response.detail["code"] == "INVALID_COMMAND"
+    assert "secret" not in response.detail["message"]
+    assert "private" not in response.detail["message"]

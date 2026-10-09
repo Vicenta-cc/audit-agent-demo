@@ -15,7 +15,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 
-from .crawler_login_v2_manager import LoginV2Error
+from .crawler_login_v2_manager import LoginV2Error, safe_error_code, error_message
 from backend.application_auth.store import AuthenticationError, AuthorizationError
 
 
@@ -24,7 +24,8 @@ def fail(exc):
         return HTTPException(
             exc.status, detail={"code": exc.code, "message": exc.message}
         )
-    return HTTPException(409, detail={"code": str(exc), "message": str(exc)})
+    code = safe_error_code(exc, "INVALID_COMMAND")
+    return HTTPException(409, detail={"code": code, "message": error_message(code)})
 
 
 def create_login_v2_router(
@@ -101,7 +102,7 @@ def create_login_v2_router(
         return {k: op.get(k) for k in fields}
 
     def public_command(command):
-        return {
+        result = {
             k: command.get(k)
             for k in (
                 "command_id",
@@ -110,10 +111,16 @@ def create_login_v2_router(
                 "platform_status",
                 "result",
                 "error_code",
+                "error_message",
                 "created_at",
                 "updated_at",
             )
         }
+
+        if command.get("error_code"):
+            result["error_code"] = safe_error_code(command["error_code"])
+            result["error_message"] = error_message(result["error_code"])
+        return result
 
     @router.post("/api/crawler-account-login-sessions/{session_id}/ws-tickets")
     def ticket(
@@ -368,8 +375,10 @@ def create_login_v2_router(
                             await ws.send_json(
                                 {
                                     "type": "error",
-                                    "code": getattr(exc, "code", str(exc)),
-                                    "message": str(exc),
+                                    "code": safe_error_code(exc, "INVALID_COMMAND"),
+                                    "message": error_message(
+                                        safe_error_code(exc, "INVALID_COMMAND")
+                                    ),
                                     "command_id": value.get("command_id"),
                                 }
                             )

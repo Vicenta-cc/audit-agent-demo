@@ -43,6 +43,80 @@ DURABLE_ACTIONS = {
 }
 
 
+ERROR_MESSAGES = {
+    "LOGIN_FAILED": "登录未完成，请查看当前登录步骤后重试。",
+    "INVALID_COMMAND": "操作内容无效，请刷新登录窗口后重试。",
+    "ACCOUNT_BUSY": "已有账号正在登录或采集，请等待结束后重试。",
+    "ACCOUNT_DISABLED": "账号已停用，请先启用账号。",
+    "SESSION_OWNER_MISMATCH": "该登录窗口属于另一应用或浏览器会话，请重新打开。",
+    "OWNER_TOKEN_REQUIRED": "登录窗口信息已失效，请重新打开。",
+    "SESSION_NOT_FOUND": "登录窗口已失效，请检查登录记录或重新打开。",
+    "SESSION_ENDED": "本次登录已结束，请查看结果或重新登录。",
+    "SESSION_REPLACED": "应用登录状态已变化，请重新登录应用。",
+    "APPLICATION_AUTH_REVOKED": "应用登录或账号管理权限已失效，本次登录已停止。",
+    "AUTH_REVISION_CONFLICT": "账号登录信息已被更新，请重新检查账号状态。",
+    "IDENTITY_MISMATCH": "登录的抖音账号与绑定账号不一致，请使用正确账号重新扫码。",
+    "IDENTITY_UNCONFIRMED": "尚未确认抖音账号身份，请查看当前登录步骤后重试。",
+    "BROWSER_LOGIN_FAILED": "登录浏览器未能完成登录，请查看当前步骤或使用兼容模式。",
+    "STALE_POINT": "本次操作轨迹已过期，请在最新验证画面重新操作。",
+    "INPUT_OUTSIDE_AREA": "请在当前验证区域内操作。",
+    "IDENTITY_UNVERIFIED": "尚未确认抖音账号身份，请查看当前登录步骤后重试。",
+    "PROFILE_AUTHORITY_UNCONFIRMED": "浏览器登录信息尚未准备完成，请重新检查。",
+    "SAVE_FAILED": "登录信息保存失败，请从登录记录恢复，暂勿重新扫码。",
+    "CAPTURE_FAILED": "验证画面暂时无法获取，请重新连接或使用兼容模式。",
+    "MEDIA_CHANNEL_FAILED": "验证画面连接中断，请重新连接登录窗口。",
+    "MEDIA_CHANNEL_EOF": "验证画面连接已关闭，请查看登录结果后重试。",
+    "CONTROL_CHANNEL_FAILED": "登录浏览器连接中断，请查看登录记录后重试。",
+    "BROWSER_DISCONNECTED": "登录浏览器已断开，请查看登录记录后重试。",
+    "BROWSER_ERROR": "登录浏览器暂时不可用，请重新尝试。",
+    "BROWSER_START_FAILED": "登录浏览器未能启动，请检查运行环境后重试。",
+    "CONTROLLER_REPLACED": "登录窗口已重新连接，本次旧操作未执行。",
+    "CONTROLLER_TIMEOUT": "登录窗口连接超时，请重新连接。",
+    "TICKET_INVALID": "连接凭据已失效，请重新连接登录窗口。",
+    "TICKET_LIMIT": "连接请求过于频繁，请稍后重试。",
+    "INPUT_BACKPRESSURE": "操作较多，请稍等当前操作完成后再试。",
+    "STALE_STATE": "登录步骤已变化，请按当前页面重新操作。",
+    "STALE_CHALLENGE": "验证码已刷新，请在最新验证画面操作。",
+    "STALE_AREA": "验证区域已变化，请在最新画面操作。",
+    "STALE_SEQUENCE": "本次操作已过期，请按当前页面重新操作。",
+    "ACTION_NOT_AVAILABLE": "当前登录步骤不支持该操作，请查看当前页面。",
+    "COMMAND_ID_CONFLICT": "操作记录不一致，请重新确认当前步骤后再试。",
+    "COMMAND_FINGERPRINT_UNAVAILABLE": "原操作记录暂时无法核验，请勿重复提交。",
+    "COMMAND_NOT_DISPATCHABLE": "该操作已经处理，请查询原操作结果。",
+    "RECOVERY_REQUIRED": "上次登录已中断，请从登录记录恢复。",
+    "RECOVERY_SOURCE_REQUIRED": "请选择需要恢复的登录记录。",
+    "RECOVERY_SOURCE_FORBIDDEN": "无权恢复该登录记录。",
+    "RECOVERY_SOURCE_NOT_RECOVERABLE": "该登录记录当前不能恢复，请查看其状态。",
+    "RECOVERY_SOURCE_SUPERSEDED": "账号登录信息已更新，该旧记录不能再恢复。",
+    "OPERATION_REQUEST_CONFLICT": "本次请求与原登录操作不一致，请重新打开登录窗口。",
+    "OPERATION_NOT_ACTIVE": "本次登录操作已结束，请查看原操作结果。",
+    "OPERATION_EXPIRED": "登录记录已失效，请重新检查账号状态。",
+    "OPERATION_MISMATCH": "操作不属于当前登录窗口，请重新打开。",
+    "LOGIN_TIMEOUT": "本次登录已超时，请重新获取二维码。",
+    "REUSE_CHECK_FAILED": "登录状态未能通过重新打开检查，请重新登录。",
+    "SMS_FORM_UNAVAILABLE": "短信输入步骤暂时不可用，请查看当前登录页面。",
+    "PLATFORM_REJECTED": "平台未接受本次操作，请按页面提示处理。",
+    "SERVER_RESTARTED": "登录服务已重启，请从登录记录恢复。",
+    "INVALID_LOGIN_OPTIONS": "登录参数无效，请重新打开登录窗口。",
+    "INVALID_PROTOCOLS": "当前登录方式不受支持，请刷新页面。",
+    "IDEMPOTENCY_KEY_REQUIRED": "登录请求信息不完整，请重新打开登录窗口。",
+    "RECOVERY_REQUIRES_V2": "当前登录方式不支持恢复，请启用新版登录。",
+    "PROTOCOL_NOT_AVAILABLE": "当前服务未启用此登录方式，请使用可用方式。",
+    "CURRENT_PHASE_UNKNOWN": "暂未识别当前登录步骤，请打开验证面板人工处理。",
+}
+
+
+def safe_error_code(value, fallback="LOGIN_FAILED"):
+    raw = getattr(value, "code", value)
+    if isinstance(value, ValueError) and not hasattr(value, "code"):
+        raw = str(value)
+    return raw if isinstance(raw, str) and raw in ERROR_MESSAGES else fallback
+
+
+def error_message(code):
+    return ERROR_MESSAGES.get(code, ERROR_MESSAGES["LOGIN_FAILED"])
+
+
 def digest(value):
     return hashlib.sha256(str(value).encode()).hexdigest()
 
@@ -53,7 +127,9 @@ def utc():
 
 class LoginV2Error(ValueError):
     def __init__(self, code, message=None, status=409):
-        self.code, self.message, self.status = code, message or code, status
+        self.code = safe_error_code(code)
+        self.message = error_message(self.code)
+        self.status = status
         super().__init__(self.message)
 
 
@@ -283,7 +359,10 @@ class CrawlerLoginV2Manager:
                     "controller_state": "detached",
                     "available_actions": [],
                     "result": None,
-                    "error": {"code": op["error_code"], "message": op["error_code"]},
+                    "error": {
+                        "code": safe_error_code(op["error_code"]),
+                        "message": error_message(op["error_code"]),
+                    },
                 }, False
             if op["stage"] != "created":
                 raise LoginV2Error("RECOVERY_REQUIRED")
@@ -369,9 +448,11 @@ class CrawlerLoginV2Manager:
             ]
             if (
                 browser_mode == "compatibility"
-                or settings.crawler_login_v2_browser_mode == "headed"
+                or settings.crawler_login_v2_browser_mode == "compatibility"
             ):
                 args.append("--headed")
+            if settings.crawler_login_v2_resource_policy == "precise":
+                args.append("--block-media")
             if account.get("platform_account_id"):
                 args.extend(
                     ["--expected-platform-account-id", account["platform_account_id"]]
@@ -716,7 +797,9 @@ class CrawlerLoginV2Manager:
                                     s.operation_id, c["command_id"]
                                 )
                         except Exception as exc:
-                            self._command_rejected(s, c, getattr(exc, "code", str(exc)))
+                            self._command_rejected(
+                                s, c, safe_error_code(exc, "INVALID_COMMAND")
+                            )
                             continue
                     data = (json.dumps(message, separators=(",", ":")) + "\n").encode()
                 deadline = time.monotonic() + 2
@@ -743,6 +826,7 @@ class CrawlerLoginV2Manager:
         self._notify(s)
 
     def _command_rejected(self, s, c, code):
+        code = safe_error_code(code, "INVALID_COMMAND")
         if self.operations.get_command(s.operation_id, c["command_id"]):
             self.operations.finish_command(
                 s.operation_id,
@@ -759,6 +843,7 @@ class CrawlerLoginV2Manager:
                 "execution_status": "rejected",
                 "platform_status": "not_applicable",
                 "error_code": code,
+                "error_message": error_message(code),
             },
         )
 
@@ -894,6 +979,12 @@ class CrawlerLoginV2Manager:
                         target=self._commit_candidate, args=(s,), daemon=True
                     ).start()
             elif kind == "command_result":
+                if event.get("error_code"):
+                    event = {
+                        **event,
+                        "error_code": safe_error_code(event["error_code"]),
+                        "error_message": error_message(event["error_code"]),
+                    }
                 command_id = event.get("command_id")
                 if self.operations.get_command(s.operation_id, command_id):
                     self.operations.finish_command(
@@ -952,19 +1043,20 @@ class CrawlerLoginV2Manager:
                 self.operations.mark_stage(
                     s.operation_id,
                     "recovery_required",
-                    error_code=getattr(exc, "code", "SAVE_FAILED"),
+                    error_code=safe_error_code(exc, "SAVE_FAILED"),
                 )
                 self._finish(
-                    s, "failed", getattr(exc, "code", "SAVE_FAILED"), recoverable=True
+                    s, "failed", safe_error_code(exc, "SAVE_FAILED"), recoverable=True
                 )
             finally:
                 s.committing = False
 
     def _set_terminal(self, s, phase, code):
+        code = safe_error_code(code) if code else None
         s.snapshot.update(
             phase=phase,
             status=phase_to_status(phase),
-            error={"code": code, "message": code} if code else None,
+            error={"code": code, "message": error_message(code)} if code else None,
             state_revision=s.snapshot["state_revision"] + 1,
             controller_state="detached",
             available_actions=[],
@@ -981,6 +1073,7 @@ class CrawlerLoginV2Manager:
         self._notify(s)
 
     def _finish(self, s, phase, code=None, recoverable=False):
+        code = safe_error_code(code) if code else None
         with self._lock:
             if s.snapshot["phase"] in TERMINAL:
                 return

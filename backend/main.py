@@ -1632,6 +1632,7 @@ async def start_crawler_account_login(
     principal: Principal = Depends(principal_provider),
 ):
     account = _require_crawler_account(account_id, principal, permission="manage")
+    using_v2 = False
     try:
         body = await request.json() if await request.body() else {}
         if not isinstance(body, dict) or set(body) - {
@@ -1657,6 +1658,7 @@ async def start_crawler_account_login(
                 for s in crawler_account_login_manager._sessions.values()
             ):
                 raise LoginV2Error("ACCOUNT_BUSY")
+            using_v2 = True
             raw_cookie = request.cookies.get(settings.app_auth_cookie_name, "")
 
             def authorize():
@@ -1707,8 +1709,12 @@ async def start_crawler_account_login(
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
+        if using_v2:
+            raise login_v2_http_error(exc) from exc
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except RuntimeError as exc:
+        if using_v2:
+            raise login_v2_http_error(LoginV2Error("BROWSER_START_FAILED", status=503)) from exc
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     response.headers["Cache-Control"] = "no-store"
     return {"item": session}
