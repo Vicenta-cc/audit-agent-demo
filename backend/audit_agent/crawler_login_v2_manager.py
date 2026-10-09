@@ -256,6 +256,8 @@ class CrawlerLoginV2Manager:
                 intent=intent,
                 source_operation_id=source_operation_id,
             )
+            if op["stage"] == "committed":
+                return self._committed_snapshot(op), False
             for s in self.sessions.values():
                 if s.operation_id == op["id"]:
                     self._owner(s, user_id, app_session_id, owner_token)
@@ -266,8 +268,23 @@ class CrawlerLoginV2Manager:
                     op["id"], "failed", error_code="ACCOUNT_BUSY"
                 )
                 return copy.deepcopy(active[0].snapshot), False
-            if op["stage"] == "committed":
-                return self._committed_snapshot(op), False
+            if op["stage"] in {"failed", "cancelled", "expired", "superseded"}:
+                phase = op["stage"] if op["stage"] in TERMINAL else "failed"
+                return {
+                    "protocol_version": 2,
+                    "engine": "v2",
+                    "id": "",
+                    "operation_id": op["id"],
+                    "account_id": op["account_id"],
+                    "phase": phase,
+                    "status": phase_to_status(phase),
+                    "state_revision": 1,
+                    "controller_epoch": 0,
+                    "controller_state": "detached",
+                    "available_actions": [],
+                    "result": None,
+                    "error": {"code": op["error_code"], "message": op["error_code"]},
+                }, False
             if op["stage"] != "created":
                 raise LoginV2Error("RECOVERY_REQUIRED")
             try:
@@ -617,11 +634,9 @@ class CrawlerLoginV2Manager:
                 else None
             )
             durable = kind in DURABLE_ACTIONS or kind == "manual_action"
-            old = (
-                self.operations.get_command(s.operation_id, c["command_id"])
-                if durable
-                else None
-            )
+            old = self.operations.get_command(s.operation_id, c["command_id"])
+            if old and not durable:
+                raise LoginV2Error("COMMAND_ID_CONFLICT")
             if old:
                 return self.operations.record_command(
                     s.operation_id,
@@ -910,8 +925,8 @@ class CrawlerLoginV2Manager:
             try:
                 if (
                     not candidate
-                    or not candidate.get("identity_verified")
-                    or not candidate.get("reuse_verified")
+                    or candidate.get("identity_verified") is not True
+                    or candidate.get("reuse_verified") is not True
                 ):
                     raise LoginV2Error("IDENTITY_UNVERIFIED")
                 if s.authorize:

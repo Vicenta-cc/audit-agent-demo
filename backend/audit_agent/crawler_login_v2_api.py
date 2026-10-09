@@ -10,6 +10,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Request,
+    Response,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -37,6 +38,9 @@ def create_login_v2_router(
     allowed_origins,
 ):
     router = APIRouter()
+
+    def no_store(response: Response):
+        response.headers["Cache-Control"] = "private, no-store"
 
     def session_key(principal):
         return principal.session_id or "local"
@@ -127,7 +131,9 @@ def create_login_v2_router(
             raise fail(exc) from exc
 
     @router.post(
-        "/api/crawler-account-login-sessions/{session_id}/actions", status_code=202
+        "/api/crawler-account-login-sessions/{session_id}/actions",
+        status_code=202,
+        dependencies=[Depends(no_store)],
     )
     def action(
         session_id: str,
@@ -170,7 +176,10 @@ def create_login_v2_router(
         except ValueError as exc:
             raise fail(exc) from exc
 
-    @router.get("/api/crawler-accounts/{account_id}/login-operations")
+    @router.get(
+        "/api/crawler-accounts/{account_id}/login-operations",
+        dependencies=[Depends(no_store)],
+    )
     def list_operations(
         account_id: str,
         recoverable: bool = False,
@@ -201,7 +210,8 @@ def create_login_v2_router(
         }
 
     @router.get(
-        "/api/crawler-accounts/{account_id}/login-operations/{operation_id}/commands/{command_id}"
+        "/api/crawler-accounts/{account_id}/login-operations/{operation_id}/commands/{command_id}",
+        dependencies=[Depends(no_store)],
     )
     def get_command(
         account_id: str,

@@ -43,7 +43,7 @@ print(json.dumps({'type':'interactive'}), flush=True)
 print(json.dumps({'type':'frame','jpeg':base64.b64encode(b'\\xff\\xd8frame').decode()}), flush=True)
 event = json.loads(sys.stdin.readline())
 assert event == {'type':'text','text':'123456'}
-print(json.dumps({'type':'success','auth_state':{'cookies':[{'name':'sessionid','value':'test-secret'}],'origins':[]}}), flush=True)
+print(json.dumps({'type':'success','platform_account_id':'identity','auth_state':{'cookies':[{'name':'sessionid','value':'test-secret'}],'origins':[]}}), flush=True)
 ''')
         store = CrawlerAccountStore(root / 'accounts.sqlite3')
         cipher = AuthStateCipher(key_file=root / 'auth.key')

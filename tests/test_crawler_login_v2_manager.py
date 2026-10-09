@@ -421,3 +421,91 @@ def test_wrong_identity_cleanup_and_existing_invalidation_preserve_risk(manager)
         m.operations.get(s["operation_id"])["expected_auth_revision"]
         == m.store.get(a["id"])["auth_state_revision"]
     )
+
+
+@pytest.mark.parametrize(
+    "outcome", ["success", "failed", "expired", "cancelled", "timeout"]
+)
+def test_protected_legacy_douyin_preserves_risk(manager, outcome):
+    from datetime import datetime, timedelta, timezone
+    from backend.audit_agent.crawler_login_manager import (
+        CrawlerAccountLoginManager,
+        LoginSession,
+    )
+
+    m, a = manager
+    m.store.mark_cooldown(a["id"], "risk message", "2099-01-01", failure_kind="verify")
+    legacy = CrawlerAccountLoginManager(m.store, m.cipher)
+    now = datetime.now(timezone.utc)
+    legacy._sessions["legacy"] = LoginSession(
+        id="legacy",
+        account_id=a["id"],
+        platform="dy",
+        status="waiting_scan",
+        created_at=now.isoformat(),
+        updated_at=now.isoformat(),
+        expires_at=(
+            now + timedelta(seconds=-1 if outcome == "timeout" else 30)
+        ).isoformat(),
+    )
+    if outcome == "success":
+        legacy._handle_event(
+            "legacy",
+            {
+                "type": "success",
+                "auth_state": {"cookies": []},
+                "platform_account_id": "identity",
+            },
+        )
+    elif outcome == "cancelled":
+        legacy.cancel("legacy")
+    elif outcome == "timeout":
+        legacy.get("legacy")
+    else:
+        legacy._fail("legacy", "login error", status=outcome)
+    account = m.store.get(a["id"])
+    assert account["cooldown_until"] == "2099-01-01"
+    assert (
+        account["failure_kind"] == "verify" and account["last_error"] == "risk message"
+    )
+
+
+@pytest.mark.parametrize("identity", ["", "wrong"])
+def test_legacy_douyin_rejects_unverified_identity(manager, identity):
+    from datetime import datetime, timedelta, timezone
+    from backend.audit_agent.crawler_login_manager import (
+        CrawlerAccountLoginManager,
+        LoginSession,
+    )
+
+    m, a = manager
+    m.store.save_douyin_auth_state(a["id"], m.cipher.encrypt({"cookies": []}), "bound")
+    m.store.mark_cooldown(a["id"], "risk message", "2099-01-01", failure_kind="verify")
+    legacy = CrawlerAccountLoginManager(m.store, m.cipher)
+    now = datetime.now(timezone.utc)
+    legacy._sessions["legacy"] = LoginSession(
+        id="legacy",
+        account_id=a["id"],
+        platform="dy",
+        status="waiting_scan",
+        created_at=now.isoformat(),
+        updated_at=now.isoformat(),
+        expires_at=(now + timedelta(seconds=30)).isoformat(),
+    )
+    legacy._handle_event(
+        "legacy",
+        {
+            "type": "success",
+            "auth_state": {"cookies": []},
+            "platform_account_id": identity,
+        },
+    )
+    assert legacy.get("legacy")["status"] == "failed"
+    account = m.store.get(a["id"])
+    assert (
+        account["status"] == "login_required"
+        and account["platform_account_id"] == "bound"
+    )
+    assert (
+        account["failure_kind"] == "verify" and account["last_error"] == "risk message"
+    )

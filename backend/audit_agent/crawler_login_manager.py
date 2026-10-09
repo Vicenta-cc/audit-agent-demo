@@ -594,6 +594,13 @@ class CrawlerAccountLoginManager:
                     if not session or session.status not in ACTIVE_LOGIN_STATUSES:
                         return
                     if session.platform == "dy":
+                        expected = self.store.get(session.account_id)
+                        if not platform_account_id:
+                            self.store.mark_douyin_auth_invalid(session.account_id, status="login_required")
+                            raise ValueError("IDENTITY_UNVERIFIED")
+                        if expected and expected.get("platform_account_id") and expected["platform_account_id"] != platform_account_id:
+                            self.store.mark_douyin_auth_invalid(session.account_id, status="login_required")
+                            raise ValueError("IDENTITY_MISMATCH")
                         account = self.store.save_douyin_auth_state(
                             session.account_id, ciphertext, platform_account_id or ""
                         )
