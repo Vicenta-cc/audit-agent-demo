@@ -22,10 +22,17 @@ const phases: Record<string, string> = {
   db_commit: "正在保存登录信息",
   done: "登录信息已保存",
 };
-type CommandOutcome = { platform_status?: string; execution_status?: string; error_message?: string };
+type CommandOutcome = {
+  platform_status?: string;
+  execution_status?: string;
+  error_message?: string;
+};
 function commandHasDefinitiveOutcome(result: CommandOutcome): boolean {
-  return ["confirmed", "rejected"].includes(result.platform_status || "") ||
-    (result.platform_status === "not_applicable" && ["not_executed", "rejected"].includes(result.execution_status || ""));
+  return (
+    ["confirmed", "rejected"].includes(result.platform_status || "") ||
+    (result.platform_status === "not_applicable" &&
+      ["not_executed", "rejected"].includes(result.execution_status || ""))
+  );
 }
 
 export function CrawlerLoginV2View({
@@ -158,9 +165,13 @@ export function CrawlerLoginV2View({
                     pendingRef.current = "";
                     window.sessionStorage.removeItem(pendingStorageKey);
                   } else if (commandHasDefinitiveOutcome(result.item)) {
-                    setPending(""); pendingRef.current = "";
+                    setPending("");
+                    pendingRef.current = "";
                     window.sessionStorage.removeItem(pendingStorageKey);
-                    setError(result.item.error_message || "操作未完成，请查看当前登录步骤后重试");
+                    setError(
+                      result.item.error_message ||
+                        "操作未完成，请查看当前登录步骤后重试",
+                    );
                   } else
                     setError(
                       "上次操作结果尚未确认，请勿重复提交，可查看当前登录步骤",
@@ -169,21 +180,30 @@ export function CrawlerLoginV2View({
                 .catch(() => setError("上次操作结果尚未确认，请勿重复提交"));
             }
           } else if (message.type === "command_result") {
-            if (["failed", "rejected", "not_executed"].includes(message.execution_status) && message.error_message) setError(message.error_message);
+            if (
+              ["failed", "rejected", "not_executed"].includes(
+                message.execution_status,
+              ) &&
+              message.error_message
+            )
+              setError(message.error_message);
             if (message.command_id === pendingRef.current) {
-              if (
-                !commandHasDefinitiveOutcome(message)
-              )
+              if (!commandHasDefinitiveOutcome(message))
                 setError("正在确认平台处理结果，请勿重复提交");
               else {
                 setPending("");
                 pendingRef.current = "";
                 window.sessionStorage.removeItem(pendingStorageKey);
                 if (
-                  ["not_executed", "failed", "rejected"].includes(message.execution_status) ||
+                  ["not_executed", "failed", "rejected"].includes(
+                    message.execution_status,
+                  ) ||
                   message.platform_status === "rejected"
                 )
-                  setError(message.error_message || "操作未完成，请查看当前登录步骤后重试");
+                  setError(
+                    message.error_message ||
+                      "操作未完成，请查看当前登录步骤后重试",
+                  );
               }
             }
           } else if (message.type === "error") {
@@ -201,8 +221,15 @@ export function CrawlerLoginV2View({
               window.sessionStorage.removeItem(pendingStorageKey);
             }
           } else if (message.type === "notice") {
-            if (["QUEUE", "GESTURE_EXPIRED", "INPUT_BACKPRESSURE"].includes(message.code)) setGestureReset(value => value + 1);
-            setError(message.message || "验证操作未完成，请根据当前画面重新操作");
+            if (
+              ["QUEUE", "GESTURE_EXPIRED", "INPUT_BACKPRESSURE"].includes(
+                message.code,
+              )
+            )
+              setGestureReset((value) => value + 1);
+            setError(
+              message.message || "验证操作未完成，请根据当前画面重新操作",
+            );
           } else if (message.type === "ping")
             created.socket.send(JSON.stringify({ type: "pong" }));
         };
@@ -315,7 +342,9 @@ export function CrawlerLoginV2View({
       ? Math.min(fallback, field.max_length)
       : fallback;
   };
-  const terminal = ["success", "failed", "expired", "cancelled"].includes(snapshot.status);
+  const terminal = ["success", "failed", "expired", "cancelled"].includes(
+    snapshot.status,
+  );
   const message =
     typeof snapshot.error === "string"
       ? snapshot.error
@@ -326,14 +355,21 @@ export function CrawlerLoginV2View({
         <strong>{phases[snapshot.phase] || "正在确认登录步骤"}</strong>
         {!terminal ? <small>{connection}</small> : null}
       </div>
-      {["qr_ready", "qr_expired"].includes(snapshot.phase) && (snapshot.qr || snapshot.phase === "qr_expired") ? (
+      {["qr_ready", "qr_expired"].includes(snapshot.phase) &&
+      (snapshot.qr || snapshot.phase === "qr_expired") ? (
         <div className="crawler-login-v2-qr">
-          {snapshot.qr?.image_data_url ? <img
-            src={snapshot.qr.image_data_url}
-            alt="抖音登录二维码"
-            className={snapshot.qr.state === "expired" ? "is-expired" : ""}
-          /> : null}
-          <p>{snapshot.phase === "qr_expired" ? "请刷新二维码后重新扫码" : "扫码后在手机上确认"}</p>
+          {snapshot.qr?.image_data_url ? (
+            <img
+              src={snapshot.qr.image_data_url}
+              alt="抖音登录二维码"
+              className={snapshot.qr.state === "expired" ? "is-expired" : ""}
+            />
+          ) : null}
+          <p>
+            {snapshot.phase === "qr_expired"
+              ? "请刷新二维码后重新扫码"
+              : "扫码后在手机上确认"}
+          </p>
           {!terminal && snapshot.available_actions.includes("refresh_qr") ? (
             <Button
               disabled={!available("refresh_qr")}
@@ -393,7 +429,11 @@ export function CrawlerLoginV2View({
             >
               发送验证码
             </Button>
-            <Button type="submit" variant="primary" disabled={!available("submit_sms") || !code}>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!available("submit_sms") || !code}
+            >
               提交验证码
             </Button>
           </div>
@@ -451,7 +491,9 @@ export function CrawlerLoginV2View({
           。
         </p>
       ) : null}
-      {pending && !terminal ? <p role="status">正在等待平台处理结果，请勿重复提交</p> : null}
+      {pending && !terminal ? (
+        <p role="status">正在等待平台处理结果，请勿重复提交</p>
+      ) : null}
       {error || message ? (
         <p role="alert" className="crawler-login-v2-error">
           {error || message}
