@@ -422,3 +422,25 @@ test("missing live session offers explicit recovery without resetting credential
   ).toBeVisible();
   expect(intent).toBe("recover");
 });
+
+test('expired QR without an image can refresh, and rejected command shows safe server message', async ({ page }) => {
+  const expired = { ...snapshot('qr_expired'), qr: null };
+  let socket: WebSocketRoute;
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => route.fulfill({ json: { item: expired } }));
+  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'fixture-ticket', expires_in: 30 } }));
+  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => {
+    socket = ws;
+    ws.onMessage(data => {
+      const command = JSON.parse(String(data));
+      if (command.type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: expired }));
+      else if (command.action === 'refresh_qr') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() }));
+      else if (command.action === 'submit_sms') ws.send(JSON.stringify({ type: 'command_result', command_id: command.command_id, execution_status: 'rejected', platform_status: 'rejected', error_code: 'SOME_INTERNAL_CODE', error_message: '验证码不正确，请重新输入' }));
+    });
+  });
+  await page.goto('/tests/crawlerLoginV2.html');
+  await expect(page.getByText('二维码已过期', { exact: true })).toBeVisible(); await expect(page.getByAltText('抖音登录二维码')).toHaveCount(0);
+  await page.getByRole('button', { name: '刷新二维码' }).click(); await expect(page.getByAltText('抖音登录二维码')).toBeVisible();
+  socket!.send(JSON.stringify({ type: 'snapshot', item: snapshot('sms_required', 2) }));
+  await page.getByLabel('短信验证码').fill('123456'); await page.getByRole('button', { name: '提交验证码' }).click();
+  await expect(page.getByRole('alert')).toHaveText('验证码不正确，请重新输入'); await expect(page.getByText('SOME_INTERNAL_CODE')).toHaveCount(0);
+});

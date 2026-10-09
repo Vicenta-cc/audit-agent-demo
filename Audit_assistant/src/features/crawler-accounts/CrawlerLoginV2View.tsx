@@ -115,16 +115,7 @@ export function CrawlerLoginV2View({
             }
             return;
           }
-          const fieldLimit = (name: string, fallback: number) => {
-            const field = snapshot.sms?.fields?.find(
-              (field) => typeof field !== "string" && field.name === name,
-            );
-            return typeof field === "object" && field.max_length
-              ? Math.min(fallback, field.max_length)
-              : fallback;
-          };
-          const terminal = ["success", "failed", "expired", "cancelled"].includes(snapshot.status);
-  const message = JSON.parse(event.data);
+          const message = JSON.parse(event.data);
           if (message.type === "snapshot" || message.type === "state_changed") {
             const next = message.item as LoginSnapshot;
             if (next.id !== initial.id) return;
@@ -147,7 +138,7 @@ export function CrawlerLoginV2View({
               needsResultQuery &&
               next.controller_state === "attached"
             )
-              void apiRequest<{ item: { platform_status?: string } }>(
+              void apiRequest<{ item: { platform_status?: string; execution_status?: string; error_message?: string } }>(
                 `/api/crawler-accounts/${next.account_id}/login-operations/${next.operation_id}/commands/${pendingRef.current}`,
                 { headers: loginControlHeaders() },
               )
@@ -157,6 +148,10 @@ export function CrawlerLoginV2View({
                     setPending("");
                     pendingRef.current = "";
                     window.sessionStorage.removeItem(pendingStorageKey);
+                  } else if (["failed", "rejected"].includes(result.item.execution_status || "") || result.item.platform_status === "rejected") {
+                    setPending(""); pendingRef.current = "";
+                    window.sessionStorage.removeItem(pendingStorageKey);
+                    setError(result.item.error_message || "操作未完成，请查看当前登录步骤后重试");
                   } else
                     setError(
                       "上次操作结果尚未确认，请勿重复提交，可查看当前登录步骤",
@@ -178,7 +173,7 @@ export function CrawlerLoginV2View({
                   ["failed", "rejected"].includes(message.execution_status) ||
                   message.platform_status === "rejected"
                 )
-                  setError("平台未接受本次操作，请检查输入和当前步骤后重试");
+                  setError(message.error_message || "操作未完成，请查看当前登录步骤后重试");
               }
             }
           } else if (message.type === "error") {
@@ -318,14 +313,14 @@ export function CrawlerLoginV2View({
         <strong>{phases[snapshot.phase] || "正在确认登录步骤"}</strong>
         {!terminal ? <small>{connection}</small> : null}
       </div>
-      {snapshot.qr && ["qr_ready", "qr_expired"].includes(snapshot.phase) ? (
+      {["qr_ready", "qr_expired"].includes(snapshot.phase) && (snapshot.qr || snapshot.phase === "qr_expired") ? (
         <div className="crawler-login-v2-qr">
-          <img
+          {snapshot.qr?.image_data_url ? <img
             src={snapshot.qr.image_data_url}
             alt="抖音登录二维码"
             className={snapshot.qr.state === "expired" ? "is-expired" : ""}
-          />
-          <p>扫码后在手机上确认</p>
+          /> : null}
+          <p>{snapshot.phase === "qr_expired" ? "请刷新二维码后重新扫码" : "扫码后在手机上确认"}</p>
           {!terminal && snapshot.available_actions.includes("refresh_qr") ? (
             <Button
               disabled={!available("refresh_qr")}
