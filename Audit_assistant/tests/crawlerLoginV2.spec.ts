@@ -444,3 +444,35 @@ test('expired QR without an image can refresh, and rejected command shows safe s
   await page.getByLabel('短信验证码').fill('123456'); await page.getByRole('button', { name: '提交验证码' }).click();
   await expect(page.getByRole('alert')).toHaveText('验证码不正确，请重新输入'); await expect(page.getByText('SOME_INTERNAL_CODE')).toHaveCount(0);
 });
+
+test('stale state rejected before execution releases pending only for a new user retry', async ({ page }) => {
+  const commands: any[] = [];
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => route.fulfill({ json: { item: snapshot('sms_required') } }));
+  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => {
+    const command = JSON.parse(String(data));
+    if (command.type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot('sms_required') }));
+    else {
+      commands.push(command);
+      ws.send(JSON.stringify({ type: 'error', code: 'STALE_STATE', message: '登录步骤已变化，请重试', command_id: command.command_id, execution_status: 'rejected', platform_status: 'not_applicable' }));
+    }
+  }));
+  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByText('已连接', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '发送验证码' }).click(); await expect(page.getByRole('button', { name: '发送验证码' })).toBeEnabled();
+  await expect(page.getByRole('alert')).toHaveText('登录步骤已变化，请重试'); expect(commands).toHaveLength(1);
+  await page.getByRole('button', { name: '发送验证码' }).click(); await expect.poll(() => commands.length).toBe(2);
+  expect(commands[0].command_id).not.toBe(commands[1].command_id);
+});
+for (const executionStatus of ['not_executed', 'rejected']) {
+  test(`reconnect query ${executionStatus} not_applicable releases pending without replay`, async ({ page }) => {
+    let connections = 0; let queried = 0; const commands: any[] = [];
+    await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => route.fulfill({ json: { item: snapshot('sms_required') } }));
+    await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+    await page.route('**/api/crawler-accounts/account-fixture/login-operations/operation-fixture/commands/*', route => { queried++; return route.fulfill({ json: { item: { execution_status: executionStatus, platform_status: 'not_applicable', error_message: '上次操作未执行，可以重新提交' } } }); });
+    await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => {
+      connections++; ws.onMessage(data => { const command = JSON.parse(String(data)); if (command.type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('sms_required'), controller_epoch: connections } })); else { commands.push(command); ws.close({ code: 1011 }); } });
+    });
+    await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByText('已连接', { exact: true })).toBeVisible(); await page.getByRole('button', { name: '发送验证码' }).click();
+    await expect.poll(() => queried).toBe(1); await expect(page.getByRole('button', { name: '发送验证码' })).toBeEnabled(); await expect(page.getByRole('alert')).toHaveText('上次操作未执行，可以重新提交'); expect(commands).toHaveLength(1);
+  });
+}

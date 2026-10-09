@@ -22,6 +22,12 @@ const phases: Record<string, string> = {
   db_commit: "正在保存登录信息",
   done: "登录信息已保存",
 };
+type CommandOutcome = { platform_status?: string; execution_status?: string; error_message?: string };
+function commandHasDefinitiveOutcome(result: CommandOutcome): boolean {
+  return ["confirmed", "rejected"].includes(result.platform_status || "") ||
+    (result.platform_status === "not_applicable" && ["not_executed", "rejected"].includes(result.execution_status || ""));
+}
+
 export function CrawlerLoginV2View({
   initial,
   onSnapshot,
@@ -137,18 +143,20 @@ export function CrawlerLoginV2View({
               pendingRef.current &&
               needsResultQuery &&
               next.controller_state === "attached"
-            )
-              void apiRequest<{ item: { platform_status?: string; execution_status?: string; error_message?: string } }>(
+            ) {
+              const queriedCommandId = pendingRef.current;
+              void apiRequest<{ item: CommandOutcome }>(
                 `/api/crawler-accounts/${next.account_id}/login-operations/${next.operation_id}/commands/${pendingRef.current}`,
                 { headers: loginControlHeaders() },
               )
                 .then((result) => {
+                  if (pendingRef.current !== queriedCommandId) return;
                   needsResultQuery = false;
                   if (result.item.platform_status === "confirmed") {
                     setPending("");
                     pendingRef.current = "";
                     window.sessionStorage.removeItem(pendingStorageKey);
-                  } else if (["failed", "rejected"].includes(result.item.execution_status || "") || result.item.platform_status === "rejected") {
+                  } else if (commandHasDefinitiveOutcome(result.item)) {
                     setPending(""); pendingRef.current = "";
                     window.sessionStorage.removeItem(pendingStorageKey);
                     setError(result.item.error_message || "操作未完成，请查看当前登录步骤后重试");
@@ -158,11 +166,11 @@ export function CrawlerLoginV2View({
                     );
                 })
                 .catch(() => setError("上次操作结果尚未确认，请勿重复提交"));
+            }
           } else if (message.type === "command_result") {
             if (message.command_id === pendingRef.current) {
               if (
-                message.platform_status === "unknown" ||
-                message.platform_status === "pending"
+                !commandHasDefinitiveOutcome(message)
               )
                 setError("正在确认平台处理结果，请勿重复提交");
               else {
@@ -170,7 +178,7 @@ export function CrawlerLoginV2View({
                 pendingRef.current = "";
                 window.sessionStorage.removeItem(pendingStorageKey);
                 if (
-                  ["failed", "rejected"].includes(message.execution_status) ||
+                  ["not_executed", "failed", "rejected"].includes(message.execution_status) ||
                   message.platform_status === "rejected"
                 )
                   setError(message.error_message || "操作未完成，请查看当前登录步骤后重试");
@@ -184,7 +192,7 @@ export function CrawlerLoginV2View({
             );
             if (
               message.command_id === pendingRef.current &&
-              message.execution_status === "rejected"
+              commandHasDefinitiveOutcome(message)
             ) {
               setPending("");
               pendingRef.current = "";
