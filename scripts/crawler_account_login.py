@@ -381,6 +381,21 @@ async def rendered_link_candidates(page, selector: str) -> list[dict]:
 
 async def identify_logged_in_account(platform: str, context) -> str:
     """Passively identify the current account without making an extra platform request."""
+    if platform == "dy":
+        # An open /user/<id> may be a video author's page, never proof of self.
+        # Require a visible personal-menu marker and reject conflicting pages or
+        # selectors instead of returning whichever candidate was visited first.
+        personal_ids = set()
+        for candidate_page in list(context.pages):
+            for selector, _ in IDENTITY_LINK_SELECTORS["dy"]:
+                personal_ids.update(
+                    extract_platform_account_id("dy", candidate.get("href", ""))
+                    for candidate in await rendered_link_candidates(candidate_page, selector)
+                    if candidate_is_personal_link("dy", candidate, require_marker=True)
+                )
+        personal_ids.discard("")
+        return next(iter(personal_ids)) if len(personal_ids) == 1 else ""
+
     for candidate_page in list(context.pages):
         current_id = extract_platform_account_id(platform, candidate_page.url)
         if current_id:
