@@ -11,8 +11,8 @@ from test_crawler_login_v2_manager import manager as manager, wait_until
 
 
 @pytest.fixture
-def api(manager, tmp_path):
-    m, a = manager
+def api(tmp_path, request):
+    m, a = request.getfixturevalue("manager")
     auth = AuthStore(tmp_path / "auth.db")
     user = auth.create_user(username="owner", password="long password 123456")
     auth.create_user(username="other", password="long password 123456")
