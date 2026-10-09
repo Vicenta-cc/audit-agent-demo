@@ -211,8 +211,7 @@ def test_real_helper_commit_risk_and_profile_reuse(real_login):
     snapshot = complete_fixture_login(manager, account, requests)
     sid = snapshot['id']
     wait_for(lambda: manager.sessions[sid].snapshot['phase'] == 'done', manager, sid)
-    wait_for(lambda: manager.sessions[sid].stopped.is_set())
-    wait_for(lambda: all(h.closed for h in manager.sessions[sid].handles))
+    wait_for(lambda: manager.sessions[sid].cleanup_done.is_set())
     saved = manager.store.get(account['id'])
     assert saved['platform_account_id'] == 'fixture-account'
     assert saved['failure_kind'] == 'verify' and saved['cooldown_until'] == '2099-01-01'
@@ -232,7 +231,7 @@ def test_real_helper_commit_risk_and_profile_reuse(real_login):
         before = db.execute('SELECT seed,version FROM profiles').fetchall()
     again, _ = manager.start(saved, request_key='check-persisted', **OWNER)
     wait_for(lambda: manager.sessions[again['id']].snapshot['phase'] == 'done', manager, again['id'])
-    wait_for(lambda: manager.sessions[again['id']].stopped.is_set())
+    wait_for(lambda: manager.sessions[again['id']].cleanup_done.is_set())
     assert requests.count('/sms') == 1
     with sqlite3.connect(registry) as db:
         assert db.execute('SELECT seed,version FROM profiles').fetchall() == before
@@ -244,7 +243,7 @@ def test_real_helper_failed_commit_recovers_without_reauth(real_login, monkeypat
     monkeypatch.setattr(manager.operations, 'commit_auth', lambda *a, **k: (_ for _ in ()).throw(RuntimeError('simulated SQLite failure')))
     snapshot = complete_fixture_login(manager, account, requests)
     wait_for(lambda: manager.sessions[snapshot['id']].snapshot['phase'] == 'failed')
-    wait_for(lambda: manager.sessions[snapshot['id']].stopped.is_set())
+    wait_for(lambda: manager.sessions[snapshot['id']].cleanup_done.is_set())
     assert manager.operations.get(snapshot['operation_id'])['stage'] == 'recovery_required'
     monkeypatch.setattr(manager.operations, 'commit_auth', original)
     new_owner = {**OWNER, 'app_session_id':'after-application-login', 'owner_token':'y'*32}
