@@ -270,7 +270,10 @@ def test_public_answer_is_full_batch_and_only_completion_acknowledges(setup, tmp
     assert len(re.findall(r"^\d+\. ", result.answer, re.M)) == 100
     assert service.comment_batch_states[session.id]["pages"][turn.id]["acknowledged"]
     product._answer_streamer.finalize.assert_called_once_with(turn.id, expected)
-    assert product.store.latest_completed_hermes_transcript(session.id)[-1]["content"] == model_answer
+    history_answer = product.store.latest_completed_hermes_transcript(session.id)[-1]["content"]
+    assert history_answer.startswith(model_answer)
+    assert "1–100" in history_answer
+    assert "评论原文000" not in history_answer
 
 
 def test_missing_report_tools_fail_as_environment_error_without_reading_or_advancing(setup, tmp_path):
@@ -414,3 +417,55 @@ def test_failed_model_answer_does_not_publish_prepared_batch(setup, tmp_path):
                                          previous_message_count=0, transcript=None)
     assert result.answer == "Provider failed"
     assert not service.comment_batch_states[session.id]["pages"][turn.id].get("acknowledged")
+
+
+@pytest.mark.parametrize("model_answer", [
+    "第一批如下：\n1. 虚构作者：不存在的评论999。\n2. 虚构作者：不存在的评论998。",
+    "| 序号 | 作者 | 原文 |\n| 1 | 虚构作者 | 不存在的评论999 |",
+    "原文是：评论原文000，评论原文001。",
+    # Captured Qwen failure: it guessed 001..100 for the real 000..099 batch.
+    "## 第一批\n" + "\n".join(f"评论原文{i:03}：请核实票价公示。" for i in range(1, 101)),
+])
+def test_invented_or_duplicate_batch_never_survives_answer_or_history(setup, tmp_path, model_answer):
+    from backend.hermes_runtime.service import HermesInvestigationAgentService
+    from backend.investigation.store import InvestigationStore
+    from backend.investigation.report_query import ReportQueryFacade
+    runtime, _, _, report_store, report_id = setup
+    product = HermesInvestigationAgentService(report_facade=ReportQueryFacade(db_path=report_store.db_path),
+        store=InvestigationStore(tmp_path / "projection.sqlite3"), bind_runtime=False)
+    session = product.create_session(report_id)
+    runtime.bind_session(session.id)
+    post = json.loads(runtime.dispatch("read_report", {}, session_id=session.id))["data"]["post_previews"][0]["ref"]
+    turn, _ = product.accept_message(session.id, client_message_id="batch", content="列出评论")
+    runtime.dispatch("list_post_comments", {"post_ref":post,"batch_action":"start"}, session_id=session.id,turn_id=turn.id)
+    product.bind_runtime = True
+    with patch("hermes_m0.runtime.report_task_runtime_for_session", return_value=runtime):
+        result = product._persist_result(turn.id, {"final_response":model_answer,"completed":True},
+            previous_message_count=0, transcript=[{"role":"user","content":"列出评论"}, {"role":"assistant","content":model_answer}])
+    assert re.findall(r"评论原文\d{3}", result.answer) == [f"评论原文{i:03}" for i in range(100)]
+    assert "不存在的评论" not in result.answer
+    reopened = InvestigationStore(product.store.db_path)
+    history = reopened.latest_completed_hermes_transcript(session.id)
+    assert "不存在的评论" not in str(history) and "评论原文000" not in str(history)
+    assert "1–100" in history[-1]["content"]
+    assert runtime.comment_batch_states[session.id]["pages"][turn.id]["acknowledged"]
+
+
+@pytest.mark.parametrize("explanation", [
+    '已准备好第一批评论。\n**当前进度：**\n- ✅ 已展示：100 条\n- 📋 剩余：130 条\n- 📊 总计：230 条',
+    '已展示全部 230 条。\n如需进一步操作：\n- 查看某条评论的完整上下文\n- 按风险等级筛选评论\n- 查看其他帖子的评论',
+    '✅ **旅游审核规则 B** 已成功正式保存：\n- 资源名称：旅游审核规则 B\n- 资源版本：1\n- 保存状态：已完成\n以下展示本批评论原文。',
+    '| 项目 | 数量 |\n| --- | --- |\n| 已展示 | 100 |\n| 剩余 | 130 |',
+    '可以继续：\n1. 查看原帖\n2. 筛选未审核评论',
+    '本批进度：\n1. 已展示：100 条\n2. 剩余：130 条',
+])
+def test_batch_keeps_natural_progress_receipts_and_followups(setup, explanation):
+    from backend.hermes_runtime.comment_delivery import compose
+    runtime, post, *_ = setup
+    invoke(runtime, post, batch_action="start")
+    public, history, rejected = compose(runtime, "session", "t1", explanation,
+        [{"role": "assistant", "content": explanation}], 0)
+    assert not rejected
+    assert public.startswith(explanation + "\n\n---")
+    assert history[-1]["content"].startswith(explanation)
+    assert re.findall(r"评论原文\d{3}", public) == [f"评论原文{i:03}" for i in range(100)]

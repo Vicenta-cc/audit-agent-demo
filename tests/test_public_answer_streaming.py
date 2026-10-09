@@ -471,3 +471,22 @@ def test_parallel_sessions_keep_answer_revisions_isolated(tmp_path):
     assert _latest_revision_text(_answer_events(store, turn_b.id)) == answers[turn_b.id]
     assert answers[turn_b.id] not in str(_answer_events(store, turn_a.id))
     assert answers[turn_a.id] not in str(_answer_events(store, turn_b.id))
+
+
+def test_prepared_batch_blocks_model_deltas_but_final_authoritative_list_streams(tmp_path):
+    store = InvestigationStore(tmp_path / "batch-stream.sqlite3")
+    session, turn = _running_turn(store)
+    prepared = False
+    streamer = PublicAnswerStreamer(store, enabled=lambda:True, sanitize=lambda s:(s,False),
+                                    live_allowed=lambda session, turn: not prepared)
+    with streamer.bind_turn(session.id, turn.id):
+        streamer.stream_delta(session.id, "正在读取评论。")
+        streamer.discard_draft_for_session(session.id)
+        prepared = True
+        streamer.stream_delta(session.id, "1. 虚构作者：不存在的评论。" * 20)
+        assert not any("不存在的评论" in str(e) for e in _answer_events(store,turn.id))
+    canonical = "第1–2条评论：\n1. 甲：真实原文A\n2. 乙：真实原文B"
+    streamer.finalize(turn.id,canonical)
+    assert _latest_revision_text(_answer_events(store,turn.id)) == canonical
+    # SSE reconnection reads the exact same durable events.
+    assert _latest_revision_text(_answer_events(InvestigationStore(store.db_path),turn.id)) == canonical

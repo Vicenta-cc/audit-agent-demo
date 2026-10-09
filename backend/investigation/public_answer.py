@@ -55,10 +55,12 @@ class PublicAnswerStreamer:
         *,
         enabled: Callable[[], bool],
         sanitize: Callable[[str], tuple[str, bool]],
+        live_allowed: Callable[[str, str], bool] | None = None,
     ) -> None:
         self.store = store
         self.enabled = enabled
         self.sanitize = sanitize
+        self.live_allowed = live_allowed
         self._lock = RLock()
         self._turns_by_session: dict[str, list[str]] = {}
         self._states: dict[str, _AnswerState] = {}
@@ -147,6 +149,15 @@ class PublicAnswerStreamer:
         text = str(delta or "")
         if state is None or not text:
             return
+        if self.live_allowed is not None:
+            try:
+                allowed = self.live_allowed(session_id, state.turn_id)
+            except Exception:
+                logger.exception("Live answer gate unavailable for %s", state.turn_id)
+                allowed = False
+            if not allowed:
+                self._discard_draft(state)
+                return
         with self._lock:
             if state.finalized or state.suppressed:
                 return

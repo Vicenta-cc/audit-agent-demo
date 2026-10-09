@@ -25,6 +25,7 @@ from backend.investigation.errors import InvestigationTurnNotFoundError
 from backend.investigation.protocol import validate_hermes_transcript_messages
 from backend.investigation.public_activity import PublicActivityEmitter
 from backend.investigation.public_answer import PublicAnswerStreamer
+from .comment_delivery import compose as compose_comment_delivery, live_model_text_allowed
 from backend.investigation.report_query import ReportQueryFacade
 from backend.investigation.store import InvestigationStore
 
@@ -208,6 +209,7 @@ class HermesInvestigationAgentService:
             self.store,
             enabled=lambda: settings.answer_stream_enabled,
             sanitize=redact_internal_account_references,
+            live_allowed=live_model_text_allowed,
         )
 
     def close(self) -> None:
@@ -717,14 +719,12 @@ class HermesInvestigationAgentService:
             if hasattr(runtime, "comment_batch_states"):
                 batch_answer = render(runtime, session.id, turn_id)
                 if batch_answer is not None:
-                    # Only the explicit full-list branch uses deterministic text.
-                    # The validated provider transcript is preserved unchanged.
-                    composed_answer = (
-                        answer + "\n\n---\n\n### 评论原文\n\n" + batch_answer
-                        if answer else batch_answer
-                    )
-                    answer, changed = redact_internal_account_references(composed_answer)
+                    answer, transcript, rejected = compose_comment_delivery(
+                        runtime, session.id, turn_id, answer, transcript, previous_message_count)
+                    answer, changed = redact_internal_account_references(answer)
                     answer_was_redacted = answer_was_redacted or changed
+                    trace_messages = [item for item in transcript[previous_message_count:]
+                                      if item.get("role") in {"assistant", "tool"}]
                     comment_batch_runtime = runtime
         try:
             self._answer_streamer.finalize(turn_id, answer)
