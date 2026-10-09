@@ -25,13 +25,19 @@ SCOPE = "结论仅适用于本次实际完成审核的帖子、已审核评论�
 def partial_coverage_paragraphs(snapshot) -> list[str]:
     coverage = snapshot.statistics.get("source_coverage") or {}
     failures = coverage.get("excluded_failed_posts") or []
+    paragraphs = []
+    if coverage.get("collection_incomplete"):
+        paragraphs.append(
+            f"采集未完成：用户已结束后续采集，本报告仅覆盖已完成研判的 {coverage.get('selected_posts', len(snapshot.posts))} 条帖子。"
+            "未采集到的内容未作研判，不能视为无风险，也不能据此推断已覆盖全部调查范围。"
+        )
     if not failures:
-        return []
-    paragraphs = [
+        return paragraphs
+    paragraphs.append(
         f"本任务共有 {coverage.get('candidate_posts', len(snapshot.posts) + len(failures))} 条候选帖子，"
         f"其中 {coverage.get('selected_posts', len(snapshot.posts))} 条审核成功并纳入统计，"
         f"{len(failures)} 条审核失败并排除在风险比例分母之外。"
-    ]
+    )
     for failure in failures:
         paragraphs.append(
             "失败帖子 {post_id}：阶段 {stage}；原因 {reason}；错误码 {error_code}。".format(

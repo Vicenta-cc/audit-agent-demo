@@ -64,6 +64,7 @@ export function MonitorTasksPage() {
   const [snapshot, setSnapshot] = useState<JobsSnapshot>(initialCache?.snapshot ?? defaultSnapshot);
   const [loading, setLoading] = useState(!initialCache);
   const [endTarget, setEndTarget] = useState<MonitorTask | null>(null);
+  const [endAction, setEndAction] = useState("stop_all");
   const [endingTask, setEndingTask] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -194,7 +195,7 @@ export function MonitorTasksPage() {
 
   const handleControl = async (task: MonitorTask, action: string, label: string, confirmed = false) => {
     setOpenMenuId(null);
-    if (action === "stop_all" && !confirmed) { setEndTarget(task); return; }
+    if (["stop_all", "finish_collection"].includes(action) && !confirmed) { setEndAction(action); setEndTarget(task); return; }
     try {
       await controlJob(task.id, action);
       showToast(`${label}已提交`);
@@ -292,14 +293,14 @@ export function MonitorTasksPage() {
         onControl={handleControl}
       />
       <TaskQuota />
-      <ConfirmDialog open={Boolean(endTarget)} title="结束整个任务？"
-        description="结束后无法继续此任务，已扣次数不返还，已采集的数据和结果保留。后台停止后可新建任务或删除会话。"
-        confirmText={endingTask ? "提交中…" : "确认结束任务"}
+      <ConfirmDialog open={Boolean(endTarget)} title={endAction === "finish_collection" ? "结束采集并生成报告？" : "结束整个任务？"}
+        description={endAction === "finish_collection" ? "不再采集新内容。已采集的帖子会继续完成研判，再生成注明采集未完成的报告；生成后本次调查结束。" : "结束后无法继续此任务，已扣次数不返还，已采集的数据和结果保留。后台停止后可新建任务或删除会话。"}
+        confirmText={endingTask ? "提交中…" : endAction === "finish_collection" ? "结束采集并生成报告" : "确认结束任务"}
         onCancel={() => { if (!endingTask) setEndTarget(null); }}
         onConfirm={() => {
           if (!endTarget || endingTask) return;
           setEndingTask(true);
-          void handleControl(endTarget, "stop_all", "结束任务", true).finally(() => { setEndingTask(false); setEndTarget(null); });
+          void handleControl(endTarget, endAction, endAction === "finish_collection" ? "结束采集并生成报告" : "结束任务", true).finally(() => { setEndingTask(false); setEndTarget(null); });
         }} />
       <ConfirmDialog
         open={Boolean(deleteTarget)}

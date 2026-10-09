@@ -1346,16 +1346,26 @@ class AuditPipeline:
             error_code = error_text.split(":", 1)[0].strip()
             current = job_store.get(self.job_id) or {}
             crawl_status = str(current.get("crawl_status") or "")
+            failure = failure_metadata(error_code, error_text)
+            analysis_status = "failed"
+            if failure.get("recoverable") and failure.get("stage") == "crawl":
+                stats = self.ingestion.stats_for_task(self.job_id)
+                analysis_status = (
+                    "pending" if stats.get("queued_analysis_count") or stats.get("analyzing_count")
+                    else "partial" if stats.get("failed_analysis_count")
+                    else "completed" if stats.get("completed_analysis_count")
+                    else "idle"
+                )
             job_store.update(
                 self.job_id,
                 status="failed",
                 crawl_status=(crawl_status if crawl_status in {"completed", "stopped", "skipped"} else "failed"),
-                analysis_status="failed",
+                analysis_status=analysis_status,
                 error=str(exc),
             )
             job_store.update_control(
                 self.job_id,
-                failure=failure_metadata(error_code, error_text),
+                failure=failure,
             )
             job_store.log(
                 self.job_id,
@@ -1660,11 +1670,13 @@ class AuditPipeline:
                 crawl_status = str((job_store.get(self.job_id) or job).get("crawl_status") or "pending")
                 overall_status = (
                     "completed"
-                    if crawl_status in {"completed", "skipped"}
+                    if crawl_status in {"completed", "skipped"} or (
+                        final_control.get("collection_finalized") and crawl_status == "stopped"
+                    )
                     else "crawl_paused"
                     if crawl_status in {"paused", "stopped"}
                     else "interrupted"
-                    if crawl_status == "interrupted"
+                    if crawl_status in {"interrupted", "failed"}
                     else "running"
                 )
                 job_store.update(

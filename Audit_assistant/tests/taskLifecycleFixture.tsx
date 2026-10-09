@@ -14,13 +14,15 @@ const base: InvestigationRunProjection = {
   status: "QUEUED", crawl_status: "queued", analysis_status: "pending",
   report_status: "pending", report_version_id: "", error_code: "", error_message: "",
   created_at: "", updated_at: "", started_at: "", completed_at: "",
-  task_stats: { completed_analysis_count: 4, failed_analysis_count: 1, pending_analysis_count: 1, queued_analysis_count: 0 },
+  task_stats: { completed_analysis_count: 4, failed_analysis_count: 1, pending_analysis_count: 1, queued_analysis_count: 0, analyzing_count: 0 },
   audit_results: [], available_actions: { end_task: true }
 };
 function Fixture() {
   const [run, setRun] = useState(base);
   return <MemoryRouter><main style={{maxWidth: 850, margin: "24px auto"}}>
     <TaskQuota />
+    <button onClick={() => setRun({ ...base, job_id: "fixture-job", status: "INTERRUPTED", crawl_status: "failed", analysis_status: "completed", error_code: "crawler_account_verification_required", task_stats: { ...base.task_stats, collection_resumable: true }, available_actions: { end_task: true, resume_crawl: true, finish_collection: true } })}>模拟采集受阻</button>
+    <button onClick={() => setRun({ ...base, job_id: "fixture-job", status: "INTERRUPTED", crawl_status: "failed", analysis_status: "completed", task_stats: { ...base.task_stats, collection_resumable: true }, available_actions: { end_task: true, finish_collection: true } })}>模拟没有可用账号</button>
     <button onClick={() => setRun({ ...base, job_id: "fixture-job", status: "INTERRUPTED", crawl_status: "stopped", analysis_status: "paused", available_actions: { end_task: true, resume_analysis: true } })}>模拟暂停状态</button>
     <button onClick={() => setRun({ ...base, status: "FAILED", crawl_status: "stopped", analysis_status: "stopped", report_status: "cancelled", error_code: "cancelled", error_message: "任务已终止。", available_actions: { ended: true } })}>模拟后台确认停止</button>
     <button onClick={() => setRun({ ...base, job_id: "fixture-job", status: "RUNNING", crawl_status: "running", analysis_status: "running", available_actions: { end_task: true, pause_crawl: true, pause_analysis: true, stop_analysis: true } })}>模拟运行状态</button>

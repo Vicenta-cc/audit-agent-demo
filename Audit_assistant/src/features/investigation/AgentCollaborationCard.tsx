@@ -184,6 +184,7 @@ export function AgentCollaborationCard({
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [recordsError, setRecordsError] = useState("");
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [confirmFinish, setConfirmFinish] = useState(false);
   const [endSubmitted, setEndSubmitted] = useState(false);
   useEffect(() => { setEndSubmitted(false); }, [run?.run_id]);
   const [controlAction, setControlAction] = useState("");
@@ -492,6 +493,14 @@ export function AgentCollaborationCard({
                       {enabled ? label : `正在${label}`}
                     </button>;
                   })}
+                  {availableActions.finish_collection ? (
+                    <button type="button" disabled={Boolean(controlAction)} onClick={() => setConfirmFinish(true)}>
+                      结束采集并生成报告
+                    </button>
+                  ) : null}
+                  {!availableActions.resume_crawl && run.task_stats.collection_resumable === true ? (
+                    <small>暂无可用采集账号，请检查账号状态，恢复后可继续采集。</small>
+                  ) : null}
                 </div>
               ) : null}
               {(availableActions.end_task && !availableActions.ended) || ending ? (
@@ -618,6 +627,10 @@ export function AgentCollaborationCard({
       <ConfirmDialog open={confirmEnd} title="结束整个任务？"
         description="结束后无法继续此任务，已扣次数不返还，已采集的数据和结果保留。后台停止后可新建任务或删除会话。"
         confirmText="确认结束任务" onConfirm={() => void submitEnd()} onCancel={() => setConfirmEnd(false)} />
+      <ConfirmDialog open={confirmFinish} title="结束采集并生成报告？"
+        description="不再采集新内容。已采集的帖子会继续完成研判，再生成注明采集未完成的报告；生成后本次调查结束。"
+        confirmText="结束采集并生成报告" onCancel={() => setConfirmFinish(false)}
+        onConfirm={() => { setConfirmFinish(false); void submitControl("finish_collection"); }} />
       <AnalysisBasisDrawer
         record={selectedRecord}
         onClose={() => setSelectedRecord(null)}

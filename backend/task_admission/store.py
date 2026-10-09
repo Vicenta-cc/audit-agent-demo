@@ -450,12 +450,13 @@ class AdmissionStore:
             ).fetchone()
             if not row:
                 raise AdmissionError("任务未通过准入。")
+            payload = json.loads(row["payload_json"])
             self.validate_user(
                 db,
                 row["owner_id"],
-                row["resource_account_id"]
-                or json.loads(row["payload_json"]).get("crawler_account_id")
-                or "",
+                "" if payload.get("resume_action") == "finish_collection" else (
+                    row["resource_account_id"] or payload.get("crawler_account_id") or ""
+                ),
             )
             if row["decision"] == "CANCELLED":
                 raise AdmissionError("任务已取消。", code="TASK_CANCELLED")

@@ -84,6 +84,13 @@ def available_job_actions(job: dict[str, Any], stats: dict[str, Any]) -> dict[st
         ) and not deleting_or_stopping_all
 
     return {
+        "finish_collection": bool(job.get("run_crawler"))
+        and crawl_status in {"failed", "stopped", "interrupted", "paused"}
+        and status in {"failed", "stopped", "interrupted", "crawl_paused", "analysis_paused", "analysis_stopped"}
+        and (crawl_status != "failed" or failure.get("code") in RECOVERABLE_CRAWL_FAILURE_CODES)
+        and int(stats.get("completed_analysis_count") or 0) > 0
+        and not control.get("collection_finalized")
+        and not deleting_or_stopping_all,
         "pause_crawl": crawl_active and not deleting_or_stopping_all,
         "resume_crawl": bool(job.get("run_crawler"))
         and (
@@ -95,7 +102,8 @@ def available_job_actions(job: dict[str, Any], stats: dict[str, Any]) -> dict[st
                 and failure.get("recovery_action") == "continue_crawl"
             )
         )
-        and not deleting_or_stopping_all,
+        and not deleting_or_stopping_all
+        and not control.get("collection_finalized"),
         "pause_analysis": analysis_active,
         "resume_analysis": analysis_status
         in {"paused", "stopped", "pending", "partial", "failed"}

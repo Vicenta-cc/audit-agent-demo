@@ -2731,7 +2731,7 @@ def control_job(
             row["state"] != "RESERVED" or row["decision"] != "OPEN"
         ):
             raise AdmissionError("任务已结束或正在结束，不能继续操作。", code="TASK_ALREADY_ENDED")
-        if request.action in {"resume_crawl","resume_analysis","backfill_analysis"}:
+        if request.action in {"resume_crawl","resume_analysis","backfill_analysis", "finish_collection"}:
             from backend.task_admission.legacy import enqueue_resume, replay_resume
             if isinstance(idempotency_key,str) and replay_resume(admission,job_id,owner=principal.id,
                     action=request.action,key=idempotency_key,analyze_limit=request.analyze_limit):
@@ -2748,6 +2748,8 @@ def control_job(
                     )
             if not isinstance(idempotency_key,str) or not idempotency_key.strip():
                 raise HTTPException(400,detail={"code":"IDEMPOTENCY_KEY_REQUIRED","message":"恢复任务需要请求标识。"})
+            if request.action == "finish_collection" and (not row or row["queue_state"] != "HELD"):
+                raise HTTPException(409, detail="请等待采集停止后，再结束采集并生成报告。")
             if request.action != "backfill_analysis" and not actions.get(request.action):
                 raise HTTPException(409,detail="当前任务状态不允许恢复。")
             enqueue_resume(admission,job,owner=principal.id,action=request.action,
@@ -2757,6 +2759,8 @@ def control_job(
             admission.cancel(job_id, job["owner_user_id"], on_cancel=_signal_admission_stop)
             return enrich_job(job_store.get(job_id))
 
+    if request.action == "finish_collection":
+        raise HTTPException(409, detail="该任务未接入统一执行队列，暂不支持结束采集并生成报告。")
     if request.action == "pause_crawl":
         if not actions["pause_crawl"]:
             raise HTTPException(status_code=409, detail="当前任务状态不允许暂停采集")

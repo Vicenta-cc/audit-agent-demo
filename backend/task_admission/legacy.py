@@ -76,7 +76,7 @@ def enqueue_resume(admission, job, *, owner, action, key, analyze_limit=0):
     )
     with admission.connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        admission.validate_user(db, owner, payload["crawler_account_id"] or "")
+        admission.validate_user(db, owner, "" if action == "finish_collection" else payload["crawler_account_id"] or "")
         replay = db.execute(
             "SELECT * FROM task_admission_commands WHERE owner_id=? AND request_key=?",
             (owner, key),
@@ -234,7 +234,14 @@ def dispatch_one(worker, task_id=None):
                         analysis_stop_requested=False,
                         stop_all_requested=False,
                     )
+                    if action == "finish_collection":
+                        # Persist the user's boundary before draining. A restart
+                        # must never turn this command back into collection.
+                        adapter.job_store.update_control(job["id"], collection_finalized=True)
+                        adapter.job_store.update(job["id"], crawl_status="stopped", error="")
                     if action == "resume_crawl":
+                        if (job.get("control") or {}).get("collection_finalized"):
+                            raise AdmissionError("采集已结束，不能继续采集。", code="TASK_COLLECTION_FINALIZED")
                         adapter.job_store.update(
                             job["id"], status="queued", crawl_status="queued", error=""
                         )
@@ -292,6 +299,10 @@ def finish_legacy(worker, row, token):
     published = worker.report_adapter.find_published(row["job_id"])
     if published:
         admission.settle(row["task_id"], report_id=published)
+        return
+    from backend.audit_agent.job_state import RECOVERABLE_CRAWL_FAILURE_CODES, failure_from_job
+    if latest["decision"] != "CANCELLED" and failure_from_job(job).get("code") in RECOVERABLE_CRAWL_FAILURE_CODES and job.get("status") == "failed":
+        admission.hold(row["task_id"], failure_from_job(job)["code"])
         return
     if latest["decision"] == "CANCELLED" or job.get("status") == "failed":
         admission.hold(

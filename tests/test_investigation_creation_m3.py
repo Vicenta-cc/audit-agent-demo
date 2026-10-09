@@ -1214,7 +1214,10 @@ class WorkerRecoveryAndFencingTest(M3TestCase):
                         report_adapter=report,
                         session_adapter=FakeSessionAdapter(),
                     ).run_once()
-                    self.assertEqual(result.status, RunStatus.FAILED)
+                    self.assertEqual(
+                        result.status,
+                        RunStatus.INTERRUPTED if expected_code == "crawler_account_login_required" else RunStatus.FAILED,
+                    )
                     self.assertEqual(result.error_code, expected_code)
                     self.assertEqual(report.generate_calls, 0)
 

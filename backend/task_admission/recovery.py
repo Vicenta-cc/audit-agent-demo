@@ -3,6 +3,8 @@
 import json
 from uuid import uuid4
 
+from backend.audit_agent.job_state import RECOVERABLE_CRAWL_FAILURE_CODES, failure_from_job
+
 
 def reconcile(worker):
     admission = worker.store.admission
@@ -70,12 +72,25 @@ def reconcile_one(worker, row):
         )
         release_stopped(worker, row, reason)
         return
+    if row["queue_state"] == "RUNNING" and json.loads(row["payload_json"]).get("resume_action") == "finish_collection":
+        # The caller holds the inherited execution fence: the old process is
+        # gone. Replaying this command only drains persisted content, never
+        # collects, and completed audits are skipped by the existing pipeline.
+        with admission.connect() as db:
+            db.execute(
+                "UPDATE task_admissions SET queue_state='QUEUED',execution_token='',updated_at=? WHERE id=? AND updated_at=?",
+                (admission.now(), row["id"], row["updated_at"]),
+            )
+        return
     if row["kind"] == "investigation":
         run = worker.store.get_run_for_worker(row["task_id"])
         pending_resume = row["queue_state"] == "QUEUED" and json.loads(
             row["payload_json"]
         ).get("resume_action")
         if pending_resume:
+            return
+        if run.status.value == "FAILED" and run.error_code in RECOVERABLE_CRAWL_FAILURE_CODES:
+            hold_interrupted(worker, row, reason=run.error_code)
             return
         if run.status.value in ("FAILED", "AUDIT_COMPLETED"):
             admission.settle(
@@ -105,7 +120,9 @@ def reconcile_one(worker, row):
     elif row["queue_state"] == "RUNNING":
         # No blind replay of a crawler whose execution result is uncertain.
         job = worker.execution_adapter.get_job_state(job_id)
-        if job and job.get("status") == "failed":
+        if job and failure_from_job(job).get("code") in RECOVERABLE_CRAWL_FAILURE_CODES:
+            hold_interrupted(worker, row, reason=failure_from_job(job)["code"])
+        elif job and job.get("status") == "failed":
             release_stopped(worker, row, "failed")
         else:
             hold_interrupted(worker, row)

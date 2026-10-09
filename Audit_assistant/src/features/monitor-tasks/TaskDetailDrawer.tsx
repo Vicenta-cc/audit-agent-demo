@@ -112,6 +112,8 @@ export function TaskDetailDrawer({ task, mode, onClose, onControl }: TaskDetailD
             <p>暂停、继续不重复扣次。结束任务不可恢复，已扣次数不返还。</p>
             {task.raw.available_actions?.ending ? <p role="status">正在结束，后台停止后可新建任务或删除会话。</p> : null}
             <div className="drawer-actions">
+              {task.raw.available_actions?.finish_collection ? <Button type="button" variant="secondary"
+                onClick={() => void onControl(task, "finish_collection", "结束采集并生成报告")}>结束采集并生成报告</Button> : null}
               {task.raw.available_actions?.end_task ? <Button type="button" variant="secondary"
                 onClick={() => void onControl(task, "stop_all", "结束任务")}>结束任务</Button> : null}
               {task.raw.available_actions?.pause_crawl ? <Button

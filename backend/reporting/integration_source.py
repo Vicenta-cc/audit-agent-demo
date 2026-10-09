@@ -240,6 +240,8 @@ class CanonicalReportSource:
     def coverage(self, task_id: str) -> dict[str, Any]:
         """Return public, sanitized coverage for completed and failed posts."""
         with self.connect() as connection:
+            job = connection.execute("SELECT control FROM jobs WHERE id=?", (task_id,)).fetchone()
+            control = json.loads(job["control"] or "{}") if job else {}
             rows = list(
                 connection.execute(
                     """
@@ -285,6 +287,7 @@ class CanonicalReportSource:
                 }
             )
         return {
+            "collection_incomplete": control.get("collection_finalized") is True,
             "candidate_posts": len(rows),
             "selected_posts": sum(
                 str(row["analyze_status"] or "") == "completed" for row in rows

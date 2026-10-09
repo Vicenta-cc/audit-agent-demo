@@ -63,6 +63,10 @@ export function TaskActionsMenu({
         <Pause size={15} />
         暂停分析
       </button> : null}
+      {actions.finish_collection ? <button type="button"
+        onClick={() => void onControl(task, "finish_collection", "结束采集并生成报告")}>
+        结束采集并生成报告
+      </button> : null}
       {actions.resume_analysis ? <button
         type="button"
         disabled={!actions.resume_analysis}

@@ -35,6 +35,9 @@ export function mapInvestigationRunState(
   if (run.available_actions?.ending) {
     return { phase: "audit_working", terminal: null, label: "正在结束，等待后台停止", step: inferStoppedStep(run), activity: "running" };
   }
+  if (run.available_actions?.resuming) {
+    return { phase: "audit_resumed", terminal: null, label: run.available_actions.finishing_collection ? "正在完成已有内容研判，随后生成报告" : "等待继续执行", step: 2, activity: "running" };
+  }
   if (run.available_actions?.ended && run.error_code === "cancelled") {
     return { phase: "audit_working", terminal: "ended", label: "任务已结束", step: inferStoppedStep(run), activity: "stopped" };
   }
@@ -51,6 +54,9 @@ export function mapInvestigationRunState(
   }
   if (run.status === "PUBLISHED") {
     return { phase: "completed", terminal: "published", label: "报告已发布", step: 4, activity: "completed" };
+  }
+  if (run.status === "REPORT_GENERATING") {
+    return { phase: "report_generating", terminal: null, label: "正在归纳报告", step: 4, activity: "running" };
   }
   if (run.status === "FAILED") {
     return { phase: "audit_working", terminal: "failed", label: "调查失败", step: inferStoppedStep(run), activity: "stopped" };
@@ -69,9 +75,6 @@ export function mapInvestigationRunState(
   }
   if (["paused", "stopped"].includes(run.analysis_status) || ["paused", "stopped"].includes(run.crawl_status)) {
     return { phase: "audit_working", terminal: "paused", label: "当前执行阶段已暂停，可恢复", step: inferStoppedStep(run), activity: "stopped" };
-  }
-  if (run.status === "REPORT_GENERATING") {
-    return { phase: "report_generating", terminal: null, label: "正在归纳报告", step: 4, activity: "running" };
   }
   if (run.status === "QUEUED") {
     return { phase: "collection_waking", terminal: null, label: "已确认，等待任务开始", step: 1, activity: "queued" };
@@ -97,11 +100,13 @@ function inferStoppedStep(run: InvestigationRunProjection): 1 | 2 | 3 | 4 {
 // A pause stops polling only while no end request is being reconciled.
 export function shouldPollInvestigationRun(run: InvestigationRunProjection): boolean {
   if (run.available_actions?.ending) return true;
+  if (run.available_actions?.resuming) return true;
   if (["AUDIT_COMPLETED", "PUBLISHED", "FAILED"].includes(run.status)) {
     return Boolean(run.available_actions?.end_task);
   }
   if (run.status === "INTERRUPTED") {
-    return ["queued", "running", "pausing"].includes(run.crawl_status)
+    return run.task_stats?.collection_resumable === true
+      || ["queued", "running", "pausing"].includes(run.crawl_status)
       || ["queued", "running", "pausing"].includes(run.analysis_status);
   }
   return true;

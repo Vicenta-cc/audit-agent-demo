@@ -36,9 +36,10 @@ def select_account(worker, row):
     if (
         account_store is None
         or recovery_without_crawl
-        or action in ("resume_report", "resume_analysis", "backfill_analysis")
+        or action in ("resume_report", "resume_analysis", "backfill_analysis", "finish_collection")
         or not config.get("run_crawler", True)
     ):
+        waiting(worker.store.admission, row, "", "")
         yield True
         return
     platform = config.get("platform", "xhs")

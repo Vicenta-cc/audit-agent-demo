@@ -15,7 +15,7 @@ from backend.audit_agent.ingestion import (
     SELECTED_CONTENT_PAYLOAD_UNAVAILABLE,
     SelectedContentPayloadUnavailableError,
 )
-from backend.audit_agent.job_state import failure_from_job
+from backend.audit_agent.job_state import RECOVERABLE_CRAWL_FAILURE_CODES, failure_from_job
 from backend.hermes_runtime.service import HermesInvestigationAgentService
 
 from .adapters import (
@@ -271,6 +271,11 @@ class InvestigationWorker:
                     else "no_valid_content_selected"
                     if error_message.startswith("no_valid_content_selected:")
                     else "audit_job_failed"
+                )
+            if error_code in RECOVERABLE_CRAWL_FAILURE_CODES:
+                return self.store.mark_interrupted(
+                    run.id, run.claim_token,
+                    error_code=error_code, error_message=error_message,
                 )
             return self.store.mark_failed(
                 run.id,
