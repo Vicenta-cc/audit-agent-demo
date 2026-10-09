@@ -173,6 +173,35 @@ SEARCH_FALLBACK_WORDING = {
 }
 
 
+# R08: replace only the four full-replacement instructions with local-edit guidance.
+PRECISE_EDIT_CHANGED_LINES = [
+    {
+        "source": "CREATION_SYSTEM_PROMPT",
+        "line": 169,
+        "text": "For edits, use current Proposal content (get_ruleset_proposal if needed), then send its proposal_id,",
+        "reason": "Use existing version-checked partial edits; retain IDs, unrelated fields, stale-version checks and natural replies."
+    },
+    {
+        "source": "CREATION_SYSTEM_PROMPT",
+        "line": 170,
+        "text": "expected_version and the full revised 审核规则完整内容 to update_ruleset_proposal. Application owns",
+        "reason": "Use existing version-checked partial edits; retain IDs, unrelated fields, stale-version checks and natural replies."
+    },
+    {
+        "source": "CREATION_SYSTEM_PROMPT",
+        "line": 171,
+        "text": "content_hash; do not supply it. Preserve category_id, rule_id and ordering for unchanged semantics;",
+        "reason": "Use existing version-checked partial edits; retain IDs, unrelated fields, stale-version checks and natural replies."
+    },
+    {
+        "source": "CREATION_SYSTEM_PROMPT",
+        "line": 172,
+        "text": "do not rewrite unrelated 审核规则 without reason. On stale version, read the current Proposal and",
+        "reason": "Use existing version-checked partial edits; retain IDs, unrelated fields, stale-version checks and natural replies."
+    }
+]
+
+
 def _current_fallback_wording(text):
     for old, new in SEARCH_FALLBACK_WORDING.items():
         text = text.replace(old, new)
@@ -192,7 +221,7 @@ def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
     ]))
     changes = {(item["source"], item["line"]): item
                for item in baseline["changed_lines"] + SEARCH_TERMS_CAP_CHANGED_LINES
-               + TASK_SETTINGS_ONLY_CHANGED_LINES}
+               + TASK_SETTINGS_ONLY_CHANGED_LINES + PRECISE_EDIT_CHANGED_LINES}
     for name, original in baseline["prompts"].items():
         for index, line in enumerate(original.splitlines()):
             if not line.strip():
@@ -206,3 +235,10 @@ def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
     # and its previously accounted-for final lifecycle sentence.
     original = baseline["prompts"]["CREATION_SYSTEM_PROMPT"].splitlines()[7]
     assert _current_fallback_wording(original.split("临时词库只写入")[0]) in CREATION_SYSTEM_PROMPT
+
+
+def test_precise_edit_guidance_retains_version_fence_and_natural_style():
+    assert 'update_resource_edit with expected_version' in CREATION_SYSTEM_PROMPT
+    assert 'Preserve unrelated fields, stable IDs and ordering' in CREATION_SYSTEM_PROMPT
+    assert 'On stale version, read the current edit' in CREATION_SYSTEM_PROMPT
+    assert "Explain the proposed 审核规则 naturally in the user's language" in CREATION_SYSTEM_PROMPT

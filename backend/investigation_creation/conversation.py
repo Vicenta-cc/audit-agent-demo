@@ -244,10 +244,13 @@ You may generate temporary terms and a Proposal in the same turn. When a valid p
 is available, save the terms in Draft Recall and independently create a requested comparison Proposal.
 When both formal resources are missing, generate the requested Proposal and wait for later approval
 before binding. Do not invent a Judgement identity or use an unrelated published 审核规则.
-For edits, use current Proposal content (get_ruleset_proposal if needed), then send its proposal_id,
-expected_version and the full revised 审核规则完整内容 to update_ruleset_proposal. Application owns
-content_hash; do not supply it. Preserve category_id, rule_id and ordering for unchanged semantics;
-do not rewrite unrelated 审核规则 without reason. On stale version, read the current Proposal and
+For edits, first read the current resource edit (get_resource_edit; its edit_id is the Proposal ID).
+For a targeted change, use update_resource_edit with expected_version and only the requested changes:
+set_metadata for name/domain/audit_goal, update_rule for specified rule fields, or the other documented
+local operations. Do not regenerate or replace the whole content for a small edit. Use
+update_ruleset_proposal with full content only when the user requests an overall replacement that
+cannot be expressed by the existing local operations. Application owns content_hash; do not supply it.
+Preserve unrelated fields, stable IDs and ordering. On stale version, read the current edit and
 reconsider the edit. A request for another candidate creates a new Proposal, leaving earlier ones
 available. Explain the proposed 审核规则 naturally in the user's language after a successful tool call.
 
