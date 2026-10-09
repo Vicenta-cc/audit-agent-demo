@@ -9,6 +9,7 @@ import pytest
 
 import backend.audit_agent.pipeline as pipeline_module
 from backend.audit_agent.crawler_adapter import (CrawlerCollectionIncompleteError,
+                                                 CrawlerMediaDownloadError,
                                                  CrawlerVerificationError, CrawlOutput,
                                                  MediaCrawlerAdapter)
 from backend.audit_agent.triage import CandidateScore, mark_candidates_collected, write_candidates_file
@@ -314,10 +315,10 @@ def test_per_keyword_exception_is_isolated_but_account_errors_propagate(tmp_path
     monkeypatch.setattr(pipeline_module.settings, "triage_candidate_comments", 60)
     monkeypatch.setattr(pipeline_module.job_store, "log", lambda *a, **k: None)
 
-    # A generic exception on 词A must not abort the sweep; 词B still gets processed.
+    # A typed media failure on 词A must not abort the sweep; 词B still gets processed.
     crawler = FakeCrawler(
         {"词A": [("a1", "今晚上分")], "词B": [("b1", "今晚上分")]},
-        detail_exceptions={"词A": RuntimeError("boom")},
+        detail_exceptions={"词A": CrawlerMediaDownloadError("media_download_failed")},
     )
     pipeline = _new_pipeline("job-isolate", crawler, FakeIngestion(analyzed=set()), FakeEngine())
     output = pipeline._run_triaged_search(
@@ -415,7 +416,7 @@ def test_selected_keys_only_recorded_after_successful_precise_collection(tmp_pat
     # selected_keys is populated, 词B can still pick and successfully collect shared1.
     crawler_fail = FakeCrawler(
         {"词A": [("shared1", "今晚上分")], "词B": [("shared1", "今晚上分")]},
-        detail_fail_once={"shared1": RuntimeError("boom")},
+        detail_fail_once={"shared1": CrawlerMediaDownloadError("media_download_failed")},
     )
     pipeline_fail = _new_pipeline("job-fail-once", crawler_fail, FakeIngestion(analyzed=set()), FakeEngine())
     output_fail = pipeline_fail._run_triaged_search(

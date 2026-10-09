@@ -29,6 +29,7 @@ export function formatRunFailureMessage(run: InvestigationRunProjection) {
   if (signal.includes("crawler_account_verification_required")) return "采集账号需要平台验证，请完成验证后再继续；这不代表登录态已失效。";
   if (signal.includes("crawler_rate_limited")) return "平台请求限流，采集已停止，请等待冷却结束后再继续。";
   if (signal.includes("crawler_account_login_required")) return "采集账号不可用，请到采集账号页面检查登录状态后再继续。";
+  if (signal.includes("crawler_media_download_failed")) return "媒体下载未完成，失败关键词已记录。可稍后继续采集；已完成的结果会保留。";
   if (signal.includes("no_valid_content_selected")) {
     return "本次未采集到有效帖子，尚未进行审核或生成报告。请调整关键词或检查采集账号后重新发起调查。";
   }

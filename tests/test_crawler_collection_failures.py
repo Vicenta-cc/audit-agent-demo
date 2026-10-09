@@ -8,8 +8,31 @@ import pytest
 from backend.audit_agent.config import settings
 from backend.audit_agent.crawler_adapter import (
     MediaCrawlerAdapter, CrawlerCollectionIncompleteError,
+    CrawlerMediaDownloadError,
     CrawlerAuthenticationError, CrawlerVerificationError,
 )
+
+
+@pytest.mark.parametrize('exit_code', [0, 1])
+@pytest.mark.parametrize('reason,expected', [('media_download_failed', True),
+    ('incomplete_images', True), ('TypeError', False), ('missing_or_mismatched_detail', False)])
+def test_media_subtype_requires_structured_failure_record(tmp_path, monkeypatch, exit_code, reason, expected):
+    output = tmp_path / 'output'
+    path = output / 'douyin/collection_status/media-123.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'stage': 'media', 'status': 'failed', 'reason': reason}))
+    class Process:
+        returncode = exit_code
+        def __init__(self, *args, stderr, **kwargs):
+            stderr.write('COLLECTION_INCOMPLETE: fixture')
+            stderr.flush()
+        def poll(self): return self.returncode
+    monkeypatch.setattr('backend.audit_agent.crawler_adapter.subprocess.Popen', Process)
+    with pytest.raises(CrawlerCollectionIncompleteError) as error:
+        MediaCrawlerAdapter(tmp_path)._run_command(command=['python', 'main.py'],
+            save_root=output, platform='dy', account_id='test', max_notes=1,
+            progress_callback=None, content_callback=None)
+    assert isinstance(error.value, CrawlerMediaDownloadError) is expected
 
 
 @pytest.mark.parametrize('exit_code', [0,1])

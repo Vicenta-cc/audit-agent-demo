@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import pytest
 
-from backend.audit_agent.crawler_adapter import CrawlOutput, MediaCrawlerAdapter, CrawlerCollectionIncompleteError
+from backend.audit_agent.crawler_adapter import CrawlOutput, MediaCrawlerAdapter, CrawlerCollectionIncompleteError, CrawlerMediaDownloadError
 from backend.audit_agent.ingestion import IngestionStore
 
 
@@ -80,7 +80,7 @@ def test_detail_delivers_only_after_comments_complete(tmp_path, monkeypatch, cou
         assert reopened.comments == comments
 
 
-@pytest.mark.parametrize("failure", ["error", "empty", "stopped"])
+@pytest.mark.parametrize("failure", ["error", "media", "empty", "stopped"])
 def test_detail_partial_attempt_never_reaches_ingestion(tmp_path, monkeypatch, failure):
     adapter = MediaCrawlerAdapter()
     delivered = []
@@ -93,6 +93,8 @@ def test_detail_partial_attempt_never_reaches_ingestion(tmp_path, monkeypatch, f
         assert kwargs["content_callback"] is None
         if failure == "error":
             raise CrawlerCollectionIncompleteError("comment fetch failed")
+        if failure == "media":
+            raise CrawlerMediaDownloadError("media_download_failed")
         if failure == "stopped":
             stop["value"] = True
             assert kwargs["stop_checker"]()

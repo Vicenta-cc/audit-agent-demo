@@ -270,6 +270,17 @@ class CanonicalReportSource:
                         failure_records[cleaned] = value
 
         excluded: list[dict[str, str]] = []
+        keyword_failures_path = self.outputs_dir / task_id / "crawler" / "keyword_failures.json"
+        keyword_failures = []
+        if keyword_failures_path.exists():
+            # Fail closed on a damaged coverage record; do not publish a full-coverage claim.
+            records = json.loads(keyword_failures_path.read_text(encoding="utf-8"))
+            for keyword, record in records.items():
+                keyword_failures.append({
+                    "keyword": str(keyword), "content_id": str(record.get("content_id") or ""),
+                    "error_code": "crawler_media_download_failed",
+                    "reason": "媒体下载失败，本关键词未完成精采",
+                })
         for row in rows:
             if str(row["analyze_status"] or "") != "failed":
                 continue
@@ -287,7 +298,8 @@ class CanonicalReportSource:
                 }
             )
         return {
-            "collection_incomplete": control.get("collection_finalized") is True,
+            "collection_incomplete": control.get("collection_finalized") is True or bool(keyword_failures),
+            "skipped_keywords": keyword_failures,
             "candidate_posts": len(rows),
             "selected_posts": sum(
                 str(row["analyze_status"] or "") == "completed" for row in rows

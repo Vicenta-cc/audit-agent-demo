@@ -30,6 +30,7 @@ from .crawler_adapter import (
     VIDEO_EXTENSIONS,
     CrawlerAuthenticationError,
     CrawlerCollectionIncompleteError,
+    CrawlerMediaDownloadError,
     CrawlOutput,
     CrawlerVerificationError,
     CrawlerRateLimitError,
@@ -2137,6 +2138,15 @@ class AuditPipeline:
         detail_comments = 300 if detail_comments is None else int(detail_comments)
         # 切换账号后 save_root 是 crawler/rotation-<账号>，证据要从整个任务的采集目录回读
         job_crawl_dir = save_root.parent if save_root.name.startswith("rotation-") else save_root
+        failure_path = job_crawl_dir / "keyword_failures.json"
+        keyword_failures = json.loads(failure_path.read_text(encoding="utf-8")) if failure_path.exists() else {}
+
+        def persist_keyword_failures() -> None:
+            failure_path.parent.mkdir(parents=True, exist_ok=True)
+            pending = failure_path.with_suffix(".tmp")
+            pending.write_text(json.dumps(keyword_failures, ensure_ascii=False), encoding="utf-8")
+            pending.replace(failure_path)
+
         selected_by_key: dict[str, str] = load_collected_selections(job_crawl_dir)  # content_key -> 选中它的词
         legacy_words = legacy_collected_keywords(job_crawl_dir)
         # A crash can occur after a complete snapshot is published but before the
@@ -2279,6 +2289,9 @@ class AuditPipeline:
                     # 换账号重试这个词时不再挑这一条，也不把它记成已选
                     state["failed_picks"].add(selected.content_key)
                     raise
+                except CrawlerMediaDownloadError:
+                    state["media_failed_content_id"] = selected.content_key
+                    raise
                 if detail_output.command:
                     last_command = list(detail_output.command)
                 if detail_output.contents:
@@ -2294,6 +2307,9 @@ class AuditPipeline:
             # 续采或切换账号后重跑：已经精采够每词上限的词不再搜索，避免一个词超出上限（R2/R3）
             already = picked(keyword)
             if keyword in done:
+                if keyword in keyword_failures:
+                    del keyword_failures[keyword]
+                    persist_keyword_failures()
                 job_store.log(self.job_id, f"词「{keyword}」已选定 {'、'.join(already)}，跳过重复采集")
                 continue
             # 本任务采集上限沿用旧路径的 max_total_notes：达到上限就不再搜索后面的词，
@@ -2317,6 +2333,9 @@ class AuditPipeline:
                 try:
                     crawl_keyword(index, keyword, candidate_root, account, keyword_state)
                     clean_account_ids.add(account["id"])
+                    if keyword in keyword_failures:
+                        del keyword_failures[keyword]
+                        persist_keyword_failures()
                 # 触发验证或登录失效的账号退出本任务轮换，同一个词只换下一个账号重试一次；
                 # 重试也失败（一个高风险词最多连累两个账号）或轮换表空了，就按原来的方式整任务失败。
                 # 限流是出口 IP 级别的，换账号没有用。
@@ -2334,12 +2353,21 @@ class AuditPipeline:
                     retry_with = rotation[cursor % len(rotation)]
                     job_store.log(self.job_id, f"词「{keyword}」改用账号 {retry_with['display_name']} 重试")
                     continue
-                # 精采不完整沿用 off 模式：整任务失败并提示查看 collection_status，
-                # 否则流式入库已经写进 DB 的内容会被当成"本词无产出"
+                except CrawlerMediaDownloadError:
+                    # Only a typed, recorded download failure from this detail attempt
+                    # is skippable. Callback/DB/integrity errors must still propagate.
+                    if "media_failed_content_id" not in keyword_state:
+                        raise
+                    keyword_failures[keyword] = {
+                        "keyword": keyword, "content_id": keyword_state["media_failed_content_id"],
+                        "error_code": "crawler_media_download_failed",
+                        "reason": "媒体下载未完成，本关键词已跳过；失败记录已保留",
+                    }
+                    persist_keyword_failures()
+                    job_store.log(self.job_id, f"词「{keyword}」媒体下载失败，记录并跳过，继续下一个关键词",
+                                  stage="crawl", level="warning", error_code="crawler_media_download_failed")
                 except (CrawlerRateLimitError, CrawlerCollectionIncompleteError):
                     raise
-                except Exception as exc:
-                    job_store.log(self.job_id, f"词「{keyword}」采集或初筛失败：{exc}，跳过该词")
                 cursor += 1
                 break
         # 本任务里没有触发风控就完成采集的账号，风控计数清零（退出慢速模式）
@@ -2357,6 +2385,10 @@ class AuditPipeline:
                            if comment_content_identity(comment, platform) in selected_by_key]
         # 诊断行 "MediaCrawler command:" 读的是 output.command，逐词模式下补上最后一次精采命令
         output.command = last_command or ["triage-select", str(len(terms)), "keywords"]
+        if keyword_failures and not selected_by_key and not (stop_checker and stop_checker()):
+            raise CrawlerMediaDownloadError(
+                "crawler_media_download_failed: 未取得可研判结果，存在媒体下载失败的关键词；可恢复后继续采集"
+            )
         job_store.log(self.job_id, f"初筛完成：{visited} 个词，选中 {len(selected_by_key)} 条，本次精采 {len(output.contents)} 条进入精审")
         # 所有词都没有可疑候选：由调用方把任务记为正常结束（不算失败，也不生成报告）
         # 采集失败、精采无产出、候选为 0 的词都不算「无可疑」，仍按原来的 no_valid_content_selected 失败

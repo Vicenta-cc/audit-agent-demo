@@ -13,7 +13,7 @@ import backend.audit_agent.pipeline as pipeline_module
 from backend.audit_agent.auth_state_cipher import AuthStateCipher
 from backend.audit_agent.crawler_account_store import CrawlerAccountStore
 from backend.audit_agent.crawler_adapter import (CrawlerAuthenticationError, CrawlerRateLimitError,
-                                                 CrawlerVerificationError, CrawlOutput)
+                                                 CrawlerVerificationError, CrawlerMediaDownloadError, CrawlOutput)
 from backend.audit_agent.triage import CandidateScore
 from backend.task_admission.resources import acquire_account_handle
 
@@ -451,12 +451,18 @@ def test_pick_lost_to_verification_is_not_reported_as_no_suspicious_content(env,
 ], ids=["crawler-error", "detail-empty", "zero-candidates", "mixed-clean-and-error"])
 def test_failures_are_not_reported_as_no_suspicious_content(env, monkeypatch, snapshot, crawler, engine):
     a = env.add("A")
-    job = _run_pipeline(env, monkeypatch, crawler(), a, engine=engine(), max_total_notes=2,
+    source = crawler()
+    job = _run_pipeline(env, monkeypatch, source, a, engine=engine(), max_total_notes=2,
                         settings_auto_analyze=True, **snapshot)
-    assert job["control"]["no_suspicious_content"] is False
+    assert job["control"].get("no_suspicious_content", False) is False
     messages = [log["message"] for log in job["logs"]]
     assert not any(m.startswith("未发现可疑内容") for m in messages)
-    if "_confirmed_analyze_limit" in snapshot:
+    if isinstance(source, RaisingSearchCrawler):
+        # Unclassified subprocess errors must retain their actual failure, not
+        # be swallowed and relabelled as an empty successful collection.
+        assert job["status"] == "failed"
+        assert job["error"] == "MediaCrawler failed with exit code 1"
+    elif "_confirmed_analyze_limit" in snapshot:
         assert job["status"] == "failed"
         assert job["error"].startswith("no_valid_content_selected:")
     else:
@@ -577,20 +583,22 @@ def test_each_keyword_logs_the_account_it_uses(env, monkeypatch):
         "词「词1」使用账号 A", "词「词2」使用账号 B", "词「词2」使用账号 C", "词「词3」使用账号 A"]
 
 
-def test_only_accounts_that_crawled_successfully_get_their_risk_reset(env, monkeypatch):
+def test_media_failure_preserves_successful_search_account_risk_handling(env, monkeypatch):
     a, b, c = (env.add(name) for name in "ABC")
     with env.store._connect() as conn:
         conn.execute("UPDATE crawler_accounts SET risk_count=1")
 
     class BrokenForB(RotationCrawler):
-        def run_search(self, *, platform, keyword, save_root, account_id="", **kwargs):
+        def run_detail(self, platform, content_id, *, source_keyword, save_root=None, account_id="", **kwargs):
             if account_id == b["id"]:
-                raise RuntimeError("MediaCrawler failed with exit code 2")
-            return super().run_search(platform=platform, keyword=keyword, save_root=save_root,
+                raise CrawlerMediaDownloadError("media_download_failed")
+            return super().run_detail(platform, content_id, source_keyword=source_keyword, save_root=save_root,
                                       account_id=account_id, **kwargs)
 
     _sweep(env, monkeypatch, BrokenForB(), _as_rotation([a, b, c]), keywords="词1,词2,词3")
-    assert [env.store.get(x["id"])["risk_count"] for x in (a, b, c)] == [0, 1, 0]
+    # All accounts completed platform search. A CDN failure does not turn B's
+    # successful authenticated request into a verification/login failure.
+    assert [env.store.get(x["id"])["risk_count"] for x in (a, b, c)] == [0, 0, 0]
 
 
 class TwoCandidateCrawler(RotationCrawler):

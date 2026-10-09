@@ -40,6 +40,13 @@ const blockedPreview = {
   }]
 } as ConfirmationPreview;
 
+test("media download interruption explains recovery without blaming account login", () => {
+  const run = { error_code: "crawler_media_download_failed", error_message: "internal traceback" } as InvestigationRunProjection;
+  expect(formatRunFailureMessage(run)).toContain("可稍后继续采集");
+  expect(formatRunFailureMessage(run)).not.toContain("internal");
+  expect(formatRunFailureMessage(run)).not.toContain("登录");
+});
+
 test("creation presentation hides internal diagnostics and keeps real management navigation", () => {
   expect(buildSuggestionAssistantCopy(draft, blockedPreview)).not.toContain("NO_PUBLISHED");
   expect(buildSuggestionBlockerLink(blockedPreview)).toEqual({

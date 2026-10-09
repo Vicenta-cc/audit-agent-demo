@@ -27,10 +27,13 @@ def partial_coverage_paragraphs(snapshot) -> list[str]:
     failures = coverage.get("excluded_failed_posts") or []
     paragraphs = []
     if coverage.get("collection_incomplete"):
+        cause = "部分关键词采集失败" if coverage.get("skipped_keywords") else "用户已结束后续采集"
         paragraphs.append(
-            f"采集未完成：用户已结束后续采集，本报告仅覆盖已完成研判的 {coverage.get('selected_posts', len(snapshot.posts))} 条帖子。"
+            f"采集未完成：{cause}，本报告仅覆盖已完成研判的 {coverage.get('selected_posts', len(snapshot.posts))} 条帖子。"
             "未采集到的内容未作研判，不能视为无风险，也不能据此推断已覆盖全部调查范围。"
         )
+        for skipped in coverage.get("skipped_keywords") or []:
+            paragraphs.append(f"未完成关键词「{skipped['keyword']}」：{skipped['reason']}（帖子 {skipped['content_id']}）。")
     if not failures:
         return paragraphs
     paragraphs.append(

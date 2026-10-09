@@ -42,6 +42,25 @@ class CrawlerCollectionIncompleteError(RuntimeError):
     """A required content stage failed; retain outputs without rotating accounts."""
 
 
+class CrawlerMediaDownloadError(CrawlerCollectionIncompleteError):
+    """A recorded media failure, isolated before a complete detail is published."""
+
+
+def collection_incomplete_error(save_root: Path, platform: str) -> CrawlerCollectionIncompleteError:
+    status_dir = save_root / PLATFORM_DATA_DIRS[platform] / "collection_status"
+    for path in sorted(status_dir.glob("media-*.json")):
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(record, dict) and record.get("stage") == "media" and record.get("status") == "failed" and record.get("reason") in {
+            "media_download_failed", "incomplete_images", "missing_video_url",
+        }:
+            return CrawlerMediaDownloadError("crawler_media_download_failed: 媒体下载未完成，失败记录已保留")
+    return CrawlerCollectionIncompleteError(
+        "采集未完成：详情、媒体或分页处理失败；已成功内容保留，请查看采集目录 douyin/collection_status 中的失败记录"
+    )
+
 
 @dataclass
 class CrawlOutput:
@@ -659,8 +678,7 @@ class MediaCrawlerAdapter:
                 if "ACCOUNT_VERIFY" in stdout or "ACCOUNT_VERIFY" in stderr:
                     raise CrawlerVerificationError("采集账号触发平台验证")
                 if "COLLECTION_INCOMPLETE" in stdout or "COLLECTION_INCOMPLETE" in stderr:
-                    raise CrawlerCollectionIncompleteError(
-                        "采集未完成：详情、媒体或分页处理失败；已成功内容保留，失败记录在采集目录 douyin/collection_status 中，可修复后继续采集")
+                    raise collection_incomplete_error(save_root, platform)
                 raise RuntimeError(
                     f"MediaCrawler failed with exit code {returncode}\n"
                     f"STDOUT:\n{stdout[-4000:]}\n"
@@ -726,8 +744,7 @@ class MediaCrawlerAdapter:
                     raise CrawlerVerificationError("采集账号触发平台验证")
 
                 if 'COLLECTION_INCOMPLETE' in terminal_log:
-                    raise CrawlerCollectionIncompleteError(
-                        "采集未完成：详情、媒体或分页处理失败；已成功内容保留，请查看采集目录 douyin/collection_status 中的失败记录")
+                    raise collection_incomplete_error(save_root, platform)
 
                 output = self.load_latest_output(save_root, platform)
                 output.command = command
