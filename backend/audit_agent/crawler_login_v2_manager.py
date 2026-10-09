@@ -31,6 +31,7 @@ from .crawler_login_protocol import (
     phase_to_status,
     read_packet,
     validate_command,
+    ProtocolError,
 )
 
 TERMINAL = {"done", "failed", "expired", "cancelled"}
@@ -131,6 +132,10 @@ class LoginV2Error(ValueError):
         self.message = error_message(self.code)
         self.status = status
         super().__init__(self.message)
+
+
+class CommandRejected(LoginV2Error):
+    """The manager has established that this new command was not accepted."""
 
 
 @dataclass
@@ -696,7 +701,10 @@ class CrawlerLoginV2Manager:
         owner_token=None,
         epoch=None,
     ):
-        c = validate_command(command)
+        try:
+            c = validate_command(command)
+        except ProtocolError as exc:
+            raise CommandRejected("INVALID_COMMAND") from exc
         with self._lock:
             s = self.sessions[session_id]
             if owner_token is not None:
@@ -704,7 +712,7 @@ class CrawlerLoginV2Manager:
             elif s.user_id != user_id or s.app_session_id != app_session_id:
                 raise LoginV2Error("SESSION_OWNER_MISMATCH", status=403)
             if c["operation_id"] != s.operation_id:
-                raise LoginV2Error("OPERATION_MISMATCH")
+                raise CommandRejected("OPERATION_MISMATCH")
             kind = (
                 c.get("action")
                 if c["type"] == "action"
@@ -730,7 +738,7 @@ class CrawlerLoginV2Manager:
                 )
             self._validate_runtime(s, c, epoch)
             if s.commands.full():
-                raise LoginV2Error("INPUT_BACKPRESSURE")
+                raise CommandRejected("INPUT_BACKPRESSURE")
             if durable:
                 self.operations.record_command(
                     s.operation_id,
@@ -749,9 +757,52 @@ class CrawlerLoginV2Manager:
                 "platform_status": "pending",
             }
 
+    def command_failure(self, session_id, command, exc):
+        """Report recorded outcomes before classifying a new pre-dispatch rejection."""
+        with self._lock:
+            session = self.sessions[session_id]
+            command_id = (
+                command.get("command_id") if isinstance(command, dict) else None
+            )
+            if isinstance(command_id, str) and len(command_id) <= 128:
+                try:
+                    recorded = self.operations.get_command(
+                        session.operation_id, command_id
+                    )
+                except Exception:
+                    recorded = None
+                    return {"execution_status": "unknown", "platform_status": "unknown"}
+                if recorded:
+                    return {
+                        "execution_status": recorded["execution_status"],
+                        "platform_status": recorded["platform_status"],
+                    }
+            if isinstance(exc, CommandRejected):
+                return {
+                    "execution_status": "rejected",
+                    "platform_status": "not_applicable",
+                }
+            return {"execution_status": "unknown", "platform_status": "unknown"}
+
+    def cancel_if_controller(self, session_id, epoch):
+        with self._lock:
+            session = self.sessions.get(session_id)
+            if session and session.epoch == epoch:
+                self._finish(session, "cancelled")
+
+    def revoke_application(self, session_id, user_id, app_session_id):
+        with self._lock:
+            session = self.sessions.get(session_id)
+            if (
+                session
+                and session.user_id == user_id
+                and session.app_session_id == app_session_id
+            ):
+                self._finish(session, "cancelled", "APPLICATION_AUTH_REVOKED")
+
     def _validate_runtime(self, s, c, epoch=None, dispatch=False):
         if s.snapshot["phase"] in TERMINAL:
-            raise LoginV2Error("SESSION_ENDED")
+            raise CommandRejected("SESSION_ENDED")
         if (
             s.controller is None
             or s.snapshot["controller_state"] != "attached"
@@ -759,20 +810,20 @@ class CrawlerLoginV2Manager:
             or epoch is not None
             and epoch != s.epoch
         ):
-            raise LoginV2Error("CONTROLLER_REPLACED")
+            raise CommandRejected("CONTROLLER_REPLACED")
         if c["expected_state_revision"] != s.snapshot["state_revision"]:
-            raise LoginV2Error("STALE_STATE")
+            raise CommandRejected("STALE_STATE")
         if not dispatch and c["sequence"] <= s.sequence:
-            raise LoginV2Error("STALE_SEQUENCE")
+            raise CommandRejected("STALE_SEQUENCE")
         capability = c["action"] if c["type"] == "action" else c["type"]
         if capability not in s.snapshot["available_actions"]:
-            raise LoginV2Error("ACTION_NOT_AVAILABLE")
+            raise CommandRejected("ACTION_NOT_AVAILABLE")
         if "challenge_id" in c:
             area = s.snapshot.get("challenge") or {}
             if c["challenge_id"] != area.get("challenge_id") or c[
                 "area_version"
             ] != area.get("area_version"):
-                raise LoginV2Error("STALE_CHALLENGE")
+                raise CommandRejected("STALE_CHALLENGE")
         if s.authorize:
             s.authorize()
 

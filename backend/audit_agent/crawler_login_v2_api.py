@@ -148,8 +148,10 @@ def create_login_v2_router(
         command: dict,
         principal=Depends(principal_provider),
     ):
+        authorized = False
         try:
             active(session_id, principal, request.headers.get("x-login-token", ""))
+            authorized = True
             return {
                 "item": manager.command(
                     session_id,
@@ -160,7 +162,10 @@ def create_login_v2_router(
                 )
             }
         except ValueError as exc:
-            raise fail(exc) from exc
+            error = fail(exc)
+            if authorized:
+                error.detail.update(manager.command_failure(session_id, command, exc))
+            raise error from exc
 
     @router.get("/api/crawler-accounts/{account_id}/login-operations/{operation_id}")
     def get_operation(
@@ -380,6 +385,7 @@ def create_login_v2_router(
                                         safe_error_code(exc, "INVALID_COMMAND")
                                     ),
                                     "command_id": value.get("command_id"),
+                                    **manager.command_failure(session_id, value, exc),
                                 }
                             )
                     receiver = asyncio.create_task(ws.receive())
@@ -397,10 +403,22 @@ def create_login_v2_router(
             AuthorizationError,
         ) as exc:
             if epoch is not None:
-                manager.cancel(session_id, internal=True)
+                if (
+                    isinstance(
+                        exc, (HTTPException, AuthenticationError, AuthorizationError)
+                    )
+                    or getattr(exc, "status", None) == 401
+                ):
+                    manager.revoke_application(
+                        session_id, principal.id, session_key(principal)
+                    )
+                else:
+                    manager.cancel_if_controller(session_id, epoch)
             try:
                 await ws.close(
-                    code=4401
+                    code=4409
+                    if getattr(exc, "code", None) == "CONTROLLER_REPLACED"
+                    else 4401
                     if isinstance(exc, AuthenticationError)
                     or getattr(exc, "status", None) == 401
                     else 4403
