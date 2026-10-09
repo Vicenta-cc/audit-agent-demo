@@ -45,5 +45,5 @@ def resolve(conn, ref, *, session_id, principal):
                             details={'mutation_applied': False, 'retryable': False})
     body = LexiconContent.model_validate_json(current['content_json'])
     return {'strategy': 'temporary_terms', 'terms': body.search_terms(),
-            'source_lexicon_ids': json.loads(row['source_ids_json']),
+            'source_lexicon_ids': json.loads(row['source_ids_json']), 'source_edit_ref': row['ref'],
             'lexicon_content': body.model_dump(mode='json')}

@@ -128,6 +128,8 @@ class ExistingLexiconRecallPlan(StrictModel):
 
 
 class TemporaryTermsRecallPlan(StrictModel):
+    source_edit_ref: StrictStr | None = Field(default=None, pattern=r"^resource-ref:[0-9a-f]{32}$",
+                                              exclude_if=lambda value: value is None)
     strategy: Literal["temporary_terms"]
     terms: list[StrictStr] = Field(default_factory=list, max_length=100)
     source_lexicon_ids: list[StrictStr] = Field(default_factory=list, max_length=20)
@@ -796,6 +798,8 @@ class ResolvedExecutionConfiguration(StrictModel):
 
 
 class ConfirmedRecallPlanSnapshot(StrictModel):
+    source_edit_ref: StrictStr | None = Field(default=None, pattern=r"^resource-ref:[0-9a-f]{32}$",
+                                              exclude_if=lambda value: value is None)
     strategy: Literal["existing_lexicon", "temporary_terms"]
     lexicon_id: StrictStr = ""
     runtime_content_hash: StrictStr = ""

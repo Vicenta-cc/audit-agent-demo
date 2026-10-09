@@ -914,6 +914,7 @@ class InvestigationResourceService:
                     strategy="temporary_terms",
                     temporary_terms=list(collection_keywords),
                     source_lexicon_ids=list(plan.source_lexicon_ids),
+                    source_edit_ref=plan.source_edit_ref,
                 )
         execution = ResolvedExecutionConfiguration.model_validate(resolved)
         resolved_search_terms = list(collection_keywords) if mode == "search" else []

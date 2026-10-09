@@ -69,6 +69,7 @@ def hide_legacy_hash_input(parameters):
     # but generated/edited resources must travel by reference in model calls.
     temporary = definitions.get('TemporaryTermsRecallPlan', {})
     temporary.get('properties', {}).pop('lexicon_content', None)
+    temporary.get('properties', {}).pop('source_edit_ref', None)
     if 'ResourceRefRecallPlan' not in definitions:
         return
     definitions.pop('ExistingLexiconRecallPlan', None)

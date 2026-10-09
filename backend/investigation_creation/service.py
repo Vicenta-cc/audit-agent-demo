@@ -92,6 +92,7 @@ class InvestigationCreationService:
                     self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
                 def normalize(configuration: InvestigationDraftConfiguration, *, previous) -> InvestigationDraftConfiguration:
                     self._reject_legacy_creation_platform(configuration)
+                    configuration = self._normalize_edit_origin(configuration, previous=previous, resource_ref=resource_ref, session_id=session_id, principal=principal)
                     sources = self._temporary_provenance(configuration)
                     if sources and sources != self._temporary_provenance(previous):
                         self.resource_service.validate_temporary_provenance(
@@ -178,6 +179,7 @@ class InvestigationCreationService:
                 with draft_operations.validation_phase(create_operation is not None):
                     if resource_ref:
                         self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
+                    configuration = self._normalize_edit_origin(configuration, resource_ref=resource_ref, session_id=session_id, principal=principal)
                     sources = self._temporary_provenance(configuration)
                     if sources:
                         self.resource_service.validate_temporary_provenance(
@@ -234,6 +236,7 @@ class InvestigationCreationService:
             with self.resource_service.authoritative_draft_fence() as resource_connection:
                 if resource_ref:
                     self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
+                effective_configuration = self._normalize_edit_origin(effective_configuration, previous=draft.configuration, resource_ref=resource_ref, session_id=session_id, principal=principal)
                 sources = self._temporary_provenance(effective_configuration)
                 if sources and sources != self._temporary_provenance(draft.configuration):
                     self.resource_service.validate_temporary_provenance(
@@ -261,6 +264,36 @@ class InvestigationCreationService:
             objective=command.objective,
             configuration=effective_configuration,
         )
+
+    def _normalize_edit_origin(self, configuration, *, previous=None, resource_ref=None,
+                              session_id='', principal):
+        """Only resolved server handles may establish an edit origin.
+
+        An unchanged adopted snapshot retains its origin even after the live edit
+        advances. Editing the snapshot in the drawer explicitly detaches it.
+        """
+        mode = configuration.investigation
+        if mode.mode != 'search' or mode.recall_plan.strategy != 'temporary_terms':
+            return configuration
+        plan = mode.recall_plan
+        if not plan.source_edit_ref:
+            return configuration
+        if resource_ref == plan.source_edit_ref:
+            resolved = self.resource_management.resolve_lexicon_ref(resource_ref, session_id=session_id, principal=principal)
+            if resolved == plan.model_dump(mode='json'):
+                return configuration
+        if previous and previous.investigation.mode == 'search':
+            prior = previous.investigation.recall_plan
+            if prior.strategy == 'temporary_terms' and prior.source_edit_ref == plan.source_edit_ref:
+                if prior.model_dump(mode='json') == plan.model_dump(mode='json'):
+                    return configuration
+                # The drawer modifies the adopted copy, not the originating edit.
+                return configuration.model_copy(update={
+                    'investigation': mode.model_copy(update={
+                        'recall_plan': plan.model_copy(update={'source_edit_ref': None})
+                    })
+                })
+        raise ConfigurationValidationError('词库来源须通过当前会话的有效资源引用建立。', code='RESOURCE_REF_INVALID')
 
     @staticmethod
     def _temporary_provenance(configuration: object) -> list[str]:

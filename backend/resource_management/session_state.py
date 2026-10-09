@@ -12,6 +12,7 @@ from pathlib import Path
 import sqlite3
 
 from .lexicon_versions import digest
+from .contracts import LexiconContent
 from backend.rulesets.compiler import content_hash as rule_hash
 
 
@@ -199,7 +200,18 @@ class SessionResourceReader:
             add_formal('lexicon', value.get('lexicon_id'))
             for identifier in value.get('source_lexicon_ids') or []:
                 add_formal('lexicon', identifier)
-            # An embedded temporary word list does not identify its original edit.
+            ref = value.get('source_edit_ref')
+            if ref and 'lexicon_edit_refs' in tables:
+                row = db.execute('SELECT * FROM lexicon_edit_refs WHERE ref=? AND principal_id=? AND session_id=?',
+                                 (ref, principal.id, session_id)).fetchone()
+                if row and known_versions.get((row['edit_id'], row['version'])) == row['content_hash']:
+                    inline = value.get('lexicon_content')
+                    if inline is not None and digest(LexiconContent.model_validate(inline).storage_dict()) != row['content_hash']:
+                        raise ValueError('Lexicon origin differs from adopted content')
+                    return dict(strategy=value.get('strategy'), edit_id=row['edit_id'],
+                                edit_version=row['version'], content_hash=row['content_hash'],
+                                lineage='verified_edit_version')
+            # Legacy/direct word lists do not identify their original edit.
             return dict(strategy=value.get('strategy', 'unknown'), lexicon_id=value.get('lexicon_id', ''),
                         content_hash=digest(value), lineage='formal_resource' if value.get('lexicon_id') else 'unknown')
 
