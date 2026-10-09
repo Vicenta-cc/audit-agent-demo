@@ -238,19 +238,50 @@ def test_real_helper_commit_risk_and_profile_reuse(real_login):
         assert db.execute('SELECT seed,version FROM profiles').fetchall() == before
 
 
-def test_real_helper_failed_commit_recovers_without_reauth(real_login, monkeypatch):
+@pytest.mark.parametrize('existing_backup', [False, True], ids=['empty-backup', 'stale-backup'])
+def test_real_helper_failed_commit_recovers_without_reauth(real_login, monkeypatch, existing_backup):
     manager, account, requests = real_login
+    old_ciphertext = ''
+    if existing_backup:
+        old_ciphertext = manager.cipher.encrypt({'cookies': [], 'origins': [
+            {'origin': 'https://www.douyin.com', 'localStorage': [{'name':'fixtureLogin','value':'old-credentials'}]}]})
+        account = manager.store.save_douyin_auth_state(account['id'], old_ciphertext, 'fixture-account')
+        assert account['has_auth_state']
+        assert account['failure_kind'] == 'verify'
+        # Model an already managed Profile whose login expired, not a legacy
+        # database-only account (that separate case requires explicit migration).
+        profile = account_profile_directory(account['id'])
+        profile.mkdir(parents=True)
+        (profile/'auth-imported').touch(mode=0o600)
+    revision_before = manager.store.get(account['id'])['auth_state_revision']
     original = manager.operations.commit_auth
     monkeypatch.setattr(manager.operations, 'commit_auth', lambda *a, **k: (_ for _ in ()).throw(RuntimeError('simulated SQLite failure')))
     snapshot = complete_fixture_login(manager, account, requests)
     wait_for(lambda: manager.sessions[snapshot['id']].snapshot['phase'] == 'failed')
     wait_for(lambda: manager.sessions[snapshot['id']].cleanup_done.is_set())
-    assert manager.operations.get(snapshot['operation_id'])['stage'] == 'recovery_required'
+    source = manager.operations.get(snapshot['operation_id'])
+    assert source['stage'] == 'recovery_required'
+    failed_account = manager.store.get(account['id'])
+    assert failed_account['auth_state_revision'] == revision_before + 1
+    assert failed_account['auth_state_revision'] == source['expected_auth_revision']
+    assert manager.store.get_auth_state_ciphertext(account['id']) == old_ciphertext
+    assert failed_account['platform_account_id'] == ('fixture-account' if existing_backup else '')
     monkeypatch.setattr(manager.operations, 'commit_auth', original)
     new_owner = {**OWNER, 'app_session_id':'after-application-login', 'owner_token':'y'*32}
     recovered, _ = manager.start(manager.store.get(account['id']), request_key='recovery', intent='recover',
                                  source_operation_id=snapshot['operation_id'], **new_owner)
     wait_for(lambda: manager.sessions[recovered['id']].snapshot['phase'] == 'done', manager, recovered['id'])
+    wait_for(lambda: manager.sessions[recovered['id']].cleanup_done.is_set())
+    assert manager.sessions[recovered['id']].snapshot['result']['auth_saved']
+    saved = manager.store.get(account['id'])
+    assert saved['has_auth_state']
+    assert saved['platform_account_id'] == 'fixture-account'
+    assert saved['auth_state_revision'] == failed_account['auth_state_revision'] + 1
+    ciphertext = manager.store.get_auth_state_ciphertext(account['id'])
+    assert ciphertext and ciphertext != old_ciphertext
+    state = manager.cipher.decrypt(ciphertext)
+    assert any(v['name'] == 'fixtureLogin' and v['value'] == 'saved'
+               for origin in state['origins'] for v in origin['localStorage'])
     assert requests.count('/sms') == 1
     assert manager.operations.get(snapshot['operation_id'])['stage'] == 'recovered'
-    assert manager.store.get(account['id'])['failure_kind'] == 'verify'
+    assert saved['failure_kind'] == 'verify' and saved['cooldown_until'] == '2099-01-01'
