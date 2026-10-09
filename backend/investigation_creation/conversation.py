@@ -1512,6 +1512,20 @@ class InvestigationCreationConversationService:
 
         # Receipt provenance, not model prose, determines this minimal public fallback.
         with self.tool_service.application_service.store._connect() as connection:
+            committed = connection.execute(
+                """SELECT 1 FROM draft_creation_operations o
+                   JOIN investigation_creation_tool_receipts r ON r.receipt_id=o.active_receipt_id
+                   JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id=r.receipt_id
+                   JOIN ruleset_proposal_approvals a ON a.draft_id=o.draft_id
+                     AND a.session_id=r.session_id AND a.runtime_turn_id=r.turn_id
+                     AND a.tool_call_id=r.tool_call_id AND a.draft_revision=1
+                   WHERE r.session_id=? AND b.application_turn_id=?
+                     AND o.principal=? AND o.state='CREATED'
+                     AND r.tool_name='use_ruleset_proposal' LIMIT 1""",
+                (turn.session_id, turn.id, self.principal_for_session(turn.session_id).id),
+            ).fetchone()
+            if committed:
+                return "调查草案和规则采用已保存，但确认预览暂时未能恢复。请读取现有草案后继续，不要重复创建。"
             failures = connection.execute(
                 """SELECT r.response_json FROM investigation_creation_tool_receipts r
                    JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id=r.receipt_id

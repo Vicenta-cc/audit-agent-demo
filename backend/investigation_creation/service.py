@@ -40,6 +40,7 @@ from .ports import (
     RunProjector,
 )
 from .store import InvestigationCreationStore
+from . import draft_operations
 from .principal import Principal
 from .approval import UseRuleSetProposalInput, reject
 
@@ -79,30 +80,33 @@ class InvestigationCreationService:
 
     def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str, turn_id: str,
                             principal: Principal, tool_call_id: str = "", runtime_turn_id: str = "",
-                            resource_ref: str | None = None) -> InvestigationDraft:
-        if self.conversation_store is None or not turn_id or not tool_call_id:
-            reject("PROPOSAL_APPROVAL_REQUIRED", "An authoritative current conversation turn is required.")
-        if self.resource_service is None:
-            raise ConfigurationValidationError("investigation resource service is not configured")
-        with self.resource_service.authoritative_draft_fence() as resource_connection:
-            if resource_ref:
-                self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
-            def normalize(configuration: InvestigationDraftConfiguration, *, previous) -> InvestigationDraftConfiguration:
-                self._reject_legacy_creation_platform(configuration)
-                sources = self._temporary_provenance(configuration)
-                if sources and sources != self._temporary_provenance(previous):
-                    self.resource_service.validate_temporary_provenance(
-                        sources, resource_connection=resource_connection, principal=principal,
-                    )
-                return self.resource_service.resolve_authoritative_draft(
-                    configuration, principal=principal, resource_connection=resource_connection,
-                ).normalized_configuration
+                            resource_ref: str | None = None,
+                            create_operation: tuple[str, str] | None = None) -> InvestigationDraft:
+        with draft_operations.validation_phase(create_operation is not None):
+            if self.conversation_store is None or not turn_id or not tool_call_id:
+                reject("PROPOSAL_APPROVAL_REQUIRED", "An authoritative current conversation turn is required.")
+            if self.resource_service is None:
+                raise ConfigurationValidationError("investigation resource service is not configured")
+            with self.resource_service.authoritative_draft_fence() as resource_connection:
+                if resource_ref:
+                    self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
+                def normalize(configuration: InvestigationDraftConfiguration, *, previous) -> InvestigationDraftConfiguration:
+                    self._reject_legacy_creation_platform(configuration)
+                    sources = self._temporary_provenance(configuration)
+                    if sources and sources != self._temporary_provenance(previous):
+                        self.resource_service.validate_temporary_provenance(
+                            sources, resource_connection=resource_connection, principal=principal,
+                        )
+                    return self.resource_service.resolve_authoritative_draft(
+                        configuration, principal=principal, resource_connection=resource_connection,
+                    ).normalized_configuration
 
-            return self.store.use_ruleset_proposal(
-                command, session_id=session_id, turn_id=turn_id, tool_call_id=tool_call_id, runtime_turn_id=runtime_turn_id or turn_id, principal=principal.id,
-                conversation_db=self.conversation_store.db_path, normalize=normalize,
-                before_write=self._edit_ref_guard(resource_ref, session_id, principal),
-            )
+                return self.store.use_ruleset_proposal(
+                    command, session_id=session_id, turn_id=turn_id, tool_call_id=tool_call_id, runtime_turn_id=runtime_turn_id or turn_id, principal=principal.id,
+                    conversation_db=self.conversation_store.db_path, normalize=normalize,
+                    before_write=self._edit_ref_guard(resource_ref, session_id, principal),
+                    create_operation=create_operation,
+                )
 
     @staticmethod
     def _edit_ref_guard(resource_ref, session_id, principal):
@@ -158,30 +162,32 @@ class InvestigationCreationService:
         session_id: str = "",
         create_operation: tuple[str, str] | None = None,
     ) -> InvestigationDraft:
-        command = CreateDraftCommand.model_validate(
-            command.model_dump(mode="json", warnings=False)
-        )
-        self._reject_legacy_creation_platform(command.configuration)
-        configuration = command.configuration
-        self.store.protect_temporary_judgement(configuration)
+        with draft_operations.validation_phase(create_operation is not None):
+            command = CreateDraftCommand.model_validate(
+                command.model_dump(mode="json", warnings=False)
+            )
+            self._reject_legacy_creation_platform(command.configuration)
+            configuration = command.configuration
+            self.store.protect_temporary_judgement(configuration)
         if isinstance(configuration, InvestigationDraftConfiguration):
             if self.resource_service is None:
                 raise ConfigurationValidationError(
                     "investigation resource service is not configured"
                 )
             with self.resource_service.authoritative_draft_fence() as resource_connection:
-                if resource_ref:
-                    self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
-                sources = self._temporary_provenance(configuration)
-                if sources:
-                    self.resource_service.validate_temporary_provenance(
-                        sources, resource_connection=resource_connection, principal=principal
+                with draft_operations.validation_phase(create_operation is not None):
+                    if resource_ref:
+                        self.resource_management.resolve_lexicon_ref(resource_ref, principal=principal, session_id=session_id, connection=resource_connection)
+                    sources = self._temporary_provenance(configuration)
+                    if sources:
+                        self.resource_service.validate_temporary_provenance(
+                            sources, resource_connection=resource_connection, principal=principal
+                        )
+                    resolution = self.resource_service.resolve_authoritative_draft(
+                        configuration,
+                        principal=principal,
+                        resource_connection=resource_connection,
                     )
-                resolution = self.resource_service.resolve_authoritative_draft(
-                    configuration,
-                    principal=principal,
-                    resource_connection=resource_connection,
-                )
                 return self.store.create_draft(
                     principal=principal.id,
                     title=command.title,

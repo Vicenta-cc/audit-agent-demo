@@ -30,6 +30,7 @@ from .contracts import (
     UpdateDraftCommand,
 )
 from .errors import IdempotencyConflictError
+from . import draft_operations
 from .principal import Principal
 from .approval import UseRuleSetProposalInput
 from .resource_ref_inputs import (
@@ -508,10 +509,11 @@ class InvestigationCreationToolService:
         resource_ref = None
         generation_profile = None
         if tool_name in {'create_investigation_draft', 'update_investigation_draft', 'use_ruleset_proposal'}:
-            resolved, resource_ref = resolve_arguments(tool_name, parsed.model_dump(mode='json'),
-                                         lambda: self.application_service.resource_management,
-                                         principal=principal, session_id=session_id)
-            parsed = (UseRuleSetProposalInput if tool_name == 'use_ruleset_proposal' else schema).model_validate(resolved)
+            with draft_operations.validation_phase(create_operation is not None):
+                resolved, resource_ref = resolve_arguments(tool_name, parsed.model_dump(mode='json'),
+                                             lambda: self.application_service.resource_management,
+                                             principal=principal, session_id=session_id)
+                parsed = (UseRuleSetProposalInput if tool_name == 'use_ruleset_proposal' else schema).model_validate(resolved)
         if tool_name in {"create_ruleset_proposal", "create_lexicon_edit"} and parsed.generation_request is not None:
             kind = "ruleset" if tool_name == "create_ruleset_proposal" else "lexicon"
             if kind == "lexicon":
@@ -535,6 +537,7 @@ class InvestigationCreationToolService:
                 turn_id = self._conversation_turns.get(session_id, "")
             draft = self.application_service.use_ruleset_proposal(
                 parsed, session_id=session_id, turn_id=turn_id, principal=principal,
+                create_operation=create_operation,
                 runtime_turn_id=runtime_identity.turn_id if runtime_identity else "",
                 tool_call_id=runtime_identity.tool_call_id if runtime_identity and runtime_identity.session_id == session_id else "",
                 **({'resource_ref': resource_ref} if resource_ref else {}),
@@ -667,13 +670,14 @@ class InvestigationCreationToolService:
                         f"{tool_name}."
                     ),
                 }
-                if tool_name == "create_investigation_draft":
+                if draft_operations.is_creation(tool_name, raw_arguments):
                     details.update(
                         {
                             "draft_created": False,
+                            "write_status": "NOT_STARTED",
                             "recovery": (
                                 "Draft was not created. Correct the arguments using the "
-                                "Tool schema and retry create_investigation_draft."
+                                f"Tool schema and retry {tool_name}."
                             ),
                         }
                     )
@@ -732,11 +736,15 @@ class InvestigationCreationToolService:
                             ),
                         },
                     }
-            if tool_name == 'create_investigation_draft' and receipt and receipt.get('draft_id'):
+            if receipt and receipt.get('operation_id') and receipt.get('draft_id'):
                 # The draft committed even if preview generation or delivery failed.
                 # Do not resolve resources or create anything again.
-                payload = self.application_service.get_draft_view(
-                    receipt['draft_id'], principal=principal,
+                draft = self.application_service.store.get_created_draft(
+                    receipt['operation_id'], principal=principal.id,
+                )
+                payload = InvestigationDraftView(draft=draft,
+                    confirmation_preview=self.application_service.resource_service.confirmation_preview(
+                        draft, principal=principal),
                 ).model_dump(mode='json', warnings=False)
             else:
                 payload = self.execute(
@@ -746,7 +754,7 @@ class InvestigationCreationToolService:
                     session_id=identity.session_id,
                     **({"runtime_identity": identity} if tool_name == "use_ruleset_proposal" else {}),
                     **({'create_operation': (receipt['operation_id'], receipt['receipt_id'])}
-                       if tool_name == 'create_investigation_draft' and receipt else {}),
+                       if receipt and receipt.get('operation_id') else {}),
                 )
             result = {"status": "ok", "data": payload}
         except Exception as exc:

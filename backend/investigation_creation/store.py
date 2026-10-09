@@ -462,7 +462,7 @@ class InvestigationCreationStore:
                 "durable tool execution identity is required",
                 code="TOOL_EXECUTION_IDENTITY_REQUIRED",
             )
-        if tool_name == draft_operations.TOOL and is_mutation:
+        if is_mutation and draft_operations.is_creation(tool_name, arguments):
             return draft_operations.begin(self, identity, arguments, application_turn_id)
         fingerprint = self.tool_arguments_fingerprint(arguments)
         now = self.clock().isoformat()
@@ -482,6 +482,7 @@ class InvestigationCreationStore:
                     SELECT * FROM investigation_creation_tool_receipts
                     WHERE session_id = ? AND turn_id = ? AND tool_name = ?
                       AND is_mutation = 1
+                      AND receipt_id NOT IN (SELECT receipt_id FROM draft_creation_attempts)
                     """,
                     (identity["session_id"], identity["turn_id"], identity["tool_name"]),
                 ).fetchone()
@@ -589,18 +590,23 @@ class InvestigationCreationStore:
         """Read adoption outcomes from Application receipts, never runtime text."""
         with self._connect() as connection:
             rows = connection.execute(
-                """SELECT r.* FROM investigation_creation_tool_receipts r
+                """SELECT r.*,
+                       CASE WHEN r.status='SUCCEEDED' THEN r.response_json ELSE o.result_json END AS effective_response_json
+                   FROM investigation_creation_tool_receipts r
+                   LEFT JOIN draft_creation_attempts a ON a.receipt_id=r.receipt_id
+                   LEFT JOIN draft_creation_operations o ON o.id=a.operation_id
                    JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id=r.receipt_id
                    WHERE r.session_id=? AND b.application_turn_id=? AND r.principal=?
                      AND r.tool_name='use_ruleset_proposal' AND r.is_mutation=1
-                     AND r.status='SUCCEEDED' ORDER BY r.rowid""",
+                     AND (r.status='SUCCEEDED' OR
+                          (o.state='CREATED' AND o.active_receipt_id=r.receipt_id AND o.result_json<>'')) ORDER BY r.rowid""",
                 (session_id, turn_id, principal),
             ).fetchall()
             results = []
             for row in rows:
                 if not row["turn_id"] or not row["tool_call_id"] or not row["arguments_fingerprint"]:
                     raise RuntimeError("Adoption receipt execution identity is incomplete")
-                envelope = json.loads(row["response_json"])
+                envelope = json.loads(row["effective_response_json"])
                 if not isinstance(envelope, dict) or envelope.get("status") != "ok":
                     raise RuntimeError("Successful adoption receipt has an invalid response")
                 data = envelope["data"]
@@ -649,12 +655,16 @@ class InvestigationCreationStore:
         with self._connect() as connection:
             rows = connection.execute(
                 f"""SELECT r.receipt_id, r.tool_call_id, r.tool_name,
-                           r.response_json, r.arguments_fingerprint
+                           r.arguments_fingerprint,
+                           CASE WHEN r.status='SUCCEEDED' THEN r.response_json ELSE o.result_json END AS effective_response_json
                     FROM investigation_creation_tool_receipts r
+                    LEFT JOIN draft_creation_attempts a ON a.receipt_id=r.receipt_id
+                    LEFT JOIN draft_creation_operations o ON o.id=a.operation_id
                     JOIN ruleset_proposal_conversation_bindings b
                       ON b.receipt_id=r.receipt_id
                     WHERE r.session_id=? AND b.application_turn_id=?
-                      AND r.principal=? AND r.status='SUCCEEDED'
+                      AND r.principal=? AND (r.status='SUCCEEDED' OR
+                          (o.state='CREATED' AND o.active_receipt_id=r.receipt_id AND o.result_json<>''))
                       {mutation_filter}
                     ORDER BY r.rowid""",
                 (session_id, turn_id, principal),
@@ -663,7 +673,7 @@ class InvestigationCreationStore:
         for row in rows:
             if not row["tool_call_id"] or not row["arguments_fingerprint"]:
                 raise RuntimeError("Successful tool receipt execution identity is incomplete")
-            response = json.loads(str(row["response_json"] or ""))
+            response = json.loads(str(row["effective_response_json"] or ""))
             if (
                 not isinstance(response, dict)
                 or response.get("status") != "ok"
@@ -786,9 +796,10 @@ class InvestigationCreationStore:
 
     def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str,
                             turn_id: str, tool_call_id: str, runtime_turn_id: str, principal: str, conversation_db: Path,
-                            normalize: Callable, before_write: Callable | None = None) -> InvestigationDraft:
+                            normalize: Callable, before_write: Callable | None = None,
+                            create_operation: tuple[str, str] | None = None) -> InvestigationDraft:
         command = UseRuleSetProposalInput.model_validate(command.model_dump(mode="json"))
-        with self._connect() as connection:
+        with draft_operations.validation_phase(create_operation is not None), self._connect() as connection:
             # Lock both existing SQLite stores before reading the approval basis.
             connection.execute("ATTACH DATABASE ? AS conversation", (str(conversation_db),))
             connection.execute("BEGIN IMMEDIATE")
@@ -885,6 +896,8 @@ class InvestigationCreationStore:
                  proposal.proposal_id, proposal.version, proposal.content_hash, draft_id, revision, now,
                  presented["presentation_id"], tool_call_id, runtime_turn_id),
             )
+            if create_operation is not None:
+                draft_operations.bind_draft(connection, create_operation, principal, draft_id)
             result = self._draft(self._owned_draft_row(connection, draft_id, principal))
         return result
 
@@ -902,7 +915,7 @@ class InvestigationCreationStore:
         draft_id = f"investigation-draft:{uuid4().hex}"
         now = self._now_text()
         configuration_json = self._json(configuration.model_dump(mode="json"))
-        with self._connect() as connection:
+        with draft_operations.validation_phase(create_operation is not None), self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             if before_write:
                 before_write(connection)
@@ -937,6 +950,27 @@ class InvestigationCreationStore:
             if create_operation is not None:
                 draft_operations.bind_draft(connection, create_operation, principal, draft_id)
         return self.get_draft(draft_id, principal=principal)
+
+    def get_created_draft(self, operation_id: str, *, principal: str) -> InvestigationDraft:
+        """Recover the committed creation revision, even if later edits exist."""
+        with self._connect() as connection:
+            operation = connection.execute(
+                "SELECT * FROM draft_creation_operations WHERE id=? AND principal=? AND state='CREATED'",
+                (operation_id, principal),
+            ).fetchone()
+            if operation is None:
+                draft_operations.unknown()
+            row = dict(self._owned_draft_row(connection, operation['draft_id'], principal))
+            revision = connection.execute(
+                'SELECT * FROM investigation_draft_revisions WHERE draft_id=? AND revision=1',
+                (operation['draft_id'],),
+            ).fetchone()
+            if revision is None:
+                draft_operations.unknown()
+            for field in ('title', 'objective', 'configuration_json', 'created_by'):
+                row[field] = revision[field]
+            row.update(current_revision=1, updated_by=revision['created_by'], updated_at=revision['created_at'])
+            return self._draft(row)
 
     def update_draft(
         self,

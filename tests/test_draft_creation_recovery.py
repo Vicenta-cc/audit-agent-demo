@@ -152,7 +152,7 @@ def test_post_commit_preview_failure_is_not_a_no_write_failure(creation_stack):
     stack = creation_stack
     args = arguments(stack)
     from backend.investigation_creation.errors import ResourceStaleError
-    with patch.object(stack['app_service'], 'get_draft_view', side_effect=ResourceStaleError(
+    with patch.object(stack['app_service'].resource_service, 'confirmation_preview', side_effect=ResourceStaleError(
             'preview failed', details={'mutation_applied': False})):
         result = call(stack, args, 'preview-failed')
         repeated = call(stack, args, 'preview-failed')
