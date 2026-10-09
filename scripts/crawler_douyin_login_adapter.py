@@ -221,7 +221,7 @@ class DouyinLoginAdapter:
         anchors = await self.page.locator(
             "header a[href*='/user/'], #douyin-header a[href*='/user/']"
         ).evaluate_all(
-            """es => es.map(e => ({href:e.href, label:(e.innerText+' '+(e.getAttribute('aria-label')||'')+' '+(e.title||'')).trim(), visible:!!(e.offsetWidth&&e.offsetHeight)}))"""
+            """es => es.map(e => ({href:e.href, text:(e.innerText||'').trim(), label:(e.getAttribute('aria-label')||'').trim(), title:(e.title||'').trim(), visible:!!(e.offsetWidth&&e.offsetHeight)}))"""
         )
         from backend.audit_agent.crawler_account_identity import (
             extract_platform_account_id,
@@ -232,10 +232,13 @@ class DouyinLoginAdapter:
             for a in anchors
             if a["visible"]
             and any(
-                label in a["label"] for label in ("我的主页", "个人主页", "我的抖音")
+                str(a.get(field) or "").strip() in {"我的主页", "个人主页", "我的抖音"}
+                for field in ("text", "label", "title")
             )
         }
         candidates.discard("")
+        if len(candidates) > 1:
+            raise ValueError("IDENTITY_UNCONFIRMED")
         if len(candidates) == 1:
             self.identity = candidates.pop()
             self.identity_source = "personal_header_menu"

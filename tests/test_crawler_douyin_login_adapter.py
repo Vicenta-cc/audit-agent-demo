@@ -816,3 +816,76 @@ def test_home_fallback_only_applies_before_any_actionable_login_step(
         "home",
     ]
     assert asyncio.run(scenario(["qr_ready", "qr_ready", "preparing"])) == ["self"]
+
+
+def test_personal_header_identity_requires_exact_individual_labels():
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        locator = SimpleNamespace(
+            evaluate_all=AsyncMock(
+                return_value=[
+                    {
+                        "href": "https://www.douyin.com/user/MS4wLjABAAAA-author",
+                        "text": "作者的个人主页",
+                        "label": "查看作者的个人主页",
+                        "title": "作者的个人主页",
+                        "visible": True,
+                    }
+                ]
+            )
+        )
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(locator=lambda _: locator))
+        assert await adapter.trusted_identity() == ""
+        for field in ("text", "label", "title"):
+            locator.evaluate_all.return_value = [
+                {
+                    "href": "https://www.douyin.com/user/MS4wLjABAAAA-self",
+                    "text": "",
+                    "label": "",
+                    "title": "",
+                    "visible": True,
+                    field: "我的主页",
+                }
+            ]
+            assert await adapter.trusted_identity() == "MS4wLjABAAAA-self"
+            assert adapter.identity_source == "personal_header_menu"
+            adapter.identity = ""
+
+    asyncio.run(run())
+
+
+def test_personal_header_conflicting_ids_fail_closed_and_self_response_has_priority():
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+    import pytest
+
+    async def run():
+        locator = SimpleNamespace(
+            evaluate_all=AsyncMock(
+                return_value=[
+                    {
+                        "href": "https://www.douyin.com/user/MS4wLjABAAAA-first",
+                        "text": "我的主页",
+                        "visible": True,
+                    },
+                    {
+                        "href": "https://www.douyin.com/user/MS4wLjABAAAA-second",
+                        "label": "个人主页",
+                        "visible": True,
+                    },
+                ]
+            )
+        )
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(locator=lambda _: locator))
+        with pytest.raises(ValueError, match="IDENTITY_UNCONFIRMED"):
+            await adapter.trusted_identity()
+        assert adapter.identity == ""
+        locator.evaluate_all.reset_mock()
+        adapter.identity = "MS4wLjABAAAA-response"
+        adapter.identity_source = "douyin_self_response"
+        assert await adapter.trusted_identity() == "MS4wLjABAAAA-response"
+        locator.evaluate_all.assert_not_awaited()
+
+    asyncio.run(run())
