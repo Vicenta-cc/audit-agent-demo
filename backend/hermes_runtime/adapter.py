@@ -101,6 +101,22 @@ def prepare_creation_history(history: list[dict[str, Any]] | None) -> list[dict[
     return result
 
 
+@contextmanager
+def turn_system_context(agent: Any, context: str) -> Iterator[None]:
+    """Use pinned Hermes' API-time context, without invalidating its stable cache.
+
+    The application serializes turns under its product/session execution lock.
+    Always restore the field, including after provider errors, to avoid stale
+    facts leaking into another turn. These facts are not persisted as chat.
+    """
+    previous = getattr(agent, "ephemeral_system_prompt", "")
+    agent.ephemeral_system_prompt = "\n\n".join(filter(None, (previous, context)))
+    try:
+        yield
+    finally:
+        agent.ephemeral_system_prompt = previous
+
+
 @dataclass(frozen=True)
 class HermesRuntimeBinding:
     """Product adapter exposing only stable Hermes public entry points."""

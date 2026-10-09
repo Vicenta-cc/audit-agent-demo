@@ -316,6 +316,7 @@ class HermesInvestigationAgentService:
                 system_message = self.runtime_binding.product_system_prompt(
                     self._product_mode(session.id)
                 )
+                turn_context = ""
                 if self.bind_runtime:
                     from hermes_m0.runtime import report_task_runtime_for_session
                     runtime = report_task_runtime_for_session(session.id)
@@ -324,14 +325,14 @@ class HermesInvestigationAgentService:
                         progress = delivery_context(runtime, session.id)
                         if progress["confirmed_deliveries"]:
                             # Ephemeral server facts, not another persisted prompt/history copy.
-                            system_message += (
+                            turn_context += (
                                 "\n当前评论交付检查点（服务端已确认；以此核对进度，不以模型历史自述代替）："
                                 + json.dumps(progress, ensure_ascii=False)
                             )
                     activity = runtime.account_activity
                     if activity is not None:
                         titles = [repo.report.title for repo in activity.authorized_report_repositories]
-                        system_message += (
+                        turn_context += (
                             "\n服务器确认本会话账号活动查询已授权以下报告："
                             + json.dumps(titles, ensure_ascii=False)
                             + "。当前报告绑定只限制报告发现与证据导航，不限制上述账号活动查询。"
@@ -347,6 +348,8 @@ class HermesInvestigationAgentService:
                     public_streams.enter_context(
                         self._answer_streamer.bind_turn(session.id, turn.id)
                     )
+                    from backend.hermes_runtime.adapter import turn_system_context
+                    public_streams.enter_context(turn_system_context(agent, turn_context))
                     result = agent.run_conversation(
                         user_message,
                         system_message=system_message,
