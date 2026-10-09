@@ -20,7 +20,6 @@ export interface InvestigationTurnWaitOptions {
   onAnswerDelta?: (event: InvestigationAnswerDeltaEvent) => void;
   onAnswerReset?: (event: InvestigationAnswerResetEvent) => void;
   signal?: AbortSignal;
-  timeoutMs?: number;
   afterSequence?: number;
   resumeReplay?: boolean;
 }
@@ -81,8 +80,6 @@ export function waitForTurn(
   options: InvestigationTurnWaitOptions = {}
 ) {
   return new Promise<InvestigationTurnResponse>((resolve, reject) => {
-    const timeoutMs = options.timeoutMs ?? 180_000;
-    const startedAt = Date.now();
     let settled = false;
     let pollTimer = 0;
     let priorTerminalSeen = false;
@@ -204,10 +201,6 @@ export function waitForTurn(
     };
     const poll = async () => {
       if (settled) return;
-      if (Date.now() - startedAt >= timeoutMs) {
-        fail(new Error("Investigation Turn timed out"));
-        return;
-      }
       try {
         const status = await apiRequest<InvestigationTurnResponse>(paths.statusPath);
         if (status.status !== "running") {
