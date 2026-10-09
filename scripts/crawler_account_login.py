@@ -595,13 +595,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-platform-account-id", default="")
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--interactive", action="store_true")
+    parser.add_argument("--protocol-v2", action="store_true")
+    parser.add_argument("--media-fd", type=int, default=-1)
+    parser.add_argument("--operation-id", default="")
+    parser.add_argument("--intent", choices=("check_or_login", "reauth", "recover"), default="check_or_login")
+    parser.add_argument("--entry", choices=("self", "home"), default="self")
+    parser.add_argument("--block-media", action="store_true")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
     try:
-        if args.interactive:
+        if args.protocol_v2:
+            if args.platform != "dy" or args.media_fd < 0 or not args.operation_id:
+                raise ValueError("V2 requires Douyin, operation ID and inherited media channel")
+            from scripts.crawler_douyin_login_v2 import run_login_v2
+            asyncio.run(run_login_v2(args))
+        elif args.interactive:
             if args.platform != "dy":
                 raise ValueError("当前平台不支持交互登录")
             from scripts.crawler_interactive_login import run_interactive_login

@@ -34,3 +34,34 @@ async def prepare_headed_login(context, profile):
         await page.close()
 
 
+async def reset_douyin_credentials_v2(context, profile):
+    """Explicit reauthentication only; preserve cache, seed and other origins.
+
+    Caller must obtain the parent's durable reset authorization first. CDP
+    clears first-party credential storage without Playwright route or visiting
+    synthetic pages (both can disturb the profile's normal cache lifecycle).
+    """
+    (profile["directory"] / "auth-imported").touch(mode=0o600)
+    page = await context.new_page()
+    cdp = await context.new_cdp_session(page)
+    try:
+        state = await asyncio.wait_for(context.storage_state(), 15)
+        origins = {"https://www.douyin.com", "https://douyin.com", "https://creator.douyin.com",
+                   "https://live.douyin.com", "https://douhot.douyin.com"}
+        from urllib.parse import urlsplit
+        for item in state.get("origins", []):
+            parsed = urlsplit(item.get("origin", ""))
+            if parsed.scheme == "https" and (parsed.hostname == "douyin.com" or (parsed.hostname or "").endswith(".douyin.com")):
+                origins.add(item["origin"])
+        for origin in sorted(origins):
+            await asyncio.wait_for(cdp.send("Storage.clearDataForOrigin", {
+                "origin": origin, "storageTypes": "local_storage,indexeddb,service_workers,cache_storage",
+            }), 5)
+        import re
+        await context.clear_cookies(domain=re.compile(r"(^|\.)douyin\.com$"))
+        for existing in list(context.pages):
+            if existing is not page:
+                await asyncio.wait_for(existing.close(), 3)
+    finally:
+        await cdp.detach()
+        # Keep the final page alive for headed persistent Chromium.
