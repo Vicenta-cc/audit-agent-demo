@@ -55,3 +55,90 @@ def test_helper_rejects_stale_epoch_and_area_before_action():
     with pytest.raises(ValueError, match="CONTROLLER_REPLACED"): helper.check_command(command)
     command["controller_epoch"] = 2; command["area_version"] = 2
     with pytest.raises(ValueError, match="STALE_AREA"): helper.check_command(command)
+
+
+def test_capture_uses_config_and_recovers_a_transient_failure(monkeypatch):
+    import socket
+    import time
+    from backend.audit_agent.config import settings
+    monkeypatch.setattr(settings, "crawler_login_v2_active_fps", 10)
+    monkeypatch.setattr(settings, "crawler_login_v2_idle_fps", 3)
+    monkeypatch.setattr(settings, "crawler_login_v2_jpeg_quality", 82)
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(SimpleNamespace(operation_id="op", media_fd=left.detach()))
+        emitted = []
+        qualities = []
+        class Page:
+            viewport_size = {"width": 1000, "height": 760}
+            async def screenshot(self, **kwargs):
+                qualities.append(kwargs["quality"])
+                if len(qualities) == 1:
+                    raise RuntimeError("transient redirect")
+                return b"jpeg"
+        class Adapter:
+            page = Page()
+            identity = ""
+            async def observe(self):
+                return {"phase": "challenge_required", "region": region}
+        class Media:
+            async def send(self, *args, **kwargs):
+                helper.stopped.set()
+        region = Region(10, 10, 200, 100)
+        helper.adapter = Adapter()
+        helper.region = region
+        helper.epoch = 1
+        helper.controller_attached = True
+        helper.phase = "challenge_required"
+        helper.last_activity = time.monotonic()
+        helper.emit = lambda kind, **payload: emitted.append((kind, payload))
+        actual_media = helper.media
+        helper.media = Media()
+        try:
+            assert helper.capture_period() == .1
+            helper.last_activity = 0
+            assert helper.capture_period() == 1 / 3
+            helper.last_activity = time.monotonic()
+            await helper.capture_frames()
+            assert qualities == [82, 82]
+            assert any(kind == "notice" for kind, _ in emitted)
+            assert not any(kind == "error" for kind, _ in emitted)
+        finally:
+            actual_media.close()
+            right.close()
+    asyncio.run(run())
+
+
+def test_capture_permanent_failure_stops_after_three_attempts():
+    import socket
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(SimpleNamespace(operation_id="op", media_fd=left.detach()))
+        attempts = []
+        emitted = []
+        class Page:
+            viewport_size = {"width": 1000, "height": 760}
+            async def screenshot(self, **kwargs):
+                attempts.append(kwargs)
+                raise RuntimeError("permanently closed page")
+        class Adapter:
+            page = Page()
+            identity = ""
+            async def observe(self):
+                raise RuntimeError("closed page cannot relocate")
+        helper.adapter = Adapter()
+        helper.region = Region(10, 10, 200, 100)
+        helper.epoch = 1
+        helper.controller_attached = True
+        helper.phase = "challenge_required"
+        helper.emit = lambda kind, **payload: emitted.append((kind, payload))
+        try:
+            await helper.capture_frames()
+            assert len(attempts) == 3
+            assert helper.stopped.is_set()
+            assert emitted[-1][0] == "error"
+            assert emitted[-1][1]["code"] == "CAPTURE_FAILED"
+        finally:
+            helper.media.close()
+            right.close()
+    asyncio.run(run())

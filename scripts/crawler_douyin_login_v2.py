@@ -19,6 +19,8 @@ MANUAL_ACTIONS = ["pointer_batch", "key", "text", "scroll", "abort_gesture"]
 
 class DouyinLoginV2:
     def __init__(self, args):
+        from backend.audit_agent.config import settings
+
         self.args = args
         self.operation_id = args.operation_id
         self.media = LoginMediaWriter(args.media_fd)
@@ -49,6 +51,9 @@ class DouyinLoginV2:
         self.tasks = []
         self.capture_enabled = True
         self.committed = False
+        self.active_fps = settings.crawler_login_v2_active_fps
+        self.idle_fps = settings.crawler_login_v2_idle_fps
+        self.jpeg_quality = settings.crawler_login_v2_jpeg_quality
 
     def emit(self, kind, **payload):
         print(json.dumps({"type": kind, "protocol_version": 2, "operation_id": self.operation_id, **payload},
@@ -281,8 +286,13 @@ class DouyinLoginV2:
             self.last_snapshot = snapshot
             self.emit("snapshot", **snapshot)
 
+    def capture_period(self):
+        fps = self.active_fps if time.monotonic() - self.last_activity < 2 else self.idle_fps
+        return 1 / fps
+
     async def capture_frames(self):
         previous = None
+        consecutive_failures = 0
         while not self.stopped.is_set():
             if not (self.region and self.epoch and self.controller_attached and self.capture_enabled and self.phase in {"challenge_required", "manual_required"}):
                 await asyncio.sleep(.1)
@@ -290,7 +300,8 @@ class DouyinLoginV2:
             started = time.monotonic()
             epoch, region, area = self.epoch, self.region, self.area_version
             try:
-                jpeg = await self.adapter.page.screenshot(type="jpeg", quality=70, clip=region.clip(), timeout=2000)
+                jpeg = await self.adapter.page.screenshot(type="jpeg", quality=self.jpeg_quality, clip=region.clip(), timeout=2000)
+                consecutive_failures = 0
                 digest = (epoch, area, hashlib.sha256(jpeg).digest())
                 if epoch == self.epoch and region == self.region and area == self.area_version and digest != previous:
                     await self.media.send(jpeg, {"operation_id": self.operation_id, "codec": "jpeg",
@@ -300,10 +311,23 @@ class DouyinLoginV2:
                         "applied_input_sequence": self.applied_sequence}, area_version=area)
                     previous = digest
             except (ConnectionError, OSError, asyncio.TimeoutError):
+                self.emit("error", code="MEDIA_CHANNEL_FAILED", message="验证画面连接中断，请重新打开登录窗口")
                 self.stopped.set()
             except Exception:
-                previous = None  # Redirects can transiently invalidate clipping.
-            period = 1 / 15 if time.monotonic() - self.last_activity < 2 else .5
+                previous = None
+                consecutive_failures += 1
+                if consecutive_failures >= 3:
+                    self.emit("error", code="CAPTURE_FAILED", message="无法取得验证画面，请重新打开登录窗口")
+                    self.stopped.set()
+                    break
+                # Navigation can replace the panel. Retry twice after observing
+                # fresh geometry; never keep a permanently broken page spinning.
+                self.emit("notice", code="CAPTURE_RETRY", message="验证页面正在更新")
+                with suppress(Exception):
+                    observation = await self.adapter.observe()
+                    await self.abort_gesture()
+                    self.publish(observation)
+            period = self.capture_period()
             await asyncio.sleep(max(0, period - (time.monotonic() - started)))
 
     async def open_context(self):
