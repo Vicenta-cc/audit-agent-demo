@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -22,6 +23,12 @@ class AuthStateCipher:
             key_file or settings.crawler_auth_key_file
         )
         self._fernet = Fernet(key)
+        self._command_key = hmac.new(base64.urlsafe_b64decode(key), b"crawler-login-command-v1", hashlib.sha256).digest()
+        self.fingerprint_key_id = hashlib.sha256(self._command_key).hexdigest()[:16]
+
+    def command_fingerprint(self, value: dict) -> str:
+        payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return hmac.new(self._command_key, payload, hashlib.sha256).hexdigest()
 
     def encrypt(self, auth_state: dict) -> str:
         if not isinstance(auth_state, dict):
