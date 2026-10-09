@@ -724,6 +724,15 @@ class InvestigationCreationToolService:
                     application_turn_id=application_turn_id,
                 )
                 if receipt["replay"]:
+                    if receipt["status"] != "SUCCEEDED":
+                        from .save_recovery import saved_request
+                        from backend.resource_management.snapshot_refs import tool_view
+                        if tool_name in {'save_resource', 'save_draft_ruleset', 'save_draft_lexicon'}:
+                            saved = saved_request(self.application_service.resource_management,
+                                                  tool_name, raw_arguments,
+                                                  session_id=identity.session_id, principal=principal)
+                            if saved:
+                                return {"status": "ok", "data": tool_view(saved)}
                     if receipt["response"] is not None:
                         return dict(receipt["response"])
                     return {

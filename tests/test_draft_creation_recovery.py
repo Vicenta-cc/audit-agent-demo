@@ -269,7 +269,9 @@ def test_legacy_migration_preserves_history_drafts_and_running_task(creation_sta
         conn.execute("""CREATE UNIQUE INDEX uq_creation_turn_mutation_tool ON investigation_creation_tool_receipts
             (session_id,turn_id,tool_name) WHERE is_mutation=1 AND tool_name NOT IN
             ('create_lexicon_edit','open_resource_edit','update_resource_edit','save_resource')""")
-        conn.execute("""INSERT INTO investigation_creation_tool_receipts VALUES
+        conn.execute("""INSERT INTO investigation_creation_tool_receipts
+            (receipt_id,session_id,turn_id,tool_call_id,principal,tool_name,
+             arguments_fingerprint,is_mutation,status,response_json,created_at,completed_at) VALUES
             ('legacy','recovery-session','turn-create','legacy-call','principal-a',
              'create_investigation_draft',?,1,?,?,'2026-10-03','')""",
             (store.tool_arguments_fingerprint(args), status, '' if status == 'STARTED' else json.dumps(response)))

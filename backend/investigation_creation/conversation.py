@@ -1205,6 +1205,8 @@ class InvestigationCreationConversationService:
         self._notify(turn.id, "call_qwen")
         self.tool_service.begin_conversation_turn(session.id, turn.id)
         provider_route = self._provider_route(user_message)
+        runtime_started = False
+        runtime_finished = False
         try:
             # Keep one immutable reference projection for the prefix fence and
             # this turn's slice. Hermes shallow-copies and may mutate its input.
@@ -1218,6 +1220,7 @@ class InvestigationCreationConversationService:
                 )
                 if self.fake_runtime:
                     agent = self._agent(session.id, provider_route=provider_route)
+                    runtime_started = True
                     result = agent.run_conversation(
                         user_message,
                         system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
@@ -1230,32 +1233,44 @@ class InvestigationCreationConversationService:
                         product_mode="creation"
                     ):
                         agent = self._agent(session.id, provider_route=provider_route)
+                        runtime_started = True
                         result = agent.run_conversation(
                             user_message,
                             system_message=CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT,
                             conversation_history=deepcopy(history),
                             task_id=turn.id,
                         )
+            runtime_finished = True
             if not isinstance(result, dict):
                 raise RuntimeError("Hermes returned a non-object Turn result")
             if bool(result.get("interrupted")):
                 self._answer_streamer.interrupt(turn.id)
+                recovered = self._complete_saved_checkpoints(turn, principal, history, user_message, result)
+                if recovered is not None:
+                    return recovered
                 raise RuntimeError("Hermes creation Turn was interrupted")
             if bool(result.get("failed")) or not bool(result.get("completed", True)):
                 self._answer_streamer.interrupt(turn.id)
                 checkpoint_messages = self._checkpoint_messages_for_turn(
                     turn, principal=principal, include_recovery_instruction=False
                 )
-                artifact = self._verified_artifact(
-                    checkpoint_messages,
-                    principal=principal,
-                    adoption_turn=turn,
-                )
+                from .save_recovery import completion_answer
+                saved_answer = completion_answer(self._saved_checkpoints(checkpoint_messages))
+                try:
+                    artifact = self._verified_artifact(
+                        checkpoint_messages, principal=principal, adoption_turn=turn)
+                except Exception:
+                    if not saved_answer:
+                        raise
+                    # A separate draft/preview failure must not erase a proven
+                    # resource save. Report only the verified save in this case.
+                    artifact = {}
                 if artifact.get("artifact_type") in {
                     "investigation_draft",
                     "investigation_run",
-                }:
-                    answer = self._checkpoint_completion_answer(artifact)
+                } or saved_answer:
+                    answer = '\n\n'.join(filter(None, [
+                        self._checkpoint_completion_answer(artifact) if artifact else '', saved_answer]))
                     transcript = [
                         *(history or []),
                         {"role": "user", "content": user_message},
@@ -1268,7 +1283,8 @@ class InvestigationCreationConversationService:
                         "failed": False,
                         "interrupted": False,
                         "final_response": answer,
-                        "turn_exit_reason": "recovered_successful_application_checkpoint",
+                        "turn_exit_reason": ("recovered_successful_application_checkpoint" if artifact
+                                             else "recovered_successful_resource_save"),
                     }
                     return self._persist_result(
                         turn,
@@ -1310,6 +1326,15 @@ class InvestigationCreationConversationService:
                 self._answer_streamer.release(turn.id)
                 return self.store.turn_result(turn.id)
             self._answer_streamer.interrupt(turn.id)
+            # Only runtime failure may use a save receipt as an alternative
+            # answer. Never turn a history/protocol validation failure into success.
+            if runtime_started and not runtime_finished:
+                try:
+                    recovered = self._complete_saved_checkpoints(turn, principal, history, user_message, {})
+                    if recovered is not None:
+                        return recovered
+                except Exception:
+                    logger.warning('Resource save recovery unavailable for Turn %s', turn.id, exc_info=True)
             self.store.mark_interrupted(
                 turn.id,
                 error_code="hermes_unknown_outcome",
@@ -1346,6 +1371,12 @@ class InvestigationCreationConversationService:
                 principal=principal.id,
             )
         )
+        from .save_recovery import conversation_saves
+        from .store import RESOURCE_SAVE_TOOLS
+        # Save success belongs to the resource transaction, even if the outer
+        # tool log never finished. Verify saves rather than trusting its status.
+        receipts = [r for r in receipts if r['tool_name'] not in RESOURCE_SAVE_TOOLS] + conversation_saves(
+            self.tool_service.application_service, session_id=turn.session_id, turn_id=turn.id, principal=principal)
         if not receipts:
             return []
         calls = []
@@ -1391,6 +1422,24 @@ class InvestigationCreationConversationService:
                 ),
             })
         return messages
+
+    @staticmethod
+    def _saved_checkpoints(messages):
+        from .store import RESOURCE_SAVE_TOOLS
+        return [{'response': json.loads(message['content'])} for message in messages
+                if message.get('role') == 'tool' and message.get('name') in RESOURCE_SAVE_TOOLS]
+
+    def _complete_saved_checkpoints(self, turn, principal, history, user_message, result):
+        from .save_recovery import completion_answer
+        messages = self._checkpoint_messages_for_turn(turn, principal=principal, include_recovery_instruction=False)
+        answer = completion_answer(self._saved_checkpoints(messages))
+        if not answer:
+            return None
+        transcript = [*(history or []), {'role': 'user', 'content': user_message},
+                      *messages, {'role': 'assistant', 'content': answer}]
+        return self._persist_result(turn, {**result, 'completed': True, 'failed': False, 'interrupted': False,
+            'final_response': answer, 'turn_exit_reason': 'recovered_successful_resource_save'},
+            transcript, {}, history_count=len(history or []), include_proposal_presentations=False)
 
     def _failed_turn_checkpoint_history(
         self,

@@ -16,6 +16,8 @@ from backend.rulesets.compiler import content_hash as ruleset_content_hash
 from .approval import UseRuleSetProposalInput, reject, resolve_approval
 from . import draft_operations
 
+RESOURCE_SAVE_TOOLS = frozenset({'save_resource', 'save_draft_ruleset', 'save_draft_lexicon'})
+
 from .contracts import (
     ConfirmationResolution,
     ConfirmationResolutionV3,
@@ -252,6 +254,7 @@ class InvestigationCreationStore:
         # both observe and alter the same missing column.
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            self._ensure_column(connection, "investigation_creation_tool_receipts", "save_arguments_json", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "ruleset_proposal_approvals", "presentation_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "ruleset_proposal_approvals", "tool_call_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "ruleset_proposal_approvals", "runtime_turn_id", "TEXT NOT NULL DEFAULT ''")
@@ -508,8 +511,8 @@ class InvestigationCreationStore:
                 """
                 INSERT INTO investigation_creation_tool_receipts (
                     receipt_id, session_id, turn_id, tool_call_id, principal,
-                    tool_name, arguments_fingerprint, is_mutation, status, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'STARTED', ?)
+                    tool_name, arguments_fingerprint, is_mutation, status, created_at, save_arguments_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'STARTED', ?, ?)
                 """,
                 (
                     receipt_id,
@@ -521,6 +524,8 @@ class InvestigationCreationStore:
                     fingerprint,
                     int(is_mutation),
                     now,
+                    json.dumps(arguments, ensure_ascii=False, sort_keys=True)
+                    if tool_name in RESOURCE_SAVE_TOOLS else '',
                 ),
             )
             if application_turn_id:
@@ -634,6 +639,22 @@ class InvestigationCreationStore:
                     raise RuntimeError("Adoption receipt has no matching durable binding")
                 results.append(data)
         return results
+
+    def conversation_resource_save_receipts(self, *, session_id: str, turn_id: str, principal: str) -> list[dict]:
+        """Locate saves, including those whose outer log missed the commit.
+
+        These are request identities, not proof of success. The resource DB's
+        atomic save receipt must still be checked; never execute a save here.
+        """
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT r.* FROM investigation_creation_tool_receipts r
+                   JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id=r.receipt_id
+                   WHERE r.session_id=? AND b.application_turn_id=? AND r.principal=?
+                     AND r.tool_name IN ('save_resource','save_draft_ruleset','save_draft_lexicon')
+                   ORDER BY r.rowid""", (session_id, turn_id, principal),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def successful_conversation_tool_receipts(
         self,

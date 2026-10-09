@@ -165,6 +165,7 @@ class ResourceManagementService:
                 formal['resource_ref'] = snapshot_refs.issue(conn, self.lexicons, resource_id, principal=principal)
             result = {'id': resource_id, 'resource_id': resource_id, 'kind': kind,
                       'status': 'saved', 'operation_id': operation_id, 'source_key': source_key,
+                      'resource_name': parsed.name if kind == 'ruleset' else parsed.title,
                       'content': parsed.model_dump(mode='json'), 'editable': True,
                       **formal, 'version': formal['resource_version'],
                       'published_revision_id': formal.get('revision_id'), 'published_version': formal['version']}
@@ -356,6 +357,23 @@ class ResourceManagementService:
             row = conn.execute("SELECT result_json FROM resource_save_receipts WHERE principal_id=? AND operation_id=? AND session_id IN (?, '')", (principal.id, operation_id, session_id)).fetchone()
         return json.loads(row[0]) if row else {'status': 'not_found', 'operation_id': operation_id}
 
+    def matching_save(self, operation_id, *, session_id, principal, request=None, source_key=None):
+        """Strict, read-only recovery; an operation ID alone does not prove this request saved."""
+        with self.lexicons._connect() as conn:
+            row = conn.execute(
+                'SELECT * FROM resource_save_receipts WHERE principal_id=? AND operation_id=? AND session_id=?',
+                (principal.id, operation_id, session_id),
+            ).fetchone()
+        if row is None or (request is not None and row['request_hash'] != digest(request)):
+            return None
+        saved = json.loads(row['result_json'])
+        if source_key is not None and saved.get('source_key') != source_key:
+            return None
+        if (saved.get('status') != 'saved' or saved.get('operation_id') != operation_id
+                or saved.get('kind') not in {'ruleset', 'lexicon'} or not saved.get('resource_id')):
+            return None
+        return saved
+
     def save(self, edit_id, expected_version, mode, operation_id, *, session_id, principal):
         request = dict(edit_id=edit_id, expected_version=expected_version, mode=mode, session_id=session_id)
         request_hash = digest(request)
@@ -409,7 +427,8 @@ class ResourceManagementService:
                 else:
                     formal = self._save_lexicon(conn, identifier, parsed, source if mode == 'update' else None, principal)
                     formal['resource_ref'] = snapshot_refs.issue(conn, self.lexicons, identifier, principal=principal)
-            result = dict(status='saved', operation_id=operation_id, kind=edit['kind'], edit_id=edit_id, edit_version=expected_version, edit_content_hash=edit['content_hash'], resource_id=identifier, **formal)
+            result = dict(status='saved', operation_id=operation_id, kind=edit['kind'], edit_id=edit_id, edit_version=expected_version, edit_content_hash=edit['content_hash'], resource_id=identifier,
+                          resource_name=parsed.name if edit['kind'] == 'ruleset' else parsed.title, **formal)
             conn.execute('INSERT INTO resource_save_receipts VALUES (?,?,?,?,?,?)', (principal.id, operation_id, session_id, request_hash, canonical(result), now()))
         return result
 
