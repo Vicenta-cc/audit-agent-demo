@@ -1,10 +1,11 @@
 import { apiRequest } from './apiClient';
 import type { AuditRuleSet, RiskRule } from '../types/investigation';
 
-export interface ExemptionContent { exemption_id: string; name: string; condition: string; enabled?: boolean }
+export interface SourceMapping { source_file: string; source_locator: string; migrated_semantics: string }
+export interface ExemptionContent { exemption_id: string; name: string; condition: string; enabled?: boolean; source_mappings?: SourceMapping[] }
 export interface RuleContent {
   rule_id: string; name: string; hit_condition: string; suggested_risk_level: 'low' | 'medium' | 'high';
-  rule_exemptions: ExemptionContent[]; application_stages: string[]; adjudication_notes: string; enabled: boolean; order: number;
+  rule_exemptions: ExemptionContent[]; application_stages: string[]; adjudication_notes: string; enabled: boolean; order: number; source_mappings?: SourceMapping[];
 }
 export interface RulesContent {
   schema_version: 0; name: string; domain: string; audit_goal: string; general_exemptions: ExemptionContent[];
@@ -58,22 +59,34 @@ export function ruleSetView(resource: Resource<RulesContent>): AuditRuleSet {
 }
 export function rulesContent(view: AuditRuleSet, original?: RulesContent): RulesContent {
   if (!view.categories.length || view.categories.some(c => !c.rules.length)) throw new Error('请为每个风险类型至少添加一条规则后再保存。');
-  const cleanExemption = (e: ExemptionContent): ExemptionContent => ({ exemption_id: e.exemption_id, name: e.name, condition: e.condition, ...(e.enabled === false ? { enabled: false } : {}) });
+  const cleanExemption = ({ enabled, ...e }: ExemptionContent): ExemptionContent => ({ ...e, ...(enabled === false ? { enabled: false } : {}) });
+  // Display sorting is not a content edit. Preserve storage order and values.
+  const storedOrder = <T,>(values: T[], ids: string[], id: (value: T) => string) => values.sort((a, b) => {
+    const rank = (value: T) => { const index = ids.indexOf(id(value)); return index < 0 ? ids.length : index; };
+    return rank(a) - rank(b);
+  });
   return {
     schema_version: 0, name: view.name, domain: view.category, audit_goal: original?.audit_goal || `依据《${view.name}》识别风险，并结合证据与豁免条件进行研判。`,
-    general_exemptions: view.generalExemptions.map(e => cleanExemption({ exemption_id: e.id, name: e.title, condition: e.description, enabled: e.enabled })),
-    categories: view.categories.map((cat, i) => {
+    general_exemptions: view.generalExemptions.map(e => cleanExemption({ ...original?.general_exemptions.find(old => old.exemption_id === e.id), exemption_id: e.id, name: e.title, condition: e.description, enabled: e.enabled })),
+    categories: storedOrder(view.categories.map((cat, i) => {
       const oldCat = original?.categories.find(c => c.category_id === cat.id);
-      return { category_id: cat.id, name: cat.name, description: oldCat?.description || '', order: i,
-        rules: cat.rules.map((r, j) => {
+      const oldDisplayIds = [...(oldCat?.rules || [])].sort((a, b) => a.order - b.order)
+        .map(r => r.rule_id).filter(id => cat.rules.some(r => r.id === id));
+      const currentExistingIds = cat.rules.map(r => r.id).filter(id => oldDisplayIds.includes(id));
+      const reordered = JSON.stringify(oldDisplayIds) !== JSON.stringify(currentExistingIds);
+      return { category_id: cat.id, name: cat.name, description: oldCat?.description ?? '', order: oldCat?.order ?? (Math.max(-1, ...original?.categories.map(c => c.order) || []) + 1 + i),
+        rules: storedOrder(cat.rules.map((r, j) => {
           const old = original?.categories.flatMap(c => c.rules).find(v => v.rule_id === r.id);
           const unchangedExemptions = old?.rule_exemptions.map(e => e.condition).join('\n') === r.exemptionConditions;
-          return { rule_id: r.id, name: r.name, hit_condition: r.content,
+          return { ...old, rule_id: r.id, name: r.name, hit_condition: r.content,
             suggested_risk_level: r.suggestedLevel === '高风险' ? 'high' : r.suggestedLevel === '低风险' ? 'low' : 'medium',
             rule_exemptions: unchangedExemptions ? old!.rule_exemptions.map(cleanExemption) : r.exemptionConditions.split('\n').filter(s => s.trim()).map((s,k) => ({ exemption_id: `ex-${k}`, name: s.trim().slice(0,160), condition: s.trim() })),
-            application_stages: Object.entries(stages).filter(([,label]) => r.applicationStages.includes(label)).map(([key]) => key),
-            adjudication_notes: r.notes?.trim() || r.content, enabled: r.enabled, order: j };
-        }) };
-    })
+            application_stages: old && JSON.stringify(old.application_stages.filter(s => stages[s]).map(s => stages[s])) === JSON.stringify(r.applicationStages)
+              ? [...old.application_stages]
+              : Object.entries(stages).filter(([,label]) => r.applicationStages.includes(label)).map(([key]) => key),
+            adjudication_notes: old ? (r.notes ?? old.adjudication_notes) : (r.notes || r.content), enabled: r.enabled,
+            order: reordered ? j : old?.order ?? (Math.max(-1, ...oldCat?.rules.map(rule => rule.order) || []) + 1 + j) };
+        }), reordered ? cat.rules.map(r => r.id) : oldCat?.rules.map(r => r.rule_id) || [], r => r.rule_id) };
+    }), original?.categories.map(c => c.category_id) || [], c => c.category_id)
   };
 }

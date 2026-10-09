@@ -95,6 +95,9 @@ export function KnowledgeCenterPage({
   const dirty = selectedRuleSet.id && (!source || JSON.stringify(ruleSetView(source)) !== JSON.stringify(selectedRuleSet));
   const handlePublish = async () => {
     if (busy) return;
+    if (source?.editable && source.published_revision_id && !dirty) {
+      setError(''); setMessage('内容未修改，仍使用当前已发布版本。'); return;
+    }
     setBusy(true); setError(''); setMessage('');
     try {
       const content = rulesContent(selectedRuleSet, source?.content);
