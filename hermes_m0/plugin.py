@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import os
+from backend.product_help import tools as product_read_tools
 
 from backend.investigation_creation.tools import (
     HERMES_M3_TOOL_SCHEMAS,
@@ -48,6 +49,8 @@ _M3_CREATION_TOOL_NAMES = frozenset(
 
 def _handler(tool_name: str):
     def handle(args: dict[str, Any], **kwargs: Any) -> str:
+        if tool_name in product_read_tools.INPUTS:
+            return product_read_tools.dispatch(tool_name, args, str(kwargs.get("session_id") or ""))
         if tool_name in _M3_CREATION_TOOL_NAMES or tool_name in {"list_session_resources", "read_session_resource"}:
             return dispatch_hermes_investigation_creation_tool(
                 tool_name,
@@ -214,6 +217,7 @@ def register(ctx: Any) -> None:
             from .pass_support import pass_tool_schemas
 
             schemas = pass_tool_schemas()
+    schemas.extend(product_read_tools.SCHEMAS)
     for schema in schemas:
         ctx.register_tool(
             name=schema["name"],

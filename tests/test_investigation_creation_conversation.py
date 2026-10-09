@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from backend.product_help.tools import SCHEMAS as PRODUCT_READ_TOOL_SCHEMAS
+
 import json
 import sqlite3
 from contextlib import contextmanager
@@ -1357,7 +1359,7 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
     )
     assert tuple(
         definition["function"]["name"] for definition in definitions
-    ) == tuple(sorted(schema["name"] for schema in HERMES_M3_TOOL_SCHEMAS))
+    ) == tuple(sorted(schema["name"] for schema in (*HERMES_M3_TOOL_SCHEMAS, *PRODUCT_READ_TOOL_SCHEMAS)))
 
     from model_tools import handle_function_call
 
@@ -1494,10 +1496,10 @@ def test_real_hermes_registry_switches_creation_report_creation_without_tool_los
             )
 
     expected_creation = tuple(
-        sorted(schema["name"] for schema in HERMES_M3_TOOL_SCHEMAS)
+        sorted(schema["name"] for schema in (*HERMES_M3_TOOL_SCHEMAS, *PRODUCT_READ_TOOL_SCHEMAS))
     )
     expected_report = tuple(
-        sorted(schema["name"] for schema in M2_ACCOUNT_ACTIVITY_TOOLS)
+        sorted(schema["name"] for schema in (*M2_ACCOUNT_ACTIVITY_TOOLS, *PRODUCT_READ_TOOL_SCHEMAS))
     )
     assert names("creation") == expected_creation
     assert names("account-activity") == expected_report

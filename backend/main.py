@@ -438,6 +438,42 @@ investigation_creation_turn_executor = InvestigationTurnExecutor(
         "creation", timeout_seconds=settings.hermes_turn_timeout_seconds,
     )),
 )
+# Both creation and report agents use the same read-only product tools.
+from backend.product_help.tools import ProductReadTools, configure as configure_product_reads
+from backend.product_help.manual import load_manual
+from backend.api.reporting import can_read_m3_report
+
+
+def _product_read_principal(session_id):
+    session = investigation_agent_service.store.get_session(session_id)
+    if not session.owner_principal or session.status != "active":
+        raise ValueError("当前会话不可用。")
+    return auth_store.principal_for_user(session.owner_principal) if _authz_enabled() else Principal(session.owner_principal)
+
+
+def _can_read_catalog_report(principal, item):
+    try:
+        historical_report_demo_service.require_report_access(item['id'], principal_id=principal.id)
+    except Exception:
+        return False
+    return can_read_m3_report(investigation_creation_store, principal,
+        report_version_id=item['id'], task_id=item['task_id'],
+        auth_service=auth_service if _authz_enabled() else None)
+
+
+configure_product_reads(ProductReadTools(report_store=report_store,
+    can_read=_can_read_catalog_report, principal_for_session=_product_read_principal))
+
+
+@app.get("/api/user-manual/images/{image_id}")
+def user_manual_image(image_id: str):
+    from fastapi.responses import Response
+    image = load_manual()[2].get(image_id)
+    if image is None:
+        raise HTTPException(404, detail="手册图片不存在")
+    return Response(image, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
 app.include_router(
     create_reporting_router(
         report_store,

@@ -1934,6 +1934,10 @@ class InvestigationCreationConversationService:
                 answer, _ = redact_internal_account_references(answer)
                 trace_messages = [item for item in transcript[history_count:]
                                   if item.get("role") in {"assistant", "tool"}]
+        from backend.product_help.delivery import complete_report_links
+        answer, transcript = complete_report_links(answer, transcript, history_count)
+        trace_messages = [item for item in transcript[history_count:]
+                          if item.get("role") in {"assistant", "tool"}]
         tool_calls = HermesInvestigationAgentService._tool_calls(trace_messages)
         session = self.store.get_session(turn.session_id)
         try:

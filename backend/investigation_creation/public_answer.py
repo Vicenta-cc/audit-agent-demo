@@ -69,7 +69,18 @@ def redact_creation_internal_references(value: str) -> tuple[str, bool]:
     """
 
     original = str(value or "")
-    redacted = _INTERNAL_ASSIGNMENT.sub("内部标识已隐藏", original)
+    # Preserve only complete, same-origin product links. Bare IDs and arbitrary
+    # paths still pass through the original redaction rules.
+    public_links = []
+    def protect_link(match):
+        public_links.append(match.group(1))
+        return "](PRODUCTPUBLICLINK" + str(len(public_links) - 1) + "END)"
+    protected = re.sub(
+        r"\]\((/api/user-manual/images/[a-f0-9]{64}|"
+        r"/investigation/[A-Za-z0-9%._~-]+/report\?report=report-version%3[Aa][a-f0-9]{32})\)",
+        protect_link, original,
+    )
+    redacted = _INTERNAL_ASSIGNMENT.sub("内部标识已隐藏", protected)
     for pattern in _INTERNAL_VALUES:
         redacted = pattern.sub("内部标识已隐藏", redacted)
     redacted = _LOCAL_PATH.sub("内部路径已隐藏", redacted)
@@ -79,6 +90,8 @@ def redact_creation_internal_references(value: str) -> tuple[str, bool]:
     redacted = re.sub(r"(?<=我是)\s+(?=研判助手)", "", redacted)
     for pattern, replacement in _PUBLIC_TERMS:
         redacted = pattern.sub(replacement, redacted)
+    for index, url in enumerate(public_links):
+        redacted = redacted.replace("PRODUCTPUBLICLINK" + str(index) + "END", url)
     return redacted, redacted != original
 
 

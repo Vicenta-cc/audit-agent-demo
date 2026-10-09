@@ -20,6 +20,8 @@ from backend.audit_agent.search_terms_cap import lexicon_cap_note
 from backend.resource_management.generation import ResourceGenerator
 from backend.resource_management.keyword_profiles import keyword_profile_metadata
 
+from backend.product_help import tools as product_read_tools
+
 from .contracts import (
     ConfirmAndQueueCommand,
     CreateDraftCommand,
@@ -480,7 +482,7 @@ class InvestigationCreationToolService:
 
     @property
     def allowed_tool_names(self) -> frozenset[str]:
-        return frozenset(M3_TOOL_INPUTS) | (frozenset(continuity.INPUTS) if settings.continuous_resource_session_enabled else frozenset())
+        return frozenset(M3_TOOL_INPUTS) | frozenset(product_read_tools.INPUTS) | (frozenset(continuity.INPUTS) if settings.continuous_resource_session_enabled else frozenset())
 
     def definitions(self) -> list[dict[str, Any]]:
         return [
@@ -491,7 +493,7 @@ class InvestigationCreationToolService:
                     "strict": True,
                 },
             }
-            for schema in (*HERMES_M3_TOOL_SCHEMAS, *continuity.schemas())
+            for schema in (*HERMES_M3_TOOL_SCHEMAS, *continuity.schemas(), *product_read_tools.SCHEMAS)
         ]
 
     def execute(
@@ -504,6 +506,8 @@ class InvestigationCreationToolService:
         runtime_identity: HermesToolExecutionIdentity | None = None,
         create_operation: tuple[str, str] | None = None,
     ) -> dict[str, Any]:
+        if tool_name in product_read_tools.INPUTS:
+            return product_read_tools.execute(tool_name, arguments, principal)
         if tool_name in continuity.INPUTS and settings.continuous_resource_session_enabled:
             return continuity.read(self.application_service, tool_name, arguments,
                                    session_id=session_id, principal=principal)

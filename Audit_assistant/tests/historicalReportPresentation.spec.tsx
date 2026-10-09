@@ -117,3 +117,17 @@ test("completed and error states do not retain the pending region", () => {
   expect(shouldShowHistoricalPending(true, false, false)).toBe(false);
   expect(shouldShowHistoricalPending(false, true, true)).toBe(false);
 });
+
+test("manual images have bounded preview controls and report links retain their targets", () => {
+  const src = `/api/user-manual/images/${"a".repeat(64)}`;
+  const report = `/investigation/task%3A1/report?report=report-version%3A${"b".repeat(32)}`;
+  const html = renderMarkdown(`![配置确认 · 示意·演示数据](${src})\n\n[查看报告](${report})`);
+  expect(html).toContain('class="inv-manual-image"');
+  expect(html).toContain('aria-label="放大：配置确认 · 示意·演示数据"');
+  expect(html).toContain(`src="${src}"`);
+  expect(html).toContain(`href="${report}"`);
+  expect(html).toContain('loading="lazy"');
+  const malformed = renderMarkdown('![配图](/api/user-manual/images/not-a-valid-image)');
+  expect(malformed).not.toContain('<img');
+  expect(malformed).not.toContain('<button');
+});

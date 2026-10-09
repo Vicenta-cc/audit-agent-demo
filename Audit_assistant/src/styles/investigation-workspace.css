@@ -9989,3 +9989,11 @@
   .inv-account-tools { flex-wrap: wrap; }
   .inv-quota-menu .inv-toolbar-popover { left: 0; right: auto; }
 }
+
+/* Manual assets use verified same-origin URLs, never model-provided base64. */
+.inv-manual-image { display: block; max-width: min(100%, 600px); margin: 12px 0; padding: 8px; border: 1px solid #dce4f0; border-radius: 12px; background: #f8faff; cursor: zoom-in; text-align: left; }
+.inv-manual-image img { display: block; width: 100%; max-height: 360px; object-fit: contain; }
+.inv-manual-image span { display: block; margin-top: 8px; color: #66758e; font-size: 12px; }
+.inv-manual-lightbox { position: fixed; inset: 0; z-index: 10000; background: #142136df; display: flex; align-items: center; justify-content: center; padding: 48px 24px; }
+.inv-manual-lightbox > img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.inv-manual-lightbox > button { position: absolute; top: 16px; right: 24px; padding: 8px 16px; border-radius: 8px; border: 0; cursor: pointer; }

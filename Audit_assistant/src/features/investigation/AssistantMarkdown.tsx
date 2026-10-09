@@ -3,6 +3,8 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { formatHistoricalReportText, formatReportVocabulary } from "./historicalReportPresentation";
 
+import { ManualImage } from "./ManualImage";
+
 interface MarkdownNode {
   type: string;
   value?: string;
@@ -64,6 +66,8 @@ function remarkHistoricalReportTerms() {
 }
 
 const components: Components = {
+  img: ({ src, alt }) => src?.startsWith("/api/user-manual/images/")
+    ? createElement(ManualImage, { src, alt }) : createElement("img", { src, alt }),
   table: ({ children, node: _node, ...props }) => createElement(
     "div",
     { className: "inv-markdown-table-scroll", tabIndex: 0, "aria-label": "回答数据表格" },

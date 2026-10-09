@@ -747,6 +747,10 @@ class HermesInvestigationAgentService:
                     trace_messages = [item for item in transcript[previous_message_count:]
                                       if item.get("role") in {"assistant", "tool"}]
                     comment_batch_runtime = runtime
+        from backend.product_help.delivery import complete_report_links
+        answer, transcript = complete_report_links(answer, transcript, previous_message_count)
+        trace_messages = [item for item in transcript[previous_message_count:]
+                          if item.get("role") in {"assistant", "tool"}]
         try:
             self._answer_streamer.finalize(turn_id, answer)
         except Exception:
