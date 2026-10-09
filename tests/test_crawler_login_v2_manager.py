@@ -31,6 +31,7 @@ for raw in sys.stdin:
    data={'auth_state':{'cookies':[]},'platform_account_id':'identity','identity_verified':True,'reuse_verified':True}
    write_packet(media,pack_packet(json.dumps(data).encode(),{'operation_id':op},kind=2))
    emit(type='save_ready')
+ elif typ=='abort_gesture': emit(type='notice',code='GESTURE_EXPIRED',message='child released')
  elif typ in ('shutdown','save_committed'): break
 media.close()
 """
@@ -159,7 +160,7 @@ def test_sensitive_command_idempotency_and_conflict(manager):
     epoch = attach(m, s)
     c = command(m, s, epoch)
     m.command(s["id"], c, user_id="user", app_session_id="app", owner_token="x" * 32)
-    result = wait_until(
+    wait_until(
         lambda: (m.operations.get_command(s["operation_id"], "cmd-1") or {}).get(
             "execution_status"
         )
@@ -562,3 +563,242 @@ def test_unknown_exceptions_do_not_leak_details():
     assert response.detail["code"] == "INVALID_COMMAND"
     assert "secret" not in response.detail["message"]
     assert "private" not in response.detail["message"]
+
+
+def test_backup_marker_flag_and_candidate_provenance_are_persisted(manager):
+    m, a = manager
+    m.store.save_douyin_auth_state(
+        a["id"], m.cipher.encrypt({"cookies": []}), "identity"
+    )
+    s = start(m, a)
+    assert "--has-auth-backup" in m.sessions[s["id"]].process.args
+    wait_until(lambda: m.sessions[s["id"]].snapshot["phase"] == "sms_required")
+    epoch = attach(m, s)
+    m.command(
+        s["id"],
+        command(m, s, epoch, "submit_sms"),
+        user_id="user",
+        app_session_id="app",
+        owner_token="x" * 32,
+    )
+    wait_until(lambda: m.sessions[s["id"]].snapshot["phase"] == "done")
+    assert m.operations.get(s["operation_id"])["credentials_changed"] == 1
+
+
+def test_terminal_memory_retention_excludes_incomplete_cleanup(manager):
+    from backend.audit_agent.crawler_login_v2_manager import V2Session
+
+    m, _ = manager
+    for i in range(132):
+        s = V2Session(
+            str(i), str(i), "account", "user", "app", "owner", {"phase": "done"}
+        )
+        s.cleanup_done.set()
+        m.sessions[s.id] = s
+    retained = V2Session(
+        "cleaning", "cleaning", "account", "user", "app", "owner", {"phase": "done"}
+    )
+    m.sessions[retained.id] = retained
+    with m._lock:
+        m._prune_terminal_sessions()
+    assert len(m.sessions) == 129 and "cleaning" in m.sessions
+    assert "0" not in m.sessions and "131" in m.sessions
+    # These synthetic records have no child process and are not shutdown targets.
+    m.sessions.clear()
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {"intent": {}},
+        {"intent": []},
+        {"browser_mode": []},
+        {"browser_mode": {}},
+        {"source_operation_id": []},
+        {"source_operation_id": 1},
+        {"source_operation_id": ""},
+        {"source_operation_id": "a" * 129},
+    ],
+)
+def test_start_rejects_invalid_json_option_types_without_spawning(manager, options):
+    m, a = manager
+    with pytest.raises(LoginV2Error) as error:
+        m.start(
+            a,
+            user_id="user",
+            app_session_id="app",
+            owner_token="x" * 32,
+            request_key="invalid",
+            **options,
+        )
+    assert error.value.code == "INVALID_LOGIN_OPTIONS" and error.value.status == 400
+    assert not m.sessions
+
+
+def test_public_cancel_waits_for_process_exit_and_lease_release(manager):
+    m, a = manager
+    s = start(m, a)
+    result = m.cancel(
+        s["id"], user_id="user", app_session_id="app", owner_token="x" * 32
+    )
+    assert result["cleanup_state"] == "complete"
+    assert m.sessions[s["id"]].process.poll() is not None
+    assert all(handle.closed for handle in m.sessions[s["id"]].handles)
+
+
+def test_helper_notice_is_sanitized_and_nonterminal(manager):
+    m, a = manager
+    s = start(m, a)
+    before = m.sessions[s["id"]].snapshot["phase"]
+    m.handle_event(
+        s["id"],
+        {
+            "type": "notice",
+            "code": "GESTURE_EXPIRED",
+            "message": "/private secret",
+            "cookies": "secret",
+        },
+    )
+    notice = m.sessions[s["id"]].results[-1]
+    assert notice == {
+        "type": "notice",
+        "code": "GESTURE_EXPIRED",
+        "message": "验证轨迹等待过久已停止，请在当前画面重新操作。",
+    }
+    assert m.sessions[s["id"]].snapshot["phase"] == before
+
+
+def test_full_parent_graph_queue_aborts_before_more_input_and_preserves_sms(
+    manager, monkeypatch
+):
+    import queue
+
+    m, a = manager
+    s = start(m, a)
+    wait_until(lambda: m.sessions[s["id"]].snapshot["phase"] == "sms_required")
+    epoch = attach(m, s)
+    m.handle_event(
+        s["id"],
+        {
+            "type": "snapshot",
+            "phase": "challenge_required",
+            "available_actions": ["pointer_batch"],
+            "challenge": {"challenge_id": "area", "area_version": 1},
+        },
+    )
+    session = m.sessions[s["id"]]
+    with m._lock:
+        original = session.commands
+        session.commands = queue.Queue(maxsize=1)
+        session.commands.put(
+            {
+                "type": "command",
+                "command": {"type": "pointer_batch", "command_id": "old"},
+            }
+        )
+        c = dict(
+            type="pointer_batch",
+            command_id="up",
+            operation_id=s["operation_id"],
+            controller_epoch=epoch,
+            sequence=1,
+            expected_state_revision=session.snapshot["state_revision"],
+            challenge_id="area",
+            area_version=1,
+            gesture_id="gesture",
+            mode="draw",
+            points=[
+                {"point_sequence": 1, "x": 0.5, "y": 0.5, "dt_ms": 0, "event": "up"}
+            ],
+        )
+        with pytest.raises(LoginV2Error) as error:
+            m.command(
+                s["id"], c, user_id="user", app_session_id="app", owner_token="x" * 32
+            )
+        assert error.value.code == "INPUT_BACKPRESSURE"
+        assert session.pending_abort and session.commands.empty()
+        session.commands.put(
+            {"type": "command", "command": {"type": "action", "command_id": "sms"}}
+        )
+        m._abort_pending_graphics(session, "INPUT_BACKPRESSURE")
+        assert session.commands.get_nowait()["command"]["command_id"] == "sms"
+        session.commands = original
+    wait_until(
+        lambda: any(
+            result.get("type") == "notice" and result.get("code") == "GESTURE_EXPIRED"
+            for result in session.results
+        )
+    )
+    assert session.snapshot["phase"] == "challenge_required"
+
+
+def test_aged_parent_graph_input_is_not_dispatched(manager):
+    m, a = manager
+    s = start(m, a)
+    wait_until(lambda: m.sessions[s["id"]].snapshot["phase"] == "sms_required")
+    epoch = attach(m, s)
+    m.handle_event(
+        s["id"],
+        {
+            "type": "snapshot",
+            "phase": "challenge_required",
+            "available_actions": ["key"],
+            "challenge": {"challenge_id": "area", "area_version": 1},
+        },
+    )
+    session = m.sessions[s["id"]]
+    c = dict(
+        type="key",
+        key="Enter",
+        command_id="aged",
+        operation_id=s["operation_id"],
+        controller_epoch=epoch,
+        sequence=1,
+        expected_state_revision=session.snapshot["state_revision"],
+        challenge_id="area",
+        area_version=1,
+    )
+    with m._lock:
+        m.operations.record_command(
+            s["operation_id"],
+            "aged",
+            "manual_action",
+            c,
+            application_session_id="app",
+            controller_epoch=epoch,
+            sequence=1,
+        )
+        m._enqueue(
+            session,
+            {
+                "type": "command",
+                "command": c,
+                "queued_mono": time.monotonic() - 1,
+                "graph_generation": 0,
+            },
+        )
+    wait_until(
+        lambda: (m.operations.get_command(s["operation_id"], "aged") or {}).get(
+            "execution_status"
+        )
+        == "not_executed"
+    )
+    assert (
+        m.operations.get_command(s["operation_id"], "aged")["error_code"]
+        == "GESTURE_EXPIRED"
+    )
+    wait_until(lambda: not session.pending_abort)
+    assert session.snapshot["phase"] == "challenge_required"
+
+
+def test_cancel_clears_candidate_before_save_ready(manager):
+    m, a = manager
+    s = start(m, a)
+    with m._lock:
+        m.sessions[s["id"]].candidate = {
+            "auth_state": {"cookies": [{"name": "sessionid", "value": "private"}]}
+        }
+        m.cancel(s["id"], internal=True)
+        assert m.sessions[s["id"]].candidate is None
+    wait_until(lambda: m.sessions[s["id"]].cleanup_done.is_set())
+    assert m.sessions[s["id"]].candidate is None

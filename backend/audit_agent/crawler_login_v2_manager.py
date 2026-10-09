@@ -75,6 +75,10 @@ ERROR_MESSAGES = {
     "CONTROLLER_TIMEOUT": "登录窗口连接超时，请重新连接。",
     "TICKET_INVALID": "连接凭据已失效，请重新连接登录窗口。",
     "TICKET_LIMIT": "连接请求过于频繁，请稍后重试。",
+    "CLEANUP_TIMEOUT": "登录浏览器仍在关闭，请稍后检查关闭结果，暂勿启动新登录。",
+    "GESTURE_EXPIRED": "验证轨迹等待过久已停止，请在当前画面重新操作。",
+    "QUEUE_FULL": "验证操作较多，已停止当前手势，请重新操作。",
+    "CAPTURE_RETRY": "验证页面正在更新，请稍候。",
     "INPUT_BACKPRESSURE": "操作较多，请稍等当前操作完成后再试。",
     "STALE_STATE": "登录步骤已变化，请按当前页面重新操作。",
     "STALE_CHALLENGE": "验证码已刷新，请在最新验证画面操作。",
@@ -103,6 +107,7 @@ ERROR_MESSAGES = {
     "IDEMPOTENCY_KEY_REQUIRED": "登录请求信息不完整，请重新打开登录窗口。",
     "RECOVERY_REQUIRES_V2": "当前登录方式不支持恢复，请启用新版登录。",
     "PROTOCOL_NOT_AVAILABLE": "当前服务未启用此登录方式，请使用可用方式。",
+    "PROFILE_MIGRATION_REQUIRED": "旧登录信息需要迁移，请明确选择重新扫码后再继续。",
     "CURRENT_PHASE_UNKNOWN": "暂未识别当前登录步骤，请打开验证面板人工处理。",
 }
 
@@ -168,6 +173,8 @@ class V2Session:
     deadline: float = 0
     committing: bool = False
     authorize: object = None
+    graph_generation: int = 0
+    pending_abort: bool = False
 
 
 class CrawlerLoginV2Manager:
@@ -300,15 +307,28 @@ class CrawlerLoginV2Manager:
             raise LoginV2Error("OWNER_TOKEN_REQUIRED", status=403)
         if not request_key or len(request_key) > 128:
             raise LoginV2Error("IDEMPOTENCY_KEY_REQUIRED", status=400)
-        if intent not in {
-            "check_or_login",
-            "reauth",
-            "recover",
-        } or browser_mode not in {"default", "compatibility"}:
+        if (
+            not isinstance(intent, str)
+            or not isinstance(browser_mode, str)
+            or intent
+            not in {
+                "check_or_login",
+                "reauth",
+                "recover",
+            }
+            or browser_mode not in {"default", "compatibility"}
+        ):
+            raise LoginV2Error("INVALID_LOGIN_OPTIONS", status=400)
+        if source_operation_id is not None and (
+            not isinstance(source_operation_id, str)
+            or not 1 <= len(source_operation_id) <= 128
+            or any(ord(char) < 33 or ord(char) > 126 for char in source_operation_id)
+        ):
             raise LoginV2Error("INVALID_LOGIN_OPTIONS", status=400)
         if (intent == "recover") != bool(source_operation_id):
             raise LoginV2Error("RECOVERY_SOURCE_REQUIRED", status=400)
         with self._start_lock, self._lock:
+            self._prune_terminal_sessions()
             active = [
                 s for s in self.sessions.values() if s.snapshot["phase"] not in TERMINAL
             ]
@@ -363,6 +383,7 @@ class CrawlerLoginV2Manager:
                     "controller_epoch": 0,
                     "controller_state": "detached",
                     "available_actions": [],
+                    "cleanup_state": "complete",
                     "result": None,
                     "error": {
                         "code": safe_error_code(op["error_code"]),
@@ -405,6 +426,7 @@ class CrawlerLoginV2Manager:
                 "state_revision": 1,
                 "controller_epoch": 0,
                 "controller_state": "detached",
+                "cleanup_state": "active",
                 "available_actions": ["cancel"],
                 "qr": None,
                 "sms": None,
@@ -458,6 +480,8 @@ class CrawlerLoginV2Manager:
                 args.append("--headed")
             if settings.crawler_login_v2_resource_policy == "precise":
                 args.append("--block-media")
+            if self.store.get_auth_state_ciphertext(account["id"]):
+                args.append("--has-auth-backup")
             if account.get("platform_account_id"):
                 args.extend(
                     ["--expected-platform-account-id", account["platform_account_id"]]
@@ -516,6 +540,7 @@ class CrawlerLoginV2Manager:
             "controller_epoch": 0,
             "controller_state": "detached",
             "available_actions": [],
+            "cleanup_state": "complete",
             "result": self._result(account),
             "error": None,
         }
@@ -738,6 +763,8 @@ class CrawlerLoginV2Manager:
                 )
             self._validate_runtime(s, c, epoch)
             if s.commands.full():
+                if c["type"] != "action":
+                    self._abort_pending_graphics(s, "INPUT_BACKPRESSURE")
                 raise CommandRejected("INPUT_BACKPRESSURE")
             if durable:
                 self.operations.record_command(
@@ -750,7 +777,15 @@ class CrawlerLoginV2Manager:
                     sequence=c["sequence"],
                 )
             s.sequence = c["sequence"]
-            self._enqueue(s, {"type": "command", "command": c})
+            self._enqueue(
+                s,
+                {
+                    "type": "command",
+                    "command": c,
+                    "queued_mono": time.monotonic(),
+                    "graph_generation": s.graph_generation,
+                },
+            )
             return {
                 "command_id": c["command_id"],
                 "execution_status": "accepted",
@@ -827,19 +862,61 @@ class CrawlerLoginV2Manager:
         if s.authorize:
             s.authorize()
 
+    def _abort_pending_graphics(self, s, code):
+        s.graph_generation += 1
+        s.pending_abort = (
+            True  # One coalesced reliable abort, separate from the full input queue.
+        )
+        retained = []
+        while True:
+            try:
+                message = s.commands.get_nowait()
+            except queue.Empty:
+                break
+            command = message.get("command")
+            if command and command["type"] != "action":
+                self._command_rejected(s, command, code)
+            else:
+                retained.append(message)
+        for message in retained:
+            s.commands.put_nowait(message)
+        self._append_result(
+            s, {"type": "notice", "code": code, "message": error_message(code)}
+        )
+
     def _writer(self, s):
+        deferred = None
         try:
             fd = s.process.stdin.fileno()
             os.set_blocking(fd, False)
             while not s.stopped.is_set():
-                try:
-                    message = s.commands.get(timeout=0.2)
-                except queue.Empty:
-                    continue
+                if deferred is None:
+                    try:
+                        deferred = s.commands.get(timeout=0.02)
+                    except queue.Empty:
+                        pass
                 with self._lock:
+                    if s.pending_abort:
+                        message = {"type": "abort_gesture"}
+                        s.pending_abort = False
+                    else:
+                        message = deferred
+                        deferred = None
+                    if message is None:
+                        continue
                     c = message.get("command")
                     if c:
                         try:
+                            graphical = c["type"] != "action"
+                            if graphical and (
+                                message.get("graph_generation", s.graph_generation)
+                                != s.graph_generation
+                                or time.monotonic()
+                                - message.get("queued_mono", time.monotonic())
+                                > 0.25
+                            ):
+                                self._abort_pending_graphics(s, "GESTURE_EXPIRED")
+                                raise CommandRejected("GESTURE_EXPIRED")
                             self._validate_runtime(s, c, dispatch=True)
                             if self.operations.get_command(
                                 s.operation_id, c["command_id"]
@@ -852,7 +929,13 @@ class CrawlerLoginV2Manager:
                                 s, c, safe_error_code(exc, "INVALID_COMMAND")
                             )
                             continue
-                    data = (json.dumps(message, separators=(",", ":")) + "\n").encode()
+                    # Queue timestamps/generation are parent-only, never part of the wire envelope.
+                    wire = {
+                        key: value
+                        for key, value in message.items()
+                        if key not in {"queued_mono", "graph_generation"}
+                    }
+                    data = (json.dumps(wire, separators=(",", ":")) + "\n").encode()
                 deadline = time.monotonic() + 2
                 while data and not s.stopped.is_set():
                     if time.monotonic() > deadline:
@@ -1048,6 +1131,11 @@ class CrawlerLoginV2Manager:
                         error_code=event.get("error_code"),
                     )
                 self._append_result(s, event)
+            elif kind == "notice":
+                code = safe_error_code(event.get("code"))
+                self._append_result(
+                    s, {"type": "notice", "code": code, "message": error_message(code)}
+                )
             elif kind == "error":
                 self._finish(s, "failed", event.get("code", "BROWSER_ERROR"))
 
@@ -1076,7 +1164,16 @@ class CrawlerLoginV2Manager:
                 current = self.operations.get(s.operation_id)
                 if not current["profile_authority_established"]:
                     raise LoginV2Error("PROFILE_AUTHORITY_UNCONFIRMED")
-                self.operations.mark_stage(s.operation_id, "profile_ready")
+                changed = current.get("credentials_changed")
+                if candidate.get("credentials_changed", True) is not False:
+                    changed = 1
+                elif current["intent"] != "recover":
+                    changed = 0
+                # Recovery observes a previously changed Profile; it cannot replace
+                # the source operation's provenance with its own "no new login".
+                self.operations.mark_stage(
+                    s.operation_id, "profile_ready", credentials_changed=changed
+                )
                 ciphertext = self.cipher.encrypt(candidate["auth_state"])
                 s.committing = True
                 op = self.operations.commit_auth(
@@ -1103,6 +1200,7 @@ class CrawlerLoginV2Manager:
                 s.committing = False
 
     def _set_terminal(self, s, phase, code):
+        s.candidate = None
         code = safe_error_code(code) if code else None
         s.snapshot.update(
             phase=phase,
@@ -1110,6 +1208,7 @@ class CrawlerLoginV2Manager:
             error={"code": code, "message": error_message(code)} if code else None,
             state_revision=s.snapshot["state_revision"] + 1,
             controller_state="detached",
+            cleanup_state="closing",
             available_actions=[],
             qr=None,
             challenge=None,
@@ -1150,6 +1249,9 @@ class CrawlerLoginV2Manager:
             if not internal:
                 self._owner(s, user_id, app_session_id, owner_token)
             self._finish(s, "cancelled")
+        if not internal and not s.cleanup_done.wait(8):
+            raise LoginV2Error("CLEANUP_TIMEOUT", status=503)
+        with self._lock:
             return copy.deepcopy(s.snapshot)
 
     def _watchdog(self, s):
@@ -1205,7 +1307,23 @@ class CrawlerLoginV2Manager:
                         pass
             for h in s.handles:
                 h.close()
-            s.cleanup_done.set()
+            with self._lock:
+                s.candidate = None
+                s.snapshot["cleanup_state"] = "complete"
+                s.snapshot["state_revision"] += 1
+                self._notify(s)
+                s.cleanup_done.set()
+
+    def _prune_terminal_sessions(self):
+        removable = [
+            key
+            for key, session in self.sessions.items()
+            if session.snapshot["phase"] in TERMINAL
+            and session.cleanup_done.is_set()
+            and not session.subscribers
+        ]
+        for key in removable[: max(0, len(removable) - 128)]:
+            del self.sessions[key]
 
     def shutdown(self):
         for s in list(self.sessions.values()):

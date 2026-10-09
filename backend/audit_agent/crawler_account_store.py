@@ -335,7 +335,7 @@ class CrawlerAccountStore:
             risk = current["failure_kind"] not in ("", "auth")
             status = "disabled" if current["status"] == "disabled" else "active"
             existing_ciphertext = conn.execute("SELECT auth_state_ciphertext FROM crawler_accounts WHERE id=?", (account_id,)).fetchone()[0]
-            changed_credentials = credentials_changed and ciphertext != (existing_ciphertext or "")
+            changed_credentials = (credentials_changed or not existing_ciphertext) and ciphertext != (existing_ciphertext or "")
             stored_ciphertext = ciphertext if changed_credentials else existing_ciphertext
             revision_change = changed_credentials or identity != current["platform_account_id"] or status != current["status"]
             conn.execute("""UPDATE crawler_accounts SET auth_state_ciphertext=?,

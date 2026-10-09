@@ -354,3 +354,36 @@ def test_unclassified_value_error_is_unknown_not_rejected(api, monkeypatch):
             result["execution_status"] == "unknown"
             and result["platform_status"] == "unknown"
         )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"intent": {}}, {"intent": []}, {"browser_mode": []}, {"source_operation_id": []}],
+)
+def test_start_api_invalid_json_option_types_return_400(api, monkeypatch, body):
+    from backend import main
+    from backend.audit_agent.config import settings
+
+    client, m, s, _, p, _, _ = api
+    monkeypatch.setattr(settings, "crawler_login_v2_enabled", True)
+    monkeypatch.setattr(main, "crawler_login_v2_manager", m)
+    monkeypatch.setattr(
+        main,
+        "_require_crawler_account",
+        lambda *args, **kwargs: m.store.get(s["account_id"]),
+    )
+    client.app.dependency_overrides[main.principal_provider] = (
+        RequestPrincipalProvider()
+    )
+    client.app.add_api_route(
+        "/api/crawler-accounts/{account_id}/login-sessions",
+        main.start_crawler_account_login,
+        methods=["POST"],
+    )
+    response = client.post(
+        f"/api/crawler-accounts/{s['account_id']}/login-sessions",
+        json={"supported_protocols": [2], **body},
+        headers={"Idempotency-Key": "invalidoptions"},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "INVALID_LOGIN_OPTIONS"

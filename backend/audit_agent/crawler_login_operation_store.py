@@ -42,6 +42,7 @@ class CrawlerLoginOperationStore:
                     expected_platform_account_id TEXT NOT NULL DEFAULT '', expected_auth_revision INTEGER NOT NULL,
                     stage TEXT NOT NULL, credentials_reset INTEGER NOT NULL DEFAULT 0,
                     profile_authority_established INTEGER NOT NULL DEFAULT 0,
+                    credentials_changed INTEGER,
                     request_fingerprint TEXT NOT NULL, verified_platform_account_id TEXT NOT NULL DEFAULT '',
                     result_json TEXT, error_code TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT);
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_login_operation_request ON crawler_login_operations(owner_user_id, request_key_hash);
@@ -55,6 +56,9 @@ class CrawlerLoginOperationStore:
                     PRIMARY KEY(operation_id, command_id));
                 CREATE INDEX IF NOT EXISTS idx_login_command_pending ON crawler_login_commands(operation_id, execution_status, updated_at);
             """)
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(crawler_login_operations)")}
+            if "credentials_changed" not in columns:
+                conn.execute("ALTER TABLE crawler_login_operations ADD COLUMN credentials_changed INTEGER")
 
     def _connect(self):
         conn = sqlite3.connect(self.db_path, timeout=15)
@@ -118,18 +122,18 @@ class CrawlerLoginOperationStore:
                 operation_id, now = uuid4().hex, _now()
                 conn.execute("""INSERT INTO crawler_login_operations(id,account_id,owner_user_id,application_session_id,
                     request_key_hash,owner_token_hash,engine,intent,source_operation_id,expected_platform_account_id,
-                    expected_auth_revision,stage,request_fingerprint,credentials_reset,profile_authority_established,created_at,updated_at)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,'created',?,?,?,?,?)""",
+                    expected_auth_revision,stage,request_fingerprint,credentials_reset,profile_authority_established,credentials_changed,created_at,updated_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,'created',?,?,?,?,?,?)""",
                     (operation_id,account_id,owner_user_id,application_session_id,request_key_hash,owner_token_hash,engine,intent,
                      source_operation_id,account["platform_account_id"],account["auth_state_revision"],request_fingerprint,
-                     source["credentials_reset"] if source else 0,source["profile_authority_established"] if source else 0,now,now))
+                     source["credentials_reset"] if source else 0,source["profile_authority_established"] if source else 0,source["credentials_changed"] if source else None,now,now))
                 result = self._get(conn, operation_id)
         if superseded:
             raise ValueError("RECOVERY_SOURCE_SUPERSEDED")
         return result
 
     def mark_stage(self, operation_id, stage, **fields):
-        allowed = {"credentials_reset", "profile_authority_established", "verified_platform_account_id", "error_code", "result_json"}
+        allowed = {"credentials_changed", "credentials_reset", "profile_authority_established", "verified_platform_account_id", "error_code", "result_json"}
         if stage not in STAGES or fields.keys() - allowed:
             raise ValueError("INVALID_OPERATION_UPDATE")
         if stage in {"committed", "recovered"}:
@@ -185,6 +189,17 @@ class CrawlerLoginOperationStore:
             source = self._get(conn, op["source_operation_id"]) if op["source_operation_id"] else None
             if source and source["stage"] != "recovery_required":
                 raise ValueError("RECOVERY_SOURCE_SUPERSEDED")
+            # A recovered Profile can be valid even though its new credentials were
+            # never committed to SQLite. The recovery helper's observation of "no
+            # new login" does not override the original candidate's provenance.
+            stored_change = op["credentials_changed"]
+            if op["intent"] == "recover":
+                credentials_changed = True if stored_change is None else bool(stored_change)
+            elif stored_change is not None:
+                credentials_changed = bool(stored_change)
+            credentials_changed = credentials_changed or bool(op["credentials_reset"])
+            backup = conn.execute("SELECT auth_state_ciphertext FROM crawler_accounts WHERE id=?", (op["account_id"],)).fetchone()[0]
+            credentials_changed = credentials_changed or not bool(backup)
             account = self.accounts.save_douyin_auth_state(op["account_id"], ciphertext, platform_account_id,
                 connection=conn, expected_revision=op["expected_auth_revision"], credentials_changed=credentials_changed)
             result = json.dumps({"status":"success", "operation_id":operation_id,"account":account}, ensure_ascii=False)

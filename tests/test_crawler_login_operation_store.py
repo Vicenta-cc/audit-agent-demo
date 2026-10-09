@@ -268,3 +268,46 @@ def test_concurrent_dispatch_only_one_sender(stores):
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         assert sum(pool.map(dispatch, range(8))) == 1
+
+
+@pytest.mark.parametrize("existing_backup", [False, True])
+def test_recover_new_candidate_preserves_original_provenance(stores, existing_backup):
+    accounts, operations, account, cipher = stores
+    if existing_backup:
+        accounts.save_douyin_auth_state(account["id"], cipher.encrypt({"generation":"old"}), "identity")
+    source = begin(stores)
+    operations.mark_stage(source["id"], "recovery_required", profile_authority_established=1, credentials_changed=1)
+    recovery = begin(stores, "recovery", intent="recover", source_operation_id=source["id"])
+    assert recovery["credentials_changed"] == 1
+    operations.commit_auth(recovery["id"], cipher.encrypt({"generation":"new"}), "identity", credentials_changed=False)
+    assert cipher.decrypt(accounts.get_auth_state_ciphertext(account["id"])) == {"generation":"new"}
+
+
+def test_recover_unknown_provenance_saves_fresh_backup(stores):
+    accounts, operations, account, cipher = stores
+    accounts.save_douyin_auth_state(account["id"], cipher.encrypt({"generation":"old"}), "identity")
+    source = begin(stores)
+    operations.mark_stage(source["id"], "recovery_required", profile_authority_established=1)
+    recovery = begin(stores, "recovery", intent="recover", source_operation_id=source["id"])
+    operations.commit_auth(recovery["id"], cipher.encrypt({"generation":"new"}), "identity", credentials_changed=False)
+    assert cipher.decrypt(accounts.get_auth_state_ciphertext(account["id"])) == {"generation":"new"}
+
+
+def test_recover_pure_check_keeps_existing_backup_and_auth_age(stores):
+    accounts, operations, account, cipher = stores
+    original = accounts.save_douyin_auth_state(account["id"], cipher.encrypt({"generation":"old"}), "identity")
+    source = begin(stores)
+    operations.mark_stage(source["id"], "recovery_required", profile_authority_established=1, credentials_changed=0)
+    recovery = begin(stores, "recovery", intent="recover", source_operation_id=source["id"])
+    result = operations.commit_auth(recovery["id"], cipher.encrypt({"generation":"checked"}), "identity", credentials_changed=True)
+    assert result["result"]["account"]["auth_state_revision"] == original["auth_state_revision"]
+    assert result["result"]["account"]["auth_state_updated_at"] == original["auth_state_updated_at"]
+    assert cipher.decrypt(accounts.get_auth_state_ciphertext(account["id"])) == {"generation":"old"}
+
+
+def test_pure_check_missing_backup_still_saves_verified_candidate(stores):
+    accounts, _, account, cipher = stores
+    saved = accounts.save_douyin_auth_state(account['id'], cipher.encrypt({'generation':'verified'}), 'identity', credentials_changed=False)
+    assert saved['has_auth_state']
+    assert saved['auth_state_updated_at']
+    assert cipher.decrypt(accounts.get_auth_state_ciphertext(account['id'])) == {'generation':'verified'}
