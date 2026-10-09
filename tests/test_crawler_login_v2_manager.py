@@ -961,3 +961,66 @@ def test_obsolete_controller_stale_up_cannot_abort_successor(manager):
         assert not session.pending_abort and session.graph_generation == 0
         assert session.epoch == current_epoch
         assert m.operations.get_command(s["operation_id"], "old-up") is None
+
+
+@pytest.mark.parametrize("replace", [False, True])
+def test_accepted_up_dispatch_rechecks_release_only_current_epoch(manager, replace):
+    m, a = manager
+    snapshot = start(m, a)
+    wait_until(lambda: m.sessions[snapshot["id"]].snapshot["phase"] == "sms_required")
+    epoch = attach(m, snapshot)
+    session = m.sessions[snapshot["id"]]
+    m.handle_event(
+        session.id,
+        {
+            "type": "snapshot",
+            "phase": "challenge_required",
+            "available_actions": ["pointer_batch"],
+            "challenge": {"challenge_id": "current", "area_version": 2},
+        },
+    )
+    up = dict(
+        type="pointer_batch",
+        command_id="queued-up",
+        operation_id=session.operation_id,
+        controller_epoch=epoch,
+        sequence=1,
+        expected_state_revision=session.snapshot["state_revision"],
+        challenge_id="current",
+        area_version=2,
+        gesture_id="prior-applied-down",
+        mode="draw",
+        points=[{"point_sequence": 2, "x": 0.5, "y": 0.5, "dt_ms": 0, "event": "up"}],
+    )
+    with m._lock:
+        m.command(
+            session.id, up, user_id="user", app_session_id="app", owner_token="x" * 32
+        )
+        # Holding the manager lock guarantees the writer cannot validate before
+        # this state/controller transition, even if it already dequeued the up.
+        if replace:
+            session.epoch += 1
+            session.snapshot["controller_epoch"] = session.epoch
+        else:
+            m.handle_event(
+                session.id, {"type": "snapshot", "phase": "challenge_required"}
+            )
+    wait_until(
+        lambda: m.operations.get_command(session.operation_id, "queued-up")[
+            "execution_status"
+        ]
+        == "not_executed"
+    )
+    result = m.operations.get_command(session.operation_id, "queued-up")
+    assert result["error_code"] == ("CONTROLLER_REPLACED" if replace else "STALE_STATE")
+    if replace:
+        assert session.graph_generation == 0 and not session.pending_abort
+        assert not any(r.get("code") == "GESTURE_EXPIRED" for r in session.results)
+    else:
+        wait_until(
+            lambda: any(
+                r.get("type") == "notice" and r.get("code") == "GESTURE_EXPIRED"
+                for r in session.results
+            )
+        )
+        assert session.graph_generation == 1

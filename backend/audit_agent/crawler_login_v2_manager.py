@@ -764,17 +764,7 @@ class CrawlerLoginV2Manager:
             try:
                 self._validate_runtime(s, c, epoch)
             except CommandRejected as exc:
-                # A current controller's stale release must still lift an already
-                # applied pointer. Obsolete controllers cannot affect its successor.
-                if (
-                    c["type"] != "action"
-                    and exc.code in {"STALE_STATE", "STALE_CHALLENGE"}
-                    and s.controller is not None
-                    and s.snapshot["controller_state"] == "attached"
-                    and c["controller_epoch"] == s.epoch
-                    and (epoch is None or epoch == s.epoch)
-                ):
-                    self._abort_pending_graphics(s, exc.code)
+                self._abort_current_stale_graphic(s, c, exc.code, epoch)
                 raise
             if s.commands.full():
                 if c["type"] != "action":
@@ -876,6 +866,19 @@ class CrawlerLoginV2Manager:
         if s.authorize:
             s.authorize()
 
+    def _abort_current_stale_graphic(self, s, command, code, epoch=None):
+        # Both admission and dispatch can invalidate a release after a prior down.
+        # A replaced epoch must never release the successor's current gesture.
+        if (
+            command["type"] != "action"
+            and code in {"STALE_STATE", "STALE_CHALLENGE", "GESTURE_EXPIRED"}
+            and s.controller is not None
+            and s.snapshot["controller_state"] == "attached"
+            and command["controller_epoch"] == s.epoch
+            and (epoch is None or epoch == s.epoch)
+        ):
+            self._abort_pending_graphics(s, code)
+
     def _abort_pending_graphics(self, s, code):
         s.graph_generation += 1
         s.pending_abort = (
@@ -931,7 +934,6 @@ class CrawlerLoginV2Manager:
                                 - message.get("queued_mono", time.monotonic())
                                 > 0.25
                             ):
-                                self._abort_pending_graphics(s, "GESTURE_EXPIRED")
                                 raise CommandRejected("GESTURE_EXPIRED")
                             self._validate_runtime(s, c, dispatch=True)
                             if self.operations.get_command(
@@ -941,9 +943,9 @@ class CrawlerLoginV2Manager:
                                     s.operation_id, c["command_id"]
                                 )
                         except Exception as exc:
-                            self._command_rejected(
-                                s, c, safe_error_code(exc, "INVALID_COMMAND")
-                            )
+                            code = safe_error_code(exc, "INVALID_COMMAND")
+                            self._abort_current_stale_graphic(s, c, code)
+                            self._command_rejected(s, c, code)
                             continue
                     # Queue timestamps/generation are parent-only, never part of the wire envelope.
                     wire = {
