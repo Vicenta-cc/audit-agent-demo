@@ -1,0 +1,106 @@
+本轮本地修复与验收（2026-10-09）
+
+结论
+保留 Hermes 及现有业务系统，先补明确的数据/运行时衔接缺口；没有证据要求更换框架。
+本次完成证据时间与每轮动态事实传递，并修复已捕获的评论批次重复展示和错误历史。
+整条报告问答链路尚未全部验收通过，不能据此直接上线。预览评论仍由模型转述，确实又捕获了缩写原文；批次保护也不是通用语义校验器。
+未部署、未 SSH、未推送。验收之后按用户要求拆分为本地提交；本记录保留验收时的范围与限制。
+
+工作区
+/Users/ext.wanghongtao6/.codex/worktrees/cloud-triage-deploy/xhs-audit-agent-demo
+分支 codex/continuous-resource-design-20261008；HEAD c184b7e。
+验收开始时工作区已有未提交的 R07～R10 等修改，提交阶段已按功能拆开，不把全部 diff 当成本次新增。
+
+本轮产品文件（路径相对上述工作区）
+1. backend/reporting/integration_source.py
+   冻结证据时保留 timestamp_start/end。
+2. hermes_m0/real_report_repository.py
+   从冻结数据读取时间，0 秒有效，非法/逆序值不推测。旧快照缺字段继续返回未知；不从后续变化的业务数据回填。
+3. backend/hermes_runtime/adapter.py
+   turn_system_context 复用固定版本 Hermes 的 ephemeral_system_prompt；执行后恢复。
+   此文件另有此前报告工具启动检查修改，属于既有工作。
+4. backend/hermes_runtime/service.py
+   旧报告入口每轮传入最新进度/授权事实，并接入评论批次投影。
+5. backend/investigation_creation/conversation.py
+   把长期行为约定与每轮状态分开；动态字段在执行锁内注入、恢复。
+   新入口复用同一评论投影；被拒绝的模型草稿以真实保存回执恢复保存结果，不重放写入。
+6. backend/hermes_runtime/comment_delivery.py（新增）
+   准备原文批次后使用后端冻结正文渲染；识别已知重复正文/评论行格式，避免模型再造列表与真实列表拼接。
+   对下一轮持久化历史也投影，只保留正常说明及交付摘要，不保留被拒绝的正文。
+   正常统计列表、保存回执表格与后续操作建议保留。该判断是有限的展示保护，无法证明任意模型文本都不含错引/虚构。
+7. backend/investigation/public_answer.py
+   批次已经准备好后暂缓模型草稿流出，最终输出核对后的规范答案；复用原 answer-reset/finalize 机制。
+8. backend/investigation_creation/continuity.py
+   删除此前直接拼接评论的旧 helper，统一使用投影函数。该文件主体是此前工作。
+
+测试证据
+Python /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python
+359 项回归通过，2 个警告，42.69 秒：regression-final.txt。
+命令：python -m pytest tests/test_report_evidence_times.py tests/test_turn_system_context.py tests/test_report_comment_batches.py tests/test_continuous_resource_session.py tests/test_public_answer_streaming.py tests/test_creation_prompt_isolation.py tests/test_reference_state.py tests/test_investigation_creation_conversation.py tests/test_resource_save_recovery.py tests/test_unified_report.py tests/test_unified_report_investigation.py tests/test_pass_report.py tests/test_report_tool_loading.py tests/test_comment_batch_provider_isolation.py tests/test_creation_input_retry.py -q --disable-warnings --maxfail=3
+随后补两条真实失败/正常编号进度用例，单独重跑 test_report_comment_batches.py：42 项通过，2 个警告，6.18 秒。它与上面的 359 项有重叠，不相加为 401。
+补充 replay.py：原样重放旧 Qwen 3 段错误评论答案，以及本轮 8 段正常进度/保存答案，共 11 项通过，见 raw-replay-results.json。
+git diff --check 通过。
+
+覆盖内容
+- 冻结证据从业务结果到真实 read_evidence 工具的时间字段；0 秒、非法值、修改底层数据不改变已发布快照。
+- 同一个 Agent 连续三轮的动态事实，异常退出清理，不改长期缓存和聊天历史。
+- 错误编号/表格/未编号复制正文不会混入最终批次与后续历史。
+- 批次后的流式草稿阻断、规范答案持久化、重开读取。
+- 同轮保存词库和错误评论列表时，保存回执保留、没有重复版本、冻结任务不变。
+- 原有输入审核重试测试保留。未改变最多五次模型请求机制。
+
+真实 Qwen
+模型 qwen3.7-plus，原生 Hermes；合成测试数据、隔离 SQLite，不使用线上任务。
+共 45 轮、127 次模型请求，全部技术完成（45/45），这不等于回答正确率。
+数据：主报告 12 帖、230 评论，OCR 80 元/12–14 秒，ASR 100 元/20–24 秒；对照报告共同发布者、评论者各 1 人。
+新旧入口均从空的模型历史开始，之后使用真实工具和后续历史；上下文和工具集本身保留各入口真实差异。
+
+本轮相同问题对照（13 主问题＋2 筛选问题；每入口仅一条连续序列）
+                    旧报告入口    新连续入口
+严格人工核对通过      12/15        12/15
+平均总耗时            19.215 秒    15.443 秒
+中位总耗时            14.027 秒    13.786 秒
+模型请求总次数        43           42
+工具调用总次数        30           30
+“严格通过”要求问题所需字段/原文完整，分页不重复，附加结论不与事实冲突；按单轮而非整个会话评分。batch3 仍有下一批且明确提示剩余，不仅因未一次结束全部评论判失败。
+这些是本轮小样本观察，不能视为生产成功率、性能承诺或框架优劣因果证据。第一组主问题发生在评论保护误判修正前；后续仅收窄展示判断，最终代码另做了真实批次/混合保存复验以及原回复重放，并未声称最终代码重跑了整组 15 题。
+
+对照失败明细
+旧 evidence：未继续调用证据工具，漏查已存在的 OCR/时间。
+旧 restart：重建服务后仍只查正文，未取已有 OCR 价格。
+旧 batch2：前轮取 20 条预览，本轮从批次首条重新开始，重复 000–019；预览与批次进度边界仍存在问题。
+新 compare：共同账号数量正确，但附加“重叠度很低”的解释不准确（全部发布者都是同一人）。按此前范围暂未修改。
+新 no_risk / unknown：选中了正确作者、审核状态及总数，但把“评论原文120：请核实票价公示。”缩成“请核实票价公示。”；不能算完整原文交付。这是预览路径，当前批次保护不覆盖。
+
+最终代码的真实复验
+new-delivery-final：230 条按 100/100/30 精确交付、无重复无缺失；三轮正常说明原样保留。
+随后真实执行“保存旅游审核规则 B＋重新展示第一批”：正常 Qwen 回复完整保留；数据库只有一个 B、一个发布版本、一个保存回执。原任务快照不变。
+new-1 request-018、request-020：实际发给模型的 System 中分别确认已交付到 100、200，证明没有继续卡在首次缓存的空进度。
+新入口问证据、重建服务再问证据均回答 12–14 / 20–24 秒；两条入口在明确查询完整证据时均正确。
+新入口修改 B 一个字段之后再问冻结任务、再回报告，正确区分编辑稿和实际采用规则；数据库字段对照及原任务不变检查通过。
+
+期间发现并纠正的测试/实现问题
+第一版评论保护把所有列表/表格都当成评论，真实 Qwen 揭示它误删正常进度与保存说明；已收窄，并对真实原答重放/再跑 Qwen。
+额外独立重放脚本最初未设置测试认证模式，被任务准入保护拒绝；改用隔离测试配置后重跑。之后一条断言错误地禁止历史中出现“评论原文”这个摘要词，已改为禁止具体正文编号。没有修改产品准入保护来使测试通过。
+
+剩余风险及下一步判断
+1. 首要：预览/筛选请求的原文也应由已有查询结果直接交付，而非让模型重新抄写；与批次的进度边界需要明确。不要另建分页或状态表。当前不能宣布“所有评论原文交付问题修复”。
+2. 当前批次草稿保护只覆盖识别到的复制/行格式，并非通用事实验证；非常规虚构散文可能漏过，其他带冒号的编号说明也可能误判。被拒绝时保留真实保存回执，但同轮自由分析可能降级。这是上线前还需收紧的边界。
+3. 模型仍可能不调用必要证据工具。数据补通是必要条件，不是工具选择质量保证；继续用轨迹定位，不凭一次成功重构调度。
+4. 旧报告缺失的时间不自动补齐。需要另行批准有出处的迁移才能补历史；本次不修改旧快照。
+5. 合成数据虽走真实模型/工具/数据库，不等于生产权限组合、恶意正文、多语言长文本、长时间会话和全部供应商故障已覆盖；没有运行生产浏览器部署验收。
+6. 本轮没有证明需要更换框架，也没有证明以后永远不需要调整能力组织。先依据已复现的交付问题继续收敛。
+
+复现入口
+compare.py <新的隔离输出目录> old|new [delivery|filters]
+evaluate.py：检查本轮证据/指标、实际动态请求、最终批次和保存落库。
+replay.py：对已有 Qwen 原回复做确定性重放，不调用供应商。
+各 run 目录有 evidence.json、逐轮 transcript/log、实际 request-NNN.json；密钥不写入产物。
+
+提交前补充检查
+- 扩大到词库来源和前端序列化测试：365 passed、2 skipped（初次 PATH 无 Node）、2 warnings，45.56 秒。
+- 设置已安装 Node 路径后补跑上述两项跨层序列化：2 passed，1.25 秒；没有遗留跳过。
+- 前端 TypeScript 类型检查通过。Playwright 第一遍 51 passed，3 项因默认浏览器文件不存在未执行；指定已安装的 Chrome 后这 3 项全部通过（5.0 秒），合计覆盖 54 项。没有为环境问题修改产品代码。
+- 这些计数包含重复覆盖，不累加成单一总数。
+- 本地代码提交分组：规则编辑保存、局部编辑工具约定、词库来源、证据时间、每轮动态事实、评论批次交付、默认关闭的连续会话；本验收记录单独提交。
+- 上述提交都是检查点，不表示剩余验收失败已解决。
