@@ -1,0 +1,123 @@
+{
+  "date": "2026-10-09",
+  "timezone": "Asia/Shanghai",
+  "scope": "Login research only; no production application changes or authenticated Douyin login.",
+  "sources": {
+    "upstream_repository": "https://github.com/NanmiCoder/MediaCrawler",
+    "upstream_commit": "e9dd17a16338c3915f2335bc609383d316e055f2",
+    "upstream_commit_time_utc": "2026-10-09T06:08:17Z",
+    "local_crawler_commit": "21f462f6210139ce25188888445f06f1624d4a07",
+    "local_application_commit": "94adccf8cca4dc333c666cf8eb282584f1400326",
+    "login_py_identical_to_upstream": true,
+    "local_crawler_core_modified": true
+  },
+  "environment": {
+    "os": "macOS",
+    "browser_binary": "CloakBrowser cached Chromium 145.0.7632.109.2",
+    "reported_browser": "Chrome/145.0.7632.109",
+    "driver": "Playwright CLI via installed skill",
+    "mode": "headless",
+    "viewport_css_px": [
+      1000,
+      760
+    ],
+    "profile": "isolated temporary profile"
+  },
+  "synthetic_interaction": {
+    "sms_form_submission": "accepted",
+    "slider_value": 100,
+    "drawing_points": 100,
+    "scope": "Local synthetic page; not Douyin verification success. Capture timing excludes network, application IPC, WebSocket and client display.",
+    "full_capture": {
+      "samples": 20,
+      "p50_ms": 27,
+      "p95_ms": 29,
+      "mean_bytes": 287961
+    },
+    "clipped_capture": {
+      "samples": 20,
+      "p50_ms": 15,
+      "p95_ms": 20,
+      "mean_bytes": 17217
+    },
+    "pointer_then_clipped_capture": {
+      "samples": 20,
+      "p50_ms": 25,
+      "p95_ms": 28,
+      "mean_bytes": 17897
+    },
+    "screencast": {
+      "frames": 81,
+      "duration_ms": 1602,
+      "fps": 50.6,
+      "mean_frame_bytes": 285986
+    }
+  },
+  "anonymous_homepage": {
+    "observation_ms": 6725,
+    "request_count": 278,
+    "completed_response_count": 244,
+    "transferred_bytes": 8882845,
+    "script_bytes": 7437338,
+    "script_responses": 141
+  },
+  "observed_login_panel": {
+    "panel_css_size": [
+      726,
+      483
+    ],
+    "qr_css_size": [
+      178,
+      178
+    ],
+    "qr_source_kind": "data URL",
+    "qr_source_characters": 1094,
+    "phone_and_sms_fields_present_with_qr": true,
+    "qr_expiration_observed_as_platform_text": true
+  },
+  "cache_comparison": {
+    "scope": "Repeated anonymous navigation using warmed profile. Different observation windows and blocking conditions; illustrative cache evidence, not controlled production speed comparison.",
+    "cdp_url_blocking_cache_enabled": {
+      "observation_ms": 5065,
+      "transferred_bytes": 2663604,
+      "cached_requests": 222,
+      "script_responses": 169,
+      "script_bytes": 35619
+    },
+    "playwright_route_all_continue": {
+      "observation_ms": 3411,
+      "transferred_bytes": 14851052,
+      "cached_requests": 10,
+      "script_responses": 169,
+      "script_bytes": 8347321
+    },
+    "cdp_document_guard_and_url_blocking": {
+      "observation_ms": 3325,
+      "transferred_bytes": 1073604,
+      "cached_requests": 173,
+      "script_responses": 169,
+      "script_bytes": 132599,
+      "rejected_documents": 0
+    }
+  },
+  "candidate_self_entry": {
+    "url": "https://www.douyin.com/user/self?from_nav=1",
+    "final_path": "/user/self",
+    "observation_ms": 3165,
+    "transferred_bytes": 2461300,
+    "script_bytes": 1987233,
+    "login_panel_count": 1,
+    "qr_image_count": 1,
+    "video_count": 1,
+    "playing_videos": 0,
+    "video_ready_state": 0,
+    "scope": "Warmed-profile anonymous observation. Does not establish cold-start reduction or post-authentication compatibility."
+  },
+  "unverified": [
+    "Real authenticated QR completion in new login flow",
+    "Real conditional SMS/slider/drawing branches",
+    "Authenticated account identity lookup after /user/self",
+    "Production Linux performance and full end-to-end WebSocket latency",
+    "All iframe and popup navigation cases under CDP document guard"
+  ]
+}
