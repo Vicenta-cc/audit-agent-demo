@@ -98,8 +98,8 @@ class LexiconContent(StrictModel):
             if entry.kind != 'main' or not entry.enabled:
                 continue
             # A main entry describes the topic. Its enabled variants are the
-            # concrete platform queries; legacy topics without variants keep
-            # their main term as a compatibility fallback.
+            # concrete platform queries. Without enabled variants (including
+            # all variants disabled), use the enabled main term itself.
             candidates = by_parent.get(entry.id) or [entry]
             entries.extend(candidates)
         return entries

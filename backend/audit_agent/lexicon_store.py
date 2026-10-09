@@ -778,7 +778,7 @@ class LexiconStore:
         *,
         connection: sqlite3.Connection | None = None,
     ) -> list[str]:
-        """Return enabled variants per topic, falling back to legacy main terms."""
+        """Return enabled variants per enabled topic, or its main term if none."""
 
         if connection is not None:
             rows = self._enabled_search_term_rows(connection, category_id)

@@ -3707,7 +3707,7 @@ def test_structured_temporary_lexicon_is_revisioned_previewed_and_saved(m3_stack
     assert retried == saved
 
 
-def test_structured_temporary_lexicon_rejects_projection_drift_and_empty_theme():
+def test_structured_temporary_lexicon_rejects_projection_drift_and_allows_main_fallback():
     from backend.investigation_creation.contracts import TemporaryTermsRecallPlan
 
     content = _structured_lexicon_content()
@@ -3719,9 +3719,9 @@ def test_structured_temporary_lexicon_rejects_projection_drift_and_empty_theme()
         )
 
     content["entries"] = [content["entries"][0]]
-    with pytest.raises(ValidationError, match="at least one enabled variant"):
-        TemporaryTermsRecallPlan(
-            strategy="temporary_terms",
-            terms=["色情服务"],
-            lexicon_content=content,
-        )
+    plan = TemporaryTermsRecallPlan(
+        strategy="temporary_terms",
+        terms=["色情服务"],
+        lexicon_content=content,
+    )
+    assert plan.terms == plan.lexicon_content.search_terms() == ["色情服务"]

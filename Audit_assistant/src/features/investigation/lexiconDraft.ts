@@ -55,8 +55,8 @@ export function projectLexiconSearchTerms(content: DraftLexiconContent): string[
   const seen = new Set<string>();
   content.entries.forEach((entry) => {
     if (entry.kind !== "main" || !entry.enabled) return;
-    (enabledVariants.get(entry.id) || []).forEach((variant) => {
-      const term = variant.term.trim();
+    (enabledVariants.get(entry.id) || [entry]).forEach((candidate) => {
+      const term = candidate.term.trim();
       if (term && !seen.has(term)) {
         seen.add(term);
         terms.push(term);
@@ -72,16 +72,8 @@ export function validateLexiconDraft(content: DraftLexiconContent): string[] {
   const mains = content.entries.filter((entry) => entry.kind === "main");
   if (!mains.length) errors.push("至少需要一个主题主词");
   const mainIds = new Set(mains.map((entry) => entry.id));
-  const enabledVariantParents = new Set(
-    content.entries
-      .filter((entry) => entry.kind === "variant" && entry.enabled && entry.term.trim())
-      .map((entry) => entry.parent_id)
-  );
   for (const main of mains) {
     if (!main.term.trim()) errors.push("主题名称不能为空");
-    if (main.enabled && !enabledVariantParents.has(main.id)) {
-      errors.push(`主题“${main.term.trim() || "未命名主题"}”至少需要一个启用的变体词`);
-    }
   }
   for (const entry of content.entries) {
     if (!entry.term.trim()) errors.push("词条不能为空");
@@ -95,7 +87,7 @@ export function validateLexiconDraft(content: DraftLexiconContent): string[] {
     if (entry.term.trim() && seen.has(key)) errors.push(`词条“${entry.term.trim()}”重复`);
     seen.add(key);
   }
-  if (!projectLexiconSearchTerms(content).length) errors.push("至少需要一个可用于搜索的启用变体词");
+  if (!projectLexiconSearchTerms(content).length) errors.push("至少需要一个可用于搜索的启用词条");
   return [...new Set(errors)];
 }
 

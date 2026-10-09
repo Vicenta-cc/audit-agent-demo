@@ -163,6 +163,22 @@ TASK_SETTINGS_ONLY_CHANGED_LINES = [
 ]
 
 
+# 2026-10-08: main fallback is the product rule, not only legacy compatibility.
+# Account for these exact phrases; preserve every other baseline constraint.
+SEARCH_FALLBACK_WORDING = {
+    "某个主词没有启用变体时，才兼容性地回退使用该主词。":
+        "某个主词没有启用变体时，回退使用该主词；主词停用时整组不参与搜索。",
+    "变体时才为兼容旧词库回退到主词。":
+        "变体时回退到主词；主词停用时整组不参与搜索。",
+}
+
+
+def _current_fallback_wording(text):
+    for old, new in SEARCH_FALLBACK_WORDING.items():
+        text = text.replace(old, new)
+    return text
+
+
 def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
     """A wording move cannot silently delete an old behavioral/quality constraint."""
     from backend.investigation_creation.tools import M3_TOOL_DESCRIPTIONS
@@ -185,7 +201,8 @@ def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
             if change:
                 assert change["text"] == line and change["reason"]
             else:
-                assert normalize(line) in current, (name, index, line)
-    # The large identity paragraph changed only its final lifecycle sentence.
+                assert normalize(_current_fallback_wording(line)) in current, (name, index, line)
+    # Preserve the identity paragraph apart from the explicit fallback wording
+    # and its previously accounted-for final lifecycle sentence.
     original = baseline["prompts"]["CREATION_SYSTEM_PROMPT"].splitlines()[7]
-    assert original.split("临时词库只写入")[0] in CREATION_SYSTEM_PROMPT
+    assert _current_fallback_wording(original.split("临时词库只写入")[0]) in CREATION_SYSTEM_PROMPT

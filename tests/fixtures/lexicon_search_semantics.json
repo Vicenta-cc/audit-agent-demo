@@ -1,0 +1,310 @@
+[
+  {
+    "name": "no_variants",
+    "content": {
+      "title": "旅游词库",
+      "risk_label": "旅游",
+      "description": "",
+      "entries": [
+        {
+          "id": "topic",
+          "term": "旅游投诉",
+          "kind": "main",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "tag",
+          "term": "旅游话题",
+          "kind": "tag",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        }
+      ]
+    },
+    "expected_terms": [
+      "旅游投诉"
+    ]
+  },
+  {
+    "name": "all_variants_disabled",
+    "content": {
+      "title": "旅游词库",
+      "risk_label": "旅游",
+      "description": "",
+      "entries": [
+        {
+          "id": "topic",
+          "term": "旅游投诉",
+          "kind": "main",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "a",
+          "term": "酒店乱收费",
+          "kind": "variant",
+          "parent_id": "topic",
+          "enabled": false,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "b",
+          "term": "出租车绕路",
+          "kind": "variant",
+          "parent_id": "topic",
+          "enabled": false,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "tag",
+          "term": "旅游话题",
+          "kind": "tag",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        }
+      ]
+    },
+    "expected_terms": [
+      "旅游投诉"
+    ]
+  },
+  {
+    "name": "some_variants_enabled",
+    "content": {
+      "title": "旅游词库",
+      "risk_label": "旅游",
+      "description": "",
+      "entries": [
+        {
+          "id": "topic",
+          "term": "旅游投诉",
+          "kind": "main",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "a",
+          "term": "酒店乱收费",
+          "kind": "variant",
+          "parent_id": "topic",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "b",
+          "term": "出租车绕路",
+          "kind": "variant",
+          "parent_id": "topic",
+          "enabled": false,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "tag",
+          "term": "旅游话题",
+          "kind": "tag",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        }
+      ]
+    },
+    "expected_terms": [
+      "酒店乱收费"
+    ]
+  },
+  {
+    "name": "enabled_variants",
+    "content": {
+      "title": "旅游词库",
+      "risk_label": "旅游",
+      "description": "",
+      "entries": [
+        {
+          "id": "topic",
+          "term": "旅游投诉",
+          "kind": "main",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "a",
+          "term": "酒店乱收费",
+          "kind": "variant",
+          "parent_id": "topic",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "b",
+          "term": "出租车绕路",
+          "kind": "variant",
+          "parent_id": "topic",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "tag",
+          "term": "旅游话题",
+          "kind": "tag",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        }
+      ]
+    },
+    "expected_terms": [
+      "酒店乱收费",
+      "出租车绕路"
+    ]
+  },
+  {
+    "name": "disabled_main",
+    "content": {
+      "title": "旅游词库",
+      "risk_label": "旅游",
+      "description": "",
+      "entries": [
+        {
+          "id": "topic",
+          "term": "旅游投诉",
+          "kind": "main",
+          "parent_id": "",
+          "enabled": false,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "a",
+          "term": "酒店乱收费",
+          "kind": "variant",
+          "parent_id": "topic",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "other",
+          "term": "景区投诉",
+          "kind": "main",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "tag",
+          "term": "旅游话题",
+          "kind": "tag",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        }
+      ]
+    },
+    "expected_terms": [
+      "景区投诉"
+    ]
+  },
+  {
+    "name": "no_enabled_groups",
+    "content": {
+      "title": "旅游词库",
+      "risk_label": "旅游",
+      "description": "",
+      "entries": [
+        {
+          "id": "topic",
+          "term": "旅游投诉",
+          "kind": "main",
+          "parent_id": "",
+          "enabled": false,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "a",
+          "term": "酒店乱收费",
+          "kind": "variant",
+          "parent_id": "topic",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        },
+        {
+          "id": "tag",
+          "term": "旅游话题",
+          "kind": "tag",
+          "parent_id": "",
+          "enabled": true,
+          "platform": "全平台",
+          "match_type": "黑话词",
+          "risk_level": "中",
+          "note": ""
+        }
+      ]
+    },
+    "expected_terms": []
+  }
+]

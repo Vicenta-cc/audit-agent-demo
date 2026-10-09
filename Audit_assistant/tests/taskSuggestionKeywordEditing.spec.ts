@@ -181,7 +181,7 @@ test("final Draft delegates keyword editing to the structured drawer", async ({ 
   ]);
 });
 
-test("structured keyword drawer preserves theme bindings and projects enabled variants", async ({ page }) => {
+test("structured keyword drawer prefers enabled variants and falls back to enabled main", async ({ page }) => {
   await page.route("**/api/**", route => route.fulfill({ json: { items: [] } }));
   await page.goto("/");
   await page.evaluate(async () => {
@@ -228,7 +228,7 @@ test("structured keyword drawer preserves theme bindings and projects enabled va
   await page.getByRole("textbox", { name: "变体搜索词" }).fill("门槛验牌");
   await expect(page.getByText("门槛验牌", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "应用到本次任务" }).click();
-  await expect(page.getByText("已应用到当前 Draft，实际搜索词已按启用变体更新。", { exact: true })).toBeVisible();
+  await expect(page.getByText("已应用到本次任务，实际搜索词已更新。", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "保存为共享黑话库" }).click();
   await expect(page.getByText(/已保存为正式黑话库/)).toBeVisible();
   const events = await page.evaluate(() => (
@@ -237,4 +237,23 @@ test("structured keyword drawer preserves theme bindings and projects enabled va
   expect(events).toHaveLength(2);
   expect(JSON.stringify(events)).toContain('"parent_id":"theme-1"');
   expect(JSON.stringify(events)).toContain('"term":"门槛验牌"');
+
+  const preview = page.locator(".keyword-search-preview");
+  const toggles = page.getByRole("checkbox");
+  await toggles.nth(1).uncheck();
+  await expect(preview.getByText("色情服务", { exact: true })).toBeVisible();
+  await expect(preview.getByText("门槛验牌", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "应用到本次任务" }).click();
+  await expect.poll(() => page.evaluate(() => (
+    window as unknown as { structuredKeywordTest: { events: unknown[] } }
+  ).structuredKeywordTest.events.length)).toBe(3);
+
+  await page.getByRole("button", { name: "删除变体 门槛验牌" }).click();
+  await expect(preview.getByText("色情服务", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "保存为共享黑话库" })).toBeEnabled();
+
+  await toggles.first().uncheck();
+  await expect(page.getByRole("alert")).toHaveText("至少需要一个可用于搜索的启用词条");
+  await expect(page.getByRole("button", { name: "应用到本次任务" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "保存为共享黑话库" })).toBeDisabled();
 });

@@ -1287,7 +1287,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       throw new Error("当前没有可编辑的调查 Draft。");
     }
     const keywords = projectLexiconSearchTerms(content);
-    if (!keywords.length) throw new Error("至少需要一个启用的变体搜索词。");
+    if (!keywords.length) throw new Error("至少需要一个启用的搜索词。");
     const currentPlan = draft.configuration.investigation.recall_plan;
     if (
       currentPlan.strategy === "temporary_terms"

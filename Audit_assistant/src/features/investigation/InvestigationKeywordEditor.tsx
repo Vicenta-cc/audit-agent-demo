@@ -93,7 +93,7 @@ export function InvestigationKeywordEditor({
       if (result === false) return;
       setNotice(
         mode === "apply"
-          ? "已应用到当前 Draft，实际搜索词已按启用变体更新。"
+          ? "已应用到本次任务，实际搜索词已更新。"
           : `已保存为正式黑话库${typeof result === "object" && result?.resourceId ? `（${result.resourceId}）` : ""}。`
       );
     } catch (reason) {

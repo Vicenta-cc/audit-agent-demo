@@ -179,20 +179,6 @@ class TemporaryTermsRecallPlan(StrictModel):
             raise ValueError(
                 "temporary terms must exactly match the structured lexicon search projection"
             )
-        enabled_variants = {
-            entry.parent_id
-            for entry in self.lexicon_content.entries
-            if entry.kind == "variant" and entry.enabled
-        }
-        missing = [
-            entry.id
-            for entry in self.lexicon_content.entries
-            if entry.kind == "main" and entry.enabled and entry.id not in enabled_variants
-        ]
-        if missing:
-            raise ValueError(
-                "each enabled structured theme must contain at least one enabled variant"
-            )
         return self
 
 
