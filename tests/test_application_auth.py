@@ -27,7 +27,7 @@ from backend.historical_reports.catalog import HistoricalReportSpec
 from backend.historical_reports.service import HistoricalReportDemoService
 from backend.historical_reports.store import HistoricalReportWorkspaceStore
 from backend.investigation.errors import InvestigationSessionNotFoundError
-from backend.investigation_creation.principal import RequestPrincipalProvider
+from backend.investigation_creation.principal import Principal, RequestPrincipalProvider
 from test_investigation_creation_conversation import (
     _create_completed_turn,
     _publish_fake_run,
@@ -239,15 +239,17 @@ def test_job_and_result_queries_do_not_leak_other_owner(tmp_path):
     assert legacy["id"] not in {item["job_id"] for item in granted["items"]}
 
 
-def test_report_version_id_is_owner_scoped_and_explicitly_grantable(
-    creation_stack, tmp_path
+@pytest.mark.parametrize("owner_role", ["user", "admin"])
+@pytest.mark.parametrize("reader_role", ["user", "admin"])
+def test_report_version_id_is_owner_only_even_for_admin_and_legacy_grants(
+    creation_stack, tmp_path, owner_role, reader_role
 ):
     stack = creation_stack
     item = _create_completed_turn(stack, workspace_key="auth-report")
     run = _publish_fake_run(stack, item, idempotency_key="auth-report")
     auth = AuthStore(tmp_path / "report-auth.sqlite3")
-    user_a = auth.create_user(username="report-user-a", password=PASSWORD)
-    user_b = auth.create_user(username="report-user-b", password=PASSWORD)
+    user_a = auth.create_user(username="report-user-a", password=PASSWORD, role=owner_role)
+    user_b = auth.create_user(username="report-user-b", password=PASSWORD, role=reader_role)
     with sqlite3.connect(stack["creation_store"].db_path) as connection:
         connection.execute(
             "UPDATE investigation_runs SET owner_principal=? WHERE id=?",
@@ -289,13 +291,25 @@ def test_report_version_id_is_owner_scoped_and_explicitly_grantable(
         permission="read",
         actor_user_id=user_a["id"],
     )
-    assert client_b.get(path).status_code == 200
+    # Stored grants no longer override report ownership, even for administrators.
+    for suffix in ("", "/structured-report", "/presentation-projection", "/accounts",
+                   "/accounts/account-test", "/posts/post-test", "/posts/post-test/audit-detail",
+                   "/posts/post-test/assets?path=video.mp4", "/findings/finding-test/evidence", "/appendix"):
+        denied = client_b.get(path + suffix)
+        assert denied.status_code == 404
+        assert denied.json()["detail"] == "Published report version not found"
+    assert client_a.get(path + "/structured-report").status_code == 200
+    task_id = stack["report_store"].get_report(
+        stack["report_store"].get_version(run["report_version_id"])["report_id"]
+    )["task_id"]
+    assert client_b.get(f"/api/tasks/{task_id}/report-versions").json()["items"] == []
+    assert len(client_a.get(f"/api/tasks/{task_id}/report-versions").json()["items"]) == 1
 
 
 def test_investigation_session_turn_and_stream_ids_are_owner_scoped(tmp_path):
     app, store = auth_app(tmp_path / "session-auth.sqlite3")
     user_a = store.create_user(username="session-user-a", password=PASSWORD)
-    user_b = store.create_user(username="session-user-b", password=PASSWORD)
+    user_b = store.create_user(username="session-user-b", password=PASSWORD, role="admin")
     provider = RequestPrincipalProvider()
     sessions = {
         "session-a": SimpleNamespace(owner_principal=user_a["id"]),
@@ -364,7 +378,39 @@ def test_investigation_session_turn_and_stream_ids_are_owner_scoped(tmp_path):
         ).status_code == 404
 
 
-def test_historical_workspace_requires_owner_or_explicit_grant(tmp_path):
+def test_old_admin_report_session_cannot_bypass_report_ownership(tmp_path):
+    app, auth = auth_app(tmp_path / "old-admin-session.sqlite3")
+    admin = auth.create_user(username="old-report-admin", password=PASSWORD, role="admin")
+    session = SimpleNamespace(owner_principal=admin["id"], report_version_id="foreign-report")
+    report_store = SimpleNamespace(
+        get_version=lambda _: {"status": "published", "report_id": "report"},
+        get_report=lambda _: {"task_id": "foreign-task"},
+    )
+    service = SimpleNamespace(store=SimpleNamespace(
+        get_session=lambda _: session,
+        get_turn=lambda _: SimpleNamespace(session_id="old-session"),
+    ))
+    app.include_router(create_investigation_router(
+        service, SimpleNamespace(), report_store=report_store,
+        m3_run_store=SimpleNamespace(owner_principals_for_report=lambda **_: ("another-user",)),
+        principal_provider=RequestPrincipalProvider(), auth_service=ApplicationAuthService(auth),
+    ))
+    client = TestClient(app)
+    csrf = login(client, "old-report-admin")["csrf_token"]
+    for method, path in (
+        ("GET", "/api/investigation-sessions/old-session/messages"),
+        ("POST", "/api/investigation-sessions/old-session/turns"),
+        ("GET", "/api/investigation-turns/old-turn"),
+        ("GET", "/api/investigation-turns/old-turn/events"),
+        ("POST", "/api/investigation-turns/old-turn/resume"),
+        ("POST", "/api/report-versions/foreign-report/investigation-sessions"),
+    ):
+        response = client.request(method, path, headers={"X-CSRF-Token": csrf},
+            json={"client_message_id": "old-session-test", "content": "继续"} if path.endswith("/turns") else None)
+        assert response.status_code == 404
+
+
+def test_historical_workspace_is_owner_only(tmp_path):
     workspace_store = HistoricalReportWorkspaceStore(tmp_path / "history.sqlite3")
     source_database = tmp_path / "unused-source.sqlite3"
     source_database.touch()
@@ -406,21 +452,6 @@ def test_historical_workspace_requires_owner_or_explicit_grant(tmp_path):
         ),
         executor=SimpleNamespace(),
         auto_register=False,
-        access_authorizer=lambda principal_id, workspace: (
-            principal_id == admin["id"]
-            or auth.has_grant(
-                principal_id,
-                "report-version",
-                str(workspace["report_version_id"]),
-                "read",
-            )
-            or auth.has_grant(
-                principal_id,
-                "historical-workspace",
-                str(workspace["id"]),
-                "read",
-            )
-        ),
     )
 
     assert service.list_workspaces(principal_id=user["id"]) == ()
@@ -433,9 +464,16 @@ def test_historical_workspace_requires_owner_or_explicit_grant(tmp_path):
         permission="read",
         actor_user_id=admin["id"],
     )
-    assert service.get_workspace(
-        spec.workspace_id, principal_id=user["id"]
-    )["id"] == spec.workspace_id
+    for principal_id in (user["id"], admin["id"]):
+        assert service.list_workspaces(principal_id=principal_id) == ()
+        with pytest.raises(InvestigationSessionNotFoundError):
+            service.get_workspace(spec.workspace_id, principal_id=principal_id)
+    assert service.get_workspace(spec.workspace_id, principal_id="legacy-admin")["id"] == spec.workspace_id
+    from backend.api.reporting import can_read_m3_report
+    for principal_id, expected in (("legacy-admin", True), (admin["id"], False), (user["id"], False)):
+        assert can_read_m3_report(None, Principal(principal_id, role="admin"),
+            report_version_id=spec.report_version_id, task_id=spec.task_id,
+            auth_service=ApplicationAuthService(auth), historical_report_service=service) is expected
 
 
 def test_expected_browser_identity_blocks_cross_tab_reads_and_writes(tmp_path):

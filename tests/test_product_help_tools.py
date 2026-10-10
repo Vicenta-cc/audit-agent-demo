@@ -95,21 +95,21 @@ def test_public_projection_preserves_only_supported_product_links():
     assert '内部标识已隐藏' in redact_creation_internal_references('[外部](https://example.com/' + 'a' * 64 + ')')[0]
 
 
-def test_catalog_reuses_report_access_policy_for_owner_admin_and_grantee(catalog):
+def test_catalog_is_owner_only_even_for_admin_and_legacy_grantee(catalog):
     from backend.api.reporting import can_read_m3_report
     reader, _ = catalog
     grants = {('guest', 'report-version', 'report-version:2', 'read')}
     auth = SimpleNamespace(store=SimpleNamespace(has_grant=lambda *args: args in grants))
     runs = SimpleNamespace(
         admission=SimpleNamespace(for_task=lambda task: {'owner_id': 'owner'} if task == 'task:0' else None),
-        owner_principals_for_report=lambda **kw: ('owner',) if kw['task_id'] == 'task:1' else (),
+        owner_principals_for_report=lambda **kw: ('owner',) if kw['task_id'] == 'task:1' else ('admin',) if kw['task_id'] == 'task:2' else (),
     )
     reader.can_read = lambda principal, row: can_read_m3_report(runs, principal,
         report_version_id=row['id'], task_id=row['task_id'], auth_service=auth)
     assert reader.reports(Principal('owner'))['total_count'] == 2
-    assert reader.reports(Principal('guest'))['total_count'] == 1
+    assert reader.reports(Principal('guest'))['total_count'] == 0
     assert reader.reports(Principal('unrelated'))['total_count'] == 0
-    assert reader.reports(Principal('admin', role='admin'))['total_count'] == 25
+    assert reader.reports(Principal('admin', role='admin'))['total_count'] == 1
     grants.clear()
     assert reader.reports(Principal('guest'))['total_count'] == 0
 

@@ -19,7 +19,7 @@ class ReportsInput(BaseModel):
 INPUTS = {'read_user_manual': ManualInput, 'list_completed_reports': ReportsInput}
 DESCRIPTIONS = {
  'read_user_manual': '用户问新手教学、怎么使用平台、操作步骤或手册时读取。query为自然语言问题；section_id取返回目录，可继续读章节；均省略返回目录。只读，返回手册原文、章节链接和最多两张可展示截图。不查询实时额度、不创建草案、不启动采集。用返回图片URL配图并保留图注，不编造截图内容。',
- 'list_completed_reports': '用户要所有已完成调查的报告、历史报告列表或报告入口时使用；新建会话也可使用。按当前账号权限返回全部类型已发布报告的目录，每个调查取最新可读版本，含标题、发布时间、打开链接和完整总数。展示目录时将每个标题链接到返回的url，发布时间保留时区。不读取报告正文、不改变当前报告绑定。默认10条最多20条；要全部时用返回cursor继续直到has_more=false，未读完明确剩余，不能把第一页称为全部。',
+ 'list_completed_reports': '用户要所有已完成调查的报告、历史报告列表或报告入口时使用；新建会话也可使用。只返回当前账号自己创建的已发布报告目录（管理员也不跨账号），每个调查取最新可读版本，含标题、发布时间、打开链接和完整总数。展示目录时将每个标题链接到返回的url，发布时间保留时区。不读取报告正文、不改变当前报告绑定。默认10条最多20条；要全部时用返回cursor继续直到has_more=false，未读完明确剩余，不能把第一页称为全部。',
 }
 SCHEMAS = tuple({'name': n, 'description': DESCRIPTIONS[n], 'parameters': c.model_json_schema()} for n,c in INPUTS.items())
 
@@ -57,7 +57,7 @@ class ProductReadTools:
         next_cursor = base64.urlsafe_b64encode(json.dumps({'revision': revision, 'offset': end}).encode()).decode() if end < len(visible) else ''
         return {'total_count': len(visible), 'returned_count': len(page), 'start': offset + 1 if page else 0,
             'end': end, 'has_more': end < len(visible), 'remaining_count': len(visible) - end, 'cursor': next_cursor,
-            'scope': '当前账号有权查看的已发布报告；每个调查展示最新可读版本，未生成报告的任务不在此目录。',
+            'scope': '当前账号自己创建的已发布报告；每个调查展示最新可读版本，未生成报告的任务不在此目录。',
             'reports': [{'title': p['title'], 'published_at': p['published_at'], 'version': p['version_number'],
                 'url': '/investigation/' + quote(p['task_id'], safe='') + '/report?' + urlencode({'report': p['id']})} for p in page]}
 

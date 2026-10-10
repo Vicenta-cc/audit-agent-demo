@@ -401,25 +401,6 @@ historical_report_demo_service = HistoricalReportDemoService(
     report_service=investigation_agent_service,
     executor=investigation_turn_executor,
     auto_register=not _authz_enabled(),
-    access_authorizer=(
-        lambda principal_id, workspace: bool(
-            (auth_store.get_user(principal_id) or {}).get("role") == "admin"
-            or auth_store.has_grant(
-                principal_id,
-                "report-version",
-                str(workspace.get("report_version_id") or ""),
-                "read",
-            )
-            or auth_store.has_grant(
-                principal_id,
-                "historical-workspace",
-                str(workspace.get("id") or ""),
-                "read",
-            )
-        )
-        if _authz_enabled()
-        else None
-    ),
 )
 from .investigation.deletion import WorkspaceDeletionService, create_workspace_deletion_router
 
@@ -458,6 +439,7 @@ def _can_read_catalog_report(principal, item):
         return False
     return can_read_m3_report(investigation_creation_store, principal,
         report_version_id=item['id'], task_id=item['task_id'],
+        historical_report_service=historical_report_demo_service,
         auth_service=auth_service if _authz_enabled() else None)
 
 

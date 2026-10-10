@@ -32,7 +32,7 @@ from backend.investigation.errors import (
     ReportNotFoundError,
     ReportScopeError,
 )
-from backend.api.reporting import published_report_task_id
+from backend.api.reporting import can_read_m3_report, published_report_task_id
 from backend.audit_agent.config import settings
 from backend.investigation_creation.principal import (
     LocalPrincipalProvider,
@@ -177,22 +177,13 @@ def create_investigation_router(
     provide_principal = principal_provider or LocalPrincipalProvider()
 
     def require_report_access(report_version_id: str, principal: Principal) -> None:
-        if auth_service is None or principal.is_admin:
+        if auth_service is None:
             return
         task_id = published_report_task_id(report_store, report_version_id)
-        owners = (
-            m3_run_store.owner_principals_for_report(
-                report_version_id=report_version_id, task_id=task_id
-            )
-            if m3_run_store is not None
-            else frozenset()
-        )
-        admission = getattr(m3_run_store, "admission", None)
-        admitted = admission.for_task(task_id) if admission is not None else None
-        if admitted and admitted["owner_id"] == principal.id:
-            return
-        if principal.id in owners or auth_service.store.has_grant(
-            principal.id, "report-version", report_version_id, "read"
+        if can_read_m3_report(
+            m3_run_store, principal, report_version_id=report_version_id,
+            task_id=task_id, auth_service=auth_service,
+            historical_report_service=historical_report_service,
         ):
             return
         raise HTTPException(
@@ -203,11 +194,12 @@ def create_investigation_router(
         if auth_service is None:
             return None
         session = service.store.get_session(session_id)
-        if not principal.is_admin:
-            if str(session.owner_principal or "") != principal.id:
-                raise InvestigationSessionNotFoundError(
-                    "investigation Session was not found"
-                )
+        if str(session.owner_principal or "") != principal.id:
+            raise InvestigationSessionNotFoundError(
+                "investigation Session was not found"
+            )
+        if report_store is not None:
+            require_report_access(session.report_version_id, principal)
         return session
 
     @router.post(
@@ -645,6 +637,8 @@ def _is_current_terminal_event(
 
 
 def _raise_public_error(exc: Exception) -> None:
+    if isinstance(exc, HTTPException):
+        raise exc
     if isinstance(exc, (ReportNotFoundError, InvestigationSessionNotFoundError, InvestigationTurnNotFoundError)):
         raise HTTPException(status_code=404, detail=exc.safe_message) from exc
     if isinstance(

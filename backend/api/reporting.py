@@ -59,6 +59,7 @@ def create_reporting_router(
                 report_version_id=str(version["id"]),
                 task_id=task_id,
                 auth_service=auth_service,
+                historical_report_service=historical_report_service,
             )
         )
         items = tuple(_summary_response(item, task_id=task_id) for item in versions)
@@ -84,6 +85,7 @@ def create_reporting_router(
             report_version_id=report_version_id,
             task_id=task_id,
             auth_service=auth_service,
+            historical_report_service=historical_report_service,
         ):
             raise HTTPException(status_code=404, detail="Published report version not found")
         return published_report_detail_response(
@@ -103,6 +105,7 @@ def create_reporting_router(
             report_version_id=report_version_id,
             task_id=task_id,
             auth_service=auth_service,
+            historical_report_service=historical_report_service,
         ):
             raise HTTPException(status_code=404, detail="Published report version not found")
         try:
@@ -123,6 +126,7 @@ def create_reporting_router(
             report_version_id=report_version_id,
             task_id=task_id,
             auth_service=auth_service,
+            historical_report_service=historical_report_service,
         ):
             raise HTTPException(status_code=404, detail="Published report version not found")
 
@@ -360,15 +364,17 @@ def can_read_m3_report(
     report_version_id: str,
     task_id: str,
     auth_service: object | None = None,
+    historical_report_service: object | None = None,
 ) -> bool:
-    if auth_service is not None and principal.is_admin:
+    # Report ownership is independent of administrative roles and old grants.
+    if historical_report_service is not None and historical_report_service.is_historical_report_version(report_version_id):
+        try:
+            historical_report_service.require_report_access(report_version_id, principal_id=principal.id)
+        except Exception:
+            return False
         return True
     if run_store is None:
-        return auth_service is None or bool(
-            auth_service.store.has_grant(
-                principal.id, "report-version", report_version_id, "read"
-            )
-        )
+        return auth_service is None
     admission = getattr(run_store, "admission", None)
     admitted = admission.for_task(task_id) if admission is not None else None
     if admitted and admitted["owner_id"] == principal.id:
@@ -380,11 +386,7 @@ def can_read_m3_report(
         return True
     if auth_service is None:
         return not owners
-    return bool(
-        auth_service.store.has_grant(
-            principal.id, "report-version", report_version_id, "read"
-        )
-    )
+    return False
 
 
 def _summary_response(

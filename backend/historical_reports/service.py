@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from threading import RLock
-from typing import Any, Callable
+from typing import Any
 
 from backend.historical_reports.catalog import HistoricalReportSpec
 from backend.historical_reports.importer import HistoricalReportImporter
@@ -22,7 +22,6 @@ class HistoricalReportDemoService:
         report_service: Any,
         executor: Any,
         auto_register: bool = True,
-        access_authorizer: Callable[[str, dict[str, Any]], bool] | None = None,
     ) -> None:
         self.specs = specs
         self.workspace_store = workspace_store
@@ -35,7 +34,6 @@ class HistoricalReportDemoService:
         self.report_service = report_service
         self.executor = executor
         self.auto_register = bool(auto_register)
-        self.access_authorizer = access_authorizer
         self.importer = HistoricalReportImporter(report_store.db_path)
         self._specs_by_workspace = {item.workspace_id: item for item in specs}
         self._report_version_ids = frozenset(
@@ -122,12 +120,7 @@ class HistoricalReportDemoService:
         return self._workspace_state(workspace, principal_id=principal_id)
 
     def _can_access(self, principal_id: str, workspace: dict[str, Any]) -> bool:
-        if str(workspace.get("principal_id") or "") == principal_id:
-            return True
-        return bool(
-            self.access_authorizer
-            and self.access_authorizer(principal_id, workspace)
-        )
+        return str(workspace.get("principal_id") or "") == principal_id
 
     def analysis_records(self, workspace_id: str, *, principal_id: str) -> dict[str, Any]:
         """Read all frozen post results, never replay or invent execution events."""
