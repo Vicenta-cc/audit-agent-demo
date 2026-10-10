@@ -910,3 +910,17 @@ for (const cleanupFails of [false, true]) {
     else { await expect(page.getByText('登录成功', { exact: true })).toBeVisible(); expect(starts).toBe(2); }
   });
 }
+
+test('view platform hint and return to scan operate on same session without restarting login', async ({ page }) => {
+  let starts = 0; const commands: any[] = [];
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: snapshot() } }); });
+  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => {
+    const command = JSON.parse(String(data));
+    if (command.type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() }));
+    else { commands.push(command); ws.send(JSON.stringify({ type: 'snapshot', item: command.action === 'open_manual' ? { ...snapshot('manual_required', 2), available_actions: ['close_manual'], challenge: { ...snapshot('challenge_required').challenge } } : snapshot() })); }
+  }));
+  await page.goto('/tests/crawlerLoginV2.html'); await page.getByRole('button', { name: '查看抖音提示' }).click();
+  await expect(page.getByRole('button', { name: '返回扫码' })).toBeVisible(); await page.getByRole('button', { name: '返回扫码' }).click(); await expect(page.getByAltText('抖音登录二维码')).toBeVisible();
+  expect(starts).toBe(1); expect(commands.map(command => command.action)).toEqual(['open_manual', 'close_manual']); expect(commands.every(command => command.operation_id === 'operation-fixture' && command.controller_epoch === 1)).toBeTruthy(); expect(commands[1].sequence).toBeGreaterThan(commands[0].sequence);
+});

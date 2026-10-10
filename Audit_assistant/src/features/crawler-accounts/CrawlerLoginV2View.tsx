@@ -531,6 +531,8 @@ export function CrawlerLoginV2View({
           刷新验证题目
         </Button>
       ) : null}
+      {!terminal && ["qr_ready", "qr_expired"].includes(displayPhase) && snapshot.available_actions.includes("open_manual") ? <div className="crawler-login-v2-platform-help"><p>手机确认后仍未完成？查看抖音当前提示。</p><Button disabled={!enabled} onClick={() => action("open_manual")}>查看抖音提示</Button></div> : null}
+      {!terminal && displayPhase === "manual_required" && snapshot.available_actions.includes("close_manual") ? <Button disabled={!enabled} onClick={() => action("close_manual")}>返回扫码</Button> : null}
       {!terminal && Number.isFinite(sessionSeconds) && sessionSeconds > 0 ? <p className="crawler-login-v2-session-time">本次登录剩余 {Math.floor(sessionSeconds / 60)}:{String(sessionSeconds % 60).padStart(2, "0")}</p> : null}
     </div>
   );
