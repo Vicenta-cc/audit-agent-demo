@@ -1138,7 +1138,7 @@ class InvestigationCreationConversationService:
         return self.execute_turn(turn_id)
 
     def _execute_collection_turn(self, turn):
-        from backend.report_collection.tools import PROMPT
+        from backend.report_collection.tools import PROMPT, AGENT_PROMPT
         from backend.hermes_runtime.adapter import turn_system_context
         try:
             self.report_collection.sources(turn.session_id, turn.id)
@@ -1150,16 +1150,18 @@ class InvestigationCreationConversationService:
                 streams.enter_context(self.runtime_binding.product_mode_execution(
                     session_runtime_home(self.hermes_state_dir, turn.session_id), product_mode="collection"))
                 agent = self._agent(turn.session_id, product_mode="collection")
-                repair = "本轮只能使用会话报告工具。答案只可引用本轮查询范围内的证据。"
+                agent_driven = self.report_collection.agent_driven
+                repair = "" if agent_driven else "本轮只能使用会话报告工具。答案只可引用本轮查询范围内的证据。"
                 totals = {k: 0 for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls")}
-                for attempt in range(2):
+                for attempt in range(1 if agent_driven else 2):
                     with turn_system_context(agent, repair):
-                        result = agent.run_conversation(user_message, system_message=PROMPT,
+                        result = agent.run_conversation(user_message, system_message=AGENT_PROMPT if agent_driven else PROMPT,
                             conversation_history=deepcopy(history), task_id=turn.id)
                     for key in totals:
                         totals[key] += int(result.get(key) or 0)
                     try:
-                        self.report_collection.validate_answer(turn.session_id, turn.id, str(result.get("final_response") or ""))
+                        if not agent_driven:
+                            self.report_collection.validate_answer(turn.session_id, turn.id, str(result.get("final_response") or ""))
                         break
                     except ValueError as exc:
                         self.report_collection.record_call("validate_answer", {}, turn.session_id, turn.id,
@@ -1987,7 +1989,9 @@ class InvestigationCreationConversationService:
             with self.report_collection.connect() as db:
                 pinned = db.execute('SELECT selected FROM collection_turns WHERE turn=?', (turn.id,)).fetchone()
             collection_source_count = len(json.loads(pinned['selected'])) if pinned and pinned['selected'] else 0
-            collection_warnings = ["collection_source_scope_verified; semantic_claims_not_independently_verified"]
+            collection_warnings = (["collection_tool_access_verified; answer_citations_and_claims_not_independently_verified"]
+                if self.report_collection.agent_driven else
+                ["collection_source_scope_verified; semantic_claims_not_independently_verified"])
         self.store.complete_turn(
             turn.id,
             answer=answer,

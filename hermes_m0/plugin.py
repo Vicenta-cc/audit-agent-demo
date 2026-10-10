@@ -159,7 +159,7 @@ def _idempotent_tool_execution(**kwargs: Any) -> Any:
 def register(ctx: Any) -> None:
     ctx.register_middleware("tool_execution", _idempotent_tool_execution)
     catalogs = (
-        ("collection", "HERMES_INVESTIGATION_COLLECTION_MODE", collection_tools.SCHEMAS),
+        ("collection", "HERMES_INVESTIGATION_COLLECTION_MODE", collection_tools.schemas()),
         (
             "account-activity",
             "HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE",

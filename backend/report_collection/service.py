@@ -25,7 +25,8 @@ def reference(kind, value):
 
 
 class ReportCollectionService:
-    def __init__(self, *, conversation, report_store, can_read, path):
+    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False):
+        self.agent_driven = agent_driven
         self.conversation = conversation
         self.report_store = report_store
         self.can_read = can_read
@@ -186,11 +187,15 @@ class ReportCollectionService:
         return selected
 
     def pin_selection(self, session, turn, selected):
-        # Once a tool has read data, that turn cannot broaden its query range.
+        # Keep a read ledger; only the constrained policy also uses it as a gate.
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT selected FROM collection_turns WHERE session=? AND turn=?', (session,turn)).fetchone()
-            if row['selected'] is not None:
+            if self.agent_driven:
+                # Audit the union of data read, never use it as a query gate.
+                prior = json.loads(row['selected']) if row['selected'] else []
+                selected = list({s['ref']: s for s in [*prior, *selected]}.values())
+            elif row['selected'] is not None:
                 allowed = {s['ref'] for s in json.loads(row['selected'])}
                 if not {s['ref'] for s in selected} <= allowed:
                     raise PermissionError('本轮已限定查询范围，不能扩大；请在下一轮明确查询更多报告。')
@@ -308,7 +313,7 @@ class ReportCollectionService:
         rows=self.observations(selected)
         if args['kind']=='comments': rows=[r for r in rows if r['kind']=='comment_author']
         parent_ref = args.get('from_result_ref')
-        if not parent_ref and args.get('scope') == 'inherit' and not args.get('report_refs'):
+        if not self.agent_driven and not parent_ref and args.get('scope') == 'inherit' and not args.get('report_refs'):
             previous = self.previous(session,sources)
             if previous and previous['kind'] in {'accounts','comments'}:
                 parent_ref = previous['result_ref']

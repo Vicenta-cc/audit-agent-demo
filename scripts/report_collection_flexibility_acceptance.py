@@ -20,7 +20,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--single-report',action='store_true',help='Compare existing single-report service and a B-only collection; three turns each.')
+    parser.add_argument('--mode',choices=['constrained','agent','paired'],default='constrained')
     args=parser.parse_args()
+    if args.single_report and args.mode=='paired':
+        parser.error('--single-report requires --mode constrained or --mode agent')
     root=args.output.resolve()
     root.mkdir(parents=True,exist_ok=False)
     os.umask(0o077)
@@ -46,7 +49,7 @@ def main():
         (root/'evidence.json').write_text(content)
     original=Completions.create
     def observed(client,*a,**kw):
-        if len(evidence['calls'])>=70:raise RuntimeError('验收最多 70 次模型请求。')
+        if len(evidence['calls'])>=120:raise RuntimeError('验收最多 120 次模型请求。')
         evidence['calls'].append({'model':kw.get('model'),'host':urlsplit(str(client._client.base_url)).hostname,
             'tool_names':[t['function']['name'] for t in kw.get('tools',[])]})
         save()
@@ -68,6 +71,12 @@ def main():
     try:
         collection.__wrapped__(stack,root)
         stack['conversation'].fake_runtime=False
+        stack['collection'].agent_driven=args.mode=='agent'
+        from backend.report_collection.tools import PROMPT,AGENT_PROMPT,schemas
+        evidence['mode']=args.mode
+        evidence['system_prompt']=AGENT_PROMPT if args.mode=='agent' else PROMPT
+        evidence['system_prompt_chars']=len(evidence['system_prompt'])
+        evidence['tool_descriptions_chars']=sum(len(s['description']) for s in schemas())
         validate=stack['collection'].validate_answer
         def observed_validation(session,turn,answer):
             try:return validate(session,turn,answer)
@@ -136,44 +145,57 @@ def main():
             ('read_then_compare','先读回刚才 B 的评论结果，确认那个共同评论账号，再查它在 A 的评论，比较它在 A 和 B 的风险判断。这个问题明确允许查询 A+B。', 'comments',['A'],1),
         ]
         with patch.object(Completions,'create',observed), (root/'runtime.log').open('w') as log, redirect_stdout(log),redirect_stderr(log):
-            for case,question,kind,labels,count in questions:
-                started=time.monotonic();call_start=len(evidence['calls'])
-                response=client.post(f'/api/investigation-workspaces/{sid}/turns',json={'client_message_id':uuid4().hex,'content':question})
-                assert response.status_code==202,response.text
-                turn_id=response.json()['turn_id']
-                deadline=time.monotonic()+240
-                while stack['conversation'].store.get_turn(turn_id).status=='running':
-                    if time.monotonic()>deadline:raise TimeoutError('模型验收超时')
-                    time.sleep(.1)
-                turn=stack['conversation'].store.get_turn(turn_id)
-                result=stack['conversation'].store.turn_result(turn_id)
-                record={'case':case,'seconds':round(time.monotonic()-started,3),'model_calls':len(evidence['calls'])-call_start,'question':question,'status':turn.status,'result':result.model_dump(mode='json')}
-                with stack['collection'].connect() as db:
-                    record['business_calls']=[dict(r) for r in db.execute('SELECT name,arguments,response FROM collection_calls WHERE turn=? ORDER BY id',(turn_id,))]
-                    record['query_results']=[json.loads(r['payload']) for r in db.execute('SELECT payload FROM collection_results WHERE turn=?',(turn_id,))]
-                candidates=[r for r in record['query_results'] if r['kind']==kind and {s['label'] for s in r['sources']}==set(labels)]
-                record['checks']={'completed':turn.status=='completed','expected_query':bool(candidates) and (count is None or len(candidates[-1]['items'])==count)}
-                if case=='followup':
-                    previous=evidence['turns'][-1]['query_results'][-1]['items'][0]
-                    # An exact answer from authorized history need not requery.
-                    record['checks'].pop('expected_query')
-                    record['checks']['correct_account']=previous['account_ref'] in record['result']['answer']
-                if case=='read_then_compare':
-                    record['checks']['expected_query']=any(r['kind']=='comments' and 'A' in {s['label'] for s in r['sources']} and r['items'] for r in record['query_results'])
-                if set(labels)=={'B'}:
-                    import re
-                    earlier_a_refs={i['comment_ref'] for t in evidence['turns'] for r in t['query_results'] if r['kind']=='comments'
-                        for i in r['items'] if i['source']['label']=='A'}
-                    cited=set(re.findall(r'comment_[0-9a-f]{24}',record['result']['answer']))
-                    record['checks']['no_A_evidence']=not (cited & earlier_a_refs)
-                if case=='metadata_exclusion':
-                    record['checks']['requested_scope_note_retained']=stack['reports']['A'].version in record['result']['answer']
-                record['repair_count']=sum(c['name']=='validate_answer' for c in record['business_calls'])
-                record['rejected_tools']=[c for c in record['business_calls'] if c['name']!='validate_answer' and not json.loads(c['response']).get('ok')]
-                record['checks']['no_rejected_tool']=not record['rejected_tools']
-                evidence['turns'].append(record);save()
+            for mode in (['constrained','agent'] if args.mode=='paired' else [args.mode]):
+                stack['collection'].agent_driven=mode=='agent'
+                evidence.setdefault('configurations',{})[mode]={
+                    'system_prompt':AGENT_PROMPT if mode=='agent' else PROMPT,
+                    'system_prompt_chars':len(AGENT_PROMPT if mode=='agent' else PROMPT),
+                    'tool_descriptions_chars':sum(len(s['description']) for s in schemas())}
+                if args.mode=='paired':
+                    sid=client.post('/api/investigation-workspaces',json={}).json()['workspace_session_id']
+                    registered=client.post(f'/api/investigation-workspaces/{sid}/report-sources',json={'reports':[
+                        {'label':n,'report_version_id':stack['reports'][n].version} for n in ['A','B']]})
+                    assert registered.status_code==200,registered.text
+                for case,question,kind,labels,count in questions:
+                    started=time.monotonic();call_start=len(evidence['calls'])
+                    response=client.post(f'/api/investigation-workspaces/{sid}/turns',json={'client_message_id':uuid4().hex,'content':question})
+                    assert response.status_code==202,response.text
+                    turn_id=response.json()['turn_id']
+                    deadline=time.monotonic()+240
+                    while stack['conversation'].store.get_turn(turn_id).status=='running':
+                        if time.monotonic()>deadline:raise TimeoutError('模型验收超时')
+                        time.sleep(.1)
+                    turn=stack['conversation'].store.get_turn(turn_id)
+                    result=stack['conversation'].store.turn_result(turn_id)
+                    record={'mode':mode,'turn_id':turn_id,'case':case,'seconds':round(time.monotonic()-started,3),'model_calls':len(evidence['calls'])-call_start,'question':question,'status':turn.status,'result':result.model_dump(mode='json')}
+                    with stack['collection'].connect() as db:
+                        record['business_calls']=[dict(r) for r in db.execute('SELECT name,arguments,response FROM collection_calls WHERE turn=? ORDER BY id',(turn_id,))]
+                        record['query_results']=[json.loads(r['payload']) for r in db.execute('SELECT payload FROM collection_results WHERE turn=?',(turn_id,))]
+                    candidates=[r for r in record['query_results'] if r['kind']==kind and {s['label'] for s in r['sources']}==set(labels)]
+                    record['checks']={'completed':turn.status=='completed','expected_query':bool(candidates) and (count is None or len(candidates[-1]['items'])==count)}
+                    if case=='followup':
+                        from backend.report_collection.service import reference
+                        # Fixture's target identity, independent of the model's query plan.
+                        record['checks'].pop('expected_query')
+                        record['checks']['correct_account']=reference('account',['douyin','same-user']) in record['result']['answer']
+                    if case=='read_then_compare':
+                        record['checks']['expected_query']=any(r['kind']=='comments' and 'A' in {s['label'] for s in r['sources']} and r['items'] for r in record['query_results'])
+                    if set(labels)=={'B'}:
+                        import re
+                        earlier_a_refs={i['comment_ref'] for t in evidence['turns'] for r in t['query_results'] if r['kind']=='comments'
+                            for i in r['items'] if i['source']['label']=='A'}
+                        cited=set(re.findall(r'comment_[0-9a-f]{24}',record['result']['answer']))
+                        record['checks']['no_A_evidence']=not (cited & earlier_a_refs)
+                    if case=='metadata_exclusion':
+                        record['checks']['requested_scope_note_retained']=stack['reports']['A'].version in record['result']['answer']
+                    record['repair_count']=sum(c['name']=='validate_answer' for c in record['business_calls'])
+                    record['rejected_tools']=[c for c in record['business_calls'] if c['name']!='validate_answer' and not json.loads(c['response']).get('ok')]
+                    record['trace_checks']={'no_rejected_tool':not record['rejected_tools']}
+                    if 'expected_query' in record['checks']:
+                        record['trace_checks']['expected_query']=record['checks'].pop('expected_query')
+                    evidence['turns'].append(record);save()
         assert evidence['calls'] and all(c['model']==settings.conversation_model for c in evidence['calls'])
-        evidence['status']='PASS' if all(all(t['checks'].values()) for t in evidence['turns']) else 'FAIL_REVIEW'
+        evidence['status']='CHECKS_PASS_NEEDS_ANSWER_REVIEW' if all(all(t['checks'].values()) for t in evidence['turns']) else 'FAIL_REVIEW'
         save()
     except Exception as exc:
         evidence['status']='FAIL';evidence['error']=str(exc);save()
