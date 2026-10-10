@@ -1,3 +1,40 @@
+Current user-selected local development baseline — 2026-10-10
+
+Implementation commit: 5089d69
+Branch: codex/report-direct-delivery
+User decision: “那先保留这个版本” after reviewing direct delivery vs model rewriting.
+This selection supersedes the earlier prompt selection below for subsequent local
+report-query development. It does not enable or deploy the feature in production.
+
+Retained: grouped factual tool output, three precise analysis capabilities,
+autonomous report querying, deterministic direct result delivery, 171-character
+report prompt, concise delivery guidance in tool descriptions and upfront visibility.
+DeepSeek remains non-thinking; rule/keyword generation and Hermes are unchanged.
+No forced delivery, report scope locks, answer scanning or automatic answer repair.
+
+Selected local runtime profile (explicit opt-in, global defaults remain off):
+REPORT_COLLECTION_ENABLED=1
+REPORT_COLLECTION_AGENT_DRIVEN=1
+REPORT_COLLECTION_DIRECT_DELIVERY=1
+REPORT_COLLECTION_DIRECT_DELIVERY_GUIDANCE=1
+No environment files or running services were changed when recording this decision.
+
+Acceptance preference: accurate and complete data takes priority over brevity.
+Correct comment details containing the requested authors may be accepted as extra
+presentation, rather than a data failure. Missing requested information, incorrect
+filters/counts/identities/sources and unauthorized access remain distinct defects.
+Do not silently rewrite historical whole-answer scores under this new preference.
+Model prose can still introduce factual errors; retention does not certify that
+free-form explanations or causal analyses are reliable.
+
+Evidence: acceptance/report-delivery-guidance-20261010 (32 full-chain turns,
+82 provider calls; 9 candidate direct deliveries faithfully rendered query data,
+including 2 redundant comment-detail deliveries). 37 regression tests passed.
+No additional model runs were needed to record the user's selection.
+Local only: no push, deployment, cloud restart, or production baseline replacement.
+
+--- Historical selection retained for provenance; superseded above ---
+
 Local development baseline selected by user — 2026-10-10
 
 Parent: ccad555 (six-arm diverse comparison).

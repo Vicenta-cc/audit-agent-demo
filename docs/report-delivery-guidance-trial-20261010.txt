@@ -49,3 +49,9 @@ Validation: 37 relevant automated tests passed; one existing dependency warning.
 All 32 turns completed, thinking disabled in all 82 saved provider requests,
 original source snapshot/protocol amendment/full tool traces/final answers retained.
 No cloud, frontend, rule/keyword generator, or Hermes dependency edits; no push.
+
+Subsequent user decision — 2026-10-10:
+The user accepted accurate extra detail and selected implementation 5089d69 as
+the retained local development version. See report-query-selected-baseline-20261010.txt.
+This supersedes the trial recommendation not to promote the local baseline;
+the original scores, failures and production opt-in defaults are unchanged.
