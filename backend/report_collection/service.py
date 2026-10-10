@@ -25,8 +25,9 @@ def reference(kind, value):
 
 
 class ReportCollectionService:
-    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False, compact_history=False):
+    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False, compact_history=False, express_results=True):
         self.agent_driven = agent_driven
+        self.express_results = express_results
         self.compact_history = compact_history
         self.conversation = conversation
         self.report_store = report_store
@@ -355,7 +356,15 @@ class ReportCollectionService:
         if args['kind'] == 'accounts':
             matched_accounts = {item['account_ref'] for item in items}
             evidence_rows = [row for row in rows if row['account_ref'] in matched_accounts]
+        # Persist effective filters with raw results so later pages need not infer
+        # them from model history. Old results without this metadata stay unknown.
+        expression_metadata = {}
+        if self.agent_driven and self.express_results:
+            expression_metadata['query_filters'] = {
+                key: args.get(key) for key in ('risk_level', 'account_ref', 'common_only', 'from_result_ref')}
+            expression_metadata['query_filters']['parent_result_ref'] = parent_ref or None
         return self.save(session,turn,selected,args['kind'],items,args['limit'],
+            **expression_metadata,
             parent_result_ref=parent_ref or '',
             unique_evidence_count=len({r['evidence_key'] for r in evidence_rows}),
             unresolved_identity_comments=sum(not r['account_ref'] and r['kind']=='comment_author' for r in rows),

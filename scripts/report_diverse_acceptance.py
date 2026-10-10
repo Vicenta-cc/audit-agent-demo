@@ -109,7 +109,8 @@ def main():
                     VALUES(?,?,?,?,?,'2026-10-10','SUCCEEDED',?,?,'{}','2026-10-10','2026-10-10')''',
                     (name,'principal-b' if name=='D' else 'principal-a',r.task,r.task,'fixture',name,name))
         service=ReportCollectionService(conversation=stack['conversation'],report_store=stack['report_store'],
-            can_read=lambda p,item:owns_report(stack['creation_store'],p,item),path=root/'collections.sqlite3',agent_driven=True)
+            can_read=lambda p,item:owns_report(stack['creation_store'],p,item),path=root/'collections.sqlite3',agent_driven=True,
+            express_results=False)  # Historical six arms apply formatting at the captured request boundary.
         stack['conversation'].report_collection=service;tools.configure(service)
         stack.update(collection=service,reports=reports)
         stack['conversation'].fake_runtime=False

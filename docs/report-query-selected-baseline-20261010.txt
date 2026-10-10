@@ -1,0 +1,35 @@
+Local development baseline selected by user — 2026-10-10
+
+Parent: ccad555 (six-arm diverse comparison).
+Selection: data_brief expression + original 90-character focused instruction
+           + user-approved 82-character factual instruction.
+Report-specific prompt: 301 characters including two newline separators.
+
+Added instruction (verbatim):
+数量与身份依据工具结果，结论保留查询条件。区分已证实事实、可能解释和无法判断；不要把相关变化写成因果，也不要把用户提及写成已查询。回答各个子问题，避免无依据的补充。
+
+The formatter now runs at the report tool dispatch boundary in agent-driven
+mode. It groups observations by existing evidence_key, exposes identity status
+and query coverage, and preserves all statistics and source references.
+Raw result rows remain durable and unchanged in shape for pagination and
+from_result_ref filtering. Effective filters are stored with new results;
+older results without filter metadata explicitly report filters_known=false.
+No new tables or report snapshot changes.
+
+The existing REPORT_COLLECTION_AGENT_DRIVEN opt-in is unchanged. The new local
+baseline applies when this experimental mode is enabled. Rule/keyword creation,
+model selection, thinking settings and query authorization are unchanged.
+No new query locks, output scanning or answer regeneration.
+
+The six-arm runner explicitly disables the service formatter and continues to
+apply its historical expression/prompt arms separately. The new 82-character
+instruction is NOT silently added to those six historical arms. Existing
+acceptance artifacts and their conclusions have not been rewritten.
+
+Validation: 29 related pytest checks passed, one dependency deprecation warning.
+Hermes 0.20.4 source loaded via PYTHONPATH from projects/hermes-agent-main.
+Initial test invocation lacked that runtime path (19 passed, 2 import failures);
+the configured invocation above passed all checks. No provider calls this turn.
+These checks validate integration, not improved model answer accuracy.
+
+Local isolated worktree only; no push, deployment, cloud restart or frontend change.

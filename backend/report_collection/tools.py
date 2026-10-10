@@ -41,7 +41,9 @@ AGENT_BASE_PROMPT='你是报告研判助手，自主选择只读工具完成用�
 # Retained candidate from original-scene comparisons; no output enforcement.
 FOCUSED_ANSWER_INSTRUCTION = ('只回答当前问题及必要依据。每项断言以对应报告的工具证据为准；筛选结果不能推及整份报告；'
                               '缺失身份不能用于排除归属。区分原始证据和报告收录，未提供的原因不补写。需要更多证据可自主查询。')
-AGENT_PROMPT = AGENT_BASE_PROMPT + '\n' + FOCUSED_ANSWER_INSTRUCTION
+FACTUAL_ANSWER_INSTRUCTION = ('数量与身份依据工具结果，结论保留查询条件。区分已证实事实、可能解释和无法判断；'
+                              '不要把相关变化写成因果，也不要把用户提及写成已查询。回答各个子问题，避免无依据的补充。')
+AGENT_PROMPT = '\n'.join((AGENT_BASE_PROMPT, FOCUSED_ANSWER_INSTRUCTION, FACTUAL_ANSWER_INSTRUCTION))
 AGENT_DESCRIPTIONS={
  'list_conversation_reports':'查看会话内获准访问的冻结报告目录及上次结果引用；上次结果只是上下文。',
  'query_conversation_reports':'查询评论或账号（含发帖者、评论者）。默认查询全部会话报告；report_refs 指定报告，scope=inherit 仅复用上次报告范围。from_result_ref 明确筛选旧结果对象；account_ref、risk_level 是可选过滤条件。common_only=true 按稳定平台 ID 计算共同账号。结果保留各报告独立判断、来源和总数；账号 observations 最多20条样例，完整明细可查评论。',
@@ -72,6 +74,9 @@ def dispatch(name,args,session,turn):
             args={'scope':'all',**args}
         parsed=INPUTS[name].model_validate(args).model_dump()
         response={'ok':True,'data':_service.execute(name,parsed,session,turn)}
+        if _service.agent_driven and _service.express_results:
+            from .expression import express_result
+            response['data'] = express_result(response['data'])
     except (ValueError,PermissionError) as exc:
         response={'ok':False,'error':{'code':'collection_query_rejected','message':str(exc)}}
     except Exception:
