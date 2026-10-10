@@ -40,7 +40,7 @@ def prepare_delivery(service,args,session,turn,sources):
     labels=args.get('report_labels',[])
     if not refs and not labels: raise ValueError('请选择查询结果或需要检查的报告名称。')
     if len(set(refs))!=len(refs): raise ValueError('不能重复交付同一结果。')
-    blocks=[];counts=[];references=[]
+    blocks=[];counts=[];references=[];displayed_labels=set()
     for ref in refs:
         data=service.result(ref,session,sources)
         if data['kind'] not in {'comments','accounts'}: raise ValueError('此结果不支持列表直出。')
@@ -50,7 +50,8 @@ def prepare_delivery(service,args,session,turn,sources):
         filters=data['query_filters']
         scope=['报告：'+'、'.join(cell(s['label']) for s in data['sources']),
             '风险：'+RISK.get(filters.get('risk_level'),'不限')]
-        if data['kind']=='accounts':scope.append('账号范围：'+ROLE.get(filters.get('account_role','any'),'未知'))
+        if data['kind']=='accounts' and filters.get('account_role','any')!='any':
+            scope.append('账号范围：'+ROLE.get(filters['account_role'],'未知'))
         if filters.get('account_ref'):scope.append('仅统计指定账号')
         if filters.get('text_exact') is not None:scope.append('评论原文为“'+cell(filters['text_exact'])+'”')
         if filters.get('parent_result_ref'):scope.append('仅统计此前选定的内容')
@@ -72,8 +73,8 @@ def prepare_delivery(service,args,session,turn,sources):
         if data['kind']=='comments':
             unique=len({r['evidence_key'] for r in rows})
             completed=sum(r['audit_status']=='completed' for r in rows)
-            lines=[f'**评论列表 · 共 {len(rows)} 条收录**', '；'.join(scope)+'。',
-                f'对应 {unique} 条原始评论，已完成研判 {completed} 次。以下按读取顺序完整列出。',
+            lines=[f'**评论明细 · {len(rows)} 条记录**', '；'.join(scope)+'。',
+                f'{unique} 条原始评论，已完成 {completed} 次研判；按读取顺序列出全部记录。',
                 '| 序号 | 评论原文 | 作者 | 风险判断 | 来源 |',
                 '| --- | --- | --- | --- | --- |']
             for i,row in enumerate(rows,1):
@@ -81,12 +82,16 @@ def prepare_delivery(service,args,session,turn,sources):
                 source=' · '.join(filter(None,(cell(row['source']['label']),source_links(row))))
                 lines.append(f"| {i} | {cell(row['text'])} | {author(row)} | {risk} | {source} |")
         else:
-            lines=[f'**账号列表 · 共 {len(rows)} 个账号**','；'.join(scope)+'。',
-                '数量及风险判断仅限上述范围。',
-                '| 序号 | 账号 | 评论数 | 帖子数 | 各报告记录及风险 | 来源 |',
+            multiple=len(data['sources'])>1
+            lines=[f'**符合条件的账号 · {len(rows)} 个**','；'.join(scope)+'。','',
+                ('| 序号 | 账号 | 去重评论数 | 去重帖子数 | 各报告明细 | 来源 |' if multiple else
+                 '| 序号 | 账号 | 评论数 | 帖子数 | 风险判断 | 来源 |'),
                 '| --- | --- | ---: | ---: | --- | --- |']
             for i,row in enumerate(rows,1):
-                reports='；'.join(f"{s['label']}：评论 {s['comment_count']} 条，帖子 {s['post_count']} 篇；{ '、'.join(RISK.get(r,'待确认') for r in s['risk_levels']) or '暂无判断'}" for s in row['report_statistics'])
+                reports='；'.join(
+                    (f"{s['label']}：评论 {s['comment_count']} 条，帖子 {s['post_count']} 篇；" if multiple else '')+
+                    ('、'.join(RISK.get(r,'待确认') for r in s['risk_levels']) or '暂无判断')
+                    for s in row['report_statistics'])
                 lines.append(f"| {i} | {author(row)} | {row['unique_comment_count']} | {row['unique_post_count']} | {cell(reports)} | {source_links(row) or '—'} |")
             unknown=data.get('unresolved_identity_comments',0)
             if unknown:lines.append(f'另有 {unknown} 条评论的作者身份待确认，未计入上述账号，不能据此排除关联。')
@@ -96,17 +101,22 @@ def prepare_delivery(service,args,session,turn,sources):
             'rows':[{'position':i,'account_ref':row.get('account_ref'),
                 'comment_ref':row.get('comment_ref'),'source':row.get('source'),
                 'links':row.get('links',{})} for i,row in enumerate(rows,1)]})
-        counts.append(len(rows));blocks.append('\n\n'.join(lines[:3])+'\n\n'+'\n'.join(lines[3:]))
+        displayed_labels.update(s['label'] for s in data['sources'])
+        counts.append(len(rows));blocks.append('\n\n'.join(filter(None,lines[:3]))+'\n\n'+'\n'.join(lines[3:]))
     if labels:
         by_label={s['label']:s for s in sources}
         lines=['**报告访问情况**','']
         for label in labels:
+            # The displayed list already establishes access to this report.
+            # Keep the permission check and receipt, omit a duplicate prose block.
+            if label in by_label and label in displayed_labels:continue
             if label in by_label:
-                lines.append(f'- **{cell(label)}**：当前会话可以查看。本项仅核实访问权限，未读取或统计报告内容。')
+                lines.append(f'- **{cell(label)}**：可以查看；本次仅确认访问权限，未查询内容。')
             else:
-                lines.append(f'- **{cell(label)}**：当前会话无权读取，未读取、未参与统计。')
-        lines.append('\n仅凭昵称相同不能合并账号；需要可靠的平台账号身份。')
-        blocks.append('\n'.join(lines))
+                lines.append(f'- **{cell(label)}**：不在当前会话可访问范围，未读取、未参与统计。')
+        if len(lines)>2:
+            lines.append('\n同名不一定是同一账号，不能只按昵称合并。')
+            blocks.append('\n'.join(lines))
     text='\n\n---\n\n'.join(blocks)
     if len(text)>200000: raise ValueError('结果超过直出原型的文本容量，未交付截断结果。')
     return {'delivery':'direct','text':text,'result_refs':refs,'row_counts':counts,

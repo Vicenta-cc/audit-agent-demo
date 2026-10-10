@@ -21,19 +21,25 @@ def test_full_list_order_roles_and_access(make_collection):
     assert data['references'][0]['result_ref']==listing['result_ref']
     assert len(data['references'][0]['rows'])==27
     assert data['references'][0]['rows'][20]['position']==21
+    repeated_access=invoke(s,t,'deliver_conversation_results',
+        result_refs=[listing['result_ref']],report_labels=['B'])
+    assert repeated_access['text']==data['text']
+    assert repeated_access['report_labels_checked']==['B']
     for item in data['references'][0]['rows']:
         assert item['comment_ref'] not in data['text']
         assert item['account_ref'] not in data['text']
     low=invoke(s,t,kind='accounts',account_role='comment_author',risk_level='low',limit=1)
     both=invoke(s,t,kind='accounts',account_role='both')
     assert low['total_count']==3 and both['total_count']==1
-    delivery=invoke(s,t,'deliver_conversation_results',result_refs=[low['result_ref'],both['result_ref']],report_labels=['A','D'])
+    delivery=invoke(s,t,'deliver_conversation_results',result_refs=[low['result_ref'],both['result_ref']],report_labels=['B','A','D'])
     assert delivery['row_counts']==[3,1]
     assert 'https://www.douyin.com/video/33002' in delivery['text']
     assert '风险：低风险；账号范围：评论作者' in delivery['text']
     assert '风险：不限；账号范围：同时发帖和评论的账号' in delivery['text']
     assert '场馆' not in delivery['text']
     assert '未读取、未参与统计' in delivery['text']
+    assert '- **A**：' in delivery['text'] and '- **D**：' in delivery['text']
+    assert '- **B**：' not in delivery['text']
     assert 'SECRET' not in delivery['text']
     # Same immutable ordering/conditions can be delivered on a follow-up.
     finish(s,t);t=begin(s)

@@ -1,0 +1,35 @@
+2026-10-10 — Conversation presentation follow-up
+
+User requested readability first, independently of factual-accuracy work.
+Based on 0eef0f9 in the isolated report-direct-delivery worktree.
+
+Shared style guidance now asks for a direct answer, usually 1–3 sentences for
+simple follow-ups, complete subanswers for complex questions, less repeated
+explanation and no routine closing offers. Retains original evidence, names,
+links, scope and uncertainty; technical details remain available on request.
+The shared guidance is 214 Chinese characters (previously 174); it replaces
+rather than stacks another instruction block. No model, thinking, generation,
+query-scope, tool-choice or retry changes.
+
+Direct presentation: single-report account rows no longer repeat counts inside
+the risk column; multiple-report rows retain per-report counts and risks, with
+cross-report totals labelled as deduplicated. Remove redundant access paragraphs
+for reports already represented in the delivered lists. Still check permissions,
+retain the full access receipt, and show refusals for inaccessible reports.
+All source destinations and structured identities remain intact.
+
+Validation: 9 existing delivery/analysis tests pass (2 dependency warnings).
+The existing full-list test additionally checks mixed accessible/inaccessible
+labels, unchanged access receipts, order, exact links and preserved refusals.
+8 real local conversation turns, 20 provider calls, plus 3 general presentation
+probes; all thinking disabled. Actual component SSR preview preserves the URL
+with parentheses, query parameters and fragment. No browser screenshot check.
+
+Limits: style remains inconsistent. Complex answers still repeat table contents,
+occasionally expose English or technical terms, and include unnecessary closings.
+Raw answers also contain factual errors. This change is not an accuracy fix;
+preview preserves failures without manual rewriting.
+
+Evidence and preview:
+/Users/ext.wanghongtao6/Documents/Codex/acceptance/answer-style-polish-20261010/
+No cloud deployment, push, frontend layout changes or default feature-flag change.
