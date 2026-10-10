@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 from test_report_collection import collection,begin,call,finish
 from test_investigation_creation_conversation import creation_stack
-from backend.report_collection.tools import dispatch,schemas
+from backend.report_collection.tools import dispatch,schemas,AGENT_PROMPT
 
 
 def agent_call(stack,turn,name='query_conversation_reports',**args):
@@ -74,4 +74,5 @@ def test_autonomy_does_not_scan_or_regenerate_final_prose(collection,monkeypatch
     result=s['conversation'].execute_turn(t)
     assert result.answer==answer
     assert run.call_count==1 and scanner.call_count==0
+    assert run.call_args.kwargs['system_message']==AGENT_PROMPT
     assert 'answer_citations_and_claims_not_independently_verified' in str(result.grounding_validation)

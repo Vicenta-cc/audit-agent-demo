@@ -18,9 +18,9 @@ import sqlite3
 import time
 
 from scripts.report_expression_trial import PROMPT as SEMANTIC_PROMPT, project
+from backend.report_collection.tools import FOCUSED_ANSWER_INSTRUCTION
 
-BRIEF_PROMPT = ('只回答当前问题及必要依据。每项断言以对应报告的工具证据为准；筛选结果不能推及整份报告；'
-                '缺失身份不能用于排除归属。区分原始证据和报告收录，未提供的原因不补写。需要更多证据可自主查询。')
+BRIEF_PROMPT = FOCUSED_ANSWER_INSTRUCTION
 SCENES = [
     ('followup', 'report-query-autonomy-20261010-paired', 'investigation-turn:55485e540b084db8b433f26814431a89'),
     ('publisher', 'report-query-autonomy-20261010-single', 'investigation-turn:f9b1adcecab24227849a57661e85cb80'),
@@ -65,8 +65,9 @@ def envelope(root):
     rebuilt = [request['messages'][0]] + [api_message(m) for m in transcript[:-1]]
     assert rebuilt == request['messages'], 'Reconstruction must exactly match known captured SDK input'
     from backend.hermes_runtime.creation_prompt import CREATION_IDENTITY
-    from backend.report_collection.tools import AGENT_PROMPT
-    assert request['messages'][0]['content'] == CREATION_IDENTITY + '\n\n' + AGENT_PROMPT
+    from backend.report_collection.tools import AGENT_BASE_PROMPT
+    # Historical controls must not silently pick up the retained candidate.
+    assert request['messages'][0]['content'] == CREATION_IDENTITY + '\n\n' + AGENT_BASE_PROMPT
     assert request['extra_body']['thinking'] == {'type': 'disabled'}
     request.pop('temperature', None)  # It was None/omitted at provider call.
     return request, dict(captured_envelope=str(path), envelope_sha256=sha256(path.read_bytes()).hexdigest(),
