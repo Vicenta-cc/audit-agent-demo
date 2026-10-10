@@ -24,10 +24,23 @@ class AnalysisQuery(Query):
 class AnalysisComparison(Scope):
     include_samples: bool=False
     limit: int=Field(default=20,ge=1,le=50)
+class DeliveryQuery(AnalysisQuery):
+    account_role: Literal['any','comment_author','post_author','both']='any'
+class Delivery(Empty):
+    result_refs: list[str]=Field(default_factory=list,max_length=8,description='按回答顺序交付评论或账号结果的完整列表，自动读取全部行；每个子问题单独查询。')
+    report_labels: list[str]=Field(default_factory=list,max_length=20,description='需要说明可访问性的报告名称；只检查本会话目录，不搜索其他会话。')
 INPUTS={'list_conversation_reports':Empty,'query_conversation_reports':Query,
     'read_conversation_result':Read,'compare_conversation_config':Scope}
 ANALYSIS_INPUTS={**INPUTS,'query_conversation_reports':AnalysisQuery,
                  'compare_conversation_config':AnalysisComparison}
+DELIVERY_INPUTS={**ANALYSIS_INPUTS,'query_conversation_reports':DeliveryQuery,
+                 'deliver_conversation_results':Delivery}
+
+def available_inputs():
+    if _service is not None and _service.agent_driven:
+        if _service.direct_delivery: return DELIVERY_INPUTS
+        if _service.analysis_tools: return ANALYSIS_INPUTS
+    return INPUTS
 DESCRIPTIONS={
  'list_conversation_reports':'列出本轮已冻结的会话报告来源、上轮结果引用和继承范围。报告名称对应 report_ref。不会搜索其他会话。',
  'query_conversation_reports':'查询冻结报告的评论或账号（包含发帖者和评论者，当前可靠身份关联支持抖音 sec_uid）。未指定范围继承上轮报告及结果对象（上轮评论或账号集合），无上轮默认全部。独立的全局问题用 scope=all；只看 B 必须传 B 的 report_ref。common_only=true 查所选报告共同账号（仅可靠平台 ID）。account_ref 过滤账号；from_result_ref 限于先前结果中的评论或账号，可再限定报告。返回完整统计、稳定引用和逐条来源；有更多时使用 read_conversation_result 分页。不同报告的同条评论保留各自判断。账号 observations 只含最多20条样例，完整范围见 report_statistics；查评论明细请用账号过滤评论查询。',
@@ -61,7 +74,7 @@ def schemas():
     if _service is None or not _service.agent_driven:
         return SCHEMAS
     from copy import deepcopy
-    result=deepcopy(SCHEMAS)
+    result=list(deepcopy(SCHEMAS))
     for schema in result:
         schema['description']=AGENT_DESCRIPTIONS[schema['name']]
         if _service.analysis_tools:
@@ -72,6 +85,14 @@ def schemas():
                 schema['description']+=' include_samples=true 同时比较两报告完整样本：帖子数、评论风险数量与比例、共同及各自独有的原始评论、各次判断；明细可分页。'
         scope=schema['parameters'].get('properties',{}).get('scope')
         if scope: scope['default']='all'
+    if _service.direct_delivery:
+        for schema in result:
+            if schema['name']=='query_conversation_reports':
+                schema['parameters']=DeliveryQuery.model_json_schema()
+                schema['parameters']['properties']['scope']['default']='all'
+                schema['description']+=' account_role 筛选账号角色：comment_author 只计评论作者，post_author 只计发帖者，both 取两者交集；风险条件只作用于本次查询。'
+        result.append({'name':'deliver_conversation_results','parameters':Delivery.model_json_schema(),
+            'description':'直接交付已查询的完整评论/账号列表、准确统计或报告可访问性，作为本轮最终回答，不再由模型复述。适用于列出、筛选、权限问题；全部子问题查询完成后一次交付。需要原因分析时继续使用查询工具并正常回答，不使用本工具。'})
     return result
 
 _service=None
@@ -85,7 +106,7 @@ def dispatch(name,args,session,turn):
         if _service is None: raise RuntimeError('统一报告查询未启用。')
         if _service.agent_driven and name in {'query_conversation_reports','compare_conversation_config'}:
             args={'scope':'all',**args}
-        inputs=ANALYSIS_INPUTS if _service.agent_driven and _service.analysis_tools else INPUTS
+        inputs=available_inputs()
         parsed=inputs[name].model_validate(args).model_dump()
         response={'ok':True,'data':_service.execute(name,parsed,session,turn)}
         if _service.agent_driven and _service.express_results:

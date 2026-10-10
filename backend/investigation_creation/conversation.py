@@ -1154,6 +1154,9 @@ class InvestigationCreationConversationService:
                 streams.enter_context(self.runtime_binding.product_mode_execution(
                     session_runtime_home(self.hermes_state_dir, turn.session_id), product_mode="collection"))
                 agent = self._agent(turn.session_id, product_mode="collection")
+                from backend.report_collection.delivery import direct_delivery_boundary
+                delivery_state = streams.enter_context(direct_delivery_boundary(
+                    agent, self.report_collection, turn.session_id, turn.id))
                 agent_driven = self.report_collection.agent_driven
                 repair = "" if agent_driven else "本轮只能使用会话报告工具。答案只可引用本轮查询范围内的证据。"
                 totals = {k: 0 for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls")}
@@ -1173,6 +1176,7 @@ class InvestigationCreationConversationService:
                         if attempt: raise
                         repair = str(exc)
                 result.update(totals)
+                result['api_calls'] = max(0, totals['api_calls'] - delivery_state['local_completions'])
             if not result.get("completed") or result.get("failed") or result.get("interrupted"):
                 raise RuntimeError("报告会话模型未完成回答。")
             transcript = HermesInvestigationAgentService._validate_completed_transcript(

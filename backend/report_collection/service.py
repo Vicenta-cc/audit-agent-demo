@@ -25,10 +25,11 @@ def reference(kind, value):
 
 
 class ReportCollectionService:
-    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False, compact_history=False, express_results=True, analysis_tools=True):
+    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False, compact_history=False, express_results=True, analysis_tools=True, direct_delivery=False):
         self.agent_driven = agent_driven
         self.express_results = express_results
         self.analysis_tools = analysis_tools
+        self.direct_delivery = direct_delivery
         self.compact_history = compact_history
         self.conversation = conversation
         self.report_store = report_store
@@ -294,6 +295,11 @@ class ReportCollectionService:
 
     def execute(self,name,args,session,turn):
         sources=self.sources(session,turn)
+        if name=='deliver_conversation_results':
+            if not (self.agent_driven and self.direct_delivery):
+                raise ValueError('直接交付未启用。')
+            from .delivery import prepare_delivery
+            return prepare_delivery(self, args, session, turn, sources)
         if name=='list_conversation_reports':
             previous=self.previous(session,sources)
             return {'reports':[public_source(s) for s in sources],'previous_result_ref':previous['result_ref'] if previous else '',
@@ -322,6 +328,12 @@ class ReportCollectionService:
                 warning='缺失字段为未知，不能视为未使用；配置差异不能单独证明风险变化的因果关系。')
         rows=self.observations(selected)
         if args['kind']=='comments': rows=[r for r in rows if r['kind']=='comment_author']
+        role=args.get('account_role','any')
+        if role!='any':
+            if not self.direct_delivery or args['kind']!='accounts':
+                raise ValueError('账号角色条件仅用于账号查询。')
+            if role in {'comment_author','post_author'}:
+                rows=[r for r in rows if r['kind']==role]
         parent_ref = args.get('from_result_ref')
         if not self.agent_driven and not parent_ref and args.get('scope') == 'inherit' and not args.get('report_refs'):
             previous = self.previous(session,sources)
@@ -349,6 +361,8 @@ class ReportCollectionService:
                 if row['account_ref']: accounts[row['account_ref']].append(row)
             items=[]
             for ref,observations in sorted(accounts.items()):
+                if role=='both' and {r['kind'] for r in observations}!={'comment_author','post_author'}:
+                    continue
                 refs={r['source']['report_ref'] for r in observations}
                 if args['common_only'] and len(refs)!=len(selected): continue
                 items.append({'account_ref':ref,'names':sorted({r['account_name'] for r in observations}),
@@ -383,6 +397,8 @@ class ReportCollectionService:
             expression_metadata['query_filters']['parent_result_ref'] = parent_ref or None
             if self.analysis_tools:
                 expression_metadata['query_filters']['text_exact'] = args.get('text_exact')
+            if self.direct_delivery:
+                expression_metadata['query_filters']['account_role'] = role
         return self.save(session,turn,selected,args['kind'],items,args['limit'],
             **expression_metadata,
             parent_result_ref=parent_ref or '',

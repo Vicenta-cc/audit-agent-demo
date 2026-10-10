@@ -51,7 +51,7 @@ _M3_CREATION_TOOL_NAMES = frozenset(
 def _handler(tool_name: str):
     def handle(args: dict[str, Any], **kwargs: Any) -> str:
         if os.environ.get("HERMES_INVESTIGATION_COLLECTION_MODE") == "1":
-            if tool_name not in collection_tools.INPUTS:
+            if tool_name not in collection_tools.available_inputs():
                 return error_result(tool=tool_name, code="collection_only", message="当前会话仅允许范围受限的报告工具。")
             return collection_tools.dispatch(tool_name, args, str(kwargs.get("session_id") or ""), str(kwargs.get("task_id") or ""))
         if tool_name in product_read_tools.INPUTS:

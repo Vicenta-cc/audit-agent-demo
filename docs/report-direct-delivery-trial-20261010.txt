@@ -1,0 +1,43 @@
+Report query direct delivery prototype — 2026-10-10
+
+Base: 7c8f2cd. Independent local branch codex/report-direct-delivery.
+Opt-in: REPORT_COLLECTION_DIRECT_DELIVERY=1 together with the existing collection
+and agent-driven flags. Default remains off. No cloud/provider configuration changes.
+
+Agent still chooses tools and query conditions. Optional deliver_conversation_results
+accepts durable result refs for comments/accounts and/or report labels for access
+status. It delivers all matching saved rows in stable order, not the model-visible
+first page. Each result prints its actual filters and report versions. One delivery
+can include separate subqueries. Account role filtering supports comment_author,
+post_author, both, any; each query has independent risk conditions.
+
+Only accepted delivery calls terminate answer writing. A per-turn, version-fenced
+Hermes chat_completions adapter resolves the accepted delivery again, rechecks live
+permissions and returns a local final response without another provider request.
+Hermes still runs normal completion/transcript persistence. Dependency code is
+unchanged. Local terminal events are logged separately and excluded from api_calls.
+This is not a prose scanner, retry, classifier, fixed query sequence or model switch.
+The existing 301-character report System Prompt is unchanged; tool descriptions
+explain the new tool and role parameter. Rule/keyword generation remains untouched.
+
+Unrequested extras from a later model rewrite disappear because no rewrite occurs.
+This does NOT prove the Agent selects correct filters, includes every subquestion,
+chooses the right result, or chooses analysis vs direct delivery correctly. Those
+remain full-answer acceptance criteria. Analysis questions continue through the
+ordinary model answer path; this prototype does not combine direct list blocks
+with freely generated analysis in one final answer.
+
+Safety/completeness: durable result ownership and frozen identity checks apply to
+all direct reads, including historical refs and delivery-time reauthorization.
+Only registered, authorized report labels may be reported as accessible; no global
+report discovery or nickname merging. Evidence is escaped as literal Markdown/HTML.
+Maximum 1000 rows per result / 200000 rendered characters; exceeding a bound rejects
+the delivery, never silently truncates or claims completeness. Large-list download
+and frontend changes are outside this prototype.
+
+Acceptance: 24 real DeepSeek turns across identical paging and config fixtures,
+two arms; paging repeated twice with reverse arm order, config once. Thinking off.
+Same prompt, same provider, no answer retries. The comparison includes the additional
+role filter, so improvements cannot all be attributed only to rendering. Manual
+whole-answer review also checks follow-up references and preservation of analysis.
+Raw evidence: /Users/ext.wanghongtao6/Documents/Codex/acceptance/report-direct-delivery-20261010
