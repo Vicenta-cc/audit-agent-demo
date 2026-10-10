@@ -1,10 +1,19 @@
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from .limits import MAX_SUPPORTED_INVESTIGATION_POSTS
 from .triage import OFFICIAL_VERIFY_PATTERNS
+
+
+def trial_job_ids(value: str) -> tuple[str, ...]:
+    ids = tuple(dict.fromkeys(part.strip() for part in value.split(',') if part.strip()))
+    if any(not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', item) for item in ids):
+        # A malformed manifest never expands authorization or runs a partial list.
+        return ()
+    return ids
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -46,6 +55,13 @@ def parse_login_v2_origins(value: str, *, auth_mode: str, enabled: bool) -> list
 
 
 class Settings:
+    crawler_proxy_enabled = environment_flag("CRAWLER_PROXY_ENABLED")
+    crawler_proxy_echo_url = os.getenv("CRAWLER_PROXY_ECHO_URL", "").strip()
+    crawler_proxy_probe_interval = 300
+    crawler_proxy_probe_budget = 96
+    crawler_proxy_probe_ttl = 300
+    crawler_proxy_trial_id = os.getenv("CRAWLER_PROXY_TRIAL_ID", "").strip()
+    crawler_proxy_trial_job_ids = trial_job_ids(os.getenv("CRAWLER_PROXY_TRIAL_JOB_IDS", ""))
     continuous_resource_session_enabled = environment_flag("CONTINUOUS_RESOURCE_SESSION_ENABLED")
     root_dir = ROOT
     data_dir = Path(os.getenv("XHS_AUDIT_DATA_DIR", str(ROOT / "data"))).expanduser()

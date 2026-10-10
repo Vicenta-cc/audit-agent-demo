@@ -72,6 +72,20 @@ def select_account(worker, row):
                 a["id"] for a in account_store.available_accounts(platform)
             }:
                 continue
+            from backend.audit_agent.crawler_route import (
+                resolve_account_route, authorize_route_owner, CollectionRouteError,
+            )
+            try:
+                from backend.audit_agent.config import settings
+                requires_route = settings.crawler_proxy_enabled or account.get("proxy_required") or account.get("proxy_id")
+                if platform == "dy" and requires_route:
+                    snapshot = resolve_account_route(account["id"], account_store=account_store)
+                    if snapshot:
+                        authorize_route_owner(account["id"], snapshot.proxy_id, row["owner_id"], account_store=account_store)
+            except CollectionRouteError as exc:
+                waiting(worker.store.admission, row, exc.code, account["id"])
+                yield False
+                return
             waiting(worker.store.admission, row, "", account["id"])
             with assigned_account(account["id"]):
                 yield True
@@ -89,7 +103,16 @@ def select_account(worker, row):
 def dispatch(worker):
     from .legacy import dispatch_one
     from .recovery import reconcile, reconcile_one
+    from backend.audit_agent.config import settings
 
+    trial_id = str(getattr(settings, "crawler_proxy_trial_id", "") or "").strip()
+    allowed = getattr(settings, "crawler_proxy_trial_job_ids", ())
+    if isinstance(allowed, str):
+        allowed = [value.strip() for value in allowed.split(",") if value.strip()]
+    trial_jobs = frozenset(allowed)
+    if trial_id and not trial_jobs:
+        # An isolated trial starts idle; only a manifest-listed task may run.
+        return None
     admission = worker.store.admission
     reconcile(worker)
     with admission.connect() as db:
@@ -100,6 +123,8 @@ def dispatch(worker):
             )
         ]
     for candidate in rows:
+        if trial_id and candidate["task_id"] not in trial_jobs and candidate.get("job_id") not in trial_jobs:
+            continue
         task_id = candidate["task_id"]
         result = None
         executed = False

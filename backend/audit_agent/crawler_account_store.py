@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -101,6 +102,16 @@ class CrawlerAccountStore:
         if "last_risk_at" not in columns:
             conn.execute("ALTER TABLE crawler_accounts ADD COLUMN last_risk_at TEXT")
 
+        for name, definition in (
+            ("proxy_id", "TEXT"),
+            ("binding_revision", "INTEGER NOT NULL DEFAULT 0"),
+            ("proxy_required", "INTEGER NOT NULL DEFAULT 0"),
+            ("validated_proxy_binding_revision", "INTEGER NOT NULL DEFAULT 0"),
+            ("validated_proxy_config_revision", "INTEGER NOT NULL DEFAULT 0"),
+        ):
+            if name not in columns:
+                conn.execute(f"ALTER TABLE crawler_accounts ADD COLUMN {name} {definition}")
+
     def list(
         self,
         *,
@@ -130,7 +141,7 @@ class CrawlerAccountStore:
                 """.format(where=where),
                 parameters,
             ).fetchall()
-            return [self._row_to_account(row) for row in rows]
+            return [self._row_to_account(row, connection=conn) for row in rows]
 
         if connection is not None:
             return read(connection)
@@ -148,7 +159,7 @@ class CrawlerAccountStore:
                 "SELECT * FROM crawler_accounts WHERE id = ?",
                 (account_id,),
             ).fetchone()
-            return self._row_to_account(row) if row else None
+            return self._row_to_account(row, connection=conn) if row else None
 
         if connection is not None:
             return read(connection)
@@ -198,7 +209,7 @@ class CrawlerAccountStore:
                 "SELECT * FROM crawler_accounts WHERE id = ?",
                 (account_id,),
             ).fetchone()
-            return self._row_to_account(row)
+            return self._row_to_account(row, connection=conn)
 
     def update(
         self,
@@ -253,7 +264,7 @@ class CrawlerAccountStore:
                 "SELECT * FROM crawler_accounts WHERE id = ?",
                 (account_id,),
             ).fetchone()
-            return self._row_to_account(row)
+            return self._row_to_account(row, connection=conn)
 
     def delete(self, account_id: str) -> bool:
         with self._lock, self._connect() as conn:
@@ -312,7 +323,7 @@ class CrawlerAccountStore:
                 "SELECT * FROM crawler_accounts WHERE id = ?",
                 (account_id,),
             ).fetchone()
-            return self._row_to_account(row)
+            return self._row_to_account(row, connection=conn)
 
     def save_douyin_auth_state(
         self, account_id: str, ciphertext: str, platform_account_id: str | None = None,
@@ -477,7 +488,27 @@ class CrawlerAccountStore:
                 "last_used_at IS NOT NULL, last_used_at, id",
                 (platform, *excluded, now),
             ).fetchall()
-            return [self._row_to_account(row) for row in rows]
+            accounts = [self._row_to_account(row, connection=conn) for row in rows]
+            # Legacy accounts remain usable; required routes never fall back to direct.
+            if not any(account["proxy_required"] or account["proxy_id"] for account in accounts):
+                return accounts
+            table_exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='proxy_resources'").fetchone()
+            available = []
+            epoch = time.time()
+            for account in accounts:
+                if not account["proxy_id"]:
+                    if not account["proxy_required"]:
+                        available.append(account)
+                    continue
+                resource = conn.execute("SELECT * FROM proxy_resources WHERE id=?", (account["proxy_id"],)).fetchone() if table_exists else None
+                if (resource and resource["platform"] == account["platform"] and resource["status"] == "active"
+                    and not resource["stop_reason"]
+                    and account["validated_proxy_binding_revision"] == account["binding_revision"]
+                    and account["validated_proxy_config_revision"] == resource["config_revision"]
+                    and (resource["expires_at"] is not None and resource["expires_at"] > epoch)
+                    and (resource["cooldown_until"] is None or resource["cooldown_until"] <= epoch)):
+                    available.append(account)
+            return available
 
     def next_available(self, platform: str, *, exclude_id: str = "") -> dict | None:
         accounts = self.available_accounts(platform, exclude_ids=(exclude_id,))
@@ -524,9 +555,23 @@ class CrawlerAccountStore:
             raise ValueError(f"Unsupported crawler account access scope: {access_scope}")
         return normalized
 
-    def _row_to_account(self, row: sqlite3.Row) -> dict:
+    def _row_to_account(self, row: sqlite3.Row, *, connection: sqlite3.Connection | None = None) -> dict:
+        needs_validation = False
+        if row["proxy_required"]:
+            needs_validation = True
+            if row["proxy_id"] and connection is not None:
+                exists = connection.execute("SELECT 1 FROM sqlite_master WHERE name='proxy_resources' AND type='table'").fetchone()
+                resource = connection.execute("SELECT config_revision FROM proxy_resources WHERE id=?", (row["proxy_id"],)).fetchone() if exists else None
+                needs_validation = not (resource and row["validated_proxy_binding_revision"] == row["binding_revision"]
+                    and row["validated_proxy_config_revision"] == resource["config_revision"])
         return {
             "id": row["id"],
+            "proxy_id": row["proxy_id"],
+            "binding_revision": int(row["binding_revision"]),
+            "proxy_required": bool(row["proxy_required"]),
+            "validated_proxy_binding_revision": int(row["validated_proxy_binding_revision"]),
+            "validated_proxy_config_revision": int(row["validated_proxy_config_revision"]),
+            "needs_proxy_login_validation": needs_validation,
             "platform": row["platform"],
             "display_name": row["display_name"],
             "platform_account_id": row["platform_account_id"] or "",

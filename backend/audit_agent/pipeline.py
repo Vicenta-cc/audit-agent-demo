@@ -12,7 +12,7 @@ import shlex
 import threading
 import tempfile
 import traceback
-from contextlib import ExitStack, nullcontext
+from contextlib import ExitStack, nullcontext, contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from time import perf_counter, time_ns
@@ -22,6 +22,7 @@ import requests
 from .auth_state_cipher import auth_state_cipher
 from .asr_chunks import ASROutOfMemoryError, is_asr_oom
 from .asset_utils import download_url_with_error, safe_filename_from_url, split_csv_urls
+from .crawler_route import CollectionRouteError, get_current_route_context, acquire_route_execution, route_execution_context
 from .config import settings
 from .crawler_account_store import account_in_slow_mode, crawler_account_store
 from .crawler_adapter import (
@@ -204,6 +205,7 @@ class AuditPipeline:
         self._admission_execution = admission_execution
         crawl_epoch_is_current = lambda: True
         crawler_account_id = ""
+        self._stream_route_error = None
         try:
             job_snapshot = job_store.get(self.job_id) or {}
             initial_control = dict(job_snapshot.get("control") or {})
@@ -353,7 +355,8 @@ class AuditPipeline:
                     if item.get("content_key") or item.get("note_id")
                 }
                 analyze_limit = max(0, request.analyze_limit)
-                stream_queue: queue.Queue[dict | tuple[list[dict], list[dict]] | None] = queue.Queue()
+                stream_queue: queue.Queue = queue.Queue()
+                stream_enqueue_lock = threading.Lock()
                 analysis_errors: list[BaseException] = []
                 batch_writer = BatchWriter(
                     job_id=self.job_id,
@@ -453,6 +456,20 @@ class AuditPipeline:
                         if membership.get("content_key")
                     )
 
+                def put_stream_entry(entry) -> None:
+                    with stream_enqueue_lock:
+                        if analysis_errors:
+                            return
+                        bundle = getattr(self, "_collection_route_context", None)
+                        source_item = entry.get("item") if isinstance(entry, dict) else next(iter(entry[0]), {})
+                        source = (source_item or {}).get("collection_route_provenance") or {}
+                        if bundle is not None and source.get("source_account_id") != bundle.account_id:
+                            bundle = None
+                        borrowed = bundle.borrow() if bundle is not None else None
+                        if borrowed is not None:
+                            bundle = borrowed.__enter__()
+                        stream_queue.put(("route_entry", entry, bundle, borrowed))
+
                 def enqueue_stream_batch(
                     contents: list[dict], comments: list[dict]
                 ) -> None:
@@ -483,7 +500,7 @@ class AuditPipeline:
                                 ingest_completed_batch(batch_path)
                         return
                     if stream_analysis:
-                        stream_queue.put((contents, comments))
+                        put_stream_entry((contents, comments))
 
                 def ingest_completed_batch(batch_path: Path) -> None:
                     queued = self.ingestion.ingest_batch(batch_path, raw_items_dir)
@@ -493,7 +510,14 @@ class AuditPipeline:
                     )
                     if stream_analysis:
                         for ref in queued:
-                            stream_queue.put(ref)
+                            put_stream_entry(ref)
+
+                def flush_route_batches() -> None:
+                    if use_batch_ingestion:
+                        for batch_path in batch_writer.flush_due(force=True):
+                            ingest_completed_batch(batch_path)
+
+                self._route_flush_pending = flush_route_batches
 
                 def flush_batches_periodically() -> None:
                     while not stop_flusher.is_set():
@@ -560,6 +584,8 @@ class AuditPipeline:
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
                             results.append(persisted or result)
+                        except CollectionRouteError:
+                            raise
                         except Exception as exc:
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
                             analyzed_ids.add(subject.note_id)
@@ -623,6 +649,8 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
+                        except CollectionRouteError:
+                            raise
                         except Exception as exc:
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
                             analyzed_ids.add(subject.note_id)
@@ -632,6 +660,7 @@ class AuditPipeline:
                         job_store.log(self.job_id, f"边抓边分析完成：{subject.note_id}")
 
                 def consume_stream_queue() -> None:
+                    self._media_route_context = threading.local()
                     try:
                         with _analysis_lock_for(self.job_id):
                             latest_items = (job_store.get(self.job_id) or {}).get("items") or []
@@ -657,11 +686,25 @@ class AuditPipeline:
                                     continue
                                 if batch is None:
                                     return
-                                if isinstance(batch, tuple):
-                                    contents, comments = batch
-                                    analyze_stream_batch(contents, comments)
-                                else:
-                                    analyze_stream_ref(batch)
+                                _, entry, bundle, borrowed = batch
+                                try:
+                                    # Thread-local explicitly populated from the queue, never ContextVar inheritance.
+                                    self._media_route_context.value = bundle
+                                    if isinstance(entry, tuple):
+                                        contents, comments = entry
+                                        analyze_stream_batch(contents, comments)
+                                    else:
+                                        analyze_stream_ref(entry)
+                                except CollectionRouteError as exc:
+                                    self._handle_stream_route_error(exc, entry, bundle)
+                                    raise
+                                finally:
+                                    self._media_route_context.value = None
+                                    if borrowed is not None:
+                                        borrowed.__exit__(None, None, None)
+                    except CollectionRouteError as exc:
+                        analysis_errors.append(exc)
+                        job_store.update_control(self.job_id, analysis_stop_requested=True)
                     except Exception as exc:
                         analysis_errors.append(exc)
                         job_store.update_control(self.job_id, analysis_stop_requested=True)
@@ -674,6 +717,18 @@ class AuditPipeline:
                             retryable=False,
                             action="stop_analysis_only",
                         )
+
+                    finally:
+                        with stream_enqueue_lock:
+                            while True:
+                                try:
+                                    pending = stream_queue.get_nowait()
+                                except queue.Empty:
+                                    break
+                                if pending is not None:
+                                    pending_borrow = pending[3]
+                                    if pending_borrow is not None:
+                                        pending_borrow.__exit__(None, None, None)
 
                 stream_analyzer = None
                 batch_flusher = None
@@ -717,6 +772,10 @@ class AuditPipeline:
                         candidates.sort(
                             key=lambda item: 0 if str(item.get("id")) == preferred_account_id else 1
                         )
+                        if str(getattr(settings, "crawler_proxy_trial_id", "") or os.environ.get("MEDIACRAWLER_PROXY_TRIAL_ID", "")).strip():
+                            if not preferred_account_id:
+                                raise CollectionRouteError("PROXY_CONFIG_INVALID")
+                            candidates = [item for item in candidates if item["id"] == preferred_account_id]
                         if preferred_account_id:
                             configured = crawler_account_store.get(preferred_account_id)
                             if configured and configured["platform"] != request.platform:
@@ -786,6 +845,7 @@ class AuditPipeline:
                             if getattr(request, "skip_content_ids_file", "") else None
                         )
                         def run_with_current_account(save_root: Path):
+                            self._collection_route_context = get_current_route_context()
                             if request.crawl_mode == "creator":
                                 creator_ref = request.creator_url or request.creator_id
                                 job_store.log(self.job_id, f"启动 MediaCrawler 博主主页爬取 {request.platform}: {creator_ref}")
@@ -807,6 +867,7 @@ class AuditPipeline:
                                     stop_checker=crawl_stop_requested,
                                     auth_state=account_auth_state,
                                     account_id=crawler_account_id,
+                                    route_context=getattr(self, "_collection_route_context", None),
                                     started_callback=mark_crawler_started,
                                 )
                             if (
@@ -860,6 +921,7 @@ class AuditPipeline:
                                 stop_checker=crawl_stop_requested,
                                 auth_state=account_auth_state,
                                 account_id=crawler_account_id,
+                                route_context=getattr(self, "_collection_route_context", None),
                                 started_callback=mark_crawler_started,
                                 checkpoint_callback=persist_crawl_checkpoint,
                                 skip_content_ids_file=skip_content_ids_file,
@@ -870,10 +932,13 @@ class AuditPipeline:
                             )
 
                         output = None
+                        risk_proxy_ids = set()
                         for candidate_index, candidate in enumerate(candidates):
                             if crawl_stop_requested():
                                 break
                             account = candidate
+                            if (candidate or {}).get("proxy_id") in risk_proxy_ids:
+                                continue
                             crawler_account_id = str((candidate or {}).get("id") or "")
                             with account_lease(request.platform, crawler_account_id) as account_acquired:
                                 if not account_acquired:
@@ -915,8 +980,14 @@ class AuditPipeline:
                                     else crawl_dir / f"rotation-{crawler_account_id or candidate_index}"
                                 )
                                 try:
-                                    candidate_output = run_with_current_account(save_root)
+                                    if request.crawl_mode == "search" and str(getattr(settings, "triage_mode", "off") or "off") in {"select", "compare"}:
+                                        candidate_output = run_with_current_account(save_root)
+                                    else:
+                                        with self._route_operation(crawler_account_id):
+                                            candidate_output = run_with_current_account(save_root)
                                 except CrawlerVerificationError as exc:
+                                    if (candidate or {}).get("proxy_id"):
+                                        risk_proxy_ids.add(candidate["proxy_id"])
                                     if getattr(exc, "triage_rotation_stop", False):
                                         raise
                                     last_account_error = exc
@@ -1018,6 +1089,9 @@ class AuditPipeline:
                         crawl_finished.set()
                         stream_queue.put(None)
                         stream_analyzer.join()
+                for analysis_error in analysis_errors:
+                    if isinstance(analysis_error, CollectionRouteError):
+                        raise analysis_error
                 if analysis_errors:
                     job_store.update_control(self.job_id, analysis_stop_requested=True)
                     job_store.log(self.job_id, "审核线程已停止，采集已独立完成；待审核内容保留")
@@ -1327,7 +1401,15 @@ class AuditPipeline:
                 retryable=True,
                 action="retry_later",
             )
+        except CollectionRouteError as exc:
+            first_error = getattr(self, "_stream_route_error", None) or exc
+            self._record_route_block(first_error)
+            raise first_error from None
         except Exception as exc:
+            stream_route_error = getattr(self, "_stream_route_error", None)
+            if stream_route_error is not None:
+                self._record_route_block(stream_route_error)
+                raise stream_route_error from None
             if getattr(request, "run_crawler", False) and not crawl_epoch_is_current():
                 job_store.log(self.job_id, f"旧采集轮次异常结束，未覆盖当前轮次状态：{exc}")
                 return
@@ -1370,6 +1452,78 @@ class AuditPipeline:
                 },
                 action="retry_after_recovery",
             )
+
+    @contextmanager
+    def _route_operation(self, account_id: str):
+        account = crawler_account_store.get(account_id) if account_id else None
+        current = get_current_route_context()
+        if (account or {}).get("proxy_required") or getattr(current, "snapshot", None) is not None:
+            job_store.update_control(self.job_id, collection_proxy_required=True)
+        if current is not None and current.account_id == account_id:
+            with current.borrow(execution_id=self.job_id, account_id=account_id) as borrowed:
+                previous = getattr(self, "_collection_route_context", None)
+                self._collection_route_context = borrowed
+                try:
+                    yield borrowed
+                finally:
+                    try:
+                        flush = getattr(self, "_route_flush_pending", None)
+                        if flush is not None:
+                            flush()
+                    finally:
+                        self._collection_route_context = previous
+            return
+        if not account_id or (not getattr(settings, "crawler_proxy_enabled", False) and not (account or {}).get("proxy_required")):
+            yield None
+            return
+        job = job_store.get(self.job_id) or {}
+        owner = str(job.get("owner_user_id") or "local-user")
+        bundle = acquire_route_execution(account_id, self.job_id, owner, account_store=crawler_account_store)
+        previous = getattr(self, "_collection_route_context", None)
+        self._collection_route_context = bundle
+        try:
+            with route_execution_context(bundle):
+                yield bundle
+        finally:
+            try:
+                flush = getattr(self, "_route_flush_pending", None)
+                if flush is not None:
+                    flush()
+            finally:
+                self._collection_route_context = previous
+                bundle.close()
+
+    def _handle_stream_route_error(self, exc: CollectionRouteError, entry, route_context=None) -> None:
+        if exc.code in {"PROXY_BUSY", "SUPPLEMENT_DEFERRED"}:
+            job_store.update_control(self.job_id, analysis_stop_requested=True)
+            return
+        if getattr(self, "_stream_route_error", None) is None:
+            self._stream_route_error = exc
+        # Stop the in-flight adapter immediately, before shared event persistence.
+        job_store.update_control(self.job_id, crawl_stop_requested=True, analysis_stop_requested=True,
+                                 collection_route_error=self._stream_route_error.code)
+        item = entry.get("item") if isinstance(entry, dict) else next(iter(entry[0]), {})
+        source = (item or {}).get("collection_route_provenance")
+        if source is not None and route_context is not None:
+            from .crawler_route import stop_source_route
+            try:
+                stop_source_route(source, exc.code, route_context=route_context)
+            except Exception:
+                # Retain the original route failure while exposing missing shared-stop evidence.
+                job_store.update_control(self.job_id, collection_route_stop_marker_failed=True)
+                job_store.log(self.job_id, "代理来源停止标记写入失败；本任务已暂停", level="error",
+                              error_code=exc.code, action="retry_after_recovery")
+
+    def _record_route_block(self, exc: CollectionRouteError) -> None:
+        deferred = exc.code in {"PROXY_BUSY", "SUPPLEMENT_DEFERRED"}
+        self.ingestion.reset_analyzing_for_task(self.job_id)
+        current = job_store.get(self.job_id) or {}
+        job_store.update(self.job_id, status="crawl_paused" if deferred else "interrupted",
+                         crawl_status=current.get("crawl_status") if current.get("crawl_status") in {"completed", "skipped"} else "stopped",
+                         analysis_status="pending", error=exc.code)
+        job_store.update_control(self.job_id, failure=failure_metadata(exc.code, exc.code))
+        job_store.log(self.job_id, exc.code, level="error", error_code=exc.code,
+                      retryable=deferred, action="retry_after_recovery")
 
     def _begin_subject_audit(self) -> None:
         # A previous post's error must not poison the next post's valid result.
@@ -1633,6 +1787,8 @@ class AuditPipeline:
                             )
                             results.append(persisted or result)
                             job_store.update(self.job_id, items=results)
+                        except CollectionRouteError:
+                            raise
                         except Exception as exc:
                             self._record_subject_failure(platform, subject_key, subject, exc)
                             analyzed_ids.add(subject.note_id)
@@ -1675,6 +1831,9 @@ class AuditPipeline:
                     items=results,
                 )
                 job_store.log(self.job_id, "继续分析完成")
+        except CollectionRouteError as exc:
+            self._record_route_block(exc)
+            raise
         except Exception as exc:
             job_store.update(self.job_id, status="failed", analysis_status="failed", error=str(exc))
             job_store.log(
@@ -2036,7 +2195,9 @@ class AuditPipeline:
         from backend.task_admission.resources import account_lease
         primary_id = str((primary or {}).get("id") or "")
         rotation = [{"id": primary_id, "display_name": str((primary or {}).get("display_name") or primary_id),
-                     "auth_state": primary_auth}]
+                     "auth_state": primary_auth, "proxy_id": (primary or {}).get("proxy_id")}]
+        if str(getattr(settings, "crawler_proxy_trial_id", "") or os.environ.get("MEDIACRAWLER_PROXY_TRIAL_ID", "")).strip():
+            return rotation
         wanted = max(1, int(settings.triage_accounts_per_task)) - 1
         # Only Douyin profiles are account-bound; other platforms share one browser lease.
         if not primary_id or wanted <= 0 or platform != "dy":
@@ -2077,7 +2238,7 @@ class AuditPipeline:
                 continue
             self._log_slow_mode(account)
             rotation.append({"id": account["id"], "display_name": str(account.get("display_name") or account["id"]),
-                             "auth_state": auth_state})
+                             "auth_state": auth_state, "proxy_id": account.get("proxy_id")})
         job_store.log(self.job_id, "本任务轮换账号：" + "、".join(item["display_name"] for item in rotation))
         return rotation
 
@@ -2159,6 +2320,8 @@ class AuditPipeline:
         # 单出口 IP：账号串行轮换，每个词（候选采集 + 该词的精采）只用一个账号
         rotation = list(rotation or [{"id": crawler_account_id, "display_name": crawler_account_id,
                                       "auth_state": account_auth_state}])
+        if str(getattr(settings, "crawler_proxy_trial_id", "") or os.environ.get("MEDIACRAWLER_PROXY_TRIAL_ID", "")).strip():
+            rotation = rotation[:1]
         primary_account_id = rotation[0]["id"]
         cursor = 0
         marked_used_ids: set[str] = set()
@@ -2192,6 +2355,7 @@ class AuditPipeline:
                     skip_profile_verify_regex="|".join(settings.triage_official_verify_patterns),
                     stream_items=False, stop_checker=stop_checker, auth_state=account["auth_state"],
                     account_id=account["id"],
+                    route_context=getattr(self, "_collection_route_context", None),
                     started_callback=None if crawler_started else started_callback,
                     reusable_content_db=self.ingestion.db_path if platform == "dy" else None,
                     current_task_id=self.job_id,
@@ -2261,6 +2425,7 @@ class AuditPipeline:
                         progress_callback=keyword_progress, content_callback=content_callback, stream_items=stream_items,
                         stop_checker=stop_checker, auth_state=account["auth_state"], started_callback=None,
                         account_id=account["id"], collect_comments=collect_comments,
+                        route_context=getattr(self, "_collection_route_context", None),
                         collect_media=bool(getattr(request, "collect_media", True)),
                     )
                 except (CrawlerVerificationError, CrawlerAuthenticationError):
@@ -2303,16 +2468,20 @@ class AuditPipeline:
                     crawler_account_store.mark_used(account["id"])
                     marked_used_ids.add(account["id"])
                 try:
-                    crawl_keyword(index, keyword, candidate_root, account, keyword_state)
+                    with self._route_operation(account["id"]):
+                        crawl_keyword(index, keyword, candidate_root, account, keyword_state)
                     clean_account_ids.add(account["id"])
                 # 触发验证或登录失效的账号退出本任务轮换，同一个词只换下一个账号重试一次；
                 # 重试也失败（一个高风险词最多连累两个账号）或轮换表空了，就按原来的方式整任务失败。
-                # 限流是出口 IP 级别的，换账号没有用。
+                # 限流不能据此归因 IP，仍停止本轮而不轮换绕过。
                 except (CrawlerVerificationError, CrawlerAuthenticationError) as exc:
                     if not account["id"]:
                         raise
                     self._retire_rotation_account(account, exc)
                     rotation.pop(position)
+                    # Shared egress verification is not bypassed by another bound account.
+                    if isinstance(exc, CrawlerVerificationError) and account.get("proxy_id"):
+                        rotation[:] = [item for item in rotation if item.get("proxy_id") != account["proxy_id"]]
                     if retried or not rotation:
                         # 外层账号循环不能再换账号重跑同一个词，否则一个高风险词会连累所有空闲账号
                         exc.triage_rotation_stop = True
@@ -2325,6 +2494,8 @@ class AuditPipeline:
                 # 精采不完整沿用 off 模式：整任务失败并提示查看 collection_status，
                 # 否则流式入库已经写进 DB 的内容会被当成"本词无产出"
                 except (CrawlerRateLimitError, CrawlerCollectionIncompleteError):
+                    raise
+                except CollectionRouteError:
                     raise
                 except Exception as exc:
                     job_store.log(self.job_id, f"词「{keyword}」采集或初筛失败：{exc}，跳过该词")
@@ -2565,6 +2736,7 @@ class AuditPipeline:
                     comments=comments_by_note.get(note_id, []),
                     local_image_paths=local_image_paths,
                     local_video_paths=local_video_paths,
+                    collection_route_provenance=item.get("collection_route_provenance"),
                 )
             )
         return subjects
@@ -7823,6 +7995,20 @@ class AuditPipeline:
         decoded["risk_items"] = restored
         return decoded
 
+    def _download_subject_media(self, subject: AuditSubject, url: str, target: Path):
+        job = job_store.get(self.job_id) or {}
+        owner_id = str(job.get("owner_user_id") or "local-user")
+        route_context = getattr(getattr(self, "_media_route_context", None), "value", None) or getattr(self, "_collection_route_context", None)
+        configured_account = crawler_account_store.get(str(job.get("crawler_account_id") or ""))
+        required_route = bool((job.get("control") or {}).get("collection_proxy_required") or
+                              job.get("proxy_required") or (configured_account or {}).get("proxy_required"))
+        return download_url_with_error(
+            url, target, platform=subject.platform, referer=subject.url,
+            collection_route_provenance=subject.collection_route_provenance,
+            owner_id=owner_id, execution_id=self.job_id,
+            route_context=route_context, required_route=required_route,
+        )
+
     def _analyze_images(self, subject: AuditSubject, image_dir: Path) -> list[dict]:
         authoritative_m3 = bool(getattr(self, "authoritative_m3", False))
         results = []
@@ -7863,6 +8049,8 @@ class AuditPipeline:
                     **analysis,
                     **ocr_fields,
                 })
+            except CollectionRouteError:
+                raise
             except Exception as exc:
                 if authoritative_m3:
                     if isinstance(
@@ -7893,7 +8081,10 @@ class AuditPipeline:
         for idx, url in enumerate(subject.image_urls[: settings.max_images_per_note]):
             job_store.log(self.job_id, f"笔记 {subject.note_id}：下载并分析远程图片 {idx + 1}/{remote_limit}")
             target = image_dir / safe_filename_from_url(url, f"image_{idx:02d}")
-            local = download_url_with_error(url, target, platform=subject.platform, referer=subject.url).path
+            local = self._download_subject_media(subject, url, target).path
+            if local is None and (getattr(settings, "crawler_proxy_enabled", False) or
+                                  (subject.collection_route_provenance or {}).get("route_mode") == "proxy_required"):
+                raise CollectionRouteError("SUPPLEMENT_DEFERRED")
             remote_candidates.append({
                 "index": idx,
                 "url": url,
@@ -7932,6 +8123,8 @@ class AuditPipeline:
                     **analysis,
                     **ocr_fields,
                 })
+            except CollectionRouteError:
+                raise
             except Exception as exc:
                 if authoritative_m3:
                     if isinstance(
@@ -8054,7 +8247,7 @@ class AuditPipeline:
         for idx, url in enumerate(subject.video_urls[:1]):
             job_store.log(self.job_id, f"笔记 {subject.note_id}：开始下载远程视频 {idx + 1}/1")
             target = video_dir / f"video_{idx:02d}.mp4"
-            download = download_url_with_error(url, target, platform=subject.platform, referer=subject.url)
+            download = self._download_subject_media(subject, url, target)
             local = download.path
             if not local:
                 error = download.error or "video download failed"

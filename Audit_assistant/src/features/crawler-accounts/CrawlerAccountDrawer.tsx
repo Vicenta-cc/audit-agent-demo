@@ -9,6 +9,8 @@ import type {
   CrawlerAccountPlatform
 } from "../../types/crawlerAccounts";
 
+import type { CrawlerProxy } from "../../types/crawlerProxies";
+
 const platformOptions: Array<{ value: CrawlerAccountPlatform; label: string }> = [
   { value: "xhs", label: "小红书" },
   { value: "dy", label: "抖音" },
@@ -20,6 +22,8 @@ interface CrawlerAccountDrawerProps {
   account: CrawlerAccount | null;
   submitting: boolean;
   allowPublicAccounts?: boolean;
+  proxies?: CrawlerProxy[];
+  proxyEnabled?: boolean;
   onClose: () => void;
   onSubmit: (input: CrawlerAccountInput) => Promise<void>;
 }
@@ -29,6 +33,8 @@ export function CrawlerAccountDrawer({
   account,
   submitting,
   allowPublicAccounts = false,
+  proxies = [],
+  proxyEnabled = false,
   onClose,
   onSubmit
 }: CrawlerAccountDrawerProps) {
@@ -36,6 +42,7 @@ export function CrawlerAccountDrawer({
   const [displayName, setDisplayName] = useState("");
   const [platformAccountId, setPlatformAccountId] = useState("");
   const [accessScope, setAccessScope] = useState<CrawlerAccountAccessScope>("private");
+  const [proxyId, setProxyId] = useState("");
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -44,6 +51,7 @@ export function CrawlerAccountDrawer({
     setDisplayName(account?.displayName || "");
     setPlatformAccountId(account?.platformAccountId || "");
     setAccessScope(account?.accessScope || "private");
+    setProxyId(account?.proxyId || "");
     setFormError("");
   }, [account, open]);
 
@@ -55,13 +63,18 @@ export function CrawlerAccountDrawer({
       setFormError("请输入账号名称");
       return;
     }
+    if (platform === "dy" && (proxyEnabled || account?.proxyRequired) && !proxyId) {
+      setFormError("请先绑定已授权的抖音代理，绑定后再登录");
+      return;
+    }
     setFormError("");
     try {
       await onSubmit({
         platform,
         displayName: displayName.trim(),
         platformAccountId: platformAccountId.trim(),
-        accessScope
+        accessScope,
+        ...(platform === "dy" && (proxyId || account?.proxyId) ? { proxyId: proxyId || null, expectedBindingRevision: account?.bindingRevision || 0 } : {})
       });
     } catch (error) {
       setFormError(readApiError(error));
@@ -167,6 +180,20 @@ export function CrawlerAccountDrawer({
                 onChange={(event) => setPlatformAccountId(event.target.value)}
               />
             </label>
+
+            {platform === "dy" && (proxyEnabled || account?.proxyRequired || proxies.length > 0) ? (
+              <label className="crawler-account-field">
+                <span>采集代理</span>
+                <select aria-label="采集代理" value={proxyId} onChange={(event) => setProxyId(event.target.value)}>
+                  <option value="">请选择已授权代理</option>
+                  {proxies.map((proxy) => <option key={proxy.id} value={proxy.id} disabled={proxy.status !== "active"}>
+                    {proxy.display_name} · {proxy.endpoint.host}:{proxy.endpoint.port} · {proxy.status}
+                  </option>)}
+                  {account?.proxyId && !proxies.some((proxy) => proxy.id === account.proxyId) ? <option value={account.proxyId} disabled>当前绑定（未获授权）</option> : null}
+                </select>
+                <small>绑定后登录、采集和媒体下载使用该代理；代理不可用时停止操作。</small>
+              </label>
+            ) : platform !== "dy" && proxyEnabled ? <p>当前代理闭环仅支持抖音。</p> : null}
 
             <div className="crawler-account-status-preview">
               <span>保存后的状态</span>

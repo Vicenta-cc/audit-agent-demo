@@ -136,12 +136,17 @@ async def has_auth(context):
 
 async def headless_state(account_id):
     adapter = login.load_account_browser()
-    context, _ = await adapter.launch_account_context(account_id, login.settings.crawler_browser_profile_root, headless=True)
+    from backend.audit_agent.crawler_route import child_route_snapshot, make_bound_proxy_session
+    snapshot = child_route_snapshot(account_id)
+    context, profile = await adapter.launch_account_context(account_id, login.settings.crawler_browser_profile_root, headless=True,
+        **({"route_snapshot": snapshot, "bound_proxy_session": make_bound_proxy_session(snapshot)} if snapshot else {}))
     try:
         for old in list(context.pages):
             await old.close()
         page = await context.new_page()
-        await page.goto("https://www.douyin.com", wait_until="domcontentloaded", timeout=45000)
+        gate = profile.get("bound_proxy_session") or login.load_request_scheduler().configured_gate()
+        async with gate.slot("login_navigation", timeout=60):
+            await page.goto("https://www.douyin.com", wait_until="domcontentloaded", timeout=45000)
         await asyncio.sleep(2)
         if not await has_auth(context):
             raise RuntimeError("登录凭据尚未完整保留，请重新登录")
@@ -186,7 +191,7 @@ async def interactive_flow(account_id, expected_account_id):
         tasks = [asyncio.create_task(frames(context)), asyncio.create_task(inputs(context))]
         try:
             login.emit("interactive")
-            gate = login.load_request_scheduler().configured_gate()
+            gate = getattr(context, "_bound_proxy_session", None) or login.load_request_scheduler().configured_gate()
             async with gate.slot('login_navigation', timeout=60):
                 try:
                     await page.goto("https://www.douyin.com", wait_until="domcontentloaded", timeout=45000)

@@ -129,6 +129,7 @@ class MediaCrawlerAdapter:
         query_correct_type: int | None = None,
         fetch_author_profile: bool = False,
         skip_profile_verify_regex: str = "",
+        route_context=None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         max_items_per_minute, account_pacing = self._account_pacing(account_id, max_items_per_minute)
@@ -273,7 +274,7 @@ class MediaCrawlerAdapter:
                     started_callback if not crawler_started else None
                 ),
                 checkpoint_callback=checkpoint_callback,
-                account_id=account_id,
+                account_id=account_id, route_context=route_context,
             )
             crawler_started = True
             last_command = command
@@ -317,6 +318,7 @@ class MediaCrawlerAdapter:
         account_id: str = "",
         collect_comments: bool = True,
         collect_media: bool = True,
+        route_context=None,
     ) -> CrawlOutput:
         self._validate_platform(platform)
         max_items_per_minute, account_pacing = self._account_pacing(account_id, max_items_per_minute)
@@ -366,7 +368,7 @@ class MediaCrawlerAdapter:
             auth_state=auth_state,
             started_callback=started_callback,
             checkpoint_callback=checkpoint_callback,
-            account_id=account_id,
+            account_id=account_id, route_context=route_context,
         )
 
     def run_detail(
@@ -389,6 +391,7 @@ class MediaCrawlerAdapter:
         account_id: str = "",
         collect_comments: bool = True,
         collect_media: bool = True,
+        route_context=None,
     ) -> CrawlOutput:
         """Collect one post by ID with media and full comments; tag rows with the originating keyword."""
         self._validate_platform(platform)
@@ -443,7 +446,7 @@ class MediaCrawlerAdapter:
             command=command, save_root=attempt_root, platform=platform, max_notes=1,
             progress_callback=None, content_callback=None,
             stop_checker=check_stopped, auth_state=auth_state, started_callback=started_callback,
-            checkpoint_callback=None, account_id=account_id,
+            checkpoint_callback=None, account_id=account_id, route_context=route_context,
         )
         if check_stopped():
             return CrawlOutput(platform=platform, contents=[], comments=[], output_dir=attempt_root, command=command)
@@ -497,6 +500,7 @@ class MediaCrawlerAdapter:
         started_callback: StartedCallback | None = None,
         checkpoint_callback: CheckpointCallback | None = None,
         account_id: str = "",
+        route_context=None,
     ) -> CrawlOutput:
         from backend.task_admission.resources import account_lease, file_lease
         while True:
@@ -506,14 +510,33 @@ class MediaCrawlerAdapter:
                 legacy_acquired = settings.app_auth_mode == "required" or leases.enter_context(
                     file_lease(self.media_crawler_dir / ".xhs-audit-crawler.lock")
                 )
-                acquired = legacy_acquired and leases.enter_context(account_lease(platform, account_id))
+                acquired = legacy_acquired and leases.enter_context(
+                    route_context.borrow(account_id=account_id) if route_context else account_lease(platform, account_id)
+                )
                 if acquired:
                     try:
-                        return self._run_command_locked(
-                            command, save_root, platform, max_notes, progress_callback,
-                            content_callback, stop_checker, auth_state, started_callback,
-                            checkpoint_callback, account_id,
-                        )
+                        from .crawler_route import acquire_route_execution
+                        from .crawler_route import get_current_route_context
+                        from backend.task_admission.execution import current_execution
+                        active_execution = current_execution()
+                        owner = ""
+                        execution_id = str(save_root)
+                        if active_execution:
+                            admission, execution_id, _ = active_execution
+                            owner = admission.for_task(execution_id)["owner_id"]
+                        bundle = route_context or get_current_route_context()
+                        owns_bundle = bundle is None and platform == "dy" and bool(account_id)
+                        if owns_bundle:
+                            bundle = acquire_route_execution(account_id, execution_id, owner, account_store=self.account_store)
+                        try:
+                            return self._run_command_locked(
+                                command, save_root, platform, max_notes, progress_callback,
+                                content_callback, stop_checker, auth_state, started_callback,
+                                checkpoint_callback, account_id, bundle,
+                            )
+                        finally:
+                            if owns_bundle:
+                                bundle.close()
                     except OSError:
                         # Preparation I/O can fail before spawn (e.g. log directory).
                         # This never retracts a prior launch barrier.
@@ -532,6 +555,7 @@ class MediaCrawlerAdapter:
         started_callback: StartedCallback | None = None,
         checkpoint_callback: CheckpointCallback | None = None,
         account_id: str = "",
+        route_context=None,
     ) -> CrawlOutput:
         env = self._subprocess_env(auth_state, platform=platform, account_id=account_id)
         if platform == "dy":
@@ -551,18 +575,58 @@ class MediaCrawlerAdapter:
             "w", encoding="utf-8", errors="replace"
         ) as stderr_file:
             from backend.task_admission.execution import crawler_fds, launch_crawler
-            completed = launch_crawler(
-                command,
-                pass_fds=crawler_fds(),
-                cwd=self.media_crawler_dir,
-                env=env,
-                stdout=stdout_file,
-                stderr=stderr_file,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                start_new_session=os.name != "nt",
-            )
+            from .crawler_route import RouteConfigPipe, RouteReceiptPipe
+            route_pipe = RouteConfigPipe(route_context.snapshot if route_context else None)
+            receipt_pipe = RouteReceiptPipe(route_context) if route_context and route_context.snapshot else None
+            if receipt_pipe:
+                env.update(receipt_pipe.env)
+            env.update(route_pipe.env)
+            if route_context:
+                from .crawler_route import probe_env
+                env.update(probe_env(route_context))
+                from backend.task_admission.resources import digest
+                env["MEDIACRAWLER_SOURCE_TASK_ID"] = route_context.execution_id if __import__("re").fullmatch(r"[A-Za-z0-9_.-]{1,128}", route_context.execution_id) else digest(route_context.execution_id)
+                env["MEDIACRAWLER_SOURCE_BATCH_ID"] = __import__("uuid").uuid4().hex
+            try:
+                completed = launch_crawler(
+                    command,
+                    pass_fds=tuple(set((*crawler_fds(), *(route_context.pass_fds if route_context else ()), *route_pipe.pass_fds, *(receipt_pipe.pass_fds if receipt_pipe else ())))),
+                    cwd=self.media_crawler_dir,
+                    env=env,
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    start_new_session=os.name != "nt",
+                )
+            except BaseException:
+                route_pipe.close()
+                if receipt_pipe:
+                    receipt_pipe.close()
+                raise
+            if route_context:
+                route_context.child_active = True
+            if receipt_pipe:
+                receipt_pipe.start(completed)
+            route_pipe.start(completed)
+            if route_pipe.thread is not None:
+                route_pipe.thread.join(timeout=5)
+            if route_pipe.error or route_pipe.thread is not None and route_pipe.thread.is_alive():
+                route_pipe.close()
+                if receipt_pipe:
+                    receipt_pipe.close()
+                if completed.poll() is None:
+                    completed.terminate()
+                try:
+                    completed.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    completed.kill()
+                    completed.wait(timeout=5)
+                if route_context:
+                    route_context.child_active = False
+                from .crawler_route import CollectionRouteError
+                raise route_pipe.error or CollectionRouteError("PROXY_CONFIG_INVALID")
             last_count = -1
             seen_content_ids: set[str] = set()
             stop_reason = ""
@@ -650,6 +714,8 @@ class MediaCrawlerAdapter:
                     if stderr_path.exists()
                     else ""
                 )
+                from .crawler_route import raise_route_log_error
+                raise_route_log_error(stdout + "\n" + stderr)
                 if "PLATFORM_RATE_LIMITED" in stdout or "PLATFORM_RATE_LIMITED" in stderr:
                     raise CrawlerRateLimitError("平台请求被限流，共享冷却已记录；保留已采集内容，冷却结束后再继续")
                 if "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stdout or "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stderr:
@@ -715,6 +781,8 @@ class MediaCrawlerAdapter:
 
                 # A caught platform limit must never look like successful completion.
                 terminal_log = stderr_path.read_text(encoding='utf-8', errors='replace') + stdout_path.read_text(encoding='utf-8', errors='replace')
+                from .crawler_route import raise_route_log_error
+                raise_route_log_error(terminal_log)
                 if 'PLATFORM_RATE_LIMITED' in terminal_log or 'REQUEST_SCHEDULER_WAIT_EXCEEDED' in terminal_log:
                     raise CrawlerRateLimitError("平台请求额度或冷却限制已生效；保留已采集内容，请稍后继续")
 
@@ -744,6 +812,11 @@ class MediaCrawlerAdapter:
                 if completed.returncode is None:
                     append_stop_error("process still running after cleanup")
                     cleanup_failed = True
+                route_pipe.close()
+                if receipt_pipe:
+                    receipt_pipe.close()
+                if route_context:
+                    route_context.child_active = completed.returncode is None
                 if cleanup_failed and operation_error is None:
                     raise RuntimeError(
                         f"MediaCrawler process cleanup failed: {stop_error}"
@@ -757,6 +830,8 @@ class MediaCrawlerAdapter:
 
     def _subprocess_env(self, auth_state: dict | None = None, *, platform: str = "", account_id: str = "") -> dict[str, str]:
         env = os.environ.copy()
+        for name in ("MEDIACRAWLER_PROXY_CONFIG_FD", "MEDIACRAWLER_PROXY_RECEIPT_FD", "MEDIACRAWLER_PROXY_REQUIRED", "MEDIACRAWLER_PROXY_PROBE_BUDGET_ID", "MEDIACRAWLER_SOURCE_TASK_ID", "MEDIACRAWLER_SOURCE_BATCH_ID"):
+            env.pop(name, None)
         for name in ("MEDIACRAWLER_ACCOUNT_ID", "MEDIACRAWLER_CLOAK_PROFILE_ROOT", "MEDIACRAWLER_DY_BROWSER_ENGINE", *scheduler_env()):
             env.pop(name, None)
         if platform == "dy":

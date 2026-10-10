@@ -315,6 +315,14 @@ class DouyinLoginV2:
                 self.pending_trajectories.pop(command["command_id"], None)
 
     async def apply_command(self, command):
+        if getattr(self, "bound_proxy_session", None):
+            await self.bound_proxy_session.ensure_business()
+        if command.get("type") == "action" and command.get("action") in {"request_sms", "submit_sms", "refresh_qr", "switch_to_sms"} and getattr(self, "bound_proxy_session", None):
+            async with self.bound_proxy_session.slot("login_action", timeout=60):
+                return await self._apply_command(command)
+        return await self._apply_command(command)
+
+    async def _apply_command(self, command):
         self.progress_observed = True
         page = self.adapter.page
         kind = command["type"]
@@ -567,6 +575,8 @@ class DouyinLoginV2:
         self.failure_stage = "browser_start"
         from scripts.crawler_account_login import load_account_browser, settings
 
+        from backend.audit_agent.crawler_route import child_route_snapshot
+        self.route_snapshot = child_route_snapshot(self.args.account_id)
         browser = load_account_browser()
         if settings.crawler_login_browser_version:
             browser.profile_for(
@@ -574,17 +584,21 @@ class DouyinLoginV2:
                 settings.crawler_browser_profile_root,
                 settings.crawler_login_browser_version,
             )
+        from backend.audit_agent.crawler_route import make_bound_proxy_session
+        bound_session = make_bound_proxy_session(self.route_snapshot) if self.route_snapshot else None
         self.context, self.profile = await browser.launch_account_context(
             self.args.account_id,
             settings.crawler_browser_profile_root,
             headless=not self.headed_mode,
+            **({"route_snapshot": self.route_snapshot, "bound_proxy_session": bound_session} if self.route_snapshot else {}),
         )
+        self.bound_proxy_session = self.profile.get("bound_proxy_session")
         self.failure_stage = "page_prepare"
         page = await self.context.new_page()
         await page.set_viewport_size({"width": 1000, "height": 760})
         page.set_default_timeout(2000)
         self.adapter = await DouyinLoginAdapter(
-            self.context, page, block_media=getattr(self.args, "block_media", False)
+            self.context, page, block_media=getattr(self.args, "block_media", False), bound_proxy_session=self.bound_proxy_session
         ).install()
 
     async def close_context(self):
@@ -781,7 +795,7 @@ class DouyinLoginV2:
             await page.set_viewport_size({"width": 1000, "height": 760})
             page.set_default_timeout(2000)
             self.adapter = await DouyinLoginAdapter(
-                self.context, page, block_media=getattr(self.args, "block_media", False)
+                self.context, page, block_media=getattr(self.args, "block_media", False), bound_proxy_session=self.bound_proxy_session
             ).install()
             self.credentials_changed = True
             self.emit("reset_done")
@@ -1014,7 +1028,7 @@ class DouyinLoginV2:
                 )
         except Exception as exc:
             self.diagnose_failure(exc)
-            code = str(exc) if isinstance(exc, ValueError) else "BROWSER_LOGIN_FAILED"
+            code = getattr(exc, "code", None) or (str(exc) if isinstance(exc, ValueError) else "BROWSER_LOGIN_FAILED")
             self.emit(
                 "error", code=code, message="登录未完成，请重试或查看当前登录步骤"
             )

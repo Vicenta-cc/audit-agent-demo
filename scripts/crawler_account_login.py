@@ -425,8 +425,12 @@ async def login_context(platform: str, account_id: str = "", *, headless: bool =
         if settings.crawler_login_browser_version:
             # Existing profiles retain their pinned version; new profiles use the deployment pin.
             adapter.profile_for(account_id, settings.crawler_browser_profile_root, settings.crawler_login_browser_version)
+        from backend.audit_agent.crawler_route import child_route_snapshot
+        route_snapshot = child_route_snapshot(account_id)
+        from backend.audit_agent.crawler_route import make_bound_proxy_session
+        route_options = {"route_snapshot": route_snapshot, "bound_proxy_session": make_bound_proxy_session(route_snapshot)} if route_snapshot else {}
         context, profile = await adapter.launch_account_context(
-            account_id, settings.crawler_browser_profile_root, headless=headless,
+            account_id, settings.crawler_browser_profile_root, headless=headless, **route_options,
         )
         try:
             await request_login_reset()
@@ -435,6 +439,7 @@ async def login_context(platform: str, account_id: str = "", *, headless: bool =
             else:
                 from scripts.crawler_login_pages import prepare_headed_login
                 await prepare_headed_login(context, profile)
+            context._bound_proxy_session = profile.get("bound_proxy_session")
             yield context
         finally:
             if sys.exc_info()[0] is not None:
@@ -500,7 +505,7 @@ async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *
         try:
             try:
                 if platform == "dy":
-                    gate = load_request_scheduler().configured_gate()
+                    gate = getattr(context, "_bound_proxy_session", None) or load_request_scheduler().configured_gate()
                     async with gate.slot('login_navigation', timeout=60):
                         await page.goto(config["url"], wait_until="domcontentloaded", timeout=60_000)
                 else:

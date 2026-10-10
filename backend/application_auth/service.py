@@ -59,17 +59,28 @@ class ApplicationAuthService:
     def can_manage_crawler_account(self, principal: Principal, account_id: str) -> bool:
         return self.store.owns_crawler_account(principal.id, account_id)
 
+    def can_use_crawler_proxy(self, principal: Principal, proxy_id: str) -> bool:
+        return principal.is_admin or self.store.has_grant(principal.id, "crawler-proxy", str(proxy_id), "use")
+
+    def require_crawler_proxy_use(self, principal: Principal, proxy_id: str) -> None:
+        if not self.can_use_crawler_proxy(principal, proxy_id):
+            raise AuthorizationError("resource was not found")
+
+    def can_manage_crawler_proxy(self, principal: Principal, proxy_id: str = "") -> bool:
+        return principal.is_admin
+
     @staticmethod
     def public_crawler_account(account: dict[str, Any]) -> dict[str, Any]:
-        return {
-            key: value
-            for key, value in account.items()
-            if key
-            not in {
-                "auth_state",
-                "auth_state_ciphertext",
-                "storage_state",
-                "cookie",
-                "cookies",
-            }
+        fields = {
+            "id", "platform", "display_name", "platform_account_id", "access_scope", "status",
+            "last_validated_at", "last_used_at", "last_error", "cooldown_until", "failure_kind",
+            "auth_state_revision", "has_auth_state", "auth_state_updated_at", "risk_count",
+            "last_risk_at", "created_at", "updated_at", "proxy_id", "binding_revision", "proxy_required",
+            "validated_proxy_binding_revision", "validated_proxy_config_revision", "needs_proxy_login_validation",
         }
+        return {key: value for key, value in account.items() if key in fields}
+
+    @staticmethod
+    def public_crawler_proxy(resource: dict[str, Any]) -> dict[str, Any]:
+        from backend.audit_agent.crawler_proxy_store import PUBLIC_PROXY_FIELDS
+        return {key: value for key, value in resource.items() if key in PUBLIC_PROXY_FIELDS}

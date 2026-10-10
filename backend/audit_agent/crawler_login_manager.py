@@ -57,6 +57,8 @@ class LoginSession:
     frame_sequence: int = 0
     resource_handle: object | None = field(default=None, repr=False)
     global_handle: object | None = field(default=None, repr=False)
+    route_bundle: object | None = field(default=None, repr=False)
+    route_pipe: object | None = field(default=None, repr=False)
     input_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def public(self) -> dict:
@@ -175,6 +177,8 @@ class CrawlerAccountLoginManager:
             str(timeout),
         ]
         env = os.environ.copy()
+        for name in ("MEDIACRAWLER_PROXY_CONFIG_FD", "MEDIACRAWLER_PROXY_RECEIPT_FD", "MEDIACRAWLER_PROXY_REQUIRED", "MEDIACRAWLER_PROXY_PROBE_BUDGET_ID"):
+            env.pop(name, None)
         if session.platform == "dy":
             browser_env = account_browser_env(session.account_id)
             env.update(browser_env)
@@ -213,11 +217,24 @@ class CrawlerAccountLoginManager:
             session.global_handle.close()
             session.resource_handle.close()
             raise ValueError("已有账号正在登录，请等待结束。")
+        from .crawler_route import acquire_route_execution, RouteConfigPipe
+        try:
+            if session.platform == "dy":
+                session.route_bundle = acquire_route_execution(session.account_id, session.id, session.owner_user_id, account_handle=session.resource_handle, account_store=self.store, allow_probe=True)
+            session.route_pipe = RouteConfigPipe(session.route_bundle.snapshot if session.route_bundle else None)
+            env.update(session.route_pipe.env)
+            if session.route_bundle:
+                from .crawler_route import probe_env
+                env.update(probe_env(session.route_bundle))
+        except Exception:
+            session.resource_handle.close()
+            session.global_handle.close()
+            raise
         diagnostic_file = tempfile.TemporaryFile(mode="w+", encoding="utf-8")
         try:
             process = subprocess.Popen(
                 command,
-                pass_fds=(session.resource_handle.fileno(), session.global_handle.fileno()),
+                pass_fds=tuple(set((session.resource_handle.fileno(), session.global_handle.fileno(), *(session.route_bundle.pass_fds if session.route_bundle else ()), *session.route_pipe.pass_fds))),
                 cwd=str(settings.root_dir),
                 env=env,
                 stdout=subprocess.PIPE,
@@ -232,11 +249,15 @@ class CrawlerAccountLoginManager:
                 start_new_session=os.name != "nt",
             )
         except OSError as exc:
+            session.route_pipe.close()
+            if session.route_bundle:
+                session.route_bundle.close()
             diagnostic_file.close()
             session.resource_handle.close()
             session.global_handle.close()
             raise RuntimeError(f"无法启动登录浏览器：{exc}") from exc
 
+        session.route_pipe.start(process)
         session.process = process
         session.diagnostic_file = diagnostic_file
         with self._lock:
@@ -431,7 +452,15 @@ class CrawlerAccountLoginManager:
             return
 
         try:
+            from .crawler_route import CollectionRouteError, consume_route_event
             for raw_line in process.stdout:
+                try:
+                    if consume_route_event(raw_line, session.route_bundle):
+                        continue
+                except CollectionRouteError as exc:
+                    self._fail(session_id, exc.code)
+                    self._stop_process(process)
+                    break
                 try:
                     event = json.loads(raw_line)
                 except json.JSONDecodeError:
@@ -458,6 +487,10 @@ class CrawlerAccountLoginManager:
                     self._unexpected_exit_message(return_code, diagnostic),
                 )
         finally:
+            if session.route_pipe is not None:
+                session.route_pipe.close()
+            if session.route_bundle is not None:
+                session.route_bundle.close()
             if session.resource_handle is not None:
                 session.resource_handle.close()
             if session.global_handle is not None:
@@ -604,6 +637,12 @@ class CrawlerAccountLoginManager:
                         account = self.store.save_douyin_auth_state(
                             session.account_id, ciphertext, platform_account_id or ""
                         )
+                        if session.route_bundle and session.route_bundle.snapshot:
+                            route = session.route_bundle.snapshot
+                            session.route_bundle.proxy_store.mark_route_login_validated(
+                                session.account_id, expected_binding_revision=route.binding_revision,
+                                expected_config_revision=route.config_revision)
+                            account = self.store.get(session.account_id)
                     else:
                         account = self.store.save_auth_state(
                             session.account_id, ciphertext, platform_account_id=platform_account_id or None

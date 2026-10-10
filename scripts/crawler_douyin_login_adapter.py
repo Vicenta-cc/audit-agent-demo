@@ -55,7 +55,8 @@ class Region:
 
 
 class DouyinLoginAdapter:
-    def __init__(self, context, page, *, block_media: bool = False):
+    def __init__(self, context, page, *, block_media: bool = False, bound_proxy_session=None):
+        self.bound_proxy_session = bound_proxy_session
         self.context, self.page = context, page
         self.block_media = block_media
         self.cdp = None
@@ -110,10 +111,16 @@ class DouyinLoginAdapter:
         self.task(dialog.dismiss())
 
     def _new_page(self, page):
+        if getattr(self.context, "_collection_proxy_probe_pending", False):
+            page._collection_proxy_probe = True
+        if getattr(page, "_collection_proxy_probe", False):
+            return
         if page is not self.page and not self._closed:
             self.task(self.install_guard(page))
 
     async def install_guard(self, page):
+        if getattr(page, "_collection_proxy_probe", False):
+            return
         if page.is_closed():
             return
         cdp = await self.context.new_cdp_session(page)
@@ -282,7 +289,7 @@ class DouyinLoginAdapter:
     async def navigate(self, entry: str):
         from scripts.crawler_account_login import load_request_scheduler
 
-        gate = load_request_scheduler().configured_gate()
+        gate = self.bound_proxy_session or load_request_scheduler().configured_gate()
         async with gate.slot("login_navigation", timeout=60):
             try:
                 await self.page.goto(
@@ -705,9 +712,12 @@ class DouyinLoginAdapter:
 
     async def close(self):
         self._closed = True
-        self.context.remove_listener("page", self._new_page)
-        self.context.remove_listener("response", self._response)
-        self.context.remove_listener("dialog", self._dialog)
+        for event, callback in (("page", self._new_page), ("response", self._response), ("dialog", self._dialog)):
+            try:
+                self.context.remove_listener(event, callback)
+            except Exception:
+                # Closing an already disconnected context must preserve the route failure.
+                pass
         for task in list(self.tasks):
             task.cancel()
         if self.tasks:

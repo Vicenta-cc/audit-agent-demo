@@ -656,3 +656,91 @@ def test_detail_verification_retries_with_the_next_candidate(env, monkeypatch):
     saved = json.loads(candidates_file.read_text(encoding="utf-8"))
     assert "p1" not in json.dumps(saved.get("collected_keys", []))
     assert env.store.get(a["id"])["risk_count"] == 1
+
+
+@pytest.mark.parametrize('code', ['PROXY_BUSY', 'PROXY_EXIT_CHANGED', 'PROXY_REVISION_MISMATCH'])
+def test_route_error_stops_keyword_sweep_without_rotation_or_account_risk(env, monkeypatch, code):
+    a, b = env.add('A'), env.add('B')
+    crawler = RotationCrawler(fail={(a['id'], '词1'): pipeline_module.CollectionRouteError(code)})
+    with pytest.raises(pipeline_module.CollectionRouteError, match=code):
+        _sweep(env, monkeypatch, crawler, _as_rotation([a, b]), keywords='词1,词2')
+    assert [call['account_id'] for call in crawler.search_kwargs] == [a['id']]
+    assert crawler.detail_accounts == []
+    assert env.store.get(a['id'])['risk_count'] == 0
+    assert env.store.get(b['id'])['risk_count'] == 0
+    assert not any('跳过该词' in line for line in env.logs)
+
+
+def test_verification_does_not_retry_another_account_on_same_proxy(env, monkeypatch):
+    a, b, c = (env.add(name) for name in 'ABC')
+    rotation = _as_rotation([a, b, c])
+    rotation[0]['proxy_id'] = rotation[1]['proxy_id'] = 'shared'
+    rotation[2]['proxy_id'] = 'independent'
+    crawler = RotationCrawler(fail={(a['id'], '词1'): CrawlerVerificationError('verify')})
+    _sweep(env, monkeypatch, crawler, rotation, keywords='词1')
+    assert [call['account_id'] for call in crawler.search_kwargs] == [a['id'], c['id']]
+    assert env.store.get(b['id'])['risk_count'] == 0
+
+
+def test_trial_mode_disables_automatic_rotation_and_backup_reservation(env, monkeypatch):
+    monkeypatch.setattr(pipeline_module.settings, 'crawler_proxy_trial_id', 'finite-trial')
+    a,b=env.add('A'),env.add('B')
+    with ExitStack() as leases:
+        rotation=_rotation(env,_pipeline(env),a,leases)
+        assert _names(rotation)==['A']
+        handle=acquire_account_handle('dy',b['id'])
+        assert handle is not None
+        handle.close()
+    crawler=RotationCrawler()
+    _sweep(env,monkeypatch,crawler,_as_rotation([a,b]),keywords='词1,词2')
+    assert [account for _,account in crawler.search_accounts]==[a['id'],a['id']]
+
+
+def test_trial_verification_never_automatically_retries_backup(env, monkeypatch):
+    monkeypatch.setattr(pipeline_module.settings, 'crawler_proxy_trial_id', 'finite-trial')
+    a,b=env.add('A'),env.add('B')
+    crawler=RotationCrawler(fail={(a['id'],'词1'):CrawlerVerificationError('verify')})
+    with pytest.raises(CrawlerVerificationError):
+        _sweep(env,monkeypatch,crawler,_as_rotation([a,b]),keywords='词1')
+    assert [call['account_id'] for call in crawler.search_kwargs]==[a['id']]
+    assert env.store.get(b['id'])['risk_count']==0
+
+
+def test_fatal_stream_route_error_stops_inflight_crawler_before_next_probe(env, monkeypatch):
+    import time
+    error=pipeline_module.CollectionRouteError('PROXY_EXIT_CHANGED')
+    monkeypatch.setattr(pipeline_module.AuditPipeline,'_analyze_subject',lambda *a: (_ for _ in ()).throw(error))
+    class BlockingCrawler(RotationCrawler):
+        stopped=False
+        ticks=0
+        def run_detail(self,platform,content_id,*,source_keyword,save_root=None,account_id='',**kwargs):
+            item={'aweme_id':content_id,'desc':'full','source_keyword':source_keyword}
+            kwargs['content_callback']([item],[])
+            deadline=time.monotonic()+2
+            while time.monotonic()<deadline:
+                if kwargs['stop_checker']():
+                    self.stopped=True
+                    raise RuntimeError('crawler interrupted by stop checker')
+                self.ticks+=1
+                time.sleep(.01)
+            pytest.fail('in-flight crawler continued after fatal stream route error')
+    account=env.add('A');crawler=BlockingCrawler()
+    with pytest.raises(pipeline_module.CollectionRouteError,match='PROXY_EXIT_CHANGED'):
+        _run_pipeline(env,monkeypatch,crawler,account,settings_auto_analyze=True,
+                      auto_analyze=True,analyze_limit=2,max_total_notes=2)
+    job=pipeline_module.job_store.get('job-rot')
+    assert crawler.stopped and crawler.ticks<100
+    assert job['control']['crawl_stop_requested']
+    assert job['control']['collection_route_error']=='PROXY_EXIT_CHANGED'
+    assert job['status']!='completed' and job['error']=='PROXY_EXIT_CHANGED'
+    assert env.store.get(account['id'])['risk_count']==0
+
+
+@pytest.mark.parametrize('code',['PROXY_BUSY','SUPPLEMENT_DEFERRED'])
+def test_stream_deferred_media_does_not_stop_collection(env,monkeypatch,code):
+    pipeline=_pipeline(env)
+    updates=[]
+    monkeypatch.setattr(pipeline_module.job_store,'update_control',lambda *a,**k: updates.append(k))
+    pipeline._handle_stream_route_error(pipeline_module.CollectionRouteError(code),{'item':{}})
+    assert updates==[{'analysis_stop_requested':True}]
+    assert not getattr(pipeline,'_stream_route_error',None)

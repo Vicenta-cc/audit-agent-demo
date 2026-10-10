@@ -7,7 +7,9 @@ from urllib.parse import urlparse
 
 from fastapi import Header, BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StrictBool, StrictInt
 
@@ -30,6 +32,7 @@ from .audit_agent.audit_policy_store import (
 from .audit_agent.config import settings
 from .audit_agent.search_terms_cap import cap_search_terms, search_terms_max
 from .audit_agent.requests import CrawlRequest, crawl_request_from_job
+from .audit_agent.crawler_route import CollectionRouteError
 from .audit_agent.crawler_account_store import account_is_cooling_down, crawler_account_store
 from .audit_agent.creator_url import (
     CreatorUrlValidationError,
@@ -717,9 +720,12 @@ class CrawlerAccountCreateRequest(BaseModel):
     display_name: str
     platform_account_id: str = ""
     access_scope: Literal["private", "public"] = "private"
+    proxy_id: str | None = None
 
 
 class CrawlerAccountUpdateRequest(BaseModel):
+    proxy_id: str | None = None
+    expected_binding_revision: int | None = None
     display_name: str | None = None
     platform_account_id: str | None = None
     status: Literal["login_required", "disabled"] | None = None
@@ -1488,6 +1494,168 @@ def list_outputs(principal: Principal = Depends(principal_provider)):
     return {"outputs": MediaCrawlerAdapter().list_existing_outputs()}
 
 
+# FastAPI's default validation body includes rejected input values. Proxy inputs
+# may contain credentials, so preserve validation locations without echoing input.
+@app.exception_handler(RequestValidationError)
+async def proxy_request_validation_handler(request: Request, exc: RequestValidationError):
+    if request.url.path.startswith("/api/crawler-proxies"):
+        return JSONResponse(status_code=422, content={"detail": [
+            {"loc": error["loc"], "type": error["type"], "msg": "Invalid proxy field"}
+            for error in exc.errors()
+        ]})
+    return await request_validation_exception_handler(request, exc)
+
+
+class CrawlerProxyEndpointRequest(BaseModel):
+    scheme: Literal["http"] = "http"
+    host: str
+    port: int = Field(ge=1, le=65535)
+
+
+class CrawlerProxyCredentialsRequest(BaseModel):
+    username: str = ""
+    password: str = ""
+
+
+class CrawlerProxyCreateRequest(BaseModel):
+    display_name: str
+    endpoint: CrawlerProxyEndpointRequest
+    credentials: CrawlerProxyCredentialsRequest | None = None
+    provider: Literal["wukong", "manual"] = "wukong"
+    expires_at: float | None = None
+    max_bound_accounts: int = Field(default=1, ge=1)
+    max_active_accounts: int = Field(default=1, ge=1)
+
+
+class CrawlerProxyUpdateRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+    display_name: str | None = None
+    endpoint: CrawlerProxyEndpointRequest | None = None
+    credentials: CrawlerProxyCredentialsRequest | None = None
+    clear_credentials: bool = False
+    expires_at: float | None = None
+    max_bound_accounts: int | None = Field(default=None, ge=1)
+    max_active_accounts: int | None = Field(default=None, ge=1)
+    status: Literal["active", "maintenance", "unavailable", "expired", "exit_changed"] | None = None
+
+
+def _crawler_proxy_store():
+    from .audit_agent.crawler_route import get_proxy_store
+    return get_proxy_store(account_store=crawler_account_store)
+
+
+def _can_use_crawler_proxy(principal, proxy_id):
+    return (not _authz_enabled() or principal.is_admin or
+            auth_store.has_grant(principal.id, "crawler-proxy", str(proxy_id), "use"))
+
+
+def _require_crawler_proxy(proxy_id, principal):
+    resource = _crawler_proxy_store().get(proxy_id)
+    if not resource or not _can_use_crawler_proxy(principal, proxy_id):
+        raise HTTPException(404, detail="Crawler proxy not found")
+    return resource
+
+
+def _proxy_http_error(exc):
+    code = str(exc).split(":", 1)[0]
+    status = 409 if code in {"PROXY_BUSY", "PROXY_CAPACITY_EXCEEDED", "PROXY_REVISION_MISMATCH", "PROXY_BINDING_CAPACITY", "PROXY_IN_USE", "PROXY_CAPACITY_CONFLICT", "PROXY_RESOURCE_BOUND"} else 400
+    return HTTPException(status, detail=code if code.startswith("PROXY_") else "Invalid proxy configuration")
+
+
+@app.get("/api/crawler-proxies")
+def list_crawler_proxies(principal: Principal = Depends(principal_provider)):
+    items = [item for item in _crawler_proxy_store().list() if _can_use_crawler_proxy(principal, item["id"])]
+    return {"items": items, "enabled": settings.crawler_proxy_enabled,
+            "max_active_accounts_cap": settings.request_concurrency,
+            "can_manage": not _authz_enabled() or principal.is_admin}
+
+
+@app.get("/api/crawler-proxies/{proxy_id}")
+def get_crawler_proxy(proxy_id: str, principal: Principal = Depends(principal_provider)):
+    return {"item": _require_crawler_proxy(proxy_id, principal)}
+
+
+@app.post("/api/crawler-proxies", status_code=201)
+def create_crawler_proxy(request: CrawlerProxyCreateRequest, principal: Principal = Depends(principal_provider)):
+    _require_admin(principal)
+    try:
+        return {"item": _crawler_proxy_store().create(**request.model_dump())}
+    except (ValueError, CollectionRouteError) as exc:
+        raise _proxy_http_error(exc) from exc
+
+
+@app.patch("/api/crawler-proxies/{proxy_id}")
+def update_crawler_proxy(proxy_id: str, request: CrawlerProxyUpdateRequest, principal: Principal = Depends(principal_provider)):
+    _require_admin(principal)
+    _require_crawler_proxy(proxy_id, principal)
+    try:
+        fields = request.model_dump(exclude_unset=True)
+        if fields.get("status") == "active":
+            from .audit_agent.crawler_route import activate_proxy_route
+            return {"item": activate_proxy_route(proxy_id, account_store=crawler_account_store, **fields)}
+        return {"item": _crawler_proxy_store().update(proxy_id, **fields)}
+    except (ValueError, CollectionRouteError) as exc:
+        raise _proxy_http_error(exc) from exc
+
+
+class CrawlerProxyRecoverRequest(BaseModel):
+    expected_revision: int = Field(ge=1)
+
+
+@app.post("/api/crawler-proxies/{proxy_id}/recover")
+def recover_crawler_proxy(proxy_id: str, request: CrawlerProxyRecoverRequest,
+                          principal: Principal = Depends(principal_provider)):
+    _require_admin(principal)
+    _require_crawler_proxy(proxy_id, principal)
+    try:
+        from .audit_agent.crawler_route import activate_proxy_route
+        return {"item": activate_proxy_route(proxy_id, expected_revision=request.expected_revision, account_store=crawler_account_store)}
+    except (ValueError, CollectionRouteError) as exc:
+        raise _proxy_http_error(exc) from exc
+
+
+class CrawlerProxyProbeRequest(BaseModel):
+    account_id: str
+    expected_revision: int = Field(ge=1)
+
+
+@app.post("/api/crawler-proxies/{proxy_id}/probe")
+def probe_crawler_proxy(proxy_id: str, request: CrawlerProxyProbeRequest,
+                        principal: Principal = Depends(principal_provider)):
+    _require_admin(principal)
+    resource = _require_crawler_proxy(proxy_id, principal)
+    account = _require_crawler_account(request.account_id, principal, permission="use")
+    if account.get("platform") != "dy" or account.get("proxy_id") != proxy_id:
+        raise HTTPException(400, detail="PROXY_CONFIG_INVALID")
+    if resource["config_revision"] != request.expected_revision:
+        raise HTTPException(409, detail="PROXY_REVISION_MISMATCH")
+    try:
+        from .audit_agent.crawler_route import probe_account_route
+        result = probe_account_route(request.account_id, principal.id,
+            expected_binding_revision=account["binding_revision"],
+            expected_config_revision=request.expected_revision, proxy_id=proxy_id,
+            account_store=crawler_account_store, auth_store=auth_store)
+        # Diagnostic results never expose route snapshots or proxy credentials.
+        safe = {key: result[key] for key in (
+            "schema_version", "proxy_id", "account_id", "config_revision", "binding_revision",
+            "observed_exit_ip", "observed_at", "status"
+        ) if key in result}
+        safe["business_enabled"] = False
+        return {"item": safe}
+    except (ValueError, CollectionRouteError) as exc:
+        raise _proxy_http_error(exc) from exc
+
+
+@app.delete("/api/crawler-proxies/{proxy_id}", status_code=204)
+def delete_crawler_proxy(proxy_id: str, expected_revision: int, principal: Principal = Depends(principal_provider)):
+    _require_admin(principal)
+    _require_crawler_proxy(proxy_id, principal)
+    try:
+        _crawler_proxy_store().delete(proxy_id, expected_revision=expected_revision)
+    except (ValueError, CollectionRouteError) as exc:
+        raise _proxy_http_error(exc) from exc
+
+
 @app.get("/api/crawler-accounts")
 def list_crawler_accounts(principal: Principal = Depends(principal_provider)):
     accounts = _authorized_crawler_accounts(principal)
@@ -1508,6 +1676,8 @@ def _shared_crawler_pool_summary() -> dict:
         if str(item.get("access_scope") or "private") == "public"
     ]
     ready = busy = 0
+    available_ids = {item["id"] for platform in {item["platform"] for item in shared}
+                     for item in crawler_account_store.available_accounts(platform)}
     by_platform: dict[str, dict[str, int]] = {}
     for account in shared:
         platform = str(account.get("platform") or "")
@@ -1519,6 +1689,9 @@ def _shared_crawler_pool_summary() -> dict:
             account.get("status") == "active"
             and account.get("has_auth_state")
             and not account_is_cooling_down(account)
+            and not account.get("needs_proxy_login_validation", False)
+            and account["id"] in available_ids
+            and not (settings.crawler_proxy_enabled and platform == "dy" and not account.get("proxy_id"))
         )
         if not usable:
             platform_summary["unavailable"] += 1
@@ -1545,8 +1718,18 @@ def create_crawler_account(
     request: CrawlerAccountCreateRequest,
     principal: Principal = Depends(principal_provider),
 ):
+    request.platform = str(request.platform or "").strip().lower()
     if request.access_scope == "public":
         _require_admin(principal)
+    if request.proxy_id:
+        if request.platform != "dy":
+            raise HTTPException(400, detail="Proxy routing currently supports dy only")
+        resource = _require_crawler_proxy(request.proxy_id, principal)
+        if resource["status"] != "active":
+            raise HTTPException(409, detail="PROXY_UNAVAILABLE")
+    elif settings.crawler_proxy_enabled and request.platform == "dy":
+        raise HTTPException(400, detail="PROXY_BINDING_REQUIRED")
+    item = None
     try:
         item = crawler_account_store.create(
             platform=request.platform,
@@ -1554,6 +1737,8 @@ def create_crawler_account(
             platform_account_id=request.platform_account_id,
             access_scope=request.access_scope,
         )
+        if request.proxy_id:
+            item = _crawler_proxy_store().bind(str(item["id"]), request.proxy_id, expected_binding_revision=int(item.get("binding_revision") or 0))
         if _authz_enabled() and request.access_scope == "private":
             try:
                 auth_store.register_crawler_account(str(item["id"]), principal.id)
@@ -1561,9 +1746,11 @@ def create_crawler_account(
                 # No profile/login exists yet. Never publish an ownerless new account.
                 crawler_account_store.delete(str(item["id"]))
                 raise
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"item": item}
+    except (ValueError, CollectionRouteError) as exc:
+        if item is not None:
+            crawler_account_store.delete(str(item["id"]))
+        raise _proxy_http_error(exc) from exc
+    return {"item": _crawler_account_public_view(item, principal)}
 
 
 @app.patch("/api/crawler-accounts/{account_id}")
@@ -1572,12 +1759,40 @@ def update_crawler_account(
     request: CrawlerAccountUpdateRequest,
     principal: Principal = Depends(principal_provider),
 ):
+    if {"proxy_id", "expected_binding_revision"} & request.model_fields_set:
+        raise HTTPException(400, detail="Use the proxy-binding endpoint for binding changes")
     account = _require_crawler_account(account_id, principal, permission="manage")
     from backend.task_admission.resources import account_lease
     with account_lease(account["platform"], account_id) as acquired:
         if not acquired:
             raise HTTPException(409, detail="账号正在采集或登录，请等待结束后再修改。")
-        return _update_idle_crawler_account(account_id, request)
+        result = _update_idle_crawler_account(account_id, request)
+        return {"item": _crawler_account_public_view(result["item"], principal)}
+
+
+class CrawlerAccountProxyBindingRequest(BaseModel):
+    proxy_id: str | None
+    expected_binding_revision: int = Field(ge=0)
+
+
+@app.patch("/api/crawler-accounts/{account_id}/proxy-binding")
+def update_crawler_account_proxy_binding(account_id: str, request: CrawlerAccountProxyBindingRequest,
+                                        principal: Principal = Depends(principal_provider)):
+    account = _require_crawler_account(account_id, principal, permission="manage")
+    if request.proxy_id:
+        _require_crawler_proxy(request.proxy_id, principal)
+    from backend.task_admission.resources import account_lease
+    with account_lease(account["platform"], account_id) as acquired:
+        if not acquired:
+            raise HTTPException(409, detail="PROXY_BUSY")
+        try:
+            if request.proxy_id:
+                item = _crawler_proxy_store().bind(account_id, request.proxy_id, expected_binding_revision=request.expected_binding_revision)
+            else:
+                item = _crawler_proxy_store().unbind(account_id, expected_binding_revision=request.expected_binding_revision)
+        except (ValueError, CollectionRouteError) as exc:
+            raise _proxy_http_error(exc) from exc
+    return {"item": _crawler_account_public_view(item, principal)}
 
 
 def _update_idle_crawler_account(account_id, request):
@@ -1588,7 +1803,7 @@ def _update_idle_crawler_account(account_id, request):
             platform_account_id=request.platform_account_id,
             status=request.status,
         )
-    except ValueError as exc:
+    except (ValueError, CollectionRouteError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not item:
         raise HTTPException(status_code=404, detail="Crawler account not found")

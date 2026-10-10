@@ -120,6 +120,19 @@ ERROR_MESSAGES = {
 }
 
 
+ERROR_MESSAGES.update({
+    "PROXY_BUSY": "代理正在使用，请稍后重试。",
+    "SUPPLEMENT_DEFERRED": "代理资源暂不可用。",
+    "PROXY_REVISION_MISMATCH": "账号代理配置已变化，请重新开始登录。",
+    "PROXY_EXIT_CHANGED": "代理出口已变化，登录已停止。",
+    "PROXY_UNAVAILABLE": "代理不可用，登录已停止。",
+    "PROXY_AUTH_FAILED": "代理鉴权失败，登录已停止。",
+    "PROXY_CONFIG_INVALID": "代理配置无效，登录已停止。",
+    "PROBE_BUDGET_EXHAUSTED": "出口检测额度已耗尽，登录已停止。",
+    "SCHEDULER_POLICY_CONFLICT": "请求保护配置冲突，登录已停止。",
+})
+
+
 def safe_error_code(value, fallback="LOGIN_FAILED"):
     raw = getattr(value, "code", value)
     if isinstance(value, ValueError) and not hasattr(value, "code"):
@@ -407,6 +420,19 @@ class CrawlerLoginV2Manager:
                     op["id"], "failed", error_code="ACCOUNT_BUSY"
                 )
                 raise
+            from .crawler_route import acquire_route_execution, RouteConfigPipe
+            try:
+                from .crawler_route import resolve_account_route
+                snapshot = resolve_account_route(account["id"], account_store=self.store, expected_binding_revision=op.get("expected_binding_revision"), expected_config_revision=op.get("expected_config_revision"), allow_probe=True)
+                if (snapshot.proxy_id if snapshot else None) != op.get("proxy_id"):
+                    from .crawler_route import CollectionRouteError
+                    raise CollectionRouteError("PROXY_REVISION_MISMATCH")
+                route_bundle = acquire_route_execution(account["id"], op["id"], user_id, account_handle=handles[-1], account_store=self.store, snapshot=snapshot, allow_probe=True)
+            except Exception as exc:
+                for handle in handles:
+                    handle.close()
+                self.operations.mark_stage(op["id"], "failed", error_code=safe_error_code(exc))
+                raise
             parent, child = socket.socketpair()
             s = V2Session(
                 uuid4().hex,
@@ -421,6 +447,8 @@ class CrawlerLoginV2Manager:
                 deadline=time.monotonic() + self.timeout,
                 authorize=authorize,
             )
+            s.route_bundle = route_bundle
+            s.route_pipe = RouteConfigPipe(route_bundle.snapshot)
             s.snapshot = {
                 "protocol_version": 2,
                 "engine": "v2",
@@ -452,8 +480,13 @@ class CrawlerLoginV2Manager:
             }
             diagnostic = tempfile.TemporaryFile(mode="w+b")
             env = os.environ.copy()
+            for name in ("MEDIACRAWLER_PROXY_CONFIG_FD", "MEDIACRAWLER_PROXY_RECEIPT_FD", "MEDIACRAWLER_PROXY_REQUIRED", "MEDIACRAWLER_PROXY_PROBE_BUDGET_ID"):
+                env.pop(name, None)
             env.update(account_browser_env(account["id"]))
             env.update(scheduler_env())
+            env.update(s.route_pipe.env)
+            from .crawler_route import probe_env
+            env.update(probe_env(route_bundle))
             env.update(
                 PYTHONUNBUFFERED="1",
                 MEDIACRAWLER_DIR=str(settings.media_crawler_dir.expanduser().resolve()),
@@ -502,14 +535,17 @@ class CrawlerLoginV2Manager:
                     stderr=diagnostic,
                     cwd=str(settings.root_dir),
                     env=env,
-                    pass_fds=tuple(h.fileno() for h in handles) + (child.fileno(),),
+                    pass_fds=tuple(set((*tuple(h.fileno() for h in handles), child.fileno(), *route_bundle.pass_fds, *s.route_pipe.pass_fds))),
                     start_new_session=True,
                     bufsize=0,
                 )
+                s.route_pipe.start(s.process)
                 s.diagnostic = diagnostic
                 self.sessions[s.id] = s
                 self.operations.mark_stage(op["id"], "checking")
             except Exception:
+                s.route_pipe.close()
+                route_bundle.close()
                 parent.close()
                 diagnostic.close()
                 for h in handles:
@@ -910,6 +946,7 @@ class CrawlerLoginV2Manager:
         )
 
     def _writer(self, s):
+        from .crawler_route import CollectionRouteError
         deferred = None
         readiness = selectors.DefaultSelector()
         try:
@@ -974,6 +1011,8 @@ class CrawlerLoginV2Manager:
                         if count <= 0:
                             raise BrokenPipeError()
                         data = data[count:]
+        except CollectionRouteError as exc:
+            self._finish(s, "failed", exc.code)
         except Exception:
             self._finish(s, "failed", "CONTROL_CHANNEL_FAILED")
         finally:
@@ -1009,6 +1048,7 @@ class CrawlerLoginV2Manager:
         )
 
     def _reader(self, s):
+        from .crawler_route import CollectionRouteError, consume_route_event
         try:
             while True:
                 raw = s.process.stdout.readline(65537)
@@ -1016,11 +1056,15 @@ class CrawlerLoginV2Manager:
                     break
                 if len(raw) > 65536:
                     raise ValueError("oversized control event")
+                if consume_route_event(raw, getattr(s, "route_bundle", None)):
+                    continue
                 self.handle_event(s.id, json.loads(raw))
             s.process.wait(timeout=3)
             with self._lock:
                 if s.snapshot["phase"] not in TERMINAL:
                     self._finish(s, "failed", "BROWSER_DISCONNECTED")
+        except CollectionRouteError as exc:
+            self._finish(s, "failed", exc.code)
         except Exception:
             self._finish(s, "failed", "CONTROL_CHANNEL_FAILED")
         finally:
@@ -1492,6 +1536,10 @@ class CrawlerLoginV2Manager:
                         stream.close()
                     except OSError:
                         pass
+            if getattr(s, "route_pipe", None):
+                s.route_pipe.close()
+            if getattr(s, "route_bundle", None):
+                s.route_bundle.close()
             for h in s.handles:
                 h.close()
             with self._lock:

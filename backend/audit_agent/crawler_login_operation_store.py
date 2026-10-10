@@ -31,6 +31,8 @@ class CrawlerLoginOperationStore:
         self.accounts = account_store
         self.db_path = account_store.db_path
         self.cipher = cipher or auth_state_cipher
+        from .crawler_proxy_store import CrawlerProxyStore
+        self.proxies = CrawlerProxyStore(account_store, cipher=self.cipher)
         with self._connect() as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS crawler_login_operations (
@@ -57,6 +59,9 @@ class CrawlerLoginOperationStore:
                 CREATE INDEX IF NOT EXISTS idx_login_command_pending ON crawler_login_commands(operation_id, execution_status, updated_at);
             """)
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(crawler_login_operations)")}
+            for name, kind in (("proxy_id", "TEXT"), ("expected_binding_revision", "INTEGER"), ("expected_config_revision", "INTEGER")):
+                if name not in columns:
+                    conn.execute(f"ALTER TABLE crawler_login_operations ADD COLUMN {name} {kind}")
             if "credentials_changed" not in columns:
                 conn.execute("ALTER TABLE crawler_login_operations ADD COLUMN credentials_changed INTEGER")
 
@@ -105,6 +110,7 @@ class CrawlerLoginOperationStore:
                 raise ValueError("DY_ACCOUNT_REQUIRED")
             if account["status"] == "disabled":
                 raise ValueError("ACCOUNT_DISABLED")
+            proxy_id, binding_revision, config_revision = self._route_revision(conn, account)
             source = self._get(conn, source_operation_id) if source_operation_id else None
             if source_operation_id:
                 if not source or source["account_id"] != account_id or source["owner_user_id"] != owner_user_id:
@@ -113,7 +119,7 @@ class CrawlerLoginOperationStore:
                     return self._get(conn, source["recovered_by_operation_id"]) if source["stage"] == "recovered" else source
                 if source["stage"] != "recovery_required":
                     raise ValueError("RECOVERY_SOURCE_NOT_RECOVERABLE")
-                if account["auth_state_revision"] != source["expected_auth_revision"] or account["platform_account_id"] != source["expected_platform_account_id"]:
+                if account["auth_state_revision"] != source["expected_auth_revision"] or account["platform_account_id"] != source["expected_platform_account_id"] or (proxy_id, binding_revision, config_revision) != (source["proxy_id"], source["expected_binding_revision"], source["expected_config_revision"]):
                     conn.execute("UPDATE crawler_login_operations SET stage='superseded', error_code='RECOVERY_SOURCE_SUPERSEDED', updated_at=? WHERE id=?", (_now(), source_operation_id))
                     superseded = True
                 elif conn.execute("SELECT id FROM crawler_login_operations WHERE source_operation_id=? AND stage NOT IN ('committed','recovered','failed','cancelled','expired','superseded','recovery_required')", (source_operation_id,)).fetchone():
@@ -127,6 +133,7 @@ class CrawlerLoginOperationStore:
                     (operation_id,account_id,owner_user_id,application_session_id,request_key_hash,owner_token_hash,engine,intent,
                      source_operation_id,account["platform_account_id"],account["auth_state_revision"],request_fingerprint,
                      source["credentials_reset"] if source else 0,source["profile_authority_established"] if source else 0,source["credentials_changed"] if source else None,now,now))
+                conn.execute("UPDATE crawler_login_operations SET proxy_id=?,expected_binding_revision=?,expected_config_revision=? WHERE id=?", (proxy_id,binding_revision,config_revision,operation_id))
                 result = self._get(conn, operation_id)
         if superseded:
             raise ValueError("RECOVERY_SOURCE_SUPERSEDED")
@@ -167,10 +174,23 @@ class CrawlerLoginOperationStore:
             conn.execute("UPDATE crawler_login_operations SET stage=?, credentials_reset=?, expected_auth_revision=?, updated_at=? WHERE id=?", ("reset_authorized" if reset else "checking", int(reset or op["credentials_reset"]),account["auth_state_revision"],_now(),operation_id))
             return self._get(conn, operation_id)
 
+    def _route_revision(self, conn, account):
+        proxy_id = account.get("proxy_id")
+        if not proxy_id:
+            if account.get("proxy_required"):
+                raise ValueError("PROXY_REVISION_MISMATCH")
+            return None, None, None
+        row = conn.execute("SELECT config_revision FROM proxy_resources WHERE id=?", (proxy_id,)).fetchone()
+        if row is None:
+            raise ValueError("PROXY_REVISION_MISMATCH")
+        return proxy_id, account["binding_revision"], row[0]
+
     def _check_revision(self, conn, op):
         account = self.accounts.get(op["account_id"], connection=conn)
         if not account or account["status"] == "disabled" or account["auth_state_revision"] != op["expected_auth_revision"] or account["platform_account_id"] != op["expected_platform_account_id"]:
             raise ValueError("AUTH_REVISION_CONFLICT")
+        if self._route_revision(conn, account) != (op["proxy_id"], op["expected_binding_revision"], op["expected_config_revision"]):
+            raise ValueError("PROXY_REVISION_MISMATCH")
         return account
 
     def commit_auth(self, operation_id, ciphertext, platform_account_id, *, credentials_changed=True):
@@ -202,6 +222,10 @@ class CrawlerLoginOperationStore:
             credentials_changed = credentials_changed or not bool(backup)
             account = self.accounts.save_douyin_auth_state(op["account_id"], ciphertext, platform_account_id,
                 connection=conn, expected_revision=op["expected_auth_revision"], credentials_changed=credentials_changed)
+            if op["proxy_id"]:
+                account = self.proxies.mark_route_login_validated(op["account_id"],
+                    expected_binding_revision=op["expected_binding_revision"],
+                    expected_config_revision=op["expected_config_revision"], connection=conn)
             result = json.dumps({"status":"success", "operation_id":operation_id,"account":account}, ensure_ascii=False)
             now = _now()
             conn.execute("UPDATE crawler_login_operations SET stage='committed', verified_platform_account_id=?,result_json=?,updated_at=?,completed_at=? WHERE id=?", (platform_account_id,result,now,now,operation_id))
