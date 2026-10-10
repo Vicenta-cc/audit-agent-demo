@@ -1,0 +1,56 @@
+Phase 2 live acceptance — 2026-10-10
+
+Branch: codex/investigation-rounds-phase2
+Baseline: 925e3fd; frozen-preview fix: ef8cc6e.
+Artifacts: /Users/ext.wanghongtao6/Documents/Codex/acceptance/investigation-rounds-live-20261010/
+Human review: 第二阶段真实链路验收.html
+
+Isolated local API 8598 / frontend 3598; fresh DBs, copied authorized crawler
+account, Hermes 0.20.4, actual DeepSeek non-thinking conversation model,
+MediaCrawler 4c70ac4. No push, cloud deployment or cloud restart.
+Triage remained off at the user's request. Each task: 1 post, <=5 comments.
+
+Two actual jobs published independent frozen reports. Round 1 searched 上分
+with formal gambling rules v2; round 2 searched 盘口 with a temporary proposal.
+Original configuration unchanged; same confirmation replay reused the run;
+exactly two runs. Collection parameters were equal. Formal rule library was
+not published/modified. 9 real conversation turns, 31 conversation model calls
+(resource-generation/media subcalls counted separately).
+
+Observed successes:
+- Copy/create round 2 in the same conversation without starting before confirmation.
+- Actual UI confirmation, crawler, media/comment audits and report publication.
+- Query round 1 during round 2; follow up on the second comment correctly.
+- Query both reports: 2 original posts, 10 comments, zero shared stable accounts,
+  consistent with independently checked crawler records.
+- Limit to round 2: five correct comments, no round-1 comments.
+- Browser-originated frozen-config comparison reads both reports and identifies
+  changed keywords, temporary rules and exemptions.
+
+Fixed defect:
+- Frozen preview rejected adopted lexicon source_edit_ref (HTTP 422 after task
+  confirmation). Exclude provenance field from preview only; retain snapshot.
+- 26 frozen-preview/lexicon-origin tests and 87 rounds/conversation tests passed.
+
+NOT a full acceptance pass. Priority follow-ups:
+1. Local rule-edit fidelity failed: requesting one added exemption generated an
+   entire proposal, changed IDs/wording and DROPPED the original three general
+   exemptions, leaving one new exemption. The original rules/library remain
+   intact, but the generated second-round rules do not match the requested edit.
+   Investigate existing edit/clone tooling and generator inputs; don't conceal
+   this with prose or claim semantic equivalence. Preserve this failed fixture.
+2. Frontend reuses latest draft in old message cards, so first-round cards show
+   second-round configuration. Existing report/progress UI only shows latest.
+   Frontend was deliberately not changed in this backend phase.
+3. GFM bare-URL linking consumes adjacent Chinese punctuation/text, sometimes
+   combining two URLs into one href. Explicit/source URLs remain in raw answers,
+   but some rendered click targets are wrong. Add renderer regression coverage.
+4. First report answer paraphrased a title and labelled it original text.
+   Count/author/link successes must not be called whole-answer correctness.
+5. Media: first ASR translation recovered after truncation; second split retry
+   remained incomplete. Raw ASR succeeded and pipeline continued. Local PATH
+   lacked FFmpeg, so slow fallback frame extraction was used. Job durations
+   (~7m16s and ~12m14s) are not production performance measurements.
+
+No new prompt, model switch, scope lock, or automatic answer-repair was added.
+Multi-round remains opt-in. Preserve raw test evidence and first-round snapshot.
