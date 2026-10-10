@@ -19,11 +19,14 @@ from uuid import uuid4
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--statistics-probe',action='store_true',help='Small real-model regression of matching-account evidence counts.')
     parser.add_argument('--context-paired',action='store_true',help='Compare full and compact tool history in Agent mode; no prompt/tool changes.')
     parser.add_argument('--repeat',type=int,choices=[1,2],default=1)
     parser.add_argument('--single-report',action='store_true',help='Compare existing single-report service and a B-only collection; three turns each.')
     parser.add_argument('--mode',choices=['constrained','agent','paired'],default='constrained')
     args=parser.parse_args()
+    if args.statistics_probe and (args.single_report or args.context_paired or args.mode!='agent'):
+        parser.error('--statistics-probe requires --mode agent and an independent run')
     if args.context_paired and (args.single_report or args.mode!='agent'):
         parser.error('--context-paired requires --mode agent and cannot use --single-report')
     if args.single_report and args.mode=='paired':
@@ -171,6 +174,13 @@ def main():
                 ('ordinal_followup','你刚才列出的第二条是谁发的？','accounts',['B'],None),
                 ('old_result','请读回本次聊天第一次查询 B 的原始评论结果，保持那个结果的顺序。','comments',['B'],2),
             ]
+        if args.statistics_probe:
+            evidence['suite']='matching-account-statistics'
+            questions=[
+                ('common_count','A 和 B 有哪些共同账号？它们共对应多少条去重原始证据（含帖子和评论）？','accounts',['A','B'],2),
+                ('all_count','改查 A+B 的全部账号：这些账号共对应多少条去重原始证据？身份未知的评论也计入了吗？','accounts',['A','B'],4),
+                ('shared_count','那个共同评论账号在 A+B 合计有几条原始评论、几次研判？','accounts',['A','B'],1),
+            ]
         modes=([f'{mode}-{repeat}' for repeat in range(1,args.repeat+1) for mode in (['full','compact'] if repeat%2 else ['compact','full'])] if args.context_paired else (['constrained','agent'] if args.mode=='paired' else [args.mode]))
         with patch.object(Completions,'create',observed), (root/'runtime.log').open('w') as log, redirect_stdout(log),redirect_stderr(log):
             for mode in modes:
@@ -202,6 +212,9 @@ def main():
                         record['query_results']=[json.loads(r['payload']) for r in db.execute('SELECT payload FROM collection_results WHERE turn=?',(turn_id,))]
                     candidates=[r for r in record['query_results'] if r['kind']==kind and {s['label'] for s in r['sources']}==set(labels)]
                     record['checks']={'completed':turn.status=='completed','expected_query':bool(candidates) and (count is None or len(candidates[-1]['items'])==count)}
+                    if args.statistics_probe:
+                        expected_evidence={'common_count':2,'all_count':4,'shared_count':1}[case]
+                        record['trace_checks_statistics']={'matching_evidence_count':any(r.get('unique_evidence_count')==expected_evidence for r in record['query_results'])}
                     if case=='followup':
                         from backend.report_collection.service import reference
                         # Fixture's target identity, independent of the model's query plan.

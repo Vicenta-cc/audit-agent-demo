@@ -348,11 +348,18 @@ class ReportCollectionService:
                         'comment_count':sum(r['source']['report_ref']==s['ref'] and r['kind']=='comment_author' for r in observations),
                         'post_count':sum(r['source']['report_ref']==s['ref'] and r['kind']=='post_author' for r in observations),
                         'risk_levels':sorted({r['risk_level'] for r in observations if r['source']['report_ref']==s['ref']})} for s in selected]})
+        # Count evidence for matching entities, before pagination and before the
+        # per-account observation preview is truncated. Unresolved identities
+        # remain a separate coverage fact; they cannot belong to a matched account.
+        evidence_rows = rows
+        if args['kind'] == 'accounts':
+            matched_accounts = {item['account_ref'] for item in items}
+            evidence_rows = [row for row in rows if row['account_ref'] in matched_accounts]
         return self.save(session,turn,selected,args['kind'],items,args['limit'],
             parent_result_ref=parent_ref or '',
-            unique_evidence_count=len({r['evidence_key'] for r in rows}),
+            unique_evidence_count=len({r['evidence_key'] for r in evidence_rows}),
             unresolved_identity_comments=sum(not r['account_ref'] and r['kind']=='comment_author' for r in rows),
-            identity_scope='按抖音 sec_uid 关联冻结报告中的发帖者和评论者；其他平台或缺失稳定 ID 不合并。')
+            identity_scope='按抖音 sec_uid 关联冻结报告中的发帖者和评论者；其他平台或缺失稳定 ID 不合并。未解析身份评论数为本次筛选后的未归属记录数，不计入账号条目及账号的唯一证据数。')
 
 
 def business_config(config):
