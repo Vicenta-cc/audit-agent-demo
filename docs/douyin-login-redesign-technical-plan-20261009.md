@@ -573,7 +573,7 @@ controller_epoch 由 manager 分配并在 disconnect、replace 或 terminal 时�
 
 服务端 JSON 消息：snapshot、state_changed、command_ack、command_result、notice、error、ping。状态消息可合并为最新 snapshot；可能产生平台副作用的低频命令结果按第 11.1 节持久保存并可查询，不因帧背压丢失。
 
-客户端 JSON 消息：auth、action、pointer_batch、scroll、key、text、abort_gesture、frame_rendered、pong。客户端不能传脚本、任意 URL、任意 selector、文件路径或 CDP method。
+客户端 JSON 消息：auth、action、pointer_batch、scroll、key、text、edit_input、abort_gesture、frame_rendered、pong。客户端不能传脚本、任意 URL、任意 selector、文件路径或 CDP method。`text` 保留旧协议兼容；验证画面的新增原位输入使用绑定真实字段的 `edit_input`，不再要求用户使用画面下方的独立输入框。
 
 示例：
 
@@ -603,6 +603,20 @@ ack 区分 accepted 与 executed/failed/rejected；accepted 只证明进入队�
 每个 controller 只有一个当前 epoch、递增输入 sequence。REST/WS 收到命令、manager 实际发送到 helper、helper 实际执行前均检查 epoch；图形输入另检查 area_version。旧 epoch 不能借队列延迟继续执行。重复 command_id 返回已有结果，不重复平台副作用。可靠点击或 Enter 在已知发送/提交控件上转为结构化敏感动作；未知面板中的低频点击/Enter 按 manual_action 记执行结果，重启不重放。逐点移动、原始文字和绘图数据不写入命令表。
 
 关闭码约定：4401 应用认证失效、4403 权限/owner 拒绝、4408 认证超时、4409 controller 已替换、4410 会话终止、1009 超长数据；正常完成 1000。前端映射为用户能理解的状态，不原样显示内部码。
+
+### 8.4.1 验证画面的原位输入与延迟处理
+
+仅已授权 owner 的二进制画面元数据包含 `editable_targets`，最多 4 个当前真实可见、启用、可编辑且完整位于验证裁剪区域内的字段。必须检查字段与 iframe/open Shadow 祖先的实际命中层级，被验证码遮挡的主页字段、透明或隐藏字段不纳入。每项包含 `field_id`、相对 clip 的归一化 `rect`、`input_type`、`input_mode`、`max_length`、瞬态 `value`、`focused`、`applied_edit_revision` 及真实光标 `selection_start/selection_end/selection_direction`（不支持选择的原生类型允许 null）。值不超过 256 UTF-16 单元，字段 ID 绑定真实 DOM 节点生命周期；不将任意 selector 或前端传来的字段 ID 当作权限证明。密码等不适合同步已有明文值的字段不纳入这次编辑通道。
+
+前端不新增可见表单，不在投屏上覆盖 input/textarea。用户点击投屏内的原生字段，现有坐标事件仍作用于真实网页；单个离屏键盘/IME relay 接收随后输入，元数据只用于目标命中、焦点及编辑安全。只有用户点击已确认暴露的字段时，才在同一用户手势内聚焦不可见 relay，支持移动键盘；没有输入框的页面不自动选中任何后台字段。`pointer_batch(mode=click, focus_field_id=…)` 执行回执仅在浏览器证实跨 iframe/open Shadow 的焦点链后返回 `focused_field_id`。前端取得焦点回执及带相应 `applied_input_sequence` 的新画面之前，只暂存输入，不向未知目标派发文字。画面中的文字和光标由抖音原网页实际渲染与截图回传，不绘制另一套本地输入框或输入值。
+
+`edit_input` 携带现有命令公共字段、`challenge_id`、`area_version` 及 `field_id/value/client_edit_revision/selection_start/selection_end/selection_direction`。使用绝对值而非每键追加，允许空串删除；选择位置按 UTF-16 校验。后端执行前再次校验 controller、区域、可信 frame、真实节点、可编辑性和焦点，revision 严格递增，使用原生输入事件填写及设置选择。ACK 仅含字段 ID、revision 与执行状态，不带验证码。填写可能触发平台自动提交，因此此命令纳入现有 `manual_action` 的 HMAC 指纹日记，未知结果或进程重启均不重放。
+
+客户端只保留一个执行中的编辑和最新待发绝对值，合并快速改动；输入法组合未结束时不派发中间文字。旧帧不覆盖不可见 relay 中尚未同步的草稿。编辑 ACK 与对应新画面同时确认 revision/sequence 后，才放行一次暂存的验证点击或 Enter；仅“accepted”不能放行。Enter 再绑定真实字段 ID，节点或焦点已变化则拒绝旧提交。平台异步验证是否成功继续由平台步骤与可信身份观察确认，不能以编辑执行成功替代。
+
+输入按序发送并合并待发编辑，保持截图新帧的快速反馈；真实同步持续时给简短等待提示，不额外画文字。超时绑定每条实际发送的命令/新帧等待，不以整个输入过程或输入法选词时长计时。断线、controller/区域/节点变化、未知执行结果会清待发编辑和提交意图，禁止重连后自动发送旧验证码。保持二进制 metadata 8KiB、图片 1MiB 上限，画面捕获与字段状态在短执行锁中保持一致，前后快照变化时丢弃该帧但保留 FPS 节奏和有界失败提示；去重包含焦点和编辑 revision，防止像素未变化造成确认元数据不更新。输入值只留在授权传输与短暂内存中，不写数据库、日志、浏览器存储或持久化命令结果。
+
+回归分开证明：真实嵌套 iframe/open Shadow 字段坐标与焦点、验证码覆盖主页背景字段、无输入的方式选择页、删除/粘贴/Unicode 选择、替换节点拒绝、明文不落盘；浏览器测试证明没有可见叠加框、Canvas 点选后键盘/粘贴/IME 直接进入原生目标、延迟时合并、旧帧不回滚草稿、提交等新帧和断线不重放。真实抖音 SMS 场景由用户人工输入验收，不用模拟通过率代替。
 
 ### 8.5 重连
 
