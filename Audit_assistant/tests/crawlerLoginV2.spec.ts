@@ -863,7 +863,7 @@ test('short screen keyboard stays in login dialog and scanned wait is truthful',
   await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
   await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => { socket = ws; ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }); });
   await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeEnabled();
-  await page.getByRole('button', { name: '关闭登录窗口' }).focus(); await page.keyboard.press('Shift+Tab'); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeFocused(); await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: '关闭登录窗口' })).toBeFocused();
+  await page.getByRole('button', { name: '关闭登录窗口' }).focus(); await page.keyboard.press('Shift+Tab'); await expect(page.getByRole('button', { name: '查看抖音提示' })).toBeFocused(); await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: '关闭登录窗口' })).toBeFocused();
   socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('phone_confirm', 2), status: 'scanned', qr: null } })); await expect(page.getByText('请在手机上确认登录', { exact: true })).toBeVisible();
   const dialog = (await page.getByRole('dialog').boundingBox())!; expect(dialog.height).toBeLessThanOrEqual(480);
   await page.screenshot({ path: '/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-user-phone-short.png' });
@@ -877,7 +877,7 @@ test('delayed start automatically focuses dialog and keyboard cannot leave it', 
   await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }));
   await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('dialog')).toBeFocused(); await page.keyboard.press('Tab'); await expect(page.getByRole('dialog')).toBeFocused();
   releaseStart!(); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeEnabled(); await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: '关闭登录窗口' })).toBeFocused();
-  await page.keyboard.press('Shift+Tab'); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab'); await expect(page.getByRole('button', { name: '查看抖音提示' })).toBeFocused(); await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: '关闭登录窗口' })).toBeFocused();
 });
 
 test('save failure checks recoverable operation and continues without reauth or clearing login', async ({ page }) => {
