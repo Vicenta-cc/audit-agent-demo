@@ -522,7 +522,7 @@ export function CrawlerAccountLoginDialog({
 
         <footer className="crawler-login-footer">
           <ShieldCheck size={16} aria-hidden="true" />
-          仅在抖音要求时完成短信或安全验证
+          仅在{platformName}要求时完成短信或安全验证
         </footer>
       </section>
     </div>
