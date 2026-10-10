@@ -153,6 +153,7 @@ class HermesRuntimeBinding:
             "creation",
             "pass-report",
             "unified-report",
+            "collection",
         }:
             raise HermesRuntimeUnavailable(f"unsupported Hermes product mode: {mode}")
         enabled_legacy = [
@@ -167,6 +168,7 @@ class HermesRuntimeBinding:
             *_LEGACY_MODE_FLAGS,
             _ACCOUNT_ACTIVITY_MODE_FLAG,
             _CREATION_MODE_FLAG,
+            "HERMES_INVESTIGATION_COLLECTION_MODE",
             _UNIFIED_REPORT_MODE_FLAG,
         ):
             os.environ[name] = "0"
@@ -175,6 +177,8 @@ class HermesRuntimeBinding:
             if mode == "creation"
             else _ACCOUNT_ACTIVITY_MODE_FLAG
         )
+        if mode == "collection":
+            selected_flag = "HERMES_INVESTIGATION_COLLECTION_MODE"
         os.environ[selected_flag] = "1"
         os.environ["HERMES_INVESTIGATION_PASS_REPORT"] = "1" if mode == "pass-report" else "0"
         os.environ[_UNIFIED_REPORT_MODE_FLAG] = "1" if mode == "unified-report" else "0"
@@ -337,7 +341,7 @@ class HermesRuntimeBinding:
             raise HermesRuntimeUnavailable(
                 "Hermes Agent 0.20.4 canonical retry control did not take effect"
             )
-        if product_mode == "creation":
+        if product_mode in {"creation", "collection"}:
             from .creation_prompt import install_creation_prompt
 
             install_creation_prompt(agent)
@@ -350,6 +354,14 @@ class HermesRuntimeBinding:
         report_tools_required = product_mode == "unified-report" or (
             product_mode == "creation" and settings.continuous_resource_session_enabled
         )
+        if product_mode == "collection":
+            from backend.report_collection.tools import SCHEMAS
+            try:
+                self.validate_report_tools(agent, enabled_toolsets=options["enabled_toolsets"],
+                    required_names={s["name"] for s in SCHEMAS})
+            except Exception:
+                self._close_failed_agent(agent)
+                raise
         if report_tools_required:
             try:
                 self.validate_report_tools(agent, enabled_toolsets=options["enabled_toolsets"])
@@ -359,7 +371,7 @@ class HermesRuntimeBinding:
         return agent
 
     @staticmethod
-    def validate_report_tools(agent: Any, *, enabled_toolsets: list[str]) -> None:
+    def validate_report_tools(agent: Any, *, enabled_toolsets: list[str], required_names: set[str] | None = None) -> None:
         """Fail before inference; a legal deferred bridge must have real tools.
 
         Project-plugin discovery depends on the launch directory. A missing
@@ -369,7 +381,7 @@ class HermesRuntimeBinding:
         """
         from hermes_m0.unified_support import unified_tool_schemas
 
-        required = {schema["name"] for schema in unified_tool_schemas()}
+        required = required_names or {schema["name"] for schema in unified_tool_schemas()}
         visible = {item["function"]["name"] for item in (getattr(agent, "tools", None) or [])}
         visible &= set(getattr(agent, "valid_tool_names", ()) or ())
         bridge = {"tool_search", "tool_describe", "tool_call"}

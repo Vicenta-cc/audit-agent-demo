@@ -6,6 +6,7 @@ from typing import Any
 
 import os
 from backend.product_help import tools as product_read_tools
+from backend.report_collection import tools as collection_tools
 
 from backend.investigation_creation.tools import (
     HERMES_M3_TOOL_SCHEMAS,
@@ -49,6 +50,10 @@ _M3_CREATION_TOOL_NAMES = frozenset(
 
 def _handler(tool_name: str):
     def handle(args: dict[str, Any], **kwargs: Any) -> str:
+        if os.environ.get("HERMES_INVESTIGATION_COLLECTION_MODE") == "1":
+            if tool_name not in collection_tools.INPUTS:
+                return error_result(tool=tool_name, code="collection_only", message="当前会话仅允许范围受限的报告工具。")
+            return collection_tools.dispatch(tool_name, args, str(kwargs.get("session_id") or ""), str(kwargs.get("task_id") or ""))
         if tool_name in product_read_tools.INPUTS:
             return product_read_tools.dispatch(tool_name, args, str(kwargs.get("session_id") or ""))
         if tool_name in _M3_CREATION_TOOL_NAMES or tool_name in {"list_session_resources", "read_session_resource"}:
@@ -154,6 +159,7 @@ def _idempotent_tool_execution(**kwargs: Any) -> Any:
 def register(ctx: Any) -> None:
     ctx.register_middleware("tool_execution", _idempotent_tool_execution)
     catalogs = (
+        ("collection", "HERMES_INVESTIGATION_COLLECTION_MODE", collection_tools.SCHEMAS),
         (
             "account-activity",
             "HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE",
@@ -217,7 +223,8 @@ def register(ctx: Any) -> None:
             from .pass_support import pass_tool_schemas
 
             schemas = pass_tool_schemas()
-    schemas.extend(product_read_tools.SCHEMAS)
+    if not (active and active[0][0] == "collection"):
+        schemas.extend(product_read_tools.SCHEMAS)
     for schema in schemas:
         ctx.register_tool(
             name=schema["name"],

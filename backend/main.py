@@ -447,6 +447,21 @@ configure_product_reads(ProductReadTools(report_store=report_store,
     can_read=_can_read_catalog_report, principal_for_session=_product_read_principal))
 
 
+# Phase 1 is opt-in: ordinary creation/report sessions keep their existing routes.
+if os.environ.get("REPORT_COLLECTION_ENABLED") == "1":
+    from backend.report_collection.service import ReportCollectionService
+    from backend.report_collection.tools import configure as configure_collection
+    from backend.report_collection.access import owns_report
+    def _can_read_collection_report(principal, item):
+        return owns_report(investigation_creation_store, principal, item, historical_report_demo_service)
+
+    collection_service = ReportCollectionService(
+        conversation=investigation_creation_conversation_service, report_store=report_store,
+        can_read=_can_read_collection_report, path=settings.data_dir / "report-collections.sqlite3")
+    investigation_creation_conversation_service.report_collection = collection_service
+    configure_collection(collection_service)
+
+
 @app.get("/api/user-manual/images/{image_id}")
 def user_manual_image(image_id: str):
     from fastapi.responses import Response

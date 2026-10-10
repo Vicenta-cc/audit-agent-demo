@@ -666,6 +666,7 @@ class InvestigationCreationConversationService:
     ) -> None:
         self.tool_service = tool_service
         self.report_service = report_service
+        self.report_collection = None
         self.tool_service.session_run_resolver = lambda session_id, principal: self.get_workspace_state(session_id, principal=principal).run
         self.store = store or InvestigationStore()
         self.tool_service.application_service.conversation_store = self.store
@@ -778,11 +779,13 @@ class InvestigationCreationConversationService:
         if not client_id or len(client_id) > 200:
             raise ValueError("client_message_id must contain between 1 and 200 characters")
         session = self.get_session(session_id, principal=principal)
-        return self.store.create_turn(
-            session.id,
-            client_message_id=client_id,
-            user_input=user_input,
-        )
+        sources = None
+        if self.report_collection and self.report_collection.active(session.id):
+            sources = self.report_collection.members(session.id, principal)
+        accepted = self.store.create_turn(session.id, client_message_id=client_id, user_input=user_input)
+        if sources is not None and not accepted[1]:
+            self.report_collection.freeze(session.id, accepted[0].id, principal, sources=sources)
+        return accepted
 
     def authorize_turn(self, turn_id: str, *, principal: Principal) -> InvestigationTurn:
         turn = self.store.get_turn(turn_id)
@@ -1134,6 +1137,35 @@ class InvestigationCreationConversationService:
     def execute_resume(self, turn_id: str) -> TurnResult:
         return self.execute_turn(turn_id)
 
+    def _execute_collection_turn(self, turn):
+        from backend.report_collection.tools import PROMPT
+        from backend.hermes_runtime.adapter import turn_system_context
+        try:
+            self.report_collection.sources(turn.session_id, turn.id)
+            self.report_collection.validate_history(turn.session_id)
+            history = self.store.hermes_conversation_history(turn.id)
+            user_message = self.store.get_user_message_for_turn(turn.id).content
+            with ExitStack() as streams:
+                streams.enter_context(self._activity_emitter.bind_turn(turn.session_id, turn.id))
+                streams.enter_context(self._answer_streamer.bind_turn(turn.session_id, turn.id))
+                streams.enter_context(self.runtime_binding.product_mode_execution(
+                    session_runtime_home(self.hermes_state_dir, turn.session_id), product_mode="collection"))
+                agent = self._agent(turn.session_id, product_mode="collection")
+                streams.enter_context(turn_system_context(agent, "本轮只能使用会话报告工具。"))
+                result = agent.run_conversation(user_message, system_message=PROMPT,
+                    conversation_history=deepcopy(history), task_id=turn.id)
+            if not result.get("completed") or result.get("failed") or result.get("interrupted"):
+                raise RuntimeError("报告会话模型未完成回答。")
+            transcript = HermesInvestigationAgentService._validate_completed_transcript(
+                result, history=history, user_message=user_message)
+            return self._persist_result(turn, result, transcript, {}, history_count=len(history or []),
+                include_proposal_presentations=False)
+        except Exception:
+            logger.exception("Collection turn failed: %s", turn.id)
+            self.store.fail_turn(turn.id, error_code="collection_turn_failed",
+                safe_message="统一报告查询未完成，请检查报告权限或稍后重试。", retryable=False)
+            return self.store.turn_result(turn.id)
+
     def execute_turn(self, turn_id: str) -> TurnResult:
         turn = self.store.get_turn(turn_id)
         if turn.status in {"completed", "error"}:
@@ -1142,6 +1174,8 @@ class InvestigationCreationConversationService:
             raise InvestigationTurnNotFoundError("turn is not ready for execution")
         session = self.store.get_session(turn.session_id)
         principal = self.principal_for_session(session.id)
+        if self.report_collection and self.report_collection.active(session.id):
+            return self._execute_collection_turn(turn)
         history = self.store.hermes_conversation_history(turn.id)
         recovered_history = self._failed_turn_checkpoint_history(
             turn, principal=principal
@@ -1676,7 +1710,7 @@ class InvestigationCreationConversationService:
         # is routed by the invoked business tool, not by matching user language.
         return "default"
 
-    def _agent(self, session_id: str, *, provider_route: str = "default") -> Any:
+    def _agent(self, session_id: str, *, provider_route: str = "default", product_mode: str = "creation") -> Any:
         if provider_route != "default":
             raise ValueError("resource generation is routed inside its business tool")
         with self._agent_lock:
@@ -1685,6 +1719,8 @@ class InvestigationCreationConversationService:
                 if provider_route == "default"
                 else (session_id, provider_route)
             )
+            if product_mode != "creation":
+                cache_key = (session_id, product_mode)
             agent = self._agents.get(cache_key)
             if agent is None:
                 callbacks = HermesInvestigationAgentService._compose_agent_callbacks(
@@ -1712,7 +1748,7 @@ class InvestigationCreationConversationService:
                     agent = self.runtime_binding.create_agent(
                         session_id=session_id,
                         agent_factory=self.agent_factory,
-                        product_mode="creation",
+                        product_mode=product_mode,
                         **provider_options,
                         **callbacks,
                     )
@@ -1932,6 +1968,13 @@ class InvestigationCreationConversationService:
                 turn.id,
                 exc_info=True,
             )
+        collection_source_count = 0
+        collection_warnings = []
+        if self.report_collection and self.report_collection.active(turn.session_id):
+            with self.report_collection.connect() as db:
+                pinned = db.execute('SELECT selected FROM collection_turns WHERE turn=?', (turn.id,)).fetchone()
+            collection_source_count = len(json.loads(pinned['selected'])) if pinned and pinned['selected'] else 0
+            collection_warnings = ["collection_source_scope_verified; semantic_claims_not_independently_verified"]
         self.store.complete_turn(
             turn.id,
             answer=answer,
@@ -1939,8 +1982,8 @@ class InvestigationCreationConversationService:
             pending_sources=[],
             grounding_validation={
                 "status": "passed",
-                "source_count": 0,
-                "warnings": (
+                "source_count": collection_source_count,
+                "warnings": collection_warnings + (
                     ["internal_creation_reference_redacted"]
                     if answer_was_redacted
                     or (

@@ -479,6 +479,11 @@ class PublishedReportRepository(InvestigationRepository):
         except KeyError as exc:
             raise RepositoryLookupError("Unknown ReportAccountEntry") from exc
 
+    def comments_for_federation(self, post_id: str) -> tuple[FrozenReportComment, ...]:
+        """Stable frozen identities for scope-enforcing report federation."""
+        self.post(post_id)
+        return tuple(self._report_comments_by_post.get(post_id, ()))
+
     def risk_comments_for_post(
         self, post_id: str
     ) -> tuple[FrozenReportComment, ...]:

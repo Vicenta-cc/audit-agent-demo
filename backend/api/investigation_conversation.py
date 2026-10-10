@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from typing import Any
+import sqlite3
 
-from fastapi import APIRouter, Depends, Header, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -45,6 +46,16 @@ class CreateInvestigationWorkspaceRequest(BaseModel):
     workspace_key: str = Field(default="", max_length=200)
 
 
+class ReportSourceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    report_version_id: str = Field(min_length=1, max_length=200)
+    label: str = Field(min_length=1, max_length=80, pattern=r"\S")
+
+class RegisterReportSourcesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reports: list[ReportSourceRequest] = Field(min_length=1, max_length=20)
+
+
 class InvestigationWorkspaceListItem(BaseModel):
     workspace_session_id: str
     run_id: str = ""
@@ -71,6 +82,35 @@ def create_investigation_conversation_router(
 ) -> APIRouter:
     router = APIRouter(tags=["investigation-creation-conversation"])
     provide_principal = principal_provider or LocalPrincipalProvider()
+
+    @router.post("/api/investigation-workspaces/{workspace_session_id}/report-sources")
+    def register_report_sources(workspace_session_id: str, request: RegisterReportSourcesRequest,
+                                principal: Principal = Depends(provide_principal)):
+        if service.report_collection is None:
+            raise HTTPException(404, detail="统一报告查询未启用。")
+        try:
+            sources = service.report_collection.register(workspace_session_id, principal,
+                [r.model_dump() for r in request.reports])
+            from backend.report_collection.service import public_source
+            return {"reports": [public_source(s) for s in sources]}
+        except PermissionError:
+            raise HTTPException(404, detail="报告不可访问。")
+        except (ValueError, sqlite3.IntegrityError):
+            raise HTTPException(400, detail="报告来源或名称无效。")
+        except Exception as exc:
+            _raise_public_error(exc)
+
+    @router.get("/api/investigation-workspaces/{workspace_session_id}/report-sources")
+    def get_report_sources(workspace_session_id: str, principal: Principal = Depends(provide_principal)):
+        if service.report_collection is None:
+            raise HTTPException(404, detail="统一报告查询未启用。")
+        try:
+            from backend.report_collection.service import public_source
+            return {"reports": [public_source(s) for s in service.report_collection.members(workspace_session_id, principal)]}
+        except PermissionError:
+            raise HTTPException(404, detail="报告不可访问。")
+        except Exception as exc:
+            _raise_public_error(exc)
 
     @router.get("/api/investigation-workspaces", response_model=InvestigationWorkspaceListResponse)
     def list_workspaces(
