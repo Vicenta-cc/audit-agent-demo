@@ -1215,3 +1215,100 @@ m.handle_event("s",{"type":"diagnostic","phase":"phone_confirm","qr_reason":"dec
     assert "phase=phone_confirm" in result.stderr
     assert "SECRET" not in result.stderr and "13800000000" not in result.stderr
     assert not result.stdout
+
+
+def test_failure_stage_diagnostic_redacts_exception_and_default_logs(caplog):
+    import socket
+    import threading
+    import logging
+    from unittest.mock import AsyncMock, Mock
+    from backend.audit_agent.crawler_login_v2_manager import CrawlerLoginV2Manager
+    from playwright.async_api import Error
+
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(
+                operation_id="op",
+                media_fd=left.detach(),
+                intent="check_or_login",
+                entry="self",
+                timeout=10,
+            )
+        )
+        helper.adapter = SimpleNamespace(
+            navigate=AsyncMock(),
+            has_auth=AsyncMock(return_value=False),
+            observe=AsyncMock(
+                side_effect=Error(
+                    "Execution context was destroyed URL=https://secret.invalid/?cookie=SECRET phone13800000000"
+                )
+            ),
+        )
+        helper.open_context = AsyncMock()
+        helper.close_context = AsyncMock()
+        events = []
+        helper.emit = lambda kind, **kw: events.append({"type": kind, **kw})
+
+        async def idle():
+            await helper.stopped.wait()
+
+        helper.read_controls = idle
+        helper.execute_commands = idle
+        helper.capture_frames = idle
+        helper.gesture_watchdog = idle
+        try:
+            await helper.run()
+            failure = next(e for e in events if e["type"] == "diagnostic_failure")
+            assert failure == {
+                "type": "diagnostic_failure",
+                "stage": "initial_observation",
+                "exception_class": "Error",
+                "error_pattern": "context_destroyed",
+            }
+            assert "SECRET" not in str(events) and "13800000000" not in str(events)
+            manager = CrawlerLoginV2Manager.__new__(CrawlerLoginV2Manager)
+            manager._lock = threading.RLock()
+            manager.sessions = {
+                "s": SimpleNamespace(
+                    operation_id="actual-server-operation",
+                    snapshot={"phase": "preparing"},
+                )
+            }
+            manager._notify = Mock()
+            with caplog.at_level(logging.WARNING):
+                manager.handle_event(
+                    "s", {**failure, "phone": "13800000000", "cookie": "SECRET"}
+                )
+            assert (
+                "stage=initial_observation" in caplog.text
+                and "actual-server-operation" in caplog.text
+            )
+            assert "SECRET" not in caplog.text and "13800000000" not in caplog.text
+            manager._notify.assert_not_called()
+        finally:
+            right.close()
+
+    asyncio.run(run())
+
+
+def test_failure_diagnostic_default_subprocess_stderr_is_safe():
+    import subprocess
+    import sys
+
+    code = """
+import threading
+from types import SimpleNamespace
+from backend.audit_agent.crawler_login_v2_manager import CrawlerLoginV2Manager
+m=CrawlerLoginV2Manager.__new__(CrawlerLoginV2Manager);m._lock=threading.RLock();m.sessions={"s":SimpleNamespace(operation_id="actual-operation",snapshot={"phase":"preparing"})}
+m.handle_event("s",{"type":"diagnostic_failure","stage":"entry_navigation","exception_class":"Error","error_pattern":"navigation_aborted","raw":"SECRET cookie13800000000"})
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=10
+    )
+    assert result.returncode == 0 and not result.stdout
+    assert (
+        "stage=entry_navigation" in result.stderr
+        and "pattern=navigation_aborted" in result.stderr
+    )
+    assert "SECRET" not in result.stderr and "13800000000" not in result.stderr

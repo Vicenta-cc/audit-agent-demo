@@ -1066,7 +1066,51 @@ class CrawlerLoginV2Manager:
             if s.snapshot["phase"] in TERMINAL:
                 return
             kind = event.get("type")
-            if kind == "diagnostic":
+            if kind == "diagnostic_failure":
+                stage = event.get("stage")
+                exception_class = event.get("exception_class")
+                pattern = event.get("error_pattern")
+                if (
+                    stage
+                    in {
+                        "browser_start",
+                        "page_prepare",
+                        "entry_navigation",
+                        "initial_observation",
+                        "observation",
+                        "identity_check",
+                        "profile_flush",
+                        "reuse_check",
+                        "export",
+                        "save_wait",
+                    }
+                    and exception_class
+                    in {
+                        "Error",
+                        "TimeoutError",
+                        "ValueError",
+                        "RuntimeError",
+                        "ConnectionError",
+                        "OSError",
+                        "Exception",
+                    }
+                    and pattern
+                    in {
+                        "context_destroyed",
+                        "target_closed",
+                        "navigation_aborted",
+                        "network_timeout",
+                        "unknown",
+                    }
+                ):
+                    logger.warning(
+                        "Douyin login failure operation=%s stage=%s exception_class=%s pattern=%s",
+                        s.operation_id,
+                        stage,
+                        exception_class,
+                        pattern,
+                    )
+            elif kind == "diagnostic":
                 phase = event.get("phase")
                 reason = event.get("qr_reason")
                 elapsed = event.get("elapsed_seconds")

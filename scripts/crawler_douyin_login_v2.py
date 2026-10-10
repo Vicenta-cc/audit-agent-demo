@@ -81,6 +81,7 @@ class DouyinLoginV2:
         self.progress_observed = False
         self.credentials_side_effect = False
         self.diagnostic_state = None
+        self.failure_stage = "browser_start"
         self.active_fps = settings.crawler_login_v2_active_fps
         self.idle_fps = settings.crawler_login_v2_idle_fps
         self.jpeg_quality = settings.crawler_login_v2_jpeg_quality
@@ -555,6 +556,7 @@ class DouyinLoginV2:
             await asyncio.sleep(max(0, period - (time.monotonic() - started)))
 
     async def open_context(self):
+        self.failure_stage = "browser_start"
         from scripts.crawler_account_login import load_account_browser, settings
 
         browser = load_account_browser()
@@ -569,6 +571,7 @@ class DouyinLoginV2:
             settings.crawler_browser_profile_root,
             headless=not self.headed_mode,
         )
+        self.failure_stage = "page_prepare"
         page = await self.context.new_page()
         await page.set_viewport_size({"width": 1000, "height": 760})
         page.set_default_timeout(2000)
@@ -628,6 +631,39 @@ class DouyinLoginV2:
                 has_trusted_identity=state[3],
                 elapsed_seconds=round(elapsed, 1),
             )
+
+    def diagnose_failure(self, exc):
+        text = str(exc).lower()
+        pattern = "unknown"
+        for marker, category in (
+            ("execution context was destroyed", "context_destroyed"),
+            ("target page, context or browser has been closed", "target_closed"),
+            ("net::err_aborted", "navigation_aborted"),
+            ("timeout", "network_timeout"),
+        ):
+            if marker in text:
+                pattern = category
+                break
+        name = type(exc).__name__
+        exception_class = (
+            name
+            if name
+            in {
+                "Error",
+                "TimeoutError",
+                "ValueError",
+                "RuntimeError",
+                "ConnectionError",
+                "OSError",
+            }
+            else "Exception"
+        )
+        self.emit(
+            "diagnostic_failure",
+            stage=self.failure_stage,
+            exception_class=exception_class,
+            error_pattern=pattern,
+        )
 
     def authentication_pending(self, observation, auth_signal):
         phase = observation["phase"]
@@ -699,8 +735,10 @@ class DouyinLoginV2:
             ).install()
             self.credentials_changed = True
             self.emit("reset_done")
+        self.failure_stage = "entry_navigation"
         await self.adapter.navigate(self.args.entry)
         has_auth = await self.adapter.has_auth()
+        self.failure_stage = "initial_observation"
         initial_observation = await self.adapter.observe()
         needs_login = not has_auth or self.authentication_pending(
             initial_observation, has_auth
@@ -745,6 +783,7 @@ class DouyinLoginV2:
         identity_started = None
         preparing_started = None
         while not self.stopped.is_set():
+            self.failure_stage = "observation"
             observation = await self.adapter.observe()
             auth_signal = await self.adapter.has_auth()
             if observation["phase"] == "preparing" and not auth_signal:
@@ -803,6 +842,7 @@ class DouyinLoginV2:
             await self.observe_pending_commands(observation)
             if not authentication_pending and await self.adapter.has_auth():
                 self.publish({"phase": "identity_check"})
+                self.failure_stage = "identity_check"
                 if identity_started is None:
                     identity_started = time.monotonic()
                 elif time.monotonic() - identity_started > 15:
@@ -838,10 +878,12 @@ class DouyinLoginV2:
         if self.stopped.is_set():
             return
         self.publish({"phase": "profile_flush"})
+        self.failure_stage = "profile_flush"
         await self.close_context()
         # Reopen exactly the same account registry identity and version. No reset/import.
         await self.open_context()
         self.publish({"phase": "reuse_check"})
+        self.failure_stage = "reuse_check"
         await self.adapter.navigate("self")
         deadline = time.monotonic() + 15
         identity = ""
@@ -871,6 +913,7 @@ class DouyinLoginV2:
             or time.monotonic() - reuse_stable_since < 3
         ):
             raise ValueError("REUSE_CHECK_FAILED")
+        self.failure_stage = "export"
         state = await asyncio.wait_for(self.context.storage_state(), 15)
         await self.close_context()
         self.emit("phase", phase="db_commit", available_actions=[])
@@ -884,6 +927,7 @@ class DouyinLoginV2:
         }
         await self.media.auth(candidate, self.operation_id)
         del state, candidate
+        self.failure_stage = "save_wait"
         await self.handshake("save_ready", "save_committed")
         # Parent owns success and eligibility. Only commit acknowledgement permits exit.
 
@@ -913,6 +957,7 @@ class DouyinLoginV2:
                     message="登录会话已超时，请重试",
                 )
         except Exception as exc:
+            self.diagnose_failure(exc)
             code = str(exc) if isinstance(exc, ValueError) else "BROWSER_LOGIN_FAILED"
             self.emit(
                 "error", code=code, message="登录未完成，请重试或查看当前登录步骤"
