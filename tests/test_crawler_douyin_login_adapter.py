@@ -1192,3 +1192,26 @@ def test_current_self_response_can_complete_with_still_mounted_qr_only():
     finally:
         helper.media.close()
         right.close()
+
+
+def test_diagnostic_reaches_default_server_stderr_without_logging_override():
+    import subprocess
+    import sys
+
+    code = """
+import threading
+from types import SimpleNamespace
+from backend.audit_agent.crawler_login_v2_manager import CrawlerLoginV2Manager
+m=CrawlerLoginV2Manager.__new__(CrawlerLoginV2Manager)
+m._lock=threading.RLock()
+m.sessions={"s":SimpleNamespace(operation_id="real-server-operation",snapshot={"phase":"preparing"})}
+m.handle_event("s",{"type":"diagnostic","phase":"phone_confirm","qr_reason":"decoded","has_auth_signal":False,"has_trusted_identity":False,"elapsed_seconds":8,"cookie":"SECRET","phone":"13800000000"})
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=10
+    )
+    assert result.returncode == 0
+    assert "real-server-operation" in result.stderr
+    assert "phase=phone_confirm" in result.stderr
+    assert "SECRET" not in result.stderr and "13800000000" not in result.stderr
+    assert not result.stdout
