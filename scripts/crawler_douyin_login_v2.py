@@ -82,6 +82,7 @@ class DouyinLoginV2:
         self.credentials_side_effect = False
         self.diagnostic_state = None
         self.failure_stage = "browser_start"
+        self.network_diagnostic_revision = 0
         self.active_fps = settings.crawler_login_v2_active_fps
         self.idle_fps = settings.crawler_login_v2_idle_fps
         self.jpeg_quality = settings.crawler_login_v2_jpeg_quality
@@ -325,7 +326,10 @@ class DouyinLoginV2:
                 await self.adapter.click_text(("验证码登录",))
                 self.adapter.sms_selected = True
             elif action == "refresh_qr":
-                await self.adapter.click_text(("刷新二维码", "点击刷新", "刷新"))
+                control = await self.adapter.qr_refresh_control()
+                if control is None:
+                    raise ActionNotExecuted("QR_REFRESH_UNAVAILABLE")
+                await control.click(timeout=2000)
             elif action in {"request_sms", "submit_sms"}:
                 controls = await self.adapter.sms_controls()
                 if not controls:
@@ -433,7 +437,9 @@ class DouyinLoginV2:
             self.challenge_id = uuid.uuid4().hex if region else ""
         actions = ["open_manual"]
         if phase in {"qr_ready", "qr_expired"}:
-            actions += ["refresh_qr", "switch_to_sms"]
+            actions += ["switch_to_sms"]
+            if observation.pop("refresh_available", False):
+                actions += ["refresh_qr"]
         elif phase == "sms_required":
             actions += ["submit_sms"]
             if (observation.get("sms") or {}).get("resend_allowed"):
@@ -615,6 +621,15 @@ class DouyinLoginV2:
         await self.adapter.open_login()
 
     def diagnose_observation(self, observation, *, has_auth, elapsed):
+        receipt = getattr(self.adapter, "latest_login_receipt", None)
+        revision = getattr(self.adapter, "network_revision", 0)
+        if receipt and revision != self.network_diagnostic_revision:
+            self.network_diagnostic_revision = revision
+            self.emit(
+                "diagnostic_network",
+                **receipt,
+                blocked_documents=int(getattr(self.adapter, "blocked_documents", 0)),
+            )
         state = (
             observation["phase"],
             getattr(self.adapter, "qr_extraction_reason", "unknown"),
@@ -785,6 +800,10 @@ class DouyinLoginV2:
         while not self.stopped.is_set():
             self.failure_stage = "observation"
             observation = await self.adapter.observe()
+            if observation["phase"] in {"qr_ready", "qr_expired"}:
+                observation["refresh_available"] = (
+                    await self.adapter.qr_refresh_control() is not None
+                )
             auth_signal = await self.adapter.has_auth()
             if observation["phase"] == "preparing" and not auth_signal:
                 if preparing_started is None:

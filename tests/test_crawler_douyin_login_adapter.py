@@ -378,6 +378,7 @@ def test_stale_cookie_with_rendered_qr_enters_prepared_login(tmp_path):
 
         adapter.observe = observe
         adapter.trusted_identity = AsyncMock(return_value="")
+        adapter.qr_refresh_control = AsyncMock(return_value=None)
         helper.adapter = adapter
         helper.open_context = AsyncMock()
         helper.handshake = AsyncMock()
@@ -469,6 +470,7 @@ def test_authentication_resuming_after_cookie_check_prepares_wrong_identity_clea
             identity="old-person",
             identity_source="old-source",
         )
+        adapter.qr_refresh_control = AsyncMock(return_value=None)
         helper.adapter = adapter
         helper.open_context = AsyncMock()
         helper.handshake = AsyncMock()
@@ -552,6 +554,7 @@ def test_late_sms_confirmation_after_unknown_is_observed_without_replay():
         adapter.sms_controls = AsyncMock(return_value={"request": request})
         adapter.sms_result = "pending"
         adapter.sms_request_observation_pending = True
+        adapter.qr_refresh_control = AsyncMock(return_value=None)
         helper.adapter = adapter
         helper.pending_sms = {
             "issued": {
@@ -798,6 +801,7 @@ def test_home_fallback_only_applies_before_any_actionable_login_step(
             identity="",
             identity_source="",
         )
+        adapter.qr_refresh_control = AsyncMock(return_value=None)
         helper.adapter = adapter
         helper.open_context = AsyncMock()
         helper.handshake = AsyncMock()
@@ -1312,3 +1316,102 @@ m.handle_event("s",{"type":"diagnostic_failure","stage":"entry_navigation","exce
         and "pattern=navigation_aborted" in result.stderr
     )
     assert "SECRET" not in result.stderr and "13800000000" not in result.stderr
+
+
+def test_login_network_receipts_are_bounded_sanitized_and_do_not_claim_login():
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, None)
+        response = SimpleNamespace(
+            url="https://www.douyin.com/passport/web/check_qrconnect/?token=SECRET",
+            status=200,
+            json=AsyncMock(
+                return_value={
+                    "data": {
+                        "status": "new",
+                        "error_code": 0,
+                        "token": "SECRET",
+                        "cookie": "PRIVATE",
+                    }
+                }
+            ),
+        )
+        for _ in range(125):
+            await adapter.observe_response(response)
+        assert len(adapter.network_receipts) == 120
+        assert adapter.network_revision == 1
+        assert adapter.latest_login_receipt == {
+            "endpoint": "check_qrconnect",
+            "http_status": 200,
+            "error_code": 0,
+            "status": "new",
+        }
+        assert adapter.identity == "" and "SECRET" not in str(adapter.network_receipts)
+        response.json.return_value = {
+            "data": {"status": "SECRET123?", "error_code": "secret"}
+        }
+        await adapter.observe_response(response)
+        assert (
+            adapter.latest_login_receipt["status"] is None
+            and adapter.latest_login_receipt["error_code"] is None
+        )
+
+    asyncio.run(run())
+
+
+def test_qr_refresh_capability_depends_on_real_control_and_missing_execution_is_rejected():
+    from unittest.mock import AsyncMock
+    import socket
+
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(operation_id="op", media_fd=left.detach())
+        )
+        helper.adapter = SimpleNamespace(
+            identity="", page=object(), qr_refresh_control=AsyncMock(return_value=None)
+        )
+        snapshots = []
+        helper.emit = lambda kind, **payload: snapshots.append((kind, payload))
+        try:
+            helper.publish(
+                {
+                    "phase": "qr_ready",
+                    "qr": {"revision": "real"},
+                    "refresh_available": False,
+                }
+            )
+            assert "refresh_qr" not in helper.available_actions
+            helper.publish(
+                {"phase": "qr_expired", "qr": None, "refresh_available": True}
+            )
+            assert "refresh_qr" in helper.available_actions
+            helper.epoch = 1
+            helper.commands.put_nowait(
+                {
+                    "type": "action",
+                    "action": "refresh_qr",
+                    "command_id": "refresh",
+                    "operation_id": "op",
+                    "controller_epoch": 1,
+                    "sequence": 1,
+                }
+            )
+            original = helper.result
+
+            def finish(*args, **kwargs):
+                original(*args, **kwargs)
+                helper.stopped.set()
+
+            helper.result = finish
+            await helper.execute_commands()
+            assert helper.results["refresh"]["execution_status"] == "rejected"
+            assert helper.results["refresh"]["platform_status"] == "not_applicable"
+            assert helper.results["refresh"]["error_code"] == "QR_REFRESH_UNAVAILABLE"
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())

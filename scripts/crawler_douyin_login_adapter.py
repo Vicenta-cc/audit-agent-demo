@@ -80,6 +80,9 @@ class DouyinLoginAdapter:
         self.last_qr = None
         self.qr_extraction_reason = "not_observed"
         self._closed = False
+        self.network_receipts = []
+        self.network_revision = 0
+        self.latest_login_receipt = None
 
     def task(self, coroutine):
         task = asyncio.create_task(coroutine)
@@ -177,7 +180,37 @@ class DouyinLoginAdapter:
         parsed = urlsplit(response.url)
         if not document_allowed(response.url, top_level=True):
             return
-        if parsed.path.rstrip("/") != "/aweme/v1/web/user/profile/self":
+        path = parsed.path.rstrip("/")
+        if parsed.hostname in {"login.douyin.com", "www.douyin.com"} and path in {
+            "/passport/web/get_qrcode",
+            "/passport/web/check_qrconnect",
+        }:
+            try:
+                payload = await asyncio.wait_for(response.json(), 3)
+                data = payload.get("data") if isinstance(payload, dict) else None
+                data = data if isinstance(data, dict) else {}
+                receipt = {
+                    "endpoint": "get_qrcode"
+                    if path.endswith("/get_qrcode")
+                    else "check_qrconnect",
+                    "http_status": int(response.status),
+                    "error_code": data.get("error_code")
+                    if type(data.get("error_code")) is int
+                    else None,
+                    "status": data.get("status")
+                    if isinstance(data.get("status"), str)
+                    and re.fullmatch(r"[A-Za-z_ -]{1,32}", data["status"])
+                    else None,
+                }
+                self.network_receipts.append(receipt)
+                del self.network_receipts[:-120]
+                if receipt != self.latest_login_receipt:
+                    self.latest_login_receipt = receipt
+                    self.network_revision += 1
+            except Exception:
+                pass
+            return
+        if path != "/aweme/v1/web/user/profile/self":
             return
         try:
             payload = await asyncio.wait_for(response.json(), 3)
@@ -519,6 +552,14 @@ class DouyinLoginAdapter:
                 await locator.click(timeout=2000)
                 return
         raise ValueError("PLATFORM_CONTROL_UNAVAILABLE")
+
+    async def qr_refresh_control(self):
+        panel = self.page.locator(PANEL_SELECTOR).first
+        for text in ("刷新二维码", "点击刷新", "刷新"):
+            locator = panel.get_by_text(text, exact=True).first
+            if await locator.is_visible() and await locator.is_enabled():
+                return locator
+        return None
 
     async def open_login(self):
         if await self.visible(PANEL_SELECTOR):

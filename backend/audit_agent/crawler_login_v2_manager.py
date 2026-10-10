@@ -64,6 +64,7 @@ ERROR_MESSAGES = {
     "BROWSER_LOGIN_FAILED": "登录页面未能完成加载，请重新尝试。",
     "LOGIN_PREPARATION_FAILED": "登录页面暂时无法加载，请重新尝试。",
     "LOGIN_DISPLAY_UNAVAILABLE": "当前无法打开登录页面，请稍后重试或联系管理员。",
+    "QR_REFRESH_UNAVAILABLE": "当前二维码暂不支持刷新，请等待平台更新或重新打开登录窗口。",
     "STALE_POINT": "本次操作轨迹已过期，请在最新验证画面重新操作。",
     "INPUT_OUTSIDE_AREA": "请在当前验证区域内操作。",
     "IDENTITY_UNVERIFIED": "尚未确认抖音账号身份，请查看当前登录步骤后重试。",
@@ -1066,7 +1067,41 @@ class CrawlerLoginV2Manager:
             if s.snapshot["phase"] in TERMINAL:
                 return
             kind = event.get("type")
-            if kind == "diagnostic_failure":
+            if kind == "diagnostic_network":
+                endpoint = event.get("endpoint")
+                http_status = event.get("http_status")
+                error_code = event.get("error_code")
+                status = event.get("status")
+                blocked = event.get("blocked_documents")
+                import re
+
+                if (
+                    endpoint in {"get_qrcode", "check_qrconnect"}
+                    and type(http_status) is int
+                    and 100 <= http_status <= 599
+                    and (
+                        error_code is None
+                        or type(error_code) is int
+                        and -999999 <= error_code <= 999999
+                    )
+                    and (
+                        status is None
+                        or isinstance(status, str)
+                        and re.fullmatch(r"[A-Za-z_ -]{1,32}", status)
+                    )
+                    and type(blocked) is int
+                    and 0 <= blocked <= 100000
+                ):
+                    logger.warning(
+                        "Douyin login network operation=%s endpoint=%s http_status=%s error_code=%s status=%s blocked_documents=%s",
+                        s.operation_id,
+                        endpoint,
+                        http_status,
+                        error_code,
+                        status,
+                        blocked,
+                    )
+            elif kind == "diagnostic_failure":
                 stage = event.get("stage")
                 exception_class = event.get("exception_class")
                 pattern = event.get("error_pattern")
