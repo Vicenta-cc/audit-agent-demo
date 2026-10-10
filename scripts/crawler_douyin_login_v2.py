@@ -15,9 +15,17 @@ import uuid
 from backend.audit_agent.crawler_login_protocol import validate_command
 from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
 from scripts.crawler_login_media import LoginMediaWriter
+from scripts.crawler_login_editables import EditableTargets, EditNotExecuted
 from scripts.crawler_login_pages import reset_douyin_credentials_v2
 
-MANUAL_ACTIONS = ["pointer_batch", "key", "text", "scroll", "abort_gesture"]
+MANUAL_ACTIONS = [
+    "pointer_batch",
+    "key",
+    "text",
+    "edit_input",
+    "scroll",
+    "abort_gesture",
+]
 AUTHENTICATION_PHASES = {
     "qr_ready",
     "qr_expired",
@@ -84,6 +92,9 @@ class DouyinLoginV2:
         self.credentials_side_effect = False
         self.diagnostic_state = None
         self.failure_stage = "browser_start"
+        self.editables = EditableTargets()
+        self.edit_lock = asyncio.Lock()
+        self.editable_scope = None
         self.network_diagnostic_revision = 0
         self.active_fps = settings.crawler_login_v2_active_fps
         self.idle_fps = settings.crawler_login_v2_idle_fps
@@ -165,7 +176,7 @@ class DouyinLoginV2:
             await self.interrupt_gesture("GESTURE_ABORTED")
             self.result(command, "executed", "not_applicable")
             return
-        if command["type"] != "action":
+        if command["type"] not in {"action", "edit_input"}:
             self.pending_trajectories[command["command_id"]] = time.monotonic()
         try:
             self.commands.put_nowait(command)
@@ -202,6 +213,8 @@ class DouyinLoginV2:
                 elif kind == "controller_authorized":
                     await self.abort_gesture()
                     self.epoch = int(message["controller_epoch"])
+                    async with self.edit_lock:
+                        await self.editables.clear()
                     self.controller_attached = bool(message.get("attached", True))
                     self.last_sequence = 0
                     while not self.commands.empty():
@@ -234,7 +247,9 @@ class DouyinLoginV2:
                 event.set()
             transport.close()
 
-    def result(self, command, execution_status, platform_status="unknown", error=None):
+    def result(
+        self, command, execution_status, platform_status="unknown", error=None, **extra
+    ):
         payload = {
             "command_id": command["command_id"],
             "execution_status": execution_status,
@@ -242,13 +257,14 @@ class DouyinLoginV2:
         }
         if error:
             payload["error_code"] = error
+        payload.update(extra)
         self.results[command["command_id"]] = payload
         # Browser helper dedup is bounded; durable sensitive dedup lives in parent SQLite.
         if len(self.results) > 128:
             self.results.pop(next(iter(self.results)))
         self.emit("command_result", **payload)
 
-    def check_command(self, command):
+    def check_command(self, command, *, executing=False):
         if (
             command["operation_id"] != self.operation_id
             or command["controller_epoch"] != self.epoch
@@ -267,7 +283,7 @@ class DouyinLoginV2:
                 or command.get("area_version") != self.area_version
             ):
                 raise ValueError("STALE_AREA")
-        if command["sequence"] <= self.last_sequence:
+        if not executing and command["sequence"] <= self.last_sequence:
             raise ValueError("STALE_SEQUENCE")
 
     async def execute_commands(self):
@@ -287,7 +303,18 @@ class DouyinLoginV2:
             self.last_sequence = command["sequence"]
             self.emit("command_started", command_id=command["command_id"])
             try:
-                await asyncio.wait_for(self.apply_command(command), 8)
+                if command["type"] in {"edit_input", "key", "text"} or command.get(
+                    "focus_field_id"
+                ):
+                    async with self.edit_lock:
+                        try:
+                            self.check_command(command, executing=True)
+                        except ValueError as exc:
+                            raise ActionNotExecuted(str(exc)) from None
+                        details = await asyncio.wait_for(self.apply_command(command), 8)
+                        self.applied_sequence = command["sequence"]
+                else:
+                    details = await asyncio.wait_for(self.apply_command(command), 8)
                 self.applied_sequence = command["sequence"]
                 self.last_activity = time.monotonic()
                 self.result(
@@ -296,6 +323,7 @@ class DouyinLoginV2:
                     "pending"
                     if command.get("action") in {"request_sms", "submit_sms"}
                     else "unknown",
+                    **(details or {}),
                 )
             except ActionNotExecuted as exc:
                 await self.abort_gesture()
@@ -318,6 +346,12 @@ class DouyinLoginV2:
         self.progress_observed = True
         page = self.adapter.page
         kind = command["type"]
+        if kind == "edit_input":
+            await self.prepare_editable_scope()
+            try:
+                return await self.editables.edit(command, page, self.region)
+            except EditNotExecuted as exc:
+                raise ActionNotExecuted(str(exc)) from None
         if kind == "action":
             action = command["action"]
             if action == "open_manual":
@@ -369,6 +403,27 @@ class DouyinLoginV2:
         if kind == "abort_gesture":
             await self.abort_gesture()
         elif kind == "pointer_batch":
+            focus_field_id = command.get("focus_field_id")
+            if focus_field_id:
+                await self.prepare_editable_scope()
+                fields = await self.editables.inventory(page, self.region)
+                target = next(
+                    (field for field in fields if field["field_id"] == focus_field_id),
+                    None,
+                )
+                if (
+                    not target
+                    or len(command["points"]) != 2
+                    or [point["event"] for point in command["points"]] != ["down", "up"]
+                ):
+                    raise ActionNotExecuted("EDIT_TARGET_CHANGED")
+                box = target["rect"]
+                for point in command["points"]:
+                    if (
+                        not box["x"] <= point["x"] <= box["x"] + box["width"]
+                        or not box["y"] <= point["y"] <= box["y"] + box["height"]
+                    ):
+                        raise ActionNotExecuted("EDIT_TARGET_CHANGED")
             gesture_id = command.get("gesture_id", "")
             if self.gesture_id and gesture_id != self.gesture_id:
                 await self.abort_gesture()
@@ -401,25 +456,27 @@ class DouyinLoginV2:
                     self.pointer_down = False
                 if point.get("dt_ms"):
                     await asyncio.sleep(min(point["dt_ms"], 50) / 1000)
+            if focus_field_id:
+                fields = await self.editables.inventory(page, self.region)
+                if any(
+                    field["field_id"] == focus_field_id and field["focused"]
+                    for field in fields
+                ):
+                    return {"focused_field_id": focus_field_id}
+                raise ValueError("EDIT_TARGET_CHANGED")
         elif kind == "scroll":
             await self.abort_gesture()
             await page.mouse.move(*self.region.point(command["x"], command["y"]))
             await page.mouse.wheel(command.get("delta_x", 0), command["delta_y"])
             self.area_version += 1
         elif kind in {"key", "text"}:
-            # Keyboard input must remain inside the current verification region.
-            box = await page.evaluate(
-                """() => {let e=document.activeElement;if(!e||!e.matches('input,textarea,[contenteditable=true]'))return null;let r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}}"""
-            )
-            r = self.region
-            if (
-                not box
-                or box["x"] < r.x
-                or box["y"] < r.y
-                or box["x"] + box["w"] > r.x + r.width + 1
-                or box["y"] + box["h"] > r.y + r.height + 1
+            await self.prepare_editable_scope()
+            fields = await self.editables.inventory(page, self.region)
+            if not any(
+                field["focused"] and field["field_id"] == command.get("field_id")
+                for field in fields
             ):
-                raise ValueError("INPUT_OUTSIDE_AREA")
+                raise ActionNotExecuted("INPUT_OUTSIDE_AREA")
             if kind == "text":
                 await page.keyboard.insert_text(command["text"])
             else:
@@ -488,6 +545,12 @@ class DouyinLoginV2:
         )
         return 1 / fps
 
+    async def prepare_editable_scope(self):
+        scope = (self.epoch, self.challenge_id, self.area_version)
+        if scope != self.editable_scope:
+            await self.editables.clear()
+            self.editable_scope = scope
+
     async def capture_frames(self):
         previous = None
         consecutive_failures = 0
@@ -505,14 +568,30 @@ class DouyinLoginV2:
             epoch, region, area = self.epoch, self.region, self.area_version
             applied_sequence = self.applied_sequence
             try:
-                jpeg = await self.adapter.page.screenshot(
-                    type="jpeg",
-                    quality=self.jpeg_quality,
-                    clip=region.clip(),
-                    timeout=2000,
-                )
+                async with self.edit_lock:
+                    await self.prepare_editable_scope()
+                    applied_sequence = self.applied_sequence
+                    fields = await self.editables.inventory(self.adapter.page, region)
+                    jpeg = await self.adapter.page.screenshot(
+                        type="jpeg",
+                        quality=self.jpeg_quality,
+                        clip=region.clip(),
+                        timeout=2000,
+                    )
+                    stable_fields = fields == await self.editables.inventory(
+                        self.adapter.page, region
+                    )
+                if not stable_fields:
+                    await asyncio.sleep(self.capture_period())
+                    continue
                 consecutive_failures = 0
-                digest = (epoch, area, applied_sequence, hashlib.sha256(jpeg).digest())
+                digest = (
+                    epoch,
+                    area,
+                    applied_sequence,
+                    hashlib.sha256(jpeg).digest(),
+                    json.dumps(fields, sort_keys=True),
+                )
                 if (
                     epoch == self.epoch
                     and region == self.region
@@ -531,6 +610,7 @@ class DouyinLoginV2:
                             "viewport": self.adapter.page.viewport_size,
                             "controller_epoch": epoch,
                             "applied_input_sequence": applied_sequence,
+                            "editable_targets": fields,
                         },
                         area_version=area,
                     )
@@ -588,6 +668,8 @@ class DouyinLoginV2:
         ).install()
 
     async def close_context(self):
+        async with self.edit_lock:
+            await self.editables.clear()
         await self.abort_gesture()
         if self.adapter:
             await self.adapter.close()

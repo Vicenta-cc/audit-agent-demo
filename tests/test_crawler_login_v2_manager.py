@@ -1024,3 +1024,46 @@ def test_accepted_up_dispatch_rechecks_release_only_current_epoch(manager, repla
             )
         )
         assert session.graph_generation == 1
+
+
+def test_direct_edit_journal_contains_only_fingerprint_and_clears_owner_frame(manager):
+    m, a = manager
+    s = start(m, a)
+    wait_until(lambda: m.sessions[s["id"]].snapshot["phase"] == "sms_required")
+    epoch = attach(m, s)
+    m.handle_event(
+        s["id"],
+        {
+            "type": "snapshot",
+            "phase": "manual_required",
+            "available_actions": ["edit_input"],
+            "challenge": {"challenge_id": "area", "area_version": 1},
+        },
+    )
+    current = m.get(s["id"], user_id="user", app_session_id="app", owner_token="x" * 32)
+    edit = {
+        "type": "edit_input",
+        "command_id": "direct-edit",
+        "operation_id": s["operation_id"],
+        "controller_epoch": epoch,
+        "sequence": 1,
+        "expected_state_revision": current["state_revision"],
+        "challenge_id": "area",
+        "area_version": 1,
+        "field_id": "opaque-field",
+        "client_edit_revision": 1,
+        "value": "SECRET-OTP-123",
+        "selection_start": 14,
+        "selection_end": 14,
+    }
+    result = m.command(
+        s["id"], edit, user_id="user", app_session_id="app", owner_token="x" * 32
+    )
+    assert result["execution_status"] == "accepted"
+    row = m.operations.get_command(s["operation_id"], "direct-edit")
+    assert row["kind"] == "manual_action" and row["request_fingerprint"]
+    assert "SECRET-OTP-123" not in str(row)
+    with m._lock:
+        m.sessions[s["id"]].frame = b"transient-sensitive-frame"
+    m.detach(s["id"], epoch)
+    assert m.sessions[s["id"]].frame == b""

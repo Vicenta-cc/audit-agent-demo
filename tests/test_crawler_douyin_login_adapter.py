@@ -124,6 +124,9 @@ def test_capture_uses_config_and_recovers_a_transient_failure(monkeypatch):
                 helper.stopped.set()
 
         region = Region(10, 10, 200, 100)
+        helper.editables.inventory = __import__(
+            "unittest.mock", fromlist=["AsyncMock"]
+        ).AsyncMock(return_value=[])
         helper.adapter = Adapter()
         helper.region = region
         helper.epoch = 1
@@ -174,6 +177,9 @@ def test_capture_permanent_failure_stops_after_three_attempts():
             async def observe(self):
                 raise RuntimeError("closed page cannot relocate")
 
+        helper.editables.inventory = __import__(
+            "unittest.mock", fromlist=["AsyncMock"]
+        ).AsyncMock(return_value=[])
         helper.adapter = Adapter()
         helper.region = Region(10, 10, 200, 100)
         helper.epoch = 1
@@ -922,6 +928,9 @@ def test_capture_freezes_input_ack_and_sends_one_final_same_pixel_confirmation()
             async def send(self, payload, metadata, **kwargs):
                 frames.append((payload, metadata))
 
+        helper.editables.inventory = __import__(
+            "unittest.mock", fromlist=["AsyncMock"]
+        ).AsyncMock(return_value=[])
         helper.adapter = SimpleNamespace(page=Page())
         helper.region = Region(10, 10, 200, 100)
         helper.epoch = 1

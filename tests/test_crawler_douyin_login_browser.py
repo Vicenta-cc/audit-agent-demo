@@ -286,3 +286,254 @@ def test_cdp_document_guard_keeps_warmed_static_cache(tmp_path, monkeypatch):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_real_nested_iframe_edit_target_focus_unicode_clear_and_detachment(
+    tmp_path, monkeypatch
+):
+    from backend.audit_agent.crawler_browser import load_account_browser
+    from scripts.crawler_douyin_login_adapter import Region
+    from scripts import crawler_login_editables as module
+
+    async def run():
+        context, _ = await load_account_browser().launch_account_context(
+            "editablefixture", tmp_path, headless=True
+        )
+        targets = module.EditableTargets()
+        monkeypatch.setattr(module, "document_allowed", lambda *args, **kwargs: True)
+        try:
+            page = await context.new_page()
+            await page.set_viewport_size({"width": 1000, "height": 760})
+            await page.goto("about:blank")
+            await page.goto(
+                "data:text/html;charset=utf-8,"
+                + __import__("urllib.parse", fromlist=["quote"]).quote(
+                    '<input id="outside" style="position:absolute;left:800px"><iframe style="position:absolute;left:100px;top:100px;width:450px;height:300px" srcdoc="&lt;iframe style=\'width:400px;height:200px\' srcdoc=\'&amp;lt;input id=&amp;quot;code&amp;quot; maxlength=&amp;quot;256&amp;quot; style=&amp;quot;width:220px;height:30px&amp;quot;&amp;gt;\'&gt;&lt;/iframe&gt;"></iframe>',
+                ),
+                wait_until="domcontentloaded",
+            )
+            await page.wait_for_timeout(100)
+            region = Region(90, 90, 480, 330)
+            fields = await targets.inventory(page, region)
+            assert len(fields) == 1 and not fields[0]["focused"]
+            field_id = fields[0]["field_id"]
+            handle = targets.nodes[field_id]
+            await handle.click()
+            fields = await targets.inventory(page, region)
+            assert fields[0]["focused"]
+            command = {
+                "field_id": field_id,
+                "client_edit_revision": 1,
+                "value": "中😀文",
+                "selection_start": 1,
+                "selection_end": 3,
+                "selection_direction": "forward",
+            }
+            assert await targets.edit(command, page, region) == {
+                "field_id": field_id,
+                "client_edit_revision": 1,
+            }
+            assert await handle.evaluate(
+                "e=>({v:e.value,start:e.selectionStart,end:e.selectionEnd})"
+            ) == {"v": "中😀文", "start": 1, "end": 3}
+            with pytest.raises(ValueError, match="EDIT_REVISION_STALE"):
+                await targets.edit(command, page, region)
+            command.update(
+                client_edit_revision=2, value="", selection_start=0, selection_end=0
+            )
+            await targets.edit(command, page, region)
+            assert await handle.input_value() == ""
+            from scripts.crawler_douyin_login_v2 import DouyinLoginV2
+
+            left, right = socket.socketpair()
+            helper = DouyinLoginV2(
+                SimpleNamespace(operation_id="key-fixture", media_fd=left.detach())
+            )
+            helper.adapter = SimpleNamespace(page=page)
+            helper.region = region
+            await handle.evaluate(
+                "e=>e.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();e.dataset.enter='yes'}})"
+            )
+            try:
+                key_targets = await helper.editables.inventory(page, region)
+                helper.editable_scope = (
+                    helper.epoch,
+                    helper.challenge_id,
+                    helper.area_version,
+                )
+                key_field = next(
+                    item["field_id"] for item in key_targets if item["focused"]
+                )
+                await helper.apply_command(
+                    {"type": "key", "key": "Enter", "field_id": key_field}
+                )
+                assert await handle.get_attribute("data-enter") == "yes"
+                await handle.evaluate(
+                    "e=>{let next=document.createElement('input');next.id='next';document.body.append(next);next.focus()}"
+                )
+                with pytest.raises(ValueError, match="INPUT_OUTSIDE_AREA"):
+                    await helper.apply_command(
+                        {"type": "key", "key": "Enter", "field_id": key_field}
+                    )
+            finally:
+                await helper.editables.clear()
+                helper.media.close()
+                right.close()
+            await page.locator("#outside").click()
+            with pytest.raises(ValueError, match="EDIT_TARGET_CHANGED"):
+                await targets.edit({**command, "client_edit_revision": 3}, page, region)
+            await handle.evaluate(
+                "e=>{document.querySelector('#next')?.remove();e.remove()}"
+            )
+            assert not await targets.inventory(page, region)
+        finally:
+            await targets.clear()
+            await context.close()
+
+    asyncio.run(run())
+
+
+def test_real_shadow_edit_inventory_excludes_sensitive_disabled_and_outside(
+    tmp_path, monkeypatch
+):
+    from backend.audit_agent.crawler_browser import load_account_browser
+    from scripts.crawler_douyin_login_adapter import Region
+    from scripts.crawler_login_editables import EditableTargets
+
+    async def run():
+        context, _ = await load_account_browser().launch_account_context(
+            "shadowfixture", tmp_path, headless=True
+        )
+        targets = EditableTargets()
+        try:
+            page = await context.new_page()
+            await page.goto(
+                "data:text/html,<div id='host'></div><input id='out' style='position:absolute;left:800px'>"
+            )
+            await page.evaluate(
+                """()=>{host.attachShadow({mode:'open'}).innerHTML='<textarea id="valid" style="width:220px;height:90px"></textarea><input readonly value="readonly"><input disabled><input type="password" value="secret"><input type="file">'}"""
+            )
+            area = Region(0, 0, 700, 500)
+            fields = await targets.inventory(page, area)
+            assert len(fields) == 1 and fields[0]["input_type"] == "textarea"
+            assert "secret" not in str(fields)
+            target = targets.nodes[fields[0]["field_id"]]
+            await target.click()
+            assert (await targets.inventory(page, area))[0]["focused"]
+            await targets.edit(
+                {
+                    "field_id": fields[0]["field_id"],
+                    "client_edit_revision": 1,
+                    "value": "one\ntwo",
+                    "selection_start": 7,
+                    "selection_end": 7,
+                },
+                page,
+                area,
+            )
+            await target.evaluate("e=>e.readOnly=true")
+            with pytest.raises(ValueError, match="EDIT_TARGET_CHANGED"):
+                await targets.edit(
+                    {
+                        "field_id": fields[0]["field_id"],
+                        "client_edit_revision": 2,
+                        "value": "x",
+                        "selection_start": 1,
+                        "selection_end": 1,
+                    },
+                    page,
+                    area,
+                )
+            assert not await targets.inventory(page, area)
+        finally:
+            await targets.clear()
+            await context.close()
+
+    asyncio.run(run())
+
+
+def test_real_edit_inventory_multiple_frames_have_independent_node_ids(
+    tmp_path, monkeypatch
+):
+    from backend.audit_agent.crawler_browser import load_account_browser
+    from scripts.crawler_douyin_login_adapter import Region
+    from scripts import crawler_login_editables as module
+
+    async def run():
+        context, _ = await load_account_browser().launch_account_context(
+            "framesfixture", tmp_path, headless=True
+        )
+        targets = module.EditableTargets()
+        monkeypatch.setattr(module, "document_allowed", lambda *a, **kw: True)
+        try:
+            page = await context.new_page()
+            html = '<input id="main"><iframe srcdoc="&lt;input id=first&gt;"></iframe><iframe srcdoc="&lt;input id=second&gt;"></iframe>'
+            await page.goto(
+                "data:text/html,"
+                + __import__("urllib.parse", fromlist=["quote"]).quote(html)
+            )
+            fields = await targets.inventory(page, Region(0, 0, 1000, 760))
+            assert len(fields) == 3 and len({f["field_id"] for f in fields}) == 3
+            again = await targets.inventory(page, Region(0, 0, 1000, 760))
+            assert [f["field_id"] for f in again] == [f["field_id"] for f in fields]
+            await targets.clear()
+            await page.evaluate("document.body.innerHTML='<input>'.repeat(8)")
+            sample = await page.locator("input").first.element_handle()
+            handle_type = type(sample)
+            original_dispose = handle_type.dispose
+            disposed = []
+
+            async def record_dispose(handle):
+                disposed.append(handle)
+                await original_dispose(handle)
+
+            monkeypatch.setattr(handle_type, "dispose", record_dispose)
+            for _ in range(3):
+                assert len(await targets.inventory(page, Region(0, 0, 1000, 760))) == 4
+            assert len(disposed) >= 20
+
+        finally:
+            await targets.clear()
+            await context.close()
+
+    asyncio.run(run())
+
+
+def test_real_covered_background_fields_are_not_exposed_editables(
+    tmp_path, monkeypatch
+):
+    from backend.audit_agent.crawler_browser import load_account_browser
+    from scripts.crawler_douyin_login_adapter import Region
+    from scripts import crawler_login_editables as module
+
+    async def run():
+        context, _ = await load_account_browser().launch_account_context(
+            "coveredfixture", tmp_path, headless=True
+        )
+        targets = module.EditableTargets()
+        monkeypatch.setattr(module, "document_allowed", lambda *a, **kw: True)
+        try:
+            page = await context.new_page()
+            html = '<input id="background" style="position:absolute;left:100px;top:100px;width:220px;height:30px"><input style="opacity:0;position:absolute;left:100px;top:160px"><iframe id="verification" style="position:absolute;left:80px;top:80px;width:400px;height:300px;background:white" srcdoc="&lt;h2&gt;Choose SMS verification&lt;/h2&gt;"></iframe>'
+            await page.goto(
+                "data:text/html,"
+                + __import__("urllib.parse", fromlist=["quote"]).quote(html)
+            )
+            area = Region(0, 0, 700, 600)
+            assert await targets.inventory(page, area) == []
+            await page.locator("#verification").evaluate(
+                "e=>e.srcdoc='<input id=real style=\"width:220px;height:30px\">'"
+            )
+            await page.wait_for_timeout(50)
+            fields = await targets.inventory(page, area)
+            assert len(fields) == 1
+            assert (
+                await targets.nodes[fields[0]["field_id"]].get_attribute("id") == "real"
+            )
+            await page.locator("#verification").evaluate("e=>e.style.opacity='0'")
+            assert await targets.inventory(page, area) == []
+        finally:
+            await targets.clear()
+            await context.close()
+
+    asyncio.run(run())

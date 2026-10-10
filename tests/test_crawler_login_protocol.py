@@ -197,3 +197,36 @@ def test_pointer_batch_limit_and_eagain_are_bounded():
 
     with pytest.raises(BlockingIOError):
         write_packet(WouldBlock(), pack_packet(b"", {}))
+
+
+def test_absolute_edit_protocol_supports_clear_unicode_and_utf16_selection():
+    command = {
+        "type": "edit_input",
+        "command_id": "edit",
+        "operation_id": "op",
+        "controller_epoch": 1,
+        "sequence": 1,
+        "expected_state_revision": 1,
+        "challenge_id": "challenge",
+        "area_version": 1,
+        "field_id": "opaque",
+        "client_edit_revision": 1,
+        "value": "中😀文",
+        "selection_start": 1,
+        "selection_end": 3,
+    }
+    assert validate_command(command)["value"] == "中😀文"
+    assert (
+        validate_command(
+            {**command, "value": "", "selection_start": 0, "selection_end": 0}
+        )["value"]
+        == ""
+    )
+    for changed in (
+        {"selection_end": 5},
+        {"client_edit_revision": 0},
+        {"value": "x\x00"},
+        {"value": "😀" * 129},
+    ):
+        with pytest.raises(ProtocolError):
+            validate_command({**command, **changed})

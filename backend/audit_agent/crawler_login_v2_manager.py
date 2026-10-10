@@ -48,6 +48,10 @@ DURABLE_ACTIONS = {
 
 
 ERROR_MESSAGES = {
+    "EDIT_TARGET_CHANGED": "输入框已变化，请点击当前输入框重新输入。",
+    "EDIT_REVISION_STALE": "本次输入已过期，请继续在当前输入框操作。",
+    "EDIT_VALUE_INVALID": "该输入框不支持此输入内容。",
+    "EDIT_VALUE_TOO_LONG": "输入内容超过当前输入框允许的长度。",
     "QR_PLATFORM_REJECTED": "平台暂未接受本次登录，请重新打开登录窗口并按页面提示操作。",
     "PHONE_CONFIRM_REFUSED": "手机端已取消本次登录，请重新扫码。",
     "LOGIN_FAILED": "登录未完成，请查看当前登录步骤后重试。",
@@ -649,6 +653,7 @@ class CrawlerLoginV2Manager:
             s.epoch += 1
             s.sequence = 0
             s.controller = controller
+            s.frame = b""
             s.controller_ready.clear()
             s.snapshot.update(controller_epoch=s.epoch, controller_state="detached")
             self._enqueue(
@@ -750,7 +755,7 @@ class CrawlerLoginV2Manager:
                 c.get("action")
                 if c["type"] == "action"
                 else "manual_action"
-                if c["type"] == "key"
+                if c["type"] in {"key", "edit_input"}
                 or c["type"] == "pointer_batch"
                 and any(p["event"] != "move" for p in c["points"])
                 else None
@@ -938,7 +943,8 @@ class CrawlerLoginV2Manager:
                             if graphical and (
                                 message.get("graph_generation", s.graph_generation)
                                 != s.graph_generation
-                                or time.monotonic()
+                                or c["type"] != "edit_input"
+                                and time.monotonic()
                                 - message.get("queued_mono", time.monotonic())
                                 > 0.25
                             ):
