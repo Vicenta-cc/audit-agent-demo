@@ -6,6 +6,8 @@ import asyncio
 from contextlib import ExitStack, suppress
 import hashlib
 import json
+import re
+import traceback
 import sys
 import time
 import uuid
@@ -679,11 +681,38 @@ class DouyinLoginV2:
             }
             else "Exception"
         )
+        first_line = str(exc).splitlines()[0] if str(exc) else ""
+        match = re.search(
+            r"\b(?:Locator|Page|Frame)\.(inner_text|get_attribute|evaluate|bounding_box|is_enabled|is_visible|wait_for|goto):",
+            first_line,
+        )
+        timeout = re.search(r"\bTimeout (\d{1,6})ms", first_line)
+        timeout_ms = (
+            int(timeout.group(1))
+            if timeout and int(timeout.group(1)) <= 120000
+            else None
+        )
+        source_frame = None
+        for frame in traceback.extract_tb(exc.__traceback__):
+            basename = frame.filename.rsplit("/", 1)[-1]
+            if basename in {
+                "crawler_douyin_login_adapter.py",
+                "crawler_douyin_login_v2.py",
+            }:
+                if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", frame.name):
+                    source_frame = {
+                        "file": basename,
+                        "function": frame.name,
+                        "line": frame.lineno,
+                    }
         self.emit(
             "diagnostic_failure",
             stage=self.failure_stage,
             exception_class=exception_class,
             error_pattern=pattern,
+            method=match.group(1) if match else None,
+            timeout_ms=timeout_ms,
+            source_frame=source_frame,
         )
 
     def authentication_pending(self, observation, auth_signal):

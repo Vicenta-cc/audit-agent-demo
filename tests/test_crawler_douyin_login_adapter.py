@@ -1265,7 +1265,10 @@ def test_failure_stage_diagnostic_redacts_exception_and_default_logs(caplog):
         try:
             await helper.run()
             failure = next(e for e in events if e["type"] == "diagnostic_failure")
-            assert failure == {
+            assert {
+                key: failure[key]
+                for key in ("type", "stage", "exception_class", "error_pattern")
+            } == {
                 "type": "diagnostic_failure",
                 "stage": "initial_observation",
                 "exception_class": "Error",
@@ -1734,3 +1737,30 @@ def test_same_page_observation_retries_only_transient_platform_failures():
         assert adapter.observe_once.await_count == 1
 
     asyncio.run(run())
+
+
+def test_failure_method_diagnostic_contains_only_fixed_method_timeout():
+    import socket
+
+    left, right = socket.socketpair()
+    helper = DouyinLoginV2(SimpleNamespace(operation_id="op", media_fd=left.detach()))
+    events = []
+    helper.emit = lambda kind, **payload: events.append(payload)
+    try:
+        helper.failure_stage = "initial_observation"
+        helper.diagnose_failure(
+            RuntimeError(
+                "Locator.inner_text: Timeout 2000ms exceeded. token=SECRET phone13800000000\nselector=https://secret.invalid/?cookie=PRIVATE"
+            )
+        )
+        event = events[-1]
+        assert event["method"] == "inner_text" and event["timeout_ms"] == 2000
+        assert (
+            "SECRET" not in str(event)
+            and "PRIVATE" not in str(event)
+            and "13800000000" not in str(event)
+        )
+        assert event["source_frame"] is None
+    finally:
+        helper.media.close()
+        right.close()

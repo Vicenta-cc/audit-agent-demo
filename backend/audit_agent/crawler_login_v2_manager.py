@@ -1140,12 +1140,51 @@ class CrawlerLoginV2Manager:
                         "unknown",
                     }
                 ):
+                    method = event.get("method")
+                    if method not in {
+                        "inner_text",
+                        "get_attribute",
+                        "evaluate",
+                        "bounding_box",
+                        "is_enabled",
+                        "is_visible",
+                        "wait_for",
+                        "goto",
+                    }:
+                        method = None
+                    timeout_ms = event.get("timeout_ms")
+                    if type(timeout_ms) is not int or not 0 <= timeout_ms <= 120000:
+                        timeout_ms = None
+                    frame = event.get("source_frame")
+                    import re
+
+                    safe_frame = None
+                    if (
+                        isinstance(frame, dict)
+                        and frame.get("file")
+                        in {
+                            "crawler_douyin_login_adapter.py",
+                            "crawler_douyin_login_v2.py",
+                        }
+                        and isinstance(frame.get("function"), str)
+                        and re.fullmatch(
+                            r"[A-Za-z_][A-Za-z0-9_]{0,63}", frame["function"]
+                        )
+                        and type(frame.get("line")) is int
+                        and 1 <= frame["line"] <= 10000
+                    ):
+                        safe_frame = (
+                            f"{frame['file']}:{frame['function']}:{frame['line']}"
+                        )
                     logger.warning(
-                        "Douyin login failure operation=%s stage=%s exception_class=%s pattern=%s",
+                        "Douyin login failure operation=%s stage=%s exception_class=%s pattern=%s method=%s timeout_ms=%s source=%s",
                         s.operation_id,
                         stage,
                         exception_class,
                         pattern,
+                        method,
+                        timeout_ms,
+                        safe_frame,
                     )
             elif kind == "diagnostic":
                 phase = event.get("phase")
