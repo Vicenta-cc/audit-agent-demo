@@ -1647,6 +1647,7 @@ def test_slow_old_qr_response_cannot_replace_new_generation():
 
 
 def test_rendered_qr_fallback_correlates_original_source_not_display(monkeypatch):
+    __import__("pytest").importorskip("playwright.async_api")
     import base64
     from unittest.mock import AsyncMock
     from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter, QR_SELECTOR
