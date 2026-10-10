@@ -514,6 +514,27 @@ class DouyinLoginAdapter:
         return self.sms_result
 
     async def observe(self):
+        for attempt in range(3):
+            try:
+                return await self.observe_once()
+            except Exception as exc:
+                from playwright.async_api import Error, TimeoutError
+
+                if not isinstance(exc, Error):
+                    raise
+                transient = isinstance(
+                    exc, TimeoutError
+                ) or "Execution context was destroyed" in str(exc)
+                if (
+                    not transient
+                    or attempt == 2
+                    or self.page.is_closed()
+                    or not document_allowed(self.page.url, top_level=True)
+                ):
+                    raise
+                await asyncio.sleep(0.2)
+
+    async def observe_once(self):
         await self.page.evaluate(
             "document.querySelectorAll('video').forEach(v=>{v.pause();v.autoplay=false})"
         )

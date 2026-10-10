@@ -1696,3 +1696,41 @@ def test_rendered_qr_fallback_correlates_original_source_not_display(monkeypatch
         assert (await adapter.observe())["phase"] == "qr_ready"
 
     asyncio.run(run())
+
+
+def test_same_page_observation_retries_only_transient_platform_failures():
+    from unittest.mock import AsyncMock
+
+    pw = __import__("pytest").importorskip("playwright.async_api")
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        page = SimpleNamespace(
+            is_closed=lambda: False, url="https://www.douyin.com/jingxuan"
+        )
+        adapter = DouyinLoginAdapter(None, page)
+        adapter.observe_once = AsyncMock(
+            side_effect=[
+                pw.TimeoutError("locator timeout SECRET"),
+                {"phase": "qr_ready"},
+            ]
+        )
+        assert await adapter.observe() == {"phase": "qr_ready"}
+        assert adapter.observe_once.await_count == 2
+        adapter.observe_once = AsyncMock(side_effect=pw.TimeoutError("locator timeout"))
+        with __import__("pytest").raises(pw.TimeoutError):
+            await adapter.observe()
+        assert adapter.observe_once.await_count == 3
+        adapter.observe_once = AsyncMock(
+            side_effect=pw.Error("Target page, context or browser has been closed")
+        )
+        with __import__("pytest").raises(pw.Error):
+            await adapter.observe()
+        assert adapter.observe_once.await_count == 1
+        page.url = "https://untrusted.invalid"
+        adapter.observe_once = AsyncMock(side_effect=pw.TimeoutError("locator timeout"))
+        with __import__("pytest").raises(pw.TimeoutError):
+            await adapter.observe()
+        assert adapter.observe_once.await_count == 1
+
+    asyncio.run(run())

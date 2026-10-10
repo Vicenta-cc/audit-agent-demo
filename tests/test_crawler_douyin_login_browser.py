@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path):
+def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path, monkeypatch):
     import cv2
     from backend.audit_agent.crawler_browser import load_account_browser
     from backend.audit_agent.crawler_login_protocol import read_packet
@@ -65,8 +65,32 @@ def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path):
             await page.set_viewport_size({"width": 1000, "height": 760})
             await page.goto(origin)
             adapter = await DouyinLoginAdapter(c, page).install()
+            from scripts import crawler_douyin_login_adapter as adapter_module
+
+            original_allowed = adapter_module.document_allowed
+            monkeypatch.setattr(
+                adapter_module,
+                "document_allowed",
+                lambda url, top_level: url.startswith(origin)
+                or original_allowed(url, top_level=top_level),
+            )
+            original_observe = adapter.observe_once
+            attempts = []
+
+            async def transient_panel_observation():
+                attempts.append(True)
+                if len(attempts) == 1:
+                    await page.locator(".douyin_login_new_class").evaluate(
+                        "e=>e.id='replacement-panel'"
+                    )
+                    await page.locator("#missing-old-panel").inner_text(timeout=20)
+                return await original_observe()
+
+            adapter.observe_once = transient_panel_observation
             helper.adapter = adapter
             observation = await adapter.observe()
+            assert len(attempts) == 2
+            adapter.observe_once = original_observe
             assert (
                 observation["phase"] == "qr_ready"
                 and observation["qr"]["image_data_url"]

@@ -1136,6 +1136,7 @@ class CrawlerLoginV2Manager:
                         "target_closed",
                         "navigation_aborted",
                         "network_timeout",
+                        "observation_timeout",
                         "unknown",
                     }
                 ):

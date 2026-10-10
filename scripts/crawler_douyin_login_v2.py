@@ -659,6 +659,12 @@ class DouyinLoginV2:
             if marker in text:
                 pattern = category
                 break
+        if pattern == "network_timeout" and self.failure_stage in {
+            "initial_observation",
+            "observation",
+            "reuse_check",
+        }:
+            pattern = "observation_timeout"
         name = type(exc).__name__
         exception_class = (
             name
