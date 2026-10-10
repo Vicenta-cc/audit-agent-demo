@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
+from contextlib import ExitStack, suppress
 import hashlib
 import json
 import sys
@@ -75,6 +75,12 @@ class DouyinLoginV2:
         self.tasks = []
         self.capture_enabled = True
         self.committed = False
+        self.headed_mode = args.headed if hasattr(args, "headed") else False
+        self.display = ExitStack()
+        self.display_fallback_used = False
+        self.progress_observed = False
+        self.credentials_side_effect = False
+        self.diagnostic_state = None
         self.active_fps = settings.crawler_login_v2_active_fps
         self.idle_fps = settings.crawler_login_v2_idle_fps
         self.jpeg_quality = settings.crawler_login_v2_jpeg_quality
@@ -305,6 +311,7 @@ class DouyinLoginV2:
                 self.pending_trajectories.pop(command["command_id"], None)
 
     async def apply_command(self, command):
+        self.progress_observed = True
         page = self.adapter.page
         kind = command["type"]
         if kind == "action":
@@ -416,6 +423,8 @@ class DouyinLoginV2:
         region = observation.pop("region", None)
         signature = observation.pop("region_signature", "")
         phase = observation["phase"]
+        if phase in AUTHENTICATION_PHASES:
+            self.progress_observed = True
         if region != self.region or signature != getattr(self, "region_signature", ""):
             self.region = region
             self.region_signature = signature
@@ -558,7 +567,7 @@ class DouyinLoginV2:
         self.context, self.profile = await browser.launch_account_context(
             self.args.account_id,
             settings.crawler_browser_profile_root,
-            headless=not self.args.headed,
+            headless=not self.headed_mode,
         )
         page = await self.context.new_page()
         await page.set_viewport_size({"width": 1000, "height": 760})
@@ -575,6 +584,67 @@ class DouyinLoginV2:
         if self.context:
             context, self.context = self.context, None
             await asyncio.wait_for(context.close(), 15)
+
+    async def display_fallback(self):
+        if (
+            self.display_fallback_used
+            or self.headed_mode
+            or self.progress_observed
+            or self.pending_sms
+            or self.credentials_side_effect
+            or getattr(self.args, "intent", "check_or_login") == "recover"
+        ):
+            raise ValueError("LOGIN_PREPARATION_FAILED")
+        self.display_fallback_used = True
+        await self.close_context()
+        if sys.platform == "linux":
+            from scripts.crawler_interactive_login import virtual_display
+
+            try:
+                self.display.enter_context(virtual_display())
+            except RuntimeError:
+                raise ValueError("LOGIN_DISPLAY_UNAVAILABLE") from None
+        elif sys.platform != "darwin":
+            raise ValueError("LOGIN_DISPLAY_UNAVAILABLE")
+        self.headed_mode = True
+        await self.open_context()
+        await self.adapter.navigate(self.args.entry)
+        await self.adapter.open_login()
+
+    def diagnose_observation(self, observation, *, has_auth, elapsed):
+        state = (
+            observation["phase"],
+            getattr(self.adapter, "qr_extraction_reason", "unknown"),
+            has_auth,
+            bool(getattr(self.adapter, "identity", "")),
+        )
+        if state != self.diagnostic_state:
+            self.diagnostic_state = state
+            self.emit(
+                "diagnostic",
+                phase=state[0],
+                qr_reason=state[1],
+                has_auth_signal=state[2],
+                has_trusted_identity=state[3],
+                elapsed_seconds=round(elapsed, 1),
+            )
+
+    def authentication_pending(self, observation, auth_signal):
+        phase = observation["phase"]
+        if phase not in AUTHENTICATION_PHASES:
+            return False
+        # An actual successful first-party self response observed by this
+        # operation can complete authentication while the old QR remains mounted.
+        # Cookie presence or a cached/menu identity alone cannot override QR.
+        current_self = (
+            auth_signal
+            and bool(getattr(self.adapter, "identity", ""))
+            and getattr(self.adapter, "identity_source", "") == "douyin_self_response"
+            and not getattr(self.adapter, "identity_conflict", False)
+        )
+        return not (
+            current_self and phase in {"qr_ready", "qr_expired", "phone_confirm"}
+        )
 
     async def observe_pending_commands(self, observation):
         sms_status = (
@@ -606,11 +676,21 @@ class DouyinLoginV2:
                 pending["unknown_reported"] = True
 
     async def flow(self):
-        await self.open_context()
+        try:
+            await self.open_context()
+        except Exception as exc:
+            # Profile locks, missing adapters and permissions are not rendering
+            # compatibility failures and must never trigger browser replacement.
+            from playwright.async_api import Error as BrowserError
+
+            if not isinstance(exc, BrowserError):
+                raise
+            await self.display_fallback()
         if self.args.intent == "reauth":
             await self.handshake("reset_requested", "reset_ready")
             await self.adapter.close()
             await reset_douyin_credentials_v2(self.context, self.profile)
+            self.credentials_side_effect = True
             page = await self.context.new_page()
             await page.set_viewport_size({"width": 1000, "height": 760})
             page.set_default_timeout(2000)
@@ -622,8 +702,8 @@ class DouyinLoginV2:
         await self.adapter.navigate(self.args.entry)
         has_auth = await self.adapter.has_auth()
         initial_observation = await self.adapter.observe()
-        needs_login = (
-            not has_auth or initial_observation["phase"] in AUTHENTICATION_PHASES
+        needs_login = not has_auth or self.authentication_pending(
+            initial_observation, has_auth
         )
         if needs_login and self.args.intent == "recover":
             raise ValueError("REUSE_AUTH_INVALID")
@@ -657,20 +737,37 @@ class DouyinLoginV2:
         if not has_auth:
             await self.adapter.open_login()
         identity_probe = False
-        home_fallback = self.args.entry == "home"
+        home_fallback = False
         fallback_retired = initial_observation["phase"] in AUTHENTICATION_PHASES
         entry_started = time.monotonic()
         stable_identity = ""
         stable_since = 0.0
+        identity_started = None
+        preparing_started = None
         while not self.stopped.is_set():
             observation = await self.adapter.observe()
+            auth_signal = await self.adapter.has_auth()
+            if observation["phase"] == "preparing" and not auth_signal:
+                if preparing_started is None:
+                    preparing_started = time.monotonic()
+            else:
+                preparing_started = None
+            self.diagnose_observation(
+                observation,
+                has_auth=auth_signal,
+                elapsed=time.monotonic() - entry_started,
+            )
             if (
                 observation["phase"] in AUTHENTICATION_PHASES
                 or getattr(self.adapter, "manual", False)
                 or getattr(self.adapter, "sms_selected", False)
             ):
                 fallback_retired = True
-            if observation["phase"] in AUTHENTICATION_PHASES:
+                self.progress_observed = True
+            authentication_pending = self.authentication_pending(
+                observation, auth_signal
+            )
+            if authentication_pending:
                 if self.args.intent == "recover":
                     raise ValueError("REUSE_AUTH_INVALID")
                 if not self.credentials_changed:
@@ -688,17 +785,28 @@ class DouyinLoginV2:
                 and not home_fallback
                 and not fallback_retired
                 and not await self.adapter.has_auth()
-                and time.monotonic() - entry_started > 8
+                and preparing_started is not None
+                and time.monotonic() - preparing_started > 8
             ):
+                # Prefer the already rendered panel; an internal display retry
+                # replaces entry reloads and is allowed only before any progress.
                 home_fallback = True
-                await self.adapter.navigate("home")
-                await self.adapter.open_login()
-            await self.observe_pending_commands(observation)
+                await self.display_fallback()
+                entry_started = time.monotonic()
+                preparing_started = None
+                continue
             if (
-                observation["phase"] not in AUTHENTICATION_PHASES
-                and await self.adapter.has_auth()
+                preparing_started is not None
+                and time.monotonic() - preparing_started > 12
             ):
+                raise ValueError("LOGIN_PREPARATION_FAILED")
+            await self.observe_pending_commands(observation)
+            if not authentication_pending and await self.adapter.has_auth():
                 self.publish({"phase": "identity_check"})
+                if identity_started is None:
+                    identity_started = time.monotonic()
+                elif time.monotonic() - identity_started > 15:
+                    raise ValueError("IDENTITY_UNCONFIRMED")
                 identity = await self.adapter.trusted_identity()
                 if not identity and not identity_probe:
                     identity_probe = True
@@ -723,6 +831,7 @@ class DouyinLoginV2:
                     elif time.monotonic() - stable_since >= 3:
                         break
             else:
+                identity_started = None
                 stable_identity, stable_since = "", 0
                 self.publish(observation)
             await asyncio.sleep(0.4)
@@ -738,7 +847,9 @@ class DouyinLoginV2:
         identity = ""
         reuse_stable_since = None
         while time.monotonic() < deadline and not self.stopped.is_set():
-            if (await self.adapter.observe())["phase"] in AUTHENTICATION_PHASES:
+            if self.authentication_pending(
+                await self.adapter.observe(), await self.adapter.has_auth()
+            ):
                 raise ValueError("REUSE_CHECK_FAILED")
             if await self.adapter.has_auth():
                 identity = await self.adapter.trusted_identity()
@@ -814,6 +925,7 @@ class DouyinLoginV2:
             with suppress(Exception):
                 await self.close_context()
             self.media.close()
+            self.display.close()
 
 
 async def run_login_v2(args):

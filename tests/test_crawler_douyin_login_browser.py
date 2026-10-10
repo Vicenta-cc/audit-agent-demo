@@ -71,6 +71,26 @@ def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path):
                 observation["phase"] == "qr_ready"
                 and observation["qr"]["image_data_url"]
             )
+            await page.locator(".douyin_login_new_class").evaluate(
+                "e=>{let p=document.createElement('p');p.id='scan-state';p.innerText='扫码后请在手机上确认登录';e.append(p)}"
+            )
+            assert (await adapter.observe())["phase"] == "qr_ready"
+            await page.locator("#scan-state").evaluate(
+                "e=>e.innerText='扫码成功\\n请在手机上确认登录'"
+            )
+            assert (await adapter.observe())["phase"] == "phone_confirm"
+            assert await page.locator("#animate_qrcode_container img").is_visible()
+            await page.locator("#scan-state").evaluate(
+                "e=>e.innerText='请完成当前安全验证'"
+            )
+            await page.locator("#animate_qrcode_container").evaluate(
+                "e=>e.style.display='none'"
+            )
+            unknown = await adapter.observe()
+            assert (
+                unknown["phase"] == "manual_required" and unknown["region"].width < 1000
+            )
+            await page.locator("#scan-state").evaluate("e=>e.remove()")
             adapter.sms_selected = True
             assert (await adapter.observe())["phase"] == "sms_required"
             await helper.apply_command(

@@ -6,6 +6,8 @@ import asyncio
 import copy
 import hashlib
 import json
+import logging
+import math
 import os
 import queue
 import secrets
@@ -35,6 +37,7 @@ from .crawler_login_protocol import (
 )
 
 TERMINAL = {"done", "failed", "expired", "cancelled"}
+logger = logging.getLogger(__name__)
 DURABLE_ACTIONS = {
     "request_sms",
     "submit_sms",
@@ -58,13 +61,15 @@ ERROR_MESSAGES = {
     "AUTH_REVISION_CONFLICT": "账号登录信息已被更新，请重新检查账号状态。",
     "IDENTITY_MISMATCH": "登录的抖音账号与绑定账号不一致，请使用正确账号重新扫码。",
     "IDENTITY_UNCONFIRMED": "尚未确认抖音账号身份，请查看当前登录步骤后重试。",
-    "BROWSER_LOGIN_FAILED": "登录浏览器未能完成登录，请查看当前步骤或使用兼容模式。",
+    "BROWSER_LOGIN_FAILED": "登录页面未能完成加载，请重新尝试。",
+    "LOGIN_PREPARATION_FAILED": "登录页面暂时无法加载，请重新尝试。",
+    "LOGIN_DISPLAY_UNAVAILABLE": "当前无法打开登录页面，请稍后重试或联系管理员。",
     "STALE_POINT": "本次操作轨迹已过期，请在最新验证画面重新操作。",
     "INPUT_OUTSIDE_AREA": "请在当前验证区域内操作。",
     "IDENTITY_UNVERIFIED": "尚未确认抖音账号身份，请查看当前登录步骤后重试。",
     "PROFILE_AUTHORITY_UNCONFIRMED": "浏览器登录信息尚未准备完成，请重新检查。",
     "SAVE_FAILED": "登录信息保存失败，请从登录记录恢复，暂勿重新扫码。",
-    "CAPTURE_FAILED": "验证画面暂时无法获取，请重新连接或使用兼容模式。",
+    "CAPTURE_FAILED": "验证画面暂时无法获取，请重新打开登录窗口。",
     "MEDIA_CHANNEL_FAILED": "验证画面连接中断，请重新连接登录窗口。",
     "MEDIA_CHANNEL_EOF": "验证画面连接已关闭，请查看登录结果后重试。",
     "CONTROL_CHANNEL_FAILED": "登录浏览器连接中断，请查看登录记录后重试。",
@@ -1061,7 +1066,49 @@ class CrawlerLoginV2Manager:
             if s.snapshot["phase"] in TERMINAL:
                 return
             kind = event.get("type")
-            if kind == "controller_ready":
+            if kind == "diagnostic":
+                phase = event.get("phase")
+                reason = event.get("qr_reason")
+                elapsed = event.get("elapsed_seconds")
+                if (
+                    phase
+                    in {
+                        "checking",
+                        "preparing",
+                        "qr_ready",
+                        "qr_expired",
+                        "phone_confirm",
+                        "sms_required",
+                        "challenge_required",
+                        "manual_required",
+                        "identity_check",
+                    }
+                    and reason
+                    in {
+                        "unknown",
+                        "not_observed",
+                        "image_not_visible",
+                        "decoded",
+                        "qr_detection_failed",
+                        "capture_timeout",
+                        "capture_failed",
+                    }
+                    and type(elapsed) in {float, int}
+                    and math.isfinite(elapsed)
+                    and 0 <= elapsed <= 86400
+                    and type(event.get("has_auth_signal")) is bool
+                    and type(event.get("has_trusted_identity")) is bool
+                ):
+                    logger.warning(
+                        "Douyin login observation operation=%s phase=%s qr_reason=%s auth_signal=%s trusted_identity=%s elapsed=%.1f",
+                        s.operation_id,
+                        phase,
+                        reason,
+                        event["has_auth_signal"],
+                        event["has_trusted_identity"],
+                        elapsed,
+                    )
+            elif kind == "controller_ready":
                 if (
                     event.get("controller_epoch") == s.epoch
                     and s.controller is not None

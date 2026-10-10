@@ -802,20 +802,18 @@ def test_home_fallback_only_applies_before_any_actionable_login_step(
         helper.open_context = AsyncMock()
         helper.handshake = AsyncMock()
         helper.abort_gesture = AsyncMock()
+        helper.display_fallback = AsyncMock()
         helper.emit = lambda *args, **kwargs: None
         helper.publish = lambda _: None
         try:
             await helper.flow()
-            return [call.args[0] for call in adapter.navigate.await_args_list]
+            return helper.display_fallback.await_count
         finally:
             helper.media.close()
             right.close()
 
-    assert asyncio.run(scenario(["preparing", "preparing", "preparing"])) == [
-        "self",
-        "home",
-    ]
-    assert asyncio.run(scenario(["qr_ready", "qr_ready", "preparing"])) == ["self"]
+    assert asyncio.run(scenario(["preparing", "preparing", "preparing"])) == 1
+    assert asyncio.run(scenario(["qr_ready", "qr_ready", "preparing"])) == 0
 
 
 def test_personal_header_identity_requires_exact_individual_labels():
@@ -944,3 +942,253 @@ def test_capture_freezes_input_ack_and_sends_one_final_same_pixel_confirmation()
             right.close()
 
     asyncio.run(run())
+
+
+def test_explicit_scan_signal_overrides_remaining_qr_but_not_required_sms():
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(evaluate=AsyncMock()))
+        panel = SimpleNamespace(
+            inner_text=AsyncMock(return_value="扫码后请在手机上确认登录")
+        )
+        adapter.visible = AsyncMock(return_value=panel)
+        adapter.region = AsyncMock(return_value=None)
+        adapter.qr = AsyncMock(
+            return_value={
+                "revision": "real",
+                "image_data_url": "observed",
+                "state": "valid",
+            }
+        )
+        assert (await adapter.observe())["phase"] == "qr_ready"
+        panel.inner_text.return_value = "扫码成功后请在手机确认"
+        assert (await adapter.observe())["phase"] == "qr_ready"
+        panel.inner_text.return_value = "扫码成功\n请在手机上确认登录"
+        assert (await adapter.observe())["phase"] == "phone_confirm"
+        adapter.sms_selected = True
+        assert (await adapter.observe())["phase"] == "phone_confirm"
+        panel.inner_text.return_value = "扫码成功\n请完成手机验证"
+        controls = {
+            "phone": SimpleNamespace(is_visible=AsyncMock(return_value=False)),
+            "code": SimpleNamespace(get_attribute=AsyncMock(return_value="6")),
+        }
+        adapter.sms_controls = AsyncMock(return_value=controls)
+        adapter.observe_sms_result = AsyncMock()
+        assert (await adapter.observe())["phase"] == "sms_required"
+
+    asyncio.run(run())
+
+
+def test_unclassified_rendered_panel_is_automatically_cropped_manual():
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(evaluate=AsyncMock()))
+        panel = SimpleNamespace(inner_text=AsyncMock(return_value="请完成当前安全验证"))
+        adapter.visible = AsyncMock(return_value=panel)
+        adapter.qr = AsyncMock(return_value=None)
+        area = Region(100, 100, 400, 300)
+        adapter.region = AsyncMock(side_effect=[None, area])
+        adapter.region_signature = AsyncMock(return_value="current-panel")
+        result = await adapter.observe()
+        assert result["phase"] == "manual_required" and result["region"] == area
+        assert not adapter.manual
+
+    asyncio.run(run())
+
+
+def test_internal_display_fallback_once_preserves_profile_and_never_resets(monkeypatch):
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_v2 as module
+    import socket
+
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(
+                operation_id="op", media_fd=left.detach(), headed=False, entry="self"
+            )
+        )
+        profile = object()
+        helper.profile = profile
+        helper.close_context = AsyncMock()
+        helper.open_context = AsyncMock()
+        helper.adapter = SimpleNamespace(navigate=AsyncMock(), open_login=AsyncMock())
+        monkeypatch.setattr(module.sys, "platform", "darwin")
+        try:
+            await helper.display_fallback()
+            assert helper.headed_mode and helper.display_fallback_used
+            assert helper.profile is profile
+            helper.close_context.assert_awaited_once()
+            helper.open_context.assert_awaited_once()
+            with __import__("pytest").raises(
+                ValueError, match="LOGIN_PREPARATION_FAILED"
+            ):
+                await helper.display_fallback()
+            helper.open_context.assert_awaited_once()
+        finally:
+            helper.media.close()
+            right.close()
+            helper.display.close()
+
+    asyncio.run(run())
+
+
+def test_display_fallback_rejected_after_progress_or_unavailable(monkeypatch):
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_v2 as module
+    import socket
+
+    async def run():
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(
+                operation_id="op", media_fd=left.detach(), headed=False, entry="self"
+            )
+        )
+        helper.close_context = AsyncMock()
+        helper.open_context = AsyncMock()
+        try:
+            helper.progress_observed = True
+            with __import__("pytest").raises(
+                ValueError, match="LOGIN_PREPARATION_FAILED"
+            ):
+                await helper.display_fallback()
+            helper.close_context.assert_not_awaited()
+            helper.progress_observed = False
+            monkeypatch.setattr(module.sys, "platform", "unsupported")
+            with __import__("pytest").raises(
+                ValueError, match="LOGIN_DISPLAY_UNAVAILABLE"
+            ):
+                await helper.display_fallback()
+            helper.open_context.assert_not_awaited()
+        finally:
+            helper.media.close()
+            right.close()
+            helper.display.close()
+
+    asyncio.run(run())
+
+
+def test_identity_confirmation_has_short_deadline_without_false_success(
+    tmp_path, monkeypatch
+):
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_v2 as module
+    import socket
+
+    async def run():
+        clock = {"now": 0.0}
+        monkeypatch.setattr(
+            module, "time", SimpleNamespace(monotonic=lambda: clock["now"])
+        )
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(
+                operation_id="op",
+                media_fd=left.detach(),
+                intent="check_or_login",
+                entry="self",
+                expected_platform_account_id="",
+            )
+        )
+        helper.profile = {"directory": tmp_path}
+
+        async def observe():
+            clock["now"] += 8
+            return {"phase": "preparing"}
+
+        helper.adapter = SimpleNamespace(
+            navigate=AsyncMock(),
+            has_auth=AsyncMock(return_value=True),
+            observe=observe,
+            trusted_identity=AsyncMock(return_value=""),
+            identity="",
+        )
+        helper.open_context = AsyncMock()
+        helper.handshake = AsyncMock()
+        helper.abort_gesture = AsyncMock()
+        helper.emit = lambda *a, **kw: None
+        published = []
+        helper.publish = lambda s: published.append(s["phase"])
+        try:
+            with __import__("pytest").raises(ValueError, match="IDENTITY_UNCONFIRMED"):
+                await helper.flow()
+            assert set(published) == {"identity_check"}
+            assert clock["now"] <= 40
+            assert ("save_ready", "save_committed") not in [
+                call.args for call in helper.handshake.await_args_list
+            ]
+            assert not helper.display_fallback_used
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())
+
+
+def test_internal_diagnostics_are_allowlisted_logged_and_not_public(caplog):
+    import logging
+    import threading
+    from unittest.mock import Mock
+    from backend.audit_agent.crawler_login_v2_manager import CrawlerLoginV2Manager
+
+    manager = CrawlerLoginV2Manager.__new__(CrawlerLoginV2Manager)
+    manager._lock = threading.RLock()
+    session = SimpleNamespace(
+        operation_id="server-operation", snapshot={"phase": "preparing"}
+    )
+    manager.sessions = {"session": session}
+    manager._notify = Mock()
+    event = {
+        "type": "diagnostic",
+        "operation_id": "attacker-supplied",
+        "phase": "phone_confirm",
+        "qr_reason": "decoded",
+        "has_auth_signal": False,
+        "has_trusted_identity": False,
+        "elapsed_seconds": 5.0,
+        "cookie": "secret-cookie",
+        "phone": "13800000000",
+    }
+    with caplog.at_level(logging.INFO):
+        manager.handle_event("session", event)
+        manager.handle_event("session", {**event, "qr_reason": "secret-cookie"})
+    assert len(caplog.records) == 1
+    assert "server-operation" in caplog.text and "phone_confirm" in caplog.text
+    assert (
+        "secret-cookie" not in caplog.text
+        and "13800000000" not in caplog.text
+        and "attacker-supplied" not in caplog.text
+    )
+    manager._notify.assert_not_called()
+    assert session.snapshot == {"phase": "preparing"}
+
+
+def test_current_self_response_can_complete_with_still_mounted_qr_only():
+    import socket
+
+    left, right = socket.socketpair()
+    helper = DouyinLoginV2(SimpleNamespace(operation_id="op", media_fd=left.detach()))
+    helper.adapter = SimpleNamespace(
+        identity="trusted-person",
+        identity_source="douyin_self_response",
+        identity_conflict=False,
+    )
+    try:
+        assert not helper.authentication_pending({"phase": "qr_ready"}, True)
+        assert not helper.authentication_pending({"phase": "phone_confirm"}, True)
+        assert helper.authentication_pending({"phase": "qr_ready"}, False)
+        assert helper.authentication_pending({"phase": "sms_required"}, True)
+        assert helper.authentication_pending({"phase": "challenge_required"}, True)
+        helper.adapter.identity_source = "personal_header_menu"
+        assert helper.authentication_pending({"phase": "qr_ready"}, True)
+        helper.adapter.identity_source = "douyin_self_response"
+        helper.adapter.identity_conflict = True
+        assert helper.authentication_pending({"phase": "qr_ready"}, True)
+    finally:
+        helper.media.close()
+        right.close()

@@ -78,6 +78,7 @@ class DouyinLoginAdapter:
         self.sms_result = "unknown"
         self.last_qr_digest = ""
         self.last_qr = None
+        self.qr_extraction_reason = "not_observed"
         self._closed = False
 
     def task(self, coroutine):
@@ -291,6 +292,7 @@ class DouyinLoginAdapter:
     async def qr(self):
         locator = await self.visible(QR_SELECTOR)
         if locator is None:
+            self.qr_extraction_reason = "image_not_visible"
             return None
         png = None
         try:
@@ -307,9 +309,15 @@ class DouyinLoginAdapter:
             from scripts.crawler_account_login import is_qr_png
 
             if not is_qr_png(png):
-                return None
+                # Source decoding and rendering are separate: a loaded image
+                # can still be detectable only at its actual rendered size.
+                png = await locator.screenshot(type="png", timeout=2000)
+                if not is_qr_png(png):
+                    self.qr_extraction_reason = "qr_detection_failed"
+                    return None
             digest = hashlib.sha256(png).hexdigest()
             self.last_qr_digest = digest
+            self.qr_extraction_reason = "decoded"
             return {
                 "image_data_url": "data:image/png;base64,"
                 + base64.b64encode(png).decode("ascii"),
@@ -317,7 +325,12 @@ class DouyinLoginAdapter:
                 "state": "valid",
                 "expires_at": None,
             }
-        except Exception:
+        except Exception as exc:
+            self.qr_extraction_reason = (
+                "capture_timeout"
+                if type(exc).__name__ == "TimeoutError"
+                else "capture_failed"
+            )
             return None
 
     async def sms_controls(self):
@@ -408,6 +421,8 @@ class DouyinLoginAdapter:
         qr = await self.qr()
         panel = await self.visible(PANEL_SELECTOR)
         text = await panel.inner_text() if panel else ""
+        # The QR can remain visible after a successful scan. Only the platform's
+        # explicit confirmation instructions establish this transition.
         # A coexisting form is normal. Only an explicit requirement or user intent selects it.
         required_sms = any(
             term in text
@@ -418,7 +433,19 @@ class DouyinLoginAdapter:
                 "短信安全验证",
             )
         )
-        if (self.sms_selected or required_sms) and await self.sms_controls():
+        phone_confirmation = any(
+            (
+                re.fullmatch(
+                    r"(?:扫码|扫描)成功[，,。！!\s]*(?:请在手机(?:上)?确认(?:登录)?[。！!]?)?",
+                    line.strip(),
+                )
+                or re.fullmatch(r"请在手机(?:上)?确认(?:登录)?[。！!]?", line.strip())
+            )
+            for line in text.splitlines()
+        )
+        if (
+            required_sms or (self.sms_selected and not phone_confirmation)
+        ) and await self.sms_controls():
             controls = await self.sms_controls()
             self.sms_form_seen = True
             phone_visible = await controls["phone"].is_visible()
@@ -453,6 +480,8 @@ class DouyinLoginAdapter:
                     "source": "rendered_login_form",
                 },
             }
+        if phone_confirmation:
+            return {"phase": "phone_confirm"}
         if self.manual and panel:
             return {
                 "phase": "manual_required",
@@ -472,8 +501,14 @@ class DouyinLoginAdapter:
             return {"phase": "qr_expired", "qr": invalid_qr}
         if qr:
             return {"phase": "qr_ready", "qr": qr}
-        if "请在手机" in text or "手机上确认" in text:
-            return {"phase": "phone_confirm"}
+        if panel:
+            region = await self.region()
+            if region:
+                return {
+                    "phase": "manual_required",
+                    "region": region,
+                    "region_signature": await self.region_signature(),
+                }
         return {"phase": "preparing"}
 
     async def click_text(self, texts):
