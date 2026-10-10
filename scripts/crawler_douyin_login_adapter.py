@@ -86,6 +86,8 @@ class DouyinLoginAdapter:
         self.qr_ticket = ""
         self.qr_ticket_digest = ""
         self.qr_platform_status = ""
+        self.qr_response_generation = 0
+        self.qr_accepted_generation = -1
 
     def task(self, coroutine):
         task = asyncio.create_task(coroutine)
@@ -180,6 +182,9 @@ class DouyinLoginAdapter:
             self.task(self.observe_response(response))
 
     async def observe_response(self, response):
+        # Freeze arrival order before parsing asynchronous response bodies.
+        self.qr_response_generation += 1
+        generation = self.qr_response_generation
         parsed = urlsplit(response.url)
         if not document_allowed(response.url, top_level=True):
             return
@@ -197,7 +202,7 @@ class DouyinLoginAdapter:
                     and data.get("error_code") == 0
                     and isinstance(data.get("token"), str)
                 ):
-                    self.accept_qr_ticket(data)
+                    self.accept_qr_ticket(data, generation=generation)
                 elif path.endswith("/check_qrconnect"):
                     query = parse_qs(parsed.query)
                     form = parse_qs(
@@ -226,7 +231,7 @@ class DouyinLoginAdapter:
                     ):
                         self.qr_platform_status = status
                         if status in {"expired", "refused"}:
-                            self.accept_qr_ticket(data)
+                            self.accept_qr_ticket(data, generation=generation)
 
                 receipt = {
                     "endpoint": "get_qrcode"
@@ -276,7 +281,9 @@ class DouyinLoginAdapter:
                 if not isinstance(exc, TimeoutError):
                     raise
 
-    def accept_qr_ticket(self, data):
+    def accept_qr_ticket(self, data, *, generation=None):
+        if generation is not None and generation <= self.qr_accepted_generation:
+            return False
         token = data.get("token")
         encoded = data.get("qrcode")
         if (
@@ -295,6 +302,8 @@ class DouyinLoginAdapter:
         self.qr_ticket = token
         self.qr_ticket_digest = hashlib.sha256(image).hexdigest()
         self.qr_platform_status = "new"
+        if generation is not None:
+            self.qr_accepted_generation = generation
         return True
 
     async def has_auth(self) -> bool:

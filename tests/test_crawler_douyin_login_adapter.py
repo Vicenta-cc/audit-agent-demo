@@ -1579,3 +1579,67 @@ def test_confirmed_without_cookie_waits_native_sso_without_navigation(
             right.close()
 
     asyncio.run(run())
+
+
+def test_slow_old_qr_response_cannot_replace_new_generation():
+    import base64
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def scenario(rotation):
+        adapter = DouyinLoginAdapter(None, None)
+        adapter.accept_qr_ticket(
+            {"token": "current", "qrcode": base64.b64encode(b"current").decode()}
+        )
+        pending = asyncio.Event()
+        started = asyncio.Event()
+
+        async def slow_json():
+            started.set()
+            await pending.wait()
+            return {
+                "data": {
+                    "error_code": 0,
+                    "token": "old",
+                    "qrcode": base64.b64encode(b"old").decode(),
+                }
+            }
+
+        old = SimpleNamespace(
+            url="https://www.douyin.com/passport/web/get_qrcode/",
+            status=200,
+            json=slow_json,
+        )
+        task = asyncio.create_task(adapter.observe_response(old))
+        await started.wait()
+        freshdata = {
+            "error_code": 0,
+            "token": "new",
+            "qrcode": base64.b64encode(b"new").decode(),
+        }
+        fresh = SimpleNamespace(
+            url="https://www.douyin.com/passport/web/get_qrcode/",
+            status=200,
+            json=AsyncMock(return_value={"data": freshdata}),
+        )
+        if rotation:
+            fresh.url = "https://www.douyin.com/passport/web/check_qrconnect/"
+            fresh.request = SimpleNamespace(post_data="token=current")
+            freshdata["status"] = "expired"
+        await adapter.observe_response(fresh)
+        pending.set()
+        await task
+        assert adapter.qr_ticket == "new"
+        poll = SimpleNamespace(
+            url="https://login.douyin.com/passport/web/check_qrconnect/",
+            status=200,
+            request=SimpleNamespace(post_data="token=new"),
+            json=AsyncMock(
+                return_value={"data": {"error_code": 0, "status": "scanned"}}
+            ),
+        )
+        await adapter.observe_response(poll)
+        assert adapter.qr_platform_status == "scanned"
+
+    asyncio.run(scenario(False))
+    asyncio.run(scenario(True))
