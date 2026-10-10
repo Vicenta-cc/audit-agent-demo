@@ -247,6 +247,24 @@ class DouyinLoginAdapter:
                             self.accept_qr_ticket(data, generation=generation)
 
                 receipt = {
+                    "token_matches_current": bool(
+                        path.endswith("/check_qrconnect")
+                        and token == self.qr_ticket
+                        and self.qr_ticket
+                    ),
+                    "source_matches_current": bool(
+                        self.qr_ticket_digest
+                        and self.last_qr_source_digest == self.qr_ticket_digest
+                    ),
+                    "has_verification_decision": "verify_center_decision_conf" in data
+                    or "verify_center_decision_conf" in payload,
+                    "has_secondary_decision": "verify_center_secondary_decision_conf"
+                    in data
+                    or "verify_center_secondary_decision_conf" in payload,
+                    "has_verification_header": any(
+                        str(key).lower() == "x-vc-bdturing-parameters"
+                        for key in getattr(response, "headers", {})
+                    ),
                     "endpoint": "get_qrcode"
                     if path.endswith("/get_qrcode")
                     else "check_qrconnect",

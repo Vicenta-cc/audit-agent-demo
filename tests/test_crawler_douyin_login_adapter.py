@@ -1347,6 +1347,11 @@ def test_login_network_receipts_are_bounded_sanitized_and_do_not_claim_login():
         assert len(adapter.network_receipts) == 120
         assert adapter.network_revision == 1
         assert adapter.latest_login_receipt == {
+            "token_matches_current": False,
+            "source_matches_current": False,
+            "has_verification_decision": False,
+            "has_secondary_decision": False,
+            "has_verification_header": False,
             "endpoint": "check_qrconnect",
             "http_status": 200,
             "error_code": 0,
@@ -1809,5 +1814,59 @@ def test_current_qr_platform_error_exposes_same_panel_and_does_not_taint_new_tic
         response.json.return_value = {"data": {"error_code": 0, "status": "new"}}
         await adapter.observe_response(response)
         assert adapter.current_qr_error is None
+
+    asyncio.run(run())
+
+
+def test_verification_metadata_and_blocked_documents_are_boolean_only():
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+    import socket
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, None)
+        response = SimpleNamespace(
+            url="https://www.douyin.com/passport/web/check_qrconnect/",
+            status=200,
+            headers={"X-Vc-Bdturing-Parameters": "SECRET"},
+            request=SimpleNamespace(post_data="token=PRIVATE"),
+            json=AsyncMock(
+                return_value={
+                    "verify_center_secondary_decision_conf": "SECRET",
+                    "data": {
+                        "error_code": 2046,
+                        "verify_center_decision_conf": {"token": "PRIVATE"},
+                    },
+                }
+            ),
+        )
+        await adapter.observe_response(response)
+        receipt = adapter.latest_login_receipt
+        assert (
+            receipt["has_verification_decision"]
+            and receipt["has_secondary_decision"]
+            and receipt["has_verification_header"]
+        )
+        assert "SECRET" not in str(receipt) and "PRIVATE" not in str(receipt)
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(operation_id="op", media_fd=left.detach())
+        )
+        helper.adapter = adapter
+        events = []
+        helper.emit = lambda kind, **data: events.append((kind, data))
+        try:
+            helper.diagnose_observation(
+                {"phase": "manual_required"}, has_auth=False, elapsed=1
+            )
+            count = len(events)
+            adapter.blocked_documents = 1
+            helper.diagnose_observation(
+                {"phase": "manual_required"}, has_auth=False, elapsed=2
+            )
+            assert len(events) == count + 1 and events[-1][1]["blocked_documents"] == 1
+        finally:
+            helper.media.close()
+            right.close()
 
     asyncio.run(run())

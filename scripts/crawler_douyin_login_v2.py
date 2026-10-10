@@ -637,6 +637,7 @@ class DouyinLoginV2:
             getattr(self.adapter, "qr_extraction_reason", "unknown"),
             has_auth,
             bool(getattr(self.adapter, "identity", "")),
+            int(getattr(self.adapter, "blocked_documents", 0)),
         )
         if state != self.diagnostic_state:
             self.diagnostic_state = state
@@ -647,6 +648,7 @@ class DouyinLoginV2:
                 has_auth_signal=state[2],
                 has_trusted_identity=state[3],
                 elapsed_seconds=round(elapsed, 1),
+                blocked_documents=state[4],
             )
 
     def diagnose_failure(self, exc):
