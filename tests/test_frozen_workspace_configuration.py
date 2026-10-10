@@ -13,6 +13,27 @@ from test_investigation_creation_conversation import (
 )
 
 
+def test_adopted_temporary_lexicon_workspace_survives_confirmation(creation_stack):
+    from copy import deepcopy
+    from test_lexicon_adoption_origin import adopted, P
+    from backend.investigation_creation.contracts import ConfirmAndQueueCommand
+
+    stack = creation_stack
+    session, _, edit, draft = adopted(stack)
+    run = stack['app_service'].confirm_and_queue(ConfirmAndQueueCommand(
+        draft_id=draft['id'], expected_revision=1, confirmed=True,
+        idempotency_key='temporary-preview'), principal=P)
+    frozen = deepcopy(run.confirmed_configuration)
+    assert frozen['recall_plan']['source_edit_ref'] == edit['resource_ref']
+    response = stack['client'].get(f'/api/investigation-workspaces/{session}/state')
+    assert response.status_code == 200, response.text
+    preview = response.json()['draft_artifact']['confirmation_preview']
+    assert preview['recall_plan']['temporary_terms'] == frozen['recall_plan']['temporary_terms']
+    assert 'source_edit_ref' not in preview['recall_plan']
+    assert not preview['can_confirm']
+    assert stack['creation_store'].get_run(run.id, principal=P.id).confirmed_configuration == frozen
+
+
 def change_resources(stack, artifact, change):
     resources = stack['app_service'].resource_service
     configuration = artifact['draft']['configuration']

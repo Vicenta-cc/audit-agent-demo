@@ -19,7 +19,9 @@ def confirmed_run_preview(run: InvestigationRun) -> ConfirmationPreview:
     unused = list(snapshot.unused_search_terms)
     if recall is not None:
         recall_preview = RecallPlanPreview(
-            **recall.model_dump(mode="json"),
+            # The adoption reference belongs to frozen provenance, not the
+            # public preview contract. Keep it in the snapshot unchanged.
+            **recall.model_dump(mode="json", exclude={"source_edit_ref"}),
             # Searched terms plus the ones cut by the cap: the lexicon's real count.
             enabled_main_term_count=len(recall.enabled_main_terms) + (
                 len(unused) if recall.strategy == "existing_lexicon" else 0),
