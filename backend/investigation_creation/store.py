@@ -36,6 +36,7 @@ from .contracts import (
     parse_draft_configuration,
 )
 from .errors import (
+    ConfigurationValidationError,
     ConfirmationRequiredError,
     DraftAlreadyConfirmedError,
     DraftNotFoundError,
@@ -931,13 +932,26 @@ class InvestigationCreationStore:
         configuration: DraftConfiguration,
         before_write: Callable | None = None,
         create_operation: tuple[str, str] | None = None,
+        copy_source: tuple[str, str] | None = None,
     ) -> InvestigationDraft:
-        self.protect_temporary_judgement(configuration)
+        if copy_source is None:
+            self.protect_temporary_judgement(configuration)
         draft_id = f"investigation-draft:{uuid4().hex}"
         now = self._now_text()
         configuration_json = self._json(configuration.model_dump(mode="json"))
         with draft_operations.validation_phase(create_operation is not None), self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if copy_source is not None:
+                from .rounds import require_member
+                source_session, source_id = copy_source
+                require_member(connection, source_session, principal, source_id)
+                source = self._draft(self._owned_draft_row(connection, source_id, principal))
+                if source.status is DraftStatus.DRAFT or source.configuration != configuration:
+                    raise ConfigurationValidationError('只能复制本会话已启动调查的原配置。', code='INVALID_ROUND_SOURCE')
+                operation = connection.execute('SELECT session_id FROM draft_creation_operations WHERE id=? AND principal=?',
+                    (create_operation[0] if create_operation else '', principal)).fetchone()
+                if operation is None or operation[0] != source_session:
+                    raise PrincipalAccessDeniedError('复制操作不属于原调查会话。')
             if before_write:
                 before_write(connection)
             connection.execute(

@@ -198,6 +198,8 @@ def create_investigation_conversation_router(
             if state.latest_report_turn is not None:
                 activity_turn_ids.append(state.latest_report_turn.id)
             return InvestigationWorkspaceStateResponse(
+                multi_round_enabled=settings.investigation_multi_round_enabled,
+                rounds=state.rounds,
                 resource_continuity_enabled=settings.continuous_resource_session_enabled,
                 workspace=_workspace_response(state.session),
                 messages=_public_messages(service, state.messages),

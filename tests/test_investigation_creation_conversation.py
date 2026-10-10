@@ -2104,6 +2104,8 @@ def test_single_creation_turn_create_and_confirm_restores_workspace_run_and_repo
 def test_creation_mode_keeps_legacy_tools_and_adds_resource_tools() -> None:
     from backend.resource_management.tools import RESOURCE_TOOL_INPUTS
     assert set(M3_TOOL_INPUTS) == set(RESOURCE_TOOL_INPUTS) | {
+        "copy_investigation_draft",
+        "list_investigation_rounds",
         "use_ruleset_proposal",
         "create_ruleset_proposal",
         "update_ruleset_proposal",

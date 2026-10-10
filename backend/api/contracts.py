@@ -216,7 +216,19 @@ class InvestigationAnswerDraftResponse(PublicApiModel):
     event_sequence: int = Field(ge=1)
 
 
+class InvestigationRoundResponse(PublicApiModel):
+    round_number: int = Field(ge=1)
+    label: str
+    draft_id: str
+    title: str
+    draft_revision: int = Field(ge=1)
+    draft_status: str
+    run: PublicInvestigationRunProjection | None = None
+
+
 class InvestigationWorkspaceStateResponse(PublicApiModel):
+    multi_round_enabled: bool = False
+    rounds: tuple[InvestigationRoundResponse, ...] = ()
     resource_continuity_enabled: bool = False
     workspace: InvestigationWorkspaceSessionResponse
     messages: tuple[InvestigationMessageResponse, ...] = ()

@@ -206,6 +206,24 @@ class InvestigationCreationService:
             create_operation=create_operation,
         )
 
+    def copy_draft(self, source_draft_id: str, *, session_id: str, principal: Principal,
+                   create_operation: tuple[str, str] | None) -> InvestigationDraft:
+        # Copy only an exact, already-approved configuration. Resource validation,
+        # current task settings, preview and admission run again on confirmation.
+        with draft_operations.validation_phase():
+            from .rounds import require_member
+            with self.store._connect() as connection:
+                require_member(connection, session_id, principal.id, source_draft_id)
+            source = self.store.get_draft(source_draft_id, principal=principal.id)
+            if source.status is DraftStatus.DRAFT:
+                raise ConfigurationValidationError('原草案尚未启动，请继续编辑原草案。', code='INVALID_ROUND_SOURCE')
+            self._reject_legacy_creation_platform(source.configuration)
+            if not isinstance(source.configuration, InvestigationDraftConfiguration):
+                raise ConfigurationValidationError('该历史配置需要重新选择规则和词库后创建草案。', code='INVALID_ROUND_SOURCE')
+        return self.store.create_draft(principal=principal.id, title=source.title,
+            objective=source.objective, configuration=source.configuration,
+            create_operation=create_operation, copy_source=(session_id, source_draft_id))
+
     def update_draft(
         self, command: UpdateDraftCommand, *, principal: Principal, resource_ref: str | None = None,
         session_id: str = "",

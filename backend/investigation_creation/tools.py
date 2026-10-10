@@ -83,6 +83,14 @@ class CreateInvestigationDraftInput(StrictModel):
         return value.strip() if isinstance(value, str) else value
 
 
+class CopyInvestigationDraftInput(StrictModel):
+    source_draft_id: str = Field(min_length=1, max_length=160)
+
+
+class ListInvestigationRoundsInput(StrictModel):
+    pass
+
+
 class UpdateInvestigationDraftInput(StrictModel):
     draft_id: str = Field(min_length=1, max_length=160)
     expected_revision: int = Field(ge=1)
@@ -167,6 +175,8 @@ class UpdateRuleSetProposalInput(GetRuleSetProposalInput):
 
 
 M3_TOOL_INPUTS: dict[str, type[StrictModel]] = {
+    "copy_investigation_draft": CopyInvestigationDraftInput,
+    "list_investigation_rounds": ListInvestigationRoundsInput,
     "use_ruleset_proposal": ToolUseRuleSetProposalInput,
     "query_investigation_options": QueryInvestigationOptions,
     "create_investigation_draft": CreateInvestigationDraftInput,
@@ -183,6 +193,7 @@ M3_TOOL_INPUTS: dict[str, type[StrictModel]] = {
 
 M3_MUTATION_TOOL_NAMES = frozenset(
     {
+        "copy_investigation_draft",
         "use_ruleset_proposal",
         "create_ruleset_proposal",
         "update_ruleset_proposal",
@@ -196,6 +207,8 @@ M3_MUTATION_TOOL_NAMES = frozenset(
 
 
 M3_TOOL_DESCRIPTIONS = {
+    "copy_investigation_draft": "沿用本会话某轮已启动调查的配置，复制为独立可编辑草案。source_draft_id 来自轮次目录。保留原关键词和规则版本，不读取资源最新版；不启动任务。修改后重新展示预览并取得确认。已有待确认草案时继续编辑它，不重复复制。",
+    "list_investigation_rounds": "读取当前会话全部调查轮次、草案和任务状态。轮次顺序固定，不因查询旧报告而切换；用于定位待编辑草案或需要沿用的原配置。报告证据使用会话报告工具查询。",
     "save_draft_ruleset": (
         "用户明确要求保存当前调查中使用的规则时，先读取当前 Draft，再传 draft_id、expected_revision、operation_id。"
         "后端直接将该版本规则快照保存到当前用户的私有规则库，不传 content 或 hash，不重新生成。"
@@ -441,7 +454,7 @@ for _name in M3_TOOL_DESCRIPTIONS:
         + M3_TOOL_DESCRIPTIONS[_name]
     ).strip()
 
-HERMES_M3_TOOL_SCHEMAS = tuple(
+_ALL_CREATION_TOOL_SCHEMAS = tuple(
     {
         "name": name,
         "description": M3_TOOL_DESCRIPTIONS[name],
@@ -449,6 +462,20 @@ HERMES_M3_TOOL_SCHEMAS = tuple(
     }
     for name, schema in M3_TOOL_INPUTS.items()
 )
+HERMES_M3_TOOL_SCHEMAS = tuple(s for s in _ALL_CREATION_TOOL_SCHEMAS
+    if s['name'] not in {'copy_investigation_draft', 'list_investigation_rounds'})
+
+
+def creation_tool_schemas():
+    from copy import deepcopy
+    from .rounds import TOOL_NAMES
+    schemas = deepcopy(_ALL_CREATION_TOOL_SCHEMAS)
+    if not settings.investigation_multi_round_enabled:
+        return tuple(s for s in schemas if s['name'] not in TOOL_NAMES)
+    for schema in schemas:
+        if schema['name'] == 'create_investigation_draft':
+            schema['description'] = schema['description'].split(' A creation Session that already has')[0]
+    return schemas
 
 
 class InvestigationCreationToolService:
@@ -482,7 +509,7 @@ class InvestigationCreationToolService:
 
     @property
     def allowed_tool_names(self) -> frozenset[str]:
-        return frozenset(M3_TOOL_INPUTS) | frozenset(product_read_tools.INPUTS) | (frozenset(continuity.INPUTS) if settings.continuous_resource_session_enabled else frozenset())
+        return frozenset(s['name'] for s in creation_tool_schemas()) | frozenset(product_read_tools.INPUTS) | (frozenset(continuity.INPUTS) if settings.continuous_resource_session_enabled else frozenset())
 
     def definitions(self) -> list[dict[str, Any]]:
         return [
@@ -493,7 +520,7 @@ class InvestigationCreationToolService:
                     "strict": True,
                 },
             }
-            for schema in (*HERMES_M3_TOOL_SCHEMAS, *continuity.schemas(), *product_read_tools.SCHEMAS)
+            for schema in (*creation_tool_schemas(), *continuity.schemas(), *product_read_tools.SCHEMAS)
         ]
 
     def execute(
@@ -506,12 +533,30 @@ class InvestigationCreationToolService:
         runtime_identity: HermesToolExecutionIdentity | None = None,
         create_operation: tuple[str, str] | None = None,
     ) -> dict[str, Any]:
+        from . import rounds
+        if tool_name in rounds.TOOL_NAMES and not settings.investigation_multi_round_enabled:
+            raise ValueError('Multi-round investigations are disabled')
+        if settings.investigation_multi_round_enabled:
+            with draft_operations.validation_phase(create_operation is not None):
+                session = self.application_service.conversation_store.get_session(session_id)
+                if session.scope_type != 'creation' or session.owner_principal != principal.id:
+                    from .errors import PrincipalAccessDeniedError
+                    raise PrincipalAccessDeniedError('会话不可访问。')
+                target = arguments.get('draft_id')
+                if tool_name == 'get_investigation_run' and arguments.get('run_id'):
+                    target = self.application_service.get_run(arguments['run_id'], principal=principal).draft_id
+                if target:
+                    with self.application_service.store._connect() as connection:
+                        rounds.require_member(connection, session_id, principal.id, target)
+        if tool_name == 'list_investigation_rounds':
+            ListInvestigationRoundsInput.model_validate(arguments)
+            return {'rounds': rounds.project(self.application_service, session_id, principal)}
         if tool_name in product_read_tools.INPUTS:
             return product_read_tools.execute(tool_name, arguments, principal)
         if tool_name in continuity.INPUTS and settings.continuous_resource_session_enabled:
             return continuity.read(self.application_service, tool_name, arguments,
                                    session_id=session_id, principal=principal)
-        if (settings.continuous_resource_session_enabled and self.session_run_resolver
+        if (settings.continuous_resource_session_enabled and not settings.investigation_multi_round_enabled and self.session_run_resolver
                 and tool_name in {'create_investigation_draft', 'use_ruleset_proposal'}):
             with draft_operations.validation_phase(create_operation is not None):
                 if self.session_run_resolver(session_id, principal) is not None:
@@ -581,6 +626,10 @@ class InvestigationCreationToolService:
             result = self.application_service.query_investigation_options(
                 parsed, principal=principal
             )
+        elif tool_name == "copy_investigation_draft":
+            draft = self.application_service.copy_draft(parsed.source_draft_id,
+                session_id=session_id, principal=principal, create_operation=create_operation)
+            result = self.application_service.get_draft_view(draft.id, principal=principal)
         elif tool_name == "create_investigation_draft":
             draft = self.application_service.create_draft(
                 CreateDraftCommand.model_validate(parsed.model_dump(mode="json")),

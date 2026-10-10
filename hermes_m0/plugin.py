@@ -10,6 +10,7 @@ from backend.report_collection import tools as collection_tools
 
 from backend.investigation_creation.tools import (
     HERMES_M3_TOOL_SCHEMAS,
+    creation_tool_schemas,
     M3_RECORDED_TOOL_NAMES,
     HermesToolExecutionIdentity,
     dispatch_hermes_investigation_creation_tool,
@@ -45,11 +46,16 @@ _TOOL_NAMES = frozenset(
                "read_comment_delivery"})
 _M3_CREATION_TOOL_NAMES = frozenset(
     schema["name"] for schema in HERMES_M3_TOOL_SCHEMAS
-)
+) | {'copy_investigation_draft', 'list_investigation_rounds'}
 
 
 def _handler(tool_name: str):
     def handle(args: dict[str, Any], **kwargs: Any) -> str:
+        from backend.audit_agent.config import settings
+        if (settings.investigation_multi_round_enabled
+                and os.environ.get('HERMES_INVESTIGATION_CREATION_MODE') == '1'
+                and tool_name in collection_tools.available_inputs()):
+            return collection_tools.dispatch(tool_name, args, str(kwargs.get('session_id') or ''), str(kwargs.get('task_id') or ''))
         if os.environ.get("HERMES_INVESTIGATION_COLLECTION_MODE") == "1":
             if tool_name not in collection_tools.available_inputs():
                 return error_result(tool=tool_name, code="collection_only", message="当前会话仅允许范围受限的报告工具。")
@@ -168,7 +174,7 @@ def register(ctx: Any) -> None:
         (
             "creation",
             "HERMES_INVESTIGATION_CREATION_MODE",
-            HERMES_M3_TOOL_SCHEMAS,
+            creation_tool_schemas(),
         ),
         (
             "real-report",
@@ -197,7 +203,9 @@ def register(ctx: Any) -> None:
         from backend.investigation_creation import continuity
         from backend.audit_agent.config import settings
         schemas.extend(continuity.schemas())
-        if settings.continuous_resource_session_enabled:
+        if settings.investigation_multi_round_enabled:
+            schemas.extend(collection_tools.schemas())
+        elif settings.continuous_resource_session_enabled:
             from .unified_support import unified_tool_schemas
             from .unified_support import UNIFIED_REPORT_SYSTEM_PROMPT
             from copy import deepcopy

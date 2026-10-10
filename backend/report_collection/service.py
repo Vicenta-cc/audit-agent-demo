@@ -80,9 +80,28 @@ class ReportCollectionService:
                 raise PermissionError('冻结报告身份已变化。')
         return item
 
-    def register(self, session, principal, versions):
+    def sync_rounds(self, session, principal, rounds):
+        """Only published runs durably associated with this chat may auto-join."""
+        existing = self.members(session, principal)
+        versions = {s['version'] for s in existing}
+        pending = []
+        for item in rounds:
+            run = item['run']
+            if run and run['status'] == 'PUBLISHED' and run['report_version_id'] not in versions:
+                # Re-read association and ownership; never trust a supplied projection.
+                from backend.investigation_creation.rounds import require_member
+                app = self.conversation.tool_service.application_service
+                with app.store._connect() as db:
+                    require_member(db, session, principal.id, item['draft_id'])
+                actual = app.find_run_for_draft(item['draft_id'], principal=principal)
+                if actual is None or actual.status.value != 'PUBLISHED' or actual.report_version_id != run['report_version_id']:
+                    raise PermissionError('调查报告关联无法验证。')
+                pending.append({'report_version_id': actual.report_version_id, 'label': item['label']})
+        return self.register(session, principal, pending, _round_sync=True) if pending else existing
+
+    def register(self, session, principal, versions, *, _round_sync=False):
         self.conversation.get_session(session, principal=principal)
-        if not self.active(session):
+        if not self.active(session) and not _round_sync:
             _, _, turns = self.conversation.store.conversation_snapshot(session, include_tool_messages=False)
             if turns:
                 raise ValueError('第一阶段请在新建的空会话中注册报告，避免改变已有创建会话的执行模式。')

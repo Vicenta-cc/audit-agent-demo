@@ -448,6 +448,12 @@ configure_product_reads(ProductReadTools(report_store=report_store,
 
 
 # Phase 1 is opt-in: ordinary creation/report sessions keep their existing routes.
+if settings.investigation_multi_round_enabled and not (
+    settings.continuous_resource_session_enabled
+    and os.environ.get('REPORT_COLLECTION_ENABLED') == '1'
+    and os.environ.get('REPORT_COLLECTION_AGENT_DRIVEN') == '1'
+):
+    raise RuntimeError('多轮调查需要连续资源会话及自主报告查询同时启用。')
 if os.environ.get("REPORT_COLLECTION_ENABLED") == "1":
     from backend.report_collection.service import ReportCollectionService
     from backend.report_collection.tools import configure as configure_collection

@@ -353,12 +353,13 @@ class HermesRuntimeBinding:
 
         report_tools_required = product_mode == "unified-report" or (
             product_mode == "creation" and settings.continuous_resource_session_enabled
+            and not settings.investigation_multi_round_enabled
         )
-        if product_mode == "collection":
-            from backend.report_collection.tools import SCHEMAS
+        if product_mode == "collection" or (product_mode == 'creation' and settings.investigation_multi_round_enabled):
+            from backend.report_collection.tools import schemas
             try:
                 self.validate_report_tools(agent, enabled_toolsets=options["enabled_toolsets"],
-                    required_names={s["name"] for s in SCHEMAS})
+                    required_names={s["name"] for s in schemas()})
             except Exception:
                 self._close_failed_agent(agent)
                 raise

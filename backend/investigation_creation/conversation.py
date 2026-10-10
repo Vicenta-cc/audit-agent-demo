@@ -271,6 +271,7 @@ class InvestigationWorkspaceState:
     run: InvestigationRunProjection | None
     report_messages: tuple[InvestigationMessage, ...] = ()
     latest_report_turn: InvestigationTurn | None = None
+    rounds: tuple[dict[str, Any], ...] = ()
 
 
 class FakeCreationHermesAgent:
@@ -780,7 +781,13 @@ class InvestigationCreationConversationService:
             raise ValueError("client_message_id must contain between 1 and 200 characters")
         session = self.get_session(session_id, principal=principal)
         sources = None
-        if self.report_collection and self.report_collection.active(session.id):
+        if settings.investigation_multi_round_enabled:
+            if self.report_collection is None or not self.report_collection.agent_driven:
+                raise RuntimeError('多轮调查报告查询服务未配置。')
+            from .rounds import project
+            sources = self.report_collection.sync_rounds(session.id, principal,
+                project(self.tool_service.application_service, session.id, principal))
+        elif self.report_collection and self.report_collection.active(session.id):
             sources = self.report_collection.members(session.id, principal)
         accepted = self.store.create_turn(session.id, client_message_id=client_id, user_input=user_input)
         if sources is not None and not accepted[1]:
@@ -823,6 +830,10 @@ class InvestigationCreationConversationService:
             for turn in turns
             for artifact in (turn.public_artifact or {},)
         )
+        if settings.investigation_multi_round_enabled:
+            from .rounds import draft_ids
+            with self.tool_service.application_service.store._connect() as connection:
+                associated = run.draft_id in draft_ids(connection, workspace_session_id, principal.id)
         if not associated:
             raise InvestigationSessionNotFoundError(
                 "Run is not associated with this creation workspace"
@@ -996,6 +1007,18 @@ class InvestigationCreationConversationService:
                     if artifact_run_id:
                         break
         current_artifact: dict[str, Any] = {}
+        rounds = ()
+        if settings.investigation_multi_round_enabled:
+            from .rounds import project
+            rounds = project(self.tool_service.application_service, session_id, principal)
+            if rounds:
+                # An older draft read in chat must not replace the editable round.
+                current_id = rounds[-1]['draft_id']
+                if current_id != draft_id:
+                    presentation_stage = 'suggestion'
+                draft_id, artifact_run_id = current_id, ''
+            if self.report_collection:
+                self.report_collection.sync_rounds(session_id, principal, rounds)
         run = None
         report_messages: tuple[InvestigationMessage, ...] = ()
         latest_report_turn = None
@@ -1039,6 +1062,7 @@ class InvestigationCreationConversationService:
             run=run,
             report_messages=report_messages,
             latest_report_turn=latest_report_turn,
+            rounds=rounds,
         )
 
     def generate_confirmation_preview(
@@ -1200,7 +1224,8 @@ class InvestigationCreationConversationService:
             raise InvestigationTurnNotFoundError("turn is not ready for execution")
         session = self.store.get_session(turn.session_id)
         principal = self.principal_for_session(session.id)
-        if self.report_collection and self.report_collection.active(session.id):
+        if (not settings.investigation_multi_round_enabled
+                and self.report_collection and self.report_collection.active(session.id)):
             return self._execute_collection_turn(turn)
         history = self.store.hermes_conversation_history(turn.id)
         recovered_history = self._failed_turn_checkpoint_history(
@@ -1214,7 +1239,7 @@ class InvestigationCreationConversationService:
         # published report. The UI normally sends report questions through the
         # report-turn endpoint; this guard protects retries and stale clients.
         workspace_state = self.get_workspace_state(session.id, principal=principal)
-        if (not settings.continuous_resource_session_enabled and workspace_state.run is not None
+        if (not settings.continuous_resource_session_enabled and not settings.investigation_multi_round_enabled and workspace_state.run is not None
                 and workspace_state.run.status.value == "PUBLISHED"):
             transcript = list(history or [])
             transcript.extend(
@@ -1268,7 +1293,11 @@ class InvestigationCreationConversationService:
         provider_route = self._provider_route(user_message)
         runtime_started = False
         runtime_finished = False
+        delivery_state = {'local_completions': 0}
         try:
+            if settings.investigation_multi_round_enabled:
+                self.report_collection.sources(session.id, turn.id)
+                self.report_collection.validate_history(session.id)
             # Keep one immutable reference projection for the prefix fence and
             # this turn's slice. Hermes shallow-copies and may mutate its input.
             history = prepare_creation_history(history)
@@ -1296,7 +1325,7 @@ class InvestigationCreationConversationService:
                         product_mode="creation"
                     ):
                         report_error = ""
-                        if settings.continuous_resource_session_enabled:
+                        if settings.continuous_resource_session_enabled and not settings.investigation_multi_round_enabled:
                             from .continuity import prepare_report
                             try:
                                 history = prepare_creation_history(prepare_report(self, workspace_state, principal, history))
@@ -1305,6 +1334,10 @@ class InvestigationCreationConversationService:
                                 report_error = "本轮报告读取服务不可用，不能声称已读取或报告不存在；仍可处理独立词库和规则。"
                                 logger.exception("Report binding unavailable for workspace %s", session.id)
                         agent = self._agent(session.id, provider_route=provider_route)
+                        if settings.investigation_multi_round_enabled:
+                            from backend.report_collection.delivery import direct_delivery_boundary
+                            delivery_state = public_streams.enter_context(direct_delivery_boundary(
+                                agent, self.report_collection, session.id, turn.id))
                         from backend.hermes_runtime.adapter import turn_system_context
                         runtime_started = True
                         with turn_system_context(agent, self._turn_context(workspace_state, report_error)):
@@ -1317,6 +1350,8 @@ class InvestigationCreationConversationService:
             runtime_finished = True
             if not isinstance(result, dict):
                 raise RuntimeError("Hermes returned a non-object Turn result")
+            if delivery_state['local_completions']:
+                result['api_calls'] = max(0, int(result.get('api_calls') or 0) - delivery_state['local_completions'])
             if bool(result.get("interrupted")):
                 self._answer_streamer.interrupt(turn.id)
                 recovered = self._complete_saved_checkpoints(turn, principal, history, user_message, result)
@@ -1707,7 +1742,17 @@ class InvestigationCreationConversationService:
 
     def _system_message(self, workspace):
         prompt = CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT
-        if settings.continuous_resource_session_enabled:
+        if settings.investigation_multi_round_enabled:
+            from .rounds import GUIDANCE
+            from backend.report_collection.tools import DIRECT_DELIVERY_PROMPT, AGENT_PROMPT
+            start = prompt.index('会话边界必须服从应用状态：')
+            end = prompt.index('The user may want to query', start)
+            prompt = prompt[:start] + GUIDANCE + prompt[end:]
+            prompt = prompt.replace('若当前会话已进入执行或报告阶段，沿用现有“新建调查”入口在新会话准备新 Draft，不替换原会话的已启动任务。', '')
+            report_prompt = (DIRECT_DELIVERY_PROMPT if self.report_collection.direct_delivery
+                and self.report_collection.direct_delivery_guidance else AGENT_PROMPT)
+            prompt += '\n以下约定仅适用于报告问答：\n' + report_prompt
+        elif settings.continuous_resource_session_enabled:
             from .continuity import GUIDANCE
             start = prompt.index('会话边界必须服从应用状态：')
             end = prompt.index('The user may want to query', start)
@@ -1716,6 +1761,11 @@ class InvestigationCreationConversationService:
 
     def _turn_context(self, workspace, report_error=""):
         context = ""
+        if settings.investigation_multi_round_enabled:
+            directory = [{**{k: r[k] for k in ('round_number', 'label', 'draft_id', 'title', 'draft_revision', 'draft_status')},
+                'run': {k: r['run'][k] for k in ('run_id', 'status', 'report_version_id')} if r['run'] else None}
+                for r in workspace.rounds]
+            return '本会话调查轮次（只表示关联和状态，不是报告证据）：' + json.dumps(directory, ensure_ascii=False)
         if settings.continuous_resource_session_enabled:
             from .continuity import report_context
             context += report_context(workspace.session.id)
@@ -1839,6 +1889,7 @@ class InvestigationCreationConversationService:
             for _, tool_name, data in successful_results
             if tool_name
             in {
+                "copy_investigation_draft",
                 "create_investigation_draft",
                 "use_ruleset_proposal",
                 "update_investigation_draft",
@@ -1851,6 +1902,7 @@ class InvestigationCreationConversationService:
             return {}
         tool_name, data = artifact_results[-1]
         if tool_name in {
+            "copy_investigation_draft",
             "create_investigation_draft",
             "use_ruleset_proposal",
             "update_investigation_draft",
