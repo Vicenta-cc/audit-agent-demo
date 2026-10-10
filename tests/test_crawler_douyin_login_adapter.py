@@ -1942,7 +1942,6 @@ def test_capture_metadata_mismatch_is_bounded_and_transient_change_recovers(
 
 
 def test_login_entry_click_timeout_accepts_only_actual_same_page_postcondition():
-
     pw = __import__("pytest").importorskip("playwright.async_api")
     from scripts.crawler_douyin_login_adapter import (
         DouyinLoginAdapter,
@@ -1991,3 +1990,24 @@ def test_login_entry_click_timeout_accepts_only_actual_same_page_postcondition()
     asyncio.run(scenario(True))
     asyncio.run(scenario(False))
     asyncio.run(scenario(True, False))
+
+
+def test_qr_error_after_verification_panel_disappears_enters_bounded_identity():
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(evaluate=AsyncMock()))
+        adapter.qr_ticket_digest = adapter.last_qr_source_digest = "current-source"
+        adapter.current_qr_error = 2046
+        adapter.qr = AsyncMock(return_value=None)
+        adapter.visible = AsyncMock(return_value=None)
+        adapter.region = AsyncMock(return_value=None)
+        assert await adapter.observe_once() == {"phase": "identity_check"}
+        assert adapter.current_qr_error == 2046
+        assert adapter.last_qr_source_digest == "current-source"
+        adapter.region = AsyncMock(return_value=Region(10, 10, 300, 200))
+        adapter.region_signature = AsyncMock(return_value="actual-verification")
+        assert (await adapter.observe_once())["phase"] == "challenge_required"
+
+    asyncio.run(run())

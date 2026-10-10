@@ -656,7 +656,10 @@ class DouyinLoginAdapter:
                     "region": region,
                     "region_signature": await self.region_signature(),
                 }
-            raise ValueError("QR_PLATFORM_REJECTED")
+            # A historical QR error is not proof of rejection after the native
+            # verification panel disappears. Preserve the same page for bounded
+            # authentication/identity observation; cookies alone never finish it.
+            return {"phase": "identity_check"}
         if correlated and self.qr_platform_status == "scanned":
             return {"phase": "phone_confirm"}
         if correlated and self.qr_platform_status == "confirmed":
