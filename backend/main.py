@@ -402,7 +402,7 @@ historical_report_demo_service = HistoricalReportDemoService(
     report_store=report_store,
     report_service=investigation_agent_service,
     executor=investigation_turn_executor,
-    auto_register=not _authz_enabled(),
+    auto_register=settings.historical_report_demo_auto_register and not _authz_enabled(),
     access_authorizer=(
         lambda principal_id, workspace: bool(
             (auth_store.get_user(principal_id) or {}).get("role") == "admin"

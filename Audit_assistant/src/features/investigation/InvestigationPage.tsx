@@ -575,6 +575,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     else params.delete("view");
     navigate({ pathname: location.pathname, search: params.toString() }, { state: location.state });
   };
+  const currentWorkspaceLocationRef = useRef(location);
+  currentWorkspaceLocationRef.current = location;
   const [sendingMessageSessionId, setSendingMessageSessionId] = useState("");
   const [deletingSessionId, setDeletingSessionId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<{id: string; title: string} | null>(null);
@@ -660,6 +662,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       const requestedHistorical = investigationId
         ? historicalSessions.find((session) => session.id === investigationId)
         : null;
+      const currentLocation = currentWorkspaceLocationRef.current;
+      const isInvestigationView = currentLocation.pathname.startsWith("/investigation")
+        && !new URLSearchParams(currentLocation.search).has("view");
+      if (!isInvestigationView || currentLocation.pathname !== location.pathname) return;
       if (requestedHistorical) {
         setActiveSessionId(requestedHistorical.id);
       } else if (!investigationId && historicalSessions[0] && !new URLSearchParams(window.location.search).has("view")) {
@@ -2587,7 +2593,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         <button type="button" aria-label="关闭删除提示" onClick={() => setDeletionNotice("")}>×</button>
       </div> : null}
 
-      {workspaceLoadError ? <div role="alert" className="inv-deletion-notice">
+      {workspaceLoadError && !activeSubView ? <div role="alert" className="inv-deletion-notice">
         <span>{workspaceLoadError}</span><button type="button" onClick={() => window.location.reload()}>重新加载</button>
       </div> : null}
 

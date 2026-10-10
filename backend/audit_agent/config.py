@@ -100,6 +100,9 @@ class Settings:
         for item in os.getenv("HERMES_AUTHORIZED_REPORT_VERSION_IDS", "").split(",")
         if item.strip()
     )
+    historical_report_demo_auto_register = environment_flag(
+        "HISTORICAL_REPORT_DEMO_AUTO_REGISTER"
+    )
     _historical_report_a_db_value = os.getenv("HISTORICAL_REPORT_A_DB", "").strip()
     historical_report_a_db = (
         Path(_historical_report_a_db_value).expanduser()
