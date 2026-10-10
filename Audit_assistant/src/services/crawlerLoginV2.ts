@@ -50,6 +50,33 @@ export interface LoginSnapshot {
   } | null;
   error?: string | { message?: string; code?: string } | null;
 }
+export interface LoginEditableTarget {
+  field_id: string;
+  rect: { x: number; y: number; width: number; height: number };
+  input_type: string;
+  input_mode: string;
+  max_length: number;
+  value: string;
+  focused: boolean;
+  applied_edit_revision: number;
+  selection_start?: number | null;
+  selection_end?: number | null;
+  selection_direction?: "none" | "forward" | "backward" | null;
+}
+export interface LoginCommandReceipt {
+  command_id: string;
+  sequence: number;
+}
+export interface LoginCommandResult {
+  type?: string;
+  command_id: string;
+  execution_status?: string;
+  focused_field_id?: string;
+  field_id?: string;
+  client_edit_revision?: number;
+  error_message?: string;
+  message?: string;
+}
 export interface LoginFrame {
   sequence: number;
   area_version: number;
@@ -59,6 +86,8 @@ export interface LoginFrame {
     image_width?: number;
     image_height?: number;
     codec?: string;
+    applied_input_sequence?: number;
+    editable_targets?: LoginEditableTarget[];
   };
   image: Blob;
 }

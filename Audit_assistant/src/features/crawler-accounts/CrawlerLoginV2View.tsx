@@ -7,16 +7,30 @@ import {
   createLoginSocket,
   decodeLoginFrame,
 } from "../../services/crawlerLoginV2";
-import type { LoginSnapshot, LoginFrame } from "../../services/crawlerLoginV2";
+import type {
+  LoginSnapshot,
+  LoginFrame,
+  LoginCommandResult,
+  LoginCommandReceipt,
+} from "../../services/crawlerLoginV2";
 import { CrawlerLoginChallengeCanvas } from "./CrawlerLoginChallengeCanvas";
 const phases: Record<string, string> = {
-  checking: "正在检查登录状态", preparing: "正在准备登录",
-  qr_ready: "打开抖音扫一扫", qr_expired: "二维码已过期",
-  phone_confirm: "请在手机上确认登录", sms_required: "完成短信验证",
-  challenge_required: "完成安全验证", manual_required: "完成安全验证",
-  identity_check: "正在完成登录，请稍候", profile_flush: "正在完成登录，请稍候",
-  reuse_check: "正在完成登录，请稍候", db_commit: "正在完成登录，请稍候",
-  done: "登录成功", failed: "未完成登录", expired: "本次登录已到期", cancelled: "本次登录已结束",
+  checking: "正在检查登录状态",
+  preparing: "正在准备登录",
+  qr_ready: "打开抖音扫一扫",
+  qr_expired: "二维码已过期",
+  phone_confirm: "请在手机上确认登录",
+  sms_required: "完成短信验证",
+  challenge_required: "完成安全验证",
+  manual_required: "完成安全验证",
+  identity_check: "正在完成登录，请稍候",
+  profile_flush: "正在完成登录，请稍候",
+  reuse_check: "正在完成登录，请稍候",
+  db_commit: "正在完成登录，请稍候",
+  done: "登录成功",
+  failed: "未完成登录",
+  expired: "本次登录已到期",
+  cancelled: "本次登录已结束",
 };
 type CommandOutcome = {
   platform_status?: string;
@@ -41,8 +55,13 @@ export function CrawlerLoginV2View({
   const [snapshot, setSnapshot] = useState(initial);
   const [now, setNow] = useState(Date.now());
   const phaseStarted = useRef(Date.now());
-  useEffect(() => { phaseStarted.current = Date.now(); }, [snapshot.phase]);
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => {
+    phaseStarted.current = Date.now();
+  }, [snapshot.phase]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [connection, setConnection] = useState("正在连接");
   const [error, setError] = useState("");
   const [gestureReset, setGestureReset] = useState(0);
@@ -53,7 +72,9 @@ export function CrawlerLoginV2View({
   );
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [manualText, setManualText] = useState("");
+  const [commandResult, setCommandResult] = useState<LoginCommandResult | null>(
+    null,
+  );
   const socket = useRef<WebSocket | null>(null);
   const current = useRef(snapshot);
   const sequence = useRef(0);
@@ -73,7 +94,7 @@ export function CrawlerLoginV2View({
       socket.current?.close();
       setPhone("");
       setCode("");
-      setManualText("");
+      setCommandResult(null);
       setFrame(null);
       setSnapshot((previous) => ({
         ...previous,
@@ -181,6 +202,7 @@ export function CrawlerLoginV2View({
                 .catch(() => setError("上次操作结果尚未确认，请勿重复提交"));
             }
           } else if (message.type === "command_result") {
+            setCommandResult(message);
             if (
               ["failed", "rejected", "not_executed"].includes(
                 message.execution_status,
@@ -208,6 +230,7 @@ export function CrawlerLoginV2View({
               }
             }
           } else if (message.type === "error") {
+            if (message.command_id) setCommandResult(message);
             setError(
               message.message ||
                 message.error?.message ||
@@ -295,21 +318,22 @@ export function CrawlerLoginV2View({
     !["success", "failed", "expired", "cancelled", "finalizing"].includes(
       snapshot.status,
     );
-  const send = (input: Record<string, unknown>) => {
-    if (!enabled || socket.current?.readyState !== WebSocket.OPEN) return;
+  const send = (input: Record<string, unknown>): LoginCommandReceipt | null => {
+    if (!enabled || socket.current?.readyState !== WebSocket.OPEN) return null;
     if (socket.current.bufferedAmount > 64 * 1024) {
       setError("连接发送积压，本次操作已停止，恢复连接后请重新操作");
       socket.current.close(1011, "input congestion");
-      return;
+      return null;
     }
     const commandId = crypto.randomUUID();
+    const commandSequence = ++sequence.current;
     socket.current.send(
       JSON.stringify({
         ...input,
         command_id: commandId,
         operation_id: snapshot.operation_id,
         controller_epoch: snapshot.controller_epoch,
-        sequence: ++sequence.current,
+        sequence: commandSequence,
         expected_state_revision: snapshot.state_revision,
       }),
     );
@@ -322,6 +346,7 @@ export function CrawlerLoginV2View({
       setPending(commandId);
       setError("");
     }
+    return { command_id: commandId, sequence: commandSequence };
   };
   const action = (name: string, payload = {}) =>
     send({
@@ -351,11 +376,41 @@ export function CrawlerLoginV2View({
   const terminal = ["success", "failed", "expired", "cancelled"].includes(
     snapshot.status,
   );
-  const verifiedAccountId = snapshot.result?.identity_verified ? snapshot.result.platform_account_id || (snapshot.identity?.status === "verified" ? snapshot.identity.platform_account_id : "") : "";
-  const displayPhase = snapshot.status === "scanned" ? "phone_confirm" : snapshot.status === "success" ? "done" : ["failed", "expired", "cancelled"].includes(snapshot.status) ? snapshot.status : snapshot.phase;
-  const waiting = !["qr_ready", "qr_expired", "sms_required", "challenge_required", "manual_required", "done", "failed", "expired", "cancelled"].includes(displayPhase);
-  const resendSeconds = snapshot.sms?.resend_available_at ? Math.max(0, Math.ceil((Date.parse(snapshot.sms.resend_available_at) - now) / 1000)) : 0;
-  const sessionSeconds = Math.max(0, Math.ceil((Date.parse(snapshot.expires_at) - now) / 1000));
+  const verifiedAccountId = snapshot.result?.identity_verified
+    ? snapshot.result.platform_account_id ||
+      (snapshot.identity?.status === "verified"
+        ? snapshot.identity.platform_account_id
+        : "")
+    : "";
+  const displayPhase =
+    snapshot.status === "scanned"
+      ? "phone_confirm"
+      : snapshot.status === "success"
+        ? "done"
+        : ["failed", "expired", "cancelled"].includes(snapshot.status)
+          ? snapshot.status
+          : snapshot.phase;
+  const waiting = ![
+    "qr_ready",
+    "qr_expired",
+    "sms_required",
+    "challenge_required",
+    "manual_required",
+    "done",
+    "failed",
+    "expired",
+    "cancelled",
+  ].includes(displayPhase);
+  const resendSeconds = snapshot.sms?.resend_available_at
+    ? Math.max(
+        0,
+        Math.ceil((Date.parse(snapshot.sms.resend_available_at) - now) / 1000),
+      )
+    : 0;
+  const sessionSeconds = Math.max(
+    0,
+    Math.ceil((Date.parse(snapshot.expires_at) - now) / 1000),
+  );
   const message =
     typeof snapshot.error === "string"
       ? snapshot.error
@@ -363,11 +418,40 @@ export function CrawlerLoginV2View({
   return (
     <div className="crawler-login-v2">
       <div className="crawler-login-v2-status" role="status">
-        {displayPhase === "done" ? <CheckCircle2 size={36} className="crawler-login-v2-success-icon" aria-hidden="true" /> : displayPhase === "phone_confirm" ? <Smartphone size={36} aria-hidden="true" /> : terminal ? <AlertCircle size={32} aria-hidden="true" /> : waiting ? <Loader2 size={30} className="spin" aria-hidden="true" /> : null}
+        {displayPhase === "done" ? (
+          <CheckCircle2
+            size={36}
+            className="crawler-login-v2-success-icon"
+            aria-hidden="true"
+          />
+        ) : displayPhase === "phone_confirm" ? (
+          <Smartphone size={36} aria-hidden="true" />
+        ) : terminal ? (
+          <AlertCircle size={32} aria-hidden="true" />
+        ) : waiting ? (
+          <Loader2 size={30} className="spin" aria-hidden="true" />
+        ) : null}
         <strong>{phases[displayPhase] || "正在等待抖音返回登录结果"}</strong>
-        {displayPhase === "phone_confirm" ? <p>请打开手机上的抖音，点击确认登录。</p> : ["checking", "preparing"].includes(displayPhase) ? <p>二维码准备好后会显示在这里。</p> : waiting ? <p>请稍候，登录结果确认后会自动更新。</p> : null}
-        {waiting && now - phaseStarted.current >= 15000 ? <p className="crawler-login-v2-slow">{displayPhase === "phone_confirm" ? "还没收到抖音确认，请检查手机提示，无需重复扫码。" : "抖音暂未返回新的登录结果，仍在等待。您也可以关闭窗口结束本次登录。"}</p> : null}
-        {!terminal && !["正在连接", "已连接", "登录身份已变化，请重新打开"].includes(connection) ? <p>正在恢复登录画面，暂时无法操作。</p> : null}
+        {displayPhase === "phone_confirm" ? (
+          <p>请打开手机上的抖音，点击确认登录。</p>
+        ) : ["checking", "preparing"].includes(displayPhase) ? (
+          <p>二维码准备好后会显示在这里。</p>
+        ) : waiting ? (
+          <p>请稍候，登录结果确认后会自动更新。</p>
+        ) : null}
+        {waiting && now - phaseStarted.current >= 15000 ? (
+          <p className="crawler-login-v2-slow">
+            {displayPhase === "phone_confirm"
+              ? "还没收到抖音确认，请检查手机提示，无需重复扫码。"
+              : "抖音暂未返回新的登录结果，仍在等待。您也可以关闭窗口结束本次登录。"}
+          </p>
+        ) : null}
+        {!terminal &&
+        !["正在连接", "已连接", "登录身份已变化，请重新打开"].includes(
+          connection,
+        ) ? (
+          <p>正在恢复登录画面，暂时无法操作。</p>
+        ) : null}
       </div>
       {["qr_ready", "qr_expired"].includes(snapshot.phase) &&
       (snapshot.qr || snapshot.phase === "qr_expired") ? (
@@ -434,14 +518,13 @@ export function CrawlerLoginV2View({
               type="button"
               disabled={
                 !available("request_sms") ||
-                Boolean(
-                  snapshot.sms.resend_available_at &&
-                  resendSeconds > 0,
-                )
+                Boolean(snapshot.sms.resend_available_at && resendSeconds > 0)
               }
               onClick={() => action("request_sms", phone ? { phone } : {})}
             >
-              {resendSeconds > 0 ? `${resendSeconds}秒后可重新发送` : "发送验证码"}
+              {resendSeconds > 0
+                ? `${resendSeconds}秒后可重新发送`
+                : "发送验证码"}
             </Button>
             <Button
               type="submit"
@@ -458,7 +541,7 @@ export function CrawlerLoginV2View({
       ["challenge_required", "manual_required"].includes(displayPhase) ? (
         <>
           <CrawlerLoginChallengeCanvas
-            key={`${snapshot.challenge.challenge_id}:${gestureReset}`}
+            key={`${snapshot.challenge.challenge_id}:${snapshot.controller_epoch}:${gestureReset}`}
             area={snapshot.challenge}
             frame={frame}
             enabled={
@@ -468,35 +551,16 @@ export function CrawlerLoginV2View({
             }
             send={send}
             onError={setError}
+            commandResult={commandResult}
           />
-          {snapshot.challenge.allowed_actions.includes("text") ? (
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                send({
-                  type: "text",
-                  text: manualText,
-                  challenge_id: snapshot.challenge!.challenge_id,
-                  area_version: snapshot.challenge!.area_version,
-                });
-                setManualText("");
-              }}
-            >
-              <label>
-                填写当前选中的输入框
-                <input
-                  value={manualText}
-                  maxLength={256}
-                  onChange={(event) => setManualText(event.target.value)}
-                  disabled={!enabled}
-                />
-              </label>
-              <Button disabled={!enabled || !manualText}>输入</Button>
-            </form>
-          ) : null}
         </>
       ) : null}
-      {snapshot.status === "success" && verifiedAccountId ? <div className="crawler-login-v2-identity"><span>已核对抖音账号</span><strong>{verifiedAccountId}</strong></div> : null}
+      {snapshot.status === "success" && verifiedAccountId ? (
+        <div className="crawler-login-v2-identity">
+          <span>已核对抖音账号</span>
+          <strong>{verifiedAccountId}</strong>
+        </div>
+      ) : null}
       {snapshot.status === "success" ? (
         <p>
           {snapshot.result?.account_eligibility === "cooling_down"
@@ -531,9 +595,29 @@ export function CrawlerLoginV2View({
           刷新验证题目
         </Button>
       ) : null}
-      {!terminal && ["qr_ready", "qr_expired"].includes(displayPhase) && snapshot.available_actions.includes("open_manual") ? <div className="crawler-login-v2-platform-help"><p>手机确认后仍未完成？查看抖音当前提示。</p><Button disabled={!enabled} onClick={() => action("open_manual")}>查看抖音提示</Button></div> : null}
-      {!terminal && displayPhase === "manual_required" && snapshot.available_actions.includes("close_manual") ? <Button disabled={!enabled} onClick={() => action("close_manual")}>返回扫码</Button> : null}
-      {!terminal && Number.isFinite(sessionSeconds) && sessionSeconds > 0 ? <p className="crawler-login-v2-session-time">本次登录剩余 {Math.floor(sessionSeconds / 60)}:{String(sessionSeconds % 60).padStart(2, "0")}</p> : null}
+      {!terminal &&
+      ["qr_ready", "qr_expired"].includes(displayPhase) &&
+      snapshot.available_actions.includes("open_manual") ? (
+        <div className="crawler-login-v2-platform-help">
+          <p>手机确认后仍未完成？查看抖音当前提示。</p>
+          <Button disabled={!enabled} onClick={() => action("open_manual")}>
+            查看抖音提示
+          </Button>
+        </div>
+      ) : null}
+      {!terminal &&
+      displayPhase === "manual_required" &&
+      snapshot.available_actions.includes("close_manual") ? (
+        <Button disabled={!enabled} onClick={() => action("close_manual")}>
+          返回扫码
+        </Button>
+      ) : null}
+      {!terminal && Number.isFinite(sessionSeconds) && sessionSeconds > 0 ? (
+        <p className="crawler-login-v2-session-time">
+          本次登录剩余 {Math.floor(sessionSeconds / 60)}:
+          {String(sessionSeconds % 60).padStart(2, "0")}
+        </p>
+      ) : null}
     </div>
   );
 }
