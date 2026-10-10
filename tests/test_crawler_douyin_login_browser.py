@@ -16,6 +16,90 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def test_real_capture_preserves_native_text_caret(tmp_path):
+    import cv2
+    import numpy as np
+    from backend.audit_agent.crawler_browser import load_account_browser
+    from scripts.crawler_douyin_login_adapter import Region
+    from scripts.crawler_douyin_login_v2 import DouyinLoginV2
+
+    def caret_pixels(jpeg):
+        pixels = cv2.imdecode(np.frombuffer(jpeg, dtype=np.uint8), cv2.IMREAD_COLOR)
+        blue, green, red = cv2.split(pixels.astype(np.int16))
+        # JPEG changes a thin caret's brightness; its red chroma still separates
+        # it from the black text, white background and blue focus border.
+        return np.count_nonzero((red - green > 45) & (red - blue > 15))
+
+    async def run():
+        browser = load_account_browser()
+        context, _ = await browser.launch_account_context(
+            "caret-fixture", tmp_path, headless=True
+        )
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(operation_id="caret-fixture", media_fd=left.detach())
+        )
+        original_media = helper.media
+        frames = []
+        try:
+            page = await context.new_page()
+            await page.bring_to_front()
+            await page.set_viewport_size({"width": 500, "height": 200})
+            html = (
+                '<style>body{margin:0;background:white}input{position:absolute;'
+                'left:30px;top:30px;width:230px;height:50px;font-size:24px;'
+                'color:black;background:white;caret-color:#e00066}</style>'
+                '<input aria-label="fixture input" value="abcd">'
+            )
+            await page.route(
+                "https://www.douyin.com/caret-fixture",
+                lambda route: route.fulfill(body=html, content_type="text/html"),
+            )
+            await page.goto(
+                "https://www.douyin.com/caret-fixture",
+                wait_until="domcontentloaded",
+                timeout=5000,
+            )
+            field = page.locator("input")
+            await field.click()
+            await field.press("End")
+            hidden = await page.screenshot(type="jpeg")
+            assert caret_pixels(hidden) == 0
+            await field.press("ArrowLeft")
+            await field.press("ArrowRight")
+
+            class Media:
+                async def send(self, jpeg, metadata, **kwargs):
+                    frames.append(jpeg)
+                    if caret_pixels(jpeg) or len(frames) >= 4:
+                        helper.stopped.set()
+                    else:
+                        await field.press("ArrowLeft")
+                        await field.press("ArrowRight")
+
+            helper.adapter = SimpleNamespace(page=page)
+            helper.region = Region(20, 20, 280, 80)
+            helper.epoch = 1
+            helper.controller_attached = True
+            helper.capture_enabled = True
+            helper.phase = "manual_required"
+            helper.media = Media()
+            await asyncio.wait_for(helper.capture_frames(), timeout=5)
+            assert any(caret_pixels(frame) > 0 for frame in frames), {
+                "frame_count": len(frames),
+                "document_focused": await page.evaluate("document.hasFocus()"),
+                "caret_color": await field.evaluate("e=>getComputedStyle(e).caretColor"),
+            }
+            assert await field.evaluate("e=>document.activeElement===e")
+            assert await field.input_value() == "abcd"
+        finally:
+            original_media.close()
+            right.close()
+            await context.close()
+
+    asyncio.run(run())
+
+
 def test_real_browser_qr_sms_graphics_reopen_and_media(tmp_path, monkeypatch):
     import cv2
     from backend.audit_agent.crawler_browser import load_account_browser

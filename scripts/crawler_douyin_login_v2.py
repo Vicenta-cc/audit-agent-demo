@@ -577,6 +577,7 @@ class DouyinLoginV2:
                         type="jpeg",
                         quality=self.jpeg_quality,
                         clip=region.clip(),
+                        caret="initial",
                         timeout=2000,
                     )
                     stable_fields = fields == await self.editables.inventory(
