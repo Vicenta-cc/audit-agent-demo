@@ -83,4 +83,15 @@ def cases():
     for spec in result.values():
         spec['reports']['D']=report([post('99001','private','私有','high',[
             c('private-D','frequent','常来看看','high','PRIVATE-D-CANARY')])])
+    # Separate follow-up requested after the initial delivery-guidance comparison.
+    # Preserve the original datasets and their question order for reproducibility.
+    result['delivery']=deepcopy(result['paging'])
+    result['delivery']['questions']=[
+        ('authors_only','只列出报告 B 中低风险评论的作者，按账号去重。',
+         '仅 frequent、guest-26、guest-27 三个作者；按评论风险筛选，不能包含仅发帖账号，不应交付22条评论明细代替作者名单。'),
+        ('both_only','报告 B 中哪些账号既发过帖子又发过评论？不限风险等级。',
+         '只有 frequent，25条评论、1个帖子；不能继承上一题low过滤，身份按稳定平台ID。'),
+        result['paging']['questions'][0],
+        result['paging']['questions'][3],
+    ]
     return deepcopy(result)

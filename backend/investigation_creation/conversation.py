@@ -1138,7 +1138,7 @@ class InvestigationCreationConversationService:
         return self.execute_turn(turn_id)
 
     def _execute_collection_turn(self, turn):
-        from backend.report_collection.tools import PROMPT, AGENT_PROMPT
+        from backend.report_collection.tools import PROMPT, AGENT_PROMPT, DIRECT_DELIVERY_PROMPT
         from backend.report_collection.context import project_history, restore_transcript
         from backend.hermes_runtime.adapter import turn_system_context
         try:
@@ -1158,11 +1158,13 @@ class InvestigationCreationConversationService:
                 delivery_state = streams.enter_context(direct_delivery_boundary(
                     agent, self.report_collection, turn.session_id, turn.id))
                 agent_driven = self.report_collection.agent_driven
+                collection_prompt = (DIRECT_DELIVERY_PROMPT if self.report_collection.direct_delivery
+                    and self.report_collection.direct_delivery_guidance else AGENT_PROMPT) if agent_driven else PROMPT
                 repair = "" if agent_driven else "本轮只能使用会话报告工具。答案只可引用本轮查询范围内的证据。"
                 totals = {k: 0 for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls")}
                 for attempt in range(1 if agent_driven else 2):
                     with turn_system_context(agent, repair):
-                        result = agent.run_conversation(user_message, system_message=AGENT_PROMPT if agent_driven else PROMPT,
+                        result = agent.run_conversation(user_message, system_message=collection_prompt,
                             conversation_history=deepcopy(history), task_id=turn.id)
                     for key in totals:
                         totals[key] += int(result.get(key) or 0)

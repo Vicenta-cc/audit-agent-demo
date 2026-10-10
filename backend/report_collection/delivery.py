@@ -93,6 +93,15 @@ def direct_delivery_boundary(agent,service,session,turn):
     if service.direct_delivery and service.agent_driven:
         if getattr(agent,'api_mode',None)!='chat_completions':
             raise ValueError('直出原型仅支持已验证的 chat_completions 适配器。')
+        if service.direct_delivery_guidance:
+            # Expose this already-registered tool directly; keep all other tools
+            # and the normal deferred bridge. No forced tool_choice or routing.
+            from .tools import schemas
+            schema=next(s for s in schemas() if s['name']=='deliver_conversation_results')
+            originals['tools']=agent.tools
+            originals['valid_tool_names']=agent.valid_tool_names
+            agent.tools=[t for t in agent.tools if t['function']['name']!=schema['name']]+[{'type':'function','function':schema}]
+            agent.valid_tool_names=set(agent.valid_tool_names)|{schema['name']}
         def wrap(original):
             @wraps(original)
             def call(*args,**kwargs):

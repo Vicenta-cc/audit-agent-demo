@@ -25,11 +25,12 @@ def reference(kind, value):
 
 
 class ReportCollectionService:
-    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False, compact_history=False, express_results=True, analysis_tools=True, direct_delivery=False):
+    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False, compact_history=False, express_results=True, analysis_tools=True, direct_delivery=False, direct_delivery_guidance=False):
         self.agent_driven = agent_driven
         self.express_results = express_results
         self.analysis_tools = analysis_tools
         self.direct_delivery = direct_delivery
+        self.direct_delivery_guidance = direct_delivery_guidance
         self.compact_history = compact_history
         self.conversation = conversation
         self.report_store = report_store

@@ -69,6 +69,7 @@ def main():
     parser.add_argument('--analysis-comparison',action='store_true',
         help='Compare selected 949f3d6 baseline against analysis tools, keeping its prompt and format fixed.')
     parser.add_argument('--direct-comparison',action='store_true')
+    parser.add_argument('--delivery-prompt-comparison',action='store_true')
     args=parser.parse_args()
     root=args.output.resolve();os.umask(0o077);root.mkdir(parents=True,exist_ok=False)
     provider={k:os.environ[k] for k in ['CONVERSATION_API_KEY','CONVERSATION_BASE_URL','CONVERSATION_MODEL']}
@@ -95,8 +96,9 @@ def main():
     if args.analysis_comparison:
         order=['selected_baseline','analysis_tools']
     if args.direct_comparison:order=['analysis_baseline','direct_delivery']
+    if args.delivery_prompt_comparison:order=['original_prompt','compact_prompt']
     if args.repeat==2:order=list(reversed(order))
-    evidence=dict(suite='direct-delivery-full-chain' if args.direct_comparison else ('analysis-tools-full-chain' if args.analysis_comparison else 'diverse-full-chain'),dataset=args.dataset,repeat=args.repeat,status='PREPARING',
+    evidence=dict(suite='delivery-prompt-full-chain' if args.delivery_prompt_comparison else 'direct-delivery-full-chain' if args.direct_comparison else ('analysis-tools-full-chain' if args.analysis_comparison else 'diverse-full-chain'),dataset=args.dataset,repeat=args.repeat,status='PREPARING',
         model=provider['CONVERSATION_MODEL'],host=urlsplit(provider['CONVERSATION_BASE_URL']).hostname,
         arm_order=order,prompts=dict(original=tools.AGENT_BASE_PROMPT,semantic=SEMANTIC_PROMPT,brief=tools.FOCUSED_ANSWER_INSTRUCTION),
         fixture=spec,turns=[],calls=[],thinking='disabled',production_changed=False,
@@ -104,6 +106,9 @@ def main():
     if args.analysis_comparison or args.direct_comparison:
         evidence['prompts']={'both_arms':tools.AGENT_PROMPT}
         evidence['baseline_commit']='7c8f2cd' if args.direct_comparison else '949f3d6'
+    if args.delivery_prompt_comparison:
+        evidence['prompts']={'original_prompt':tools.AGENT_PROMPT,'compact_prompt':tools.DIRECT_DELIVERY_PROMPT}
+        evidence['baseline_commit']='461709c'
     def save():
         data=json.dumps(evidence,ensure_ascii=False,indent=2,default=str)
         assert provider['CONVERSATION_API_KEY'] not in data
@@ -119,7 +124,7 @@ def main():
                     (name,'principal-b' if name=='D' else 'principal-a',r.task,r.task,'fixture',name,name))
         service=ReportCollectionService(conversation=stack['conversation'],report_store=stack['report_store'],
             can_read=lambda p,item:owns_report(stack['creation_store'],p,item),path=root/'collections.sqlite3',agent_driven=True,
-            express_results=args.analysis_comparison or args.direct_comparison, analysis_tools=args.direct_comparison)  # Historical six arms remain unchanged.
+            express_results=args.analysis_comparison or args.direct_comparison or args.delivery_prompt_comparison, analysis_tools=args.direct_comparison or args.delivery_prompt_comparison)  # Historical six arms remain unchanged.
         stack['conversation'].report_collection=service;tools.configure(service)
         stack.update(collection=service,reports=reports)
         stack['conversation'].fake_runtime=False
@@ -190,6 +195,10 @@ def main():
                 if args.analysis_comparison:
                     prompt=tools.AGENT_PROMPT
                     service.analysis_tools=(arm=='analysis_tools')
+                elif args.delivery_prompt_comparison:
+                    prompt=tools.DIRECT_DELIVERY_PROMPT if arm=='compact_prompt' else tools.AGENT_PROMPT
+                    service.direct_delivery=True
+                    service.direct_delivery_guidance=(arm=='compact_prompt')
                 elif args.direct_comparison:
                     prompt=tools.AGENT_PROMPT
                     service.direct_delivery=(arm=='direct_delivery')

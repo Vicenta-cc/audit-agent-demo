@@ -460,6 +460,7 @@ if os.environ.get("REPORT_COLLECTION_ENABLED") == "1":
         can_read=_can_read_collection_report, path=settings.data_dir / "report-collections.sqlite3",
         agent_driven=os.environ.get("REPORT_COLLECTION_AGENT_DRIVEN") == "1",
         direct_delivery=os.environ.get("REPORT_COLLECTION_DIRECT_DELIVERY") == "1",
+        direct_delivery_guidance=os.environ.get("REPORT_COLLECTION_DIRECT_DELIVERY_GUIDANCE") == "1",
         compact_history=os.environ.get("REPORT_COLLECTION_COMPACT_HISTORY") == "1")
     investigation_creation_conversation_service.report_collection = collection_service
     configure_collection(collection_service)

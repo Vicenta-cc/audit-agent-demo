@@ -7,6 +7,8 @@ import statistics
 import sys
 
 root=Path(sys.argv[1]);plan=json.loads((root/'plan.json').read_text())
+guidance=plan['arms']==['original_prompt','compact_prompt']
+title='精简提示与直出选择对照' if guidance else '查询结果直接交付对照'
 reviews=json.loads((root/'manual-review.json').read_text())
 turns=[];requests=[];groups=[]
 for dataset,repeat in plan['jobs']:
@@ -20,7 +22,12 @@ for dataset,repeat in plan['jobs']:
         assert req['extra_body']['thinking']=={'type':'disabled'}
         assert req['model']==data['model']
         system=[m for m in req['messages'] if m['role']=='system']
-        requests.append((req['model'],hashlib.sha256(json.dumps(system,sort_keys=True,ensure_ascii=False).encode()).hexdigest()))
+        arm=next(c['arm'] for c in data['calls'] if c['request_file']==request.name)
+        if guidance:
+            assert data['prompts'][arm] in system[0]['content']
+            visible={t['function']['name'] for t in req['tools']}
+            assert ('deliver_conversation_results' in visible)==(arm=='compact_prompt')
+        requests.append((req['model'],hashlib.sha256(json.dumps(system,sort_keys=True,ensure_ascii=False).encode()).hexdigest(),arm))
     for turn in data['turns']:
         key=f"{job}/{turn['arm']}/{turn['case']}";r=reviews[key]
         assert turn['status']=='completed'
@@ -33,7 +40,11 @@ for dataset,repeat in plan['jobs']:
         turns.append({**turn,'job':job,'review':r,'direct':bool(completions)})
     groups.append((job,data))
 assert len(turns)==plan['turns'] and len(reviews)==len(turns)
-assert len(set(x[1] for x in requests))==1,'system prompt changed'
+if guidance:
+    assert len(set(x[1] for x in requests))==2
+    assert all(len({x[1] for x in requests if x[2]==arm})==1 for arm in plan['arms'])
+else:
+    assert len(set(x[1] for x in requests))==1,'system prompt changed'
 summary={}
 for arm in plan['arms']:
     items=[t for t in turns if t['arm']==arm]
@@ -56,7 +67,8 @@ for job,data in groups:
 notes=(root/'conclusions.txt').read_text()
 page='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>查询结果直接交付对照</title><style>
 body{font:16px/1.7 system-ui,sans-serif;margin:36px auto;max-width:1500px;padding:0 24px;background:#f5f6f8;color:#182336}h1,h2,h3{line-height:1.4}.pair{display:grid;grid-template-columns:1fr 1fr;gap:20px}article,header{background:white;padding:24px;border-radius:12px;margin:24px 0}section{min-width:0;border:1px solid #ddd;border-radius:8px;padding:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.7 ui-monospace,monospace}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #ddd;padding:10px;text-align:left}.fail{color:#aa2035}.pass{color:#13754b}.concern{color:#966107}summary{cursor:pointer;font-weight:600}@media(max-width:900px){.pair{grid-template-columns:1fr}}</style><body>'''
-page+=f'<header><h1>查询结果直接交付对照</h1><p>2026-10-10 · 24 轮真实会话 · DeepSeek 非思考 · 独立本地环境</p><pre>{esc(notes)}</pre><table><tr><th>方案</th><th>通过</th><th>有保留</th><th>明确错误</th><th>实际直出轮数</th><th>供应商调用</th><th>每轮耗时中位数</th></tr>{rows}</table><p>“直出轮数”单列：不能把仍由模型生成的正确答案算成直出的效果。统计包含工具选错参数、未使用直出等所有已完成轮次；没有挑选重跑。小样本、合成冻结数据、非盲人工评分，不证明生产准确率或稳定提速。</p></header>'+''.join(cards)+'</body></html>'
-(root/'查询结果直接交付对照.html').write_text(page)
+page=page.replace('<title>查询结果直接交付对照</title>',f'<title>{title}</title>')
+page+=f'<header><h1>{title}</h1><p>2026-10-10 · {len(turns)} 轮真实会话 · DeepSeek 非思考 · 独立本地环境</p><pre>{esc(notes)}</pre><table><tr><th>方案</th><th>通过</th><th>有保留</th><th>明确错误</th><th>实际直出轮数</th><th>供应商调用</th><th>每轮耗时中位数</th></tr>{rows}</table><p>“直出轮数”单列：不能把仍由模型生成的正确答案算成直出的效果。统计包含工具选错参数、未使用直出等所有已完成轮次；没有挑选重跑。小样本、合成冻结数据、非盲人工评分，不证明生产准确率或稳定提速。</p></header>'+''.join(cards)+'</body></html>'
+(root/(title+'.html')).write_text(page)
 (root/'verification.json').write_text(json.dumps({'turns':len(turns),'real_provider_requests':len(requests),'system_hashes':list(set(x[1] for x in requests)),'models':list(set(x[0] for x in requests)),'thinking_disabled':True,'all_turns_completed':True,'direct_text_equals_final_answer':True,'manual_review_complete':True},indent=2))
 print(json.dumps(summary,ensure_ascii=False,indent=2))

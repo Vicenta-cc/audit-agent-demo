@@ -1,0 +1,51 @@
+Direct delivery guidance trial — 2026-10-10
+Base: 461709c; independent local worktree, existing direct-delivery branch.
+
+User requested a shorter prompt plus explicit guidance in tool descriptions and
+selection. Candidate replaces the 301-character report prompt with 171 characters;
+it is not appended to the old instructions. Creation identity/runtime prompt is
+unchanged. Query/read descriptions identify direct delivery as an available output;
+delivery description states full subquestion coverage and the analysis exception.
+The already-registered delivery tool is exposed with its full schema on the Agent
+instance alongside the standard deferred bridge, then restored at turn end.
+No forced tool_choice, output classifier, output scanner, repair loop or model change.
+
+Both comparison arms retain the same deterministic query/role/delivery capabilities.
+Only guidance and visibility differ. Therefore outcomes are evidence for the
+combined treatment, not proof that prompt shortening alone caused improvements.
+The report-specific prompt is 171 characters; this is not the entire model context.
+
+Opt-in: REPORT_COLLECTION_DIRECT_DELIVERY_GUIDANCE=1, together with existing
+REPORT_COLLECTION_ENABLED / AGENT_DRIVEN / DIRECT_DELIVERY flags. Defaults remain off.
+Ordinary report/creation/keyword/rule generation is unaffected.
+
+Predeclared 24 full-chain turns: paging repeated twice with reversed arm order,
+config once; each conversation has the same four questions. Same synthetic frozen
+reports per job, same DeepSeek, thinking disabled, no discarded wrong answers.
+Whole-answer review includes selection, shape of delivered results, all subquestions,
+follow-up order, no unauthorized disclosure, and preservation of causal analysis.
+More direct-delivery calls do not by themselves count as more correct answers.
+
+Artifacts: /Users/ext.wanghongtao6/Documents/Codex/acceptance/report-delivery-guidance-20261010
+
+User-requested supplement: 8 more turns on the same paging fixture, separately
+asking deduplicated low-risk authors, unrestricted both-role accounts, complete
+comments and foreign-report access. Original plan preserved in initial-plan.json;
+plan-amendment.json records the later addition. Total 32 turns, 82 provider calls.
+
+Whole-answer results (16 per arm): original 11 pass / 3 concern / 2 fail;
+candidate 11 pass / 0 concern / 5 fail. Both made 41 provider calls; observed median
+seconds 16.65 vs 14.72, too small/noisy to establish speed improvement.
+Candidate direct deliveries 9/16 vs original 0/16. Seven candidate deliveries met
+the request; two mixed questions delivered comment rows instead of an author list.
+All six complete 27-comment tables matched fixture content/order/author/risk.
+Candidate standalone four-category supplement passed 4/4 and used direct delivery.
+Two candidate permission explanations still misdescribed scope/tool semantics;
+auth enforcement and private-data checks passed. Both arms failed one causal
+analysis answer despite correct main counts. More direct calls did not improve
+overall pass count. Keep experimental opt-in disabled; do not promote baseline.
+
+Validation: 37 relevant automated tests passed; one existing dependency warning.
+All 32 turns completed, thinking disabled in all 82 saved provider requests,
+original source snapshot/protocol amendment/full tool traces/final answers retained.
+No cloud, frontend, rule/keyword generator, or Hermes dependency edits; no push.

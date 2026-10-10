@@ -72,3 +72,21 @@ def test_delivery_rejects_partial_oversized_and_unknown_filter_results(make_coll
         db.execute('UPDATE collection_results SET payload=? WHERE ref=?',(json.dumps(data),result['result_ref']))
     refused=json.loads(tools.dispatch('deliver_conversation_results',{'result_refs':[result['result_ref']]},s['sid'],t))
     assert not refused['ok'] and '查询条件' in refused['error']['message']
+
+
+def test_guidance_exposes_delivery_without_forcing_tool_choice_and_restores_agent(make_collection):
+    s=make_collection('paging');service=s['collection'];service.direct_delivery=True
+    before={x['name']:x for x in tools.schemas()}
+    service.direct_delivery_guidance=True
+    after={x['name']:x for x in tools.schemas()}
+    assert all(before[k]['parameters']==after[k]['parameters'] for k in before)
+    assert len(tools.DIRECT_DELIVERY_PROMPT)==171<len(tools.AGENT_PROMPT)
+    agent=SimpleNamespace(api_mode='chat_completions',tools=[{'type':'function','function':{'name':'tool_call'}}],
+        valid_tool_names={'tool_call'},_interruptible_api_call=lambda *a:None,_interruptible_streaming_api_call=lambda *a:None)
+    original_tools=agent.tools;original_names=agent.valid_tool_names
+    t=begin(s)
+    with direct_delivery_boundary(agent,service,s['sid'],t):
+        assert [x['function']['name'] for x in agent.tools]==['tool_call','deliver_conversation_results']
+        assert agent.valid_tool_names=={'tool_call','deliver_conversation_results'}
+        assert 'tool_choice' not in agent.__dict__
+    assert agent.tools is original_tools and agent.valid_tool_names is original_names
