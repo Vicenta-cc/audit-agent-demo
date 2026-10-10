@@ -604,7 +604,8 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         title: item.title,
         updatedAt: formatSessionTimestamp(item.updated_at),
         updatedAtIso: item.updated_at,
-        status: item.run_status === "PUBLISHED" ? "报告已生成"
+        status: item.read_error ? "读取异常"
+          : item.run_status === "PUBLISHED" ? "报告已生成"
           : item.run_status === "AUDIT_COMPLETED" ? "审核完成"
           : item.run_status === "FAILED" ? "调查失败"
           : item.run_status === "INTERRUPTED" ? "调查已中断"
@@ -2216,6 +2217,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
 
   // User sends text in input box
   const handleSendMessage = (text: string) => {
+    if (activeSession.status === "读取异常") return;
     const nowTime = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 
     if (activeSession.reportBinding && !activeSession.creationBinding?.resourceContinuityEnabled) {

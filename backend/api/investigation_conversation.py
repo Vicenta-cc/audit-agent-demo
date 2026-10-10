@@ -70,6 +70,7 @@ class InvestigationWorkspaceListItem(BaseModel):
     updated_at: str
     run_status: str
     presentation_stage: str
+    read_error: str = ""
 
 
 class InvestigationWorkspaceListResponse(BaseModel):

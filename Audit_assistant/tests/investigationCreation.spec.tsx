@@ -699,7 +699,7 @@ test("workspace state API failures stay explicit and never produce a demo fallba
   );
   expect(failed.id).toBe("investigation-session:missing");
   expect(failed.creationBinding?.error).toBe("调查工作区不存在");
-  expect(failed.messages[0].content).toBe("当前调查暂时无法恢复，请返回调查列表后重试。");
+  expect(failed.messages[0].content).toBe("当前会话暂时无法读取，请刷新后重试。其他会话仍可正常使用。");
 });
 
 test("blockers disable confirmation and expose the management URL", () => {

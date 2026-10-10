@@ -133,7 +133,7 @@ export function buildWorkspaceRecoveryErrorSession(
   return {
     id: workspaceSessionId,
     title: "调查工作区读取失败",
-    status: "配置中",
+    status: "读取异常",
     updatedAt: formatSessionTimestamp(updatedAtIso),
     updatedAtIso,
     draft: emptyDraft(),
@@ -141,7 +141,7 @@ export function buildWorkspaceRecoveryErrorSession(
       id: `workspace-recovery-error:${workspaceSessionId}`,
       sender: "assistant",
       timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-      content: "当前调查暂时无法恢复，请返回调查列表后重试。",
+      content: "当前会话暂时无法读取，请刷新后重试。其他会话仍可正常使用。",
       type: "text"
     }],
     executionPhase: "idle",

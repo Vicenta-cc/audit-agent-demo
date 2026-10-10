@@ -7,7 +7,7 @@ import type {
 } from "./investigationCreation";
 import type { InvestigationActivityEvent } from "./investigations";
 
-export type TaskSessionStatus = "配置中" | "等待确认" | "研判中" | "审核完成" | "报告已生成" | "已创建" | "调查失败" | "调查已中断";
+export type TaskSessionStatus = "读取异常" | "配置中" | "等待确认" | "研判中" | "审核完成" | "报告已生成" | "已创建" | "调查失败" | "调查已中断";
 
 export type PlatformCode = "dy" | "xhs" | "ks" | "wb" | "xy" | "multi";
 

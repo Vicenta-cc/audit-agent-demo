@@ -193,6 +193,7 @@
   font-weight: 500;
 }
 
+.inv-status-pill.st-读取异常 { background: #fef2f2; color: #b91c1c; }
 .inv-status-pill.st-配置中 { background: #fef3c7; color: #b45309; }
 .inv-status-pill.st-等待确认 { background: #dbeafe; color: #1e40af; }
 .inv-status-pill.st-研判中 { background: #e0e7ff; color: #3730a3; }

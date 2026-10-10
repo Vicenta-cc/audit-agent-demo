@@ -833,14 +833,14 @@ export function InvestigationCenterArea({
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={getPlaceholder()}
-            disabled={isSendingMessage}
+            disabled={isSendingMessage || session.status === "读取异常"}
             aria-keyshortcuts={getSuggestedPrompt(getPlaceholder()) ? "Enter Shift+Enter Tab" : "Enter Shift+Enter"}
           />
           <button
             type="button"
             className="inv-send-btn"
             onClick={handleSend}
-            disabled={!inputText.trim() || isSendingMessage}
+            disabled={!inputText.trim() || isSendingMessage || session.status === "读取异常"}
             title="发送消息"
           >
             <Send size={15} />

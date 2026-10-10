@@ -22,6 +22,7 @@ export interface InvestigationWorkspaceListItem {
   updated_at: string;
   run_status: string;
   presentation_stage: string;
+  read_error?: string;
 }
 
 export async function listInvestigationWorkspaces() {

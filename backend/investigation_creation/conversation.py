@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sqlite3
+import traceback
 from contextlib import ExitStack
 from copy import deepcopy
 from dataclasses import dataclass
@@ -709,25 +711,55 @@ class InvestigationCreationConversationService:
     def list_workspaces(self, *, principal: Principal, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
         items = []
         for session in self.store.list_creation_sessions(principal=principal.id, limit=None):
-            state = self.get_workspace_state(session.id, principal=principal)
-            first_question = next((message.content for message in state.messages if message.role == "user"), "")
-            timestamp_candidates = [
-                session.updated_at,
-                state.run.updated_at if state.run else "",
-                str((state.draft_artifact.get("draft") or {}).get("updated_at") or ""),
-                state.latest_report_turn.completed_at if state.latest_report_turn else "",
-                *(message.created_at for message in state.messages),
-                *(message.created_at for message in state.report_messages),
-            ]
-            updated_at = max((value for value in timestamp_candidates if value), default=session.updated_at)
-            items.append({
-                "workspace_session_id": session.id,
-                "run_id": state.run.run_id if state.run else "",
-                "title": (state.draft_artifact.get("draft") or {}).get("title") or first_question[:48] or "新调查需求",
-                "updated_at": updated_at,
-                "run_status": state.run.status if state.run else "",
-                "presentation_stage": state.draft_artifact.get("presentation_stage", ""),
-            })
+            try:
+                state = self.get_workspace_state(session.id, principal=principal)
+                first_question = next((message.content for message in state.messages if message.role == "user"), "")
+                timestamp_candidates = [
+                    session.updated_at,
+                    state.run.updated_at if state.run else "",
+                    str((state.draft_artifact.get("draft") or {}).get("updated_at") or ""),
+                    state.latest_report_turn.completed_at if state.latest_report_turn else "",
+                    *(message.created_at for message in state.messages),
+                    *(message.created_at for message in state.report_messages),
+                ]
+                updated_at = max((value for value in timestamp_candidates if value), default=session.updated_at)
+                items.append({
+                    "workspace_session_id": session.id,
+                    "run_id": state.run.run_id if state.run else "",
+                    "title": (state.draft_artifact.get("draft") or {}).get("title") or first_question[:48] or "新调查需求",
+                    "updated_at": updated_at,
+                    "run_status": state.run.status if state.run else "",
+                    "presentation_stage": state.draft_artifact.get("presentation_stage", ""),
+                })
+            except (sqlite3.Error, OSError):
+                # A shared storage outage must remain a request failure.
+                raise
+            except Exception as exc:
+                if isinstance(exc, InvestigationSessionNotFoundError):
+                    # Skip only an actually removed session. A missing related
+                    # record must still leave an explicit error row in the list.
+                    try:
+                        self.get_session(session.id, principal=principal)
+                    except InvestigationSessionNotFoundError:
+                        continue
+                # Isolate projection failures without changing persisted history or
+                # rereading potentially broken draft/run data for a fallback title.
+                # Validation exceptions can contain private input: log locations
+                # and exception type, never their message or input values.
+                logger.error(
+                    "Workspace list projection failed: session_id=%s error_type=%s\n%s",
+                    session.id, type(exc).__name__,
+                    "".join(traceback.format_tb(exc.__traceback__)),
+                )
+                items.append({
+                    "workspace_session_id": session.id,
+                    "run_id": "",
+                    "title": "调查会话（暂时无法读取）",
+                    "updated_at": session.updated_at,
+                    "run_status": "",
+                    "presentation_stage": "",
+                    "read_error": "WORKSPACE_READ_FAILED",
+                })
         items.sort(
             key=lambda item: (item["updated_at"], item["workspace_session_id"]),
             reverse=True,
