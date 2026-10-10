@@ -23,10 +23,15 @@ const account: CrawlerAccount = {
   createdAt: "",
   updatedAt: "",
 };
+const trigger = document.createElement("button");
+trigger.textContent = "登录测试入口";
+trigger.id = "login-fixture-trigger";
+document.body.insertBefore(trigger, document.getElementById("root"));
+trigger.focus();
 createRoot(document.getElementById("root")!).render(
   <CrawlerAccountLoginDialog
     account={account}
-    onSuccess={() => undefined}
+    onSuccess={() => { document.getElementById("root")!.textContent = "登录已完成"; trigger.focus(); }}
     onClose={() => {
       document.getElementById("root")!.textContent = "登录窗口已关闭";
     }}

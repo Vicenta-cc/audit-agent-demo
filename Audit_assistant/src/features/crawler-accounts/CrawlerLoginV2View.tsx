@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CheckCircle2, Loader2, Smartphone, AlertCircle } from "lucide-react";
 import { Button } from "../../components/common/Button";
 import { apiRequest } from "../../services/apiClient";
 import { loginControlHeaders } from "../../services/crawlerAccounts";
@@ -9,18 +10,13 @@ import {
 import type { LoginSnapshot, LoginFrame } from "../../services/crawlerLoginV2";
 import { CrawlerLoginChallengeCanvas } from "./CrawlerLoginChallengeCanvas";
 const phases: Record<string, string> = {
-  preparing: "正在获取二维码",
-  qr_ready: "请使用抖音扫码",
-  qr_expired: "二维码已过期",
-  phone_confirm: "请在手机上确认登录",
-  sms_required: "请完成短信验证",
-  challenge_required: "请完成人工验证",
-  manual_required: "请完成当前登录步骤",
-  identity_check: "正在核对账号身份",
-  profile_flush: "正在保存浏览器登录状态",
-  reuse_check: "正在检查登录状态能否接续使用",
-  db_commit: "正在保存登录信息",
-  done: "登录信息已保存",
+  checking: "正在检查登录状态", preparing: "正在准备登录",
+  qr_ready: "打开抖音扫一扫", qr_expired: "二维码已过期",
+  phone_confirm: "请在手机上确认登录", sms_required: "完成短信验证",
+  challenge_required: "完成安全验证", manual_required: "完成安全验证",
+  identity_check: "正在完成登录，请稍候", profile_flush: "正在完成登录，请稍候",
+  reuse_check: "正在完成登录，请稍候", db_commit: "正在完成登录，请稍候",
+  done: "登录成功", failed: "未完成登录", expired: "本次登录已到期", cancelled: "本次登录已结束",
 };
 type CommandOutcome = {
   platform_status?: string;
@@ -43,6 +39,10 @@ export function CrawlerLoginV2View({
   onSnapshot: (snapshot: LoginSnapshot) => void;
 }) {
   const [snapshot, setSnapshot] = useState(initial);
+  const [now, setNow] = useState(Date.now());
+  const phaseStarted = useRef(Date.now());
+  useEffect(() => { phaseStarted.current = Date.now(); }, [snapshot.phase]);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const [connection, setConnection] = useState("正在连接");
   const [error, setError] = useState("");
   const [gestureReset, setGestureReset] = useState(0);
@@ -82,6 +82,7 @@ export function CrawlerLoginV2View({
         controller_state: "detached",
       }));
       setConnection("登录身份已变化，请重新打开");
+      setError("应用登录已结束，请重新登录后打开此窗口");
     };
     const connect = async () => {
       if (
@@ -350,6 +351,11 @@ export function CrawlerLoginV2View({
   const terminal = ["success", "failed", "expired", "cancelled"].includes(
     snapshot.status,
   );
+  const verifiedAccountId = snapshot.result?.identity_verified ? snapshot.result.platform_account_id || (snapshot.identity?.status === "verified" ? snapshot.identity.platform_account_id : "") : "";
+  const displayPhase = snapshot.status === "scanned" ? "phone_confirm" : snapshot.status === "success" ? "done" : ["failed", "expired", "cancelled"].includes(snapshot.status) ? snapshot.status : snapshot.phase;
+  const waiting = !["qr_ready", "qr_expired", "sms_required", "challenge_required", "manual_required", "done", "failed", "expired", "cancelled"].includes(displayPhase);
+  const resendSeconds = snapshot.sms?.resend_available_at ? Math.max(0, Math.ceil((Date.parse(snapshot.sms.resend_available_at) - now) / 1000)) : 0;
+  const sessionSeconds = Math.max(0, Math.ceil((Date.parse(snapshot.expires_at) - now) / 1000));
   const message =
     typeof snapshot.error === "string"
       ? snapshot.error
@@ -357,8 +363,11 @@ export function CrawlerLoginV2View({
   return (
     <div className="crawler-login-v2">
       <div className="crawler-login-v2-status" role="status">
-        <strong>{phases[snapshot.phase] || "正在确认登录步骤"}</strong>
-        {!terminal ? <small>{connection}</small> : null}
+        {displayPhase === "done" ? <CheckCircle2 size={36} className="crawler-login-v2-success-icon" aria-hidden="true" /> : displayPhase === "phone_confirm" ? <Smartphone size={36} aria-hidden="true" /> : terminal ? <AlertCircle size={32} aria-hidden="true" /> : waiting ? <Loader2 size={30} className="spin" aria-hidden="true" /> : null}
+        <strong>{phases[displayPhase] || "正在等待抖音返回登录结果"}</strong>
+        {displayPhase === "phone_confirm" ? <p>请打开手机上的抖音，点击确认登录。</p> : ["checking", "preparing"].includes(displayPhase) ? <p>二维码准备好后会显示在这里。</p> : waiting ? <p>请稍候，登录结果确认后会自动更新。</p> : null}
+        {waiting && now - phaseStarted.current >= 15000 ? <p className="crawler-login-v2-slow">{displayPhase === "phone_confirm" ? "还没收到抖音确认，请检查手机提示，无需重复扫码。" : "抖音暂未返回新的登录结果，仍在等待。您也可以关闭窗口结束本次登录。"}</p> : null}
+        {!terminal && !["正在连接", "已连接", "登录身份已变化，请重新打开"].includes(connection) ? <p>正在恢复登录画面，暂时无法操作。</p> : null}
       </div>
       {["qr_ready", "qr_expired"].includes(snapshot.phase) &&
       (snapshot.qr || snapshot.phase === "qr_expired") ? (
@@ -427,12 +436,12 @@ export function CrawlerLoginV2View({
                 !available("request_sms") ||
                 Boolean(
                   snapshot.sms.resend_available_at &&
-                  Date.parse(snapshot.sms.resend_available_at) > Date.now(),
+                  resendSeconds > 0,
                 )
               }
               onClick={() => action("request_sms", phone ? { phone } : {})}
             >
-              发送验证码
+              {resendSeconds > 0 ? `${resendSeconds}秒后可重新发送` : "发送验证码"}
             </Button>
             <Button
               type="submit"
@@ -446,7 +455,7 @@ export function CrawlerLoginV2View({
         </form>
       ) : null}
       {snapshot.challenge &&
-      ["challenge_required", "manual_required"].includes(snapshot.phase) ? (
+      ["challenge_required", "manual_required"].includes(displayPhase) ? (
         <>
           <CrawlerLoginChallengeCanvas
             key={`${snapshot.challenge.challenge_id}:${gestureReset}`}
@@ -487,13 +496,14 @@ export function CrawlerLoginV2View({
           ) : null}
         </>
       ) : null}
+      {snapshot.status === "success" && verifiedAccountId ? <div className="crawler-login-v2-identity"><span>已核对抖音账号</span><strong>{verifiedAccountId}</strong></div> : null}
       {snapshot.status === "success" ? (
         <p>
           {snapshot.result?.account_eligibility === "cooling_down"
             ? "账号仍处于冷却中，登录不会解除冷却"
             : snapshot.result?.account_eligibility === "disabled"
               ? "账号仍为停用状态"
-              : "登录状态已完成接续检查"}
+              : "现在可以使用此账号"}
           。
         </p>
       ) : null}
@@ -521,16 +531,7 @@ export function CrawlerLoginV2View({
           刷新验证题目
         </Button>
       ) : null}
-      {!terminal && snapshot.available_actions.includes("close_manual") ? (
-        <Button disabled={!enabled} onClick={() => action("close_manual")}>
-          返回扫码
-        </Button>
-      ) : null}
-      {!terminal && snapshot.available_actions.includes("open_manual") ? (
-        <Button disabled={!enabled} onClick={() => action("open_manual")}>
-          查看当前登录步骤
-        </Button>
-      ) : null}
+      {!terminal && Number.isFinite(sessionSeconds) && sessionSeconds > 0 ? <p className="crawler-login-v2-session-time">本次登录剩余 {Math.floor(sessionSeconds / 60)}:{String(sessionSeconds % 60).padStart(2, "0")}</p> : null}
     </div>
   );
 }

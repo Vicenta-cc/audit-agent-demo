@@ -58,16 +58,40 @@ export function CrawlerAccountLoginDialog({
   const [recoveries, setRecoveries] = useState<
     Array<{ id: string; updated_at: string }>
   >([]);
-  const [compatibility, setCompatibility] = useState(false);
+  const recoverySource = useRef<string | undefined>();
+  const [saveRecovery, setSaveRecovery] = useState<"none" | "checking" | "ready" | "unavailable">("none");
   const [closing, setClosing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const requestedAccountRef = useRef("");
   const successHandledRef = useRef("");
+  const dialogRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!account) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const focus = window.setTimeout(() => {
+      const target = dialogRef.current?.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]') || dialogRef.current;
+      target?.focus();
+    }, 0);
+    const trap = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const elements = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]') || []).filter(element => element.offsetParent !== null);
+      if (!elements.length) { event.preventDefault(); dialogRef.current?.focus(); return; }
+      if (document.activeElement === dialogRef.current || !dialogRef.current?.contains(document.activeElement)) {
+        event.preventDefault(); (event.shiftKey ? elements[elements.length - 1] : elements[0]).focus(); return;
+      }
+      const first = elements[0], last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", trap);
+    return () => { window.clearTimeout(focus); document.removeEventListener("keydown", trap); previous?.focus(); };
+  }, [account?.id]);
 
   const beginLogin = useCallback(
-    async (resume = true, sourceOperationId?: string, browserMode?: "compatibility") => {
+    async (resume = true, sourceOperationId?: string) => {
       if (!account) return;
+      recoverySource.current = sourceOperationId;
       requestedAccountRef.current = account.id;
       successHandledRef.current = "";
       setStarting(true);
@@ -121,7 +145,6 @@ export function CrawlerAccountLoginDialog({
                   ? "check_or_login"
                   : "reauth",
               sourceOperationId,
-              browserMode,
             );
           }
         } else {
@@ -133,7 +156,6 @@ export function CrawlerAccountLoginDialog({
                 ? "check_or_login"
                 : "reauth",
             sourceOperationId,
-            browserMode,
           );
         }
         if (next.accountId !== account.id) {
@@ -240,6 +262,17 @@ export function CrawlerAccountLoginDialog({
     return () => window.clearTimeout(timer);
   }, [onSuccess, session?.id, session?.status]);
 
+  const sessionErrorCode = typeof session?.v2?.error === "object" ? session.v2.error?.code : "";
+  const savingUncertain = session?.status === "failed" && ["SAVE_FAILED", "SAVE_RESULT_UNKNOWN"].includes(sessionErrorCode || "");
+  useEffect(() => {
+    if (!account || !session?.v2 || !savingUncertain) { setSaveRecovery("none"); return; }
+    let stopped = false; setSaveRecovery("checking");
+    void apiRequest<{ item: { stage: string } }>(`/api/crawler-accounts/${encodeURIComponent(account.id)}/login-operations/${encodeURIComponent(session.v2.operation_id)}`, { headers: loginControlHeaders() }).then(result => {
+      if (!stopped) setSaveRecovery(result.item.stage === "recovery_required" ? "ready" : "unavailable");
+    }).catch(error => { if (!stopped) { setSaveRecovery("unavailable"); setStartError(readApiError(error)); } });
+    return () => { stopped = true; };
+  }, [account?.id, session?.v2?.operation_id, savingUncertain]);
+
   if (!account) return null;
 
   const platformName = platformNames[account.platform];
@@ -277,21 +310,18 @@ export function CrawlerAccountLoginDialog({
       }
       window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
       requestedAccountRef.current = "";
-      await beginLogin(false, undefined, compatibility ? "compatibility" : undefined);
+      await beginLogin(false, recoverySource.current);
     } catch (error) { setStartError(readApiError(error)); }
     finally { setClosing(false); }
   };
 
-  const retryCompatibility = async () => {
-    if (!session?.v2 || closing || starting) return;
-    setClosing(true);
-    setStartError("");
+  const continueSavedLogin = async () => {
+    if (!session?.v2 || closing || starting || saveRecovery !== "ready") return;
+    setClosing(true); setStartError("");
     try {
       const cancelled = await cancelCrawlerAccountLoginSession(session.id);
-      if (!cancelled.cleanupComplete) throw new Error("原登录窗口仍在释放资源，请稍后再尝试兼容模式");
-      window.sessionStorage.removeItem(loginSessionStorageKey(account.id));
-      setCompatibility(true);
-      await beginLogin(false, undefined, "compatibility");
+      if (!cancelled.cleanupComplete) throw new Error("上次登录仍在结束，请稍后继续完成登录");
+      await beginLogin(false, session.v2.operation_id);
     } catch (error) { setStartError(readApiError(error)); }
     finally { setClosing(false); }
   };
@@ -299,7 +329,9 @@ export function CrawlerAccountLoginDialog({
   return (
     <div className="crawler-login-backdrop" role="presentation">
       <section
-        className={`crawler-login-dialog${session?.interactive ? " is-interactive" : ""}`}
+        ref={dialogRef}
+        tabIndex={-1}
+        className={`crawler-login-dialog${session?.v2 ? " is-v2" : ""}${session?.v2 ? (session.v2.challenge ? " is-interactive" : "") : session?.interactive ? " is-interactive" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="crawler-login-title"
@@ -465,7 +497,7 @@ export function CrawlerAccountLoginDialog({
                   </span>
                   <Button type="button" variant="primary" onClick={retry}>
                     <RefreshCw size={16} />
-                    {compatibility ? "重试兼容模式" : "重新获取二维码"}
+                    {recoverySource.current ? "继续完成登录" : "重新获取二维码"}
                   </Button>
                 </div>
               ) : null}
@@ -476,25 +508,21 @@ export function CrawlerAccountLoginDialog({
               <Button type="button" variant="primary" onClick={onSuccess}>
                 完成
               </Button>
-              <Button type="button" onClick={() => void retry()}>
-                重新扫码
-              </Button>
+
             </div>
           ) : null}
           {session?.v2 &&
-          ["failed", "expired", "cancelled"].includes(session.status) ? (
-            <Button type="button" onClick={() => void retry()}>
-              重新扫码
-            </Button>
+          ["failed", "expired", "cancelled"].includes(session.status) && !savingUncertain ? (
+            <div className="crawler-login-v2-retry"><p>重新开始需要再次扫码。</p><Button type="button" disabled={closing || starting} onClick={() => void retry()}>重新扫码</Button></div>
           ) : null}
-          {session?.v2 && session.status !== "success" && !compatibility ? <div className="crawler-login-v2-compatibility"><p>当前步骤无法完成时，可重新尝试兼容模式。这会结束当前会话并重新开始登录；服务器需要支持有界面浏览器。</p><Button type="button" disabled={closing || starting} onClick={() => void retryCompatibility()}>重新尝试兼容模式</Button></div> : null}
-          {closing ? <p role="status">正在结束登录会话…</p> : null}
+          {session?.v2 && savingUncertain ? <div className="crawler-login-v2-retry"><p>{saveRecovery === "checking" ? "正在检查已完成的登录，请勿重复扫码。" : "先确认已有登录信息，避免丢失已完成的登录。"}</p>{saveRecovery === "ready" ? <Button type="button" variant="primary" disabled={closing || starting} onClick={() => void continueSavedLogin()}>继续完成登录</Button> : null}</div> : null}
+          {closing ? <p role="status">正在结束本次登录…</p> : null}
           {session?.v2 && startError ? <p role="alert">{startError}</p> : null}
         </div>
 
         <footer className="crawler-login-footer">
           <ShieldCheck size={16} aria-hidden="true" />
-          登录凭证仅加密保存在服务端
+          仅在抖音要求时完成短信或安全验证
         </footer>
       </section>
     </div>

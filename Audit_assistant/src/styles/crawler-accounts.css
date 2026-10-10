@@ -1207,3 +1207,18 @@
 
 .crawler-login-v2-complete { display: flex; justify-content: center; gap: 12px; padding-top: 16px; }
 .crawler-login-v2-complete .mt-button { min-width: 112px; }
+
+.crawler-login-dialog.is-v2 .crawler-login-body { min-height: 0; padding: 28px 24px; }
+.crawler-login-v2-status { justify-items: center; }
+.crawler-login-v2-status strong { font-size: 16px; }
+.crawler-login-v2-status p { margin: 0; font-size: 14px; color: var(--color-text-secondary); line-height: 1.6; }
+.crawler-login-v2-success-icon { color: var(--color-success, #16a34a); }
+.crawler-login-v2-identity { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--color-border); border-radius: 8px; overflow-wrap: anywhere; }
+.crawler-login-v2-identity span, .crawler-login-v2-session-time { font-size: 12px; color: var(--color-text-secondary); }
+.crawler-login-v2-retry { text-align: center; }
+.crawler-login-v2-retry p { color: var(--color-text-secondary); font-size: 13px; }
+@media (max-width: 540px) { .crawler-login-dialog.is-v2 .crawler-login-body { padding: 24px 18px; } .crawler-login-v2-sms > div { flex-wrap: wrap; } }
+
+.crawler-login-dialog.is-v2 { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.crawler-login-v2 p { margin-top: 0; margin-bottom: 0; }
+.crawler-login-v2-slow { padding: 10px 12px; background: var(--color-bg-secondary, #f8fafc); border-radius: 8px; }

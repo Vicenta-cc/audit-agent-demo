@@ -14,7 +14,7 @@ const snapshot = (phase = "qr_ready", revision = 1) => ({
   state_revision: revision,
   controller_epoch: 1,
   controller_state: "attached",
-  expires_at: "2099-01-01T00:00:00Z",
+  expires_at: new Date(Date.now() + 600000).toISOString(),
   available_actions: ["refresh_qr", "open_manual", "request_sms", "submit_sms"],
   qr: {
     revision: "fixture-image-sha256",
@@ -146,7 +146,7 @@ for (const viewport of [
     );
     await page.goto("/tests/crawlerLoginV2.html");
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByText("已连接", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "刷新二维码", exact: true })).toBeEnabled();
     await expect(page.getByAltText("抖音登录二维码")).toBeVisible();
     await expect(page.getByLabel("短信验证码")).toHaveCount(0);
     expect(starts).toBe(1);
@@ -317,7 +317,7 @@ test("reconnect uses a new ticket and queries uncertain command without replay; 
     },
   );
   await page.goto("/tests/crawlerLoginV2.html");
-  await expect(page.getByText("已连接", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "发送验证码", exact: true })).toBeEnabled();
   await page.getByLabel("手机号", { exact: true }).fill("13800000000");
   await page.getByRole("button", { name: "发送验证码" }).click();
   await expect.poll(() => tickets).toBe(2);
@@ -331,7 +331,7 @@ test("reconnect uses a new ticket and queries uncertain command without replay; 
   );
   await expect(page.getByLabel("手机号", { exact: true })).toHaveValue("");
   await expect(
-    page.getByText("登录身份已变化，请重新打开", { exact: true }),
+    page.getByText("应用登录已结束，请重新登录后打开此窗口", { exact: true }),
   ).toBeVisible();
   await page.waitForTimeout(700);
   expect(tickets).toBe(2);
@@ -519,7 +519,7 @@ test("stale state rejected before execution releases pending only for a new user
       }),
   );
   await page.goto("/tests/crawlerLoginV2.html");
-  await expect(page.getByText("已连接", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "发送验证码", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "发送验证码" }).click();
   await expect(page.getByRole("button", { name: "发送验证码" })).toBeEnabled();
   await expect(page.getByRole("alert")).toHaveText("登录步骤已变化，请重试");
@@ -582,7 +582,7 @@ for (const executionStatus of ["not_executed", "rejected"]) {
       },
     );
     await page.goto("/tests/crawlerLoginV2.html");
-    await expect(page.getByText("已连接", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "发送验证码", exact: true })).toBeEnabled();
     await page.getByRole("button", { name: "发送验证码" }).click();
     await expect.poll(() => queried).toBe(1);
     await expect(
@@ -595,114 +595,15 @@ for (const executionStatus of ["not_executed", "rejected"]) {
   });
 }
 
-test("compatibility retry waits for cancelled cleanup then starts a new V2 intent", async ({
-  page,
-}) => {
-  const events: string[] = [];
-  const requests: any[] = [];
-  const keys: string[] = [];
-  let releaseCleanup: (() => void) | undefined;
-  await page.route(
-    "**/api/crawler-accounts/account-fixture/login-sessions",
-    (route) => {
-      events.push("start");
-      requests.push(route.request().postDataJSON());
-      keys.push(route.request().headers()["idempotency-key"]);
-      return route.fulfill({ json: { item: snapshot() } });
-    },
-  );
-  await page.route(
-    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
-    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
-  );
-  await page.routeWebSocket(
-    "**/api/crawler-account-login-sessions/login-fixture/stream",
-    (ws) =>
-      ws.onMessage((data) => {
-        if (JSON.parse(String(data)).type === "auth")
-          ws.send(JSON.stringify({ type: "snapshot", item: snapshot() }));
-      }),
-  );
-  await page.route(
-    "**/api/crawler-account-login-sessions/login-fixture",
-    async (route) => {
-      events.push("cancel");
-      await new Promise<void>((resolve) => {
-        releaseCleanup = resolve;
-      });
-      events.push("cleanup");
-      await route.fulfill({
-        json: {
-          item: {
-            ...snapshot("cancelled"),
-            status: "cancelled",
-            cleanup_state: "complete",
-          },
-        },
-      });
-    },
-  );
-  await page.goto("/tests/crawlerLoginV2.html");
-  await expect(
-    page.getByRole("button", { name: "重新尝试兼容模式" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "重新尝试兼容模式" }).click();
-  await expect.poll(() => events).toEqual(["start", "cancel"]);
-  expect(requests).toHaveLength(1);
-  releaseCleanup!();
-  await expect
-    .poll(() => events)
-    .toEqual(["start", "cancel", "cleanup", "start"]);
-  expect(requests[1]).toMatchObject({
-    browser_mode: "compatibility",
-    intent: "reauth",
-    supported_protocols: [2],
-  });
-  expect(keys[1]).not.toBe(keys[0]);
-});
-test("compatibility retry never starts when cancellation fails", async ({
-  page,
-}) => {
-  let starts = 0;
-  await page.route(
-    "**/api/crawler-accounts/account-fixture/login-sessions",
-    (route) => {
-      starts++;
-      return route.fulfill({ json: { item: snapshot() } });
-    },
-  );
-  await page.route(
-    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
-    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
-  );
-  await page.routeWebSocket(
-    "**/api/crawler-account-login-sessions/login-fixture/stream",
-    (ws) =>
-      ws.onMessage((data) => {
-        if (JSON.parse(String(data)).type === "auth")
-          ws.send(JSON.stringify({ type: "snapshot", item: snapshot() }));
-      }),
-  );
-  await page.route(
-    "**/api/crawler-account-login-sessions/login-fixture",
-    (route) =>
-      route.fulfill({
-        status: 503,
-        json: {
-          detail: {
-            code: "CLEANUP_TIMEOUT",
-            message: "登录资源仍在释放，请稍后重试",
-          },
-        },
-      }),
-  );
-  await page.goto("/tests/crawlerLoginV2.html");
-  await page.getByRole("button", { name: "重新尝试兼容模式" }).click();
-  await expect(page.getByRole("alert")).toHaveText(
-    "登录资源仍在释放，请稍后重试",
-  );
-  await expect(page.getByAltText("抖音登录二维码")).toBeVisible();
-  expect(starts).toBe(1);
+test("login does not ask users to choose a browser mode or restart after QR", async ({ page }) => {
+  let starts = 0; let cancels = 0;
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: snapshot() } }); });
+  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+  await page.route('**/api/crawler-account-login-sessions/login-fixture', route => { cancels++; return route.fulfill({ json: { item: snapshot() } }); });
+  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }));
+  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByAltText('抖音登录二维码')).toBeVisible();
+  await expect(page.getByText(/兼容模式|已连接|接续|服务器需要/)).toHaveCount(0); await expect(page.getByRole('button', { name: '查看当前登录步骤' })).toHaveCount(0);
+  await page.waitForTimeout(300); expect(starts).toBe(1); expect(cancels).toBe(0);
 });
 
 test("gesture notice is visible and preserves manual retry without replay", async ({
@@ -922,3 +823,90 @@ test("socket send backlog stops input and relies on disconnect for reliable rele
   ).toBe(3);
   await page.mouse.up();
 });
+
+for (const width of [1280, 390]) {
+  test(`user flow shows QR, phone confirmation, conditional verification and identified result at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 }); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message)); let socket: WebSocketRoute; let starts = 0;
+    await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: snapshot() } }); });
+    await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+    await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => { socket = ws; ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }); });
+    await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByText('打开抖音扫一扫', { exact: true })).toBeVisible(); await expect(page.getByAltText('抖音登录二维码')).toBeVisible();
+    await expect(page.getByLabel('短信验证码')).toHaveCount(0); await expect(page.getByText(/兼容模式|已连接|Profile|接续检查/)).toHaveCount(0);
+    socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('preparing', 2), status: 'scanned', qr: null } }));
+    await expect(page.getByText('请在手机上确认登录', { exact: true })).toBeVisible(); await expect(page.getByAltText('抖音登录二维码')).toHaveCount(0);
+    await page.screenshot({ path: `/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-user-phone-${width}.png` });
+    socket!.send(JSON.stringify({ type: 'snapshot', item: snapshot('challenge_required', 3) })); socket!.send(packet()); await expect(page.getByText('完成安全验证', { exact: true })).toBeVisible(); await expect(page.getByLabel('人工验证区域')).toBeVisible();
+    socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('identity_check', 4), status: 'finalizing', qr: null } })); await expect(page.getByText('正在完成登录，请稍候', { exact: true })).toBeVisible();
+    socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('done', 5), status: 'success', identity: { status: 'verified' }, result: { auth_saved: true, identity_verified: true, reuse_verified: true, platform_account_id: 'verified-douyin-account', account_eligibility: 'ready' } } }));
+    await expect(page.getByText('登录成功', { exact: true })).toBeVisible(); await expect(page.getByText('verified-douyin-account', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: '完成', exact: true })).toBeVisible(); expect(starts).toBe(1);
+    await page.screenshot({ path: `/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-user-success-${width}.png` }); expect(errors).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+    await page.waitForTimeout(1100); await expect(page.getByRole('button', { name: '完成', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '完成', exact: true }).click(); await expect(page.getByText('登录已完成', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: '登录测试入口' })).toBeFocused();
+  });
+}
+
+test('SMS resend countdown follows server deadline and capability, unknown phase never invents scanned', async ({ page }) => {
+  let socket: WebSocketRoute; let starts = 0;
+  const sms = { ...snapshot('sms_required'), sms: { fields: ['code'], resend_available_at: new Date(Date.now() + 2000).toISOString() } };
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: sms } }); });
+  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => { socket = ws; ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: sms })); }); });
+  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('button', { name: /秒后可重新发送/ })).toBeDisabled(); await expect(page.getByRole('button', { name: '发送验证码', exact: true })).toBeEnabled({ timeout: 5000 });
+  socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('unclassified', 2), qr: null } })); await expect(page.getByText('正在等待抖音返回登录结果', { exact: true })).toBeVisible(); await expect(page.getByText('请在手机上确认登录', { exact: true })).toHaveCount(0);
+  socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('failed', 3), status: 'failed', qr: null, error: { message: '抖音暂时没有响应，请重新尝试' } } })); await expect(page.getByText('未完成登录', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: '重新扫码' })).toBeVisible(); expect(starts).toBe(1);
+});
+
+test('short screen keyboard stays in login dialog and scanned wait is truthful', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 480 }); let socket: WebSocketRoute;
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => route.fulfill({ json: { item: snapshot() } }));
+  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => { socket = ws; ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }); });
+  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeEnabled();
+  await page.getByRole('button', { name: '关闭登录窗口' }).focus(); await page.keyboard.press('Shift+Tab'); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeFocused(); await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: '关闭登录窗口' })).toBeFocused();
+  socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('phone_confirm', 2), status: 'scanned', qr: null } })); await expect(page.getByText('请在手机上确认登录', { exact: true })).toBeVisible();
+  const dialog = (await page.getByRole('dialog').boundingBox())!; expect(dialog.height).toBeLessThanOrEqual(480);
+  await page.screenshot({ path: '/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-user-phone-short.png' });
+});
+
+test('delayed start automatically focuses dialog and keyboard cannot leave it', async ({ page }) => {
+  let releaseStart: (() => void) | undefined;
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', async route => { await new Promise<void>(resolve => { releaseStart = resolve; }); await route.fulfill({ json: { item: snapshot() } }); });
+  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
+  await page.route('**/api/crawler-account-login-sessions/login-fixture', route => route.fulfill({ json: { item: { ...snapshot('cancelled'), status: 'cancelled', cleanup_state: 'complete' } } }));
+  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }));
+  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('dialog')).toBeFocused(); await page.keyboard.press('Tab'); await expect(page.getByRole('dialog')).toBeFocused();
+  releaseStart!(); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeEnabled(); await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: '关闭登录窗口' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab'); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeFocused();
+});
+
+test('save failure checks recoverable operation and continues without reauth or clearing login', async ({ page }) => {
+  const failed = { ...snapshot('failed'), status: 'failed', qr: null, error: { code: 'SAVE_FAILED', message: '登录信息暂未保存，请继续完成登录' } };
+  const requests: any[] = []; let cancels = 0;
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { requests.push(route.request().postDataJSON()); return route.fulfill({ json: { item: requests.length === 1 ? failed : { ...snapshot('done'), status: 'success', identity: { status: 'verified' }, result: { auth_saved: true, identity_verified: true, reuse_verified: true, platform_account_id: 'real-manager-result-id', account_eligibility: 'ready' } } } }); });
+  await page.route('**/api/crawler-accounts/account-fixture/login-operations/operation-fixture', route => route.fulfill({ json: { item: { id: 'operation-fixture', stage: 'recovery_required' } } }));
+  await page.route('**/api/crawler-account-login-sessions/login-fixture', route => { cancels++; return route.fulfill({ json: { item: { ...failed, cleanup_state: 'complete' } } }); });
+  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('button', { name: '继续完成登录' })).toBeVisible(); await expect(page.getByRole('button', { name: '重新扫码' })).toHaveCount(0);
+  await page.getByRole('button', { name: '继续完成登录' }).click(); await expect(page.getByText('real-manager-result-id', { exact: true })).toBeVisible();
+  expect(requests[1]).toMatchObject({ intent: 'recover', source_operation_id: 'operation-fixture' }); expect(requests.some(request => request.intent === 'reauth')).toBeFalsy(); expect(cancels).toBe(1);
+});
+
+test('save recovery authorization failure does not offer reset or unverified recovery', async ({ page }) => {
+  const failed = { ...snapshot('failed'), status: 'failed', qr: null, error: { code: 'SAVE_FAILED', message: '正在确认登录信息' } }; let starts = 0;
+  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: failed } }); });
+  await page.route('**/api/crawler-accounts/account-fixture/login-operations/operation-fixture', route => route.fulfill({ status: 403, json: { detail: { code: 'FORBIDDEN', message: '无权查看该登录结果' } } }));
+  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByText('无权查看该登录结果', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '继续完成登录' })).toHaveCount(0); await expect(page.getByRole('button', { name: '重新扫码' })).toHaveCount(0); expect(starts).toBe(1);
+});
+
+for (const cleanupFails of [false, true]) {
+  test(`saved login recovery waits for cleanup and ${cleanupFails ? 'keeps retry on failure' : 'then continues'}`, async ({ page }) => {
+    const failed = { ...snapshot('failed'), status: 'failed', qr: null, error: { code: 'SAVE_FAILED', message: '请继续完成登录' } }; let starts = 0; let release: (() => void) | undefined;
+    await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: starts === 1 ? failed : { ...snapshot('done'), status: 'success' } } }); });
+    await page.route('**/api/crawler-accounts/account-fixture/login-operations/operation-fixture', route => route.fulfill({ json: { item: { stage: 'recovery_required' } } }));
+    await page.route('**/api/crawler-account-login-sessions/login-fixture', async route => { await new Promise<void>(resolve => { release = resolve; }); return route.fulfill(cleanupFails ? { status: 503, json: { detail: { code: 'CLEANUP_TIMEOUT', message: '上次登录尚未结束，请稍后继续' } } } : { json: { item: { ...failed, cleanup_state: 'complete' } } }); });
+    await page.goto('/tests/crawlerLoginV2.html'); await page.getByRole('button', { name: '继续完成登录' }).click(); await expect(page.getByRole('button', { name: '继续完成登录' })).toBeDisabled(); expect(starts).toBe(1); release!();
+    if (cleanupFails) { await expect(page.getByText('上次登录尚未结束，请稍后继续', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: '继续完成登录' })).toBeEnabled(); expect(starts).toBe(1); }
+    else { await expect(page.getByText('登录成功', { exact: true })).toBeVisible(); expect(starts).toBe(2); }
+  });
+}

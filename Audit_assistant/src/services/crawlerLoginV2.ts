@@ -40,12 +40,13 @@ export interface LoginSnapshot {
     error?: string;
   };
   challenge: ChallengeArea | null;
-  identity?: { status: string; platform_account_id: string };
+  identity?: { status: string; platform_account_id?: string };
   result?: {
     auth_saved: boolean;
     identity_verified: boolean;
     reuse_verified: boolean;
     account_eligibility: string;
+    platform_account_id?: string;
   } | null;
   error?: string | { message?: string; code?: string } | null;
 }
