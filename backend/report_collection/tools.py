@@ -19,8 +19,15 @@ class Read(Empty):
     result_ref: str=Field(min_length=1,max_length=100)
     offset: int=Field(default=0,ge=0)
     limit: int=Field(default=20,ge=1,le=50)
+class AnalysisQuery(Query):
+    text_exact: str | None=Field(default=None,max_length=10000,description='按评论正文精确匹配；null 不筛选正文。不按相同正文合并身份。')
+class AnalysisComparison(Scope):
+    include_samples: bool=False
+    limit: int=Field(default=20,ge=1,le=50)
 INPUTS={'list_conversation_reports':Empty,'query_conversation_reports':Query,
     'read_conversation_result':Read,'compare_conversation_config':Scope}
+ANALYSIS_INPUTS={**INPUTS,'query_conversation_reports':AnalysisQuery,
+                 'compare_conversation_config':AnalysisComparison}
 DESCRIPTIONS={
  'list_conversation_reports':'列出本轮已冻结的会话报告来源、上轮结果引用和继承范围。报告名称对应 report_ref。不会搜索其他会话。',
  'query_conversation_reports':'查询冻结报告的评论或账号（包含发帖者和评论者，当前可靠身份关联支持抖音 sec_uid）。未指定范围继承上轮报告及结果对象（上轮评论或账号集合），无上轮默认全部。独立的全局问题用 scope=all；只看 B 必须传 B 的 report_ref。common_only=true 查所选报告共同账号（仅可靠平台 ID）。account_ref 过滤账号；from_result_ref 限于先前结果中的评论或账号，可再限定报告。返回完整统计、稳定引用和逐条来源；有更多时使用 read_conversation_result 分页。不同报告的同条评论保留各自判断。账号 observations 只含最多20条样例，完整范围见 report_statistics；查评论明细请用账号过滤评论查询。',
@@ -57,6 +64,12 @@ def schemas():
     result=deepcopy(SCHEMAS)
     for schema in result:
         schema['description']=AGENT_DESCRIPTIONS[schema['name']]
+        if _service.analysis_tools:
+            schema['parameters']=ANALYSIS_INPUTS[schema['name']].model_json_schema()
+            if schema['name']=='query_conversation_reports':
+                schema['description']+=' text_exact 精确筛选评论正文并统计原始评论、收录和已完成研判次数。账号结果含按报告组合的分组统计；common_only=true 只保留全部报告交集，查询恰好两份等组合用 false。'
+            elif schema['name']=='compare_conversation_config':
+                schema['description']+=' include_samples=true 同时比较两报告完整样本：帖子数、评论风险数量与比例、共同及各自独有的原始评论、各次判断；明细可分页。'
         scope=schema['parameters'].get('properties',{}).get('scope')
         if scope: scope['default']='all'
     return result
@@ -72,7 +85,8 @@ def dispatch(name,args,session,turn):
         if _service is None: raise RuntimeError('统一报告查询未启用。')
         if _service.agent_driven and name in {'query_conversation_reports','compare_conversation_config'}:
             args={'scope':'all',**args}
-        parsed=INPUTS[name].model_validate(args).model_dump()
+        inputs=ANALYSIS_INPUTS if _service.agent_driven and _service.analysis_tools else INPUTS
+        parsed=inputs[name].model_validate(args).model_dump()
         response={'ok':True,'data':_service.execute(name,parsed,session,turn)}
         if _service.agent_driven and _service.express_results:
             from .expression import express_result

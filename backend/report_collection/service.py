@@ -25,9 +25,10 @@ def reference(kind, value):
 
 
 class ReportCollectionService:
-    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False, compact_history=False, express_results=True):
+    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False, compact_history=False, express_results=True, analysis_tools=True):
         self.agent_driven = agent_driven
         self.express_results = express_results
+        self.analysis_tools = analysis_tools
         self.compact_history = compact_history
         self.conversation = conversation
         self.report_store = report_store
@@ -310,6 +311,13 @@ class ReportCollectionService:
                 'known': configs[0][k] is not None and configs[1][k] is not None,
                 **list_difference(configs[0][k],configs[1][k])}
                 for k in configs[0] if configs[0][k]!=configs[1][k] or configs[0][k] is None]
+            if args.get('include_samples'):
+                if not (self.agent_driven and self.analysis_tools):
+                    raise ValueError('样本比较未启用。')
+                from .analysis import compare_samples
+                samples, summary = compare_samples(self.observations(selected), [public_source(s) for s in selected])
+                return self.save(session,turn,selected,'report_comparison',samples,args.get('limit',20),
+                    configs=configs,configuration_changes=changes,**summary)
             return self.save(session,turn,selected,'config_diff',changes,configs=configs,
                 warning='缺失字段为未知，不能视为未使用；配置差异不能单独证明风险变化的因果关系。')
         rows=self.observations(selected)
@@ -329,6 +337,10 @@ class ReportCollectionService:
             else: raise ValueError('此结果不包含账号或评论。')
         if args.get('account_ref'): rows=[r for r in rows if r['account_ref']==args['account_ref']]
         if args.get('risk_level'): rows=[r for r in rows if r['audit_status']=='completed' and r['risk_level']==args['risk_level']]
+        if args.get('text_exact') is not None:
+            if not (self.agent_driven and self.analysis_tools) or args['kind']!='comments':
+                raise ValueError('text_exact 仅用于评论查询。')
+            rows=[r for r in rows if r['text']==args['text_exact']]
         if args['kind']=='comments':
             items=rows
         else:
@@ -359,10 +371,18 @@ class ReportCollectionService:
         # Persist effective filters with raw results so later pages need not infer
         # them from model history. Old results without this metadata stay unknown.
         expression_metadata = {}
+        if self.agent_driven and self.analysis_tools:
+            from .analysis import account_presence, comment_counts
+            if args['kind']=='accounts':
+                expression_metadata['report_presence_groups'] = account_presence(items, selected)
+            else:
+                expression_metadata['comment_counts'] = comment_counts(rows)
         if self.agent_driven and self.express_results:
             expression_metadata['query_filters'] = {
                 key: args.get(key) for key in ('risk_level', 'account_ref', 'common_only', 'from_result_ref')}
             expression_metadata['query_filters']['parent_result_ref'] = parent_ref or None
+            if self.analysis_tools:
+                expression_metadata['query_filters']['text_exact'] = args.get('text_exact')
         return self.save(session,turn,selected,args['kind'],items,args['limit'],
             **expression_metadata,
             parent_result_ref=parent_ref or '',

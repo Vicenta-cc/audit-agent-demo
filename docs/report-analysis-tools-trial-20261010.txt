@@ -1,0 +1,61 @@
+Report analysis tools trial — 2026-10-10
+
+Baseline: 949f3d6 (grouped expression + focused instruction + factual instruction).
+All three prompt constants remain unchanged; report prompt is 301 characters.
+
+Changes in the existing agent-driven report collection service:
+1. Account results carry exact report-presence combinations and counts computed
+   across matching accounts before pagination, with each account's membership.
+2. text_exact on comment queries filters by exact body, without treating equal
+   text as identity. Counts distinguish original comments, report observations
+   and completed assessments. Saved results preserve the actual text filter.
+3. compare_conversation_config(include_samples=true) additionally returns a
+   paged union of original comments, first/second/both membership, risk changes,
+   text changes, and complete per-report post/comment statistics and risk ratios.
+   Frozen configurations remain available. Rule-hit traces are not exposed by
+   this tool; controlled reassessment is not performed; causation is not inferred.
+
+Only authorized frozen observations feed these calculations. The existing
+ownership, snapshot, paging and result readback checks remain in effect.
+No new Hermes flow, model, thinking setting, System Prompt, answer gate or retry.
+Rule/keyword generation and frontend remain unchanged. Deployment still uses
+the existing agent-driven experimental opt-in; no cloud deployment was done.
+The constructor analysis_tools=False retains the selected baseline's exact
+schemas and result behavior for comparison. The original six-arm runner now
+explicitly disables these additions, preserving its historical definitions.
+
+Verification: 32 related pytest checks passed (one dependency deprecation).
+Real model: deepseek-v4-1-flash-260910 at the same configured provider.
+48 full-chain turns, 122 captured model calls, 71 business calls, one schema
+rejection corrected autonomously. Three previous synthetic report sets, same
+12 questions, two repeats per condition; second repeat reverses arm order.
+All captured system envelopes have the same hash and thinking is disabled.
+No private-report or post-freeze current-config canary appeared in requests or
+answers. No new answer-repair pass. Prompt/schema baseline equality checked
+against 949f3d6. No model switching or provider change.
+
+Whole-answer review:
+Selected baseline: 12/24 clear failures, 12/24 without identified error.
+With analysis tools: 8/24 clear failures, 4/24 with concerns, 12/24 without error.
+Common-account partitioning and same-text comment counts improved in both
+repeats. Same-text causes remained underexplored (configuration comparison was
+offered rather than executed). Both causal-analysis answers still described
+rule replacement as established tightening. All four full-comment-list answers
+contained supplemental high-count 4-versus-5 contradictions despite correct
+27-row tables. Other errors include out-of-scope A/C risk detail in a B-only
+answer and inaccurate descriptions of available tools. No ACL data leak.
+
+Median end-to-end turn latency: baseline 14.56s, additions 12.32s; calls 63/59.
+Small sample and two-process concurrency do not establish stable speed gains.
+Review was manual by the same assistant, not independent/blind. Unknown-cause
+answers with correct counts are concerns rather than post-hoc mandatory-tool
+failures; see individual judgments. This is not an overall reliability pass.
+
+Keep the three concrete tool capabilities as a local candidate. Do not claim
+they solve the remaining model explanation errors or justify further backend
+patches masking those errors. No push, cloud restart or deployment.
+
+Evidence and complete answers:
+/Users/ext.wanghongtao6/Documents/Codex/acceptance/report-analysis-tools-20261010/分析工具补齐对照.html
+The environment-preflight folder retains initial missing-SDK launch failures;
+they occurred before model calls. No model-answer runs were discarded.

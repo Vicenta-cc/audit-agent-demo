@@ -13,8 +13,12 @@ DATASETS=dict(identity='三报告身份与连续追问',config='多帖子、冻�
 
 
 def main():
+    global ARMS
     p=argparse.ArgumentParser();p.add_argument('directory',type=Path);args=p.parse_args();root=args.directory
     load=lambda name:json.loads((root/name).read_text())
+    analysis_comparison=load('plan.json').get('arms')==['selected_baseline','analysis_tools']
+    if analysis_comparison:
+        ARMS=dict(selected_baseline='已选基线：格式＋聚焦＋事实提示',analysis_tools='相同基线＋新增分析工具能力')
     review=load('manual-review.json');judgments=review['records'];summary=load('summary.json')
     jobs={f'{d}-{r}':load(f'{d}-{r}/evidence.json') for d in DATASETS for r in [1,2]}
     verification=dict(turns=0,model_calls=0,tool_calls=0,tool_rejections=[],
@@ -43,7 +47,7 @@ def main():
                 if response.get('ok') is False:
                     verification['tool_rejections'].append(dict(key=key,name=call['name'],response=response))
     assert set(judgments)=={r['key'] for r in rows}
-    assert len(rows)==144, 'Do not publish a partial run as the planned comparison'
+    assert len(rows)==(48 if analysis_comparison else 144), 'Do not publish a partial run as the planned comparison'
     verification['requested_models']=sorted(verification['requested_models'])
     (root/'verification.json').write_text(json.dumps(verification,ensure_ascii=False,indent=2))
     e=lambda value:escape(str(value))
@@ -61,7 +65,11 @@ def main():
     .fail{color:#9c2f22}.concern,.partial{color:#7b580f}.pass{color:#17643e}.incomplete{color:#61558a}a{color:#1654a1}.small{font-size:14px;color:#536174}blockquote{border-left:3px solid #bc5b48;margin:12px 0;padding:8px 16px}</style><main>
     <h1>多报告、多样问答：六组完整链路对照</h1>''']
     out.append('<section>'+''.join('<p>'+e(s)+'</p>' for s in summary['conclusions'])+'</section>')
-    out.append('<p>三套新合成报告，12类问题，每组六种配置各重复2次。每个会话连续完成4问，使用真实 Hermes / DeepSeek、实际只读工具和本地鉴权 HTTP 接口。没有把回答边界单独抽出来重放。</p>')
+    if analysis_comparison:
+        out[0]=out[0].replace('多报告多样问答：六组完整链路对照','分析工具补齐：固定提示词完整链路对照').replace('多报告、多样问答：六组完整链路对照','分析工具补齐：固定提示词完整链路对照')
+        out.append('<p>沿用上次三套合成报告及12类原问题，每种工具配置重复2次。每个会话连续完成4问；两组均固定为949f3d6的格式及301字报告提示，不更换模型或开启思考。真实 Hermes / DeepSeek、实际只读工具、本地鉴权接口，共48轮。仅新增正文筛选、报告组合统计及样本比较能力。</p>')
+    else:
+        out.append('<p>三套新合成报告，12类问题，每组六种配置各重复2次。每个会话连续完成4问，使用真实 Hermes / DeepSeek、实际只读工具和本地鉴权 HTTP 接口。没有把回答边界单独抽出来重放。</p>')
     out.append('<h2>整段答案与任务完成度</h2><p>只要表格、补充或结尾有明确错误，整段就失败；漏答子问题单列。存在实质歧义、无依据能力承诺或其他表达问题的答案单列，不包装成全对。数据不是生产准确率。</p>')
     out.append('<table><tr><th>方案</th><th>未发现错误</th><th>有疑点</th><th>明确错误</th><th>漏答</th><th>未完成</th><th>总轮数</th><th>中位耗时</th><th>模型调用</th></tr>')
     for arm,label in ARMS.items():
@@ -108,7 +116,7 @@ def main():
     for name,job in jobs.items():
         out.append(f'<p><a href="{e(name)}/evidence.json">{e(name)} 完整证据 JSON</a> · '+e(job['status'])+'</p>')
     out.append('</main></html>')
-    target=root/'多报告多样问答六组对照.html';target.write_text(''.join(out))
+    target=root/('分析工具补齐对照.html' if analysis_comparison else '多报告多样问答六组对照.html');target.write_text(''.join(out))
     manifest={str(p.relative_to(root)):sha256(p.read_bytes()).hexdigest() for p in root.glob('*/request-*.json')}
     manifest.update({str(p.relative_to(root)):sha256(p.read_bytes()).hexdigest() for p in root.glob('*/evidence.json')})
     (root/'evidence-manifest.json').write_text(json.dumps(manifest,indent=2))
