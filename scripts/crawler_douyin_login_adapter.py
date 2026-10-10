@@ -8,7 +8,7 @@ import hashlib
 import re
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from backend.audit_agent.crawler_account_identity import douyin_self_response_identity
 
@@ -83,6 +83,9 @@ class DouyinLoginAdapter:
         self.network_receipts = []
         self.network_revision = 0
         self.latest_login_receipt = None
+        self.qr_ticket = ""
+        self.qr_ticket_digest = ""
+        self.qr_platform_status = ""
 
     def task(self, coroutine):
         task = asyncio.create_task(coroutine)
@@ -189,6 +192,48 @@ class DouyinLoginAdapter:
                 payload = await asyncio.wait_for(response.json(), 3)
                 data = payload.get("data") if isinstance(payload, dict) else None
                 data = data if isinstance(data, dict) else {}
+                if (
+                    path.endswith("/get_qrcode")
+                    and data.get("error_code") == 0
+                    and isinstance(data.get("token"), str)
+                ):
+                    try:
+                        image = base64.b64decode(
+                            data["qrcode"].split(",", 1)[-1], validate=True
+                        )
+                        self.qr_ticket_digest = hashlib.sha256(image).hexdigest()
+                        self.qr_ticket = data["token"]
+                        self.qr_platform_status = "new"
+                    except (ValueError, TypeError, AttributeError, KeyError):
+                        pass
+                elif path.endswith("/check_qrconnect"):
+                    query = parse_qs(parsed.query)
+                    form = parse_qs(
+                        getattr(getattr(response, "request", None), "post_data", None)
+                        or ""
+                    )
+                    token = (form.get("token") or query.get("token") or [""])[0]
+                    states = {
+                        "1": "new",
+                        "new": "new",
+                        "2": "scanned",
+                        "scanned": "scanned",
+                        "3": "confirmed",
+                        "confirmed": "confirmed",
+                        "4": "expired",
+                        "5": "expired",
+                        "refused": "refused",
+                        "expired": "expired",
+                    }
+                    status = states.get(str(data.get("status")))
+                    if (
+                        self.qr_ticket
+                        and token == self.qr_ticket
+                        and status
+                        and data.get("error_code") == 0
+                    ):
+                        self.qr_platform_status = status
+
                 receipt = {
                     "endpoint": "get_qrcode"
                     if path.endswith("/get_qrcode")
@@ -513,6 +558,15 @@ class DouyinLoginAdapter:
                     "source": "rendered_login_form",
                 },
             }
+        correlated = bool(
+            self.qr_ticket_digest and self.last_qr_digest == self.qr_ticket_digest
+        )
+        if correlated and self.qr_platform_status == "scanned":
+            return {"phase": "phone_confirm"}
+        if correlated and self.qr_platform_status == "confirmed":
+            return {"phase": "identity_check"}
+        if correlated and self.qr_platform_status == "refused":
+            raise ValueError("PHONE_CONFIRM_REFUSED")
         if phone_confirmation:
             return {"phase": "phone_confirm"}
         if self.manual and panel:
@@ -523,7 +577,7 @@ class DouyinLoginAdapter:
             }
         if qr:
             self.last_qr = dict(qr)
-        expired = any(
+        expired = (correlated and self.qr_platform_status == "expired") or any(
             term in text
             for term in ("二维码已失效", "二维码已过期", "二维码失效", "点击刷新")
         )

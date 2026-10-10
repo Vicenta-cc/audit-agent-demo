@@ -1227,7 +1227,8 @@ def test_failure_stage_diagnostic_redacts_exception_and_default_logs(caplog):
     import logging
     from unittest.mock import AsyncMock, Mock
     from backend.audit_agent.crawler_login_v2_manager import CrawlerLoginV2Manager
-    from playwright.async_api import Error
+
+    Error = __import__("pytest").importorskip("playwright.async_api").Error
 
     async def run():
         left, right = socket.socketpair()
@@ -1413,5 +1414,69 @@ def test_qr_refresh_capability_depends_on_real_control_and_missing_execution_is_
         finally:
             helper.media.close()
             right.close()
+
+    asyncio.run(run())
+
+
+def test_official_poll_states_are_correlated_to_current_qr_ticket():
+    import base64
+    import hashlib
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(evaluate=AsyncMock()))
+        panel = SimpleNamespace(inner_text=AsyncMock(return_value="扫码登录"))
+        adapter.visible = AsyncMock(return_value=panel)
+        adapter.region = AsyncMock(return_value=None)
+        image = b"current-image"
+        digest = hashlib.sha256(image).hexdigest()
+        adapter.qr = AsyncMock(return_value={"revision": digest, "state": "valid"})
+        get = SimpleNamespace(
+            url="https://login.douyin.com/passport/web/get_qrcode/",
+            status=200,
+            json=AsyncMock(
+                return_value={
+                    "data": {
+                        "error_code": 0,
+                        "token": "current-secret",
+                        "qrcode": base64.b64encode(image).decode(),
+                    }
+                }
+            ),
+        )
+        await adapter.observe_response(get)
+        adapter.last_qr_digest = digest
+        poll = SimpleNamespace(
+            url="https://www.douyin.com/passport/web/check_qrconnect/",
+            status=200,
+            request=SimpleNamespace(post_data="token=current-secret"),
+            json=AsyncMock(),
+        )
+        for status, phase in [
+            ("new", "qr_ready"),
+            ("2", "phone_confirm"),
+            ("scanned", "phone_confirm"),
+            ("3", "identity_check"),
+            ("confirmed", "identity_check"),
+            ("4", "qr_expired"),
+            ("5", "qr_expired"),
+            ("expired", "qr_expired"),
+        ]:
+            poll.json.return_value = {"data": {"error_code": 0, "status": status}}
+            await adapter.observe_response(poll)
+            assert (await adapter.observe())["phase"] == phase
+        get.json.return_value = {
+            "data": {
+                "error_code": 0,
+                "token": "next-secret",
+                "qrcode": base64.b64encode(b"next-image").decode(),
+            }
+        }
+        await adapter.observe_response(get)
+        poll.json.return_value = {"data": {"error_code": 0, "status": "confirmed"}}
+        await adapter.observe_response(poll)
+        assert adapter.qr_platform_status == "new"
+        assert "current-secret" not in str(adapter.network_receipts)
 
     asyncio.run(run())

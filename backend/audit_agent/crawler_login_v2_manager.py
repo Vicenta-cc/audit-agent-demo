@@ -48,6 +48,7 @@ DURABLE_ACTIONS = {
 
 
 ERROR_MESSAGES = {
+    "PHONE_CONFIRM_REFUSED": "手机端已取消本次登录，请重新扫码。",
     "LOGIN_FAILED": "登录未完成，请查看当前登录步骤后重试。",
     "INVALID_COMMAND": "操作内容无效，请刷新登录窗口后重试。",
     "ACCOUNT_BUSY": "已有账号正在登录或采集，请等待结束后重试。",

@@ -859,7 +859,9 @@ class DouyinLoginV2:
             ):
                 raise ValueError("LOGIN_PREPARATION_FAILED")
             await self.observe_pending_commands(observation)
-            if not authentication_pending and await self.adapter.has_auth():
+            if not authentication_pending and (
+                auth_signal or observation["phase"] == "identity_check"
+            ):
                 self.publish({"phase": "identity_check"})
                 self.failure_stage = "identity_check"
                 if identity_started is None:
@@ -870,7 +872,7 @@ class DouyinLoginV2:
                 if not identity and not identity_probe:
                     identity_probe = True
                     await self.adapter.navigate("self")
-                if identity:
+                if identity and await self.adapter.has_auth():
                     if (
                         self.args.expected_platform_account_id
                         and identity != self.args.expected_platform_account_id
