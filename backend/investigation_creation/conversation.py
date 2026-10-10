@@ -1147,13 +1147,26 @@ class InvestigationCreationConversationService:
             user_message = self.store.get_user_message_for_turn(turn.id).content
             with ExitStack() as streams:
                 streams.enter_context(self._activity_emitter.bind_turn(turn.session_id, turn.id))
-                streams.enter_context(self._answer_streamer.bind_turn(turn.session_id, turn.id))
                 streams.enter_context(self.runtime_binding.product_mode_execution(
                     session_runtime_home(self.hermes_state_dir, turn.session_id), product_mode="collection"))
                 agent = self._agent(turn.session_id, product_mode="collection")
-                streams.enter_context(turn_system_context(agent, "本轮只能使用会话报告工具。"))
-                result = agent.run_conversation(user_message, system_message=PROMPT,
-                    conversation_history=deepcopy(history), task_id=turn.id)
+                repair = "本轮只能使用会话报告工具。答案只可引用本轮查询范围内的证据。"
+                totals = {k: 0 for k in ("input_tokens", "output_tokens", "total_tokens", "api_calls")}
+                for attempt in range(2):
+                    with turn_system_context(agent, repair):
+                        result = agent.run_conversation(user_message, system_message=PROMPT,
+                            conversation_history=deepcopy(history), task_id=turn.id)
+                    for key in totals:
+                        totals[key] += int(result.get(key) or 0)
+                    try:
+                        self.report_collection.validate_answer(turn.session_id, turn.id, str(result.get("final_response") or ""))
+                        break
+                    except ValueError as exc:
+                        self.report_collection.record_call("validate_answer", {}, turn.session_id, turn.id,
+                            {"ok": False, "error": str(exc), "attempt": attempt + 1})
+                        if attempt: raise
+                        repair = str(exc)
+                result.update(totals)
             if not result.get("completed") or result.get("failed") or result.get("interrupted"):
                 raise RuntimeError("报告会话模型未完成回答。")
             transcript = HermesInvestigationAgentService._validate_completed_transcript(

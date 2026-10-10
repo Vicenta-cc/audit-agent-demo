@@ -56,8 +56,10 @@ def test_union_intersection_limit_and_followup(collection):
     s=collection;t=begin(s)
     listing=call(s,t,'list_conversation_reports'); refs={r['label']:r['report_ref'] for r in listing['reports']}
     data=call(s,t,'query_conversation_reports',kind='accounts',common_only=True,scope='all')
-    assert data['total_count']==1
-    account=data['items'][0]
+    assert data['total_count']==2  # shared publisher and shared comment author
+    publisher=next(a for a in data['items'] if a['unique_post_count'])
+    assert publisher['roles']==['post_author'] and publisher['unique_post_count']==1
+    account=next(a for a in data['items'] if a['unique_comment_count'])
     assert account['unique_comment_count']==1
     assert {r['risk_level'] for r in account['observations']}=={'low','high'}
     assert {r['source']['label'] for r in account['observations']}=={'A','B'}
@@ -221,3 +223,18 @@ def test_configuration_uses_confirmed_run_snapshot(collection):
     with s['creation_store']._connect() as db:
         db.execute("UPDATE investigation_runs SET confirmed_configuration_json='{}' WHERE id=?",(run['run_id'],))
     assert s['collection'].repository(members[0])[1]==config
+
+
+def test_answer_cannot_cite_prior_a_after_selecting_b(collection):
+    from backend.report_collection.tools import dispatch
+    s=collection;t=begin(s)
+    original=call(s,t,'query_conversation_reports',scope='all')
+    a=next(r for r in original['items'] if r['source']['label']=='A')
+    finish(s,t);t=begin(s)
+    b=next(r for r in call(s,t,'list_conversation_reports')['reports'] if r['label']=='B')
+    result=json.loads(dispatch('query_conversation_reports',{'report_refs':[b['report_ref']]},s['sid'],t))
+    assert result['ok']
+    b_comment=result['data']['items'][0]['comment_ref']
+    s['collection'].validate_answer(s['sid'],t,'报告 B 的评论 '+b_comment)
+    with pytest.raises(ValueError,match='范围之外'):
+        s['collection'].validate_answer(s['sid'],t,'顺带对比 A 的评论 '+a['comment_ref'])

@@ -63,7 +63,7 @@ def main():
         evidence['auth_checks']={'owner_read':True,'other_admin_denied':True,'other_report_denied':True}
         questions=[
             '查询这个会话里的全部报告，有哪些共同出现的账号？请保留各报告对评论的不同风险判断。',
-            '只看报告 B，刚才那个共同账号发表了哪些评论？',
+            '只看报告 B，刚才显示名为“同名账号”的那个共同账号发表了哪些评论？',
             '这些评论涉及哪些账号？继续沿用刚才的范围，不要扩展。',
             '报告 A 和 B 实际使用的关键词、审核规则、豁免条件及规则版本有什么区别？',
             '现在查当前会话全部报告中的高风险评论，列出来源。',
@@ -89,13 +89,19 @@ def main():
         assert evidence['calls'] and all(c['model']==settings.conversation_model for c in evidence['calls'])
         turns=evidence['turns']
         common=[r for r in turns[0]['query_results'] if r['kind']=='accounts'][-1]
-        assert len(common['items'])==1 and common['items'][0]['unique_comment_count']==1
+        assert len(common['items'])==2
+        common_account=next(a for a in common['items'] if a['unique_comment_count'])
+        assert common_account['unique_comment_count']==1
+        assert any(a['unique_post_count']==1 for a in common['items'])
         for index in [1,2]:
             results=turns[index]['query_results'];assert results
             assert all({s['label'] for s in r['sources']}=={'B'} for r in results)
             assert len(results[-1]['items'])==1
             if index==2:
-                assert results[-1]['items'][0]['account_ref']==common['items'][0]['account_ref']
+                assert results[-1]['items'][0]['account_ref']==common_account['account_ref']
+            import re
+            a_comment_refs={r['comment_ref'] for r in common_account['observations'] if r['source']['label']=='A'}
+            assert not (set(re.findall(r'comment_[0-9a-f]{24}', turns[index]['result']['answer'])) & a_comment_refs)
         assert any(r['kind']=='config_diff' for r in turns[3]['query_results'])
         high=turns[4]['query_results'][-1]
         assert {s['label'] for s in high['sources']}=={'A','B'}

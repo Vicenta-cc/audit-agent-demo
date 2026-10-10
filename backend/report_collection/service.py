@@ -7,6 +7,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from hashlib import sha256
 import json
+import re
 from pathlib import Path
 import sqlite3
 from uuid import uuid4
@@ -209,16 +210,31 @@ class ReportCollectionService:
             expected_database_sha256=digest,expected_content_hash=version['content_hash'],expected_snapshot_hash=snapshot['snapshot_hash'])
         return repo, pinned['config']
 
-    def comments(self, sources):
+    def observations(self, sources):
         rows = []
         for s in sources:
             repo,_ = self.repository(s)
             for post in repo.ordered_posts():
+                payload=repo.snapshot_payloads[post.id]
+                platform='douyin' if payload.get('platform') in {'dy','douyin'} else payload.get('platform','')
+                author=(payload.get('raw_content_payload') or {}).get('author') or {}
+                stable=str(author.get('sec_uid') or '').strip() if platform=='douyin' else ''
+                finding=repo.finding_for_post(post.id)
+                post_ref=reference('post',[s['version'],post.id])
+                source={'report_ref':s['ref'],'label':s['label'],'report_version_id':s['version']}
+                rows.append({'kind':'post_author','comment_ref':'','post_ref':post_ref,
+                    'evidence_key':reference('evidence',[platform,post.id]),
+                    'account_ref':reference('account',[platform,stable]) if stable else '',
+                    'account_name':str(author.get('nickname') or ''),
+                    'text':payload.get('display_title') or payload.get('title') or '',
+                    'risk_level':finding.risk_level,'audit_status':'completed',
+                    'post_id':post.id,'source':source})
                 for c in repo.comments_for_federation(post.id):
                     stable = c.author_source_key if c.identity_consistent and c.platform in {'dy','douyin'} else ''
-                    rows.append({'comment_ref':reference('comment',[s['version'],post.id,c.id]),
+                    rows.append({'kind':'comment_author','post_ref':post_ref,
+                        'comment_ref':reference('comment',[s['version'],post.id,c.id]),
                         'evidence_key':reference('evidence',[c.platform,post.id,c.id]),
-                        'account_ref':reference('account',[c.platform,stable]) if stable else '',
+                        'account_ref':reference('account',[platform,stable]) if stable else '',
                         'account_name':c.author_display_name, 'text':c.text, 'risk_level':c.risk_level,
                         'audit_status':c.audit_status, 'post_id':post.id,
                         'source':{'report_ref':s['ref'],'label':s['label'],'report_version_id':s['version']}})
@@ -238,6 +254,30 @@ class ReportCollectionService:
         items=data['items']; end=min(len(items),offset+limit)
         return {**data, 'sources':[public_source(s) for s in data['sources']], 'items':items[offset:end],'total_count':len(items),'has_more':end<len(items),'next_offset':end,
             'scope_note':'仅本次列出的冻结报告；数量为本结果全集，分页不改变结果。'}
+
+    def validate_answer(self, session, turn, answer):
+        """Validate opaque evidence citations, not the semantics of prose claims."""
+        with self.connect() as db:
+            pinned=db.execute('SELECT selected FROM collection_turns WHERE session=? AND turn=?',(session,turn)).fetchone()
+            calls=db.execute('SELECT name,response FROM collection_calls WHERE session=? AND turn=?',(session,turn)).fetchall()
+        if not pinned or not pinned['selected']:
+            return  # A refusal or request for clarification can have no data read.
+        selected=json.loads(pinned['selected'])
+        allowed_reports={s['ref'] for s in selected}
+        versions={s['version'] for s in selected}
+        visible=[]
+        for call in calls:
+            response=json.loads(call['response'])
+            if not response.get('ok') or call['name']=='list_conversation_reports': continue
+            data=response.get('data',{})
+            if {s['report_ref'] for s in data.get('sources',[])} <= allowed_reports:
+                visible.append(data)
+        pattern=r'(?:comment|account|report|post)_[0-9a-f]{24,32}'
+        allowed=set(re.findall(pattern,encoded(visible))) | allowed_reports
+        used=set(re.findall(pattern,answer))
+        used_versions=set(re.findall(r'report-version:[0-9a-f]{32}',answer))
+        if used-allowed or used_versions-versions:
+            raise ValueError('答复引用了本轮查询范围之外或未读取的证据。请仅依据本轮工具结果重答，不补充其他报告的历史评论或风险对照。')
 
     def record_call(self, name, args, session, turn, response):
         with self.connect() as db:
@@ -265,7 +305,8 @@ class ReportCollectionService:
                 for k in configs[0] if configs[0][k]!=configs[1][k] or configs[0][k] is None]
             return self.save(session,turn,selected,'config_diff',changes,configs=configs,
                 warning='缺失字段为未知，不能视为未使用；配置差异不能单独证明风险变化的因果关系。')
-        rows=self.comments(selected)
+        rows=self.observations(selected)
+        if args['kind']=='comments': rows=[r for r in rows if r['kind']=='comment_author']
         parent_ref = args.get('from_result_ref')
         if not parent_ref and args.get('scope') == 'inherit' and not args.get('report_refs'):
             previous = self.previous(session,sources)
@@ -292,16 +333,20 @@ class ReportCollectionService:
                 refs={r['source']['report_ref'] for r in observations}
                 if args['common_only'] and len(refs)!=len(selected): continue
                 items.append({'account_ref':ref,'names':sorted({r['account_name'] for r in observations}),
-                    'unique_comment_count':len({r['evidence_key'] for r in observations}),
+                    'unique_comment_count':len({r['evidence_key'] for r in observations if r['kind']=='comment_author'}),
+                    'unique_post_count':len({r['evidence_key'] for r in observations if r['kind']=='post_author'}),
+                    'roles':sorted({r['kind'] for r in observations}),
                     'observation_count':len(observations),
                     'observations':observations[:20], 'observations_truncated':len(observations)>20,
                     'report_statistics':[{'report_ref':s['ref'],'label':s['label'],
-                        'comment_count':sum(r['source']['report_ref']==s['ref'] for r in observations),
+                        'comment_count':sum(r['source']['report_ref']==s['ref'] and r['kind']=='comment_author' for r in observations),
+                        'post_count':sum(r['source']['report_ref']==s['ref'] and r['kind']=='post_author' for r in observations),
                         'risk_levels':sorted({r['risk_level'] for r in observations if r['source']['report_ref']==s['ref']})} for s in selected]})
         return self.save(session,turn,selected,args['kind'],items,args['limit'],
             parent_result_ref=parent_ref or '',
             unique_evidence_count=len({r['evidence_key'] for r in rows}),
-            unresolved_identity_comments=sum(not r['account_ref'] for r in rows))
+            unresolved_identity_comments=sum(not r['account_ref'] and r['kind']=='comment_author' for r in rows),
+            identity_scope='按抖音 sec_uid 关联冻结报告中的发帖者和评论者；其他平台或缺失稳定 ID 不合并。')
 
 
 def business_config(config):
