@@ -232,13 +232,15 @@ class ReportCollectionService:
                 finding=repo.finding_for_post(post.id)
                 post_ref=reference('post',[s['version'],post.id])
                 source={'report_ref':s['ref'],'label':s['label'],'report_version_id':s['version']}
+                post_links={'原帖':str(payload.get('url') or '')}
                 rows.append({'kind':'post_author','comment_ref':'','post_ref':post_ref,
                     'evidence_key':reference('evidence',[platform,post.id]),
                     'account_ref':reference('account',[platform,stable]) if stable else '',
                     'account_name':str(author.get('nickname') or ''),
                     'text':payload.get('display_title') or payload.get('title') or '',
                     'risk_level':finding.risk_level,'audit_status':'completed',
-                    'post_id':post.id,'source':source})
+                    'post_id':post.id,'source':source,'links':{
+                        **post_links,'账号主页':str(author.get('homepage_url') or author.get('profile_url') or '')}})
                 for c in repo.comments_for_federation(post.id):
                     stable = c.author_source_key if c.identity_consistent and c.platform in {'dy','douyin'} else ''
                     rows.append({'kind':'comment_author','post_ref':post_ref,
@@ -246,7 +248,7 @@ class ReportCollectionService:
                         'evidence_key':reference('evidence',[c.platform,post.id,c.id]),
                         'account_ref':reference('account',[platform,stable]) if stable else '',
                         'account_name':c.author_display_name, 'text':c.text, 'risk_level':c.risk_level,
-                        'audit_status':c.audit_status, 'post_id':post.id,
+                        'audit_status':c.audit_status, 'post_id':post.id,'links':post_links,
                         'source':{'report_ref':s['ref'],'label':s['label'],'report_version_id':s['version']}})
             if len(rows)>100000: raise ValueError('报告内容超过第一阶段查询上限，未返回部分结果冒充全量。')
         return rows
@@ -367,6 +369,8 @@ class ReportCollectionService:
                 refs={r['source']['report_ref'] for r in observations}
                 if args['common_only'] and len(refs)!=len(selected): continue
                 items.append({'account_ref':ref,'names':sorted({r['account_name'] for r in observations}),
+                    'links':[{'label':label,'url':url} for label,url in sorted({
+                        (label,url) for r in observations for label,url in r.get('links',{}).items() if url})],
                     'unique_comment_count':len({r['evidence_key'] for r in observations if r['kind']=='comment_author'}),
                     'unique_post_count':len({r['evidence_key'] for r in observations if r['kind']=='post_author'}),
                     'roles':sorted({r['kind'] for r in observations}),

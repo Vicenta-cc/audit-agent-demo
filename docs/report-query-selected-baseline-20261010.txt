@@ -70,3 +70,8 @@ the configured invocation above passed all checks. No provider calls this turn.
 These checks validate integration, not improved model answer accuracy.
 
 Local isolated worktree only; no push, deployment, cloud restart or frontend change.
+
+Readability work after selection: shared conversation style and user-readable direct
+delivery added locally (see conversation-readable-style-20261010.txt). The selected
+query/delivery capabilities remain; this presentation revision is not evidence of
+improved complex reasoning. Link destinations are retained and tested.

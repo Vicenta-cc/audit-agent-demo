@@ -4,7 +4,7 @@ import pytest
 from test_report_collection_analysis import make_collection, creation_stack, invoke
 from test_report_collection import begin, finish
 from backend.report_collection import tools
-from backend.report_collection.delivery import direct_delivery_boundary, cell
+from backend.report_collection.delivery import direct_delivery_boundary, cell, link
 
 
 def test_full_list_order_roles_and_access(make_collection):
@@ -14,14 +14,24 @@ def test_full_list_order_roles_and_access(make_collection):
     assert data['row_counts']==[27]
     assert '| 27 |' in data['text'] and '27 条原始评论' in data['text']
     assert data['text'].count('| 高风险 |')==5
+    assert '[原帖](<https://www.douyin.com/video/33001>)' in data['text']
+    assert '[原帖](<https://www.douyin.com/video/33002>)' in data['text']
     assert data['text'].index('| 21 |')<data['text'].index('| 22 |')
+    assert listing['result_ref'] not in data['text']
+    assert data['references'][0]['result_ref']==listing['result_ref']
+    assert len(data['references'][0]['rows'])==27
+    assert data['references'][0]['rows'][20]['position']==21
+    for item in data['references'][0]['rows']:
+        assert item['comment_ref'] not in data['text']
+        assert item['account_ref'] not in data['text']
     low=invoke(s,t,kind='accounts',account_role='comment_author',risk_level='low',limit=1)
     both=invoke(s,t,kind='accounts',account_role='both')
     assert low['total_count']==3 and both['total_count']==1
     delivery=invoke(s,t,'deliver_conversation_results',result_refs=[low['result_ref'],both['result_ref']],report_labels=['A','D'])
     assert delivery['row_counts']==[3,1]
-    assert '风险=低风险；角色=评论作者' in delivery['text']
-    assert '风险=不限；角色=同时发帖和评论的账号' in delivery['text']
+    assert 'https://www.douyin.com/video/33002' in delivery['text']
+    assert '风险：低风险；账号范围：评论作者' in delivery['text']
+    assert '风险：不限；账号范围：同时发帖和评论的账号' in delivery['text']
     assert '场馆' not in delivery['text']
     assert '未读取、未参与统计' in delivery['text']
     assert 'SECRET' not in delivery['text']
@@ -56,6 +66,21 @@ def test_default_off_and_literal_evidence(make_collection):
     assert 'deliver_conversation_results' not in {x['name'] for x in tools.schemas()}
     assert not json.loads(tools.dispatch('deliver_conversation_results',{'report_labels':['D']},s['sid'],t))['ok']
     assert cell('<img src=x> [click](https://evil) | **bold**\nnext')=='&lt;img src=x&gt; \\[click\\]\\(https://evil\\) \\| \\*\\*bold\\*\\* next'
+    assert link('原帖','https://example.com/a_(b)?x=1&y=2#comment')=='[原帖](<https://example.com/a_(b)?x=1&y=2#comment>)'
+    assert link('详情','/tasks/task/outputs/7?view=report')=='[详情](</tasks/task/outputs/7?view=report>)'
+    assert link('不可信','javascript:alert(1)')==''
+
+
+def test_readable_delivery_keeps_distinct_same_name_accounts_and_sources(make_collection):
+    s=make_collection('identity');s['collection'].direct_delivery=True;t=begin(s)
+    listing=invoke(s,t,kind='accounts')
+    delivered=invoke(s,t,'deliver_conversation_results',result_refs=[listing['result_ref']])
+    assert '小桥（本表账号1）' in delivered['text']
+    assert '小桥（本表账号2）' in delivered['text']
+    assert delivered['row_counts']==[listing['total_count']]
+    assert {source['label'] for source in delivered['references'][0]['sources']}=={'A','B','C'}
+    for source in delivered['references'][0]['sources']:
+        assert source['version'] not in delivered['text']
 
 
 def test_delivery_rejects_partial_oversized_and_unknown_filter_results(make_collection):

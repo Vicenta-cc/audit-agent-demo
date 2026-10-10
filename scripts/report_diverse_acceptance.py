@@ -70,7 +70,10 @@ def main():
         help='Compare selected 949f3d6 baseline against analysis tools, keeping its prompt and format fixed.')
     parser.add_argument('--direct-comparison',action='store_true')
     parser.add_argument('--delivery-prompt-comparison',action='store_true')
+    parser.add_argument('--presentation-check',action='store_true',
+        help='Run only the retained direct-delivery arm; not a before/after comparison.')
     args=parser.parse_args()
+    if args.presentation_check: args.delivery_prompt_comparison=True
     root=args.output.resolve();os.umask(0o077);root.mkdir(parents=True,exist_ok=False)
     provider={k:os.environ[k] for k in ['CONVERSATION_API_KEY','CONVERSATION_BASE_URL','CONVERSATION_MODEL']}
     inherited={k:os.environ[k] for k in ['HOME','PATH','LANG','TMPDIR','PYTHONPATH'] if k in os.environ}
@@ -98,6 +101,7 @@ def main():
     if args.direct_comparison:order=['analysis_baseline','direct_delivery']
     if args.delivery_prompt_comparison:order=['original_prompt','compact_prompt']
     if args.repeat==2:order=list(reversed(order))
+    if args.presentation_check:order=['compact_prompt']
     evidence=dict(suite='delivery-prompt-full-chain' if args.delivery_prompt_comparison else 'direct-delivery-full-chain' if args.direct_comparison else ('analysis-tools-full-chain' if args.analysis_comparison else 'diverse-full-chain'),dataset=args.dataset,repeat=args.repeat,status='PREPARING',
         model=provider['CONVERSATION_MODEL'],host=urlsplit(provider['CONVERSATION_BASE_URL']).hostname,
         arm_order=order,prompts=dict(original=tools.AGENT_BASE_PROMPT,semantic=SEMANTIC_PROMPT,brief=tools.FOCUSED_ANSWER_INSTRUCTION),

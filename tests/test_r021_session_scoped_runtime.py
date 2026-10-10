@@ -534,9 +534,10 @@ class InvocationParityTest(unittest.TestCase):
             self.assertEqual(
                 agents[0].calls[1][1]["conversation_history"], first_transcript
             )
+            from backend.hermes_runtime.answer_style import with_answer_style
             self.assertEqual(
                 agents[0].calls[1][1]["system_message"],
-                service.runtime_binding.product_system_prompt(),
+                with_answer_style(service.runtime_binding.product_system_prompt()),
             )
 
             app = FastAPI()

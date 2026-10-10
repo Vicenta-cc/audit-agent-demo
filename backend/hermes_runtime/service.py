@@ -315,9 +315,10 @@ class HermesInvestigationAgentService:
                     tool_service = report_task_runtime_for_session(session.id)
                     history = prepare_conversation_history(tool_service, session.id, history)
                 user_message = self.store.get_user_message_for_turn(turn.id).content
-                system_message = self.runtime_binding.product_system_prompt(
+                from .answer_style import with_answer_style
+                system_message = with_answer_style(self.runtime_binding.product_system_prompt(
                     self._product_mode(session.id)
-                )
+                ))
                 turn_context = ""
                 if self.bind_runtime:
                     from hermes_m0.runtime import report_task_runtime_for_session

@@ -94,3 +94,18 @@ test("published rule recommendation with a domain label remains visible", () => 
   expect(html).toContain("覆盖民族仇恨与群体歧视");
   expect(html).not.toMatch(/draft_id|investigation-draft:private|RESOURCE_STALE/);
 });
+
+test("readable answers retain source and detail links with exact destinations", () => {
+  const content = [
+    "第 **21** 条由 **常来看看** 发布，本报告共有 **25** 条评论。", "",
+    "[原帖](<https://example.com/a_(b)?x=1&y=2#comment>) · [查看审核详情](</tasks/task/outputs/7?view=report>)", "",
+    "> 原文中的 English、high 和 https://example.com/source 都应保留。"
+  ].join("\n");
+  const html = renderToStaticMarkup(createElement(AssistantMarkdown, { content }));
+  expect(html).toContain('href="https://example.com/a_(b)?x=1&amp;y=2#comment"');
+  expect(html).toContain('href="/tasks/task/outputs/7?view=report"');
+  expect(html).toContain('>原帖</a>');
+  expect(html).toContain('>查看审核详情</a>');
+  expect(html).toContain('<strong>25</strong>');
+  expect(html).toContain('English、high');
+});

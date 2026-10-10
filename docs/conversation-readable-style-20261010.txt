@@ -1,0 +1,54 @@
+Readable conversation presentation — 2026-10-10
+Parent: dc87721 (user-retained direct delivery baseline).
+
+One shared short style instruction now reaches creation/resource conversations,
+collection conversations, and existing account/pass/unified report conversation
+service calls. Creation and collection use the instance-local identity builder;
+existing report modes add the same style after the unchanged canonical prompt
+hash fence. Tool schemas, generation prompts/contracts, permission and inquiry
+policies, non-thinking mode, and model routing are unchanged.
+
+Style: answer the point first, concise paragraphs/lists/comparison tables, moderate
+bold, no routine repeated conclusion or follow-up; user-readable names instead of
+internal identifiers. Preserve original evidence, effective scope, source,
+uncertainty and valid links; explicit technical-detail requests remain possible.
+The retained report-specific prompt remains 171 chars; the shared style is extra
+presentation guidance, not a claim that the total system prompt is 171 chars.
+
+Direct result rendering removes opaque IDs/version hashes from visible prose and
+retains source/filter/row references in structured delivery metadata. It preserves
+full row order, complete counts, per-report judgments, unresolved identity and
+scope. Same-name distinct accounts are visibly separated with table-local labels.
+Existing frozen post URLs are now passed through the unified adapter and rendered
+as links. Supplied publisher profile URLs are retained when available; no account
+or report URLs are guessed. Existing frontend links and literal evidence are not
+stripped or rewritten by a general English/ID removal filter.
+No frontend layout code or database snapshot was changed. The preview uses the
+actual AssistantMarkdown component and current CSS, rendered offline.
+
+Validation artifacts: acceptance/conversation-readable-20261010.
+8 real non-thinking report conversation turns (22 provider calls) were run before
+the later link-preservation clarification. The final link-aware prompt was used
+in 3 actual-model creation-style probes (greeting, resource explanation, exact URL).
+Those probes use the real creation prompt but do not test tool execution or rule
+resource generation. Final templates/URL transfer verified with frozen fixtures
+and 7 frontend component tests, including exact href query/fragment preservation.
+
+Observed: ordinal follow-up became short and omitted opaque IDs. Lists retained
+all 27 rows and sources. Configuration answers still expose rules-v1/r1 and repeat
+some explanations. Causal analysis still invents extra facts (B adds 2 posts rather
+than 1; calls a shared post B-only). Mixed-role answer incorrectly generalizes the
+remaining accounts as commenters, overlooking a post-only account. These are not
+fixed by this presentation change; no answer was manually repaired in the preview.
+No causal A/B correctness improvement is claimed.
+
+Automated checks: 39 backend tests plus 12 subtests passed when excluding the
+historical native catalog-size assertion; 7 frontend rendering tests passed.
+The combined suite's catalog assertion expected 12 tools and saw 14; preserve this
+failure separately, do not silently update its canonical expectation. An initial
+run in the older venv also lacked the optional OpenAI SDK; the configured runtime
+resolved that dependency. Existing dependency deprecation warnings remain.
+Browser screenshot inspection was blocked by the local-file URL policy; component
+HTML/link assertions passed, but no screenshot-level visual approval is claimed.
+Local isolated worktree only; no cloud restart, deployment, push, or runtime flag
+change. Historical baselines and score sheets remain unmodified.
