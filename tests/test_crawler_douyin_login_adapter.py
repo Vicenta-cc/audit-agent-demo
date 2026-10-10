@@ -1879,3 +1879,63 @@ def test_verification_metadata_and_blocked_documents_are_boolean_only():
             right.close()
 
     asyncio.run(run())
+
+
+def test_capture_metadata_mismatch_is_bounded_and_transient_change_recovers(
+    monkeypatch,
+):
+    import socket
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_v2 as module
+
+    async def scenario(permanent):
+        clock = {"now": 0}
+        monkeypatch.setattr(
+            module, "time", SimpleNamespace(monotonic=lambda: clock["now"])
+        )
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(operation_id="op", media_fd=left.detach())
+        )
+        helper.region = Region(10, 10, 100, 100)
+        helper.epoch = 1
+        helper.controller_attached = True
+        helper.phase = "manual_required"
+        page = SimpleNamespace(
+            viewport_size={"width": 1000, "height": 760},
+            screenshot=AsyncMock(return_value=b"pixels"),
+        )
+        helper.adapter = SimpleNamespace(page=page)
+        calls = []
+        events = []
+        frames = []
+
+        async def inventory(*args):
+            calls.append(True)
+            clock["now"] += 2
+            return [{"revision": len(calls)}] if permanent or len(calls) <= 2 else []
+
+        helper.editables.inventory = inventory
+        actual = helper.media
+
+        async def send(*args, **kwargs):
+            frames.append(True)
+            helper.stopped.set()
+
+        helper.media = SimpleNamespace(send=send)
+        helper.emit = lambda kind, **data: events.append((kind, data))
+        helper.capture_period = lambda: 0.001
+        try:
+            await helper.capture_frames()
+            assert events[0][0] == "notice"
+            if permanent:
+                assert not frames and helper.stopped.is_set()
+                assert events[-1][1]["code"] == "CAPTURE_FAILED" and len(calls) <= 8
+            else:
+                assert frames and not any(kind == "error" for kind, _ in events)
+        finally:
+            actual.close()
+            right.close()
+
+    asyncio.run(scenario(True))
+    asyncio.run(scenario(False))

@@ -554,6 +554,7 @@ class DouyinLoginV2:
     async def capture_frames(self):
         previous = None
         consecutive_failures = 0
+        unstable_since = None
         while not self.stopped.is_set():
             if not (
                 self.region
@@ -582,8 +583,22 @@ class DouyinLoginV2:
                         self.adapter.page, region
                     )
                 if not stable_fields:
+                    if unstable_since is None:
+                        unstable_since = time.monotonic()
+                        self.emit(
+                            "notice", code="CAPTURE_RETRY", message="验证页面正在更新"
+                        )
+                    elif time.monotonic() - unstable_since >= 8:
+                        self.emit(
+                            "error",
+                            code="CAPTURE_FAILED",
+                            message="无法取得稳定验证画面，请重新打开登录窗口",
+                        )
+                        self.stopped.set()
+                        break
                     await asyncio.sleep(self.capture_period())
                     continue
+                unstable_since = None
                 consecutive_failures = 0
                 digest = (
                     epoch,
