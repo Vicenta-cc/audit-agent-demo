@@ -1139,11 +1139,15 @@ class InvestigationCreationConversationService:
 
     def _execute_collection_turn(self, turn):
         from backend.report_collection.tools import PROMPT, AGENT_PROMPT
+        from backend.report_collection.context import project_history, restore_transcript
         from backend.hermes_runtime.adapter import turn_system_context
         try:
             self.report_collection.sources(turn.session_id, turn.id)
             self.report_collection.validate_history(turn.session_id)
-            history = self.store.hermes_conversation_history(turn.id)
+            stored_history = self.store.hermes_conversation_history(turn.id)
+            compact = self.report_collection.agent_driven and self.report_collection.compact_history
+            boundary = self.store.hermes_history_compaction_boundary(turn.id, stored_history) if compact else 0
+            history = project_history(stored_history, keep_from=boundary) if compact else stored_history
             user_message = self.store.get_user_message_for_turn(turn.id).content
             with ExitStack() as streams:
                 streams.enter_context(self._activity_emitter.bind_turn(turn.session_id, turn.id))
@@ -1173,7 +1177,8 @@ class InvestigationCreationConversationService:
                 raise RuntimeError("报告会话模型未完成回答。")
             transcript = HermesInvestigationAgentService._validate_completed_transcript(
                 result, history=history, user_message=user_message)
-            return self._persist_result(turn, result, transcript, {}, history_count=len(history or []),
+            transcript = restore_transcript(transcript, model_history=history, stored_history=stored_history)
+            return self._persist_result(turn, result, transcript, {}, history_count=len(stored_history or []),
                 include_proposal_presentations=False)
         except Exception:
             logger.exception("Collection turn failed: %s", turn.id)

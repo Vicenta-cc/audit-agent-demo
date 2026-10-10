@@ -25,8 +25,9 @@ def reference(kind, value):
 
 
 class ReportCollectionService:
-    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False):
+    def __init__(self, *, conversation, report_store, can_read, path, agent_driven=False, compact_history=False):
         self.agent_driven = agent_driven
+        self.compact_history = compact_history
         self.conversation = conversation
         self.report_store = report_store
         self.can_read = can_read

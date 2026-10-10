@@ -458,7 +458,8 @@ if os.environ.get("REPORT_COLLECTION_ENABLED") == "1":
     collection_service = ReportCollectionService(
         conversation=investigation_creation_conversation_service, report_store=report_store,
         can_read=_can_read_collection_report, path=settings.data_dir / "report-collections.sqlite3",
-        agent_driven=os.environ.get("REPORT_COLLECTION_AGENT_DRIVEN") == "1")
+        agent_driven=os.environ.get("REPORT_COLLECTION_AGENT_DRIVEN") == "1",
+        compact_history=os.environ.get("REPORT_COLLECTION_COMPACT_HISTORY") == "1")
     investigation_creation_conversation_service.report_collection = collection_service
     configure_collection(collection_service)
 

@@ -19,9 +19,13 @@ from uuid import uuid4
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--context-paired',action='store_true',help='Compare full and compact tool history in Agent mode; no prompt/tool changes.')
+    parser.add_argument('--repeat',type=int,choices=[1,2],default=1)
     parser.add_argument('--single-report',action='store_true',help='Compare existing single-report service and a B-only collection; three turns each.')
     parser.add_argument('--mode',choices=['constrained','agent','paired'],default='constrained')
     args=parser.parse_args()
+    if args.context_paired and (args.single_report or args.mode!='agent'):
+        parser.error('--context-paired requires --mode agent and cannot use --single-report')
     if args.single_report and args.mode=='paired':
         parser.error('--single-report requires --mode constrained or --mode agent')
     root=args.output.resolve()
@@ -49,15 +53,26 @@ def main():
         (root/'evidence.json').write_text(content)
     original=Completions.create
     def observed(client,*a,**kw):
-        if len(evidence['calls'])>=120:raise RuntimeError('验收最多 120 次模型请求。')
+        if len(evidence['calls'])>=(240 if args.context_paired else 120):raise RuntimeError('模型请求达到本次验收上限。')
         evidence['calls'].append({'model':kw.get('model'),'host':urlsplit(str(client._client.base_url)).hostname,
             'tool_names':[t['function']['name'] for t in kw.get('tools',[])]})
         save()
         call=evidence['calls'][-1]
+        if args.context_paired:
+            import hashlib
+            messages=kw.get('messages',[])
+            request=json.dumps({'messages':messages,'model':kw.get('model'),'tools':kw.get('tools'),'temperature':kw.get('temperature'),'extra_body':kw.get('extra_body')},ensure_ascii=False,default=str)
+            request_path=f'request-{len(evidence["calls"]):03d}.json'
+            (root/request_path).write_text(request.replace(provider['CONVERSATION_API_KEY'],'[REDACTED]'))
+            call.update(request_file=request_path,message_chars=len(json.dumps(messages,ensure_ascii=False)),
+                system_sha256=hashlib.sha256(json.dumps([m for m in messages if m.get('role')=='system'],ensure_ascii=False).encode()).hexdigest(),
+                tools_sha256=hashlib.sha256(json.dumps(kw.get('tools'),sort_keys=True).encode()).hexdigest(),
+                projected_results=sum('history_projection' in str(m.get('content','')) for m in messages))
         started=time.monotonic()
         try:
             response=original(client,*a,**kw)
             call['outcome']='success'
+            if args.context_paired and getattr(response,'usage',None):call['usage']=response.usage.model_dump()
             return response
         except Exception as exc:
             call['outcome']=type(exc).__name__
@@ -144,14 +159,28 @@ def main():
             ('metadata_exclusion',f"只查询 B 的全部评论。开头注明：本次仅分析 B，未纳入报告 A（{stack['reports']['A'].version}）。这个 A 的编号只是范围说明，请保留它，不要引用 A 的评论。然后列出 B 的评论。", 'comments',['B'],2),
             ('read_then_compare','先读回刚才 B 的评论结果，确认那个共同评论账号，再查它在 A 的评论，比较它在 A 和 B 的风险判断。这个问题明确允许查询 A+B。', 'comments',['A'],1),
         ]
+        if args.context_paired:
+            evidence['suite']='tool-history-context-comparison'
+            evidence['context_revision']='durable-completed-turn-boundaries'
+            questions += [
+                ('unique_comment','刚才这个共同评论账号在 A 和 B 中合计有几条不同的原始评论、几次研判？请说明身份依据。','accounts',['A','B'],None),
+                ('unknown_identity','A 中内容为 unknown 的评论，能确定不是刚才那个共同评论账号发布的吗？','comments',['A'],None),
+                ('filtered_accounts','只看 B：有哪些高风险账号？包括发帖者和评论者。','accounts',['B'],None),
+                ('publisher_exists','所以 B 没有发帖者账号吗？请核实。','accounts',['B'],None),
+                ('ordinal_setup','请把 B 的全部评论按本次返回顺序列成编号列表。','comments',['B'],2),
+                ('ordinal_followup','你刚才列出的第二条是谁发的？','accounts',['B'],None),
+                ('old_result','请读回本次聊天第一次查询 B 的原始评论结果，保持那个结果的顺序。','comments',['B'],2),
+            ]
+        modes=([f'{mode}-{repeat}' for repeat in range(1,args.repeat+1) for mode in (['full','compact'] if repeat%2 else ['compact','full'])] if args.context_paired else (['constrained','agent'] if args.mode=='paired' else [args.mode]))
         with patch.object(Completions,'create',observed), (root/'runtime.log').open('w') as log, redirect_stdout(log),redirect_stderr(log):
-            for mode in (['constrained','agent'] if args.mode=='paired' else [args.mode]):
-                stack['collection'].agent_driven=mode=='agent'
+            for mode in modes:
+                stack['collection'].agent_driven=args.context_paired or mode=='agent'
+                stack['collection'].compact_history=args.context_paired and mode.startswith('compact')
                 evidence.setdefault('configurations',{})[mode]={
-                    'system_prompt':AGENT_PROMPT if mode=='agent' else PROMPT,
-                    'system_prompt_chars':len(AGENT_PROMPT if mode=='agent' else PROMPT),
+                    'system_prompt':AGENT_PROMPT if stack['collection'].agent_driven else PROMPT,
+                    'system_prompt_chars':len(AGENT_PROMPT if stack['collection'].agent_driven else PROMPT),
                     'tool_descriptions_chars':sum(len(s['description']) for s in schemas())}
-                if args.mode=='paired':
+                if args.mode=='paired' or args.context_paired:
                     sid=client.post('/api/investigation-workspaces',json={}).json()['workspace_session_id']
                     registered=client.post(f'/api/investigation-workspaces/{sid}/report-sources',json={'reports':[
                         {'label':n,'report_version_id':stack['reports'][n].version} for n in ['A','B']]})
@@ -167,7 +196,7 @@ def main():
                         time.sleep(.1)
                     turn=stack['conversation'].store.get_turn(turn_id)
                     result=stack['conversation'].store.turn_result(turn_id)
-                    record={'mode':mode,'turn_id':turn_id,'case':case,'seconds':round(time.monotonic()-started,3),'model_calls':len(evidence['calls'])-call_start,'question':question,'status':turn.status,'result':result.model_dump(mode='json')}
+                    record={'mode':mode,'call_start':call_start,'turn_id':turn_id,'case':case,'seconds':round(time.monotonic()-started,3),'model_calls':len(evidence['calls'])-call_start,'question':question,'status':turn.status,'result':result.model_dump(mode='json')}
                     with stack['collection'].connect() as db:
                         record['business_calls']=[dict(r) for r in db.execute('SELECT name,arguments,response FROM collection_calls WHERE turn=? ORDER BY id',(turn_id,))]
                         record['query_results']=[json.loads(r['payload']) for r in db.execute('SELECT payload FROM collection_results WHERE turn=?',(turn_id,))]

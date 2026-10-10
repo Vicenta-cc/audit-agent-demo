@@ -1847,6 +1847,38 @@ class InvestigationStore:
             ) from exc
         return [dict(item) for item in value]
 
+    def hermes_history_compaction_boundary(
+        self, turn_id: str, history: list[dict[str, Any]] | None, *, keep_completed_turns: int = 2,
+    ) -> int:
+        """Find a durable turn boundary; Hermes continuation users are not turns."""
+        if keep_completed_turns < 1:
+            raise ValueError("At least one completed turn must remain intact")
+        turn = self.get_turn(turn_id)
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT h.messages_json, h.messages_sha256
+                FROM investigation_hermes_transcripts h
+                JOIN investigation_turns t ON t.id = h.turn_id
+                JOIN investigation_messages m ON m.turn_id = t.id AND m.role = 'user'
+                WHERE h.session_id = ? AND t.status = 'completed'
+                  AND m.sequence < (SELECT sequence FROM investigation_messages
+                                    WHERE turn_id = ? AND role = 'user')
+                ORDER BY m.sequence DESC LIMIT 1 OFFSET ?
+                """,
+                (turn.session_id, turn_id, keep_completed_turns),
+            ).fetchone()
+        if row is None:
+            return 0
+        serialized = str(row['messages_json'])
+        if hashlib.sha256(serialized.encode('utf-8')).hexdigest() != str(row['messages_sha256']):
+            raise InvestigationTurnNotFoundError("private Hermes transcript failed its integrity check")
+        prefix = json.loads(serialized)
+        # An unexpected history layout falls back to the complete model view.
+        if not isinstance(prefix, list) or (history or [])[:len(prefix)] != prefix:
+            return 0
+        return len(prefix)
+
     def hermes_conversation_history(self, turn_id: str) -> list[dict[str, Any]] | None:
         """Keep unanswered user intent without promoting a failed draft to evidence."""
         turn = self.get_turn(turn_id)
