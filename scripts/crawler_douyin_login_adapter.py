@@ -197,15 +197,7 @@ class DouyinLoginAdapter:
                     and data.get("error_code") == 0
                     and isinstance(data.get("token"), str)
                 ):
-                    try:
-                        image = base64.b64decode(
-                            data["qrcode"].split(",", 1)[-1], validate=True
-                        )
-                        self.qr_ticket_digest = hashlib.sha256(image).hexdigest()
-                        self.qr_ticket = data["token"]
-                        self.qr_platform_status = "new"
-                    except (ValueError, TypeError, AttributeError, KeyError):
-                        pass
+                    self.accept_qr_ticket(data)
                 elif path.endswith("/check_qrconnect"):
                     query = parse_qs(parsed.query)
                     form = parse_qs(
@@ -233,6 +225,8 @@ class DouyinLoginAdapter:
                         and data.get("error_code") == 0
                     ):
                         self.qr_platform_status = status
+                        if status in {"expired", "refused"}:
+                            self.accept_qr_ticket(data)
 
                 receipt = {
                     "endpoint": "get_qrcode"
@@ -281,6 +275,27 @@ class DouyinLoginAdapter:
 
                 if not isinstance(exc, TimeoutError):
                     raise
+
+    def accept_qr_ticket(self, data):
+        token = data.get("token")
+        encoded = data.get("qrcode")
+        if (
+            not isinstance(token, str)
+            or not 1 <= len(token) <= 4096
+            or not isinstance(encoded, str)
+            or len(encoded) > 131072
+        ):
+            return False
+        try:
+            image = base64.b64decode(encoded.split(",", 1)[-1], validate=True)
+            if not image or len(image) > 65536:
+                return False
+        except ValueError:
+            return False
+        self.qr_ticket = token
+        self.qr_ticket_digest = hashlib.sha256(image).hexdigest()
+        self.qr_platform_status = "new"
+        return True
 
     async def has_auth(self) -> bool:
         cookies = {
@@ -565,8 +580,6 @@ class DouyinLoginAdapter:
             return {"phase": "phone_confirm"}
         if correlated and self.qr_platform_status == "confirmed":
             return {"phase": "identity_check"}
-        if correlated and self.qr_platform_status == "refused":
-            raise ValueError("PHONE_CONFIRM_REFUSED")
         if phone_confirmation:
             return {"phase": "phone_confirm"}
         if self.manual and panel:
@@ -577,7 +590,9 @@ class DouyinLoginAdapter:
             }
         if qr:
             self.last_qr = dict(qr)
-        expired = (correlated and self.qr_platform_status == "expired") or any(
+        expired = (
+            correlated and self.qr_platform_status in {"expired", "refused"}
+        ) or any(
             term in text
             for term in ("二维码已失效", "二维码已过期", "二维码失效", "点击刷新")
         )

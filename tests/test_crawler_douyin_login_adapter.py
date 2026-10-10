@@ -1480,3 +1480,102 @@ def test_official_poll_states_are_correlated_to_current_qr_ticket():
         assert "current-secret" not in str(adapter.network_receipts)
 
     asyncio.run(run())
+
+
+def test_native_poll_rotation_accepts_replacement_and_ignores_old_ticket():
+    import base64
+    import hashlib
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, None)
+        assert adapter.accept_qr_ticket(
+            {"token": "old", "qrcode": base64.b64encode(b"old").decode()}
+        )
+        response = SimpleNamespace(
+            url="https://login.douyin.com/passport/web/check_qrconnect/",
+            status=200,
+            request=SimpleNamespace(post_data="token=old"),
+            json=AsyncMock(
+                return_value={
+                    "data": {
+                        "status": "refused",
+                        "error_code": 0,
+                        "token": "new",
+                        "qrcode": base64.b64encode(b"new").decode(),
+                    }
+                }
+            ),
+        )
+        await adapter.observe_response(response)
+        assert adapter.qr_ticket == "new" and adapter.qr_platform_status == "new"
+        assert adapter.qr_ticket_digest == hashlib.sha256(b"new").hexdigest()
+        response.json.return_value = {"data": {"status": "confirmed", "error_code": 0}}
+        await adapter.observe_response(response)
+        assert adapter.qr_platform_status == "new"
+        response.request.post_data = "token=new"
+        response.json.return_value = {"data": {"status": "scanned", "error_code": 0}}
+        await adapter.observe_response(response)
+        assert adapter.qr_platform_status == "scanned"
+        response.json.return_value = {"data": {"status": "confirmed", "error_code": 0}}
+        await adapter.observe_response(response)
+        assert adapter.qr_platform_status == "confirmed"
+
+    asyncio.run(run())
+
+
+def test_confirmed_without_cookie_waits_native_sso_without_navigation(
+    tmp_path, monkeypatch
+):
+    import socket
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_v2 as module
+
+    async def run():
+        clock = {"now": 0}
+        monkeypatch.setattr(
+            module, "time", SimpleNamespace(monotonic=lambda: clock["now"])
+        )
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(
+                operation_id="op",
+                media_fd=left.detach(),
+                intent="check_or_login",
+                entry="home",
+                expected_platform_account_id="",
+            )
+        )
+        helper.profile = {"directory": tmp_path}
+
+        async def observe():
+            clock["now"] += 8
+            return {"phase": "identity_check"}
+
+        helper.adapter = SimpleNamespace(
+            navigate=AsyncMock(),
+            open_login=AsyncMock(),
+            has_auth=AsyncMock(return_value=False),
+            observe=observe,
+            trusted_identity=AsyncMock(return_value=""),
+            identity="",
+            identity_source="",
+        )
+        helper.open_context = AsyncMock()
+        helper.handshake = AsyncMock()
+        helper.abort_gesture = AsyncMock()
+        helper.emit = lambda *a, **kw: None
+        helper.publish = lambda _: None
+        try:
+            with __import__("pytest").raises(ValueError, match="IDENTITY_UNCONFIRMED"):
+                await helper.flow()
+            assert [call.args for call in helper.adapter.navigate.await_args_list] == [
+                ("home",)
+            ]
+            assert not helper.display_fallback_used and not helper.committed
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())

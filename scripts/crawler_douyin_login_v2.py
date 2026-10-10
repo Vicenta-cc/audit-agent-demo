@@ -869,7 +869,7 @@ class DouyinLoginV2:
                 elif time.monotonic() - identity_started > 15:
                     raise ValueError("IDENTITY_UNCONFIRMED")
                 identity = await self.adapter.trusted_identity()
-                if not identity and not identity_probe:
+                if not identity and not identity_probe and auth_signal:
                     identity_probe = True
                     await self.adapter.navigate("self")
                 if identity and await self.adapter.has_auth():
