@@ -1447,6 +1447,7 @@ def test_official_poll_states_are_correlated_to_current_qr_ticket():
         )
         await adapter.observe_response(get)
         adapter.last_qr_digest = digest
+        adapter.last_qr_source_digest = digest
         poll = SimpleNamespace(
             url="https://www.douyin.com/passport/web/check_qrconnect/",
             status=200,
@@ -1643,3 +1644,54 @@ def test_slow_old_qr_response_cannot_replace_new_generation():
 
     asyncio.run(scenario(False))
     asyncio.run(scenario(True))
+
+
+def test_rendered_qr_fallback_correlates_original_source_not_display(monkeypatch):
+    import base64
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter, QR_SELECTOR
+    from scripts import crawler_account_login as login
+
+    async def run():
+        source = b"original-api-image"
+        display = b"rendered-image"
+        locator = SimpleNamespace(
+            get_attribute=AsyncMock(
+                return_value="data:image/png;base64,"
+                + base64.b64encode(source).decode()
+            ),
+            screenshot=AsyncMock(return_value=display),
+        )
+        panel = SimpleNamespace(inner_text=AsyncMock(return_value="扫码登录"))
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(evaluate=AsyncMock()))
+        adapter.visible = AsyncMock(
+            side_effect=lambda selector: locator if selector == QR_SELECTOR else panel
+        )
+        adapter.region = AsyncMock(return_value=None)
+        monkeypatch.setattr(login, "is_qr_png", lambda image: image == display)
+        adapter.accept_qr_ticket(
+            {"token": "current", "qrcode": base64.b64encode(source).decode()}
+        )
+        adapter.qr_platform_status = "scanned"
+        adapter.sms_selected = True
+        assert (await adapter.observe())["phase"] == "phone_confirm"
+        assert adapter.last_qr_digest != adapter.last_qr_source_digest
+        adapter.qr_platform_status = "confirmed"
+        assert (await adapter.observe())["phase"] == "identity_check"
+        panel.inner_text.return_value = "请完成手机验证"
+        adapter.sms_controls = AsyncMock(
+            return_value={
+                "phone": SimpleNamespace(is_visible=AsyncMock(return_value=False)),
+                "code": SimpleNamespace(get_attribute=AsyncMock(return_value="6")),
+            }
+        )
+        adapter.observe_sms_result = AsyncMock()
+        assert (await adapter.observe())["phase"] == "sms_required"
+        panel.inner_text.return_value = "扫码登录"
+        adapter.sms_selected = False
+        locator.get_attribute.return_value = (
+            "data:image/png;base64," + base64.b64encode(b"wrong-source").decode()
+        )
+        assert (await adapter.observe())["phase"] == "qr_ready"
+
+    asyncio.run(run())

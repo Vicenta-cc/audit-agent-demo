@@ -77,6 +77,7 @@ class DouyinLoginAdapter:
         self.platform_signal = ""
         self.sms_result = "unknown"
         self.last_qr_digest = ""
+        self.last_qr_source_digest = ""
         self.last_qr = None
         self.qr_extraction_reason = "not_observed"
         self._closed = False
@@ -396,6 +397,7 @@ class DouyinLoginAdapter:
         if locator is None:
             self.qr_extraction_reason = "image_not_visible"
             return None
+        self.last_qr_source_digest = ""
         png = None
         try:
             source = await locator.get_attribute("src") or ""
@@ -408,6 +410,8 @@ class DouyinLoginAdapter:
                 png = base64.b64decode(encoded, validate=True)
             if not png or len(png) > 32768:
                 png = await locator.screenshot(type="png", timeout=2000)
+            elif png:
+                self.last_qr_source_digest = hashlib.sha256(png).hexdigest()
             from scripts.crawler_account_login import is_qr_png
 
             if not is_qr_png(png):
@@ -545,8 +549,17 @@ class DouyinLoginAdapter:
             )
             for line in text.splitlines()
         )
+        correlated = bool(
+            self.qr_ticket_digest
+            and self.last_qr_source_digest == self.qr_ticket_digest
+        )
+        network_progress = correlated and self.qr_platform_status in {
+            "scanned",
+            "confirmed",
+        }
         if (
-            required_sms or (self.sms_selected and not phone_confirmation)
+            required_sms
+            or (self.sms_selected and not phone_confirmation and not network_progress)
         ) and await self.sms_controls():
             controls = await self.sms_controls()
             self.sms_form_seen = True
@@ -582,9 +595,6 @@ class DouyinLoginAdapter:
                     "source": "rendered_login_form",
                 },
             }
-        correlated = bool(
-            self.qr_ticket_digest and self.last_qr_digest == self.qr_ticket_digest
-        )
         if correlated and self.qr_platform_status == "scanned":
             return {"phase": "phone_confirm"}
         if correlated and self.qr_platform_status == "confirmed":
