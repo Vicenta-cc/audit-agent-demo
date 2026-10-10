@@ -1124,6 +1124,7 @@ class CrawlerLoginV2Manager:
                         "browser_start",
                         "page_prepare",
                         "entry_navigation",
+                        "login_entry_open",
                         "initial_observation",
                         "observation",
                         "identity_check",
@@ -1162,6 +1163,7 @@ class CrawlerLoginV2Manager:
                         "is_visible",
                         "wait_for",
                         "goto",
+                        "click",
                     }:
                         method = None
                     timeout_ms = event.get("timeout_ms")
