@@ -1939,3 +1939,55 @@ def test_capture_metadata_mismatch_is_bounded_and_transient_change_recovers(
 
     asyncio.run(scenario(True))
     asyncio.run(scenario(False))
+
+
+def test_login_entry_click_timeout_accepts_only_actual_same_page_postcondition():
+
+    pw = __import__("pytest").importorskip("playwright.async_api")
+    from scripts.crawler_douyin_login_adapter import (
+        DouyinLoginAdapter,
+        PANEL_SELECTOR,
+        QR_SELECTOR,
+    )
+
+    async def scenario(panel_after, trusted=True):
+        page = SimpleNamespace(
+            url="https://www.douyin.com/jingxuan"
+            if trusted
+            else "https://outside.invalid",
+            is_closed=lambda: False,
+        )
+        adapter = DouyinLoginAdapter(None, page)
+        state = {"clicked": False}
+
+        async def click(**kwargs):
+            state["clicked"] = True
+            raise pw.TimeoutError("Locator.click: Timeout 2000ms exceeded token=SECRET")
+
+        trigger = SimpleNamespace(click=click)
+
+        async def visible(selector):
+            if selector == PANEL_SELECTOR:
+                return object() if state["clicked"] and panel_after else None
+            if selector == QR_SELECTOR:
+                return object() if state["clicked"] and panel_after else None
+            return trigger
+
+        adapter.visible = visible
+        if panel_after and trusted:
+            await adapter.open_login()
+            assert adapter.login_entry_diagnostic == {
+                "method": "click",
+                "timeout_ms": 2000,
+                "panel_present": True,
+                "qr_present": True,
+            }
+            assert "SECRET" not in str(adapter.login_entry_diagnostic)
+        else:
+            with __import__("pytest").raises(pw.TimeoutError):
+                await adapter.open_login()
+        assert state["clicked"]
+
+    asyncio.run(scenario(True))
+    asyncio.run(scenario(False))
+    asyncio.run(scenario(True, False))

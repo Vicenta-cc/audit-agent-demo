@@ -717,6 +717,7 @@ class DouyinLoginV2:
         self.headed_mode = True
         await self.open_context()
         await self.adapter.navigate(self.args.entry)
+        self.failure_stage = "login_entry_open"
         await self.adapter.open_login()
 
     def diagnose_observation(self, observation, *, has_auth, elapsed):
@@ -782,7 +783,7 @@ class DouyinLoginV2:
         )
         first_line = str(exc).splitlines()[0] if str(exc) else ""
         match = re.search(
-            r"\b(?:Locator|Page|Frame)\.(inner_text|get_attribute|evaluate|bounding_box|is_enabled|is_visible|wait_for|goto):",
+            r"\b(?:Locator|Page|Frame)\.(inner_text|get_attribute|evaluate|bounding_box|is_enabled|is_visible|wait_for|goto|click):",
             first_line,
         )
         timeout = re.search(r"\bTimeout (\d{1,6})ms", first_line)
@@ -922,6 +923,7 @@ class DouyinLoginV2:
         (self.profile["directory"] / "auth-imported").touch(mode=0o600)
         self.emit("guard_established")
         if not has_auth:
+            self.failure_stage = "login_entry_open"
             await self.adapter.open_login()
         identity_probe = False
         home_fallback = False

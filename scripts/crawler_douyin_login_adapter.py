@@ -90,6 +90,7 @@ class DouyinLoginAdapter:
         self.qr_response_generation = 0
         self.qr_accepted_generation = -1
         self.current_qr_error = None
+        self.login_entry_diagnostic = None
 
     def task(self, coroutine):
         task = asyncio.create_task(coroutine)
@@ -718,7 +719,25 @@ class DouyinLoginAdapter:
         for selector in PLATFORMS["dy"]["login_triggers"]:
             trigger = await self.visible(selector)
             if trigger:
-                await trigger.click(timeout=2000)
+                from playwright.async_api import TimeoutError
+
+                try:
+                    await trigger.click(timeout=2000)
+                except TimeoutError:
+                    if self.page.is_closed() or not document_allowed(
+                        self.page.url, top_level=True
+                    ):
+                        raise
+                    panel_present = await self.visible(PANEL_SELECTOR) is not None
+                    qr_present = await self.visible(QR_SELECTOR) is not None
+                    self.login_entry_diagnostic = {
+                        "method": "click",
+                        "timeout_ms": 2000,
+                        "panel_present": panel_present,
+                        "qr_present": qr_present,
+                    }
+                    if not (panel_present or qr_present):
+                        raise
                 return
 
     async def close(self):
