@@ -89,6 +89,7 @@ class DouyinLoginAdapter:
         self.qr_platform_status = ""
         self.qr_response_generation = 0
         self.qr_accepted_generation = -1
+        self.current_qr_error = None
 
     def task(self, coroutine):
         task = asyncio.create_task(coroutine)
@@ -195,6 +196,13 @@ class DouyinLoginAdapter:
             "/passport/web/check_qrconnect",
         }:
             try:
+                if self.page is not None and response.frame.page is not self.page:
+                    return
+            except AttributeError:
+                pass
+            except Exception:
+                return
+            try:
                 payload = await asyncio.wait_for(response.json(), 3)
                 data = payload.get("data") if isinstance(payload, dict) else None
                 data = data if isinstance(data, dict) else {}
@@ -224,6 +232,10 @@ class DouyinLoginAdapter:
                         "expired": "expired",
                     }
                     status = states.get(str(data.get("status")))
+                    if self.qr_ticket and token == self.qr_ticket:
+                        code = data.get("error_code")
+                        if type(code) is int:
+                            self.current_qr_error = code if code != 0 else None
                     if (
                         self.qr_ticket
                         and token == self.qr_ticket
@@ -303,6 +315,7 @@ class DouyinLoginAdapter:
         self.qr_ticket = token
         self.qr_ticket_digest = hashlib.sha256(image).hexdigest()
         self.qr_platform_status = "new"
+        self.current_qr_error = None
         if generation is not None:
             self.qr_accepted_generation = generation
         return True
@@ -616,6 +629,15 @@ class DouyinLoginAdapter:
                     "source": "rendered_login_form",
                 },
             }
+        if correlated and self.current_qr_error is not None:
+            region = await self.region()
+            if region:
+                return {
+                    "phase": "manual_required",
+                    "region": region,
+                    "region_signature": await self.region_signature(),
+                }
+            raise ValueError("QR_PLATFORM_REJECTED")
         if correlated and self.qr_platform_status == "scanned":
             return {"phase": "phone_confirm"}
         if correlated and self.qr_platform_status == "confirmed":

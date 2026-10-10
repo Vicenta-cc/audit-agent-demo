@@ -1764,3 +1764,50 @@ def test_failure_method_diagnostic_contains_only_fixed_method_timeout():
     finally:
         helper.media.close()
         right.close()
+
+
+def test_current_qr_platform_error_exposes_same_panel_and_does_not_taint_new_ticket():
+    import base64
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(evaluate=AsyncMock()))
+        adapter.accept_qr_ticket(
+            {"token": "current", "qrcode": base64.b64encode(b"current").decode()}
+        )
+        adapter.last_qr_source_digest = adapter.qr_ticket_digest
+        adapter.qr = AsyncMock(return_value={"revision": "current", "state": "valid"})
+        adapter.visible = AsyncMock(
+            return_value=SimpleNamespace(inner_text=AsyncMock(return_value="扫码登录"))
+        )
+        area = Region(10, 10, 400, 300)
+        adapter.region = AsyncMock(side_effect=[None, area])
+        adapter.region_signature = AsyncMock(return_value="platform-panel")
+        response = SimpleNamespace(
+            url="https://www.douyin.com/passport/web/check_qrconnect/",
+            status=200,
+            request=SimpleNamespace(post_data="token=current"),
+            json=AsyncMock(return_value={"data": {"error_code": 2046}}),
+        )
+        await adapter.observe_response(response)
+        result = await adapter.observe()
+        assert (
+            result["phase"] == "manual_required"
+            and result["region"] == area
+            and "qr" not in result
+        )
+        adapter.accept_qr_ticket(
+            {"token": "next", "qrcode": base64.b64encode(b"next").decode()}
+        )
+        assert adapter.current_qr_error is None
+        await adapter.observe_response(response)
+        assert adapter.current_qr_error is None
+        response.request.post_data = "token=next"
+        await adapter.observe_response(response)
+        assert adapter.current_qr_error == 2046
+        response.json.return_value = {"data": {"error_code": 0, "status": "new"}}
+        await adapter.observe_response(response)
+        assert adapter.current_qr_error is None
+
+    asyncio.run(run())
