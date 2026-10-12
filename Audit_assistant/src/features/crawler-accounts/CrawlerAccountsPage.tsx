@@ -26,8 +26,7 @@ import {
   createCrawlerAccount,
   deleteCrawlerAccount,
   fetchCrawlerAccountOverview,
-  updateCrawlerAccount,
-  updateCrawlerAccountProxyBinding
+  updateCrawlerAccount
 } from "../../services/crawlerAccounts";
 import type {
   CrawlerAccount,
@@ -38,9 +37,6 @@ import type {
   SharedCrawlerPoolSummary
 } from "../../types/crawlerAccounts";
 import { useApplicationAuth } from "../auth/AuthBoundary";
-import { fetchCrawlerProxies } from "../../services/crawlerProxies";
-import type { CrawlerProxyOverview } from "../../types/crawlerProxies";
-import { CrawlerProxyResources } from "./CrawlerProxyResources";
 import { CrawlerAccountDrawer } from "./CrawlerAccountDrawer";
 import { CrawlerAccountLoginDialog } from "./CrawlerAccountLoginDialog";
 
@@ -76,13 +72,6 @@ export function CrawlerAccountsPage() {
   const [searchParams] = useSearchParams();
   const requestedReturnTo = searchParams.get("return_to") || "";
   const returnTo = requestedReturnTo.startsWith("/investigation") ? requestedReturnTo : "";
-  const [proxies, setProxies] = useState<CrawlerProxyOverview>({ items: [], enabled: false, can_manage: false });
-  const [proxyError, setProxyError] = useState("");
-  const loadProxies = useCallback(async () => {
-    try { setProxies(await fetchCrawlerProxies()); setProxyError(""); }
-    catch { setProxies((previous) => ({ items: [], enabled: previous.enabled, can_manage: false })); setProxyError("代理配置读取失败，不能确认账号路由，请刷新后再操作。"); }
-  }, []);
-  useEffect(() => { void loadProxies(); }, [loadProxies]);
   const [accounts, setAccounts] = useState<CrawlerAccount[]>([]);
   const [sharedPool, setSharedPool] = useState<SharedCrawlerPoolSummary>({
     total: 0,
@@ -191,13 +180,13 @@ export function CrawlerAccountsPage() {
   const stats = useMemo(
     () => ({
       total: scopedAccounts.length,
-      active: scopedAccounts.filter((account) => isAccountReady(account, clock, proxies.enabled)).length,
+      active: scopedAccounts.filter((account) => isAccountReady(account, clock)).length,
       attention: scopedAccounts.filter(
-        (account) => account.needsProxyLoginValidation || (proxies.enabled && account.platform === "dy" && !account.proxyId) || isCooling(account, clock) || ["login_required", "expired"].includes(account.status)
+        (account) => account.status !== "disabled" && (account.collectionReady === false || account.needsProxyLoginValidation || (account.proxyRequired && !account.proxyId) || isCooling(account, clock) || ["login_required", "expired"].includes(account.status) || !account.hasAuthState)
       ).length,
       disabled: scopedAccounts.filter((account) => account.status === "disabled").length
     }),
-    [clock, scopedAccounts, proxies.enabled]
+    [clock, scopedAccounts]
   );
 
   const openCreate = () => {
@@ -219,17 +208,10 @@ export function CrawlerAccountsPage() {
     setSubmitting(true);
     try {
       if (editingAccount) {
-        let updated = await updateCrawlerAccount(editingAccount.id, {
+        const updated = await updateCrawlerAccount(editingAccount.id, {
           displayName: input.displayName,
           platformAccountId: input.platformAccountId
         });
-        if (input.proxyId !== undefined && input.proxyId !== editingAccount.proxyId) {
-          try { updated = await updateCrawlerAccountProxyBinding(editingAccount.id, input.proxyId, input.expectedBindingRevision || 0); }
-          catch (failure) {
-            setAccounts((current) => current.map((account) => account.id === updated.id ? updated : account));
-            throw new Error(`账号信息已保存，但代理绑定未更新：${readApiError(failure)}`);
-          }
-        }
         setAccounts((current) => current.map((account) => (account.id === updated.id ? updated : account)));
         setToast({ message: "账号信息已更新" });
       } else {
@@ -415,7 +397,7 @@ export function CrawlerAccountsPage() {
               if (groupAccounts.length === 0) return null;
               const meta = platformMeta[platformKey];
               const activeCount = groupAccounts.filter(
-                (account) => isAccountReady(account, clock, proxies.enabled)
+                (account) => isAccountReady(account, clock)
               ).length;
               const exceptionCount = groupAccounts.length - activeCount;
 
@@ -454,7 +436,7 @@ export function CrawlerAccountsPage() {
                         <span>操作</span>
                       </div>
                       {groupAccounts.map((account) => {
-                        const status = accountStatus(account, clock, proxies.enabled);
+                        const status = accountStatus(account, clock);
                         const isActing = actionId === account.id;
                         return (
                           <div className="crawler-account-table-row" role="row" key={account.id}>
@@ -525,10 +507,7 @@ export function CrawlerAccountsPage() {
         )}
       </section>
 
-      {proxyError ? <p role="alert">{proxyError}</p> : <CrawlerProxyResources overview={proxies} onRefresh={loadProxies} />}
       <CrawlerAccountDrawer
-        proxies={proxies.items}
-        proxyEnabled={proxies.enabled}
         open={drawerOpen}
         account={editingAccount}
         submitting={submitting}
@@ -601,20 +580,29 @@ function isCooling(account: CrawlerAccount, now: number): boolean {
   return Number.isFinite(until) && until > now;
 }
 
-function isAccountReady(account: CrawlerAccount, now: number, proxyEnabled: boolean): boolean {
-  return account.status === "active" && !isCooling(account, now) && !account.needsProxyLoginValidation
-    && !(proxyEnabled && account.platform === "dy" && !account.proxyId);
+function isAccountReady(account: CrawlerAccount, now: number): boolean {
+  return account.collectionReady !== false && account.status === "active" && account.hasAuthState && !isCooling(account, now) && !account.needsProxyLoginValidation
+    && !(account.proxyRequired && !account.proxyId);
 }
 
-function accountStatus(account: CrawlerAccount, now: number, proxyEnabled: boolean): { label: string; className: string } {
+function accountStatus(account: CrawlerAccount, now: number): { label: string; className: string } {
+  if (account.status === "disabled") return statusMeta.disabled;
   if (isCooling(account, now)) {
     return {
       label: `冷却中 · 至 ${formatDateTime(account.cooldownUntil)}`,
       className: "is-cooling"
     };
   }
-  if (account.status !== "disabled" && account.needsProxyLoginValidation) return { label: "代理配置变更，需校验登录", className: "is-login-required" };
-  if (account.status !== "disabled" && proxyEnabled && account.platform === "dy" && !account.proxyId) return { label: "请先绑定采集代理", className: "is-login-required" };
+  if (account.collectionBlockReason === "PROXY_CONFIGURATION_REQUIRED" || (account.proxyRequired && !account.proxyId)) {
+    return { label: "待配置采集网络", className: "is-login-required" };
+  }
+  if (account.collectionBlockReason?.startsWith("PROXY_") && account.collectionBlockReason !== "PROXY_LOGIN_VALIDATION_REQUIRED") {
+    return { label: "采集网络暂不可用", className: "is-login-required" };
+  }
+  if (account.collectionBlockReason === "PROXY_LOGIN_VALIDATION_REQUIRED" || account.needsProxyLoginValidation) {
+    return { label: "采集网络已变更，需校验登录", className: "is-login-required" };
+  }
+  if (account.status === "active" && !account.hasAuthState) return statusMeta.login_required;
   return statusMeta[account.status];
 }
 

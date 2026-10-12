@@ -218,7 +218,7 @@ def test_platform_normalization_requires_binding_and_summary_excludes_pending(ap
     client, _, accounts, proxies, _, _ = api
     for platform in ('DY', ' dy '):
         response = client.post('/api/crawler-accounts', json={'platform':platform,'display_name':'unbound'})
-        assert response.status_code == 400 and response.json()['detail'] == 'PROXY_BINDING_REQUIRED'
+        assert response.status_code == 400 and response.json()['detail'] == 'PROXY_CONFIGURATION_REQUIRED'
     assert accounts.list() == []
     resource = create_proxy(client)
     bound = client.post('/api/crawler-accounts', json={'platform':' DY ','display_name':'bound','access_scope':'public','proxy_id':resource['id']}).json()['item']

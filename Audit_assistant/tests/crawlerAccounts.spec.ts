@@ -209,8 +209,9 @@ test("QR and every login status come only from API responses", async () => {
 
 test("maps proxy binding and pending login validation fields without inventing readiness", async () => {
   globalThis.fetch = async () => new Response(JSON.stringify({ items: [{ ...apiAccount("proxy-account", "代理账号"),
+    collection_ready: false, collection_block_reason: "PROXY_UNAVAILABLE",
     proxy_id: "proxy-one", proxy_required: true, binding_revision: 4, validated_proxy_binding_revision: 3,
     validated_proxy_config_revision: 2, needs_proxy_login_validation: true }] }), { status: 200, headers: { "Content-Type": "application/json" } });
-  expect((await fetchCrawlerAccounts())[0]).toMatchObject({ proxyId: "proxy-one", proxyRequired: true,
+  expect((await fetchCrawlerAccounts())[0]).toMatchObject({ collectionReady: false, collectionBlockReason: "PROXY_UNAVAILABLE", proxyId: "proxy-one", proxyRequired: true,
     bindingRevision: 4, needsProxyLoginValidation: true, validatedProxyBindingRevision: 3, validatedProxyConfigRevision: 2 });
 });

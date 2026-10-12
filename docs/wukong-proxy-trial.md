@@ -8,7 +8,7 @@
 
 离线通过后，申请**一个长效或粘性 HTTP 入口**，不要申请每请求随机出口的池。订单时长不意味着真实出口永久固定；家庭线路可能自然变化。确认订单起止时间、入口鉴权和切换语义。见[悟空 IP 说明](https://www.wukongdaili.com/jiaocheng/doc/ipshuoming.html)。本手册不替代当前订单的确认，也不测试供应商 API。
 
-管理员在应用代理管理 UI 录入密码，密码仅写入、不可读回；不要发到聊天、CLI、环境变量或日志。试用准备文件仅接受 proxy_id、product、sticky_http、expires_at、owner_authorized、credentials_in_ui 元数据。
+管理员按[后端代理配置手册](crawler-proxy-backend-config.md)使用运维 CLI 和隐藏凭据输入，前端只管理账号；不要把密码发到聊天、CLI 参数、环境变量或日志。试用准备文件仅接受 proxy_id、product、sticky_http、expires_at、owner_authorized、credentials_in_ui 元数据；其中 credentials_in_ui 是既有兼容字段，现仅表示凭据已通过后端秘密输入安全写入，不要求或提供前端录入界面。
 
 ## 专用目录与只读检查
 

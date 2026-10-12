@@ -13,6 +13,8 @@ export type CrawlerAccountLoginStatus =
   | "cancelled";
 
 export interface CrawlerAccount {
+  collectionReady?: boolean;
+  collectionBlockReason?: string;
   proxyId?: string | null;
   proxyRequired?: boolean;
   needsProxyLoginValidation?: boolean;
@@ -56,8 +58,6 @@ export interface CrawlerAccountLoginSession {
 }
 
 export interface CrawlerAccountInput {
-  proxyId?: string | null;
-  expectedBindingRevision?: number;
   platform: CrawlerAccountPlatform;
   displayName: string;
   platformAccountId: string;

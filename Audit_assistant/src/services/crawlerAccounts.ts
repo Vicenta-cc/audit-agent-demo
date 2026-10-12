@@ -11,6 +11,8 @@ import type {
 } from "../types/crawlerAccounts";
 
 interface ApiCrawlerAccount {
+  collection_ready?: boolean;
+  collection_block_reason?: string;
   proxy_id?: string | null;
   proxy_required?: boolean;
   needs_proxy_login_validation?: boolean;
@@ -110,13 +112,6 @@ export async function updateCrawlerAccount(
   return mapCrawlerAccount(payload.item);
 }
 
-export async function updateCrawlerAccountProxyBinding(accountId: string, proxyId: string | null, expectedBindingRevision: number): Promise<CrawlerAccount> {
-  const payload = await apiRequest<{ item: ApiCrawlerAccount }>(`/api/crawler-accounts/${encodeURIComponent(accountId)}/proxy-binding`, {
-    method: "PATCH", body: JSON.stringify({ proxy_id: proxyId, expected_binding_revision: expectedBindingRevision })
-  });
-  return mapCrawlerAccount(payload.item);
-}
-
 export async function deleteCrawlerAccount(accountId: string): Promise<void> {
   await apiRequest(`/api/crawler-accounts/${encodeURIComponent(accountId)}`, {
     method: "DELETE"
@@ -163,7 +158,6 @@ export async function cancelCrawlerAccountLoginSession(sessionId: string): Promi
 
 function toApiInput(input: CrawlerAccountInput) {
   return {
-    ...(input.proxyId !== undefined ? { proxy_id: input.proxyId } : {}),
     platform: input.platform,
     display_name: input.displayName,
     platform_account_id: input.platformAccountId,
@@ -174,6 +168,8 @@ function toApiInput(input: CrawlerAccountInput) {
 function mapCrawlerAccount(item: ApiCrawlerAccount): CrawlerAccount {
   return {
     id: item.id,
+    collectionReady: item.collection_ready,
+    collectionBlockReason: item.collection_block_reason,
     proxyId: item.proxy_id,
     proxyRequired: item.proxy_required,
     needsProxyLoginValidation: item.needs_proxy_login_validation ?? false,

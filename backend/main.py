@@ -241,6 +241,36 @@ def _crawler_account_public_view(account: dict, principal: Principal) -> dict:
     item["can_manage"] = not _authz_enabled() or _can_manage_crawler_account(
         principal, account
     )
+    import time
+    reason = ""
+    proxy_id = account.get("proxy_id")
+    required = bool(account.get("proxy_required") or proxy_id
+                    or settings.crawler_proxy_enabled and account["platform"] == "dy")
+    if required:
+        if not proxy_id:
+            reason = "PROXY_CONFIGURATION_REQUIRED"
+        elif not settings.crawler_proxy_enabled or not _can_use_crawler_proxy(principal, proxy_id):
+            reason = "PROXY_UNAVAILABLE"
+        else:
+            # Read only routing metadata; never decrypt transport credentials.
+            with crawler_account_store._connect() as conn:
+                exists = conn.execute("SELECT 1 FROM sqlite_master WHERE name='proxy_resources' AND type='table'").fetchone()
+                resource = conn.execute("SELECT platform,status,stop_reason,expires_at,cooldown_until,config_revision FROM proxy_resources WHERE id=?", (proxy_id,)).fetchone() if exists else None
+            now = time.time()
+            if (not resource or resource["platform"] != account["platform"]
+                    or resource["status"] != "active" or resource["stop_reason"]
+                    or resource["expires_at"] is None or resource["expires_at"] <= now
+                    or resource["cooldown_until"] is not None and resource["cooldown_until"] > now):
+                reason = "PROXY_UNAVAILABLE"
+            elif (account.get("validated_proxy_binding_revision") != account.get("binding_revision")
+                    or account.get("validated_proxy_config_revision") != resource["config_revision"]):
+                reason = "PROXY_LOGIN_VALIDATION_REQUIRED"
+    if not reason and (account.get("status") != "active" or not account.get("has_auth_state")):
+        reason = "ACCOUNT_LOGIN_REQUIRED"
+    if not reason and account_is_cooling_down(account):
+        reason = "ACCOUNT_COOLDOWN"
+    item["collection_ready"] = not reason
+    item["collection_block_reason"] = reason
     return item
 
 
@@ -1721,11 +1751,20 @@ def create_crawler_account(
     request.platform = str(request.platform or "").strip().lower()
     if request.access_scope == "public":
         _require_admin(principal)
+    selected_default_proxy = (settings.crawler_proxy_enabled and request.platform == "dy"
+                              and "proxy_id" not in request.model_fields_set)
+    if selected_default_proxy:
+        request.proxy_id = settings.crawler_proxy_default_id or None
+        if not request.proxy_id:
+            raise HTTPException(400, detail="PROXY_CONFIGURATION_REQUIRED")
     if request.proxy_id:
         if request.platform != "dy":
             raise HTTPException(400, detail="Proxy routing currently supports dy only")
         resource = _require_crawler_proxy(request.proxy_id, principal)
-        if resource["status"] != "active":
+        import time
+        if resource["status"] != "active" or selected_default_proxy and (resource["stop_reason"]
+                or resource["expires_at"] is None or resource["expires_at"] <= time.time()
+                or resource["cooldown_until"] is not None and resource["cooldown_until"] > time.time()):
             raise HTTPException(409, detail="PROXY_UNAVAILABLE")
     elif settings.crawler_proxy_enabled and request.platform == "dy":
         raise HTTPException(400, detail="PROXY_BINDING_REQUIRED")
