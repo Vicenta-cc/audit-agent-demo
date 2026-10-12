@@ -624,3 +624,24 @@ def test_route_failure_diagnostic_logs_stage_class_without_sensitive_arguments(m
     assert 'stage=entry_navigation' in caplog.text
     assert 'exception_class=CollectionRouteError' in caplog.text
     assert 'SECRET' not in caplog.text and 'proxy.invalid' not in caplog.text
+
+
+@pytest.mark.parametrize('trial_id,login_bootstrap', [('paid-trial',True),('paid-trial',False),('',False)])
+def test_bound_session_factory_explicit_login_bootstrap_does_not_change_other_consumers(tmp_path,monkeypatch,trial_id,login_bootstrap):
+    from backend.audit_agent import crawler_route
+    from backend.audit_agent.config import settings
+    snapshot=frozen_route(tmp_path)
+    import sys
+    sys.path.insert(0,str(settings.media_crawler_dir))
+    import tools.bound_proxy as transport
+    captured=[]
+    monkeypatch.setattr(transport,'BoundProxySession',lambda value,**kwargs: captured.append((value,kwargs)) or object())
+    monkeypatch.setattr(settings,'crawler_proxy_trial_id',trial_id)
+    monkeypatch.setattr(crawler_route,'resolve_account_route',lambda *args,**kwargs: snapshot)
+    if login_bootstrap:
+        crawler_route.make_bound_proxy_session(snapshot,login_bootstrap=True)
+    else:
+        crawler_route.make_bound_proxy_session(snapshot)
+    assert captured[0][1]['login_bootstrap'] is login_bootstrap
+    assert captured[0][1]['trial_id']==trial_id
+    assert captured[0][1]['stop_checker']() is False

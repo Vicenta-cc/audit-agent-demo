@@ -175,8 +175,8 @@ def dispatch(manager, snapshot, epoch, sequence, action=None, owner=OWNER, **fie
         for index, point in enumerate(command['points'], 1):
             point['point_sequence'] = index
     manager.command(snapshot['id'], command, **owner)
-    wait_for(lambda: any(r['command_id'] == command['command_id'] for r in manager.sessions[snapshot['id']].results), manager, snapshot['id'])
-    assert next(r for r in manager.sessions[snapshot['id']].results if r['command_id'] == command['command_id'])['execution_status'] == 'executed'
+    wait_for(lambda: any(r.get('command_id') == command['command_id'] for r in manager.sessions[snapshot['id']].results), manager, snapshot['id'])
+    assert next(r for r in manager.sessions[snapshot['id']].results if r.get('command_id') == command['command_id'])['execution_status'] == 'executed'
     return command
 
 

@@ -678,7 +678,7 @@ def clear_route_stop(proxy_id, expected_revision):
                 db.execute('DELETE FROM collection_route_health WHERE proxy_id=? AND config_revision=?', (proxy_id, expected_revision))
 
 
-def make_bound_proxy_session(snapshot):
+def make_bound_proxy_session(snapshot, *, login_bootstrap=False):
     """Application-owned runtime checker bridges shared health to each action."""
     path = str(settings.media_crawler_dir.resolve())
     if path not in sys.path:
@@ -697,7 +697,8 @@ def make_bound_proxy_session(snapshot):
         except CollectionRouteError as exc:
             return exc.code
         return False
-    return BoundProxySession(snapshot, stop_checker=check)
+    return BoundProxySession(snapshot, stop_checker=check, login_bootstrap=login_bootstrap,
+        trial_id=getattr(settings, 'crawler_proxy_trial_id', ''))
 
 
 def publish_route_stop(proxy_id, config_revision, code='PROXY_UNAVAILABLE'):

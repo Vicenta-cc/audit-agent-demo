@@ -681,7 +681,8 @@ class DouyinLoginV2:
                 settings.crawler_login_browser_version,
             )
         from backend.audit_agent.crawler_route import make_bound_proxy_session
-        bound_session = make_bound_proxy_session(self.route_snapshot) if self.route_snapshot else None
+        bound_session = make_bound_proxy_session(self.route_snapshot,
+            login_bootstrap=bool(settings.crawler_proxy_trial_id)) if self.route_snapshot else None
         self.context, self.profile = await browser.launch_account_context(
             self.args.account_id,
             settings.crawler_browser_profile_root,
