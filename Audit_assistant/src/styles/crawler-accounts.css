@@ -1222,3 +1222,9 @@
 .crawler-login-dialog.is-v2 { max-height: calc(100dvh - 32px); overflow-y: auto; }
 .crawler-login-v2 p { margin-top: 0; margin-bottom: 0; }
 .crawler-login-v2-slow { padding: 10px 12px; background: var(--color-bg-secondary, #f8fafc); border-radius: 8px; }
+
+.crawler-login-native-surface { position: relative; line-height: 0; }
+.crawler-login-native-surface canvas { display: block; }
+.crawler-login-native-sync { position: absolute; left: 8px; bottom: 8px; z-index: 2; padding: 5px 8px; border-radius: 4px; background: rgba(255,255,255,.95); color: #475569; font-size: 12px; line-height: 1.5; pointer-events: none; }
+
+.crawler-login-keyboard-relay { position: fixed !important; left: -10000px !important; top: 0 !important; width: 1px !important; height: 1px !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; opacity: 0; resize: none; pointer-events: none; }

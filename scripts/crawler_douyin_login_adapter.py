@@ -91,6 +91,7 @@ class DouyinLoginAdapter:
         self.qr_response_generation = 0
         self.qr_accepted_generation = -1
         self.current_qr_error = None
+        self.login_entry_diagnostic = None
 
     def task(self, coroutine):
         task = asyncio.create_task(coroutine)
@@ -254,6 +255,24 @@ class DouyinLoginAdapter:
                             self.accept_qr_ticket(data, generation=generation)
 
                 receipt = {
+                    "token_matches_current": bool(
+                        path.endswith("/check_qrconnect")
+                        and token == self.qr_ticket
+                        and self.qr_ticket
+                    ),
+                    "source_matches_current": bool(
+                        self.qr_ticket_digest
+                        and self.last_qr_source_digest == self.qr_ticket_digest
+                    ),
+                    "has_verification_decision": "verify_center_decision_conf" in data
+                    or "verify_center_decision_conf" in payload,
+                    "has_secondary_decision": "verify_center_secondary_decision_conf"
+                    in data
+                    or "verify_center_secondary_decision_conf" in payload,
+                    "has_verification_header": any(
+                        str(key).lower() == "x-vc-bdturing-parameters"
+                        for key in getattr(response, "headers", {})
+                    ),
                     "endpoint": "get_qrcode"
                     if path.endswith("/get_qrcode")
                     else "check_qrconnect",
@@ -644,7 +663,10 @@ class DouyinLoginAdapter:
                     "region": region,
                     "region_signature": await self.region_signature(),
                 }
-            raise ValueError("QR_PLATFORM_REJECTED")
+            # A historical QR error is not proof of rejection after the native
+            # verification panel disappears. Preserve the same page for bounded
+            # authentication/identity observation; cookies alone never finish it.
+            return {"phase": "identity_check"}
         if correlated and self.qr_platform_status == "scanned":
             return {"phase": "phone_confirm"}
         if correlated and self.qr_platform_status == "confirmed":
@@ -707,7 +729,25 @@ class DouyinLoginAdapter:
         for selector in PLATFORMS["dy"]["login_triggers"]:
             trigger = await self.visible(selector)
             if trigger:
-                await trigger.click(timeout=2000)
+                from playwright.async_api import TimeoutError
+
+                try:
+                    await trigger.click(timeout=2000)
+                except TimeoutError:
+                    if self.page.is_closed() or not document_allowed(
+                        self.page.url, top_level=True
+                    ):
+                        raise
+                    panel_present = await self.visible(PANEL_SELECTOR) is not None
+                    qr_present = await self.visible(QR_SELECTOR) is not None
+                    self.login_entry_diagnostic = {
+                        "method": "click",
+                        "timeout_ms": 2000,
+                        "panel_present": panel_present,
+                        "qr_present": qr_present,
+                    }
+                    if not (panel_present or qr_present):
+                        raise
                 return
 
     async def close(self):

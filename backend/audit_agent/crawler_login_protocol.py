@@ -250,10 +250,21 @@ def validate_command(command: dict) -> dict:
             "gesture_id",
             "mode",
             "points",
+            "focus_field_id",
         },
         "scroll": {"challenge_id", "area_version", "x", "y", "delta_x", "delta_y"},
-        "key": {"challenge_id", "area_version", "key"},
-        "text": {"challenge_id", "area_version", "text"},
+        "key": {"challenge_id", "area_version", "key", "field_id"},
+        "text": {"challenge_id", "area_version", "text", "field_id"},
+        "edit_input": {
+            "challenge_id",
+            "area_version",
+            "field_id",
+            "value",
+            "client_edit_revision",
+            "selection_start",
+            "selection_end",
+            "selection_direction",
+        },
         "abort_gesture": {"challenge_id", "area_version", "gesture_id"},
     }
     if (
@@ -295,6 +306,10 @@ def validate_command(command: dict) -> dict:
         if action == "submit_sms" and not payload.get("code"):
             raise ProtocolError("SMS code required")
     elif kind == "pointer_batch":
+        if "focus_field_id" in command:
+            _identifier(command["focus_field_id"])
+            if command.get("mode") != "click":
+                raise ProtocolError("Invalid focus intent")
         _identifier(command.get("gesture_id"))
         if command.get("mode") not in {"slider", "click", "draw", "unknown"}:
             raise ProtocolError("Invalid gesture mode")
@@ -331,9 +346,13 @@ def validate_command(command: dict) -> dict:
             ):
                 raise ProtocolError("Invalid scroll delta")
     elif kind == "key":
+        if "field_id" in command:
+            _identifier(command["field_id"])
         if not isinstance(command.get("key"), str) or command["key"] not in KEYS:
             raise ProtocolError("Invalid key")
     elif kind == "text":
+        if "field_id" in command:
+            _identifier(command["field_id"])
         value = command.get("text")
         if (
             not isinstance(value, str)
@@ -341,6 +360,34 @@ def validate_command(command: dict) -> dict:
             or any(ord(c) < 32 for c in value)
         ):
             raise ProtocolError("Invalid text")
+    elif kind == "edit_input":
+        _identifier(command.get("field_id"))
+        revision = _uint(command.get("client_edit_revision"))
+        value = command.get("value")
+        if (
+            not revision
+            or not isinstance(value, str)
+            or any(ord(c) < 32 and c != "\n" for c in value)
+        ):
+            raise ProtocolError("Invalid edit value")
+        try:
+            length = len(value.encode("utf-16-le")) // 2
+        except UnicodeEncodeError as exc:
+            raise ProtocolError("Invalid edit Unicode") from exc
+        start, end = command.get("selection_start"), command.get("selection_end")
+        if (
+            length > 256
+            or type(start) is not int
+            or type(end) is not int
+            or not 0 <= start <= end <= length
+        ):
+            raise ProtocolError("Invalid edit selection")
+        if command.get("selection_direction", "none") not in {
+            "none",
+            "forward",
+            "backward",
+        }:
+            raise ProtocolError("Invalid edit direction")
     elif kind == "abort_gesture":
         _identifier(command.get("gesture_id"))
     return json.loads(_json(command))

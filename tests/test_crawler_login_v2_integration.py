@@ -25,7 +25,7 @@ from backend.task_admission.resources import acquire_account_handle
 
 
 WRAPPER = '''
-import asyncio, os
+import asyncio, os, base64
 import dotenv
 dotenv.load_dotenv = lambda *a, **k: False
 from scripts.crawler_account_login import parse_args
@@ -34,7 +34,15 @@ class FixtureAdapter(helper.DouyinLoginAdapter):
     async def install_guard(self, page): pass
     async def navigate(self, entry):
         await self.page.goto(os.environ['LOGIN_FIXTURE_ORIGIN'])
+        if 'qr_error=2046' in os.environ['LOGIN_FIXTURE_ORIGIN']:
+            image = self.page.locator('#animate_qrcode_container img')
+            if await image.count():
+                source = await image.get_attribute('src')
+                self.accept_qr_ticket({'token':'fixture-ticket','qrcode':source.split(',',1)[1]})
+                self.current_qr_error = 2046
     async def has_auth(self):
+        if 'qr_error=2046' in os.environ['LOGIN_FIXTURE_ORIGIN']:
+            return any(c['name']=='sessionid' for c in await self.context.cookies(os.environ['LOGIN_FIXTURE_ORIGIN']))
         return await self.page.evaluate("localStorage.getItem('fixtureLogin')==='saved'")
     async def trusted_identity(self):
         if await self.has_auth():
@@ -92,6 +100,16 @@ def real_login(tmp_path, monkeypatch):
     <script>let active=false,points=0; drawing.onpointerdown=e=>{{active=true;drawing.setPointerCapture(e.pointerId)}};
     drawing.onpointermove=e=>{{if(active)points++}};
     drawing.onpointerup=e=>{{active=false;if(points>=2&&+slider.value>80)captcha_container.style.display='none'}};
+    if(location.search.includes('qr_error=2046')){{
+      const complete=document.querySelector('.douyin_login_new_class button:last-of-type');
+      complete.style.cssText='position:absolute;left:10px;top:350px;width:100px;height:30px';
+      complete.onclick=()=>{{
+        const delay=Number(new URLSearchParams(location.search).get('cookie_delay'));
+        if(delay===0)document.cookie='sessionid=fixture;path=/;max-age=3600';
+        localStorage.setItem('fixtureLogin','saved');document.querySelector('.douyin_login_new_class').remove();
+        if(delay>0)setTimeout(()=>document.cookie='sessionid=fixture;path=/;max-age=3600',delay);
+      }};
+    }}
     if(localStorage.getItem('fixtureLogin')==='saved')document.querySelector('.douyin_login_new_class').remove();</script>'''
 
     class Handler(BaseHTTPRequestHandler):
@@ -285,3 +303,36 @@ def test_real_helper_failed_commit_recovers_without_reauth(real_login, monkeypat
     assert requests.count('/sms') == 1
     assert manager.operations.get(snapshot['operation_id'])['stage'] == 'recovered'
     assert saved['failure_kind'] == 'verify' and saved['cooldown_until'] == '2099-01-01'
+
+
+@pytest.mark.parametrize('cookie_delay', [0, 600, -1, -2])
+def test_real_qr_error_verification_disappears_preserves_native_auth_completion(real_login, monkeypatch, cookie_delay):
+    manager, account, requests = real_login
+    origin = os.environ['LOGIN_FIXTURE_ORIGIN']
+    if cookie_delay == -2:
+        account = manager.store.update(account['id'], platform_account_id='fixture-original')
+    actual_delay = 0 if cookie_delay == -2 else cookie_delay
+    monkeypatch.setenv('LOGIN_FIXTURE_ORIGIN', origin + f'?qr_error=2046&cookie_delay={actual_delay}')
+    snapshot, _ = manager.start(account, request_key=f'qr-error-{cookie_delay}', **OWNER)
+    sid = snapshot['id']
+    wait_for(lambda: manager.sessions[sid].snapshot['phase'] == 'manual_required', manager, sid)
+    epoch = connect(manager, snapshot)
+    wait_for(lambda: manager.sessions[sid].frame, manager, sid)
+    challenge = manager.sessions[sid].snapshot['challenge']
+    dispatch(manager, snapshot, epoch, 1, points=[
+        {'x':.1,'y':.91,'event':'down','dt_ms':0},
+        {'x':.1,'y':.91,'event':'up','dt_ms':0},
+    ], challenge_id=challenge['challenge_id'], area_version=challenge['area_version'])
+    if cookie_delay < 0:
+        wait_for(lambda: manager.sessions[sid].snapshot['phase'] == 'failed', timeout=25)
+        assert manager.sessions[sid].snapshot['error']['code'] == ('IDENTITY_MISMATCH' if cookie_delay == -2 else 'IDENTITY_UNCONFIRMED')
+        assert not manager.store.get(account['id'])['has_auth_state']
+    else:
+        wait_for(lambda: manager.sessions[sid].snapshot['phase'] == 'done', manager, sid)
+        saved = manager.store.get(account['id'])
+        assert saved['has_auth_state'] and saved['platform_account_id'] == 'fixture-account'
+        state = manager.cipher.decrypt(manager.store.get_auth_state_ciphertext(account['id']))
+        assert any(c['name'] == 'sessionid' for c in state['cookies'])
+        assert manager.operations.get(snapshot['operation_id'])['stage'] == 'committed'
+        assert saved['failure_kind'] == 'verify' and saved['cooldown_until'] == '2099-01-01'
+    assert requests.count('/sms') == 0

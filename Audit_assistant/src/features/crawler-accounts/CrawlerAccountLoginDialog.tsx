@@ -88,6 +88,12 @@ export function CrawlerAccountLoginDialog({
     return () => { window.clearTimeout(focus); document.removeEventListener("keydown", trap); previous?.focus(); };
   }, [account?.id]);
 
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!account || !dialog || dialog.contains(document.activeElement)) return;
+    (dialog.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]') || dialog).focus();
+  }, [account?.id, starting, closing]);
+
   const beginLogin = useCallback(
     async (resume = true, sourceOperationId?: string) => {
       if (!account) return;

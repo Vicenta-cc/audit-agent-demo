@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import type { WebSocketRoute } from "@playwright/test";
 import { decodeLoginFrame } from "../src/services/crawlerLoginV2";
 const png =
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==";
+  "iVBORw0KGgoAAAANSUhEUgAAAUAAAAC0CAIAAABqhmJGAAACIklEQVR4nO3TMQ0AMAzAsPIn3XLYM0WyEeTJLJA1vwOAdwaGMANDmIEhzMAQZmAIMzCEGRjCDAxhBoYwA0OYgSHMwBBmYAgzMIQZGMIMDGEGhjADQ5iBIczAEGZgCDMwhBkYwgwMYQaGMANDmIEhzMAQZmAIMzCEGRjCDAxhBoYwA0OYgSHMwBBmYAgzMIQZGMIMDGEGhjADQ5iBIczAEGZgCDMwhBkYwgwMYQaGMANDmIEhzMAQZmAIMzCEGRjCDAxhBoYwA0OYgSHMwBBmYAgzMIQZGMIMDGEGhjADQ5iBIczAEGZgCDMwhBkYwgwMYQaGMANDmIEhzMAQZmAIMzCEGRjCDAxhBoYwA0OYgSHMwBBmYAgzMIQZGMIMDGEGhjADQ5iBIczAEGZgCDMwhBkYwgwMYQaGMANDmIEhzMAQZmAIMzCEGRjCDAxhBoYwA0OYgSHMwBBmYAgzMIQZGMIMDGEGhjADQ5iBIczAEGZgCDMwhBkYwgwMYQaGMANDmIEhzMAQZmAIMzCEGRjCDAxhBoYwA0OYgSHMwBBmYAgzMIQZGMIMDGEGhjADQ5iBIczAEGZgCDMwhBkYwgwMYQaGMANDmIEhzMAQZmAIMzCEGRjCDAxhBoYwA0OYgSHMwBBmYAgzMIQZGMIMDGEGhjADQ5iBIczAEGZgCDMwhBkYwgwMYQaGMANDmIEhzMAQZmAIMzCEGRjCDAxhBoYwA0PYAfqlhGEWOYL0AAAAAElFTkSuQmCC";
 const snapshot = (phase = "qr_ready", revision = 1) => ({
   protocol_version: 2,
   engine: "v2",
@@ -51,14 +51,18 @@ const snapshot = (phase = "qr_ready", revision = 1) => ({
   error: null,
   result: null,
 });
-function packet() {
+function packet(
+  metadataPatch: Record<string, unknown> = {},
+  frameSequence = 1,
+) {
   const metadata = Buffer.from(
     JSON.stringify({
       controller_epoch: 1,
       challenge_id: "challenge-fixture",
       codec: "jpeg",
-      image_width: 1,
-      image_height: 1,
+      image_width: 320,
+      image_height: 180,
+      ...metadataPatch,
     }),
   );
   const image = Buffer.from(png, "base64");
@@ -68,7 +72,7 @@ function packet() {
   header[5] = 1;
   header.writeUInt16BE(metadata.length, 6);
   header.writeUInt32BE(image.length, 8);
-  header.writeUInt32BE(1, 12);
+  header.writeUInt32BE(frameSequence, 12);
   header.writeUInt32BE(2, 16);
   return Buffer.concat([header, metadata, image]);
 }
@@ -146,7 +150,9 @@ for (const viewport of [
     );
     await page.goto("/tests/crawlerLoginV2.html");
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByRole("button", { name: "刷新二维码", exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "刷新二维码", exact: true }),
+    ).toBeEnabled();
     await expect(page.getByAltText("抖音登录二维码")).toBeVisible();
     await expect(page.getByLabel("短信验证码")).toHaveCount(0);
     expect(starts).toBe(1);
@@ -211,16 +217,7 @@ for (const viewport of [
         (point) => point.x >= 0 && point.x <= 1 && point.y >= 0 && point.y <= 1,
       ),
     ).toBeTruthy();
-    await page.getByLabel("填写当前选中的输入框").fill("中文验证码123");
-    await page.getByRole("button", { name: "输入", exact: true }).click();
-    await expect
-      .poll(() =>
-        commands.some(
-          (item) => item.type === "text" && item.text === "中文验证码123",
-        ),
-      )
-      .toBeTruthy();
-    await expect(page.getByLabel("填写当前选中的输入框")).toHaveValue("");
+    await expect(page.getByLabel("填写当前选中的输入框")).toHaveCount(0);
     socket!.send(
       JSON.stringify({ type: "snapshot", item: snapshot("sms_required", 4) }),
     );
@@ -317,7 +314,9 @@ test("reconnect uses a new ticket and queries uncertain command without replay; 
     },
   );
   await page.goto("/tests/crawlerLoginV2.html");
-  await expect(page.getByRole("button", { name: "发送验证码", exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "发送验证码", exact: true }),
+  ).toBeEnabled();
   await page.getByLabel("手机号", { exact: true }).fill("13800000000");
   await page.getByRole("button", { name: "发送验证码" }).click();
   await expect.poll(() => tickets).toBe(2);
@@ -519,7 +518,9 @@ test("stale state rejected before execution releases pending only for a new user
       }),
   );
   await page.goto("/tests/crawlerLoginV2.html");
-  await expect(page.getByRole("button", { name: "发送验证码", exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "发送验证码", exact: true }),
+  ).toBeEnabled();
   await page.getByRole("button", { name: "发送验证码" }).click();
   await expect(page.getByRole("button", { name: "发送验证码" })).toBeEnabled();
   await expect(page.getByRole("alert")).toHaveText("登录步骤已变化，请重试");
@@ -582,7 +583,9 @@ for (const executionStatus of ["not_executed", "rejected"]) {
       },
     );
     await page.goto("/tests/crawlerLoginV2.html");
-    await expect(page.getByRole("button", { name: "发送验证码", exact: true })).toBeEnabled();
+    await expect(
+      page.getByRole("button", { name: "发送验证码", exact: true }),
+    ).toBeEnabled();
     await page.getByRole("button", { name: "发送验证码" }).click();
     await expect.poll(() => queried).toBe(1);
     await expect(
@@ -595,15 +598,48 @@ for (const executionStatus of ["not_executed", "rejected"]) {
   });
 }
 
-test("login does not ask users to choose a browser mode or restart after QR", async ({ page }) => {
-  let starts = 0; let cancels = 0;
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: snapshot() } }); });
-  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-  await page.route('**/api/crawler-account-login-sessions/login-fixture', route => { cancels++; return route.fulfill({ json: { item: snapshot() } }); });
-  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }));
-  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByAltText('抖音登录二维码')).toBeVisible();
-  await expect(page.getByText(/兼容模式|已连接|接续|服务器需要/)).toHaveCount(0); await expect(page.getByRole('button', { name: '查看当前登录步骤' })).toHaveCount(0);
-  await page.waitForTimeout(300); expect(starts).toBe(1); expect(cancels).toBe(0);
+test("login does not ask users to choose a browser mode or restart after QR", async ({
+  page,
+}) => {
+  let starts = 0;
+  let cancels = 0;
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) => {
+      starts++;
+      return route.fulfill({ json: { item: snapshot() } });
+    },
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture",
+    (route) => {
+      cancels++;
+      return route.fulfill({ json: { item: snapshot() } });
+    },
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) =>
+      ws.onMessage((data) => {
+        if (JSON.parse(String(data)).type === "auth")
+          ws.send(JSON.stringify({ type: "snapshot", item: snapshot() }));
+      }),
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await expect(page.getByAltText("抖音登录二维码")).toBeVisible();
+  await expect(page.getByText(/兼容模式|已连接|接续|服务器需要/)).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("button", { name: "查看当前登录步骤" }),
+  ).toHaveCount(0);
+  await page.waitForTimeout(300);
+  expect(starts).toBe(1);
+  expect(cancels).toBe(0);
 });
 
 test("gesture notice is visible and preserves manual retry without replay", async ({
@@ -825,102 +861,1007 @@ test("socket send backlog stops input and relies on disconnect for reliable rele
 });
 
 for (const width of [1280, 390]) {
-  test(`user flow shows QR, phone confirmation, conditional verification and identified result at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 800 }); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message)); let socket: WebSocketRoute; let starts = 0;
-    await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: snapshot() } }); });
-    await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-    await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => { socket = ws; ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }); });
-    await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByText('打开抖音扫一扫', { exact: true })).toBeVisible(); await expect(page.getByAltText('抖音登录二维码')).toBeVisible();
-    await expect(page.getByLabel('短信验证码')).toHaveCount(0); await expect(page.getByText(/兼容模式|已连接|Profile|接续检查/)).toHaveCount(0);
-    socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('preparing', 2), status: 'scanned', qr: null } }));
-    await expect(page.getByText('请在手机上确认登录', { exact: true })).toBeVisible(); await expect(page.getByAltText('抖音登录二维码')).toHaveCount(0);
-    await page.screenshot({ path: `/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-user-phone-${width}.png` });
-    socket!.send(JSON.stringify({ type: 'snapshot', item: snapshot('challenge_required', 3) })); socket!.send(packet()); await expect(page.getByText('完成安全验证', { exact: true })).toBeVisible(); await expect(page.getByLabel('人工验证区域')).toBeVisible();
-    socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('identity_check', 4), status: 'finalizing', qr: null } })); await expect(page.getByText('正在完成登录，请稍候', { exact: true })).toBeVisible();
-    socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('done', 5), status: 'success', identity: { status: 'verified' }, result: { auth_saved: true, identity_verified: true, reuse_verified: true, platform_account_id: 'verified-douyin-account', account_eligibility: 'ready' } } }));
-    await expect(page.getByText('登录成功', { exact: true })).toBeVisible(); await expect(page.getByText('verified-douyin-account', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: '完成', exact: true })).toBeVisible(); expect(starts).toBe(1);
-    await page.screenshot({ path: `/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-user-success-${width}.png` }); expect(errors).toEqual([]);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
-    await page.waitForTimeout(1100); await expect(page.getByRole('button', { name: '完成', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '完成', exact: true }).click(); await expect(page.getByText('登录已完成', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: '登录测试入口' })).toBeFocused();
+  test(`user flow shows QR, phone confirmation, conditional verification and identified result at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    let socket: WebSocketRoute;
+    let starts = 0;
+    await page.route(
+      "**/api/crawler-accounts/account-fixture/login-sessions",
+      (route) => {
+        starts++;
+        return route.fulfill({ json: { item: snapshot() } });
+      },
+    );
+    await page.route(
+      "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+      (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+    );
+    await page.routeWebSocket(
+      "**/api/crawler-account-login-sessions/login-fixture/stream",
+      (ws) => {
+        socket = ws;
+        ws.onMessage((data) => {
+          if (JSON.parse(String(data)).type === "auth")
+            ws.send(JSON.stringify({ type: "snapshot", item: snapshot() }));
+        });
+      },
+    );
+    await page.goto("/tests/crawlerLoginV2.html");
+    await expect(
+      page.getByText("打开抖音扫一扫", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByAltText("抖音登录二维码")).toBeVisible();
+    await expect(page.getByLabel("短信验证码")).toHaveCount(0);
+    await expect(
+      page.getByText(/兼容模式|已连接|Profile|接续检查/),
+    ).toHaveCount(0);
+    socket!.send(
+      JSON.stringify({
+        type: "snapshot",
+        item: { ...snapshot("preparing", 2), status: "scanned", qr: null },
+      }),
+    );
+    await expect(
+      page.getByText("请在手机上确认登录", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByAltText("抖音登录二维码")).toHaveCount(0);
+    await page.screenshot({
+      path: `/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-user-phone-${width}.png`,
+    });
+    socket!.send(
+      JSON.stringify({
+        type: "snapshot",
+        item: snapshot("challenge_required", 3),
+      }),
+    );
+    socket!.send(packet());
+    await expect(page.getByText("完成安全验证", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("人工验证区域")).toBeVisible();
+    socket!.send(
+      JSON.stringify({
+        type: "snapshot",
+        item: {
+          ...snapshot("identity_check", 4),
+          status: "finalizing",
+          qr: null,
+        },
+      }),
+    );
+    await expect(
+      page.getByText("正在完成登录，请稍候", { exact: true }),
+    ).toBeVisible();
+    socket!.send(
+      JSON.stringify({
+        type: "snapshot",
+        item: {
+          ...snapshot("done", 5),
+          status: "success",
+          identity: { status: "verified" },
+          result: {
+            auth_saved: true,
+            identity_verified: true,
+            reuse_verified: true,
+            platform_account_id: "verified-douyin-account",
+            account_eligibility: "ready",
+          },
+        },
+      }),
+    );
+    await expect(page.getByText("登录成功", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("verified-douyin-account", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "完成", exact: true }),
+    ).toBeVisible();
+    expect(starts).toBe(1);
+    await page.screenshot({
+      path: `/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-user-success-${width}.png`,
+    });
+    expect(errors).toEqual([]);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBeTruthy();
+    await page.waitForTimeout(1100);
+    await expect(
+      page.getByRole("button", { name: "完成", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "完成", exact: true }).click();
+    await expect(page.getByText("登录已完成", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "登录测试入口" }),
+    ).toBeFocused();
   });
 }
 
-test('SMS resend countdown follows server deadline and capability, unknown phase never invents scanned', async ({ page }) => {
-  let socket: WebSocketRoute; let starts = 0;
-  const sms = { ...snapshot('sms_required'), sms: { fields: ['code'], resend_available_at: new Date(Date.now() + 2000).toISOString() } };
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: sms } }); });
-  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => { socket = ws; ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: sms })); }); });
-  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('button', { name: /秒后可重新发送/ })).toBeDisabled(); await expect(page.getByRole('button', { name: '发送验证码', exact: true })).toBeEnabled({ timeout: 5000 });
-  socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('unclassified', 2), qr: null } })); await expect(page.getByText('正在等待抖音返回登录结果', { exact: true })).toBeVisible(); await expect(page.getByText('请在手机上确认登录', { exact: true })).toHaveCount(0);
-  socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('failed', 3), status: 'failed', qr: null, error: { message: '抖音暂时没有响应，请重新尝试' } } })); await expect(page.getByText('未完成登录', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: '重新扫码' })).toBeVisible(); expect(starts).toBe(1);
+test("SMS resend countdown follows server deadline and capability, unknown phase never invents scanned", async ({
+  page,
+}) => {
+  let socket: WebSocketRoute;
+  let starts = 0;
+  const sms = {
+    ...snapshot("sms_required"),
+    sms: {
+      fields: ["code"],
+      resend_available_at: new Date(Date.now() + 2000).toISOString(),
+    },
+  };
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) => {
+      starts++;
+      return route.fulfill({ json: { item: sms } });
+    },
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) => {
+      socket = ws;
+      ws.onMessage((data) => {
+        if (JSON.parse(String(data)).type === "auth")
+          ws.send(JSON.stringify({ type: "snapshot", item: sms }));
+      });
+    },
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await expect(
+    page.getByRole("button", { name: /秒后可重新发送/ }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "发送验证码", exact: true }),
+  ).toBeEnabled({ timeout: 5000 });
+  socket!.send(
+    JSON.stringify({
+      type: "snapshot",
+      item: { ...snapshot("unclassified", 2), qr: null },
+    }),
+  );
+  await expect(
+    page.getByText("正在等待抖音返回登录结果", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("请在手机上确认登录", { exact: true }),
+  ).toHaveCount(0);
+  socket!.send(
+    JSON.stringify({
+      type: "snapshot",
+      item: {
+        ...snapshot("failed", 3),
+        status: "failed",
+        qr: null,
+        error: { message: "抖音暂时没有响应，请重新尝试" },
+      },
+    }),
+  );
+  await expect(page.getByText("未完成登录", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "重新扫码" })).toBeVisible();
+  expect(starts).toBe(1);
 });
 
-test('short screen keyboard stays in login dialog and scanned wait is truthful', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 480 }); let socket: WebSocketRoute;
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => route.fulfill({ json: { item: snapshot() } }));
-  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => { socket = ws; ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }); });
-  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeEnabled();
-  await page.getByRole('button', { name: '关闭登录窗口' }).focus(); await page.keyboard.press('Shift+Tab'); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeFocused(); await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: '关闭登录窗口' })).toBeFocused();
-  socket!.send(JSON.stringify({ type: 'snapshot', item: { ...snapshot('phone_confirm', 2), status: 'scanned', qr: null } })); await expect(page.getByText('请在手机上确认登录', { exact: true })).toBeVisible();
-  const dialog = (await page.getByRole('dialog').boundingBox())!; expect(dialog.height).toBeLessThanOrEqual(480);
-  await page.screenshot({ path: '/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-user-phone-short.png' });
+test("short screen keyboard stays in login dialog and scanned wait is truthful", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 480 });
+  let socket: WebSocketRoute;
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) => route.fulfill({ json: { item: snapshot() } }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) => {
+      socket = ws;
+      ws.onMessage((data) => {
+        if (JSON.parse(String(data)).type === "auth")
+          ws.send(JSON.stringify({ type: "snapshot", item: snapshot() }));
+      });
+    },
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await expect(page.getByRole("button", { name: "刷新二维码" })).toBeEnabled();
+  await page.getByRole("button", { name: "关闭登录窗口" }).focus();
+  await page.keyboard.press("Shift+Tab");
+  await expect(
+    page.getByRole("button", { name: "查看抖音提示" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("button", { name: "关闭登录窗口" }),
+  ).toBeFocused();
+  socket!.send(
+    JSON.stringify({
+      type: "snapshot",
+      item: { ...snapshot("phone_confirm", 2), status: "scanned", qr: null },
+    }),
+  );
+  await expect(
+    page.getByText("请在手机上确认登录", { exact: true }),
+  ).toBeVisible();
+  const dialog = (await page.getByRole("dialog").boundingBox())!;
+  expect(dialog.height).toBeLessThanOrEqual(480);
+  await page.screenshot({
+    path: "/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-user-phone-short.png",
+  });
 });
 
-test('delayed start automatically focuses dialog and keyboard cannot leave it', async ({ page }) => {
+test("delayed start automatically focuses dialog and keyboard cannot leave it", async ({
+  page,
+}) => {
   let releaseStart: (() => void) | undefined;
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', async route => { await new Promise<void>(resolve => { releaseStart = resolve; }); await route.fulfill({ json: { item: snapshot() } }); });
-  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-  await page.route('**/api/crawler-account-login-sessions/login-fixture', route => route.fulfill({ json: { item: { ...snapshot('cancelled'), status: 'cancelled', cleanup_state: 'complete' } } }));
-  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => { if (JSON.parse(String(data)).type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() })); }));
-  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('dialog')).toBeFocused(); await page.keyboard.press('Tab'); await expect(page.getByRole('dialog')).toBeFocused();
-  releaseStart!(); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeEnabled(); await page.keyboard.press('Tab'); await expect(page.getByRole('button', { name: '关闭登录窗口' })).toBeFocused();
-  await page.keyboard.press('Shift+Tab'); await expect(page.getByRole('button', { name: '刷新二维码' })).toBeFocused();
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    async (route) => {
+      await new Promise<void>((resolve) => {
+        releaseStart = resolve;
+      });
+      await route.fulfill({ json: { item: snapshot() } });
+    },
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture",
+    (route) =>
+      route.fulfill({
+        json: {
+          item: {
+            ...snapshot("cancelled"),
+            status: "cancelled",
+            cleanup_state: "complete",
+          },
+        },
+      }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) =>
+      ws.onMessage((data) => {
+        if (JSON.parse(String(data)).type === "auth")
+          ws.send(JSON.stringify({ type: "snapshot", item: snapshot() }));
+      }),
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await expect(page.getByRole("dialog")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("dialog")).toBeFocused();
+  releaseStart!();
+  await expect(page.getByRole("button", { name: "刷新二维码" })).toBeEnabled();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("button", { name: "关闭登录窗口" }),
+  ).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(
+    page.getByRole("button", { name: "查看抖音提示" }),
+  ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(
+    page.getByRole("button", { name: "关闭登录窗口" }),
+  ).toBeFocused();
 });
 
-test('save failure checks recoverable operation and continues without reauth or clearing login', async ({ page }) => {
-  const failed = { ...snapshot('failed'), status: 'failed', qr: null, error: { code: 'SAVE_FAILED', message: '登录信息暂未保存，请继续完成登录' } };
-  const requests: any[] = []; let cancels = 0;
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { requests.push(route.request().postDataJSON()); return route.fulfill({ json: { item: requests.length === 1 ? failed : { ...snapshot('done'), status: 'success', identity: { status: 'verified' }, result: { auth_saved: true, identity_verified: true, reuse_verified: true, platform_account_id: 'real-manager-result-id', account_eligibility: 'ready' } } } }); });
-  await page.route('**/api/crawler-accounts/account-fixture/login-operations/operation-fixture', route => route.fulfill({ json: { item: { id: 'operation-fixture', stage: 'recovery_required' } } }));
-  await page.route('**/api/crawler-account-login-sessions/login-fixture', route => { cancels++; return route.fulfill({ json: { item: { ...failed, cleanup_state: 'complete' } } }); });
-  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByRole('button', { name: '继续完成登录' })).toBeVisible(); await expect(page.getByRole('button', { name: '重新扫码' })).toHaveCount(0);
-  await page.getByRole('button', { name: '继续完成登录' }).click(); await expect(page.getByText('real-manager-result-id', { exact: true })).toBeVisible();
-  expect(requests[1]).toMatchObject({ intent: 'recover', source_operation_id: 'operation-fixture' }); expect(requests.some(request => request.intent === 'reauth')).toBeFalsy(); expect(cancels).toBe(1);
+test("save failure checks recoverable operation and continues without reauth or clearing login", async ({
+  page,
+}) => {
+  const failed = {
+    ...snapshot("failed"),
+    status: "failed",
+    qr: null,
+    error: { code: "SAVE_FAILED", message: "登录信息暂未保存，请继续完成登录" },
+  };
+  const requests: any[] = [];
+  let cancels = 0;
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) => {
+      requests.push(route.request().postDataJSON());
+      return route.fulfill({
+        json: {
+          item:
+            requests.length === 1
+              ? failed
+              : {
+                  ...snapshot("done"),
+                  status: "success",
+                  identity: { status: "verified" },
+                  result: {
+                    auth_saved: true,
+                    identity_verified: true,
+                    reuse_verified: true,
+                    platform_account_id: "real-manager-result-id",
+                    account_eligibility: "ready",
+                  },
+                },
+        },
+      });
+    },
+  );
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-operations/operation-fixture",
+    (route) =>
+      route.fulfill({
+        json: { item: { id: "operation-fixture", stage: "recovery_required" } },
+      }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture",
+    (route) => {
+      cancels++;
+      return route.fulfill({
+        json: { item: { ...failed, cleanup_state: "complete" } },
+      });
+    },
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await expect(
+    page.getByRole("button", { name: "继续完成登录" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "重新扫码" })).toHaveCount(0);
+  await page.getByRole("button", { name: "继续完成登录" }).click();
+  await expect(
+    page.getByText("real-manager-result-id", { exact: true }),
+  ).toBeVisible();
+  expect(requests[1]).toMatchObject({
+    intent: "recover",
+    source_operation_id: "operation-fixture",
+  });
+  expect(requests.some((request) => request.intent === "reauth")).toBeFalsy();
+  expect(cancels).toBe(1);
 });
 
-test('save recovery authorization failure does not offer reset or unverified recovery', async ({ page }) => {
-  const failed = { ...snapshot('failed'), status: 'failed', qr: null, error: { code: 'SAVE_FAILED', message: '正在确认登录信息' } }; let starts = 0;
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: failed } }); });
-  await page.route('**/api/crawler-accounts/account-fixture/login-operations/operation-fixture', route => route.fulfill({ status: 403, json: { detail: { code: 'FORBIDDEN', message: '无权查看该登录结果' } } }));
-  await page.goto('/tests/crawlerLoginV2.html'); await expect(page.getByText('无权查看该登录结果', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '继续完成登录' })).toHaveCount(0); await expect(page.getByRole('button', { name: '重新扫码' })).toHaveCount(0); expect(starts).toBe(1);
+test("save recovery authorization failure does not offer reset or unverified recovery", async ({
+  page,
+}) => {
+  const failed = {
+    ...snapshot("failed"),
+    status: "failed",
+    qr: null,
+    error: { code: "SAVE_FAILED", message: "正在确认登录信息" },
+  };
+  let starts = 0;
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) => {
+      starts++;
+      return route.fulfill({ json: { item: failed } });
+    },
+  );
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-operations/operation-fixture",
+    (route) =>
+      route.fulfill({
+        status: 403,
+        json: { detail: { code: "FORBIDDEN", message: "无权查看该登录结果" } },
+      }),
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await expect(
+    page.getByText("无权查看该登录结果", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "继续完成登录" })).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole("button", { name: "重新扫码" })).toHaveCount(0);
+  expect(starts).toBe(1);
 });
 
 for (const cleanupFails of [false, true]) {
-  test(`saved login recovery waits for cleanup and ${cleanupFails ? 'keeps retry on failure' : 'then continues'}`, async ({ page }) => {
-    const failed = { ...snapshot('failed'), status: 'failed', qr: null, error: { code: 'SAVE_FAILED', message: '请继续完成登录' } }; let starts = 0; let release: (() => void) | undefined;
-    await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: starts === 1 ? failed : { ...snapshot('done'), status: 'success' } } }); });
-    await page.route('**/api/crawler-accounts/account-fixture/login-operations/operation-fixture', route => route.fulfill({ json: { item: { stage: 'recovery_required' } } }));
-    await page.route('**/api/crawler-account-login-sessions/login-fixture', async route => { await new Promise<void>(resolve => { release = resolve; }); return route.fulfill(cleanupFails ? { status: 503, json: { detail: { code: 'CLEANUP_TIMEOUT', message: '上次登录尚未结束，请稍后继续' } } } : { json: { item: { ...failed, cleanup_state: 'complete' } } }); });
-    await page.goto('/tests/crawlerLoginV2.html'); await page.getByRole('button', { name: '继续完成登录' }).click(); await expect(page.getByRole('button', { name: '继续完成登录' })).toBeDisabled(); expect(starts).toBe(1); release!();
-    if (cleanupFails) { await expect(page.getByText('上次登录尚未结束，请稍后继续', { exact: true })).toBeVisible(); await expect(page.getByRole('button', { name: '继续完成登录' })).toBeEnabled(); expect(starts).toBe(1); }
-    else { await expect(page.getByText('登录成功', { exact: true })).toBeVisible(); expect(starts).toBe(2); }
+  test(`saved login recovery waits for cleanup and ${cleanupFails ? "keeps retry on failure" : "then continues"}`, async ({
+    page,
+  }) => {
+    const failed = {
+      ...snapshot("failed"),
+      status: "failed",
+      qr: null,
+      error: { code: "SAVE_FAILED", message: "请继续完成登录" },
+    };
+    let starts = 0;
+    let release: (() => void) | undefined;
+    await page.route(
+      "**/api/crawler-accounts/account-fixture/login-sessions",
+      (route) => {
+        starts++;
+        return route.fulfill({
+          json: {
+            item:
+              starts === 1
+                ? failed
+                : { ...snapshot("done"), status: "success" },
+          },
+        });
+      },
+    );
+    await page.route(
+      "**/api/crawler-accounts/account-fixture/login-operations/operation-fixture",
+      (route) =>
+        route.fulfill({ json: { item: { stage: "recovery_required" } } }),
+    );
+    await page.route(
+      "**/api/crawler-account-login-sessions/login-fixture",
+      async (route) => {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return route.fulfill(
+          cleanupFails
+            ? {
+                status: 503,
+                json: {
+                  detail: {
+                    code: "CLEANUP_TIMEOUT",
+                    message: "上次登录尚未结束，请稍后继续",
+                  },
+                },
+              }
+            : { json: { item: { ...failed, cleanup_state: "complete" } } },
+        );
+      },
+    );
+    await page.goto("/tests/crawlerLoginV2.html");
+    await page.getByRole("button", { name: "继续完成登录" }).click();
+    await expect(
+      page.getByRole("button", { name: "继续完成登录" }),
+    ).toBeDisabled();
+    expect(starts).toBe(1);
+    release!();
+    if (cleanupFails) {
+      await expect(
+        page.getByText("上次登录尚未结束，请稍后继续", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "继续完成登录" }),
+      ).toBeEnabled();
+      expect(starts).toBe(1);
+    } else {
+      await expect(page.getByText("登录成功", { exact: true })).toBeVisible();
+      expect(starts).toBe(2);
+    }
   });
 }
 
-test('view platform hint and return to scan operate on same session without restarting login', async ({ page }) => {
-  let starts = 0; const commands: any[] = [];
-  await page.route('**/api/crawler-accounts/account-fixture/login-sessions', route => { starts++; return route.fulfill({ json: { item: snapshot() } }); });
-  await page.route('**/api/crawler-account-login-sessions/login-fixture/ws-tickets', route => route.fulfill({ json: { ticket: 'ticket', expires_in: 30 } }));
-  await page.routeWebSocket('**/api/crawler-account-login-sessions/login-fixture/stream', ws => ws.onMessage(data => {
-    const command = JSON.parse(String(data));
-    if (command.type === 'auth') ws.send(JSON.stringify({ type: 'snapshot', item: snapshot() }));
-    else { commands.push(command); ws.send(JSON.stringify({ type: 'snapshot', item: command.action === 'open_manual' ? { ...snapshot('manual_required', 2), available_actions: ['close_manual'], challenge: { ...snapshot('challenge_required').challenge } } : snapshot() })); }
-  }));
-  await page.goto('/tests/crawlerLoginV2.html'); await page.getByRole('button', { name: '查看抖音提示' }).click();
-  await expect(page.getByRole('button', { name: '返回扫码' })).toBeVisible(); await page.getByRole('button', { name: '返回扫码' }).click(); await expect(page.getByAltText('抖音登录二维码')).toBeVisible();
-  expect(starts).toBe(1); expect(commands.map(command => command.action)).toEqual(['open_manual', 'close_manual']); expect(commands.every(command => command.operation_id === 'operation-fixture' && command.controller_epoch === 1)).toBeTruthy(); expect(commands[1].sequence).toBeGreaterThan(commands[0].sequence);
+test("view platform hint and return to scan operate on same session without restarting login", async ({
+  page,
+}) => {
+  let starts = 0;
+  const commands: any[] = [];
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) => {
+      starts++;
+      return route.fulfill({ json: { item: snapshot() } });
+    },
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) =>
+      ws.onMessage((data) => {
+        const command = JSON.parse(String(data));
+        if (command.type === "auth")
+          ws.send(JSON.stringify({ type: "snapshot", item: snapshot() }));
+        else {
+          commands.push(command);
+          ws.send(
+            JSON.stringify({
+              type: "snapshot",
+              item:
+                command.action === "open_manual"
+                  ? {
+                      ...snapshot("manual_required", 2),
+                      available_actions: ["close_manual"],
+                      challenge: {
+                        ...snapshot("challenge_required").challenge,
+                      },
+                    }
+                  : snapshot(),
+            }),
+          );
+        }
+      }),
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  await page.getByRole("button", { name: "查看抖音提示" }).click();
+  await expect(page.getByRole("button", { name: "返回扫码" })).toBeVisible();
+  await page.getByRole("button", { name: "返回扫码" }).click();
+  await expect(page.getByAltText("抖音登录二维码")).toBeVisible();
+  expect(starts).toBe(1);
+  expect(commands.map((command) => command.action)).toEqual([
+    "open_manual",
+    "close_manual",
+  ]);
+  expect(
+    commands.every(
+      (command) =>
+        command.operation_id === "operation-fixture" &&
+        command.controller_epoch === 1,
+    ),
+  ).toBeTruthy();
+  expect(commands[1].sequence).toBeGreaterThan(commands[0].sequence);
+});
+
+const nativeField = (patch: Record<string, unknown> = {}) => ({
+  field_id: "native-code",
+  rect: { x: 0.1, y: 0.12, width: 0.72, height: 0.15 },
+  input_type: "text",
+  input_mode: "numeric",
+  max_length: 12,
+  value: "",
+  focused: false,
+  applied_edit_revision: 0,
+  ...patch,
+});
+async function nativeInputFixture(
+  page: import("@playwright/test").Page,
+  fields = [nativeField()],
+) {
+  let socket: WebSocketRoute;
+  const commands: any[] = [];
+  await page.route(
+    "**/api/crawler-accounts/account-fixture/login-sessions",
+    (route) =>
+      route.fulfill({
+        json: {
+          item: {
+            ...snapshot("manual_required"),
+            challenge: snapshot("challenge_required").challenge,
+          },
+        },
+      }),
+  );
+  await page.route(
+    "**/api/crawler-account-login-sessions/login-fixture/ws-tickets",
+    (route) => route.fulfill({ json: { ticket: "ticket", expires_in: 30 } }),
+  );
+  await page.routeWebSocket(
+    "**/api/crawler-account-login-sessions/login-fixture/stream",
+    (ws) => {
+      socket = ws;
+      ws.onMessage((data) => {
+        const command = JSON.parse(String(data));
+        if (command.type === "auth") {
+          ws.send(
+            JSON.stringify({
+              type: "snapshot",
+              item: {
+                ...snapshot("manual_required"),
+                challenge: snapshot("challenge_required").challenge,
+              },
+            }),
+          );
+          ws.send(
+            packet({ editable_targets: fields, applied_input_sequence: 0 }),
+          );
+        } else commands.push(command);
+      });
+    },
+  );
+  await page.goto("/tests/crawlerLoginV2.html");
+  const canvas = page.getByLabel("人工验证区域");
+  await expect
+    .poll(() => canvas.evaluate((element: HTMLCanvasElement) => element.width))
+    .toBe(320);
+  const relay = page.getByRole("textbox", { name: "原页面键盘输入" });
+  const clickField = async () => {
+    const box = (await canvas.boundingBox())!;
+    await page.mouse.click(
+      box.x + box.width * 0.46,
+      box.y + box.height * 0.195,
+    );
+  };
+  return {
+    relay,
+    canvas,
+    commands,
+    clickField,
+    sendFrame: (
+      field: Record<string, unknown> | Record<string, unknown>[],
+      applied: number,
+      sequence: number,
+    ) =>
+      socket!.send(
+        packet(
+          {
+            editable_targets: Array.isArray(field) ? field : [field],
+            applied_input_sequence: applied,
+          },
+          sequence,
+        ),
+      ),
+    sendResult: (result: any) =>
+      socket!.send(JSON.stringify({ type: "command_result", ...result })),
+    disconnect: () => socket!.close({ code: 1011 }),
+  };
+}
+for (const width of [1280, 390]) {
+  test(`canvas native textbox captures keyboard without visible extra form at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const { relay, canvas, commands, clickField, sendFrame, sendResult } =
+      await nativeInputFixture(page);
+    expect(await page.locator("input").count()).toBe(0);
+    const geometry = (await relay.boundingBox())!;
+    expect(geometry.x).toBeLessThan(0);
+    expect(geometry.width).toBe(1);
+    expect(geometry.height).toBe(1);
+    await clickField();
+    await expect(relay).toBeFocused();
+    await page.keyboard.insertText("123456");
+    await expect(relay).toHaveValue("123456");
+    expect(
+      commands.filter((command) => command.type === "edit_input"),
+    ).toHaveLength(0);
+    await page.waitForTimeout(800);
+    await expect(relay).toHaveValue("123456");
+    const focus = commands.find((command) => command.focus_field_id);
+    sendResult({
+      command_id: focus.command_id,
+      execution_status: "executed",
+      focused_field_id: "native-code",
+    });
+    expect(
+      commands.filter((command) => command.type === "edit_input"),
+    ).toHaveLength(0);
+    sendFrame(nativeField({ focused: true }), focus.sequence, 2);
+    await expect
+      .poll(
+        () =>
+          commands.filter((command) => command.type === "edit_input").length,
+      )
+      .toBe(1);
+    const edit = commands.find((command) => command.type === "edit_input");
+    expect(edit.value).toBe("123456");
+    sendFrame(nativeField({ focused: true, value: "1" }), focus.sequence, 3);
+    await expect(relay).toHaveValue("123456");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("Backspace");
+    await expect(relay).toHaveValue("12346");
+    sendResult({
+      command_id: edit.command_id,
+      execution_status: "executed",
+      field_id: "native-code",
+      client_edit_revision: edit.client_edit_revision,
+    });
+    sendFrame(
+      nativeField({
+        focused: true,
+        value: edit.value,
+        applied_edit_revision: edit.client_edit_revision,
+      }),
+      edit.sequence,
+      4,
+    );
+    await expect
+      .poll(
+        () =>
+          commands.filter((command) => command.type === "edit_input").length,
+      )
+      .toBe(2);
+    expect(
+      commands.filter((command) => command.type === "edit_input")[1].value,
+    ).toBe("12346");
+    await expect(page.getByLabel("填写当前选中的输入框")).toHaveCount(0);
+    await page.screenshot({
+      path: `/Users/hose/.codex/visualizations/2026/10/09/01a12072-f58f-7b03-a114-522562084e7b/login-keyboard-relay-${width}.png`,
+    });
+  });
+}
+test("canvas without a genuine editable field never focuses keyboard or creates extra form", async ({
+  page,
+}) => {
+  const { relay, canvas, commands } = await nativeInputFixture(page, []);
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.4, box.y + box.height * 0.3);
+  await expect(relay).not.toBeFocused();
+  await page.keyboard.insertText("123456");
+  expect(
+    commands.some(
+      (command) => command.type === "edit_input" || command.focus_field_id,
+    ),
+  ).toBeFalsy();
+  expect(await page.locator("input").count()).toBe(0);
+});
+test("hidden relay clipboard and composition keep one flight and Enter waits for real frame", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const { relay, commands, clickField, sendFrame, sendResult } =
+    await nativeInputFixture(page);
+  await clickField();
+  const focus = commands.find((command) => command.focus_field_id);
+  sendResult({
+    command_id: focus.command_id,
+    execution_status: "executed",
+    focused_field_id: "native-code",
+  });
+  sendFrame(nativeField({ focused: true }), focus.sequence, 2);
+  await relay.evaluate((element) =>
+    element.dispatchEvent(
+      new CompositionEvent("compositionstart", { bubbles: true }),
+    ),
+  );
+  await page.keyboard.insertText("中文");
+  expect(
+    commands.filter((command) => command.type === "edit_input"),
+  ).toHaveLength(0);
+  await relay.evaluate((element) =>
+    element.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        key: "Enter",
+        isComposing: true,
+      }),
+    ),
+  );
+  expect(commands.filter((command) => command.type === "key")).toHaveLength(0);
+  await relay.evaluate((element) =>
+    element.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true }),
+    ),
+  );
+  await expect
+    .poll(
+      () => commands.filter((command) => command.type === "edit_input").length,
+    )
+    .toBe(1);
+  const first = commands.find((command) => command.type === "edit_input");
+  await page.keyboard.press(
+    process.platform === "darwin" ? "Meta+A" : "Control+A",
+  );
+  await page.evaluate(() => navigator.clipboard.writeText("987654"));
+  await page.keyboard.press(
+    process.platform === "darwin" ? "Meta+V" : "Control+V",
+  );
+  await expect(relay).toHaveValue("987654");
+  sendResult({
+    command_id: first.command_id,
+    execution_status: "executed",
+    field_id: "native-code",
+    client_edit_revision: first.client_edit_revision,
+  });
+  sendFrame(
+    nativeField({
+      focused: true,
+      value: first.value,
+      applied_edit_revision: first.client_edit_revision,
+    }),
+    first.sequence,
+    3,
+  );
+  await expect
+    .poll(
+      () => commands.filter((command) => command.type === "edit_input").length,
+    )
+    .toBe(2);
+  const second = commands.filter((command) => command.type === "edit_input")[1];
+  expect(second.value).toBe("987654");
+  await page.keyboard.press("Enter");
+  expect(commands.filter((command) => command.type === "key")).toHaveLength(0);
+  sendResult({
+    command_id: second.command_id,
+    execution_status: "executed",
+    field_id: "native-code",
+    client_edit_revision: second.client_edit_revision,
+  });
+  await page.waitForTimeout(50);
+  expect(commands.filter((command) => command.type === "key")).toHaveLength(0);
+  sendFrame(
+    nativeField({
+      focused: true,
+      value: second.value,
+      applied_edit_revision: second.client_edit_revision,
+    }),
+    second.sequence,
+    4,
+  );
+  await expect
+    .poll(() => commands.filter((command) => command.type === "key").length)
+    .toBe(1);
+  expect(commands.find((command) => command.type === "key").field_id).toBe(
+    "native-code",
+  );
+});
+test("hidden relay drops unsent input and queued submit when field disappears", async ({
+  page,
+}) => {
+  const { relay, commands, clickField, sendFrame } =
+    await nativeInputFixture(page);
+  await clickField();
+  await page.keyboard.insertText("654321");
+  await page.keyboard.press("Enter");
+  sendFrame(nativeField({ field_id: "replacement-code" }), 0, 2);
+  await expect(relay).toHaveValue("");
+  await expect(relay).not.toBeFocused();
+  expect(
+    commands.some(
+      (command) => command.type === "edit_input" || command.type === "key",
+    ),
+  ).toBeFalsy();
+  await expect(page.getByRole("alert")).toHaveText(
+    "输入框已变化，请点击当前页面的输入框重新输入",
+  );
+});
+test("hidden relay reconnect never automatically replays typed OTP", async ({
+  page,
+}) => {
+  const { relay, commands, clickField, disconnect } =
+    await nativeInputFixture(page);
+  await clickField();
+  await page.keyboard.insertText("246810");
+  disconnect();
+  await expect(relay).toHaveValue("");
+  await page.waitForTimeout(900);
+  expect(commands.some((command) => command.type === "edit_input")).toBeFalsy();
+  await expect(relay).not.toBeFocused();
+});
+
+test("early real type paste and backspace rebase once onto confirmed native middle caret", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const { relay, commands, clickField, sendFrame, sendResult } =
+    await nativeInputFixture(page, [
+      nativeField({ value: "123456", selection_start: 6, selection_end: 6 }),
+    ]);
+  await clickField();
+  const focus = commands.find((command) => command.focus_field_id);
+  await page.keyboard.insertText("X");
+  await page.evaluate(() => navigator.clipboard.writeText("Y"));
+  await page.keyboard.press(
+    process.platform === "darwin" ? "Meta+V" : "Control+V",
+  );
+  await page.keyboard.press("Backspace");
+  expect(commands.some((command) => command.type === "edit_input")).toBeFalsy();
+  sendResult({
+    command_id: focus.command_id,
+    execution_status: "executed",
+    focused_field_id: "native-code",
+  });
+  sendFrame(
+    nativeField({
+      value: "123456",
+      focused: true,
+      selection_start: 3,
+      selection_end: 3,
+      selection_direction: "none",
+    }),
+    focus.sequence,
+    2,
+  );
+  await expect
+    .poll(
+      () => commands.filter((command) => command.type === "edit_input").length,
+    )
+    .toBe(1);
+  const edit = commands.find((command) => command.type === "edit_input");
+  expect(edit.value).toBe("123X456");
+  expect(edit.selection_start).toBe(4);
+  expect(edit.selection_end).toBe(4);
+  await expect(relay).toHaveValue("123X456");
+});
+test("early delete uses the actual native caret rather than old end selection", async ({
+  page,
+}) => {
+  const { commands, clickField, sendFrame, sendResult } =
+    await nativeInputFixture(page, [
+      nativeField({ value: "123456", selection_start: 6, selection_end: 6 }),
+    ]);
+  await clickField();
+  const focus = commands.find((command) => command.focus_field_id);
+  await page.keyboard.press("Backspace");
+  sendResult({
+    command_id: focus.command_id,
+    execution_status: "executed",
+    focused_field_id: "native-code",
+  });
+  sendFrame(
+    nativeField({
+      value: "123456",
+      focused: true,
+      selection_start: 3,
+      selection_end: 3,
+    }),
+    focus.sequence,
+    2,
+  );
+  await expect
+    .poll(
+      () => commands.filter((command) => command.type === "edit_input").length,
+    )
+    .toBe(1);
+  expect(commands.find((command) => command.type === "edit_input").value).toBe(
+    "12456",
+  );
+});
+test("hidden relay long composition does not expire local thinking time", async ({
+  page,
+}) => {
+  const { relay, commands, clickField, sendFrame, sendResult } =
+    await nativeInputFixture(page);
+  await clickField();
+  const focus = commands.find((command) => command.focus_field_id);
+  sendResult({
+    command_id: focus.command_id,
+    execution_status: "executed",
+    focused_field_id: "native-code",
+  });
+  sendFrame(nativeField({ focused: true }), focus.sequence, 2);
+  await relay.evaluate((element) =>
+    element.dispatchEvent(
+      new CompositionEvent("compositionstart", { bubbles: true }),
+    ),
+  );
+  await page.keyboard.insertText("中文");
+  await page.waitForTimeout(8100);
+  await expect(relay).toHaveValue("中文");
+  await expect(
+    page.getByText("输入同步结果暂未确认，请检查原页面后重新点击输入框"),
+  ).toHaveCount(0);
+  await relay.evaluate((element) =>
+    element.dispatchEvent(
+      new CompositionEvent("compositionend", { bubbles: true, data: "中文" }),
+    ),
+  );
+  await expect
+    .poll(
+      () => commands.filter((command) => command.type === "edit_input").length,
+    )
+    .toBe(1);
+});
+
+test("early ArrowRight collapses native selection to its end before inserting text", async ({
+  page,
+}) => {
+  const { commands, clickField, sendFrame, sendResult } =
+    await nativeInputFixture(page, [
+      nativeField({ value: "123456", selection_start: 6, selection_end: 6 }),
+    ]);
+  await clickField();
+  const focus = commands.find((command) => command.focus_field_id);
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.insertText("X");
+  sendResult({
+    command_id: focus.command_id,
+    execution_status: "executed",
+    focused_field_id: "native-code",
+  });
+  sendFrame(
+    nativeField({
+      value: "123456",
+      focused: true,
+      selection_start: 2,
+      selection_end: 4,
+    }),
+    focus.sequence,
+    2,
+  );
+  await expect
+    .poll(
+      () => commands.filter((command) => command.type === "edit_input").length,
+    )
+    .toBe(1);
+  expect(commands.find((command) => command.type === "edit_input").value).toBe(
+    "1234X56",
+  );
 });

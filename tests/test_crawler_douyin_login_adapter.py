@@ -124,6 +124,9 @@ def test_capture_uses_config_and_recovers_a_transient_failure(monkeypatch):
                 helper.stopped.set()
 
         region = Region(10, 10, 200, 100)
+        helper.editables.inventory = __import__(
+            "unittest.mock", fromlist=["AsyncMock"]
+        ).AsyncMock(return_value=[])
         helper.adapter = Adapter()
         helper.region = region
         helper.epoch = 1
@@ -174,6 +177,9 @@ def test_capture_permanent_failure_stops_after_three_attempts():
             async def observe(self):
                 raise RuntimeError("closed page cannot relocate")
 
+        helper.editables.inventory = __import__(
+            "unittest.mock", fromlist=["AsyncMock"]
+        ).AsyncMock(return_value=[])
         helper.adapter = Adapter()
         helper.region = Region(10, 10, 200, 100)
         helper.epoch = 1
@@ -922,6 +928,9 @@ def test_capture_freezes_input_ack_and_sends_one_final_same_pixel_confirmation()
             async def send(self, payload, metadata, **kwargs):
                 frames.append((payload, metadata))
 
+        helper.editables.inventory = __import__(
+            "unittest.mock", fromlist=["AsyncMock"]
+        ).AsyncMock(return_value=[])
         helper.adapter = SimpleNamespace(page=Page())
         helper.region = Region(10, 10, 200, 100)
         helper.epoch = 1
@@ -1347,6 +1356,11 @@ def test_login_network_receipts_are_bounded_sanitized_and_do_not_claim_login():
         assert len(adapter.network_receipts) == 120
         assert adapter.network_revision == 1
         assert adapter.latest_login_receipt == {
+            "token_matches_current": False,
+            "source_matches_current": False,
+            "has_verification_decision": False,
+            "has_secondary_decision": False,
+            "has_verification_header": False,
             "endpoint": "check_qrconnect",
             "http_status": 200,
             "error_code": 0,
@@ -1809,5 +1823,191 @@ def test_current_qr_platform_error_exposes_same_panel_and_does_not_taint_new_tic
         response.json.return_value = {"data": {"error_code": 0, "status": "new"}}
         await adapter.observe_response(response)
         assert adapter.current_qr_error is None
+
+    asyncio.run(run())
+
+
+def test_verification_metadata_and_blocked_documents_are_boolean_only():
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+    import socket
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, None)
+        response = SimpleNamespace(
+            url="https://www.douyin.com/passport/web/check_qrconnect/",
+            status=200,
+            headers={"X-Vc-Bdturing-Parameters": "SECRET"},
+            request=SimpleNamespace(post_data="token=PRIVATE"),
+            json=AsyncMock(
+                return_value={
+                    "verify_center_secondary_decision_conf": "SECRET",
+                    "data": {
+                        "error_code": 2046,
+                        "verify_center_decision_conf": {"token": "PRIVATE"},
+                    },
+                }
+            ),
+        )
+        await adapter.observe_response(response)
+        receipt = adapter.latest_login_receipt
+        assert (
+            receipt["has_verification_decision"]
+            and receipt["has_secondary_decision"]
+            and receipt["has_verification_header"]
+        )
+        assert "SECRET" not in str(receipt) and "PRIVATE" not in str(receipt)
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(operation_id="op", media_fd=left.detach())
+        )
+        helper.adapter = adapter
+        events = []
+        helper.emit = lambda kind, **data: events.append((kind, data))
+        try:
+            helper.diagnose_observation(
+                {"phase": "manual_required"}, has_auth=False, elapsed=1
+            )
+            count = len(events)
+            adapter.blocked_documents = 1
+            helper.diagnose_observation(
+                {"phase": "manual_required"}, has_auth=False, elapsed=2
+            )
+            assert len(events) == count + 1 and events[-1][1]["blocked_documents"] == 1
+        finally:
+            helper.media.close()
+            right.close()
+
+    asyncio.run(run())
+
+
+def test_capture_metadata_mismatch_is_bounded_and_transient_change_recovers(
+    monkeypatch,
+):
+    import socket
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_v2 as module
+
+    async def scenario(permanent):
+        clock = {"now": 0}
+        monkeypatch.setattr(
+            module, "time", SimpleNamespace(monotonic=lambda: clock["now"])
+        )
+        left, right = socket.socketpair()
+        helper = DouyinLoginV2(
+            SimpleNamespace(operation_id="op", media_fd=left.detach())
+        )
+        helper.region = Region(10, 10, 100, 100)
+        helper.epoch = 1
+        helper.controller_attached = True
+        helper.phase = "manual_required"
+        page = SimpleNamespace(
+            viewport_size={"width": 1000, "height": 760},
+            screenshot=AsyncMock(return_value=b"pixels"),
+        )
+        helper.adapter = SimpleNamespace(page=page)
+        calls = []
+        events = []
+        frames = []
+
+        async def inventory(*args):
+            calls.append(True)
+            clock["now"] += 2
+            return [{"revision": len(calls)}] if permanent or len(calls) <= 2 else []
+
+        helper.editables.inventory = inventory
+        actual = helper.media
+
+        async def send(*args, **kwargs):
+            frames.append(True)
+            helper.stopped.set()
+
+        helper.media = SimpleNamespace(send=send)
+        helper.emit = lambda kind, **data: events.append((kind, data))
+        helper.capture_period = lambda: 0.001
+        try:
+            await helper.capture_frames()
+            assert events[0][0] == "notice"
+            if permanent:
+                assert not frames and helper.stopped.is_set()
+                assert events[-1][1]["code"] == "CAPTURE_FAILED" and len(calls) <= 8
+            else:
+                assert frames and not any(kind == "error" for kind, _ in events)
+        finally:
+            actual.close()
+            right.close()
+
+    asyncio.run(scenario(True))
+    asyncio.run(scenario(False))
+
+
+def test_login_entry_click_timeout_accepts_only_actual_same_page_postcondition():
+    pw = __import__("pytest").importorskip("playwright.async_api")
+    from scripts.crawler_douyin_login_adapter import (
+        DouyinLoginAdapter,
+        PANEL_SELECTOR,
+        QR_SELECTOR,
+    )
+
+    async def scenario(panel_after, trusted=True):
+        page = SimpleNamespace(
+            url="https://www.douyin.com/jingxuan"
+            if trusted
+            else "https://outside.invalid",
+            is_closed=lambda: False,
+        )
+        adapter = DouyinLoginAdapter(None, page)
+        state = {"clicked": False}
+
+        async def click(**kwargs):
+            state["clicked"] = True
+            raise pw.TimeoutError("Locator.click: Timeout 2000ms exceeded token=SECRET")
+
+        trigger = SimpleNamespace(click=click)
+
+        async def visible(selector):
+            if selector == PANEL_SELECTOR:
+                return object() if state["clicked"] and panel_after else None
+            if selector == QR_SELECTOR:
+                return object() if state["clicked"] and panel_after else None
+            return trigger
+
+        adapter.visible = visible
+        if panel_after and trusted:
+            await adapter.open_login()
+            assert adapter.login_entry_diagnostic == {
+                "method": "click",
+                "timeout_ms": 2000,
+                "panel_present": True,
+                "qr_present": True,
+            }
+            assert "SECRET" not in str(adapter.login_entry_diagnostic)
+        else:
+            with __import__("pytest").raises(pw.TimeoutError):
+                await adapter.open_login()
+        assert state["clicked"]
+
+    asyncio.run(scenario(True))
+    asyncio.run(scenario(False))
+    asyncio.run(scenario(True, False))
+
+
+def test_qr_error_after_verification_panel_disappears_enters_bounded_identity():
+    from unittest.mock import AsyncMock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    async def run():
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(evaluate=AsyncMock()))
+        adapter.qr_ticket_digest = adapter.last_qr_source_digest = "current-source"
+        adapter.current_qr_error = 2046
+        adapter.qr = AsyncMock(return_value=None)
+        adapter.visible = AsyncMock(return_value=None)
+        adapter.region = AsyncMock(return_value=None)
+        assert await adapter.observe_once() == {"phase": "identity_check"}
+        assert adapter.current_qr_error == 2046
+        assert adapter.last_qr_source_digest == "current-source"
+        adapter.region = AsyncMock(return_value=Region(10, 10, 300, 200))
+        adapter.region_signature = AsyncMock(return_value="actual-verification")
+        assert (await adapter.observe_once())["phase"] == "challenge_required"
 
     asyncio.run(run())

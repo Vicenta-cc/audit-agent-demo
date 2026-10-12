@@ -48,6 +48,10 @@ DURABLE_ACTIONS = {
 
 
 ERROR_MESSAGES = {
+    "EDIT_TARGET_CHANGED": "输入框已变化，请点击当前输入框重新输入。",
+    "EDIT_REVISION_STALE": "本次输入已过期，请继续在当前输入框操作。",
+    "EDIT_VALUE_INVALID": "该输入框不支持此输入内容。",
+    "EDIT_VALUE_TOO_LONG": "输入内容超过当前输入框允许的长度。",
     "QR_PLATFORM_REJECTED": "平台暂未接受本次登录，请重新打开登录窗口并按页面提示操作。",
     "PHONE_CONFIRM_REFUSED": "手机端已取消本次登录，请重新扫码。",
     "LOGIN_FAILED": "登录未完成，请查看当前登录步骤后重试。",
@@ -685,6 +689,7 @@ class CrawlerLoginV2Manager:
             s.epoch += 1
             s.sequence = 0
             s.controller = controller
+            s.frame = b""
             s.controller_ready.clear()
             s.snapshot.update(controller_epoch=s.epoch, controller_state="detached")
             self._enqueue(
@@ -786,7 +791,7 @@ class CrawlerLoginV2Manager:
                 c.get("action")
                 if c["type"] == "action"
                 else "manual_action"
-                if c["type"] == "key"
+                if c["type"] in {"key", "edit_input"}
                 or c["type"] == "pointer_batch"
                 and any(p["event"] != "move" for p in c["points"])
                 else None
@@ -975,7 +980,8 @@ class CrawlerLoginV2Manager:
                             if graphical and (
                                 message.get("graph_generation", s.graph_generation)
                                 != s.graph_generation
-                                or time.monotonic()
+                                or c["type"] != "edit_input"
+                                and time.monotonic()
                                 - message.get("queued_mono", time.monotonic())
                                 > 0.25
                             ):
@@ -1139,13 +1145,18 @@ class CrawlerLoginV2Manager:
                     and 0 <= blocked <= 100000
                 ):
                     logger.warning(
-                        "Douyin login network operation=%s endpoint=%s http_status=%s error_code=%s status=%s blocked_documents=%s",
+                        "Douyin login network operation=%s endpoint=%s http_status=%s error_code=%s status=%s blocked_documents=%s verification=%s secondary=%s verification_header=%s token_current=%s source_current=%s",
                         s.operation_id,
                         endpoint,
                         http_status,
                         error_code,
                         status,
                         blocked,
+                        event.get("has_verification_decision") is True,
+                        event.get("has_secondary_decision") is True,
+                        event.get("has_verification_header") is True,
+                        event.get("token_matches_current") is True,
+                        event.get("source_matches_current") is True,
                     )
             elif kind == "diagnostic_failure":
                 stage = event.get("stage")
@@ -1157,6 +1168,7 @@ class CrawlerLoginV2Manager:
                         "browser_start",
                         "page_prepare",
                         "entry_navigation",
+                        "login_entry_open",
                         "initial_observation",
                         "observation",
                         "identity_check",
@@ -1196,6 +1208,7 @@ class CrawlerLoginV2Manager:
                         "is_visible",
                         "wait_for",
                         "goto",
+                        "click",
                     }:
                         method = None
                     timeout_ms = event.get("timeout_ms")
@@ -1266,13 +1279,17 @@ class CrawlerLoginV2Manager:
                     and type(event.get("has_trusted_identity")) is bool
                 ):
                     logger.warning(
-                        "Douyin login observation operation=%s phase=%s qr_reason=%s auth_signal=%s trusted_identity=%s elapsed=%.1f",
+                        "Douyin login observation operation=%s phase=%s qr_reason=%s auth_signal=%s trusted_identity=%s elapsed=%.1f blocked_documents=%s",
                         s.operation_id,
                         phase,
                         reason,
                         event["has_auth_signal"],
                         event["has_trusted_identity"],
                         elapsed,
+                        event.get("blocked_documents")
+                        if type(event.get("blocked_documents")) is int
+                        and 0 <= event["blocked_documents"] <= 100000
+                        else None,
                     )
             elif kind == "controller_ready":
                 if (
