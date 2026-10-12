@@ -1304,7 +1304,8 @@ for (const enabled of [false, true]) {
       let data: unknown = {items:[],has_more:false};
       if (path==='/api/investigation-workspaces') data={items:[{...state.workspace,title:'连续会话验收',run_status:'PUBLISHED'}],has_more:false};
       else if (path.endsWith('/state')) data=state;
-      else if (path.endsWith('/published-report')) data={report_version_id:'report-ui',report_id:'report',task_id:'task',version_number:1,published_at:'2026-08-28T00:02:00Z',presentation:{title:'连续会话验收报告',key_metrics:[],sections:[],case_blocks:[]}};
+      // Report attachment validates ownership before enabling report-only chat.
+      else if (path.endsWith('/published-report')) data={report_version_id:'report-ui',report_id:'report',task_id:state.run!.job_id,version_number:1,published_at:'2026-08-28T00:02:00Z',presentation:{title:'连续会话验收报告',key_metrics:[],sections:[],case_blocks:[]}};
       await route.fulfill({json:data});
     });
     await page.goto('/');
@@ -1314,7 +1315,7 @@ for (const enabled of [false, true]) {
       const host=document.createElement('div');document.body.replaceChildren(host);
       await mountInvestigationWorkspace(host, sessionId);
     }, state.workspace.workspace_session_id);
-    await expect(page.getByText('连续会话验收报告').first()).toBeVisible();
+    await expect(page.getByLabel('研判报告卡片').getByRole('heading', { name: '连续会话验收报告', exact: true })).toBeVisible();
     const input=page.locator('textarea');
     await input.fill('修改刚才的规则'); await input.press('Enter');
     await expect.poll(()=>sent.length).toBe(1);
