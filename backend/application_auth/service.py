@@ -77,6 +77,7 @@ class ApplicationAuthService:
             "auth_state_revision", "has_auth_state", "auth_state_updated_at", "risk_count",
             "last_risk_at", "created_at", "updated_at", "proxy_id", "binding_revision", "proxy_required",
             "validated_proxy_binding_revision", "validated_proxy_config_revision", "needs_proxy_login_validation",
+            "route_mode", "route_state", "shared_exit_key", "shared_exit_generation", "paused_until", "pause_reason", "skip_count",
         }
         return {key: value for key, value in account.items() if key in fields}
 

@@ -24,7 +24,8 @@ PUBLIC_PROXY_FIELDS = frozenset({
     'id', 'provider', 'platform', 'display_name', 'config_revision', 'status',
     'expires_at', 'max_bound_accounts', 'max_active_accounts', 'cooldown_until',
     'observed_exit_ip', 'observed_exit_at', 'stop_reason', 'created_at', 'updated_at',
-    'bound_accounts', 'has_credentials', 'endpoint',
+    'bound_accounts', 'has_credentials', 'endpoint', 'shared_exit_key',
+    'shared_exit_generation', 'paused_until', 'pause_reason',
 })
 _UNSET = object()
 
@@ -128,6 +129,8 @@ class CrawlerProxyStore:
                     max_bound_accounts INTEGER NOT NULL DEFAULT 1,
                     max_active_accounts INTEGER NOT NULL DEFAULT 1,
                     cooldown_until REAL, observed_exit_ip TEXT, observed_exit_at REAL,
+                    shared_exit_key TEXT NOT NULL DEFAULT '', shared_exit_generation INTEGER NOT NULL DEFAULT 0,
+                    paused_until REAL, pause_reason TEXT NOT NULL DEFAULT '',
                     stop_reason TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL, updated_at REAL NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS resource_events (
@@ -137,6 +140,10 @@ class CrawlerProxyStore:
                 CREATE INDEX IF NOT EXISTS idx_proxy_resource_events ON resource_events(proxy_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_crawler_accounts_proxy ON crawler_accounts(proxy_id);
             ''')
+            columns = {row[1] for row in conn.execute('PRAGMA table_info(proxy_resources)')}
+            for name, definition in (('shared_exit_key', "TEXT NOT NULL DEFAULT ''"), ('shared_exit_generation', 'INTEGER NOT NULL DEFAULT 0'), ('paused_until', 'REAL'), ('pause_reason', "TEXT NOT NULL DEFAULT ''")):
+                if name not in columns:
+                    conn.execute(f'ALTER TABLE proxy_resources ADD COLUMN {name} {definition}')
 
     @contextmanager
     def _guard(self, operation, proxy_id, account_id=None):
@@ -385,10 +392,27 @@ class CrawlerProxyStore:
             changed = bool(row['observed_exit_ip']) and ip != row['observed_exit_ip']
             status = 'exit_changed' if changed else row['status']
             reason = 'PROXY_EXIT_CHANGED' if changed else row['stop_reason']
-            conn.execute('UPDATE proxy_resources SET observed_exit_ip=?, observed_exit_at=?, status=?,stop_reason=?,updated_at=? WHERE id=?', (ip, observed_at, status, reason, time.time(), proxy_id))
+            generation = int(row['shared_exit_generation'] or 0) + (1 if changed or not row['shared_exit_key'] else 0)
+            conn.execute('UPDATE proxy_resources SET observed_exit_ip=?, observed_exit_at=?, shared_exit_key=?, shared_exit_generation=?, status=?,stop_reason=?,updated_at=? WHERE id=?', (ip, observed_at, ip, generation, status, reason, time.time(), proxy_id))
             if changed:
                 conn.execute('INSERT INTO resource_events(proxy_id,kind,code,created_at) VALUES (?,?,?,?)', (proxy_id, 'exit_changed', reason, time.time()))
             return self._public(conn, conn.execute('SELECT * FROM proxy_resources WHERE id=?', (proxy_id,)).fetchone())
+
+    def pause_shared_exit(self, proxy_id, *, reason='ACCOUNT_CHALLENGE', until=None):
+        if not re.fullmatch(r'[A-Z][A-Z0-9_]{0,79}', str(reason)):
+            raise ValueError('PROXY_INVALID_EVENT')
+        with self._lock, self.accounts._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT * FROM proxy_resources WHERE id=?', (proxy_id,)).fetchone()
+            if row is None: raise ValueError('PROXY_NOT_FOUND')
+            conn.execute('UPDATE proxy_resources SET paused_until=?,pause_reason=?,updated_at=? WHERE id=?', (_epoch(until), str(reason), time.time(), proxy_id))
+            return self._public(conn, conn.execute('SELECT * FROM proxy_resources WHERE id=?', (proxy_id,)).fetchone())
+
+    def shared_exit_admission_allowed(self, proxy_id, *, observed_exit=None):
+        with self._lock, self.accounts._connect() as conn:
+            row = conn.execute('SELECT * FROM proxy_resources WHERE id=?', (proxy_id,)).fetchone()
+            if row is None or not row['shared_exit_key'] or (observed_exit and observed_exit != row['shared_exit_key']): return False
+            return not row['paused_until'] or row['paused_until'] <= time.time()
 
     def record_event(self, proxy_id, kind, *, code=''):
         if not isinstance(kind, str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,79}', kind) or not isinstance(code, str) or code and not re.fullmatch(r'[A-Z][A-Z0-9_]{0,79}', code):

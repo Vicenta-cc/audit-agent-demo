@@ -108,9 +108,21 @@ class CrawlerAccountStore:
             ("proxy_required", "INTEGER NOT NULL DEFAULT 0"),
             ("validated_proxy_binding_revision", "INTEGER NOT NULL DEFAULT 0"),
             ("validated_proxy_config_revision", "INTEGER NOT NULL DEFAULT 0"),
+                ("route_mode", "TEXT NOT NULL DEFAULT 'proxy_required'"),
+                ("route_state", "TEXT NOT NULL DEFAULT 'active'"),
+                ("shared_exit_key", "TEXT NOT NULL DEFAULT ''"),
+                ("shared_exit_generation", "INTEGER NOT NULL DEFAULT 0"),
+                ("paused_until", "REAL"),
+                ("pause_reason", "TEXT NOT NULL DEFAULT ''"),
+                ("skip_count", "INTEGER NOT NULL DEFAULT 0"),
         ):
             if name not in columns:
                 conn.execute(f"ALTER TABLE crawler_accounts ADD COLUMN {name} {definition}")
+        conn.execute('''CREATE TABLE IF NOT EXISTS crawler_route_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, account_id TEXT NOT NULL, event_type TEXT NOT NULL,
+            route_mode TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL DEFAULT '',
+            operation_id TEXT NOT NULL DEFAULT '', shared_exit_key TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL)''')
 
     def list(
         self,
@@ -587,9 +599,46 @@ class CrawlerAccountStore:
             "auth_state_updated_at": row["auth_state_updated_at"] or "",
             "risk_count": int(row["risk_count"] or 0),
             "last_risk_at": row["last_risk_at"] or "",
+            "route_mode": row["route_mode"] or "proxy_required",
+            "route_state": row["route_state"] or "active",
+            "shared_exit_key": row["shared_exit_key"] or "",
+            "shared_exit_generation": int(row["shared_exit_generation"] or 0),
+            "paused_until": row["paused_until"],
+            "pause_reason": row["pause_reason"] or "",
+            "skip_count": int(row["skip_count"] or 0),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
+
+    def record_route_event(self, account_id, event_type, *, route_mode='', reason='', operation_id='', shared_exit_key=''):
+        """Append only redacted route telemetry; never accept credentials or URLs."""
+        import re
+        reason = re.sub(r'(?i)(password|token|cookie|secret|authorization)=[^\s]+', r'\1=[redacted]', str(reason or ''))[:500]
+        with self._lock, self._connect() as conn:
+            conn.execute('INSERT INTO crawler_route_events(account_id,event_type,route_mode,reason,operation_id,shared_exit_key,created_at) VALUES(?,?,?,?,?,?,?)',
+                         (account_id, str(event_type)[:80], str(route_mode)[:40], reason, str(operation_id)[:100], str(shared_exit_key)[:120], time.time()))
+
+    def set_route_state(self, account_id, *, state, route_mode=None, paused_until=None, pause_reason=None, shared_exit_key=None, generation=None):
+        allowed = {'active', 'transport_blocked', 'challenge_paused', 'manual_required', 'draining', 'drain_timeout'}
+        if state not in allowed: raise ValueError('ROUTE_STATE_INVALID')
+        updates = {'route_state': state}
+        if route_mode is not None: updates['route_mode'] = str(route_mode)
+        if paused_until is not None: updates['paused_until'] = float(paused_until)
+        if pause_reason is not None: updates['pause_reason'] = str(pause_reason)[:200]
+        if shared_exit_key is not None: updates['shared_exit_key'] = str(shared_exit_key)[:120]
+        if generation is not None: updates['shared_exit_generation'] = int(generation)
+        with self._lock, self._connect() as conn:
+            sets = ','.join(f'{k}=?' for k in updates)
+            cur = conn.execute(f'UPDATE crawler_accounts SET {sets},updated_at=? WHERE id=?', (*updates.values(), datetime.now().isoformat(timespec='seconds'), account_id))
+            if not cur.rowcount: return None
+        return self.get(account_id)
+
+    def select_fair(self, platform, *, exclude_ids=(), skip_limit=3):
+        candidates = self.available_accounts(platform, exclude_ids=exclude_ids)
+        if not candidates: return None
+        candidates.sort(key=lambda a: (bool(a.get('last_used_at')), a.get('last_used_at') or '', a['id']))
+        forced = [a for a in candidates if a.get('skip_count', 0) >= skip_limit]
+        return (forced[0] if forced else candidates[0])
 
 
 crawler_account_store = CrawlerAccountStore()

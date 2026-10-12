@@ -8,6 +8,9 @@ import os
 import selectors
 import threading
 import time
+import json
+import secrets
+from dataclasses import dataclass, asdict
 from functools import lru_cache
 
 from .config import settings
@@ -45,6 +48,126 @@ class CollectionRouteError(RuntimeError):
         }
         self.code = code if isinstance(code, str) and code in allowed else "PROXY_CONFIG_INVALID"
         super().__init__(self.code)
+
+
+ROUTE_MODES = frozenset({'proxy_required', 'proxy_preferred', 'direct_degraded', 'legacy_direct'})
+OPERATION_STATES = frozenset({'issued', 'acked', 'draining', 'ended', 'expired', 'drain_timeout'})
+
+
+@dataclass(frozen=True)
+class RouteOperation:
+    """Versioned App-owned route envelope. Secrets never belong in this object."""
+    operation_id: str
+    lease_id: str
+    lease_version: int
+    owner_id: str
+    account_id: str
+    profile_key: str
+    route_mode: str
+    proxy_id: str = ''
+    resource_revision: int = 0
+    observed_exit: str = ''
+    exit_generation: int = 0
+    expires_at: float = 0.0
+    context_id: str = ''
+    scope_ids: tuple = ()
+    snapshot_digest: str = ''
+
+    def __post_init__(self):
+        if not self.operation_id or not self.lease_id or not self.owner_id or not self.account_id:
+            raise ValueError('ROUTE_OPERATION_INVALID')
+        if self.route_mode not in ROUTE_MODES or int(self.lease_version) < 1:
+            raise ValueError('ROUTE_OPERATION_INVALID')
+        if self.route_mode == 'direct_degraded' and not self.observed_exit:
+            raise ValueError('SHARED_EXIT_UNKNOWN')
+        if self.expires_at <= 0:
+            raise ValueError('ROUTE_OPERATION_INVALID')
+
+    def to_dict(self):
+        result = asdict(self)
+        result['scope_ids'] = list(self.scope_ids)
+        return result
+
+    @classmethod
+    def create(cls, **kwargs):
+        kwargs.setdefault('operation_id', secrets.token_hex(16))
+        kwargs.setdefault('lease_id', secrets.token_hex(16))
+        kwargs.setdefault('lease_version', 1)
+        kwargs.setdefault('scope_ids', ())
+        return cls(**kwargs)
+
+
+class RouteOperationStore:
+    """Durable idempotency/ACK state for App-owned route operations."""
+    def __init__(self, db_path):
+        import sqlite3
+        self.db_path = db_path
+        self._lock = threading.RLock()
+        with self._lock, sqlite3.connect(db_path) as conn:
+            conn.execute('''CREATE TABLE IF NOT EXISTS route_operations (
+                operation_id TEXT PRIMARY KEY, lease_id TEXT NOT NULL, lease_version INTEGER NOT NULL,
+                owner_id TEXT NOT NULL, account_id TEXT NOT NULL, state TEXT NOT NULL,
+                request_json TEXT NOT NULL, ack_json TEXT, expires_at REAL NOT NULL,
+                created_at REAL NOT NULL, updated_at REAL NOT NULL)''')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_route_operations_lease ON route_operations(lease_id, lease_version)')
+
+    def _row(self, row):
+        if not row: return None
+        return {'operation_id': row[0], 'lease_id': row[1], 'lease_version': row[2], 'owner_id': row[3],
+                'account_id': row[4], 'state': row[5], 'request': json.loads(row[6]),
+                'ack': json.loads(row[7]) if row[7] else None, 'expires_at': row[8]}
+
+    def issue(self, operation: RouteOperation):
+        import sqlite3
+        now = time.time()
+        payload = json.dumps(operation.to_dict(), sort_keys=True)
+        with self._lock, sqlite3.connect(self.db_path) as conn:
+            row = conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation.operation_id,)).fetchone()
+            if row:
+                existing = self._row(row)
+                if existing['request'] != operation.to_dict(): raise ValueError('ROUTE_OPERATION_CONFLICT')
+                return existing
+            conn.execute('''INSERT INTO route_operations(operation_id,lease_id,lease_version,owner_id,account_id,state,request_json,expires_at,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?, ?,?,?)''', (operation.operation_id, operation.lease_id, operation.lease_version,
+                operation.owner_id, operation.account_id, 'issued', payload, operation.expires_at, now, now))
+            return self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation.operation_id,)).fetchone())
+
+    def ack(self, operation_id, *, owner_id, lease_version, snapshot_digest='', context_id=''):
+        import sqlite3
+        with self._lock, sqlite3.connect(self.db_path) as conn:
+            row = conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone()
+            current = self._row(row)
+            if current is None or current['owner_id'] != owner_id or current['lease_version'] != lease_version: raise ValueError('ROUTE_LEASE_REJECTED')
+            if current['state'] == 'acked': return current
+            if current['state'] != 'issued' or current['expires_at'] <= time.time(): raise ValueError('ROUTE_LEASE_EXPIRED')
+            expected = current['request'].get('snapshot_digest', '')
+            if expected and snapshot_digest and expected != snapshot_digest: raise ValueError('ROUTE_SNAPSHOT_MISMATCH')
+            ack = {'operation_id': operation_id, 'lease_id': current['lease_id'], 'lease_version': lease_version,
+                   'snapshot_digest': snapshot_digest, 'context_id': context_id}
+            conn.execute('UPDATE route_operations SET state="acked",ack_json=?,updated_at=? WHERE operation_id=?', (json.dumps(ack, sort_keys=True), time.time(), operation_id))
+            return self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
+
+
+def direct_degraded_allowed(*, transport_error, health_pool_exhausted, risk_signal=False,
+                            observed_exit='', shared_exit_key='', old_context_drained=False):
+    """Pure App gate: only transport failure and exhausted healthy pool may degrade."""
+    allowed_errors = {'PROXY_EXPIRED', 'PROXY_UNAVAILABLE', 'PROXY_AUTH_FAILED', 'PROXY_TRANSPORT_FAILED', 'PROXY_CONNECTION_REFUSED'}
+    if transport_error not in allowed_errors or not health_pool_exhausted or risk_signal:
+        return False
+    if not observed_exit or not shared_exit_key or observed_exit != shared_exit_key or not old_context_drained:
+        return False
+    return True
+
+    def transition(self, operation_id, *, state, owner_id, lease_version):
+        if state not in OPERATION_STATES: raise ValueError('ROUTE_OPERATION_INVALID')
+        import sqlite3
+        with self._lock, sqlite3.connect(self.db_path) as conn:
+            row = self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
+            if row is None or row['owner_id'] != owner_id or row['lease_version'] != lease_version: raise ValueError('ROUTE_LEASE_REJECTED')
+            if row['state'] == state: return row
+            if row['state'] in ('ended', 'expired', 'drain_timeout'): return row
+            conn.execute('UPDATE route_operations SET state=?,updated_at=? WHERE operation_id=?', (state, time.time(), operation_id))
+            return self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
 
 
 RouteError = CollectionRouteError
