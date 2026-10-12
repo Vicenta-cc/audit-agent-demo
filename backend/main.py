@@ -266,6 +266,9 @@ def _crawler_account_collection_block_reason(account: dict, principal: Principal
         if account.get("route_mode") == "direct_degraded":
             if not settings.crawler_direct_degrade_enabled:
                 return "PROXY_UNAVAILABLE"
+            direct=crawler_account_store.get_direct_route(account["id"])
+            if not direct or account.get("validated_direct_generation",0)!=direct["shared_exit_generation"]:
+                return "LOGIN_REVALIDATION_REQUIRED"
             return "" if crawler_account_store.get_direct_route(account["id"]) else "SHARED_EXIT_UNAVAILABLE"
     proxy_id = account.get("proxy_id")
     required = bool(account.get("proxy_required") or proxy_id

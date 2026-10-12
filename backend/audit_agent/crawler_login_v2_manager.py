@@ -439,7 +439,7 @@ class CrawlerLoginV2Manager:
                 if (snapshot.proxy_id if snapshot and snapshot.route_mode != 'direct_degraded' else account.get('proxy_id') if snapshot else None) != op.get("proxy_id"):
                     from .crawler_route import CollectionRouteError
                     raise CollectionRouteError("PROXY_REVISION_MISMATCH")
-                route_bundle = acquire_route_execution(account["id"], op["id"], user_id, account_handle=handles[-1], account_store=self.store, snapshot=snapshot, allow_probe=True, recovery_claim=manual_claim)
+                route_bundle = acquire_route_execution(account["id"], op["id"], user_id, account_handle=handles[-1], account_store=self.store, snapshot=snapshot, allow_probe=True, recovery_claim=manual_claim,human_login_operation_id=op["id"])
             except Exception as exc:
                 if manual_claim:
                     self.store.finish_manual_recovery(account['id'],op['id'],manual_claim,'uncertain',owner_id=user_id)
@@ -461,7 +461,7 @@ class CrawlerLoginV2Manager:
                 deadline=time.monotonic() + self.timeout,
                 authorize=authorize,
             )
-            s.manual_recovery_claim = manual_claim
+            s.manual_recovery_claim = getattr(route_bundle,"manual_recovery_claim",None) or manual_claim
             s.manual_finished = False
             s.route_bundle = route_bundle
             s.route_pipe = RouteConfigPipe(route_bundle.snapshot)
@@ -1326,6 +1326,9 @@ class CrawlerLoginV2Manager:
                 phase = event.get("phase", s.snapshot["phase"])
                 if phase in TERMINAL:
                     raise ValueError("child cannot commit terminal state")
+                if phase=="challenge_required":
+                    from .crawler_route import record_login_challenge
+                    record_login_challenge(getattr(s,"route_bundle",None))
                 s.snapshot.update(
                     phase=phase,
                     status=phase_to_status(phase),

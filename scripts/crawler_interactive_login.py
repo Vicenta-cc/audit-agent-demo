@@ -182,7 +182,7 @@ async def interactive_flow(account_id, expected_account_id):
             if request.is_navigation_request() and not (host == "douyin.com" or host.endswith(".douyin.com") or trusted_frame):
                 await route.abort()
             else:
-                await route.continue_()
+                await route.fallback()
         await context.route("**/*", guard)
         page = await context.new_page()
         await page.set_viewport_size({"width": VIEW_WIDTH, "height": VIEW_HEIGHT})
@@ -205,6 +205,7 @@ async def interactive_flow(account_id, expected_account_id):
                 except Exception:
                     pass
             while True:
+                await login.report_douyin_challenge(page,context)
                 try:
                     authenticated = await has_auth(context)
                 except Exception:

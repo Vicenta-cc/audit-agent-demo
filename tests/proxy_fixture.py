@@ -9,7 +9,7 @@ import hashlib
 import http.client
 import json
 import os
-import select
+import selectors
 import shutil
 import socket
 import ssl
@@ -148,7 +148,10 @@ class ProxyFixture:
                 self.end_headers()
                 try:
                     while True:
-                        ready, _, _ = select.select([self.connection, upstream], [], [], 3)
+                        with selectors.DefaultSelector() as poll:
+                            poll.register(self.connection,selectors.EVENT_READ)
+                            poll.register(upstream,selectors.EVENT_READ)
+                            ready=[key.fileobj for key,_ in poll.select(3)]
                         if not ready:
                             break
                         for source in ready:
@@ -399,8 +402,8 @@ settings.media_crawler_dir=Path(config['crawler'])
 settings.crawler_browser_profile_root=Path(config['profiles'])
 settings.crawler_login_browser_version=''
 original_launch=browser_module.launch_account_context
-def trusted_session(route):
- return BoundProxySession(route,echo_url=config['echo'],budget_id='runtime-fixture',verify=config['ca'],ttl=1,policy=dict(min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0,cooldown_seconds=1))
+def trusted_session(route,**kwargs):
+ return BoundProxySession(route,**kwargs,echo_url=config['echo'],budget_id='runtime-fixture',verify=config['ca'],ttl=1,policy=dict(min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0,cooldown_seconds=1))
 app_route.make_bound_proxy_session=trusted_session
 async def test_launch(*args,**kwargs):
  route=kwargs['route_snapshot']

@@ -228,7 +228,8 @@ class CrawlerAccountLoginManager:
                     session.manual_recovery_claim = self.store.begin_manual_recovery(session.account_id,session.id,owner_id=session.owner_user_id) or ""
                     if not session.manual_recovery_claim:
                         raise ValueError('ACCOUNT_BUSY')
-                session.route_bundle = acquire_route_execution(session.account_id, session.id, session.owner_user_id, account_handle=session.resource_handle, account_store=self.store, allow_probe=True, recovery_claim=session.manual_recovery_claim or None)
+                session.route_bundle = acquire_route_execution(session.account_id, session.id, session.owner_user_id, account_handle=session.resource_handle, account_store=self.store, allow_probe=True, recovery_claim=session.manual_recovery_claim or None,human_login_operation_id=session.id)
+                session.manual_recovery_claim=getattr(session.route_bundle,"manual_recovery_claim",None) or session.manual_recovery_claim
             session.route_pipe = RouteConfigPipe(session.route_bundle.snapshot if session.route_bundle else None)
             env.update(session.route_pipe.env)
             from .crawler_route import RouteReceiptPipe
@@ -548,6 +549,13 @@ class CrawlerAccountLoginManager:
 
     def _handle_event(self, session_id: str, event: dict) -> None:
         event_type = str(event.get("type") or "")
+        if event_type=="security_challenge":
+            with self._lock:
+                session=self._sessions.get(session_id)
+                if session and session.platform=="dy" and session.status in ACTIVE_LOGIN_STATUSES:
+                    from .crawler_route import record_login_challenge
+                    record_login_challenge(session.route_bundle)
+            return
         if event_type in {"interactive", "frame"}:
             with self._lock:
                 session = self._sessions.get(session_id)

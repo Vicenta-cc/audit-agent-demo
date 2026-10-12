@@ -82,7 +82,7 @@ def test_ambiguous_or_risk_faults_never_degrade(error):
         observed_exit='198.51.100.8',shared_exit_key='198.51.100.8',old_context_drained=True)
 
 
-@pytest.mark.parametrize('mode,fault',[('proxy_preferred','none'),('direct_degraded','none'),('proxy_preferred','407')])
+@pytest.mark.parametrize('mode,fault',[('proxy_preferred','none'),('direct_degraded','none'),('proxy_preferred','407'),('proxy_preferred','429'),('direct_degraded','429')])
 def test_real_browser_managed_ack_and_explicit_transport(tmp_path,monkeypatch,mode,fault):
     import http.server
     import ssl
@@ -159,8 +159,11 @@ async def main():
   assert session.context_id==snap.context_id
   print('BROWSER_ACK_OK',flush=True)
   import sqlite3
-  with sqlite3.connect(snap.safety_db_path) as db:
-   db.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE',paused_until=? WHERE exit_key=?",(__import__('time').time()+30,snap.observed_exit_ip))
+  if config['stop']=='429':
+   session.enter_cooldown('http_429',30)
+  else:
+   with sqlite3.connect(snap.safety_db_path) as db:
+    db.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE',paused_until=? WHERE exit_key=?",(__import__('time').time()+30,snap.observed_exit_ip))
   page=await context.new_page()
   try:
    await page.evaluate('url => fetch(url)',config['target']+'/paused')
@@ -180,7 +183,7 @@ asyncio.run(main())
         try:
             route_pipe.start(child);receipt_pipe.start(child)
             import json
-            out,err=child.communicate(json.dumps(dict(echo=echo,target=target,ca=fixture.ca,spki=fixture.spki,profiles=str(tmp_path/'profiles'))),timeout=45)
+            out,err=child.communicate(json.dumps(dict(echo=echo,target=target,ca=fixture.ca,spki=fixture.spki,profiles=str(tmp_path/'profiles'),stop=fault)),timeout=45)
             assert fixture.password not in out+err
             if fault=='407':
                 assert child.returncode!=0 and 'PROXY_AUTH_FAILED' in err
@@ -191,6 +194,8 @@ asyncio.run(main())
                 return
             assert child.returncode==0,err[-2500:]
             assert 'BROWSER_ACK_OK' in out and 'BROWSER_PAUSE_FENCED' in out
+            with __import__('sqlite3').connect(snap.scheduler_db_path) as db:
+                assert not db.execute('SELECT 1 FROM collection_route_health').fetchone()
             if mode=='proxy_preferred':
                 fixture.assert_routed();assert any(e['kind']=='CONNECT' for e in fixture.events)
                 assert not any(o['path'].endswith('/paused') for o in fixture.origins)
@@ -370,6 +375,17 @@ runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
                 with accounts._connect() as conn:
                     pause=conn.execute('SELECT pause_reason FROM crawler_shared_exits WHERE exit_key=?',(fixture.exit_ip,)).fetchone()[0]
                     assert bool(pause)==(outcome!='success')
+                if outcome=='success':
+                    # A new real browser and HTTP pair can resume on the same Profile after recovery.
+                    accounts.release_route_admission(snap.operation_id)
+                    restored=replace(snap,operation_id='restored-operation',lease_id='restored-lease',context_id='restored-context',recovery_claim='',snapshot_digest='')
+                    restored=replace(restored,snapshot_digest=app.route_contract().snapshot_digest(restored))
+                    accounts.admit_route(account['id'],fixture.exit_ip,1,restored.operation_id)
+                    store_operation(store,restored)
+                    resumed=SimpleNamespace(snapshot=restored,account_id=account['id'],owner_id='owner',execution_id='restored-login',pass_fds=(),route_operation_store=store,account_store=accounts,_lock=threading.RLock())
+                    assert app._run_maintenance_probe(resumed,check_login=True,expected_identity='fixture_identity_123')=='success'
+                    assert restored.profile_key==snap.profile_key and restored.context_id!=snap.context_id
+                    assert accounts.get(account['id'])['risk_count']==1
         assert (tmp_path/'profiles'/snap.profile_key/'adapter.lock').exists()
         assert all(o['path']=='/echo' for o in fixture.origins)
         assert not fixture.traps
@@ -508,3 +524,36 @@ runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
             bundle.close()
         assert all(child.poll() is not None for child in children)
         with accounts._connect() as db:assert not db.execute("SELECT 1 FROM crawler_route_admissions WHERE account_id=? AND state='active'",(account['id'],)).fetchone()
+
+
+def test_actual_manager_challenge_pauses_once_but_qr_and_human_claim_remain_valid(tmp_path,monkeypatch):
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
+    from backend.audit_agent.crawler_login_v2_manager import CrawlerLoginV2Manager,V2Session
+    from backend.audit_agent.auth_state_cipher import AuthStateCipher
+    for name,value in dict(crawler_safety_enabled=True,crawler_proxy_enabled=True,app_auth_mode='disabled',
+        request_scheduler_db=tmp_path/'gate.db',task_resource_lock_dir=tmp_path/'locks',crawler_browser_profile_root=tmp_path/'profiles').items():monkeypatch.setattr(app.settings,name,value)
+    accounts=CrawlerAccountStore(tmp_path/'accounts.db');proxies=CrawlerProxyStore(accounts)
+    a=accounts.create(platform='dy',display_name='human');accounts.update(a['id'],platform_account_id='original_identity_123')
+    p=proxies.create(display_name='fixture',endpoint='http://127.0.0.1:9',expires_at=time.time()+3600)
+    proxies.bind(a['id'],p['id'],expected_binding_revision=a['binding_revision']);proxies.observe_exit(p['id'],'198.51.100.8')
+    bundle=app.acquire_route_execution(a['id'],'human-login','owner',account_store=accounts,allow_probe=True,human_login_operation_id='human-login')
+    manager=CrawlerLoginV2Manager(accounts,AuthStateCipher('fixture'))
+    session=V2Session('session','human-login',a['id'],'owner','app-session','owner-hash',dict(phase='checking',state_revision=1))
+    session.route_bundle=bundle;manager.sessions[session.id]=session
+    b=accounts.create(platform='dy',display_name='neighbor');accounts.save_auth_state(b['id'],'fixture-ciphertext')
+    try:
+        manager.handle_event(session.id,dict(type='snapshot',phase='qr_ready'))
+        assert accounts.get(a['id'])['risk_count']==0
+        accounts.admit_route(b['id'],'198.51.100.8',1,'before-challenge');accounts.release_route_admission('before-challenge')
+        manager.handle_event(session.id,dict(type='snapshot',phase='challenge_required'))
+        manager.handle_event(session.id,dict(type='snapshot',phase='challenge_required'))
+        assert accounts.get(a['id'])['risk_count']==1
+        with pytest.raises(ValueError,match='ACCOUNT_CHALLENGE'):accounts.admit_route(b['id'],'198.51.100.8',1,'after-challenge')
+        # The existing explicit human claim may continue verification despite expired credentials.
+        accounts.mark_douyin_auth_invalid(a['id'],status='login_required',reset=True)
+        assert accounts.admit_route(a['id'],'198.51.100.8',1,'human-continue',recovery_claim=bundle.snapshot.recovery_claim)=='human-continue'
+        with pytest.raises(ValueError):accounts.admit_route(a['id'],'198.51.100.8',1,'automatic-hidden-login')
+        accounts.release_route_admission('human-continue')
+    finally:
+        manager.sessions.clear();bundle.close()

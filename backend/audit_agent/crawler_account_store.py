@@ -153,6 +153,9 @@ class CrawlerAccountStore:
         """)
 
         manual_columns={row[1] for row in conn.execute('PRAGMA table_info(crawler_manual_recovery_operations)')}
+        for name in ('initial_login','risk_recorded'):
+            if name not in manual_columns:
+                conn.execute(f'ALTER TABLE crawler_manual_recovery_operations ADD COLUMN {name} INTEGER NOT NULL DEFAULT 0')
         for name,definition in (('cooldown_until','REAL NOT NULL DEFAULT 0'),('exit_key',"TEXT NOT NULL DEFAULT ''"),('exit_generation','INTEGER NOT NULL DEFAULT 0')):
             if name not in manual_columns:
                 conn.execute(f'ALTER TABLE crawler_manual_recovery_operations ADD COLUMN {name} {definition}')
@@ -851,9 +854,9 @@ class CrawlerAccountStore:
             manual = bool(recovery and account['recovery_state']=='manual_claimed' and self._manual_claim_valid(conn,account_id,recovery_claim,key=key,generation=generation))
             if recovery and (key!=account['shared_exit_key'] or generation<account['shared_exit_generation'] or account['recovery_state']=='manual_claimed' and not manual):
                 raise ValueError('ACCOUNT_CHALLENGE')
-            if not account or (account['status']!='active' and not (login_bootstrap and account['status'] in {'login_required','expired'})) or (account['route_state']!='active' and not recovery and not (login_bootstrap and account['route_state']=='transport_blocked')) or (account['paused_until'] and account['paused_until']>time.time() and not manual) or not self._exit_allowed(conn,key,generation,recovery=recovery,manual=manual):
+            if not account or (account['status']!='active' and not ((login_bootstrap or manual) and account['status'] in {'login_required','expired'})) or (account['route_state']!='active' and not recovery and not (login_bootstrap and account['route_state']=='transport_blocked')) or (account['paused_until'] and account['paused_until']>time.time() and not manual) or not self._exit_allowed(conn,key,generation,recovery=recovery,manual=manual):
                 raise ValueError('ACCOUNT_CHALLENGE')
-            if not login_bootstrap:
+            if not login_bootstrap and not manual:
                 if not account['auth_state_ciphertext']:
                     raise ValueError('AUTH_INVALID')
                 try:
@@ -950,7 +953,7 @@ class CrawlerAccountStore:
                 conn.execute("INSERT INTO crawler_route_events(account_id,event_type,route_mode,reason,shared_exit_key,created_at) VALUES(?,'manual_required',?,'RECOVERY_UNCERTAIN',?,?)",(account_id,row['route_mode'],row['shared_exit_key'],time.time()))
             return ended
 
-    def begin_manual_recovery(self, account_id, login_operation_id, *, owner_id):
+    def begin_manual_recovery(self, account_id, login_operation_id, *, owner_id, allow_active=False, observed_exit=None, generation=None):
         """Explicit authenticated login action; caller holds the Profile FD lease."""
         if (not isinstance(login_operation_id,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}',login_operation_id)
                 or not isinstance(owner_id,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}',owner_id)):
@@ -962,18 +965,27 @@ class CrawlerAccountStore:
                 if prior['account_id']!=account_id or prior['owner_id']!=owner_id: raise ValueError('MANUAL_OPERATION_CONFLICT')
                 return None
             row=conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
-            if not row or row['route_state'] not in {'manual_required','challenge_paused','recovery_check'}:
+            if type(allow_active) is not bool:
+                raise ValueError('MANUAL_OPERATION_INVALID')
+            if not row or row['route_state'] not in ({'active','transport_blocked','manual_required','challenge_paused','recovery_check'} if allow_active else {'manual_required','challenge_paused','recovery_check'}):
                 return None
             if row['recovery_state']=='manual_claimed': return None
             if conn.execute("SELECT 1 FROM crawler_route_admissions WHERE account_id=? AND state='active'",(account_id,)).fetchone():
                 return None
+            initial=bool(allow_active and row['route_state'] in {'active','transport_blocked'} and not row['pause_reason'])
+            if initial:
+                key=self._exit_key(observed_exit);gen=self._generation(generation)
+                if not self._exit_allowed(conn,key,gen):return None
+                conn.execute('UPDATE crawler_accounts SET shared_exit_key=?,shared_exit_generation=? WHERE id=?',(key,gen,account_id))
+                row=conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
             claim=uuid4().hex
             cooldown=float(row['paused_until'] or 0)
             try:
                 if row['cooldown_until']: cooldown=max(cooldown,datetime.fromisoformat(row['cooldown_until']).timestamp())
             except (ValueError,TypeError): return None
             conn.execute("INSERT INTO crawler_manual_recovery_operations(login_operation_id,account_id,owner_id,claim,expected_identity,exit_key,exit_generation,cooldown_until,state,created_at) VALUES(?,?,?,?,?,?,?,?,'claimed',?)",(login_operation_id,account_id,owner_id,claim,row['platform_account_id'] or '',row['shared_exit_key'],row['shared_exit_generation'],cooldown,time.time()))
-            conn.execute("UPDATE crawler_accounts SET route_state='recovery_check',recovery_state='manual_claimed',recovery_claim=?,recovery_incident=CASE WHEN recovery_incident='' THEN ? ELSE recovery_incident END WHERE id=?",(claim,uuid4().hex,account_id))
+            conn.execute('UPDATE crawler_manual_recovery_operations SET initial_login=?,risk_recorded=? WHERE login_operation_id=?',(int(initial),int(not initial),login_operation_id))
+            conn.execute("UPDATE crawler_accounts SET route_state='recovery_check',recovery_state='manual_claimed',recovery_claim=? WHERE id=?",(claim,account_id))
             conn.execute("INSERT INTO crawler_route_events(account_id,event_type,route_mode,operation_id,shared_exit_key,created_at) VALUES(?,'manual_recovery_claimed',?,?,?,?)",(account_id,row['route_mode'],login_operation_id,row['shared_exit_key'],time.time()))
             return claim
 
@@ -991,8 +1003,8 @@ class CrawlerAccountStore:
             operation=conn.execute("SELECT * FROM crawler_manual_recovery_operations WHERE login_operation_id=? AND account_id=? AND owner_id=? AND claim=? AND state='claimed'",(login_operation_id,account_id,owner_id,claim)).fetchone()
             row=conn.execute("SELECT * FROM crawler_accounts WHERE id=? AND recovery_claim=? AND recovery_state='manual_claimed'",(account_id,claim)).fetchone()
             if not operation or not row: return False
-            verified=bool(result=='success' and operation['expected_identity'] and verified_identity==operation['expected_identity']
-                and row['platform_account_id']==operation['expected_identity'] and row['auth_state_ciphertext']
+            verified=bool(result=='success' and verified_identity and (verified_identity==operation['expected_identity'] if operation['expected_identity'] else operation['initial_login'])
+                and row['platform_account_id']==verified_identity and row['auth_state_ciphertext']
                 and row['shared_exit_key']==operation['exit_key'] and row['shared_exit_generation']>=operation['exit_generation'])
             cooled=operation['cooldown_until']<=time.time() and (row['paused_until'] is None or row['paused_until']<=time.time())
             try:

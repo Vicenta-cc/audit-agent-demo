@@ -358,7 +358,7 @@ def resolve_account_route(account_id, *, account_store=None, expected_binding_re
 
 
 def acquire_route_execution(account_id, execution_id, owner_id, *, account_store=None,
-                            account_handle=None, snapshot=None, allow_probe=False, recovery_claim=None):
+                            account_handle=None, snapshot=None, allow_probe=False, recovery_claim=None, human_login_operation_id=None):
     from backend.task_admission.resources import ExecutionLeaseBundle
     snapshot = snapshot or resolve_account_route(account_id, account_store=account_store, allow_probe=allow_probe)
     store = get_proxy_store(account_store) if snapshot else None
@@ -409,12 +409,17 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
             if not bundle.acquire_exit_capacity(snapshot.observed_exit_ip):
                 bundle.close()
                 raise CollectionRouteError('PROXY_BUSY')
+            if human_login_operation_id and not recovery_claim:
+                recovery_claim=bundle.account_store.begin_manual_recovery(account_id,human_login_operation_id,owner_id=owner_id,allow_active=True,observed_exit=snapshot.observed_exit_ip,generation=observation['shared_exit_generation'])
+                if not recovery_claim:raise CollectionRouteError('PROXY_BUSY')
+            bundle.manual_recovery_claim=recovery_claim if human_login_operation_id else None
+            bundle.login_operation_id=human_login_operation_id
             mode = bundle.account_store.get(account_id).get('route_mode', 'proxy_required')
             managed = replace(snapshot, route_mode=mode, operation_id=secrets.token_hex(16), lease_id=secrets.token_hex(16),
                 lease_version=1, owner_id=owner_id, context_id=secrets.token_hex(16),
                 exit_generation=observation['shared_exit_generation'],
                 safety_db_path=str(bundle.account_store.db_path.resolve()), recovery_claim=recovery_claim or '',
-                login_bootstrap=bool(allow_probe and not recovery_claim))
+                login_bootstrap=bool(human_login_operation_id or allow_probe and not recovery_claim))
             managed = replace(managed, snapshot_digest=contract.snapshot_digest(managed))
             operation = RouteOperation(operation_id=managed.operation_id, lease_id=managed.lease_id,
                 lease_version=managed.lease_version, owner_id=owner_id, account_id=account_id,
@@ -424,7 +429,7 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                 scope_ids=managed.scope_ids, snapshot_digest=managed.snapshot_digest, proxy_expires_at=managed.expires_at or now+1200)
             bundle.route_operation_store = RouteOperationStore(str(settings.request_scheduler_db.resolve()))
             try:
-                token = bundle.account_store.admit_route(account_id, managed.observed_exit_ip, managed.exit_generation, managed.operation_id, recovery_claim=recovery_claim, login_bootstrap=allow_probe and not recovery_claim)
+                token = bundle.account_store.admit_route(account_id, managed.observed_exit_ip, managed.exit_generation, managed.operation_id, recovery_claim=recovery_claim, login_bootstrap=bool(human_login_operation_id or allow_probe and not recovery_claim))
                 bundle.add_closer(lambda: bundle.account_store.release_route_admission(token))
                 bundle.route_operation_store.issue(operation)
                 bundle.add_closer(lambda: end_route_operation(bundle))
@@ -791,6 +796,26 @@ def asset_request_slot(bundle, timeout=60):
                     raise _safe_error(exc) from None
 
 
+def record_login_challenge(bundle):
+    """Record one confirmed challenge while retaining the authorized human context."""
+    if bundle is None or not getattr(bundle.snapshot,'managed',False):
+        return
+    with bundle._lock:
+        if getattr(bundle,'account_risk_recorded',False):return
+        accounts=bundle.account_store
+        account_id=bundle.snapshot.account_id
+        claim=getattr(bundle.snapshot,'recovery_claim','')
+        with accounts._connect() as db:
+            prior=db.execute("SELECT risk_recorded FROM crawler_manual_recovery_operations WHERE account_id=? AND claim=? AND state='claimed'",(account_id,claim)).fetchone() if claim else None
+        if not prior or not prior[0]:
+            from .account_rotation import AccountRotationManager
+            AccountRotationManager(accounts).cool_down_after_risk(account_id)
+            if prior:
+                with accounts._connect() as db:
+                    db.execute('UPDATE crawler_manual_recovery_operations SET risk_recorded=1 WHERE account_id=? AND claim=?',(account_id,claim))
+        bundle.account_risk_recorded=True
+
+
 class RouteReceiptPipe:
     """Public child-browser receipts, invalidated on EOF or process death."""
     def __init__(self, bundle):
@@ -867,10 +892,7 @@ class RouteReceiptPipe:
                             if (set(value) != fields or value['reason'] != 'ACCOUNT_CHALLENGE'
                                     or not snapshot.managed or any(value[key] != getattr(snapshot,key) for key in fields - {'type','reason'})):
                                 return
-                            if not getattr(self.bundle, 'account_risk_recorded', False):
-                                from .account_rotation import AccountRotationManager
-                                AccountRotationManager(self.bundle.account_store).cool_down_after_risk(snapshot.account_id)
-                                self.bundle.account_risk_recorded = True
+                            record_login_challenge(self.bundle)
                             continue
                         if isinstance(value, dict) and value.get('type') == 'route_renew':
                             if set(value) != {'type','operation_id','route_operation_id','owner_id','lease_version'} or value['route_operation_id'] != snapshot.operation_id:

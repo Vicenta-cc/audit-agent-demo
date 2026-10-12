@@ -308,6 +308,8 @@ async def wait_for_qr(page, config: dict, timeout_seconds: float = 35) -> tuple[
     deadline = time.monotonic() + timeout_seconds
     triggered = False
     while time.monotonic() < deadline:
+        if "douyin.com" in config["url"] and getattr(page,"context",None) is not None:
+            await report_douyin_challenge(page,page.context)
         qr = await first_valid_qr(page, config)
         if qr:
             return qr
@@ -483,6 +485,19 @@ async def request_login_reset():
         raise RuntimeError("登录管理器未确认状态更新，原浏览器登录态保留")
 
 
+async def report_douyin_challenge(page, context):
+    from scripts.crawler_douyin_login_adapter import CHALLENGE_SELECTORS
+    for selector in CHALLENGE_SELECTORS:
+        if await page.locator(selector).first.is_visible():
+            session=getattr(context,'_bound_proxy_session',None)
+            if session is not None:
+                from tools.bound_proxy import emit_account_risk
+                emit_account_risk(session.snapshot)
+            emit('security_challenge')
+            return True
+    return False
+
+
 async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *,
                     headless: bool = True, expected_platform_account_id: str = "") -> None:
     config = PLATFORMS[platform]
@@ -527,6 +542,7 @@ async def run_login(platform: str, timeout_seconds: int, account_id: str = "", *
             next_scanned_diagnostic = 0.0
 
             while time.monotonic() < deadline:
+                if platform=="dy":await report_douyin_challenge(page,context)
                 now = time.monotonic()
                 if await is_logged_in(platform, page, context, baseline_cookies):
                     if login_confirmed_at is None:

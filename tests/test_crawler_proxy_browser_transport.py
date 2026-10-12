@@ -151,6 +151,8 @@ runpy.run_path(os.environ['FIXTURE_PROBE_SCRIPT'],run_name='__main__')
 ''')
         original_popen=subprocess.Popen;children=[];commands=[]
         def child(command,**kwargs):
+            if len(command)<2 or command[1]!=str(helper):
+                return original_popen(command,**kwargs)
             assert command[0]==str(settings.crawler_login_python)
             assert command[1]==str(helper)
             assert fixture.password not in json.dumps(command)+json.dumps(kwargs['env'])

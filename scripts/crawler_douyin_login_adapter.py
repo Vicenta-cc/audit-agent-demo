@@ -581,6 +581,9 @@ class DouyinLoginAdapter:
         )
         region = await self.region(challenge_only=True)
         if region:
+            if self.bound_proxy_session is not None:
+                from tools.bound_proxy import emit_account_risk
+                emit_account_risk(self.bound_proxy_session.snapshot)
             return {
                 "phase": "challenge_required",
                 "region": region,

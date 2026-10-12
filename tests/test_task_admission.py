@@ -1069,3 +1069,24 @@ def test_admin_unlimited_quota_preserves_active_slot_and_role_changes(stack):
     assert error.value.code == "DAILY_REPORT_LIMIT"
     auth.update_user(owner, actor_user_id="test", role="admin")
     enqueue(store, owner, "promoted")
+
+
+def test_nonadmin_direct_scheduler_checks_account_permission_without_supplier_acl(stack,tmp_path,monkeypatch):
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    from backend.task_admission.scheduler import select_account
+    creation,auth,users=stack
+    for name,value in dict(crawler_safety_enabled=True,crawler_proxy_enabled=True,crawler_direct_degrade_enabled=True,
+        task_resource_lock_dir=tmp_path/'locks',request_scheduler_db=tmp_path/'gate.db').items():monkeypatch.setattr(settings,name,value)
+    accounts=CrawlerAccountStore(creation.db_path)
+    account=accounts.create(platform='dy',display_name='direct',access_scope='public')
+    accounts.save_auth_state(account['id'],'fixture-ciphertext')
+    accounts.observe_shared_exit('198.51.100.8',service_exit=True)
+    accounts.set_route_state(account['id'],state='active',route_mode='direct_degraded',shared_exit_key='198.51.100.8',generation=1)
+    accounts.mark_direct_validated(account['id'],1)
+    assert not auth.principal_for_user(users[0]).is_admin
+    enqueue(creation.admission,users[0],key='direct',payload={'request':{'platform':'dy','run_crawler':True}})
+    row=creation.admission.for_task('task:direct')
+    worker=SimpleNamespace(store=creation,execution_adapter=SimpleNamespace(crawler_account_store=accounts))
+    with select_account(worker,row) as selected:
+        assert selected is True
+    assert creation.admission.for_task('task:direct')['resource_account_id']==account['id']
