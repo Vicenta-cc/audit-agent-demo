@@ -223,6 +223,10 @@ class CrawlerAccountLoginManager:
                 session.route_bundle = acquire_route_execution(session.account_id, session.id, session.owner_user_id, account_handle=session.resource_handle, account_store=self.store, allow_probe=True)
             session.route_pipe = RouteConfigPipe(session.route_bundle.snapshot if session.route_bundle else None)
             env.update(session.route_pipe.env)
+            from .crawler_route import RouteReceiptPipe
+            session.route_receipt_pipe = RouteReceiptPipe(session.route_bundle) if session.route_bundle and session.route_bundle.snapshot else None
+            if session.route_receipt_pipe:
+                env.update(session.route_receipt_pipe.env)
             if session.route_bundle:
                 from .crawler_route import probe_env
                 env.update(probe_env(session.route_bundle))
@@ -234,7 +238,7 @@ class CrawlerAccountLoginManager:
         try:
             process = subprocess.Popen(
                 command,
-                pass_fds=tuple(set((session.resource_handle.fileno(), session.global_handle.fileno(), *(session.route_bundle.pass_fds if session.route_bundle else ()), *session.route_pipe.pass_fds))),
+                pass_fds=tuple(set((session.resource_handle.fileno(), session.global_handle.fileno(), *(session.route_bundle.pass_fds if session.route_bundle else ()), *session.route_pipe.pass_fds, *(session.route_receipt_pipe.pass_fds if session.route_receipt_pipe else ())))),
                 cwd=str(settings.root_dir),
                 env=env,
                 stdout=subprocess.PIPE,
@@ -258,6 +262,8 @@ class CrawlerAccountLoginManager:
             raise RuntimeError(f"无法启动登录浏览器：{exc}") from exc
 
         session.route_pipe.start(process)
+        if session.route_receipt_pipe:
+            session.route_receipt_pipe.start(process)
         session.process = process
         session.diagnostic_file = diagnostic_file
         with self._lock:

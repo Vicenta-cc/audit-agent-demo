@@ -147,14 +147,16 @@ def test_route_operation_transition_preserves_terminal_state(tmp_path):
     operation = RouteOperation.create(
         owner_id='owner-1', account_id='account-1', profile_key='profile-1',
         route_mode='proxy_required', expires_at=time.time() + 300,
+        context_id='context-1', snapshot_digest='a'*64,
     )
     store = RouteOperationStore(tmp_path / 'route-operations.sqlite3')
 
     assert store.issue(operation)['state'] == 'issued'
-    assert store.ack(operation.operation_id, owner_id='owner-1', lease_version=1)['state'] == 'acked'
+    assert store.ack(operation.operation_id, owner_id='owner-1', lease_version=1, snapshot_digest='a'*64, context_id='context-1')['state'] == 'acked'
     assert store.transition(operation.operation_id, state='draining', owner_id='owner-1', lease_version=1)['state'] == 'draining'
     assert store.transition(operation.operation_id, state='ended', owner_id='owner-1', lease_version=1)['state'] == 'ended'
-    assert store.transition(operation.operation_id, state='issued', owner_id='owner-1', lease_version=1)['state'] == 'ended'
+    with pytest.raises(ValueError, match='ROUTE_TRANSITION_REJECTED'):
+        store.transition(operation.operation_id, state='issued', owner_id='owner-1', lease_version=1)
 
     with pytest.raises(ValueError, match='ROUTE_LEASE_REJECTED'):
         store.transition(operation.operation_id, state='issued', owner_id='other-owner', lease_version=1)

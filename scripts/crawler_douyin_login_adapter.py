@@ -63,6 +63,7 @@ class DouyinLoginAdapter:
         self.identity = ""
         self.identity_source = ""
         self.identity_conflict = False
+        self.identity_observed = asyncio.Event()
         self.sms_selected = False
         self.manual = False
         self.sms_form_seen = False
@@ -302,6 +303,7 @@ class DouyinLoginAdapter:
                 if self.identity and self.identity != identity:
                     self.identity_conflict = True
                 self.identity, self.identity_source = identity, "douyin_self_response"
+                self.identity_observed.set()
         except Exception:
             return
 

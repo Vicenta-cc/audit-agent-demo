@@ -715,7 +715,6 @@ class MediaCrawlerAdapter:
                     else ""
                 )
                 from .crawler_route import raise_route_log_error
-                raise_route_log_error(stdout + "\n" + stderr)
                 if "PLATFORM_RATE_LIMITED" in stdout or "PLATFORM_RATE_LIMITED" in stderr:
                     raise CrawlerRateLimitError("平台请求被限流，共享冷却已记录；保留已采集内容，冷却结束后再继续")
                 if "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stdout or "REQUEST_SCHEDULER_WAIT_EXCEEDED" in stderr:
@@ -723,7 +722,10 @@ class MediaCrawlerAdapter:
                 if ACCOUNT_AUTH_INVALID_MARKER in stdout or ACCOUNT_AUTH_INVALID_MARKER in stderr:
                     raise CrawlerAuthenticationError("所选采集账号登录态已失效，请重新登录")
                 if "ACCOUNT_VERIFY" in stdout or "ACCOUNT_VERIFY" in stderr:
-                    raise CrawlerVerificationError("采集账号触发平台验证")
+                    error = CrawlerVerificationError("采集账号触发平台验证")
+                    error.account_risk_recorded = bool(route_context and getattr(route_context, 'account_risk_recorded', False))
+                    raise error
+                raise_route_log_error(stdout + '\n' + stderr)
                 if "COLLECTION_INCOMPLETE" in stdout or "COLLECTION_INCOMPLETE" in stderr:
                     raise CrawlerCollectionIncompleteError(
                         "采集未完成：详情、媒体或分页处理失败；已成功内容保留，失败记录在采集目录 douyin/collection_status 中，可修复后继续采集")
@@ -782,7 +784,6 @@ class MediaCrawlerAdapter:
                 # A caught platform limit must never look like successful completion.
                 terminal_log = stderr_path.read_text(encoding='utf-8', errors='replace') + stdout_path.read_text(encoding='utf-8', errors='replace')
                 from .crawler_route import raise_route_log_error
-                raise_route_log_error(terminal_log)
                 if 'PLATFORM_RATE_LIMITED' in terminal_log or 'REQUEST_SCHEDULER_WAIT_EXCEEDED' in terminal_log:
                     raise CrawlerRateLimitError("平台请求额度或冷却限制已生效；保留已采集内容，请稍后继续")
 
@@ -791,8 +792,11 @@ class MediaCrawlerAdapter:
                 if stderr_path.exists() and "ACCOUNT_VERIFY" in stderr_path.read_text(
                     encoding="utf-8", errors="replace"
                 ):
-                    raise CrawlerVerificationError("采集账号触发平台验证")
+                    error = CrawlerVerificationError("采集账号触发平台验证")
+                    error.account_risk_recorded = bool(route_context and getattr(route_context, 'account_risk_recorded', False))
+                    raise error
 
+                raise_route_log_error(terminal_log)
                 if 'COLLECTION_INCOMPLETE' in terminal_log:
                     raise CrawlerCollectionIncompleteError(
                         "采集未完成：详情、媒体或分页处理失败；已成功内容保留，请查看采集目录 douyin/collection_status 中的失败记录")
@@ -830,7 +834,7 @@ class MediaCrawlerAdapter:
 
     def _subprocess_env(self, auth_state: dict | None = None, *, platform: str = "", account_id: str = "") -> dict[str, str]:
         env = os.environ.copy()
-        for name in ("MEDIACRAWLER_PROXY_CONFIG_FD", "MEDIACRAWLER_PROXY_RECEIPT_FD", "MEDIACRAWLER_PROXY_REQUIRED", "MEDIACRAWLER_PROXY_PROBE_BUDGET_ID", "MEDIACRAWLER_SOURCE_TASK_ID", "MEDIACRAWLER_SOURCE_BATCH_ID"):
+        for name in ("MEDIACRAWLER_PROXY_CONFIG_FD", "MEDIACRAWLER_PROXY_RECEIPT_FD", "MEDIACRAWLER_ROUTE_ACK_FD", "MEDIACRAWLER_MANAGED_ROUTE", "MEDIACRAWLER_PROXY_REQUIRED", "MEDIACRAWLER_PROXY_PROBE_BUDGET_ID", "MEDIACRAWLER_SOURCE_TASK_ID", "MEDIACRAWLER_SOURCE_BATCH_ID"):
             env.pop(name, None)
         for name in ("MEDIACRAWLER_ACCOUNT_ID", "MEDIACRAWLER_CLOAK_PROFILE_ROOT", "MEDIACRAWLER_DY_BROWSER_ENGINE", *scheduler_env()):
             env.pop(name, None)

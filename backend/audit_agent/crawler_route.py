@@ -1,6 +1,8 @@
 """Application bridge for frozen account routes and inherited secret pipes."""
 from __future__ import annotations
 
+import math
+import ipaddress
 import hashlib
 import importlib.util
 import sys
@@ -45,6 +47,7 @@ class CollectionRouteError(RuntimeError):
             "PROXY_BUSY", "SUPPLEMENT_DEFERRED", "PROXY_REVISION_MISMATCH",
             "PROXY_EXIT_CHANGED", "PROXY_UNAVAILABLE", "PROXY_AUTH_FAILED",
             "PROXY_CONFIG_INVALID", "PROBE_BUDGET_EXHAUSTED", "SCHEDULER_POLICY_CONFLICT",
+            "PROXY_EXPIRED", "PROXY_CONNECTION_REFUSED", "PROXY_TRANSPORT_FAILED",
         }
         self.code = code if isinstance(code, str) and code in allowed else "PROXY_CONFIG_INVALID"
         super().__init__(self.code)
@@ -72,15 +75,25 @@ class RouteOperation:
     context_id: str = ''
     scope_ids: tuple = ()
     snapshot_digest: str = ''
+    proxy_expires_at: float = 0.0
 
     def __post_init__(self):
-        if not self.operation_id or not self.lease_id or not self.owner_id or not self.account_id:
+        import re
+        if any(not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', value) for value in (self.operation_id, self.lease_id, self.owner_id, self.account_id)):
             raise ValueError('ROUTE_OPERATION_INVALID')
-        if self.route_mode not in ROUTE_MODES or int(self.lease_version) < 1:
+        if self.route_mode not in ROUTE_MODES or type(self.lease_version) is not int or self.lease_version < 1:
             raise ValueError('ROUTE_OPERATION_INVALID')
         if self.route_mode == 'direct_degraded' and not self.observed_exit:
             raise ValueError('SHARED_EXIT_UNKNOWN')
-        if self.expires_at <= 0:
+        if type(self.expires_at) not in (int, float) or not math.isfinite(self.expires_at) or self.expires_at <= 0:
+            raise ValueError('ROUTE_OPERATION_INVALID')
+        if (type(self.proxy_expires_at) not in (int,float) or not math.isfinite(self.proxy_expires_at) or self.proxy_expires_at < 0
+                or type(self.resource_revision) is not int or self.resource_revision < 0
+                or type(self.exit_generation) is not int or self.exit_generation < 0):
+            raise ValueError('ROUTE_OPERATION_INVALID')
+        if not isinstance(self.context_id,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}',self.context_id):
+            raise ValueError('ROUTE_OPERATION_INVALID')
+        if not isinstance(self.snapshot_digest,str) or not re.fullmatch(r'[0-9a-f]{64}',self.snapshot_digest):
             raise ValueError('ROUTE_OPERATION_INVALID')
 
     def to_dict(self):
@@ -110,6 +123,7 @@ class RouteOperationStore:
                 request_json TEXT NOT NULL, ack_json TEXT, expires_at REAL NOT NULL,
                 created_at REAL NOT NULL, updated_at REAL NOT NULL)''')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_route_operations_lease ON route_operations(lease_id, lease_version)')
+            conn.execute('CREATE TABLE IF NOT EXISTS route_lease_commands (operation_id TEXT PRIMARY KEY,request_json TEXT NOT NULL,response_json TEXT NOT NULL)')
 
     def _row(self, row):
         if not row: return None
@@ -120,13 +134,19 @@ class RouteOperationStore:
     def issue(self, operation: RouteOperation):
         import sqlite3
         now = time.time()
-        payload = json.dumps(operation.to_dict(), sort_keys=True)
+        payload = json.dumps(operation.to_dict(), sort_keys=True, allow_nan=False)
         with self._lock, sqlite3.connect(self.db_path) as conn:
+            conn.execute('BEGIN IMMEDIATE')
             row = conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation.operation_id,)).fetchone()
             if row:
                 existing = self._row(row)
                 if existing['request'] != operation.to_dict(): raise ValueError('ROUTE_OPERATION_CONFLICT')
                 return existing
+            if operation.expires_at <= now:
+                raise ValueError('ROUTE_LEASE_EXPIRED')
+            lease = conn.execute('SELECT owner_id,lease_version,state FROM route_operations WHERE lease_id=? ORDER BY lease_version DESC LIMIT 1', (operation.lease_id,)).fetchone()
+            if lease and (lease[0] != operation.owner_id or lease[1] >= operation.lease_version or lease[2] not in ('ended', 'expired')):
+                raise ValueError('ROUTE_LEASE_REJECTED')
             conn.execute('''INSERT INTO route_operations(operation_id,lease_id,lease_version,owner_id,account_id,state,request_json,expires_at,created_at,updated_at)
                 VALUES(?,?,?,?,?,?,?, ?,?,?)''', (operation.operation_id, operation.lease_id, operation.lease_version,
                 operation.owner_id, operation.account_id, 'issued', payload, operation.expires_at, now, now))
@@ -135,30 +155,81 @@ class RouteOperationStore:
     def ack(self, operation_id, *, owner_id, lease_version, snapshot_digest='', context_id=''):
         import sqlite3
         with self._lock, sqlite3.connect(self.db_path) as conn:
+            conn.execute('BEGIN IMMEDIATE')
             row = conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone()
             current = self._row(row)
             if current is None or current['owner_id'] != owner_id or current['lease_version'] != lease_version: raise ValueError('ROUTE_LEASE_REJECTED')
+            if type(lease_version) is not int or not snapshot_digest or not context_id:
+                raise ValueError('ROUTE_LEASE_REJECTED')
+            expected = current['request'].get('snapshot_digest', '')
+            if not expected or expected != snapshot_digest or current['request'].get('context_id') != context_id:
+                raise ValueError('ROUTE_SNAPSHOT_MISMATCH')
+            if current['expires_at'] <= time.time(): raise ValueError('ROUTE_LEASE_EXPIRED')
             if current['state'] == 'acked': return current
-            if current['state'] != 'issued' or current['expires_at'] <= time.time(): raise ValueError('ROUTE_LEASE_EXPIRED')
+            if current['state'] != 'issued': raise ValueError('ROUTE_LEASE_EXPIRED')
             expected = current['request'].get('snapshot_digest', '')
             if expected and snapshot_digest and expected != snapshot_digest: raise ValueError('ROUTE_SNAPSHOT_MISMATCH')
             ack = {'operation_id': operation_id, 'lease_id': current['lease_id'], 'lease_version': lease_version,
-                   'snapshot_digest': snapshot_digest, 'context_id': context_id}
+                   'snapshot_digest': snapshot_digest, 'context_id': context_id,
+                   'owner_id': owner_id, 'expires_at': current['expires_at'],
+                   'ttl': current['expires_at'] - time.time()}
             conn.execute('UPDATE route_operations SET state="acked",ack_json=?,updated_at=? WHERE operation_id=?', (json.dumps(ack, sort_keys=True), time.time(), operation_id))
             return self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
+
+    def ticket(self, operation_id, *, owner_id, snapshot_digest, context_id):
+        import sqlite3
+        with sqlite3.connect(self.db_path) as conn:
+            row = self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?',(operation_id,)).fetchone())
+        if (not row or row['owner_id'] != owner_id or row['state'] != 'acked' or row['expires_at'] <= time.time()
+                or row['request']['snapshot_digest'] != snapshot_digest or row['request']['context_id'] != context_id):
+            raise ValueError('ROUTE_LEASE_REJECTED')
+        return row['ack']
+
+    def renew(self, operation_id, *, route_operation_id, owner_id, lease_version):
+        """Idempotent bounded ticket renewal; frozen route identity never changes."""
+        import sqlite3
+        if type(lease_version) is not int or lease_version < 1:
+            raise ValueError('ROUTE_LEASE_REJECTED')
+        request = json.dumps(dict(route_operation_id=route_operation_id, owner_id=owner_id,
+            lease_version=lease_version), sort_keys=True)
+        with self._lock, sqlite3.connect(self.db_path) as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            prior = conn.execute('SELECT request_json,response_json FROM route_lease_commands WHERE operation_id=?', (operation_id,)).fetchone()
+            if prior:
+                if prior[0] != request:
+                    raise ValueError('ROUTE_OPERATION_CONFLICT')
+                return json.loads(prior[1])
+            raw = conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (route_operation_id,)).fetchone()
+            row = self._row(raw)
+            now = time.time()
+            if (not row or row['owner_id'] != owner_id or row['lease_version'] != lease_version
+                    or row['state'] != 'acked' or row['expires_at'] <= now):
+                raise ValueError('ROUTE_LEASE_REJECTED')
+            limit = min(raw[9] + 1200, row['request'].get('proxy_expires_at') or raw[9] + 1200)
+            expiry = min(now + 300, limit)
+            if expiry <= now or lease_version >= 5:
+                raise ValueError('ROUTE_LEASE_EXPIRED')
+            ack = dict(row['ack'], lease_version=lease_version+1, expires_at=expiry, ttl=expiry-now)
+            conn.execute('UPDATE route_operations SET lease_version=?,expires_at=?,ack_json=?,updated_at=? WHERE operation_id=?', (lease_version+1,expiry,json.dumps(ack),now,route_operation_id))
+            conn.execute('INSERT INTO route_lease_commands VALUES(?,?,?)',(operation_id,request,json.dumps(ack)))
+            return ack
 
     def transition(self, operation_id, *, state, owner_id, lease_version):
         if state not in OPERATION_STATES:
             raise ValueError('ROUTE_OPERATION_INVALID')
         import sqlite3
         with self._lock, sqlite3.connect(self.db_path) as conn:
+            conn.execute('BEGIN IMMEDIATE')
             row = self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
-            if row is None or row['owner_id'] != owner_id or row['lease_version'] != lease_version:
+            if type(lease_version) is not int or row is None or row['owner_id'] != owner_id or row['lease_version'] != lease_version:
                 raise ValueError('ROUTE_LEASE_REJECTED')
             if row['state'] == state:
                 return row
             if row['state'] in ('ended', 'expired', 'drain_timeout'):
-                return row
+                raise ValueError('ROUTE_TRANSITION_REJECTED')
+            allowed = {'issued': {'draining', 'expired'}, 'acked': {'draining', 'expired'}, 'draining': {'ended', 'drain_timeout'}}
+            if state not in allowed.get(row['state'], set()):
+                raise ValueError('ROUTE_TRANSITION_REJECTED')
             conn.execute('UPDATE route_operations SET state=?,updated_at=? WHERE operation_id=?', (state, time.time(), operation_id))
             return self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
 
@@ -166,12 +237,17 @@ class RouteOperationStore:
 def direct_degraded_allowed(*, transport_error, health_pool_exhausted, risk_signal=False,
                             observed_exit='', shared_exit_key='', old_context_drained=False):
     """Pure App gate: only transport failure and exhausted healthy pool may degrade."""
-    allowed_errors = {'PROXY_EXPIRED', 'PROXY_UNAVAILABLE', 'PROXY_AUTH_FAILED', 'PROXY_TRANSPORT_FAILED', 'PROXY_CONNECTION_REFUSED'}
+    if any(type(value) is not bool for value in (health_pool_exhausted, risk_signal, old_context_drained)):
+        return False
+    allowed_errors = {'PROXY_EXPIRED', 'PROXY_TRANSPORT_FAILED', 'PROXY_CONNECTION_REFUSED', 'PROXY_AUTH_FAILED'}
     if transport_error not in allowed_errors or not health_pool_exhausted or risk_signal:
         return False
-    if not observed_exit or not shared_exit_key or observed_exit != shared_exit_key or not old_context_drained:
+    if type(observed_exit) is not str or type(shared_exit_key) is not str or not old_context_drained:
         return False
-    return True
+    try:
+        return ipaddress.ip_address(observed_exit) == ipaddress.ip_address(shared_exit_key)
+    except ValueError:
+        return False
 
 
 RouteError = CollectionRouteError
@@ -195,7 +271,7 @@ def get_proxy_store(account_store=None):
 
 def _safe_error(exc):
     code = getattr(exc, 'code', str(exc))
-    if code in {'PROXY_EXPIRED', 'PROXY_NOT_FOUND', 'PROXY_BINDING_REQUIRED', 'PROXY_LOGIN_VALIDATION_REQUIRED'}:
+    if code in {'PROXY_NOT_FOUND', 'PROXY_BINDING_REQUIRED', 'PROXY_LOGIN_VALIDATION_REQUIRED'}:
         code = 'PROXY_UNAVAILABLE'
     return CollectionRouteError(code)
 
@@ -215,6 +291,22 @@ def resolve_account_route(account_id, *, account_store=None, expected_binding_re
         account is None or not account.get('proxy_required') and not account.get('proxy_id')
     ):
         return None
+    if getattr(settings, 'crawler_safety_enabled', False) and account and account.get('route_mode') == 'direct_degraded':
+        if not getattr(settings, 'crawler_direct_degrade_enabled', False):
+            raise CollectionRouteError('PROXY_UNAVAILABLE')
+        direct = accounts.get_direct_route(account_id, allow_stale_recovery=allow_probe)
+        if direct is None:
+            raise CollectionRouteError('PROXY_UNAVAILABLE')
+        contract = route_contract()
+        # Template becomes managed after App owns all account/admission locks.
+        from dataclasses import replace
+        baseline = contract.BoundRoute('dy', account_id, contract.derive_profile_key(account_id),
+            'service-direct', max(1, account.get('binding_revision', 1)), 1, 'direct.invalid', 1,
+            '', '', time.time() + 1200, direct['observed_exit_ip'], direct['observed_exit_at'],
+            str(settings.request_scheduler_db.resolve()), tuple(sorted(['dy', 'dy:account:' + account_id,
+                'dy:service_exit:' + direct['observed_exit_ip'], 'dy:exit:' + direct['observed_exit_ip']])),
+            route_mode='direct_degraded', exit_generation=direct['shared_exit_generation'])
+        return baseline
     store = get_proxy_store(account_store)
     try:
         resolved = store.resolve(account_id, expected_binding_revision=expected_binding_revision,
@@ -230,25 +322,27 @@ def resolve_account_route(account_id, *, account_store=None, expected_binding_re
         observed_ip = resource.get('observed_exit_ip') or resource.get('last_exit_ip')
         observed_at = resource.get('observed_exit_at') or resource.get('last_exit_observed_at')
         contract = route_contract()
-        return contract.validate_route_envelope(dict(schema_version=1, route_mode='proxy_required',
+        from dataclasses import replace
+        result = contract.validate_route_envelope(dict(schema_version=1, route_mode='proxy_required',
             platform=account['platform'], account_id=account_id, profile_key=contract.derive_profile_key(account_id),
             proxy_id=resource['id'], binding_revision=account['binding_revision'], config_revision=resource['config_revision'],
             endpoint=transport['endpoint'], credentials=transport['credentials'], expires_at=resource['expires_at'],
             observed_exit=None if observed_ip is None else dict(ip=observed_ip, observed_at=observed_at),
             scheduler=dict(db_path=str(settings.request_scheduler_db.resolve()),
                            scope_ids=list(contract.derive_scope_ids('dy', account_id, resource['id'], observed_ip)))), account_id=account_id)
+        return replace(result, exit_generation=resource.get('shared_exit_generation') or 0)
     except Exception as exc:
         raise _safe_error(exc) from None
 
 
 def acquire_route_execution(account_id, execution_id, owner_id, *, account_store=None,
-                            account_handle=None, snapshot=None, allow_probe=False):
+                            account_handle=None, snapshot=None, allow_probe=False, recovery_claim=None):
     from backend.task_admission.resources import ExecutionLeaseBundle
     snapshot = snapshot or resolve_account_route(account_id, account_store=account_store, allow_probe=allow_probe)
     store = get_proxy_store(account_store) if snapshot else None
-    resource = store.get_public(snapshot.proxy_id) if snapshot else None
+    resource = store.get_public(snapshot.proxy_id) if snapshot and snapshot.route_mode != 'direct_degraded' else None
     if snapshot:
-        authorize_route_owner(account_id, snapshot.proxy_id, owner_id, account_store=account_store)
+        authorize_route_owner(account_id, snapshot.proxy_id if snapshot.route_mode != 'direct_degraded' else None, owner_id, account_store=account_store)
     bundle = ExecutionLeaseBundle(execution_id, owner_id, account_id, snapshot)
     bundle.proxy_store = store
     if store is not None:
@@ -269,7 +363,91 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
     except Exception:
         bundle.close()
         raise
+    if snapshot is not None and getattr(settings, 'crawler_safety_enabled', False):
+        try:
+            from dataclasses import replace
+            contract = route_contract()
+            now = time.time()
+            expiry = min(snapshot.expires_at or now + 300, now + 300)
+            if snapshot.observed_exit_ip is None or (allow_probe and (snapshot.observed_exit_at is None or now-snapshot.observed_exit_at > settings.crawler_exit_observation_ttl)):
+                original_snapshot = snapshot
+                if snapshot.route_mode == 'direct_degraded':
+                    bundle.snapshot = replace(snapshot, route_mode='legacy_direct',
+                        scope_ids=contract.derive_scope_ids('dy', account_id, snapshot.proxy_id, snapshot.observed_exit_ip))
+                try:
+                    observed = _run_maintenance_probe(bundle)
+                finally:
+                    bundle.snapshot = original_snapshot
+                if original_snapshot.observed_exit_ip is not None and observed.ip != original_snapshot.observed_exit_ip:
+                    raise CollectionRouteError('PROXY_EXIT_CHANGED')
+                snapshot = replace(snapshot, observed_exit_ip=observed.ip, observed_exit_at=observed.observed_at,
+                    scope_ids=(tuple(sorted(['dy','dy:account:'+account_id,'dy:service_exit:'+observed.ip,'dy:exit:'+observed.ip])) if snapshot.route_mode=='direct_degraded' else contract.derive_scope_ids('dy', account_id, snapshot.proxy_id, observed.ip)))
+                bundle.snapshot = snapshot
+            observation = bundle.account_store.observe_shared_exit(snapshot.observed_exit_ip, observed_at=snapshot.observed_exit_at, service_exit=snapshot.route_mode == 'direct_degraded')
+            if not bundle.acquire_exit_capacity(snapshot.observed_exit_ip):
+                bundle.close()
+                raise CollectionRouteError('PROXY_BUSY')
+            mode = bundle.account_store.get(account_id).get('route_mode', 'proxy_required')
+            managed = replace(snapshot, route_mode=mode, operation_id=secrets.token_hex(16), lease_id=secrets.token_hex(16),
+                lease_version=1, owner_id=owner_id, context_id=secrets.token_hex(16),
+                exit_generation=observation['shared_exit_generation'],
+                safety_db_path=str(bundle.account_store.db_path.resolve()), recovery_claim=recovery_claim or '',
+                login_bootstrap=bool(allow_probe and not recovery_claim))
+            managed = replace(managed, snapshot_digest=contract.snapshot_digest(managed))
+            operation = RouteOperation(operation_id=managed.operation_id, lease_id=managed.lease_id,
+                lease_version=managed.lease_version, owner_id=owner_id, account_id=account_id,
+                profile_key=managed.profile_key, route_mode=managed.route_mode, proxy_id=managed.proxy_id,
+                resource_revision=managed.config_revision, observed_exit=managed.observed_exit_ip or '',
+                exit_generation=managed.exit_generation, expires_at=expiry, context_id=managed.context_id,
+                scope_ids=managed.scope_ids, snapshot_digest=managed.snapshot_digest, proxy_expires_at=managed.expires_at or now+1200)
+            bundle.route_operation_store = RouteOperationStore(str(settings.request_scheduler_db.resolve()))
+            try:
+                token = bundle.account_store.admit_route(account_id, managed.observed_exit_ip, managed.exit_generation, managed.operation_id, recovery_claim=recovery_claim, login_bootstrap=allow_probe and not recovery_claim)
+                bundle.add_closer(lambda: bundle.account_store.release_route_admission(token))
+                bundle.route_operation_store.issue(operation)
+                bundle.add_closer(lambda: end_route_operation(bundle))
+            except Exception:
+                bundle.close()
+                raise
+            bundle.snapshot = managed
+        except Exception:
+            bundle.close()
+            raise
     return bundle
+
+
+def parent_renew_ticket(bundle, prior):
+    snapshot = bundle.snapshot
+    store = bundle.route_operation_store
+    deadline = time.monotonic()+2
+    while True:
+        current = store.ticket(snapshot.operation_id,owner_id=bundle.owner_id,
+            snapshot_digest=snapshot.snapshot_digest,context_id=snapshot.context_id)
+        if current['lease_version'] > prior['lease_version']:
+            return current
+        pipe = getattr(bundle,'child_receipt_pipe',None)
+        child_live = pipe is not None and pipe.process is not None and pipe.process.poll() is None
+        if not child_live:
+            return store.renew(secrets.token_hex(16),route_operation_id=snapshot.operation_id,
+                owner_id=bundle.owner_id,lease_version=prior['lease_version'])
+        if time.monotonic() >= deadline:
+            raise CollectionRouteError('SUPPLEMENT_DEFERRED')
+        time.sleep(.02)
+
+
+def end_route_operation(bundle):
+    """End only after later-registered child/browser drain callbacks succeeded."""
+    store = getattr(bundle, 'route_operation_store', None)
+    if store is None:
+        return
+    snapshot = bundle.snapshot
+    import sqlite3
+    with sqlite3.connect(store.db_path) as conn:
+        row = store._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?',(snapshot.operation_id,)).fetchone())
+    if row['state'] == 'ended':
+        return
+    store.transition(snapshot.operation_id,state='draining',owner_id=snapshot.owner_id,lease_version=row['lease_version'])
+    store.transition(snapshot.operation_id,state='ended',owner_id=snapshot.owner_id,lease_version=row['lease_version'])
 
 
 class RouteConfigPipe:
@@ -345,7 +523,7 @@ class RouteConfigPipe:
 def load_child_route(account_id):
     required = os.environ.get("MEDIACRAWLER_PROXY_REQUIRED") == "true"
     if "MEDIACRAWLER_PROXY_CONFIG_FD" not in os.environ:
-        if required:
+        if required or os.environ.get('MEDIACRAWLER_MANAGED_ROUTE') == '1':
             raise CollectionRouteError("PROXY_CONFIG_INVALID")
         return None
     try:
@@ -403,12 +581,14 @@ def authorize_source_route(provenance, owner_id, execution_id, *, route_context=
     except Exception as exc:
         raise _safe_error(exc) from None
     account_id = value['source_account_id']
-    authorize_route_owner(account_id, value['proxy_id'], owner_id, account_store=account_store, auth_store=auth_store)
+    authorize_route_owner(account_id, value['proxy_id'] if value['route_mode'] != 'direct_degraded' else None, owner_id, account_store=account_store, auth_store=auth_store)
     snapshot = resolve_account_route(account_id, account_store=account_store,
         expected_binding_revision=value['binding_revision'], expected_config_revision=value['config_revision'])
     if (snapshot is None) != (value['route_mode'] == 'legacy_direct'):
         raise CollectionRouteError('PROXY_REVISION_MISMATCH')
-    if snapshot and (snapshot.proxy_id != value['proxy_id'] or snapshot.observed_exit_ip is not None and snapshot.observed_exit_ip != value['observed_exit_ip']):
+    if snapshot and 'exit_generation' in value and snapshot.exit_generation != value['exit_generation']:
+        raise CollectionRouteError('PROXY_REVISION_MISMATCH')
+    if snapshot and (snapshot.route_mode != value['route_mode'] and not (snapshot.route_mode == 'proxy_required' and value['route_mode'] == 'proxy_preferred') or snapshot.proxy_id != value['proxy_id'] or snapshot.observed_exit_ip is not None and snapshot.observed_exit_ip != value['observed_exit_ip']):
         raise CollectionRouteError('PROXY_EXIT_CHANGED')
     if route_context is not None and route_context.account_id == account_id:
         if any(getattr(route_context.snapshot, key, None) != getattr(snapshot, key, None) for key in ("account_id", "proxy_id", "binding_revision", "config_revision")):
@@ -459,7 +639,8 @@ def probe_env(bundle):
 def raise_route_log_error(log):
     for code in ('PROXY_BUSY', 'SUPPLEMENT_DEFERRED', 'PROXY_REVISION_MISMATCH',
                  'PROXY_EXIT_CHANGED', 'PROXY_UNAVAILABLE', 'PROXY_AUTH_FAILED',
-                 'PROXY_CONFIG_INVALID', 'PROBE_BUDGET_EXHAUSTED', 'SCHEDULER_POLICY_CONFLICT'):
+                 'PROXY_CONFIG_INVALID', 'PROBE_BUDGET_EXHAUSTED', 'SCHEDULER_POLICY_CONFLICT',
+                 'PROXY_EXPIRED', 'PROXY_CONNECTION_REFUSED', 'PROXY_TRANSPORT_FAILED'):
         if code in log:
             raise CollectionRouteError(code)
 
@@ -516,7 +697,11 @@ class _AssetBrowserSession:
             ttl=getattr(settings, 'crawler_proxy_probe_ttl', 300),
             max_calls=getattr(settings, 'crawler_proxy_probe_budget', 96),
             trial_id=getattr(settings, 'crawler_proxy_trial_id', ''), reuse_existing_policy=True,
-            account_policy=parent_account_policy(self.bundle))
+            account_policy=parent_account_policy(self.bundle),
+            ack=self.bundle.route_operation_store.ticket(self.bundle.snapshot.operation_id, owner_id=self.bundle.owner_id,
+                snapshot_digest=self.bundle.snapshot.snapshot_digest,
+                context_id=self.bundle.snapshot.context_id) if self.bundle.snapshot.managed else None,
+            lease_renewer=(lambda prior: parent_renew_ticket(self.bundle,prior)) if self.bundle.snapshot.managed else None)
         try:
             self.context, _ = await load_account_browser().launch_account_context(
                 self.bundle.account_id, settings.crawler_browser_profile_root, headless=True,
@@ -575,7 +760,7 @@ def _asset_helper(bundle, *, lazy=False):
 def asset_request_slot(bundle, timeout=60):
     """Reauthorize every hop; proxy route must have real paired browser receipt."""
     snapshot = bundle.snapshot
-    authorize_route_owner(bundle.account_id, snapshot.proxy_id if snapshot else None, bundle.owner_id, account_store=getattr(bundle, "account_store", None))
+    authorize_route_owner(bundle.account_id, snapshot.proxy_id if snapshot and snapshot.route_mode != 'direct_degraded' else None, bundle.owner_id, account_store=getattr(bundle, "account_store", None))
     fresh = resolve_account_route(bundle.account_id, account_store=getattr(bundle, "account_store", None),
         expected_binding_revision=snapshot.binding_revision if snapshot else None,
         expected_config_revision=snapshot.config_revision if snapshot else None)
@@ -613,24 +798,31 @@ class RouteReceiptPipe:
     def __init__(self, bundle):
         self.bundle = bundle
         self.read_fd, self.write_fd = os.pipe()
+        self.ack_read_fd, self.ack_write_fd = os.pipe()
         self.thread = None
         self.process = None
         self.stopped = threading.Event()
 
     @property
     def pass_fds(self):
-        return (self.write_fd,)
+        return (self.write_fd, self.ack_read_fd)
 
     @property
     def env(self):
-        return {'MEDIACRAWLER_PROXY_RECEIPT_FD': str(self.write_fd)}
+        return {'MEDIACRAWLER_PROXY_RECEIPT_FD': str(self.write_fd),
+                'MEDIACRAWLER_ROUTE_ACK_FD': str(self.ack_read_fd),
+                'MEDIACRAWLER_MANAGED_ROUTE': '1' if self.bundle.snapshot.managed else '0'}
 
     def start(self, process):
         import json
         self.process = process
         os.close(self.write_fd)
         self.write_fd = None
+        os.close(self.ack_read_fd)
+        self.ack_read_fd = None
         self.bundle.child_receipt_pipe = self
+        if self.bundle.snapshot.managed and callable(getattr(self.bundle, 'add_closer', None)):
+            self.bundle.add_closer(self.drain)
         def read():
             buffer = bytearray()
             poll = selectors.DefaultSelector()
@@ -660,8 +852,37 @@ class RouteReceiptPipe:
                                 result[key] = entry
                             return result
                         value = json.loads(line, object_pairs_hook=unique)
-                        fields = {'schema_version', 'type', 'platform', 'account_id', 'proxy_id', 'binding_revision', 'config_revision', 'context_id', 'ip', 'observed_at'}
                         snapshot = self.bundle.snapshot
+                        if isinstance(value, dict) and value.get('type') == 'account_risk':
+                            fields = {'type','operation_id','owner_id','lease_version','snapshot_digest','context_id','reason'}
+                            if (set(value) != fields or value['reason'] != 'ACCOUNT_CHALLENGE'
+                                    or not snapshot.managed or any(value[key] != getattr(snapshot,key) for key in fields - {'type','reason'})):
+                                return
+                            if not getattr(self.bundle, 'account_risk_recorded', False):
+                                from .account_rotation import AccountRotationManager
+                                AccountRotationManager(self.bundle.account_store).cool_down_after_risk(snapshot.account_id)
+                                self.bundle.account_risk_recorded = True
+                            continue
+                        if isinstance(value, dict) and value.get('type') == 'route_renew':
+                            if set(value) != {'type','operation_id','route_operation_id','owner_id','lease_version'} or value['route_operation_id'] != snapshot.operation_id:
+                                return
+                            ack = self.bundle.route_operation_store.renew(value['operation_id'], route_operation_id=value['route_operation_id'], owner_id=value['owner_id'], lease_version=value['lease_version'])
+                            os.write(self.ack_write_fd, (json.dumps(ack, allow_nan=False) + '\n').encode())
+                            continue
+                        if isinstance(value, dict) and value.get('type') == 'route_ack':
+                            expected = {'type', 'operation_id', 'owner_id', 'lease_version', 'snapshot_digest', 'context_id'}
+                            if set(value) != expected or not snapshot.managed:
+                                return
+                            result = self.bundle.route_operation_store.ack(value['operation_id'],
+                                owner_id=value['owner_id'], lease_version=value['lease_version'],
+                                snapshot_digest=value['snapshot_digest'], context_id=value['context_id'])
+                            os.write(self.ack_write_fd, (json.dumps(result['ack'], allow_nan=False) + '\n').encode())
+                            continue
+                        fields = {'schema_version', 'type', 'platform', 'account_id', 'proxy_id', 'binding_revision', 'config_revision', 'context_id', 'ip', 'observed_at'}
+                        if snapshot.managed:
+                            fields |= {'operation_id', 'lease_id', 'lease_version', 'owner_id', 'snapshot_digest', 'exit_generation'}
+                            if any(value.get(key) != getattr(snapshot, key) for key in ('operation_id', 'lease_id', 'lease_version', 'owner_id', 'snapshot_digest', 'exit_generation')):
+                                return
                         if not isinstance(value, dict) or set(value) != fields:
                             return
                         if type(value['schema_version']) is not int or value['schema_version'] != 1:
@@ -682,14 +903,16 @@ class RouteReceiptPipe:
                                 if previous is None or previous.context_id == value['context_id']:
                                     self.bundle.child_receipt = None
                             continue
-                        receipt = route_contract().ProbeReceipt(snapshot.proxy_id, snapshot.config_revision, value['context_id'], value['ip'], value['observed_at'])
+                        receipt = route_contract().ProbeReceipt(snapshot.proxy_id, snapshot.config_revision, value['context_id'], value['ip'], value['observed_at'], snapshot.exit_generation)
                         route_contract().require_probe_receipt(snapshot, receipt, value['context_id'])
                         with self.bundle._lock:
                             if process.poll() is not None:
                                 return
                             self.bundle.child_receipt = receipt
                         store = getattr(self.bundle, "proxy_store", None)
-                        if store is not None:
+                        if snapshot.route_mode == 'direct_degraded':
+                            self.bundle.account_store.observe_shared_exit(receipt.ip, observed_at=receipt.observed_at, service_exit=True)
+                        elif store is not None:
                             store.observe_exit(snapshot.proxy_id, receipt.ip, observed_at=receipt.observed_at)
             except Exception:
                 # Invalid input or persistence failure invalidates the receipt;
@@ -701,6 +924,24 @@ class RouteReceiptPipe:
                     self.bundle.child_receipt = None
         self.thread = threading.Thread(target=read, daemon=True)
         self.thread.start()
+
+    def drain(self):
+        snapshot = self.bundle.snapshot
+        store = getattr(self.bundle, 'route_operation_store', None)
+        version = snapshot.lease_version
+        if store:
+            import sqlite3
+            with sqlite3.connect(store.db_path) as conn:
+                row = store._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?',(snapshot.operation_id,)).fetchone())
+            if row['state'] == 'ended':
+                return
+            version = row['lease_version']
+            store.transition(snapshot.operation_id, state='draining', owner_id=snapshot.owner_id, lease_version=version)
+        if self.process is not None:
+            _stop_probe_process_group(self.process)
+        self.close()
+        if store:
+            store.transition(snapshot.operation_id, state='ended', owner_id=snapshot.owner_id, lease_version=version)
 
     def receipt(self):
         with self.bundle._lock:
@@ -718,7 +959,7 @@ class RouteReceiptPipe:
         self.stopped.set()
         if self.thread:
             self.thread.join(timeout=1)
-        for name in ('read_fd', 'write_fd'):
+        for name in ('read_fd', 'write_fd', 'ack_read_fd', 'ack_write_fd'):
             fd = getattr(self, name)
             if fd is not None:
                 try:
@@ -743,7 +984,11 @@ class _BorrowedChildSession(_AssetBrowserSession):
             ttl=getattr(settings, 'crawler_proxy_probe_ttl', 300),
             max_calls=getattr(settings, 'crawler_proxy_probe_budget', 96),
             trial_id=getattr(settings, 'crawler_proxy_trial_id', ''), reuse_existing_policy=True,
-            account_policy=parent_account_policy(self.bundle))
+            account_policy=parent_account_policy(self.bundle),
+            ack=self.bundle.route_operation_store.ticket(self.bundle.snapshot.operation_id, owner_id=self.bundle.owner_id,
+                snapshot_digest=self.bundle.snapshot.snapshot_digest,
+                context_id=self.bundle.snapshot.context_id) if self.bundle.snapshot.managed else None,
+            lease_renewer=(lambda prior: parent_renew_ticket(self.bundle,prior)) if self.bundle.snapshot.managed else None)
         from tools.trial_limits import from_env
         self.session.trial_limits = from_env(self.bundle.snapshot.scheduler_db_path, env={
             **os.environ, 'MEDIACRAWLER_PROXY_TRIAL_ID': getattr(settings, 'crawler_proxy_trial_id', '')})
@@ -906,7 +1151,7 @@ def probe_account_route(account_id, owner_id, *, expected_binding_revision=None,
         bundle.close()
 
 
-def _run_maintenance_probe(bundle, *, timeout=45):
+def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_identity=''):
     """Bounded subprocess protocol; dependency imports stay in crawler Python."""
     import json
     import signal
@@ -915,25 +1160,33 @@ def _run_maintenance_probe(bundle, *, timeout=45):
     from .crawler_browser import account_browser_env, scheduler_env
     snapshot = bundle.snapshot
     pipe = RouteConfigPipe(snapshot)
+    receipt_pipe = RouteReceiptPipe(bundle) if snapshot.managed else None
     process = None
     poll = selectors.DefaultSelector()
     try:
         env = os.environ.copy()
-        for name in ('MEDIACRAWLER_PROXY_CONFIG_FD', 'MEDIACRAWLER_PROXY_RECEIPT_FD',
+        for name in ('MEDIACRAWLER_PROXY_CONFIG_FD', 'MEDIACRAWLER_PROXY_RECEIPT_FD', 'MEDIACRAWLER_ROUTE_ACK_FD', 'MEDIACRAWLER_MANAGED_ROUTE',
                      'MEDIACRAWLER_PROXY_REQUIRED', 'MEDIACRAWLER_PROXY_PROBE_BUDGET_ID'):
             env.pop(name, None)
         env.update(account_browser_env(bundle.account_id))
         env.update(scheduler_env())
         env.update(probe_env(bundle))
         env.update(pipe.env)
+        if receipt_pipe:
+            env.update(receipt_pipe.env)
         env['MEDIACRAWLER_DIR'] = str(settings.media_crawler_dir.resolve())
         env['PYTHONUNBUFFERED'] = '1'
         helper = Path(__file__).resolve().parents[2] / 'scripts' / 'crawler_proxy_probe.py'
-        process = subprocess.Popen([str(settings.crawler_login_python), str(helper),
-            '--account-id', bundle.account_id], cwd=settings.media_crawler_dir,
-            env=env, pass_fds=(*bundle.pass_fds, *pipe.pass_fds), stdout=subprocess.PIPE,
+        env['PYTHONPATH'] = str(settings.root_dir) + os.pathsep + env.get('PYTHONPATH', '')
+        command = [str(settings.crawler_login_python), str(helper), '--account-id', bundle.account_id]
+        if check_login:
+            command += ['--check-login', '--expected-identity', expected_identity]
+        process = subprocess.Popen(command, cwd=settings.media_crawler_dir,
+            env=env, pass_fds=(*bundle.pass_fds, *pipe.pass_fds, *(receipt_pipe.pass_fds if receipt_pipe else ())), stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, start_new_session=True)
         pipe.start(process)
+        if receipt_pipe:
+            receipt_pipe.start(process)
         poll.register(process.stdout, selectors.EVENT_READ)
         deadline = time.monotonic() + timeout
         data = bytearray()
@@ -964,6 +1217,8 @@ def _run_maintenance_probe(bundle, *, timeout=45):
                     raise CollectionRouteError('PROXY_CONFIG_INVALID')
                 result = json.loads(line[len('PROXY_PROBE_RESULT '):])
         fields = {'schema_version','account_id','proxy_id','binding_revision','config_revision','context_id','ip','observed_at'}
+        if check_login:
+            fields.add('login_result')
         if process.returncode != 0 or not isinstance(result, dict) or set(result) != fields:
             raise CollectionRouteError('PROXY_UNAVAILABLE')
         import re
@@ -974,12 +1229,16 @@ def _run_maintenance_probe(bundle, *, timeout=45):
             or any(result[key] != getattr(snapshot,key) for key in ('account_id','proxy_id','binding_revision','config_revision'))):
             raise CollectionRouteError('PROXY_CONFIG_INVALID')
         receipt = route_contract().ProbeReceipt(snapshot.proxy_id,snapshot.config_revision,
-            result['context_id'],result['ip'],result['observed_at'])
+            result['context_id'],result['ip'],result['observed_at'],snapshot.exit_generation)
         # Maintenance observes a changed exit; it must not authorize business
         # against the old baseline. Validate identity, expiry and receipt freshness.
         from dataclasses import replace
         diagnostic_snapshot = replace(snapshot, observed_exit_ip=None, observed_exit_at=None)
         route_contract().require_probe_receipt(diagnostic_snapshot,receipt,result['context_id'])
+        if check_login:
+            if result['login_result'] not in {'success', 'challenge', 'uncertain'}:
+                raise CollectionRouteError('PROXY_CONFIG_INVALID')
+            return result['login_result']
         return receipt
     except CollectionRouteError:
         raise
@@ -996,6 +1255,8 @@ def _run_maintenance_probe(bundle, *, timeout=45):
             if process is not None and process.stdout is not None:
                 process.stdout.close()
             pipe.close()
+            if receipt_pipe:
+                receipt_pipe.close()
 
 
 def _stop_probe_process_group(process):
@@ -1055,7 +1316,7 @@ def download_asset_hop(bundle, url, headers, timeout, verify, on_chunk, *, media
     snapshot = bundle.snapshot
     if snapshot is None:
         raise CollectionRouteError('PROXY_CONFIG_INVALID')
-    authorize_route_owner(bundle.account_id, snapshot.proxy_id, bundle.owner_id,
+    authorize_route_owner(bundle.account_id, snapshot.proxy_id if snapshot.route_mode != 'direct_degraded' else None, bundle.owner_id,
                           account_store=getattr(bundle, 'account_store', None))
     current = resolve_account_route(bundle.account_id, account_store=getattr(bundle, 'account_store', None),
         expected_binding_revision=snapshot.binding_revision, expected_config_revision=snapshot.config_revision)
@@ -1119,7 +1380,7 @@ def stop_source_route(provenance, code, *, route_context=None):
     except Exception as exc:
         raise _safe_error(exc) from None
     error = CollectionRouteError(code)
-    if source['route_mode'] != 'proxy_required' or error.code in {'PROXY_BUSY', 'SUPPLEMENT_DEFERRED'}:
+    if source['route_mode'] not in {'proxy_required','proxy_preferred','direct_degraded'} or error.code in {'PROXY_BUSY', 'SUPPLEMENT_DEFERRED'}:
         return False
     if route_context is None:
         return False
@@ -1180,6 +1441,11 @@ def consume_route_event(line, bundle):
         store = bundle.proxy_store
         if event['code'] == 'ROUTE_OBSERVED':
             ip = route_contract().canonical_exit_ip(event['observed_exit_ip'])
+            if snapshot.route_mode == 'direct_degraded':
+                if ip != snapshot.observed_exit_ip:
+                    raise CollectionRouteError('PROXY_EXIT_CHANGED')
+                bundle.account_store.observe_shared_exit(ip, observed_at=at, service_exit=True)
+                return True
             current = store.get_public(snapshot.proxy_id)
             if current['config_revision'] != snapshot.config_revision:
                 raise CollectionRouteError('PROXY_REVISION_MISMATCH')
@@ -1190,9 +1456,149 @@ def consume_route_event(line, bundle):
         if error.code != event['code'] or event['observed_exit_ip'] is not None:
             raise CollectionRouteError('PROXY_CONFIG_INVALID')
         publish_route_stop(snapshot.proxy_id,snapshot.config_revision,error.code)
+        if snapshot.route_mode == 'direct_degraded':
+            raise error
         store.set_health(snapshot.proxy_id,status='exit_changed' if error.code=='PROXY_EXIT_CHANGED' else 'unavailable',stop_reason=error.code)
         raise error
     except CollectionRouteError:
         raise
     except Exception as exc:
         raise _safe_error(exc) from None
+
+
+def check_recovery_route(account_id, claim, *, account_store=None, owner_id='local-user'):
+    """One claimed read-only login observation on the existing account Profile."""
+    from .crawler_account_store import crawler_account_store
+    accounts = account_store or crawler_account_store
+    account = accounts.get(account_id)
+    if not account or not account.get('platform_account_id'):
+        return None
+    bundle = acquire_route_execution(account_id, 'recovery-' + secrets.token_hex(16),
+        owner_id, account_store=accounts,
+        allow_probe=True, recovery_claim=claim)
+    try:
+        outcome = _run_maintenance_probe(bundle, check_login=True, expected_identity=account['platform_account_id'])
+        return True if outcome == 'success' else False if outcome == 'challenge' else None
+    finally:
+        bundle.close()
+
+
+
+def probe_direct_route(account_id, *, account_store=None, owner_id='local-user'):
+    """Echo-only direct observation under the original Profile/account lease."""
+    from .crawler_account_store import crawler_account_store
+    from backend.task_admission.resources import ExecutionLeaseBundle
+    accounts = account_store or crawler_account_store
+    authorize_route_owner(account_id, None, owner_id, account_store=accounts)
+    contract = route_contract()
+    snapshot = contract.BoundRoute('dy', account_id, contract.derive_profile_key(account_id),
+        'service-direct', 1, 1, 'direct.invalid', 1, '', '', time.time()+300, None, None,
+        str(settings.request_scheduler_db.resolve()), contract.derive_scope_ids('dy', account_id, 'service-direct'),
+        route_mode='legacy_direct')
+    bundle = ExecutionLeaseBundle('direct-probe-' + secrets.token_hex(16), owner_id, account_id, snapshot)
+    bundle.account_store = accounts
+    bundle.proxy_store = None
+    if not bundle.acquire():
+        raise CollectionRouteError('PROXY_BUSY')
+    try:
+        receipt = _run_maintenance_probe(bundle)
+        return accounts.observe_shared_exit(receipt.ip, observed_at=receipt.observed_at, service_exit=True)
+    finally:
+        bundle.close()
+
+def prepare_direct_degraded(account_id, transport_error, health_pool_exhausted, *, account_store=None,
+                            old_context_drained=False, owner_id='local-user'):
+    """Explicit new route after drained transport incident; never alter a required account."""
+    from .crawler_account_store import crawler_account_store
+    accounts = account_store or crawler_account_store
+    account = accounts.get(account_id)
+    if (not settings.crawler_safety_enabled or not settings.crawler_direct_degrade_enabled or not account
+            or account.get('proxy_required') or account.get('route_mode') != 'proxy_preferred'):
+        return False
+    if (type(health_pool_exhausted) is not bool or type(old_context_drained) is not bool
+            or not health_pool_exhausted or not old_context_drained
+            or transport_error not in {'PROXY_EXPIRED', 'PROXY_CONNECTION_REFUSED', 'PROXY_TRANSPORT_FAILED', 'PROXY_AUTH_FAILED'}
+            or account.get('pause_reason')):
+        return False
+    direct = accounts.get_direct_route(account_id)
+    if direct is None:
+        direct = probe_direct_route(account_id, account_store=accounts, owner_id=owner_id)
+    if not direct or not direct_degraded_allowed(transport_error=transport_error,
+            health_pool_exhausted=health_pool_exhausted, risk_signal=bool(account.get('pause_reason')),
+            observed_exit=direct['observed_exit_ip'], shared_exit_key=direct['shared_exit_key'],
+            old_context_drained=old_context_drained):
+        return False
+    # Existing account lease + original persistent browser adapter lock enforce drain.
+    with accounts._connect() as conn:
+        if conn.execute("SELECT 1 FROM crawler_route_admissions WHERE account_id=? AND state='active'", (account_id,)).fetchone():
+            return False
+    accounts.set_route_state(account_id, state='active', route_mode='direct_degraded',
+        shared_exit_key=direct['shared_exit_key'], generation=direct['shared_exit_generation'])
+    bundle = None
+    try:
+        bundle = acquire_route_execution(account_id, 'direct-check-' + secrets.token_hex(16), owner_id,
+            account_store=accounts, allow_probe=True)
+        outcome = _run_maintenance_probe(bundle, check_login=True, expected_identity=account.get('platform_account_id') or '')
+        if outcome != 'success':
+            accounts.set_route_state(account_id, state='manual_required', route_mode='direct_degraded', pause_reason='LOGIN_REVALIDATION_REQUIRED')
+            return False
+        accounts.mark_direct_validated(account_id, bundle.snapshot.exit_generation)
+        return True
+    except Exception:
+        accounts.set_route_state(account_id, state='manual_required', route_mode='direct_degraded', pause_reason='LOGIN_REVALIDATION_REQUIRED')
+        return False
+    finally:
+        if bundle is not None:
+            bundle.close()
+
+
+def refresh_existing_route(account_id, *, account_store=None, owner_id='local-user'):
+    """Refresh a stale known route by echo only; TTL never triggers fallback."""
+    from .crawler_account_store import crawler_account_store
+    from backend.task_admission.resources import ExecutionLeaseBundle
+    from dataclasses import replace
+    accounts=account_store or crawler_account_store
+    account=accounts.get(account_id)
+    if not account or account['status']!='active' or account.get('route_state')!='active' or account.get('pause_reason'):
+        return False
+    if account.get('route_mode')=='direct_degraded':
+        with accounts._connect() as db:
+            row=db.execute('SELECT * FROM crawler_shared_exits WHERE exit_key=?',(account.get('shared_exit_key'),)).fetchone()
+        if (not row or row['pause_reason'] or row['generation']!=account.get('shared_exit_generation')
+                or account.get('validated_direct_generation')!=row['generation']):
+            return False
+        contract=route_contract()
+        snapshot=contract.BoundRoute('dy',account_id,contract.derive_profile_key(account_id),'service-direct',
+            max(1,account['binding_revision']),1,'direct.invalid',1,'','',time.time()+1200,row['exit_key'],row['observed_at'],
+            str(settings.request_scheduler_db.resolve()),contract.derive_scope_ids('dy',account_id,'service-direct',row['exit_key']),route_mode='legacy_direct')
+        store=None
+    else:
+        store=get_proxy_store(accounts)
+        resolved=store.resolve(account_id,allow_probe=True)
+        resource=resolved['resource']
+        if (not resource or resource['status']!='active' or resource['stop_reason']
+                or resource['expires_at'] is None or resource['expires_at']<=time.time()
+                or account['validated_proxy_binding_revision']!=account['binding_revision']
+                or account['validated_proxy_config_revision']!=resource['config_revision']):
+            return False
+        snapshot=resolve_account_route(account_id,account_store=accounts,allow_probe=True)
+    authorize_route_owner(account_id,None if store is None else snapshot.proxy_id,owner_id,account_store=accounts)
+    with accounts._connect() as db:
+        if db.execute("SELECT 1 FROM crawler_route_admissions WHERE account_id=? AND state='active'",(account_id,)).fetchone():
+            return False
+    bundle=ExecutionLeaseBundle('refresh-'+secrets.token_hex(16),owner_id,account_id,snapshot)
+    bundle.account_store=accounts;bundle.proxy_store=store
+    if not bundle.acquire(max_active_accounts=1):
+        return False
+    try:
+        receipt=_run_maintenance_probe(bundle)
+        if snapshot.observed_exit_ip is not None and receipt.ip!=snapshot.observed_exit_ip:
+            if store is not None:store.set_health(snapshot.proxy_id,status='exit_changed',stop_reason='PROXY_EXIT_CHANGED')
+            raise CollectionRouteError('PROXY_EXIT_CHANGED')
+        if store is not None:
+            store.observe_exit(snapshot.proxy_id,receipt.ip,observed_at=receipt.observed_at)
+        else:
+            accounts.observe_shared_exit(receipt.ip,observed_at=receipt.observed_at,service_exit=True)
+        return True
+    finally:
+        bundle.close()

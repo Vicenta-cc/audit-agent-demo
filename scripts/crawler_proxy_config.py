@@ -56,6 +56,27 @@ def apply_config(store, config, *, credentials=None):
         return store.update(config['proxy_id'], expected_revision=config['expected_revision'], **updates)
     if credentials is not None:
         raise ValueError('PROXY_CONFIG_INVALID')
+    if operation == 'safety-policy':
+        if (set(config) != {'operation', 'account_id', 'expected_binding_revision', 'route_mode'}
+                or config['route_mode'] not in {'proxy_required', 'proxy_preferred'}):
+            raise ValueError('PROXY_CONFIG_INVALID')
+        from backend.task_admission.resources import account_lease
+        with account_lease('dy', config['account_id']) as acquired:
+            if not acquired:
+                raise ValueError('PROXY_BUSY')
+            with store.accounts._connect() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                account = store.accounts.get(config['account_id'], connection=conn)
+                if not account or account['platform'] != 'dy':
+                    raise ValueError('PROXY_NOT_FOUND')
+                if account['binding_revision'] != config['expected_binding_revision']:
+                    raise ValueError('PROXY_REVISION_MISMATCH')
+                if conn.execute("SELECT 1 FROM crawler_route_admissions WHERE account_id=? AND state='active'", (account['id'],)).fetchone():
+                    raise ValueError('PROXY_BUSY')
+                conn.execute('UPDATE crawler_accounts SET route_mode=?,proxy_required=? WHERE id=?',
+                    (config['route_mode'], int(config['route_mode']=='proxy_required'), account['id']))
+                conn.execute("INSERT INTO crawler_route_events(account_id,event_type,reason,created_at) VALUES(?,'policy_updated','OPERATOR_POLICY',?)", (account['id'], __import__('time').time()))
+            return {'account_id':account['id'], 'proxy_id':account['proxy_id'], 'binding_revision':account['binding_revision']}
     if operation == 'bind' and set(config) == {'operation', 'account_id', 'proxy_id', 'expected_binding_revision'}:
         item = store.bind(config['account_id'], config['proxy_id'], expected_binding_revision=config['expected_binding_revision'])
         return {'account_id': item['id'], 'proxy_id': item['proxy_id'], 'binding_revision': item['binding_revision']}

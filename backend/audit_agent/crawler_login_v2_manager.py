@@ -484,11 +484,15 @@ class CrawlerLoginV2Manager:
             }
             diagnostic = tempfile.TemporaryFile(mode="w+b")
             env = os.environ.copy()
-            for name in ("MEDIACRAWLER_PROXY_CONFIG_FD", "MEDIACRAWLER_PROXY_RECEIPT_FD", "MEDIACRAWLER_PROXY_REQUIRED", "MEDIACRAWLER_PROXY_PROBE_BUDGET_ID"):
+            for name in ("MEDIACRAWLER_PROXY_CONFIG_FD", "MEDIACRAWLER_PROXY_RECEIPT_FD", "MEDIACRAWLER_ROUTE_ACK_FD", "MEDIACRAWLER_MANAGED_ROUTE", "MEDIACRAWLER_PROXY_REQUIRED", "MEDIACRAWLER_PROXY_PROBE_BUDGET_ID"):
                 env.pop(name, None)
             env.update(account_browser_env(account["id"]))
             env.update(scheduler_env())
             env.update(s.route_pipe.env)
+            from .crawler_route import RouteReceiptPipe
+            s.route_receipt_pipe = RouteReceiptPipe(s.route_bundle) if s.route_bundle and s.route_bundle.snapshot else None
+            if s.route_receipt_pipe:
+                env.update(s.route_receipt_pipe.env)
             from .crawler_route import probe_env
             env.update(probe_env(route_bundle))
             env.update(
@@ -539,11 +543,13 @@ class CrawlerLoginV2Manager:
                     stderr=diagnostic,
                     cwd=str(settings.root_dir),
                     env=env,
-                    pass_fds=tuple(set((*tuple(h.fileno() for h in handles), child.fileno(), *route_bundle.pass_fds, *s.route_pipe.pass_fds))),
+                    pass_fds=tuple(set((*tuple(h.fileno() for h in handles), child.fileno(), *route_bundle.pass_fds, *s.route_pipe.pass_fds, *(s.route_receipt_pipe.pass_fds if s.route_receipt_pipe else ())))),
                     start_new_session=True,
                     bufsize=0,
                 )
                 s.route_pipe.start(s.process)
+                if s.route_receipt_pipe:
+                    s.route_receipt_pipe.start(s.process)
                 s.diagnostic = diagnostic
                 self.sessions[s.id] = s
                 self.operations.mark_stage(op["id"], "checking")

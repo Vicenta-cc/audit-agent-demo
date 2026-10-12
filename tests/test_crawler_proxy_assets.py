@@ -90,6 +90,7 @@ def _real_transport_helper(monkeypatch, tmp_path, bundle, fixture):
     snapshot = bundle.snapshot
     snapshot.account_id = "source"
     snapshot.proxy_id = "proxy1"
+    snapshot.route_mode = "proxy_required"
     snapshot.binding_revision = snapshot.config_revision = 1
     snapshot.httpx_proxy = lambda: fixture.authenticated_url
     snapshot.scheduler_db_path = getattr(snapshot, "scheduler_db_path", str(tmp_path/"scheduler.sqlite"))
