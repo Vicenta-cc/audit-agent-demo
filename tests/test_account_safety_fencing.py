@@ -43,6 +43,7 @@ def recovery_worker(path, account_id, barrier, queue):
 @pytest.fixture
 def safety(tmp_path,monkeypatch):
     monkeypatch.setattr(settings,'crawler_safety_enabled',True)
+    monkeypatch.setattr(settings,'crawler_direct_degrade_enabled',True)
     store=CrawlerAccountStore(tmp_path/'safety.sqlite3')
     a,b=account(store,'a'),account(store,'b')
     store.observe_shared_exit('203.0.113.10',service_exit=True)
@@ -296,3 +297,192 @@ def test_proxy_event_fixed_enum_rejects_arbitrary_machine_shaped_secrets(tmp_pat
     with pytest.raises(ValueError,match='EVENT'):
         proxies.set_health(resource['id'],status='unavailable',stop_reason='SECRET_TOKEN_ABC')
     assert b'SECRET_TOKEN_ABC' not in accounts.db_path.read_bytes()
+
+
+def test_early_child_verification_receipt_does_not_duplicate_incident(safety,monkeypatch):
+    from backend.audit_agent import pipeline as pipeline_module
+    from backend.audit_agent.crawler_adapter import CrawlerVerificationError
+    store,a,_=safety
+    manager=AccountRotationManager(store)
+    manager.cool_down_after_risk(a['id'])
+    before=store.get(a['id'])
+    error=CrawlerVerificationError('fixture verification')
+    error.account_risk_recorded=True
+    monkeypatch.setattr(pipeline_module,'crawler_account_store',store)
+    monkeypatch.setattr(pipeline_module.job_store,'log',lambda *args,**kwargs:None)
+    pipeline=pipeline_module.AuditPipeline.__new__(pipeline_module.AuditPipeline)
+    pipeline.job_id='fixture'
+    pipeline._retire_rotation_account(a,error)
+    after=store.get(a['id'])
+    assert after['risk_count']==before['risk_count']==1
+    assert after['recovery_incident']==before['recovery_incident']
+
+
+def test_expired_direct_recovery_metadata_is_probe_only_never_admission(safety):
+    store,a,_=safety
+    expired_incident(store,a)
+    claim=store.claim_recovery(a['id'])
+    with store._connect() as db:
+        db.execute('UPDATE crawler_shared_exits SET observed_at=?',(time.time()-settings.crawler_exit_observation_ttl-1,))
+    assert store.get_direct_route(a['id']) is None
+    assert store.get_direct_route(a['id'],allow_stale_recovery=True)['shared_exit_key']=='203.0.113.10'
+    with pytest.raises(ValueError):
+        store.admit_route(a['id'],'203.0.113.10',1,'stale-recovery',recovery_claim=claim)
+    store.observe_shared_exit('203.0.113.10',service_exit=True)
+    assert store.admit_route(a['id'],'203.0.113.10',1,'fresh-recovery',recovery_claim=claim)
+
+
+def test_admission_rechecks_auth_and_cooldown_after_candidate_read(safety):
+    from datetime import datetime,timedelta
+    store,a,_=safety
+    assert a['id'] in {value['id'] for value in store.available_accounts('dy')}
+    store.mark_cooldown(a['id'],'empty_search',(datetime.now()+timedelta(minutes=1)).isoformat(),failure_kind='empty_search')
+    with pytest.raises(ValueError,match='ACCOUNT_CHALLENGE'):
+        store.admit_route(a['id'],'203.0.113.10',1,'cooled-after-read')
+    with store._connect() as db:
+        db.execute('UPDATE crawler_accounts SET cooldown_until=NULL,auth_state_ciphertext=NULL WHERE id=?',(a['id'],))
+    with pytest.raises(ValueError,match='AUTH_INVALID'):
+        store.admit_route(a['id'],'203.0.113.10',1,'auth-after-read')
+
+
+def test_unbound_account_is_not_healthy_capacity_under_proxy_required_config(tmp_path,monkeypatch):
+    store=CrawlerAccountStore(tmp_path/'unbound.sqlite3')
+    value=account(store,'unbound')
+    monkeypatch.setattr(settings,'crawler_proxy_enabled',True)
+    monkeypatch.setattr(settings,'crawler_safety_enabled',True)
+    assert store.available_accounts('dy')==[]
+    assert not AccountRotationManager(store).healthy_capacity_available('dy','owner',{value['id']})
+
+
+def test_generation_is_local_to_exit_and_cross_key_change_is_drain_fenced(safety):
+    store,a,_=safety
+    store.observe_shared_exit('203.0.113.20')
+    with store._connect() as db:
+        db.execute('UPDATE crawler_shared_exits SET generation=10 WHERE exit_key=?',('203.0.113.20',))
+    store.set_route_state(a['id'],state='active',route_mode='proxy_preferred',shared_exit_key='203.0.113.20',generation=10)
+    with pytest.raises(ValueError,match='GENERATION_STALE'):
+        store.set_route_state(a['id'],state='active',generation=9)
+    store.admit_route(a['id'],'203.0.113.20',10,'old-proxy-route')
+    with pytest.raises(ValueError,match='ROUTE_BUSY'):
+        store.set_route_state(a['id'],state='active',route_mode='direct_degraded',shared_exit_key='203.0.113.10',generation=1)
+    store.release_route_admission('old-proxy-route')
+    value=store.set_route_state(a['id'],state='active',route_mode='direct_degraded',shared_exit_key='203.0.113.10',generation=1)
+    assert value['shared_exit_generation']==1
+    with pytest.raises(ValueError,match='EXIT_INVALID'):
+        store.set_route_state(a['id'],state='active',shared_exit_key='203.0.113.99',generation=1)
+    with store._connect() as db:
+        db.execute('UPDATE crawler_shared_exits SET observed_at=? WHERE exit_key=?',(time.time()-settings.crawler_exit_observation_ttl-1,'203.0.113.20'))
+    with pytest.raises(ValueError,match='EXIT_INVALID'):
+        store.set_route_state(a['id'],state='active',shared_exit_key='203.0.113.20',generation=10)
+
+
+def test_dispatch_echo_refresh_repairs_idle_direct_ttl_once_without_query_io(safety,monkeypatch):
+    from backend.audit_agent import crawler_route
+    store,a,_=safety
+    with store._connect() as db:
+        db.execute('UPDATE crawler_shared_exits SET observed_at=?',(time.time()-settings.crawler_exit_observation_ttl-1,))
+    calls=[]
+    def echo(account_id,**kwargs):
+        with store._connect() as db:
+            assert db.execute('SELECT state FROM crawler_exit_refreshes WHERE account_id=?',(account_id,)).fetchone()[0]=='claimed'
+        calls.append(account_id)
+        store.observe_shared_exit('203.0.113.10',service_exit=True)
+        return True
+    monkeypatch.setattr(crawler_route,'refresh_existing_route',echo)
+    assert store.available_accounts('dy')==[] and calls==[]
+    manager=AccountRotationManager(store)
+    manager.refresh_authorized('dy','owner',{a['id']})
+    assert calls==[a['id']]
+    assert store.admit_route(a['id'],'203.0.113.10',1,'refreshed-idle')
+    store.release_route_admission('refreshed-idle')
+    manager.refresh_authorized('dy','owner',{a['id']})
+    assert calls==[a['id']]
+
+
+def test_same_exit_refresh_does_not_forge_another_proxy_sample_ttl(tmp_path,monkeypatch):
+    from backend.audit_agent import crawler_route
+    monkeypatch.setattr(settings,'crawler_safety_enabled',True)
+    accounts=CrawlerAccountStore(tmp_path/'stale-proxies.sqlite3')
+    proxies=CrawlerProxyStore(accounts,cipher=AuthStateCipher(encryption_key='fixture'))
+    values=[account(accounts,str(i)) for i in range(2)]
+    resources=[proxies.create(display_name=str(i),endpoint='http://proxy.example:8080',expires_at=time.time()+3600) for i in range(2)]
+    for value,resource in zip(values,resources):
+        proxies.bind(value['id'],resource['id'],expected_binding_revision=0)
+        proxies.observe_exit(resource['id'],'203.0.113.10')
+        proxies.mark_route_login_validated(value['id'],expected_binding_revision=1,expected_config_revision=1)
+    with accounts._connect() as db:
+        db.execute('UPDATE proxy_resources SET observed_exit_at=?',(time.time()-settings.crawler_exit_observation_ttl-1,))
+        db.execute('UPDATE crawler_shared_exits SET observed_at=?',(time.time()-settings.crawler_exit_observation_ttl-1,))
+    calls=[]
+    def echo(account_id,**kwargs):
+        calls.append(account_id)
+        proxies.observe_exit(accounts.get(account_id)['proxy_id'],'203.0.113.10')
+        return True
+    monkeypatch.setattr(crawler_route,'refresh_existing_route',echo)
+    assert accounts.available_accounts('dy')==[]
+    AccountRotationManager(accounts).refresh_authorized('dy','owner',{item['id'] for item in values})
+    assert set(calls)=={item['id'] for item in values} and len(calls)==2
+    assert len(accounts.available_accounts('dy'))==2
+
+
+def test_disabled_downgrade_does_not_project_degraded_account_as_available(safety,monkeypatch):
+    store,a,_=safety
+    assert a['id'] in {value['id'] for value in store.available_accounts('dy')}
+    monkeypatch.setattr(settings,'crawler_direct_degrade_enabled',False)
+    assert store.available_accounts('dy')==[]
+
+
+@pytest.mark.parametrize('code,required,expected', [('PROXY_AUTH_FAILED',False,True),('AUTH_INVALID',False,False),('PROXY_AUTH_FAILED',True,False)])
+def test_confirmed_proxy_407_candidate_does_not_include_platform_auth_or_strict_accounts(tmp_path,monkeypatch,code,required,expected):
+    from backend.audit_agent import crawler_route
+    from backend.task_admission.resources import acquire_account_handle
+    monkeypatch.setattr(settings,'crawler_safety_enabled',True)
+    monkeypatch.setattr(settings,'crawler_direct_degrade_enabled',True)
+    monkeypatch.setattr(settings,'crawler_browser_profile_root',tmp_path/'profiles')
+    monkeypatch.setattr(settings,'task_resource_lock_dir',tmp_path/'locks')
+    accounts=CrawlerAccountStore(tmp_path/'407.sqlite3')
+    proxies=CrawlerProxyStore(accounts,cipher=AuthStateCipher(encryption_key='fixture'))
+    value=account(accounts,'fixture')
+    proxy=proxies.create(display_name='supplier',endpoint='http://proxy.example:8080',expires_at=time.time()+3600)
+    proxies.bind(value['id'],proxy['id'],expected_binding_revision=0,route_mode='proxy_required' if required else 'proxy_preferred')
+    proxies.observe_exit(proxy['id'],'203.0.113.10')
+    proxies.mark_route_login_validated(value['id'],expected_binding_revision=1,expected_config_revision=1)
+    proxies.set_health(proxy['id'],status='unavailable',stop_reason=code)
+    direct=accounts.observe_shared_exit('203.0.113.11',service_exit=True)
+    calls=[]
+    def prepare(account_id,error,exhausted,**kwargs):
+        assert error=='PROXY_AUTH_FAILED' and exhausted is True
+        assert kwargs['old_context_drained'] is True and kwargs['owner_id']=='owner'
+        assert acquire_account_handle('dy',account_id) is None
+        calls.append(error)
+        accounts.set_route_state(account_id,state='active',route_mode='direct_degraded',shared_exit_key=direct['shared_exit_key'],generation=direct['shared_exit_generation'])
+        accounts.mark_direct_validated(account_id,direct['shared_exit_generation'])
+        return True
+    monkeypatch.setattr(crawler_route,'prepare_direct_degraded',prepare)
+    result=AccountRotationManager(accounts).prepare_exhausted_pool('dy','owner',{value['id']})
+    assert bool(result) is expected
+    assert calls==(['PROXY_AUTH_FAILED'] if expected else [])
+
+
+def test_legacy_confirmed_proxy_observation_warms_canonical_after_additive_upgrade(tmp_path,monkeypatch):
+    from backend.audit_agent import crawler_route
+    monkeypatch.setattr(settings,'crawler_safety_enabled',True)
+    accounts=CrawlerAccountStore(tmp_path/'legacy.sqlite3')
+    proxies=CrawlerProxyStore(accounts,cipher=AuthStateCipher(encryption_key='fixture'))
+    value=account(accounts,'fixture')
+    proxy=proxies.create(display_name='legacy',endpoint='http://proxy.example:8080',expires_at=time.time()+3600)
+    proxies.bind(value['id'],proxy['id'],expected_binding_revision=0)
+    proxies.observe_exit(proxy['id'],'203.0.113.10')
+    proxies.mark_route_login_validated(value['id'],expected_binding_revision=1,expected_config_revision=1)
+    with accounts._connect() as db: db.execute('DELETE FROM crawler_shared_exits')
+    assert accounts.available_accounts('dy')==[]
+    with pytest.raises(ValueError): accounts.admit_route(value['id'],'203.0.113.10',1,'legacy-unobserved-canonical')
+    calls=[]
+    def echo(account_id,**kwargs):
+        calls.append(account_id)
+        proxies.observe_exit(proxy['id'],'203.0.113.10')
+        return True
+    monkeypatch.setattr(crawler_route,'refresh_existing_route',echo)
+    AccountRotationManager(accounts).refresh_authorized('dy','owner',{value['id']})
+    assert calls==[value['id']]
+    assert accounts.available_accounts('dy')[0]['id']==value['id']

@@ -58,8 +58,10 @@ class AccountRotationManager:
             attempted.add(current_id)
             try:
                 return runner(current_id, current_auth)
-            except CrawlerVerificationError:
-                self.cool_down_after_risk(current_id, reason="verify")
+            except CrawlerVerificationError as exc:
+                if not getattr(exc, 'account_risk_recorded', False):
+                    self.cool_down_after_risk(current_id, reason="verify")
+                    exc.account_risk_recorded = True
                 if max_switches is not None and switches >= max(0, int(max_switches)):
                     raise
                 accounts = self.store.available_accounts(platform, exclude_ids=attempted)
@@ -99,12 +101,33 @@ class AccountRotationManager:
             self.store.finish_recovery(account_id,claim,result)
             return result
 
+    def refresh_authorized(self, platform, owner_id, authorized_ids):
+        """Dispatch-only, echo-only refresh; risk recovery has a separate claim."""
+        if platform!='dy' or not settings.crawler_safety_enabled: return
+        from backend.task_admission.resources import account_lease
+        from .crawler_route import refresh_existing_route
+        for account in self.store.stale_route_candidates(platform):
+            if account['id'] not in authorized_ids: continue
+            with account_lease(platform,account['id']) as acquired:
+                if not acquired: continue
+                claim=self.store.claim_exit_refresh(account['id'])
+                if claim is None: continue
+                success=False
+                try:
+                    success=refresh_existing_route(account['id'],account_store=self.store,owner_id=owner_id) is True
+                except Exception:
+                    success=False
+                self.store.finish_exit_refresh(account['id'],claim,success)
+
     def recover_authorized(self, platform, owner_id, authorized_ids):
         """Explicit dispatch work, never invoked by construction or listing."""
         if platform != 'dy' or not settings.crawler_safety_enabled:
             return
         from .crawler_route import check_recovery_route
         for account in self.store.list(platform=platform):
+            if account['id'] in authorized_ids and account.get('recovery_state')=='manual_verified_waiting':
+                self.store.release_verified_manual(account['id'])
+                continue
             if account['id'] not in authorized_ids or account.get('recovery_state') != 'pending':
                 continue
             self.recover_once(account['id'],lambda account_id,claim: check_recovery_route(

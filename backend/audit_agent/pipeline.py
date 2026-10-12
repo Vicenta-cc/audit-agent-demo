@@ -36,7 +36,7 @@ from .crawler_adapter import (
     CrawlerRateLimitError,
     MediaCrawlerAdapter,
 )
-from .account_rotation import AccountRotationManager
+from .account_rotation import AccountRotationManager, risk_cooldown_seconds
 from .evidence_groups import build_evidence_groups
 from .ingestion import AuditResultStore, BatchWriter, IngestionStore, comment_content_identity, content_identity
 from .job_store import job_store
@@ -784,6 +784,7 @@ class AuditPipeline:
                         }
                         safety_owner = str((job_store.get(self.job_id) or {}).get('owner_user_id') or 'local-user')
                         safety_manager = AccountRotationManager(crawler_account_store, auth_state_cipher)
+                        safety_manager.refresh_authorized(request.platform, safety_owner, safety_ids)
                         safety_manager.recover_authorized(request.platform, safety_owner, safety_ids)
                         safety_manager.prepare_exhausted_pool(request.platform, safety_owner, safety_ids)
                         candidates = crawler_account_store.available_accounts(request.platform)
@@ -1013,7 +1014,7 @@ class AuditPipeline:
                                         with self._route_operation(crawler_account_id):
                                             candidate_output = run_with_current_account(save_root)
                                 except CollectionRouteError as exc:
-                                    if exc.code not in {'PROXY_EXPIRED','PROXY_TRANSPORT_FAILED','PROXY_CONNECTION_REFUSED'}:
+                                    if exc.code not in {'PROXY_EXPIRED','PROXY_TRANSPORT_FAILED','PROXY_CONNECTION_REFUSED','PROXY_AUTH_FAILED'}:
                                         raise
                                     last_account_error = exc
                                     if crawler_account_id:
@@ -2298,7 +2299,10 @@ class AuditPipeline:
         account_id = account["id"]
         name = account.get("display_name") or account_id
         if isinstance(exc, CrawlerVerificationError):
-            seconds = AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down_after_risk(account_id)
+            if not getattr(exc, 'account_risk_recorded', False):
+                seconds = AccountRotationManager(crawler_account_store, auth_state_cipher).cool_down_after_risk(account_id)
+            else:
+                seconds = risk_cooldown_seconds((crawler_account_store.get(account_id) or {}).get('risk_count', 1))
             job_store.log(self.job_id, f"账号 {name} 触发平台验证，退出本任务轮换")
             job_store.log(self.job_id, f"账号 {name} 冷却 {int(seconds // 60)} 分钟")
         else:

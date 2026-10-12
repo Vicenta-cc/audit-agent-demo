@@ -55,6 +55,7 @@ def select_account(worker, row):
         except AdmissionError:
             continue
     manager=AccountRotationManager(account_store)
+    manager.refresh_authorized(platform,row['owner_id'],all_permitted)
     manager.recover_authorized(platform,row['owner_id'],all_permitted)
     manager.prepare_exhausted_pool(platform,row['owner_id'],all_permitted)
     accounts = account_store.available_accounts(platform)
