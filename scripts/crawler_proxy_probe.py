@@ -7,14 +7,17 @@ from pathlib import Path
 import sys
 
 
-async def probe(account_id, *, check_login=False, expected_identity=''):
+async def probe(account_id, *, check_login=False, expected_identity='', hold_context=False):
     crawler_root = Path(os.environ['MEDIACRAWLER_DIR']).resolve()
     sys.path.insert(0, str(crawler_root))
     from tools.collection_route import load_route_from_env
     snapshot = load_route_from_env(account_id=account_id, proxy_required=True)
     from tools.bound_proxy import BoundProxySession
     from tools.cloak_browser import launch_account_context
-    session = BoundProxySession(snapshot, maintenance_only=not check_login)
+    options={}
+    if hold_context:
+        options=dict(reuse_existing_policy=True,account_policy=json.loads(os.environ['MEDIACRAWLER_ASSET_ACCOUNT_POLICY']))
+    session = BoundProxySession(snapshot, maintenance_only=not check_login and not hold_context, **options)
     context = None
     try:
         context, _ = await launch_account_context(account_id,
@@ -49,6 +52,10 @@ async def probe(account_id, *, check_login=False, expected_identity=''):
             context_id=receipt.context_id, ip=receipt.ip, observed_at=receipt.observed_at,
             **({'login_result':login_result} if check_login else {})),
             separators=(',', ':'), allow_nan=False), flush=True)
+        if hold_context:
+            command=await asyncio.wait_for(asyncio.to_thread(sys.stdin.readline),1200)
+            if command.strip() not in {'close',''}:
+                raise ValueError('PROXY_CONFIG_INVALID')
     finally:
         if context is not None:
             await context.close()
@@ -61,9 +68,10 @@ if __name__ == '__main__':
     parser.add_argument('--account-id', required=True)
     parser.add_argument('--check-login', action='store_true')
     parser.add_argument('--expected-identity', default='')
+    parser.add_argument('--hold-context',action='store_true')
     args = parser.parse_args()
     try:
-        asyncio.run(probe(args.account_id, check_login=args.check_login, expected_identity=args.expected_identity))
+        asyncio.run(probe(args.account_id, check_login=args.check_login, expected_identity=args.expected_identity,hold_context=args.hold_context))
     except Exception as exc:
         allowed = {'PROXY_BUSY','PROXY_REVISION_MISMATCH','PROXY_EXIT_CHANGED',
                    'PROXY_UNAVAILABLE','PROXY_AUTH_FAILED','PROXY_CONFIG_INVALID',

@@ -575,7 +575,10 @@ class MediaCrawlerAdapter:
             "w", encoding="utf-8", errors="replace"
         ) as stderr_file:
             from backend.task_admission.execution import crawler_fds, launch_crawler
-            from .crawler_route import RouteConfigPipe, RouteReceiptPipe
+            from .crawler_route import RouteConfigPipe, RouteReceiptPipe, prepare_collection_child
+            if route_context:
+                from backend.task_admission.resources import BorrowedRouteContext
+                prepare_collection_child(route_context,allowed_borrowers=2 if isinstance(route_context,BorrowedRouteContext) else 1)
             route_pipe = RouteConfigPipe(route_context.snapshot if route_context else None)
             receipt_pipe = RouteReceiptPipe(route_context) if route_context and route_context.snapshot else None
             if receipt_pipe:
@@ -739,6 +742,12 @@ class MediaCrawlerAdapter:
                 if started_callback:
                     started_callback()
                 while completed.poll() is None:
+                    if route_context and getattr(route_context,'account_risk_recorded',False):
+                        error=CrawlerVerificationError('采集账号触发平台验证')
+                        error.account_risk_recorded=True
+                        raise error
+                    if route_context and getattr(route_context,'route_error',None):
+                        raise CollectionRouteError(route_context.route_error)
                     if stop_checker and stop_checker():
                         stop_process("external_stop_requested")
                         break

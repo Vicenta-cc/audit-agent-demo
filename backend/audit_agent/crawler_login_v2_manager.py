@@ -424,15 +424,25 @@ class CrawlerLoginV2Manager:
                     op["id"], "failed", error_code="ACCOUNT_BUSY"
                 )
                 raise
+            manual_claim = None
             from .crawler_route import acquire_route_execution, RouteConfigPipe
             try:
+                if settings.crawler_safety_enabled and account.get('route_state') in {'manual_required','challenge_paused','recovery_check'}:
+                    if not self.lease_factory:
+                        from .crawler_route import reconcile_stopped_route_admissions
+                        reconcile_stopped_route_admissions(self.store,account['id'],handles[-1])
+                    manual_claim = self.store.begin_manual_recovery(account['id'],op['id'],owner_id=user_id)
+                    if not manual_claim:
+                        raise LoginV2Error('ACCOUNT_BUSY')
                 from .crawler_route import resolve_account_route
                 snapshot = resolve_account_route(account["id"], account_store=self.store, expected_binding_revision=op.get("expected_binding_revision"), expected_config_revision=op.get("expected_config_revision"), allow_probe=True)
-                if (snapshot.proxy_id if snapshot else None) != op.get("proxy_id"):
+                if (snapshot.proxy_id if snapshot and snapshot.route_mode != 'direct_degraded' else account.get('proxy_id') if snapshot else None) != op.get("proxy_id"):
                     from .crawler_route import CollectionRouteError
                     raise CollectionRouteError("PROXY_REVISION_MISMATCH")
-                route_bundle = acquire_route_execution(account["id"], op["id"], user_id, account_handle=handles[-1], account_store=self.store, snapshot=snapshot, allow_probe=True)
+                route_bundle = acquire_route_execution(account["id"], op["id"], user_id, account_handle=handles[-1], account_store=self.store, snapshot=snapshot, allow_probe=True, recovery_claim=manual_claim)
             except Exception as exc:
+                if manual_claim:
+                    self.store.finish_manual_recovery(account['id'],op['id'],manual_claim,'uncertain',owner_id=user_id)
                 for handle in handles:
                     handle.close()
                 self.operations.mark_stage(op["id"], "failed", error_code=safe_error_code(exc))
@@ -451,6 +461,8 @@ class CrawlerLoginV2Manager:
                 deadline=time.monotonic() + self.timeout,
                 authorize=authorize,
             )
+            s.manual_recovery_claim = manual_claim
+            s.manual_finished = False
             s.route_bundle = route_bundle
             s.route_pipe = RouteConfigPipe(route_bundle.snapshot)
             s.snapshot = {
@@ -554,6 +566,9 @@ class CrawlerLoginV2Manager:
                 self.sessions[s.id] = s
                 self.operations.mark_stage(op["id"], "checking")
             except Exception:
+                if getattr(s,'manual_recovery_claim',None) and not s.manual_finished:
+                    self.store.finish_manual_recovery(s.account_id,s.operation_id,s.manual_recovery_claim,'uncertain',owner_id=s.user_id)
+                    s.manual_finished=True
                 s.route_pipe.close()
                 route_bundle.close()
                 parent.close()
@@ -609,7 +624,7 @@ class CrawlerLoginV2Manager:
             "account_eligibility": "disabled"
             if account.get("status") == "disabled"
             else "cooling_down"
-            if account_is_cooling_down(account)
+            if account_is_cooling_down(account) or account.get("route_state","active") != "active"
             else "ready",
             "cooldown_until": account.get("cooldown_until"),
         }
@@ -1436,7 +1451,10 @@ class CrawlerLoginV2Manager:
                     ciphertext,
                     candidate["platform_account_id"],
                     credentials_changed=candidate.get("credentials_changed", True),
+                    **({"manual_recovery_claim":s.manual_recovery_claim,"owner_id":s.user_id} if getattr(s,"manual_recovery_claim",None) else {}),
+                    **({"route_snapshot":s.route_bundle.snapshot} if getattr(s,"route_bundle",None) and s.route_bundle.snapshot and s.route_bundle.snapshot.route_mode=="direct_degraded" else {}),
                 )
+                s.manual_finished = bool(getattr(s,"manual_recovery_claim",None))
                 s.snapshot["result"] = self._result(op["result"]["account"])
                 self._enqueue(
                     s, {"type": "save_committed", "operation_id": s.operation_id}
@@ -1554,6 +1572,9 @@ class CrawlerLoginV2Manager:
                     s.process.wait(timeout=2)
         finally:
             s.stopped.set()
+            if getattr(s,'manual_recovery_claim',None) and not getattr(s,'manual_finished',False):
+                self.store.finish_manual_recovery(s.account_id,s.operation_id,s.manual_recovery_claim,'cancelled' if s.snapshot['phase']=='cancelled' else 'uncertain',owner_id=s.user_id)
+                s.manual_finished=True
             for stream in (s.media, s.process.stdin, s.process.stdout, s.diagnostic):
                 if stream:
                     try:

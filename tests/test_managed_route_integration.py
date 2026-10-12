@@ -82,8 +82,8 @@ def test_ambiguous_or_risk_faults_never_degrade(error):
         observed_exit='198.51.100.8',shared_exit_key='198.51.100.8',old_context_drained=True)
 
 
-@pytest.mark.parametrize('mode',['proxy_preferred','direct_degraded'])
-def test_real_browser_managed_ack_and_explicit_transport(tmp_path,monkeypatch,mode):
+@pytest.mark.parametrize('mode,fault',[('proxy_preferred','none'),('direct_degraded','none'),('proxy_preferred','407')])
+def test_real_browser_managed_ack_and_explicit_transport(tmp_path,monkeypatch,mode,fault):
     import http.server
     import ssl
     from proxy_fixture import local_proxy
@@ -120,9 +120,19 @@ def test_real_browser_managed_ack_and_explicit_transport(tmp_path,monkeypatch,mo
             username=fixture.username if mode=='proxy_preferred' else '',password=fixture.password if mode=='proxy_preferred' else '',
             observed_exit_ip=fixture.exit_ip,scope_ids=scopes,safety_db_path=str(accounts.db_path))
         snap=replace(snap,snapshot_digest=app.route_contract().snapshot_digest(snap))
+        proxies=None
+        if fault=='407':
+            from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
+            proxies=CrawlerProxyStore(accounts)
+            resource=proxies.create(display_name='auth-fault',endpoint=fixture.server,credentials={'username':fixture.username,'password':fixture.password},expires_at=time.time()+120)
+            bound=proxies.bind(account['id'],resource['id'],expected_binding_revision=account['binding_revision'])
+            snap=replace(snap,proxy_id=resource['id'],binding_revision=bound['binding_revision'],scope_ids=app.route_contract().derive_scope_ids('dy',account['id'],resource['id'],fixture.exit_ip))
+            snap=replace(snap,snapshot_digest=app.route_contract().snapshot_digest(snap))
+            fixture.reject=True
+            monkeypatch.setattr(app.settings,'request_scheduler_db',tmp_path/'gate.db')
         accounts.admit_route(account['id'],fixture.exit_ip,1,snap.operation_id)
         store=app.RouteOperationStore(tmp_path/'ops.db');store_operation(store,snap)
-        bundle=SimpleNamespace(snapshot=snap,route_operation_store=store,_lock=threading.RLock(),account_store=accounts)
+        bundle=SimpleNamespace(snapshot=snap,route_operation_store=store,_lock=threading.RLock(),account_store=accounts,proxy_store=proxies)
         route_pipe,receipt_pipe=app.RouteConfigPipe(snap),app.RouteReceiptPipe(bundle)
         script=r'''import asyncio,json,os,socket,sys
 from pathlib import Path
@@ -172,6 +182,13 @@ asyncio.run(main())
             import json
             out,err=child.communicate(json.dumps(dict(echo=echo,target=target,ca=fixture.ca,spki=fixture.spki,profiles=str(tmp_path/'profiles'))),timeout=45)
             assert fixture.password not in out+err
+            if fault=='407':
+                assert child.returncode!=0 and 'PROXY_AUTH_FAILED' in err
+                assert bundle.route_error=='PROXY_AUTH_FAILED'
+                assert proxies.get_public(snap.proxy_id)['stop_reason']=='PROXY_AUTH_FAILED'
+                assert app.direct_degraded_allowed(transport_error=bundle.route_error,health_pool_exhausted=True,old_context_drained=True,observed_exit=fixture.exit_ip,shared_exit_key=fixture.exit_ip)
+                assert not fixture.origins and any(e['kind']=='407' for e in fixture.events)
+                return
             assert child.returncode==0,err[-2500:]
             assert 'BROWSER_ACK_OK' in out and 'BROWSER_PAUSE_FENCED' in out
             if mode=='proxy_preferred':
@@ -238,8 +255,8 @@ def test_risk_receipt_pauses_shared_exit_before_live_child_drains(tmp_path,monke
         config.close();receipts.close()
 
 
-@pytest.mark.parametrize('cold_direct',[False,True])
-def test_actual_bounded_login_checker_uses_same_profile_and_local_identity(tmp_path,monkeypatch,cold_direct):
+@pytest.mark.parametrize('cold_direct,manual,outcome',[(False,False,'success'),(True,False,'success'),(False,True,'success'),(False,True,'failed'),(False,True,'challenge')])
+def test_actual_bounded_login_checker_uses_same_profile_and_local_identity(tmp_path,monkeypatch,cold_direct,manual,outcome):
     import json
     from proxy_fixture import local_proxy
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
@@ -263,11 +280,19 @@ def test_actual_bounded_login_checker_uses_same_profile_and_local_identity(tmp_p
             monkeypatch.setattr(app.settings,name,value)
         accounts=CrawlerAccountStore(tmp_path/'accounts.db');account=accounts.create(platform='dy',display_name='bounded-login')
         accounts.save_auth_state(account['id'],'fixture-ciphertext');accounts.observe_shared_exit(fixture.exit_ip)
+        manual_claim=None
+        if manual:
+            accounts.update(account['id'],platform_account_id='fixture_identity_123')
+            accounts.record_risk(account['id'])
+            accounts.set_route_state(account['id'],state='active',shared_exit_key=fixture.exit_ip,generation=1)
+            accounts.pause_account_exit(account['id'],until=time.time()+.1)
+            manual_claim=accounts.begin_manual_recovery(account['id'],'manual-login',owner_id='owner')
+            assert manual_claim and accounts.get(account['id'])['recovery_state']=='manual_claimed'
         snap=replace(managed(tmp_path),account_id=account['id'],profile_key=app.route_contract().derive_profile_key(account['id']),
             host='127.0.0.1',port=fixture.proxy.server_port,username=fixture.username,password=fixture.password,
-            observed_exit_ip=fixture.exit_ip,scope_ids=app.route_contract().derive_scope_ids('dy',account['id'],'p',fixture.exit_ip),safety_db_path=str(accounts.db_path))
+            observed_exit_ip=fixture.exit_ip,scope_ids=app.route_contract().derive_scope_ids('dy',account['id'],'p',fixture.exit_ip),safety_db_path=str(accounts.db_path),recovery_claim=manual_claim or '')
         snap=replace(snap,snapshot_digest=app.route_contract().snapshot_digest(snap))
-        accounts.admit_route(account['id'],fixture.exit_ip,1,snap.operation_id)
+        accounts.admit_route(account['id'],fixture.exit_ip,1,snap.operation_id,recovery_claim=manual_claim)
         store=app.RouteOperationStore(tmp_path/'ops.db');store_operation(store,snap)
         bundle=SimpleNamespace(snapshot=snap,account_id=account['id'],owner_id='owner',execution_id='bounded-login',pass_fds=(),
             route_operation_store=store,account_store=accounts,_lock=threading.RLock())
@@ -293,7 +318,8 @@ async def trusted(*args,**kwargs):
   url=route.request.url
   if url.startswith(os.environ['FIXTURE_ECHO']):await route.fallback();return
   if url.startswith('https://www.douyin.com/user/self'):
-   await route.fulfill(status=200,content_type='text/html',body='<html><body>local identity fixture<script>fetch("/aweme/v1/web/user/profile/self");</script></body></html>');return
+   body='<html><body>local identity fixture'+('<div id="captcha_container" style="width:300px;height:200px">fixture challenge</div>' if os.environ.get('FIXTURE_CASE')=='challenge' else '')+'<script>fetch("/aweme/v1/web/user/profile/self");</script></body></html>'
+   await route.fulfill(status=200,content_type='text/html',body=body);return
   if url.startswith('https://www.douyin.com/aweme/v1/web/user/profile/self'):
    await route.fulfill(status=200,content_type='application/json',body=json.dumps({'status_code':0,'user':{'sec_uid':'fixture_identity_123'}}));return
   await route.abort()
@@ -305,7 +331,7 @@ runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
         original_popen=subprocess.Popen
         def local_child(command,**kwargs):
             if len(command)>1 and command[1]==str(helper):
-                env={**kwargs['env'],'FIXTURE_ECHO':echo,'FIXTURE_CA':fixture.ca,'FIXTURE_SPKI':fixture.spki,'FIXTURE_HELPER':str(helper)}
+                env={**kwargs['env'],'FIXTURE_ECHO':echo,'FIXTURE_CA':fixture.ca,'FIXTURE_SPKI':fixture.spki,'FIXTURE_HELPER':str(helper),'FIXTURE_CASE':outcome}
                 return original_popen([command[0],str(wrapper),*command[2:]],**{**kwargs,'env':env})
             return original_popen(command,**kwargs)
         monkeypatch.setattr(subprocess,'Popen',local_child)
@@ -330,7 +356,20 @@ runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
             assert current['route_mode']=='direct_degraded' and current['validated_direct_generation']==current['shared_exit_generation']
             assert not fixture.events
         else:
-            assert app._run_maintenance_probe(bundle,check_login=True,expected_identity='fixture_identity_123')=='success'
+            expected='different_identity_456' if outcome=='failed' else 'fixture_identity_123'
+            result=app._run_maintenance_probe(bundle,check_login=True,expected_identity=expected)
+            assert result==('success' if outcome=='success' else 'challenge' if outcome=='challenge' else 'uncertain')
+            if manual:
+                with accounts._connect() as conn:
+                    conn.execute('BEGIN IMMEDIATE')
+                    if result=='success':accounts.save_douyin_auth_state(account['id'],'fresh-fixture-ciphertext','fixture_identity_123',connection=conn)
+                    settled=accounts.finish_manual_recovery(account['id'],'manual-login',manual_claim,outcome,owner_id='owner',verified_identity='fixture_identity_123' if result=='success' else '',connection=conn)
+                    assert settled==(outcome=='success')
+                current=accounts.get(account['id'])
+                assert current['route_state']==('active' if outcome=='success' else 'manual_required') and current['risk_count']==1
+                with accounts._connect() as conn:
+                    pause=conn.execute('SELECT pause_reason FROM crawler_shared_exits WHERE exit_key=?',(fixture.exit_ip,)).fetchone()[0]
+                    assert bool(pause)==(outcome!='success')
         assert (tmp_path/'profiles'/snap.profile_key/'adapter.lock').exists()
         assert all(o['path']=='/echo' for o in fixture.origins)
         assert not fixture.traps
@@ -361,3 +400,111 @@ def test_real_child_renews_ticket_without_changing_snapshot_identity(tmp_path):
     finally:
         if child.poll() is None:child.kill();child.wait()
         route_pipe.close();receipt_pipe.close()
+
+
+def test_live_orphan_retains_account_profile_fences_then_exact_reconciliation(tmp_path,monkeypatch):
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    from backend.task_admission.resources import acquire_account_handle
+    monkeypatch.setattr(app.settings,'task_resource_lock_dir',tmp_path/'locks')
+    monkeypatch.setattr(app.settings,'crawler_browser_profile_root',tmp_path/'profiles')
+    accounts=CrawlerAccountStore(tmp_path/'accounts.db');account=accounts.create(platform='dy',display_name='orphan')
+    accounts.save_auth_state(account['id'],'fixture-ciphertext');accounts.observe_shared_exit('198.51.100.8')
+    accounts.admit_route(account['id'],'198.51.100.8',1,'orphan-operation')
+    handle=acquire_account_handle('dy',account['id']);assert handle
+    directory=tmp_path/'profiles'/app.route_contract().derive_profile_key(account['id']);directory.mkdir(parents=True)
+    script="import fcntl,sys,time\nh=open(sys.argv[1],'a+b');fcntl.flock(h,fcntl.LOCK_EX);print('READY',flush=True);time.sleep(30)"
+    child=subprocess.Popen(['/Users/hose/project/zhanyun/media-crawler/.venv/bin/python','-c',script,str(directory/'adapter.lock')],
+        pass_fds=(handle.fileno(),),stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+    try:
+        assert child.stdout.readline().strip()=='READY'
+        handle.close()
+        assert acquire_account_handle('dy',account['id']) is None
+        with accounts._connect() as db:assert db.execute("SELECT state FROM crawler_route_admissions WHERE operation_id='orphan-operation'").fetchone()[0]=='active'
+        child.terminate();child.wait(timeout=5)
+        fresh=acquire_account_handle('dy',account['id']);assert fresh
+        try:
+            assert app.reconcile_stopped_route_admissions(accounts,account['id'],fresh)==1
+        finally:fresh.close()
+        with accounts._connect() as db:assert db.execute("SELECT state FROM crawler_route_admissions WHERE operation_id='orphan-operation'").fetchone()[0]=='ended'
+    finally:
+        if not handle.closed:handle.close()
+        if child.poll() is None:child.kill();child.wait()
+
+
+def test_inactive_crawl_child_supplement_uses_crawler_helper_in_app_interpreter(tmp_path,monkeypatch):
+    import functools,importlib.util,json
+    from proxy_fixture import local_proxy
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
+    from backend.audit_agent.asset_utils import download_url_with_error
+    from backend.task_admission.resources import ExecutionLeaseBundle
+    assert importlib.util.find_spec('cloakbrowser') is None
+    with local_proxy(tmp_path/'network') as fixture:
+        for name,value in dict(crawler_login_python=Path('/Users/hose/project/zhanyun/media-crawler/.venv/bin/python'),
+            crawler_safety_enabled=True,crawler_proxy_enabled=True,app_auth_mode='disabled',
+            crawler_proxy_echo_url=fixture.url(host='echo'),crawler_browser_profile_root=tmp_path/'profiles',
+            request_scheduler_db=tmp_path/'gate.db',task_resource_lock_dir=tmp_path/'locks',crawler_account_min_interval=0,
+            crawler_account_requests_per_minute=1000).items():monkeypatch.setattr(app.settings,name,value)
+        accounts=CrawlerAccountStore(tmp_path/'accounts.db');proxies=CrawlerProxyStore(accounts)
+        account=accounts.create(platform='dy',display_name='asset-source')
+        resource=proxies.create(display_name='fixture',endpoint=fixture.server,credentials={'username':fixture.username,'password':fixture.password},expires_at=time.time()+600)
+        bound=proxies.bind(account['id'],resource['id'],expected_binding_revision=account['binding_revision'])
+        proxies.observe_exit(resource['id'],fixture.exit_ip);accounts.save_auth_state(account['id'],'fixture-ciphertext')
+        proxies.mark_route_login_validated(account['id'],expected_binding_revision=bound['binding_revision'],expected_config_revision=1)
+        monkeypatch.setattr(app,'_store',proxies)
+        bundle=app.acquire_route_execution(account['id'],'source-task','owner',account_store=accounts)
+        old=bundle.snapshot
+        helper=Path(app.__file__).resolve().parents[2]/'scripts/crawler_proxy_probe.py'
+        wrapper=tmp_path/'asset_helper.py'
+        wrapper.write_text(r'''import os,sys,runpy,functools
+sys.path.insert(0,os.environ['MEDIACRAWLER_DIR'])
+from cloakbrowser.config import get_binary_path
+os.environ['CLOAKBROWSER_BINARY_PATH']=str(get_binary_path());os.environ['CLOAKBROWSER_AUTO_UPDATE']='false'
+import tools.bound_proxy as transport
+import tools.cloak_browser as browser
+transport.BoundProxySession=functools.partial(transport.BoundProxySession,echo_url=os.environ['FIXTURE_ECHO'],verify=os.environ['FIXTURE_CA'],policy=dict(min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0,cooldown_seconds=1))
+original=browser.launch_account_context
+async def trusted(*args,**kwargs):
+ kwargs['browser_args']=['--ignore-certificate-errors-spki-list='+os.environ['FIXTURE_SPKI'],'--host-resolver-rules=MAP *.proxy-test.invalid 127.0.0.1','--proxy-bypass-list=<-loopback>']
+ return await original(*args,**kwargs)
+browser.launch_account_context=trusted
+runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
+''')
+        original_popen=subprocess.Popen;children=[]
+        def local_child(command,**kwargs):
+            if len(command)>1 and command[1]==str(helper):
+                assert command[0]==str(app.settings.crawler_login_python)
+                env={**kwargs['env'],'FIXTURE_ECHO':fixture.url(host='echo'),'FIXTURE_CA':fixture.ca,'FIXTURE_SPKI':fixture.spki,'FIXTURE_HELPER':str(helper)}
+                child=original_popen([command[0],str(wrapper),*command[2:]],**{**kwargs,'env':env});children.append(child);return child
+            return original_popen(command,**kwargs)
+        monkeypatch.setattr(subprocess,'Popen',local_child)
+        try:
+            # A real original browser has ended; a new helper must preserve its source route.
+            original_receipt=app._run_maintenance_probe(bundle)
+            assert children[0].poll()==0
+            source=app.route_contract().collection_route_provenance(old,original_receipt,observation_id='source-observation',source_task_id='source-task',source_batch_id='source-batch',collected_at=time.time(),context_id=old.context_id)
+            monkeypatch.syspath_prepend(str(app.settings.media_crawler_dir))
+            from tools import bound_proxy as transport
+            from tools.persistent_request_gate import RequestScheduler
+            RequestScheduler(tmp_path/'gate.db',platform='dy',min_interval=0,per_minute=1000,max_concurrency=1,media_interval=0)
+            monkeypatch.setattr(transport,'BoundProxySession',functools.partial(transport.BoundProxySession,verify=fixture.ca))
+            bundle.child_active=False
+            result=download_url_with_error(fixture.url('/final'),tmp_path/'asset',timeout=25,platform='dy',
+                collection_route_provenance=source,owner_id='owner',execution_id='source-task',route_context=bundle,verify=fixture.ca)
+            assert result.path==tmp_path/'asset' and result.status_code==200
+            assert len(children)==2 and children[1].poll() is None
+            assert bundle.snapshot.operation_id!=old.operation_id and bundle.snapshot.context_id!=old.context_id
+            assert bundle.snapshot.profile_key==old.profile_key and bundle.snapshot.proxy_id==old.proxy_id and bundle.snapshot.exit_generation==old.exit_generation
+            assert source['operation_id']==old.operation_id
+            fixture.assert_routed();assert any(o['path']=='/final' for o in fixture.origins)
+            with bundle.borrow():
+                with pytest.raises(app.CollectionRouteError,match='PROXY_BUSY'):
+                    app.prepare_collection_child(bundle,allowed_borrowers=0,timeout=.05)
+                assert children[1].poll() is None
+            app.prepare_collection_child(bundle,allowed_borrowers=0,timeout=1)
+            assert children[1].poll() is not None and bundle.asset_browser_process is None
+            assert bundle.snapshot.proxy_id==old.proxy_id and bundle.snapshot.exit_generation==old.exit_generation
+        finally:
+            bundle.close()
+        assert all(child.poll() is not None for child in children)
+        with accounts._connect() as db:assert not db.execute("SELECT 1 FROM crawler_route_admissions WHERE account_id=? AND state='active'",(account['id'],)).fetchone()

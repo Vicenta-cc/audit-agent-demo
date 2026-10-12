@@ -121,7 +121,9 @@ class RouteOperationStore:
                 operation_id TEXT PRIMARY KEY, lease_id TEXT NOT NULL, lease_version INTEGER NOT NULL,
                 owner_id TEXT NOT NULL, account_id TEXT NOT NULL, state TEXT NOT NULL,
                 request_json TEXT NOT NULL, ack_json TEXT, expires_at REAL NOT NULL,
-                created_at REAL NOT NULL, updated_at REAL NOT NULL)''')
+                created_at REAL NOT NULL, updated_at REAL NOT NULL, child_pgid INTEGER)''')
+            if 'child_pgid' not in {row[1] for row in conn.execute('PRAGMA table_info(route_operations)')}:
+                conn.execute('ALTER TABLE route_operations ADD COLUMN child_pgid INTEGER')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_route_operations_lease ON route_operations(lease_id, lease_version)')
             conn.execute('CREATE TABLE IF NOT EXISTS route_lease_commands (operation_id TEXT PRIMARY KEY,request_json TEXT NOT NULL,response_json TEXT NOT NULL)')
 
@@ -129,7 +131,7 @@ class RouteOperationStore:
         if not row: return None
         return {'operation_id': row[0], 'lease_id': row[1], 'lease_version': row[2], 'owner_id': row[3],
                 'account_id': row[4], 'state': row[5], 'request': json.loads(row[6]),
-                'ack': json.loads(row[7]) if row[7] else None, 'expires_at': row[8]}
+                'ack': json.loads(row[7]) if row[7] else None, 'expires_at': row[8], 'child_pgid': row[11] if len(row)>11 else None}
 
     def issue(self, operation: RouteOperation):
         import sqlite3
@@ -142,6 +144,8 @@ class RouteOperationStore:
                 existing = self._row(row)
                 if existing['request'] != operation.to_dict(): raise ValueError('ROUTE_OPERATION_CONFLICT')
                 return existing
+            if conn.execute('SELECT 1 FROM route_lease_commands WHERE operation_id=?',(operation.operation_id,)).fetchone():
+                raise ValueError('ROUTE_OPERATION_CONFLICT')
             if operation.expires_at <= now:
                 raise ValueError('ROUTE_LEASE_EXPIRED')
             lease = conn.execute('SELECT owner_id,lease_version,state FROM route_operations WHERE lease_id=? ORDER BY lease_version DESC LIMIT 1', (operation.lease_id,)).fetchone()
@@ -176,6 +180,18 @@ class RouteOperationStore:
             conn.execute('UPDATE route_operations SET state="acked",ack_json=?,updated_at=? WHERE operation_id=?', (json.dumps(ack, sort_keys=True), time.time(), operation_id))
             return self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
 
+    def record_child(self, operation_id, *, owner_id, lease_version, child_pgid):
+        import sqlite3
+        if type(child_pgid) is not int or child_pgid < 1 or type(lease_version) is not int:
+            raise ValueError('ROUTE_LEASE_REJECTED')
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?',(operation_id,)).fetchone())
+            if (not row or row['owner_id']!=owner_id or row['lease_version']!=lease_version
+                    or row['state'] not in {'issued','acked'} or row['child_pgid'] not in (None,child_pgid)):
+                raise ValueError('ROUTE_LEASE_REJECTED')
+            conn.execute('UPDATE route_operations SET child_pgid=? WHERE operation_id=?',(child_pgid,operation_id))
+
     def ticket(self, operation_id, *, owner_id, snapshot_digest, context_id):
         import sqlite3
         with sqlite3.connect(self.db_path) as conn:
@@ -188,12 +204,16 @@ class RouteOperationStore:
     def renew(self, operation_id, *, route_operation_id, owner_id, lease_version):
         """Idempotent bounded ticket renewal; frozen route identity never changes."""
         import sqlite3
-        if type(lease_version) is not int or lease_version < 1:
+        import re
+        if (type(lease_version) is not int or lease_version < 1
+                or any(not isinstance(value,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}',value) for value in (operation_id,route_operation_id,owner_id))):
             raise ValueError('ROUTE_LEASE_REJECTED')
         request = json.dumps(dict(route_operation_id=route_operation_id, owner_id=owner_id,
             lease_version=lease_version), sort_keys=True)
         with self._lock, sqlite3.connect(self.db_path) as conn:
             conn.execute('BEGIN IMMEDIATE')
+            if conn.execute('SELECT 1 FROM route_operations WHERE operation_id=?',(operation_id,)).fetchone():
+                raise ValueError('ROUTE_OPERATION_CONFLICT')
             prior = conn.execute('SELECT request_json,response_json FROM route_lease_commands WHERE operation_id=?', (operation_id,)).fetchone()
             if prior:
                 if prior[0] != request:
@@ -271,7 +291,7 @@ def get_proxy_store(account_store=None):
 
 def _safe_error(exc):
     code = getattr(exc, 'code', str(exc))
-    if code in {'PROXY_NOT_FOUND', 'PROXY_BINDING_REQUIRED', 'PROXY_LOGIN_VALIDATION_REQUIRED'}:
+    if code in {'PROXY_NOT_FOUND', 'PROXY_BINDING_REQUIRED', 'PROXY_LOGIN_VALIDATION_REQUIRED', 'ACCOUNT_CHALLENGE'}:
         code = 'PROXY_UNAVAILABLE'
     return CollectionRouteError(code)
 
@@ -410,9 +430,9 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                 bundle.close()
                 raise
             bundle.snapshot = managed
-        except Exception:
+        except Exception as exc:
             bundle.close()
-            raise
+            raise _safe_error(exc) from None
     return bundle
 
 
@@ -645,11 +665,12 @@ def raise_route_log_error(log):
             raise CollectionRouteError(code)
 
 
-class _AssetBrowserSession:
+class _AssetLoopSession:
     """Original account browser remains live on a dedicated async loop."""
     def __init__(self, bundle, *, lazy=False):
         import asyncio
         self.bundle = bundle
+        self._snapshot_identity=getattr(bundle.snapshot,'operation_id','')
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
         self.thread.start()
@@ -684,37 +705,9 @@ class _AssetBrowserSession:
                 self.session = None
                 raise
 
-    async def open(self):
-        path = str(settings.media_crawler_dir.resolve())
-        if path not in sys.path:
-            sys.path.insert(0, path)
-        route_contract()
-        from tools.bound_proxy import BoundProxySession
-        from .crawler_browser import load_account_browser
-        self.session = BoundProxySession(self.bundle.snapshot,
-            echo_url=getattr(settings, 'crawler_proxy_echo_url', ''),
-            budget_id=probe_env(self.bundle)['MEDIACRAWLER_PROXY_PROBE_BUDGET_ID'],
-            ttl=getattr(settings, 'crawler_proxy_probe_ttl', 300),
-            max_calls=getattr(settings, 'crawler_proxy_probe_budget', 96),
-            trial_id=getattr(settings, 'crawler_proxy_trial_id', ''), reuse_existing_policy=True,
-            account_policy=parent_account_policy(self.bundle),
-            ack=self.bundle.route_operation_store.ticket(self.bundle.snapshot.operation_id, owner_id=self.bundle.owner_id,
-                snapshot_digest=self.bundle.snapshot.snapshot_digest,
-                context_id=self.bundle.snapshot.context_id) if self.bundle.snapshot.managed else None,
-            lease_renewer=(lambda prior: parent_renew_ticket(self.bundle,prior)) if self.bundle.snapshot.managed else None)
-        try:
-            self.context, _ = await load_account_browser().launch_account_context(
-                self.bundle.account_id, settings.crawler_browser_profile_root, headless=True,
-                route_snapshot=self.bundle.snapshot, bound_proxy_session=self.session)
-        except RuntimeError as exc:
-            code = getattr(exc, "code", None)
-            if code == "PROXY_BUSY":
-                raise CollectionRouteError("SUPPLEMENT_DEFERRED") from None
-            if code is not None:
-                raise _safe_error(exc) from None
-            raise CollectionRouteError("PROXY_UNAVAILABLE") from None
-
     def close(self):
+        if self.loop.is_closed():
+            return
         error = None
         try:
             if self.context is not None:
@@ -749,8 +742,11 @@ def _asset_helper(bundle, *, lazy=False):
     with bundle._asset_session_lock:
         key = "_borrowed_child_session" if child_active else "_asset_browser"
         helper = getattr(bundle, key, None)
+        if helper is not None and getattr(bundle.snapshot,'managed',False) and helper._snapshot_identity!=bundle.snapshot.operation_id:
+            helper.close()
+            helper=None
         if helper is None:
-            helper = (_BorrowedChildSession if child_active else _AssetBrowserSession)(bundle, lazy=lazy)
+            helper = _BorrowedChildSession(bundle, lazy=lazy)
             bundle.add_closer(helper.close)
             setattr(bundle, key, helper)
     return helper
@@ -797,6 +793,7 @@ class RouteReceiptPipe:
     """Public child-browser receipts, invalidated on EOF or process death."""
     def __init__(self, bundle):
         self.bundle = bundle
+        self.snapshot = bundle.snapshot
         self.read_fd, self.write_fd = os.pipe()
         self.ack_read_fd, self.ack_write_fd = os.pipe()
         self.thread = None
@@ -811,17 +808,19 @@ class RouteReceiptPipe:
     def env(self):
         return {'MEDIACRAWLER_PROXY_RECEIPT_FD': str(self.write_fd),
                 'MEDIACRAWLER_ROUTE_ACK_FD': str(self.ack_read_fd),
-                'MEDIACRAWLER_MANAGED_ROUTE': '1' if self.bundle.snapshot.managed else '0'}
+                'MEDIACRAWLER_MANAGED_ROUTE': '1' if self.snapshot.managed else '0'}
 
     def start(self, process):
         import json
         self.process = process
+        if self.snapshot.managed:
+            self.bundle.route_operation_store.record_child(self.snapshot.operation_id,owner_id=self.snapshot.owner_id,lease_version=self.snapshot.lease_version,child_pgid=process.pid)
         os.close(self.write_fd)
         self.write_fd = None
         os.close(self.ack_read_fd)
         self.ack_read_fd = None
         self.bundle.child_receipt_pipe = self
-        if self.bundle.snapshot.managed and callable(getattr(self.bundle, 'add_closer', None)):
+        if self.snapshot.managed and callable(getattr(self.bundle, 'add_closer', None)):
             self.bundle.add_closer(self.drain)
         def read():
             buffer = bytearray()
@@ -852,7 +851,15 @@ class RouteReceiptPipe:
                                 result[key] = entry
                             return result
                         value = json.loads(line, object_pairs_hook=unique)
-                        snapshot = self.bundle.snapshot
+                        snapshot = self.snapshot
+                        if isinstance(value,dict) and value.get('type')=='route_fault':
+                            if set(value)!={'type','event'}:
+                                return
+                            try:
+                                consume_route_event('COLLECTION_ROUTE_EVENT '+json.dumps(value['event'],allow_nan=False),self.bundle)
+                            except CollectionRouteError as fault:
+                                self.bundle.route_error = fault.code
+                            continue
                         if isinstance(value, dict) and value.get('type') == 'account_risk':
                             fields = {'type','operation_id','owner_id','lease_version','snapshot_digest','context_id','reason'}
                             if (set(value) != fields or value['reason'] != 'ACCOUNT_CHALLENGE'
@@ -921,12 +928,13 @@ class RouteReceiptPipe:
             finally:
                 poll.close()
                 with self.bundle._lock:
-                    self.bundle.child_receipt = None
+                    if getattr(self.bundle,'child_receipt_pipe',None) is self:
+                        self.bundle.child_receipt = None
         self.thread = threading.Thread(target=read, daemon=True)
         self.thread.start()
 
     def drain(self):
-        snapshot = self.bundle.snapshot
+        snapshot = self.snapshot
         store = getattr(self.bundle, 'route_operation_store', None)
         version = snapshot.lease_version
         if store:
@@ -939,6 +947,7 @@ class RouteReceiptPipe:
             store.transition(snapshot.operation_id, state='draining', owner_id=snapshot.owner_id, lease_version=version)
         if self.process is not None:
             _stop_probe_process_group(self.process)
+        assert_profile_browser_stopped(snapshot.account_id)
         self.close()
         if store:
             store.transition(snapshot.operation_id, state='ended', owner_id=snapshot.owner_id, lease_version=version)
@@ -949,7 +958,7 @@ class RouteReceiptPipe:
             if receipt is None or self.process is None or self.process.poll() is not None or self.stopped.is_set():
                 raise CollectionRouteError('SUPPLEMENT_DEFERRED')
             try:
-                route_contract().require_probe_receipt(self.bundle.snapshot, receipt, receipt.context_id,
+                route_contract().require_probe_receipt(self.snapshot, receipt, receipt.context_id,
                     ttl=getattr(settings, 'crawler_proxy_probe_ttl', 300))
             except Exception:
                 raise CollectionRouteError('SUPPLEMENT_DEFERRED') from None
@@ -967,12 +976,139 @@ class RouteReceiptPipe:
                 except OSError:
                     pass
                 setattr(self, name, None)
-        self.bundle.child_receipt = None
+        if getattr(self.bundle,'child_receipt_pipe',None) is self:
+            self.bundle.child_receipt = None
 
 
-class _BorrowedChildSession(_AssetBrowserSession):
+def renew_same_route_phase(bundle, *, allowed_borrowers=1):
+    """A closed original browser may yield a fresh lease on the SAME source route."""
+    from dataclasses import replace
+    old=bundle.snapshot
+    if getattr(bundle,'_borrowers',0)>allowed_borrowers:
+        raise CollectionRouteError('SUPPLEMENT_DEFERRED')
+    pipe=getattr(bundle,'child_receipt_pipe',None)
+    if pipe is not None:
+        if pipe.process is not None and pipe.process.poll() is None:
+            raise CollectionRouteError('SUPPLEMENT_DEFERRED')
+        pipe.drain()
+    else:
+        assert_profile_browser_stopped(bundle.account_id)
+        end_route_operation(bundle)
+    current=resolve_account_route(bundle.account_id,account_store=bundle.account_store,
+        expected_binding_revision=old.binding_revision,expected_config_revision=old.config_revision)
+    if (current is None or current.proxy_id!=old.proxy_id or current.observed_exit_ip!=old.observed_exit_ip
+            or current.exit_generation!=old.exit_generation):
+        raise CollectionRouteError('PROXY_REVISION_MISMATCH')
+    bundle.account_store.release_route_admission(old.operation_id)
+    new=replace(old,operation_id=secrets.token_hex(16),lease_id=secrets.token_hex(16),lease_version=1,
+        context_id=secrets.token_hex(16),snapshot_digest='',login_bootstrap=False,recovery_claim='')
+    new=replace(new,snapshot_digest=route_contract().snapshot_digest(new))
+    expiry=min(new.expires_at,time.time()+300)
+    operation=RouteOperation(operation_id=new.operation_id,lease_id=new.lease_id,lease_version=1,owner_id=new.owner_id,
+        account_id=new.account_id,profile_key=new.profile_key,route_mode=new.route_mode,proxy_id=new.proxy_id,
+        resource_revision=new.config_revision,observed_exit=new.observed_exit_ip,exit_generation=new.exit_generation,
+        expires_at=expiry,context_id=new.context_id,scope_ids=new.scope_ids,snapshot_digest=new.snapshot_digest,proxy_expires_at=new.expires_at)
+    token=bundle.account_store.admit_route(new.account_id,new.observed_exit_ip,new.exit_generation,new.operation_id)
+    bundle.add_closer(lambda:bundle.account_store.release_route_admission(token))
+    bundle.route_operation_store.issue(operation)
+    bundle.snapshot=new
+    bundle.route_error=None
+
+
+def prepare_collection_child(bundle, *, allowed_borrowers=0, timeout=15):
+    """Drain a supplementary context after every other media borrower finishes."""
+    process=getattr(bundle,'asset_browser_process',None)
+    if process is None:
+        return
+    deadline=time.monotonic()+timeout
+    while getattr(bundle,'_borrowers',0)>allowed_borrowers:
+        if time.monotonic()>=deadline:
+            raise CollectionRouteError('PROXY_BUSY')
+        time.sleep(.02)
+    pipe=bundle.child_receipt_pipe
+    close_asset_browser_child(process,pipe)
+    bundle.child_active=False
+    if bundle.snapshot.managed:
+        renew_same_route_phase(bundle,allowed_borrowers=allowed_borrowers)
+    bundle.asset_browser_process=None
+
+
+def close_asset_browser_child(process, pipe):
+    """Graceful close first; cleanup proof still fences every held source lock."""
+    import subprocess
+    if process.poll() is None:
+        try:
+            process.stdin.write('close\n');process.stdin.flush();process.stdin.close()
+        except (BrokenPipeError,OSError):
+            pass
+        try:process.wait(timeout=15)
+        except subprocess.TimeoutExpired:_stop_probe_process_group(process)
+    pipe.drain()
+    for stream in (process.stdin,process.stdout,process.stderr):
+        if stream is not None and not stream.closed:stream.close()
+
+
+def start_asset_browser_child(bundle):
+    """Use the configured crawler interpreter, never import browser deps in App."""
+    import subprocess
+    from pathlib import Path
+    from .crawler_browser import account_browser_env,scheduler_env
+    store=getattr(bundle,'route_operation_store',None)
+    if store is not None:
+        with __import__('sqlite3').connect(store.db_path) as db:
+            row=store._row(db.execute('SELECT * FROM route_operations WHERE operation_id=?',(bundle.snapshot.operation_id,)).fetchone())
+        if row['child_pgid'] is not None or row['state']=='ended':
+            renew_same_route_phase(bundle)
+    else:
+        old_pipe=getattr(bundle,'child_receipt_pipe',None)
+        if old_pipe is not None:
+            if old_pipe.process is not None and old_pipe.process.poll() is None:
+                raise CollectionRouteError('SUPPLEMENT_DEFERRED')
+            old_pipe.drain()
+    config=RouteConfigPipe(bundle.snapshot);receipt=RouteReceiptPipe(bundle)
+    env=os.environ.copy()
+    for name in ('MEDIACRAWLER_PROXY_CONFIG_FD','MEDIACRAWLER_PROXY_RECEIPT_FD','MEDIACRAWLER_ROUTE_ACK_FD','MEDIACRAWLER_MANAGED_ROUTE'):
+        env.pop(name,None)
+    env.update(account_browser_env(bundle.account_id));env.update(scheduler_env());env.update(probe_env(bundle))
+    env.update(config.env);env.update(receipt.env)
+    env['MEDIACRAWLER_DIR']=str(settings.media_crawler_dir.resolve())
+    env['MEDIACRAWLER_ASSET_ACCOUNT_POLICY']=json.dumps(parent_account_policy(bundle),allow_nan=False)
+    env['PYTHONPATH']=str(settings.root_dir)+os.pathsep+env.get('PYTHONPATH','')
+    helper=Path(__file__).resolve().parents[2]/'scripts/crawler_proxy_probe.py'
+    process=None
+    try:
+        process=subprocess.Popen([str(settings.crawler_login_python),str(helper),'--account-id',bundle.account_id,'--hold-context'],
+            cwd=settings.media_crawler_dir,env=env,pass_fds=(*bundle.pass_fds,*config.pass_fds,*receipt.pass_fds),
+            stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,text=True,start_new_session=True)
+        config.start(process);receipt.start(process)
+        bundle.add_closer(lambda:close_asset_browser_child(process,receipt))
+        bundle.add_closer(config.close)
+        bundle.asset_browser_process=process
+        bundle.child_active=True
+    except Exception:
+        if process is not None:_stop_probe_process_group(process)
+        config.close();receipt.close()
+        raise
+
+
+class _BorrowedChildSession(_AssetLoopSession):
     """Use actual live child browser sample; compare a fresh HTTP-only echo."""
     async def open(self):
+        pipe=getattr(self.bundle,'child_receipt_pipe',None)
+        live=pipe is not None and pipe.process is not None and pipe.process.poll() is None and not pipe.stopped.is_set()
+        if not live:
+            start_asset_browser_child(self.bundle)
+            deadline=time.monotonic()+45
+            while time.monotonic()<deadline:
+                try:
+                    self.bundle.child_receipt_pipe.receipt()
+                    break
+                except CollectionRouteError:
+                    if self.bundle.child_receipt_pipe.process.poll() is not None:
+                        raise CollectionRouteError('SUPPLEMENT_DEFERRED')
+                    await __import__('asyncio').sleep(.05)
+            else:
+                raise CollectionRouteError('SUPPLEMENT_DEFERRED')
         path = str(settings.media_crawler_dir.resolve())
         if path not in sys.path:
             sys.path.insert(0, path)
@@ -1333,6 +1469,7 @@ def download_asset_hop(bundle, url, headers, timeout, verify, on_chunk, *, media
             return duration
         async with asyncio.timeout(remaining()) as timer:
             await helper.ensure_open()
+            active_snapshot=bundle.snapshot
             duration = remaining()
             timer.reschedule(asyncio.get_running_loop().time() + duration)
             slot = None
@@ -1438,7 +1575,7 @@ def consume_route_event(line, bundle):
         at = event['observed_at']
         if type(at) not in (int,float) or not math.isfinite(at) or at < 0 or at > time.time()+1:
             raise CollectionRouteError('PROXY_CONFIG_INVALID')
-        store = bundle.proxy_store
+        store = getattr(bundle,'proxy_store',None)
         if event['code'] == 'ROUTE_OBSERVED':
             ip = route_contract().canonical_exit_ip(event['observed_exit_ip'])
             if snapshot.route_mode == 'direct_degraded':
@@ -1457,6 +1594,8 @@ def consume_route_event(line, bundle):
             raise CollectionRouteError('PROXY_CONFIG_INVALID')
         publish_route_stop(snapshot.proxy_id,snapshot.config_revision,error.code)
         if snapshot.route_mode == 'direct_degraded':
+            raise error
+        if store is None:
             raise error
         store.set_health(snapshot.proxy_id,status='exit_changed' if error.code=='PROXY_EXIT_CHANGED' else 'unavailable',stop_reason=error.code)
         raise error
@@ -1602,3 +1741,61 @@ def refresh_existing_route(account_id, *, account_store=None, owner_id='local-us
         return True
     finally:
         bundle.close()
+
+
+def assert_profile_browser_stopped(account_id):
+    """A detached Chromium owner keeps SingletonLock even after helper exit."""
+    from pathlib import Path
+    import re
+    directory=settings.crawler_browser_profile_root.expanduser().resolve()/route_contract().derive_profile_key(account_id)
+    singleton=directory/'SingletonLock'
+    if singleton.is_symlink():
+        target=os.readlink(singleton)
+        match=re.fullmatch(r'(.+)-(\d+)',target)
+        if not match:
+            raise CollectionRouteError('PROXY_BUSY')
+        import socket
+        if match[1] not in {socket.gethostname(),socket.gethostname().split('.')[0]}:
+            raise CollectionRouteError('PROXY_BUSY')
+        try:
+            os.kill(int(match[2]),0)
+        except ProcessLookupError:
+            return
+        except (PermissionError,ValueError):
+            raise CollectionRouteError('PROXY_BUSY') from None
+        raise CollectionRouteError('PROXY_BUSY')
+    if singleton.exists():
+        raise CollectionRouteError('PROXY_BUSY')
+
+
+def reconcile_stopped_route_admissions(accounts, account_id, fresh_account_handle):
+    """A fresh account FD plus independently free Profile proves local child drain."""
+    import fcntl
+    from backend.task_admission.resources import account_lock_path
+    expected=account_lock_path('dy',account_id)
+    actual=os.fstat(fresh_account_handle.fileno());wanted=expected.stat()
+    if (actual.st_dev,actual.st_ino)!=(wanted.st_dev,wanted.st_ino):
+        raise CollectionRouteError('PROXY_BUSY')
+    directory=settings.crawler_browser_profile_root.expanduser().resolve()/route_contract().derive_profile_key(account_id)
+    profile_handle=None
+    try:
+        assert_profile_browser_stopped(account_id)
+        import sqlite3,subprocess
+        path=settings.request_scheduler_db
+        if path.exists():
+            with sqlite3.connect(path) as db:
+                if db.execute("SELECT 1 FROM sqlite_master WHERE name='route_operations'").fetchone() and 'child_pgid' in {row[1] for row in db.execute('PRAGMA table_info(route_operations)')}:
+                    groups={row[0] for row in db.execute("SELECT child_pgid FROM route_operations WHERE account_id=? AND state<>'ended' AND child_pgid IS NOT NULL",(account_id,))}
+                else:groups=set()
+            listing=subprocess.run(['ps','-axo','pgid=,stat='],capture_output=True,text=True,timeout=2,check=True).stdout
+            for line in listing.splitlines():
+                fields=line.split()
+                if len(fields)==2 and fields[0].isdigit() and int(fields[0]) in groups and not fields[1].startswith('Z'):
+                    raise CollectionRouteError('PROXY_BUSY')
+        if directory.exists():
+            profile_handle=(directory/'adapter.lock').open('a+b')
+            try:fcntl.flock(profile_handle.fileno(),fcntl.LOCK_EX|fcntl.LOCK_NB)
+            except BlockingIOError:raise CollectionRouteError('PROXY_BUSY') from None
+        return accounts.release_admissions_for_stopped_account(account_id)
+    finally:
+        if profile_handle is not None:profile_handle.close()

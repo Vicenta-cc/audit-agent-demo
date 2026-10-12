@@ -387,3 +387,23 @@ def test_start_api_invalid_json_option_types_return_400(api, monkeypatch, body):
     )
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "INVALID_LOGIN_OPTIONS"
+
+
+def test_manual_claim_and_transport_secrets_never_enter_rest_or_ws(api):
+    import json
+    client,m,s,_,_,_,_=api
+    claim='manual-claim-canary-private'
+    password='proxy-password-canary-private'
+    m.operations.mark_stage(s['operation_id'],'checking',result_json=json.dumps({'status':'success','operation_id':s['operation_id'],
+        'recovery_claim':claim,'password':password,'account':{'id':s['account_id'],'status':'active','recovery_claim':claim,
+        'manual_recovery_claim':claim,'auth_state_ciphertext':password,'transport_ciphertext':password}}))
+    response=client.get(f"/api/crawler-accounts/{s['account_id']}/login-operations/{s['operation_id']}")
+    assert response.status_code==200
+    assert claim not in response.text and password not in response.text
+    m.sessions[s['id']].manual_recovery_claim=claim
+    path=f"/api/crawler-account-login-sessions/{s['id']}"
+    ticket=client.post(path+'/ws-tickets').json()['ticket']
+    with client.websocket_connect(path+'/stream',headers={'Origin':'https://app.test'}) as ws:
+        ws.send_json({'type':'auth','protocol_version':2,'ticket':ticket})
+        snapshot=json.dumps(ws.receive_json())
+        assert claim not in snapshot and password not in snapshot

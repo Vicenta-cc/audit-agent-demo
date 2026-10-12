@@ -193,7 +193,7 @@ class CrawlerLoginOperationStore:
             raise ValueError("PROXY_REVISION_MISMATCH")
         return account
 
-    def commit_auth(self, operation_id, ciphertext, platform_account_id, *, credentials_changed=True):
+    def commit_auth(self, operation_id, ciphertext, platform_account_id, *, credentials_changed=True, manual_recovery_claim=None, owner_id=None, route_snapshot=None):
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             op = self._get(conn, operation_id)
@@ -222,10 +222,17 @@ class CrawlerLoginOperationStore:
             credentials_changed = credentials_changed or not bool(backup)
             account = self.accounts.save_douyin_auth_state(op["account_id"], ciphertext, platform_account_id,
                 connection=conn, expected_revision=op["expected_auth_revision"], credentials_changed=credentials_changed)
-            if op["proxy_id"]:
+            if account.get("route_mode") == "direct_degraded" and route_snapshot is not None:
+                self.accounts.mark_direct_validated(op["account_id"],route_snapshot.exit_generation,connection=conn)
+            elif op["proxy_id"]:
                 account = self.proxies.mark_route_login_validated(op["account_id"],
                     expected_binding_revision=op["expected_binding_revision"],
                     expected_config_revision=op["expected_config_revision"], connection=conn)
+            if manual_recovery_claim:
+                if not self.accounts.finish_manual_recovery(op["account_id"],operation_id,manual_recovery_claim,"success",
+                    owner_id=owner_id,verified_identity=platform_account_id,connection=conn):
+                    raise ValueError("MANUAL_RECOVERY_REJECTED")
+                account=self.accounts.get(op["account_id"],connection=conn)
             result = json.dumps({"status":"success", "operation_id":operation_id,"account":account}, ensure_ascii=False)
             now = _now()
             conn.execute("UPDATE crawler_login_operations SET stage='committed', verified_platform_account_id=?,result_json=?,updated_at=?,completed_at=? WHERE id=?", (platform_account_id,result,now,now,operation_id))

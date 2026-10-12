@@ -99,7 +99,22 @@ def create_login_v2_router(
             "updated_at",
             "completed_at",
         )
-        return {k: op.get(k) for k in fields}
+        item={k: op.get(k) for k in fields}
+        result=item.get('result')
+        if isinstance(result,dict):
+            safe={key:result[key] for key in ('status','operation_id') if key in result}
+            account=result.get('account')
+            if isinstance(account,dict):
+                public_account_fields=('id','platform','display_name','platform_account_id','status','access_scope',
+                    'has_auth_state','auth_state_revision','auth_state_updated_at','last_validated_at','last_used_at',
+                    'last_error','cooldown_until','failure_kind','risk_count','last_risk_at','created_at','updated_at',
+                    'proxy_id','proxy_required','binding_revision','route_mode','route_state','pause_reason','paused_until',
+                    'shared_exit_generation','recovery_state')
+                safe['account']={key:account[key] for key in public_account_fields if key in account}
+            item['result']=safe
+        else:
+            item['result']=None
+        return item
 
     def public_command(command):
         result = {

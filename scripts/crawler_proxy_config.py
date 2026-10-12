@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import json
+import re
 from pathlib import Path
 import sys
 
@@ -58,6 +59,8 @@ def apply_config(store, config, *, credentials=None):
         raise ValueError('PROXY_CONFIG_INVALID')
     if operation == 'safety-policy':
         if (set(config) != {'operation', 'account_id', 'expected_binding_revision', 'route_mode'}
+                or not isinstance(config['account_id'],str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}',config['account_id'])
+                or type(config['route_mode']) is not str
                 or config['route_mode'] not in {'proxy_required', 'proxy_preferred'}):
             raise ValueError('PROXY_CONFIG_INVALID')
         from backend.task_admission.resources import account_lease

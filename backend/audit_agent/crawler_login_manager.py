@@ -59,6 +59,8 @@ class LoginSession:
     global_handle: object | None = field(default=None, repr=False)
     route_bundle: object | None = field(default=None, repr=False)
     route_pipe: object | None = field(default=None, repr=False)
+    manual_recovery_claim: str = field(default="",repr=False)
+    manual_finished: bool = field(default=False,repr=False)
     input_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def public(self) -> dict:
@@ -220,7 +222,13 @@ class CrawlerAccountLoginManager:
         from .crawler_route import acquire_route_execution, RouteConfigPipe
         try:
             if session.platform == "dy":
-                session.route_bundle = acquire_route_execution(session.account_id, session.id, session.owner_user_id, account_handle=session.resource_handle, account_store=self.store, allow_probe=True)
+                if settings.crawler_safety_enabled and account.get("route_state") in {"manual_required","challenge_paused","recovery_check"}:
+                    from .crawler_route import reconcile_stopped_route_admissions
+                    reconcile_stopped_route_admissions(self.store,session.account_id,session.resource_handle)
+                    session.manual_recovery_claim = self.store.begin_manual_recovery(session.account_id,session.id,owner_id=session.owner_user_id) or ""
+                    if not session.manual_recovery_claim:
+                        raise ValueError('ACCOUNT_BUSY')
+                session.route_bundle = acquire_route_execution(session.account_id, session.id, session.owner_user_id, account_handle=session.resource_handle, account_store=self.store, allow_probe=True, recovery_claim=session.manual_recovery_claim or None)
             session.route_pipe = RouteConfigPipe(session.route_bundle.snapshot if session.route_bundle else None)
             env.update(session.route_pipe.env)
             from .crawler_route import RouteReceiptPipe
@@ -231,6 +239,9 @@ class CrawlerAccountLoginManager:
                 from .crawler_route import probe_env
                 env.update(probe_env(session.route_bundle))
         except Exception:
+            if session.manual_recovery_claim and not session.manual_finished:
+                self.store.finish_manual_recovery(session.account_id,session.id,session.manual_recovery_claim,"uncertain",owner_id=session.owner_user_id)
+                session.manual_finished=True
             session.resource_handle.close()
             session.global_handle.close()
             raise
@@ -253,6 +264,9 @@ class CrawlerAccountLoginManager:
                 start_new_session=os.name != "nt",
             )
         except OSError as exc:
+            if session.manual_recovery_claim and not session.manual_finished:
+                self.store.finish_manual_recovery(session.account_id,session.id,session.manual_recovery_claim,"uncertain",owner_id=session.owner_user_id)
+                session.manual_finished=True
             session.route_pipe.close()
             if session.route_bundle:
                 session.route_bundle.close()
@@ -493,6 +507,9 @@ class CrawlerAccountLoginManager:
                     self._unexpected_exit_message(return_code, diagnostic),
                 )
         finally:
+            if session.manual_recovery_claim and not session.manual_finished:
+                self.store.finish_manual_recovery(session.account_id,session.id,session.manual_recovery_claim,"cancelled" if session.status=="cancelled" else "uncertain",owner_id=session.owner_user_id)
+                session.manual_finished=True
             if session.route_pipe is not None:
                 session.route_pipe.close()
             if session.route_bundle is not None:
@@ -640,15 +657,23 @@ class CrawlerAccountLoginManager:
                         if expected and expected.get("platform_account_id") and expected["platform_account_id"] != platform_account_id:
                             self.store.mark_douyin_auth_invalid(session.account_id, status="login_required")
                             raise ValueError("IDENTITY_MISMATCH")
-                        account = self.store.save_douyin_auth_state(
-                            session.account_id, ciphertext, platform_account_id or ""
-                        )
-                        if session.route_bundle and session.route_bundle.snapshot:
-                            route = session.route_bundle.snapshot
-                            session.route_bundle.proxy_store.mark_route_login_validated(
-                                session.account_id, expected_binding_revision=route.binding_revision,
-                                expected_config_revision=route.config_revision)
-                            account = self.store.get(session.account_id)
+                        with self.store._connect() as conn:
+                            conn.execute('BEGIN IMMEDIATE')
+                            account = self.store.save_douyin_auth_state(session.account_id,ciphertext,platform_account_id or '',connection=conn)
+                            if session.route_bundle and session.route_bundle.snapshot:
+                                route = session.route_bundle.snapshot
+                                if route.route_mode == 'direct_degraded':
+                                    self.store.mark_direct_validated(session.account_id,route.exit_generation,connection=conn)
+                                else:
+                                    session.route_bundle.proxy_store.mark_route_login_validated(session.account_id,
+                                        expected_binding_revision=route.binding_revision,expected_config_revision=route.config_revision,connection=conn)
+                            if session.manual_recovery_claim:
+                                if not self.store.finish_manual_recovery(session.account_id,session.id,session.manual_recovery_claim,'success',
+                                    owner_id=session.owner_user_id,verified_identity=platform_account_id,connection=conn):
+                                    raise ValueError('MANUAL_RECOVERY_REJECTED')
+                            account=self.store.get(session.account_id,connection=conn)
+                        if session.manual_recovery_claim:
+                            session.manual_finished=True
                     else:
                         account = self.store.save_auth_state(
                             session.account_id, ciphertext, platform_account_id=platform_account_id or None
