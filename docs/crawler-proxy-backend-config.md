@@ -99,7 +99,7 @@ CRAWLER_PROXY_POOL_IDS=RESOURCE_ID_A,RESOURCE_ID_B
 
 策略只允许 `proxy_required` / `proxy_preferred`；改回严格代理时把 `route_mode` 改为 `proxy_required`。操作持有原有账号/Profile lease，检查绑定版本，并在事务中拒绝存在 active route admission 的账号。成功 stdout 为 `item` 下的 `account_id`、`proxy_id`、`binding_revision`；失败仅为 `code` 固定码，进程返回 1。该操作不增加绑定版本，不清除风险、冷却、人工处理状态或登录验证，不授予 ACL；不要重复使用旧版本来绕过重新读取。
 
-恢复代理资源可继续使用上文的 `update` / `bind` 操作，随后在原 Profile 上完成可信登录验证；修改策略或 `status:active` 本身不是恢复采集证明。当前工具没有专门的强制 drain、人工风险清除、出口注入或直接进入 `direct_degraded` 操作。不要手改 SQLite 状态或把内部 probe 子进程当作公开运维 CLI。
+恢复代理资源可继续使用上文的 `update` / `bind` 操作，随后在原 Profile 上完成可信登录验证；修改策略或 `status:active` 本身不是恢复采集证明。风险人工恢复复用账号页面现有登录操作，V2 与旧登录路径均绑定已授权用户、原账号身份、Profile、出口和原冷却期限；可信 self 身份验证与 auth 保存成功后，仍须等待冷却结束。详见下述安全运维文档。当前 CLI 没有专门的强制 drain、强制风险清除、出口注入或直接进入 `direct_degraded` 操作。不要手改 SQLite 状态或把内部 probe 子进程当作公开运维 CLI。
 
 ## 只读状态与运行边界
 
