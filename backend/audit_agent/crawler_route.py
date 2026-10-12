@@ -405,7 +405,7 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                 snapshot = replace(snapshot, observed_exit_ip=observed.ip, observed_exit_at=observed.observed_at,
                     scope_ids=(tuple(sorted(['dy','dy:account:'+account_id,'dy:service_exit:'+observed.ip,'dy:exit:'+observed.ip])) if snapshot.route_mode=='direct_degraded' else contract.derive_scope_ids('dy', account_id, snapshot.proxy_id, observed.ip)))
                 bundle.snapshot = snapshot
-            observation = bundle.account_store.observe_shared_exit(snapshot.observed_exit_ip, observed_at=snapshot.observed_exit_at, service_exit=snapshot.route_mode == 'direct_degraded')
+            observation = bundle.account_store.consume_cached_exit(snapshot.observed_exit_ip, observed_at=snapshot.observed_exit_at, service_exit=snapshot.route_mode == 'direct_degraded')
             if not bundle.acquire_exit_capacity(snapshot.observed_exit_ip):
                 bundle.close()
                 raise CollectionRouteError('PROXY_BUSY')

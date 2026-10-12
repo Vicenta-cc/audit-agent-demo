@@ -17,6 +17,32 @@ def account(store, name):
     return store.save_auth_state(value['id'],'fixture-ciphertext')
 
 
+def test_initial_human_login_can_retry_cancelled_claim_and_freeze_trusted_identity(tmp_path):
+    store=CrawlerAccountStore(tmp_path/'safety.sqlite3')
+    a=store.create(platform='dy',display_name='first-human-login')
+    observation=store.observe_shared_exit('203.0.113.10',service_exit=True)
+    generation=observation['shared_exit_generation']
+    first=store.begin_manual_recovery(a['id'],'first',owner_id='owner',allow_active=True,observed_exit='203.0.113.10',generation=generation)
+    assert first and not store.finish_manual_recovery(a['id'],'first',first,'cancelled',owner_id='owner')
+    assert store.get(a['id'])['route_state']=='manual_required'
+    second=store.begin_manual_recovery(a['id'],'second',owner_id='owner')
+    assert second
+    with store._connect() as db:
+        db.execute('BEGIN IMMEDIATE')
+        store.save_douyin_auth_state(a['id'],'trusted-fixture-ciphertext','trusted_new_identity',connection=db)
+        assert store.finish_manual_recovery(a['id'],'second',second,'success',owner_id='owner',verified_identity='trusted_new_identity',connection=db)
+    assert store.get(a['id'])['route_state']=='active'
+    with store._connect() as db:
+        assert db.execute("SELECT expected_identity FROM crawler_manual_recovery_operations WHERE login_operation_id='second'").fetchone()[0]=='trusted_new_identity'
+    store.pause_account_exit(a['id'],until=time.time()+60)
+    third=store.begin_manual_recovery(a['id'],'third',owner_id='owner')
+    with store._connect() as db:
+        db.execute('BEGIN IMMEDIATE')
+        store.save_douyin_auth_state(a['id'],'wrong-fixture-ciphertext','different_identity',connection=db)
+        assert not store.finish_manual_recovery(a['id'],'third',third,'success',owner_id='owner',verified_identity='different_identity',connection=db)
+    assert store.get(a['id'])['platform_account_id']=='trusted_new_identity'
+
+
 def admit_worker(path, account_id, barrier, queue):
     store=CrawlerAccountStore(path)
     barrier.wait()

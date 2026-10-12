@@ -800,6 +800,18 @@ class CrawlerAccountStore:
             conn.execute('BEGIN IMMEDIATE')
             return update(conn)
 
+    def consume_cached_exit(self, ip, *, observed_at, service_exit=False):
+        """Consume a fresh resource sample without rolling back shared observations."""
+        key=self._exit_key(ip);at=self._epoch(observed_at)
+        if type(service_exit) is not bool or not 0 <= time.time()-at <= settings.crawler_exit_observation_ttl:
+            raise ValueError('PROXY_STALE_OBSERVATION')
+        with self._lock,self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row=conn.execute('SELECT * FROM crawler_shared_exits WHERE exit_key=?',(key,)).fetchone()
+            if row and row['observed_at']>at:
+                return {'observed_exit_ip':key,'observed_exit_at':row['observed_at'],'shared_exit_key':key,'shared_exit_generation':row['generation']}
+            return self.observe_shared_exit(key,observed_at=at,service_exit=service_exit,connection=conn)
+
     def get_direct_route(self, account_id, *, allow_stale_recovery=False):
         if type(allow_stale_recovery) is not bool:
             raise ValueError('ROUTE_RECOVERY_INVALID')
@@ -972,8 +984,8 @@ class CrawlerAccountStore:
             if row['recovery_state']=='manual_claimed': return None
             if conn.execute("SELECT 1 FROM crawler_route_admissions WHERE account_id=? AND state='active'",(account_id,)).fetchone():
                 return None
-            initial=bool(allow_active and row['route_state'] in {'active','transport_blocked'} and not row['pause_reason'])
-            if initial:
+            bootstrap=bool(allow_active and row['route_state'] in {'active','transport_blocked'} and not row['pause_reason'])
+            if bootstrap:
                 key=self._exit_key(observed_exit);gen=self._generation(generation)
                 if not self._exit_allowed(conn,key,gen):return None
                 conn.execute('UPDATE crawler_accounts SET shared_exit_key=?,shared_exit_generation=? WHERE id=?',(key,gen,account_id))
@@ -984,7 +996,9 @@ class CrawlerAccountStore:
                 if row['cooldown_until']: cooldown=max(cooldown,datetime.fromisoformat(row['cooldown_until']).timestamp())
             except (ValueError,TypeError): return None
             conn.execute("INSERT INTO crawler_manual_recovery_operations(login_operation_id,account_id,owner_id,claim,expected_identity,exit_key,exit_generation,cooldown_until,state,created_at) VALUES(?,?,?,?,?,?,?,?,'claimed',?)",(login_operation_id,account_id,owner_id,claim,row['platform_account_id'] or '',row['shared_exit_key'],row['shared_exit_generation'],cooldown,time.time()))
-            conn.execute('UPDATE crawler_manual_recovery_operations SET initial_login=?,risk_recorded=? WHERE login_operation_id=?',(int(initial),int(not initial),login_operation_id))
+            exit_pause=conn.execute('SELECT pause_reason FROM crawler_shared_exits WHERE exit_key=?',(row['shared_exit_key'],)).fetchone()
+            risk_recorded=bool(row['recovery_incident'] and row['risk_count'] and row['paused_until'] and exit_pause and exit_pause[0]=='ACCOUNT_CHALLENGE')
+            conn.execute('UPDATE crawler_manual_recovery_operations SET initial_login=?,risk_recorded=? WHERE login_operation_id=?',(int(not row['platform_account_id']),int(risk_recorded),login_operation_id))
             conn.execute("UPDATE crawler_accounts SET route_state='recovery_check',recovery_state='manual_claimed',recovery_claim=? WHERE id=?",(claim,account_id))
             conn.execute("INSERT INTO crawler_route_events(account_id,event_type,route_mode,operation_id,shared_exit_key,created_at) VALUES(?,'manual_recovery_claimed',?,?,?,?)",(account_id,row['route_mode'],login_operation_id,row['shared_exit_key'],time.time()))
             return claim
@@ -1006,6 +1020,8 @@ class CrawlerAccountStore:
             verified=bool(result=='success' and verified_identity and (verified_identity==operation['expected_identity'] if operation['expected_identity'] else operation['initial_login'])
                 and row['platform_account_id']==verified_identity and row['auth_state_ciphertext']
                 and row['shared_exit_key']==operation['exit_key'] and row['shared_exit_generation']>=operation['exit_generation'])
+            if verified and not operation['expected_identity']:
+                conn.execute('UPDATE crawler_manual_recovery_operations SET expected_identity=? WHERE login_operation_id=?',(verified_identity,login_operation_id))
             cooled=operation['cooldown_until']<=time.time() and (row['paused_until'] is None or row['paused_until']<=time.time())
             try:
                 cooled=cooled and (not row['cooldown_until'] or datetime.fromisoformat(row['cooldown_until'])<=datetime.now())

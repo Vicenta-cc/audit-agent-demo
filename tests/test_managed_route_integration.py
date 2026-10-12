@@ -526,18 +526,26 @@ runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
         with accounts._connect() as db:assert not db.execute("SELECT 1 FROM crawler_route_admissions WHERE account_id=? AND state='active'",(account['id'],)).fetchone()
 
 
-def test_actual_manager_challenge_pauses_once_but_qr_and_human_claim_remain_valid(tmp_path,monkeypatch):
+@pytest.mark.parametrize('original_identity',['original_identity_123',''])
+@pytest.mark.parametrize('manual_without_risk',[False,True])
+def test_actual_manager_challenge_pauses_once_but_qr_and_human_claim_remain_valid(tmp_path,monkeypatch,original_identity,manual_without_risk):
     from backend.audit_agent.crawler_account_store import CrawlerAccountStore
     from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
     from backend.audit_agent.crawler_login_v2_manager import CrawlerLoginV2Manager,V2Session
     from backend.audit_agent.auth_state_cipher import AuthStateCipher
-    for name,value in dict(crawler_safety_enabled=True,crawler_proxy_enabled=True,app_auth_mode='disabled',
+    for name,value in dict(crawler_safety_enabled=True,crawler_direct_degrade_enabled=True,crawler_proxy_enabled=True,app_auth_mode='disabled',
         request_scheduler_db=tmp_path/'gate.db',task_resource_lock_dir=tmp_path/'locks',crawler_browser_profile_root=tmp_path/'profiles').items():monkeypatch.setattr(app.settings,name,value)
     accounts=CrawlerAccountStore(tmp_path/'accounts.db');proxies=CrawlerProxyStore(accounts)
-    a=accounts.create(platform='dy',display_name='human');accounts.update(a['id'],platform_account_id='original_identity_123')
+    a=accounts.create(platform='dy',display_name='human');accounts.update(a['id'],platform_account_id=original_identity)
     p=proxies.create(display_name='fixture',endpoint='http://127.0.0.1:9',expires_at=time.time()+3600)
-    proxies.bind(a['id'],p['id'],expected_binding_revision=a['binding_revision']);proxies.observe_exit(p['id'],'198.51.100.8')
-    bundle=app.acquire_route_execution(a['id'],'human-login','owner',account_store=accounts,allow_probe=True,human_login_operation_id='human-login')
+    proxies.bind(a['id'],p['id'],expected_binding_revision=a['binding_revision'],route_mode='proxy_preferred' if manual_without_risk else None);proxies.observe_exit(p['id'],'198.51.100.8')
+    prior_claim=None
+    if manual_without_risk:
+        observation=accounts.observe_shared_exit('198.51.100.8',service_exit=True)
+        accounts.set_route_state(a['id'],state='manual_required',route_mode='direct_degraded',pause_reason='LOGIN_REVALIDATION_REQUIRED',shared_exit_key='198.51.100.8',generation=observation['shared_exit_generation'])
+        prior_claim=accounts.begin_manual_recovery(a['id'],'human-login',owner_id='owner')
+        assert prior_claim
+    bundle=app.acquire_route_execution(a['id'],'human-login','owner',account_store=accounts,allow_probe=True,human_login_operation_id='human-login',recovery_claim=prior_claim)
     manager=CrawlerLoginV2Manager(accounts,AuthStateCipher('fixture'))
     session=V2Session('session','human-login',a['id'],'owner','app-session','owner-hash',dict(phase='checking',state_revision=1))
     session.route_bundle=bundle;manager.sessions[session.id]=session
@@ -555,5 +563,61 @@ def test_actual_manager_challenge_pauses_once_but_qr_and_human_claim_remain_vali
         assert accounts.admit_route(a['id'],'198.51.100.8',1,'human-continue',recovery_claim=bundle.snapshot.recovery_claim)=='human-continue'
         with pytest.raises(ValueError):accounts.admit_route(a['id'],'198.51.100.8',1,'automatic-hidden-login')
         accounts.release_route_admission('human-continue')
+        if not original_identity:
+            # First trusted human identity is frozen atomically, including a deferred release.
+            identity='trusted_new_identity_123'
+            with accounts._connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                accounts.save_douyin_auth_state(a['id'],'fresh-fixture-ciphertext',identity,connection=db)
+                assert accounts.finish_manual_recovery(a['id'],'human-login',bundle.snapshot.recovery_claim,'success',owner_id='owner',verified_identity=identity,connection=db)
+            assert accounts.get(a['id'])['recovery_state']=='manual_verified_waiting'
+            with accounts._connect() as db:
+                operation=db.execute("SELECT expected_identity,cooldown_until FROM crawler_manual_recovery_operations WHERE login_operation_id='human-login'").fetchone()
+            assert operation['expected_identity']==identity
+            assert not accounts.release_verified_manual(a['id'])
+            release_at=max(operation['cooldown_until'],accounts.get(a['id'])['paused_until'])+1
+            from datetime import datetime
+            from backend.audit_agent import crawler_account_store
+            class ReleasedDatetime(datetime):
+                @classmethod
+                def now(cls,tz=None):return cls.fromtimestamp(release_at,tz)
+            with monkeypatch.context() as clock_patch:
+                clock_patch.setattr(time,'time',lambda:release_at)
+                clock_patch.setattr(crawler_account_store,'datetime',ReleasedDatetime)
+                assert accounts.release_verified_manual(a['id'])
+            assert accounts.get(a['id'])['risk_count']==1
     finally:
         manager.sessions.clear();bundle.close()
+
+
+def test_two_fresh_proxy_samples_share_newer_canonical_exit_without_timestamp_replay(tmp_path,monkeypatch):
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
+    for name,value in dict(crawler_safety_enabled=True,crawler_proxy_enabled=True,app_auth_mode='disabled',
+        request_scheduler_db=tmp_path/'gate.db',task_resource_lock_dir=tmp_path/'locks',crawler_browser_profile_root=tmp_path/'profiles').items():monkeypatch.setattr(app.settings,name,value)
+    accounts=CrawlerAccountStore(tmp_path/'accounts.db');proxies=CrawlerProxyStore(accounts)
+    now=time.time();items=[]
+    for index,at in enumerate((now-.1,now)):
+        a=accounts.create(platform='dy',display_name=str(index));accounts.save_auth_state(a['id'],'fixture-ciphertext')
+        p=proxies.create(display_name=str(index),endpoint='http://127.0.0.1:9',expires_at=now+3600)
+        bound=proxies.bind(a['id'],p['id'],expected_binding_revision=a['binding_revision'])
+        proxies.observe_exit(p['id'],'198.51.100.8',observed_at=at)
+        proxies.mark_route_login_validated(a['id'],expected_binding_revision=bound['binding_revision'],expected_config_revision=1)
+        items.append((a,p,at))
+    assert len(accounts.available_accounts('dy'))==2
+    for index,(a,p,at) in enumerate(items):
+        bundle=app.acquire_route_execution(a['id'],'shared-'+str(index),'owner',account_store=accounts)
+        try:
+            assert bundle.snapshot.observed_exit_at==at and bundle.snapshot.exit_generation==1
+        finally:bundle.close()
+    with accounts._connect() as db:
+        assert db.execute('SELECT observed_at FROM crawler_shared_exits').fetchone()[0]==now
+    with pytest.raises(ValueError,match='PROXY_STALE_OBSERVATION'):
+        accounts.observe_shared_exit('198.51.100.8',observed_at=now-.1)
+    with pytest.raises(ValueError,match='PROXY_STALE_OBSERVATION'):
+        accounts.consume_cached_exit('198.51.100.8',observed_at=now-app.settings.crawler_exit_observation_ttl-1)
+    bundle=app.acquire_route_execution(items[0][0]['id'],'risk','owner',account_store=accounts)
+    try:app.record_login_challenge(bundle)
+    finally:bundle.close()
+    for a,_,_ in items:
+        with pytest.raises(app.CollectionRouteError):app.acquire_route_execution(a['id'],'after-risk','owner',account_store=accounts)
