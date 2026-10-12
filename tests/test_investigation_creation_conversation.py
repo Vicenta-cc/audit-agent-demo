@@ -2213,8 +2213,8 @@ def test_resource_prompt_generates_covert_variants_as_search_terms() -> None:
 
     normalized_prompt = " ".join(generation_messages("lexicon", ResourceGenerationRequest(
         objective="调查", platform="dy"))[0]["content"].split())
-    assert "主词是主题和语义归类" in RESOURCE_PROMPT
-    assert "变体词是主要的实际召回表达" in RESOURCE_PROMPT
+    assert "词库主词用于主题归类" in RESOURCE_PROMPT
+    assert "启用主词有启用变体时搜索变体，否则搜索主词" in RESOURCE_PROMPT
     assert "每个主题下用 variants 列出实际搜索词" in normalized_prompt
     assert "主题只用于归类，不额外参与搜索" in normalized_prompt
     assert "只生成 1 至 10 个最终可直接搜索的实际搜索词" in normalized_prompt

@@ -109,9 +109,9 @@ def test_global_prompt_keeps_authority_but_not_authoring_payloads():
         "presentation_id",
         "confirm_and_queue_investigation after an explicit",
         "get_resource_save",
-        "保存不是规则采用",
-        "不能声称生成、修改、保存、采用或启动完成",
-        "版本冲突需核对内容",
+        "保存不等于采用或启动",
+        "没有成功回执不能宣称完成",
+        "版本冲突先读取并核对",
     ):
         assert boundary in product
     assert "不强制增加资源工具" not in product
@@ -217,6 +217,20 @@ READABILITY_CHANGED_RANGES = {
     ],
 }
 
+# 2026-10-12: promote the measured candidate as the default, retaining the
+# immutable original fixture and explicitly accounting for condensed wording.
+READABILITY_CHANGED_RANGES["CREATION_SYSTEM_PROMPT"] += [
+    ([129, 130], "Generation authorization and sufficient-context behavior consolidated into the five resource principles."),
+    ([173, 174], "Independent candidates and natural successful replies retained in the shorter English paragraph."),
+]
+READABILITY_CHANGED_RANGES["RESOURCE_PROMPT"] += [
+    (range(1, 10), "Public names, tool-backed resource creation, temporary drafts and completing both resources retained in candidate opening paragraphs."),
+    ([29, 31, 32], "Explicit save authorization, one-step publish and saving existing edit references retained in candidate save paragraph."),
+    ([34, 35], "Variant-first search, fallback, disabled groups and non-search tags retained in candidate lexicon paragraph."),
+    (range(66, 72), "Exact search terms, authorized expansion and task-size distinction retained in candidate search paragraph."),
+    ([95, 96, 97, 98, 101, 102, 103, 104, 105, 106], "Adoption/start authorization, exact recall refs, independent save receipts, frozen tasks and conflict recovery retained in candidate closing paragraphs; multi-round behavior remains application-owned."),
+]
+
 
 def _current_fallback_wording(text):
     for old, new in SEARCH_FALLBACK_WORDING.items():
@@ -260,7 +274,8 @@ def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
 
 
 def test_precise_edit_guidance_retains_version_fence_and_natural_style():
-    assert 'update_resource_edit with expected_version' in CREATION_SYSTEM_PROMPT
-    assert 'Preserve unrelated fields, stable IDs and ordering' in CREATION_SYSTEM_PROMPT
-    assert 'On stale version, read the current edit' in CREATION_SYSTEM_PROMPT
-    assert "Explain the proposed 审核规则 naturally in the user's language" in CREATION_SYSTEM_PROMPT
+    from backend.resource_management.tools import RESOURCE_DESCRIPTIONS
+    assert '只提交指定字段或条目变更，保留其余内容、编号和顺序' in RESOURCE_PROMPT
+    assert '版本冲突先读取并核对，不强行写入' in RESOURCE_PROMPT
+    assert 'edit_id/expected_version' in RESOURCE_DESCRIPTIONS['update_resource_edit']
+    assert 'Explain the actual result naturally after a successful tool call.' in CREATION_SYSTEM_PROMPT

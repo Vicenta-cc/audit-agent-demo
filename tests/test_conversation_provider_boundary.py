@@ -16,7 +16,7 @@ from backend.investigation_creation.conversation import InvestigationCreationCon
 
 
 @pytest.mark.parametrize('cls', [HermesInvestigationAgentService, InvestigationCreationConversationService])
-@pytest.mark.parametrize('model', ['qwen-test', 'deepseek-v4-1-flash-260910'])
+@pytest.mark.parametrize('model', ['qwen-test', 'deepseek-v4-1-flash-260910', 'deepseek-v4-pro-ga-260813'])
 def test_interactive_entrypoints_use_dedicated_provider_without_changing_audit(monkeypatch, cls, model):
     from backend.audit_agent.qwen_client import QwenClient
     monkeypatch.setattr(settings, 'conversation_api_key', 'test-chat-key')
@@ -29,7 +29,7 @@ def test_interactive_entrypoints_use_dedicated_provider_without_changing_audit(m
     service._agent_lock = RLock()
     service._answer_streamer = SimpleNamespace(agent_callbacks=lambda _: {})
     service._activity_emitter = SimpleNamespace(agent_callbacks=lambda _: {})
-    service.runtime_binding = SimpleNamespace(create_agent=Mock(return_value=object()))
+    service.runtime_binding = SimpleNamespace(create_agent=Mock(return_value=SimpleNamespace()))
     service.agent_factory = None
     service.fake_runtime = False
     service._product_mode = lambda _: 'unified-report'
@@ -45,7 +45,7 @@ def test_interactive_entrypoints_use_dedicated_provider_without_changing_audit(m
     assert (audit.base_url, audit.api_key) == ('https://audit.example/v1', 'test-audit-key')
 
 
-def test_unconfigured_conversation_provider_keeps_existing_deployment_defaults():
+def test_default_conversation_provider_uses_pro_without_reusing_audit_credentials():
     env = {k: v for k, v in os.environ.items() if not k.startswith('CONVERSATION_')}
     env.update(PYTHON_DOTENV_DISABLED='1', DASHSCOPE_API_KEY='old-key',
                DASHSCOPE_BASE_URL='https://old.example/v1', QWEN_TEXT_MODEL='old-qwen')
@@ -53,4 +53,4 @@ def test_unconfigured_conversation_provider_keeps_existing_deployment_defaults()
         'from backend.audit_agent.config import settings as s; import json; '
         'print(json.dumps([s.conversation_api_key,s.conversation_base_url,s.conversation_model]))'],
         cwd=Path(__file__).resolve().parents[1], env=env, text=True)
-    assert json.loads(result) == ['old-key', 'https://old.example/v1', 'old-qwen']
+    assert json.loads(result) == ['', 'https://api.qhose.net/v1', 'deepseek-v4-pro-ga-260813']

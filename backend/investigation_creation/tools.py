@@ -456,6 +456,24 @@ for _name in M3_TOOL_DESCRIPTIONS:
         + M3_TOOL_DESCRIPTIONS[_name]
     ).strip()
 
+RULESET_EDIT_TOOL_GUIDANCE = {
+    'create_ruleset_proposal': (
+        '【仅新建独立规则】最佳用途：从零生成另一套独立规则，或原样导入用户已给定的完整新资源。'
+        '【不允许用于修改已有规则】修改风险等级、条件、条款、豁免、临时修改版必须用 open_resource_edit + update_resource_edit；'
+        '不得让生成器重写，也不得自己抄写整套 content 来冒充局部修改。'
+    ),
+    'update_ruleset_proposal': (
+        '【仅用户已提供完整替换正文时使用】【不允许用于局部修改】本工具会提交整套规则；'
+        '只改某一条、风险等级或豁免时，即使已经打开副本，也必须改用 update_resource_edit。'
+        '不要自行重写或抄写整份 content。'
+    ),
+}
+for _name, _guidance in RULESET_EDIT_TOOL_GUIDANCE.items():
+    M3_TOOL_DESCRIPTIONS[_name] = _guidance + "\n" + M3_TOOL_DESCRIPTIONS[_name].replace(
+        "Use this tool when the user asks to generate 审核规则 or another candidate.",
+        "Use this tool only for a new independent resource, never for changes to an existing resource.",
+    )
+
 _ALL_CREATION_TOOL_SCHEMAS = tuple(
     {
         "name": name,

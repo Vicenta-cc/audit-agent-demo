@@ -68,9 +68,9 @@ class Settings:
     ).rstrip("/")
     qwen_text_model = os.getenv("QWEN_TEXT_MODEL", "qwen3.7-plus")
     # Interactive agents have a separate provider boundary from audit/report jobs.
-    conversation_api_key = os.getenv("CONVERSATION_API_KEY", dashscope_api_key)
-    conversation_base_url = os.getenv("CONVERSATION_BASE_URL", dashscope_base_url).rstrip("/")
-    conversation_model = os.getenv("CONVERSATION_MODEL", qwen_text_model)
+    conversation_api_key = os.getenv("CONVERSATION_API_KEY", "")
+    conversation_base_url = os.getenv("CONVERSATION_BASE_URL", "https://api.qhose.net/v1").rstrip("/")
+    conversation_model = os.getenv("CONVERSATION_MODEL", "deepseek-v4-pro-ga-260813")
     # Only the dedicated RuleSet/Lexicon authoring calls use this provider. Every
     # audit and report-generation call remains on DASHSCOPE_*.
     resource_generation_api_key = os.getenv("RESOURCE_GENERATION_API_KEY", "")
