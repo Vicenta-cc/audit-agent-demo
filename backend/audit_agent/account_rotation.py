@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import time
 
 from .auth_state_cipher import AuthStateCipher, auth_state_cipher
 from .config import settings
@@ -31,6 +32,9 @@ class AccountRotationManager:
         """Record a verification/silent-risk signal and apply the escalated cooldown."""
         seconds = risk_cooldown_seconds(self.store.record_risk(account_id))
         self.cool_down(account_id, reason=reason, cooldown_seconds=seconds)
+        account = self.store.get(account_id)
+        if account and account['platform'] == 'dy' and settings.crawler_safety_enabled:
+            self.store.pause_account_exit(account_id, until=time.time()+seconds)
         return seconds
 
     def rotate(self, platform: str, current_account_id: str, *, reason: str, cooldown_seconds: float = 300.0) -> tuple[dict, dict] | None:
@@ -55,7 +59,7 @@ class AccountRotationManager:
             try:
                 return runner(current_id, current_auth)
             except CrawlerVerificationError:
-                self.cool_down(current_id, reason="verify")
+                self.cool_down_after_risk(current_id, reason="verify")
                 if max_switches is not None and switches >= max(0, int(max_switches)):
                     raise
                 accounts = self.store.available_accounts(platform, exclude_ids=attempted)
@@ -68,3 +72,28 @@ class AccountRotationManager:
                 )
                 switches += 1
         raise RuntimeError("account rotation exhausted")
+
+    def recover_once(self, account_id, check):
+        """No I/O until the incident's only attempt is durably claimed.
+
+        Caller holds the account/Profile lease and provides one bounded low-rate
+        operation. A crashed claim stays claimed, preventing automatic replay.
+        """
+        from backend.task_admission.resources import account_lease
+        account=self.store.get(account_id)
+        if not account or account['platform']!='dy': return None
+        with account_lease('dy',account_id) as acquired:
+            if not acquired: return None
+            claim=self.store.claim_recovery(account_id)
+            if claim is None: return None
+            result='uncertain'
+            try:
+                outcome=check(account_id,claim)
+                if outcome is True: result='success'
+                elif outcome is False: result='challenge'
+            except CrawlerVerificationError:
+                result='challenge'
+            except Exception:
+                result='uncertain'
+            self.store.finish_recovery(account_id,claim,result)
+            return result

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import ipaddress
+import math
+import re
 import sqlite3
 import threading
 import time
@@ -115,6 +118,9 @@ class CrawlerAccountStore:
                 ("paused_until", "REAL"),
                 ("pause_reason", "TEXT NOT NULL DEFAULT ''"),
                 ("skip_count", "INTEGER NOT NULL DEFAULT 0"),
+                ("recovery_incident", "TEXT NOT NULL DEFAULT ''"),
+                ("recovery_state", "TEXT NOT NULL DEFAULT ''"),
+                ("recovery_claim", "TEXT NOT NULL DEFAULT ''"),
         ):
             if name not in columns:
                 conn.execute(f"ALTER TABLE crawler_accounts ADD COLUMN {name} {definition}")
@@ -123,6 +129,17 @@ class CrawlerAccountStore:
             route_mode TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL DEFAULT '',
             operation_id TEXT NOT NULL DEFAULT '', shared_exit_key TEXT NOT NULL DEFAULT '',
             created_at REAL NOT NULL)''')
+
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS crawler_shared_exits (
+                exit_key TEXT PRIMARY KEY, generation INTEGER NOT NULL,
+                observed_at REAL NOT NULL, paused_until REAL,
+                pause_reason TEXT NOT NULL DEFAULT '', service_exit INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS crawler_route_admissions (
+                operation_id TEXT PRIMARY KEY, account_id TEXT NOT NULL,
+                exit_key TEXT NOT NULL, generation INTEGER NOT NULL,
+                state TEXT NOT NULL DEFAULT 'active', created_at REAL NOT NULL);
+        """)
 
     def list(
         self,
@@ -433,7 +450,7 @@ class CrawlerAccountStore:
             conn.execute(
                 """
                 UPDATE crawler_accounts
-                SET last_used_at = ?, last_error = '', updated_at = ?
+                SET last_used_at = ?, skip_count=0, last_error = '', updated_at = ?
                 WHERE id = ?
                 """,
                 (now, now, account_id),
@@ -493,7 +510,7 @@ class CrawlerAccountStore:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 "SELECT * FROM crawler_accounts WHERE platform=? AND status='active' "
-                "AND COALESCE(auth_state_ciphertext,'')<>'' "
+                "AND COALESCE(auth_state_ciphertext,'')<>'' AND route_state='active' AND (paused_until IS NULL OR paused_until<=strftime('%s','now')) "
                 + exclusion +
                 "AND (cooldown_until IS NULL OR cooldown_until<=?) "
                 "ORDER BY CASE access_scope WHEN 'public' THEN 0 ELSE 1 END, "
@@ -501,13 +518,14 @@ class CrawlerAccountStore:
                 (platform, *excluded, now),
             ).fetchall()
             accounts = [self._row_to_account(row, connection=conn) for row in rows]
-            # Legacy accounts remain usable; required routes never fall back to direct.
-            if not any(account["proxy_required"] or account["proxy_id"] for account in accounts):
-                return accounts
             table_exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='proxy_resources'").fetchone()
             available = []
             epoch = time.time()
             for account in accounts:
+                if account.get("route_mode") == "direct_degraded":
+                    if self._exit_allowed(conn, account["shared_exit_key"], account["shared_exit_generation"]):
+                        available.append(account)
+                    continue
                 if not account["proxy_id"]:
                     if not account["proxy_required"]:
                         available.append(account)
@@ -518,7 +536,9 @@ class CrawlerAccountStore:
                     and account["validated_proxy_binding_revision"] == account["binding_revision"]
                     and account["validated_proxy_config_revision"] == resource["config_revision"]
                     and (resource["expires_at"] is not None and resource["expires_at"] > epoch)
-                    and (resource["cooldown_until"] is None or resource["cooldown_until"] <= epoch)):
+                    and (resource["cooldown_until"] is None or resource["cooldown_until"] <= epoch)
+                    and (resource["paused_until"] is None or resource["paused_until"] <= epoch)
+                    and (not settings.crawler_safety_enabled or self._exit_allowed(conn, resource["shared_exit_key"], resource["shared_exit_generation"]))):
                     available.append(account)
             return available
 
@@ -606,39 +626,184 @@ class CrawlerAccountStore:
             "paused_until": row["paused_until"],
             "pause_reason": row["pause_reason"] or "",
             "skip_count": int(row["skip_count"] or 0),
+            "recovery_state": row["recovery_state"] or '',
+            "recovery_incident": row["recovery_incident"] or '',
+            "recovery_claim": row["recovery_claim"] or '', 
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
 
-    def record_route_event(self, account_id, event_type, *, route_mode='', reason='', operation_id='', shared_exit_key=''):
-        """Append only redacted route telemetry; never accept credentials or URLs."""
-        import re
-        reason = re.sub(r'(?i)(password|token|cookie|secret|authorization)=[^\s]+', r'\1=[redacted]', str(reason or ''))[:500]
+    ROUTE_MODES = frozenset({'proxy_required', 'proxy_preferred', 'direct_degraded', 'legacy_direct'})
+    ROUTE_STATES = frozenset({'active', 'transport_blocked', 'challenge_paused', 'manual_required', 'draining', 'drain_timeout', 'recovery_check'})
+    EVENT_TYPES = frozenset({'route_changed', 'transport_blocked', 'challenge_paused', 'recovery_claimed', 'recovery_succeeded', 'manual_required', 'route_admitted', 'route_ended'})
+    REASONS = frozenset({'', 'ACCOUNT_CHALLENGE', 'AUTH_INVALID', 'PLATFORM_429', 'PROXY_EXPIRED', 'PROXY_TRANSPORT_FAILED', 'PROXY_CONNECTION_REFUSED', 'POOL_EXHAUSTED', 'RECOVERY_SUCCESS', 'RECOVERY_UNCERTAIN', 'DRAIN_TIMEOUT'})
+
+    @staticmethod
+    def _epoch(value):
+        if value is None:
+            return None
+        if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+            raise ValueError('ROUTE_TIME_INVALID')
+        return float(value)
+
+    @staticmethod
+    def _generation(value):
+        if type(value) is not int or value < 1:
+            raise ValueError('ROUTE_GENERATION_INVALID')
+        return value
+
+    @staticmethod
+    def _exit_key(value):
+        try:
+            return str(ipaddress.ip_address(value))
+        except (ValueError, TypeError):
+            raise ValueError('ROUTE_EXIT_INVALID') from None
+
+    def _exit_allowed(self, conn, key, generation, *, recovery=False):
+        row = conn.execute('SELECT * FROM crawler_shared_exits WHERE exit_key=?', (key,)).fetchone()
+        return bool(row and row['generation'] == generation
+            and 0 <= time.time() - row['observed_at'] <= settings.crawler_exit_observation_ttl
+            and (recovery or not row['pause_reason'])
+            and (row['paused_until'] is None or row['paused_until'] <= time.time()))
+
+    def observe_shared_exit(self, ip, *, observed_at=None, service_exit=False, connection=None):
+        key = self._exit_key(ip)
+        at = time.time() if observed_at is None else self._epoch(observed_at)
+        if at > time.time() + 5 or type(service_exit) is not bool:
+            raise ValueError('ROUTE_OBSERVATION_INVALID')
+        def update(conn):
+            row = conn.execute('SELECT * FROM crawler_shared_exits WHERE exit_key=?', (key,)).fetchone()
+            if row and at < row['observed_at']:
+                raise ValueError('PROXY_STALE_OBSERVATION')
+            generation = row['generation'] if row else 1
+            conn.execute("INSERT INTO crawler_shared_exits(exit_key,generation,observed_at,service_exit) VALUES(?,?,?,?) ON CONFLICT(exit_key) DO UPDATE SET observed_at=excluded.observed_at,service_exit=MAX(service_exit,excluded.service_exit)", (key,generation,at,int(service_exit)))
+            return {'observed_exit_ip': key, 'observed_exit_at': at, 'shared_exit_key': key, 'shared_exit_generation': generation}
+        if connection is not None:
+            return update(connection)
         with self._lock, self._connect() as conn:
-            conn.execute('INSERT INTO crawler_route_events(account_id,event_type,route_mode,reason,operation_id,shared_exit_key,created_at) VALUES(?,?,?,?,?,?,?)',
-                         (account_id, str(event_type)[:80], str(route_mode)[:40], reason, str(operation_id)[:100], str(shared_exit_key)[:120], time.time()))
+            conn.execute('BEGIN IMMEDIATE')
+            return update(conn)
+
+    def get_direct_route(self, account_id):
+        with self._connect() as conn:
+            row = conn.execute('SELECT * FROM crawler_shared_exits WHERE service_exit=1 ORDER BY observed_at DESC LIMIT 1').fetchone()
+            if not row or not self._exit_allowed(conn,row['exit_key'],row['generation']):
+                return None
+            return dict(observed_exit_ip=row['exit_key'],observed_exit_at=row['observed_at'],shared_exit_key=row['exit_key'],shared_exit_generation=row['generation'])
+
+    def admit_route(self, account_id, observed_exit, generation, operation_id, *, recovery_claim=None):
+        key = self._exit_key(observed_exit)
+        generation = self._generation(generation)
+        if not isinstance(operation_id,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}',operation_id):
+            raise ValueError('ROUTE_OPERATION_INVALID')
+        with self._lock, self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            prior = conn.execute('SELECT * FROM crawler_route_admissions WHERE operation_id=?',(operation_id,)).fetchone()
+            if prior:
+                if (prior['account_id'],prior['exit_key'],prior['generation'],prior['state']) != (account_id,key,generation,'active'):
+                    raise ValueError('ROUTE_OPERATION_CONFLICT')
+                return operation_id
+            account = conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
+            recovery = bool(account and recovery_claim and account['recovery_claim']==recovery_claim and account['recovery_state']=='claimed')
+            if not account or account['status']!='active' or (account['route_state']!='active' and not recovery) or (account['paused_until'] and account['paused_until']>time.time()) or not self._exit_allowed(conn,key,generation,recovery=recovery):
+                raise ValueError('ACCOUNT_CHALLENGE')
+            conn.execute('INSERT INTO crawler_route_admissions(operation_id,account_id,exit_key,generation,created_at) VALUES(?,?,?,?,?)',(operation_id,account_id,key,generation,time.time()))
+            conn.execute('UPDATE crawler_accounts SET shared_exit_key=?,shared_exit_generation=? WHERE id=?',(key,generation,account_id))
+            return operation_id
+
+    def release_route_admission(self, operation_id):
+        with self._connect() as conn:
+            conn.execute("UPDATE crawler_route_admissions SET state='ended' WHERE operation_id=?",(operation_id,))
+
+    def pause_account_exit(self, account_id, *, until, reason='ACCOUNT_CHALLENGE'):
+        until = self._epoch(until)
+        if until is None or until <= time.time() or reason not in self.REASONS or not reason:
+            raise ValueError('ROUTE_PAUSE_INVALID')
+        with self._lock, self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
+            if row is None:
+                raise ValueError('ACCOUNT_NOT_FOUND')
+            key = row['shared_exit_key']
+            if not key and row['proxy_id'] and conn.execute("SELECT 1 FROM sqlite_master WHERE name='proxy_resources'").fetchone():
+                proxy = conn.execute('SELECT shared_exit_key FROM proxy_resources WHERE id=?',(row['proxy_id'],)).fetchone()
+                key = proxy['shared_exit_key'] if proxy else ''
+            incident = uuid4().hex
+            conn.execute("UPDATE crawler_accounts SET route_state='challenge_paused',paused_until=?,pause_reason=?,recovery_incident=?,recovery_state='pending',recovery_claim='',shared_exit_key=? WHERE id=?",(until,reason,incident,key,account_id))
+            if key:
+                conn.execute("UPDATE crawler_shared_exits SET paused_until=MAX(COALESCE(paused_until,0),?),pause_reason=? WHERE exit_key=?",(until,reason,key))
+            conn.execute("INSERT INTO crawler_route_events(account_id,event_type,reason,created_at) VALUES(?,'challenge_paused',?,?)",(account_id,reason,time.time()))
+            return incident
+
+    def claim_recovery(self, account_id):
+        with self._lock, self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row=conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
+            if not row or row['recovery_state']!='pending' or row['route_state']!='challenge_paused' or row['paused_until'] is None or row['paused_until']>time.time():
+                return None
+            claim=uuid4().hex
+            conn.execute("UPDATE crawler_accounts SET recovery_state='claimed',recovery_claim=?,route_state='recovery_check' WHERE id=?",(claim,account_id))
+            return claim
+
+    def finish_recovery(self, account_id, claim, result):
+        if result not in {'success','challenge','uncertain'}:
+            raise ValueError('RECOVERY_RESULT_INVALID')
+        with self._lock, self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row=conn.execute("SELECT * FROM crawler_accounts WHERE id=? AND recovery_claim=? AND recovery_state='claimed'",(account_id,claim)).fetchone()
+            if not row:
+                raise ValueError('RECOVERY_CLAIM_INVALID')
+            state='active' if result=='success' else 'manual_required'
+            conn.execute('UPDATE crawler_accounts SET recovery_state=?,route_state=?,pause_reason=?,paused_until=NULL WHERE id=?',(result,state,'' if result=='success' else 'RECOVERY_UNCERTAIN',account_id))
+            if result=='success' and row['shared_exit_key'] and not conn.execute("SELECT 1 FROM crawler_accounts WHERE shared_exit_key=? AND id<>? AND route_state IN ('challenge_paused','recovery_check','manual_required')",(row['shared_exit_key'],account_id)).fetchone():
+                conn.execute("UPDATE crawler_shared_exits SET pause_reason='',paused_until=NULL WHERE exit_key=?",(row['shared_exit_key'],))
+
+    def record_route_event(self, account_id, event_type, *, route_mode='', reason='', operation_id='', shared_exit_key=''):
+        if event_type not in self.EVENT_TYPES or reason not in self.REASONS or route_mode not in self.ROUTE_MODES | {''}:
+            raise ValueError('ROUTE_EVENT_INVALID')
+        if operation_id and (not isinstance(operation_id,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}',operation_id)):
+            raise ValueError('ROUTE_OPERATION_INVALID')
+        key=self._exit_key(shared_exit_key) if shared_exit_key else ''
+        with self._lock, self._connect() as conn:
+            conn.execute('INSERT INTO crawler_route_events(account_id,event_type,route_mode,reason,operation_id,shared_exit_key,created_at) VALUES(?,?,?,?,?,?,?)',(account_id,event_type,route_mode,reason,operation_id,key,time.time()))
 
     def set_route_state(self, account_id, *, state, route_mode=None, paused_until=None, pause_reason=None, shared_exit_key=None, generation=None):
-        allowed = {'active', 'transport_blocked', 'challenge_paused', 'manual_required', 'draining', 'drain_timeout'}
-        if state not in allowed: raise ValueError('ROUTE_STATE_INVALID')
-        updates = {'route_state': state}
-        if route_mode is not None: updates['route_mode'] = str(route_mode)
-        if paused_until is not None: updates['paused_until'] = float(paused_until)
-        if pause_reason is not None: updates['pause_reason'] = str(pause_reason)[:200]
-        if shared_exit_key is not None: updates['shared_exit_key'] = str(shared_exit_key)[:120]
-        if generation is not None: updates['shared_exit_generation'] = int(generation)
+        if state not in self.ROUTE_STATES or (route_mode is not None and route_mode not in self.ROUTE_MODES) or (pause_reason is not None and pause_reason not in self.REASONS):
+            raise ValueError('ROUTE_STATE_INVALID')
+        updates={'route_state':state}
+        if route_mode is not None: updates['route_mode']=route_mode
+        if paused_until is not None: updates['paused_until']=self._epoch(paused_until)
+        if pause_reason is not None: updates['pause_reason']=pause_reason
+        if shared_exit_key is not None: updates['shared_exit_key']=self._exit_key(shared_exit_key)
+        if generation is not None: updates['shared_exit_generation']=self._generation(generation)
         with self._lock, self._connect() as conn:
-            sets = ','.join(f'{k}=?' for k in updates)
-            cur = conn.execute(f'UPDATE crawler_accounts SET {sets},updated_at=? WHERE id=?', (*updates.values(), datetime.now().isoformat(timespec='seconds'), account_id))
-            if not cur.rowcount: return None
+            conn.execute('BEGIN IMMEDIATE')
+            old=conn.execute('SELECT shared_exit_generation FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
+            if not old: return None
+            if generation is not None and generation < old[0]: raise ValueError('ROUTE_GENERATION_STALE')
+            sets=','.join(f'{k}=?' for k in updates)
+            conn.execute(f'UPDATE crawler_accounts SET {sets},updated_at=? WHERE id=?',(*updates.values(),datetime.now().isoformat(timespec='seconds'),account_id))
         return self.get(account_id)
 
+    @staticmethod
+    def fair_key(account, *, skip_limit=None):
+        limit=settings.crawler_fair_skip_limit if skip_limit is None else skip_limit
+        return (account.get('skip_count',0)<limit, bool(account.get('last_used_at')),account.get('last_used_at') or '',account['id'])
+
+    def record_fair_selection(self, selected_id, eligible_ids):
+        ids=tuple(dict.fromkeys(eligible_ids))
+        if selected_id not in ids: raise ValueError('FAIR_SELECTION_INVALID')
+        with self._lock,self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            for account_id in ids:
+                conn.execute("UPDATE crawler_accounts SET skip_count=CASE WHEN id=? THEN 0 ELSE MIN(skip_count+1,?) END WHERE id=? AND route_state='active'",(selected_id,settings.crawler_fair_skip_limit,account_id))
+
     def select_fair(self, platform, *, exclude_ids=(), skip_limit=3):
-        candidates = self.available_accounts(platform, exclude_ids=exclude_ids)
+        candidates=self.available_accounts(platform,exclude_ids=exclude_ids)
         if not candidates: return None
-        candidates.sort(key=lambda a: (bool(a.get('last_used_at')), a.get('last_used_at') or '', a['id']))
-        forced = [a for a in candidates if a.get('skip_count', 0) >= skip_limit]
-        return (forced[0] if forced else candidates[0])
+        chosen=min(candidates,key=lambda a:self.fair_key(a,skip_limit=skip_limit))
+        self.record_fair_selection(chosen['id'],[a['id'] for a in candidates])
+        return chosen
 
 
 crawler_account_store = CrawlerAccountStore()

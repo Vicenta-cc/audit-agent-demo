@@ -55,7 +55,12 @@ def parse_login_v2_origins(value: str, *, auth_mode: str, enabled: bool) -> list
 
 
 class Settings:
+    crawler_safety_enabled = environment_flag("CRAWLER_SAFETY_ENABLED")
+    crawler_direct_degrade_enabled = environment_flag("CRAWLER_DIRECT_DEGRADE_ENABLED")
+    crawler_exit_observation_ttl = max(1, int(os.getenv("CRAWLER_EXIT_OBSERVATION_TTL", "300")))
+    crawler_fair_skip_limit = max(1, int(os.getenv("CRAWLER_FAIR_SKIP_LIMIT", "3")))
     crawler_proxy_enabled = environment_flag("CRAWLER_PROXY_ENABLED")
+    crawler_proxy_pool_ids = trial_job_ids(os.getenv("CRAWLER_PROXY_POOL_IDS", ""))
     crawler_proxy_default_id = os.getenv("CRAWLER_PROXY_DEFAULT_ID", "").strip()
     crawler_proxy_echo_url = os.getenv("CRAWLER_PROXY_ECHO_URL", "").strip()
     crawler_proxy_probe_interval = 300

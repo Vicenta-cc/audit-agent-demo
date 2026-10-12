@@ -697,7 +697,10 @@ class AuditPipeline:
                                         analyze_stream_ref(entry)
                                 except CollectionRouteError as exc:
                                     self._handle_stream_route_error(exc, entry, bundle)
-                                    raise
+                                    # Only affected network work is frozen. Other
+                                    # queued subjects with complete local media
+                                    # still pass their normal provenance checks.
+                                    continue
                                 finally:
                                     self._media_route_context.value = None
                                     if borrowed is not None:
@@ -770,7 +773,7 @@ class AuditPipeline:
                                 in authorized_account_ids
                             ]
                         candidates.sort(
-                            key=lambda item: 0 if str(item.get("id")) == preferred_account_id else 1
+                            key=lambda item: (item.get('access_scope') != 'public', *crawler_account_store.fair_key(item), str(item.get('id')) != preferred_account_id)
                         )
                         if str(getattr(settings, "crawler_proxy_trial_id", "") or os.environ.get("MEDIACRAWLER_PROXY_TRIAL_ID", "")).strip():
                             if not preferred_account_id:
@@ -964,6 +967,7 @@ class AuditPipeline:
                                         last_account_error = CrawlerAuthenticationError("登录态无法读取，请重新登录")
                                         job_store.log(self.job_id, "采集账号登录态无法读取，继续尝试账号池中的下一账号")
                                         continue
+                                    crawler_account_store.record_fair_selection(crawler_account_id, [item['id'] for item in candidates if item])
                                     record_execution_account()
                                     if not self.authoritative_m3:
                                         job_store.log(
@@ -1043,7 +1047,8 @@ class AuditPipeline:
                                     and (crawler_account_store.get(crawler_account_id) or {}).get("risk_count")
                                 ):
                                     # 逐词采集在轮换内按账号清零；这里只处理单账号路径
-                                    crawler_account_store.reset_risk(crawler_account_id)
+                                    if request.platform != 'dy' or not settings.crawler_safety_enabled:
+                                        crawler_account_store.reset_risk(crawler_account_id)
                                 output = candidate_output
                                 break
 
@@ -1495,12 +1500,11 @@ class AuditPipeline:
 
     def _handle_stream_route_error(self, exc: CollectionRouteError, entry, route_context=None) -> None:
         if exc.code in {"PROXY_BUSY", "SUPPLEMENT_DEFERRED"}:
-            job_store.update_control(self.job_id, analysis_stop_requested=True)
             return
         if getattr(self, "_stream_route_error", None) is None:
             self._stream_route_error = exc
         # Stop the in-flight adapter immediately, before shared event persistence.
-        job_store.update_control(self.job_id, crawl_stop_requested=True, analysis_stop_requested=True,
+        job_store.update_control(self.job_id, crawl_stop_requested=True,
                                  collection_route_error=self._stream_route_error.code)
         item = entry.get("item") if isinstance(entry, dict) else next(iter(entry[0]), {})
         source = (item or {}).get("collection_route_provenance")
@@ -2507,7 +2511,8 @@ class AuditPipeline:
                 if account["id"] in clean_account_ids:
                     stored = crawler_account_store.get(account["id"])
                     if stored and stored.get("risk_count"):
-                        crawler_account_store.reset_risk(account["id"])
+                        if platform != 'dy' or not settings.crawler_safety_enabled:
+                            crawler_account_store.reset_risk(account["id"])
         output = self.crawler._load_platform_output(save_root, platform)
         # 重新读盘拿到的是爬虫原始行：抖音 detail 模式不写 source_keyword，按选中它的词补回（R7）
         output.contents = [item | {"source_keyword": selected_by_key[key]} for item in output.contents

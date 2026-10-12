@@ -59,6 +59,7 @@ def select_account(worker, row):
     permitted_accounts.sort(
         key=lambda item: (
             item[0] != "public",
+            *account_store.fair_key(item[1]),
             item[1]["id"] != preferred,
         )
     )
@@ -84,8 +85,8 @@ def select_account(worker, row):
                         authorize_route_owner(account["id"], snapshot.proxy_id, row["owner_id"], account_store=account_store)
             except CollectionRouteError as exc:
                 waiting(worker.store.admission, row, exc.code, account["id"])
-                yield False
-                return
+                continue
+            account_store.record_fair_selection(account['id'], [item['id'] for _,item in permitted_accounts])
             waiting(worker.store.admission, row, "", account["id"])
             with assigned_account(account["id"]):
                 yield True
