@@ -1,0 +1,44 @@
+# 抖音账号安全运维
+
+本文说明当前开发代码的安全边界。配置与元数据 CLI 见 [后端采集代理配置](crawler-proxy-backend-config.md)。已对照实现检查本文接口与命令格式；未执行运维命令或真实平台/供应商网络验证，不能据此判定生产运行已通过。
+
+## 准入与受控直连
+
+既有严格代理账号不自动降级。`proxy_preferred` 只表示允许检查以下全部门槛，不表示网络失败即可直接改路由：
+
+1. `CRAWLER_SAFETY_ENABLED` 和 `CRAWLER_DIRECT_DEGRADE_ENABLED` 均已开启，账号有有效 auth，且没有风险暂停或账号冷却。
+2. 原代理有明确 `PROXY_EXPIRED`、`PROXY_CONNECTION_REFUSED`、`PROXY_TRANSPORT_FAILED` 或已确认代理认证失败 `PROXY_AUTH_FAILED`（代理 407）证据。平台 401/403、`AUTH_INVALID`、captcha、429、未知错误、出口 TTL 过期均不属于此条件。
+3. 当前用户授权范围内的健康池已无可用容量。检查沿用账号、代理和实际出口的锁/槽位，不能用新账号或不同资源名绕过同一出口占用。
+4. 原 context、采集子进程及继承锁 FD 的后代已结束，原账号/Profile lease 可取得，active route admission 为零。
+5. 后端服务运行位置取得新鲜 echo 出口观测，并通过共享出口暂停/容量检查；在同一持久 Profile 上，以可信抖音 self 响应核对原账号身份，登录验证成功后才开放业务采集。
+
+验证出现 challenge 或结果不确定则进入 `manual_required`，不会继续尝试切出口。echo 的作用是验证实际服务出口，不通过操作者电脑或供应商名称推断。IPv4/IPv6 地址采用规范化地址键；同一实际地址共享风险与容量。当前实现不能保证供应商出口永久固定，也不证明不同地址一定来自不同物理网络。
+
+## 验证码、429 与恢复
+
+captcha/账号风险暂停当前账号及其已观测共享出口；相同出口上的其他账号也被挡住，其他健康出口仍可被选择。账号轮换不会把风险账号重新循环尝试。
+
+429 沿用已有 `dy` 全局 scheduler 冷却/预算，不因轮换账号、代理或直连路由清空。现有风险冷却默认从 `CRAWLER_RISK_COOLDOWN_BASE_SECONDS=1800` 秒递增，最高 `CRAWLER_RISK_COOLDOWN_MAX_SECONDS=21600` 秒；这些值不代表平台安全配额。
+
+冷却后，已授权任务派发可为每个 incident 领取一次持久 recovery claim，然后低速、有限地检查原 Profile 登录。成功恢复准入，但保留风险计数与慢速策略；challenge/uncertain 进入人工处理。进程在 claim 后崩溃不会自动重试同一 claim。普通列表/状态查询和对象初始化不触发此检查。
+
+已知出口的观测过期时，派发路径可领取独立 refresh claim，执行 echo-only 的维护刷新。它要求已有有效登录、验证版本、未来有效期且无风险暂停；刷新沿用探测间隔，失败不允许以 TTL 过期为依据降级。未知出口仅允许登录/维护引导，业务准入持续隔离。
+
+人工处理应保留原 Profile、cookie、auth 和风险记录，通过已有账号登录流程完成验证。`safety-policy`、资源恢复或普通重新登录不能被当作“已清除所有人工/出口暂停”的承诺；当前运维 CLI 没有强制清除 incident 的命令。需要确认可信身份、冷却结束、路由及共享出口状态实际通过后再恢复派发。
+
+## Lease、关闭失败与已入库内容
+
+路由快照绑定账号、Profile、owner、资源修订、出口版本、context 和摘要。运行前须 ACK；续租只能延长相同快照的 ticket，不能换代理、身份或出口。每次 ticket 最长 300 秒，版本最多到 5，总时长不超过首次签发后 20 分钟及代理实际到期时间。过期不能替代子进程 drain 证明。
+
+context/子进程关闭失败时保留剩余关闭回调、账号/Profile 锁及 admission，进入人工排查；不因到期或状态显示为空闲强制释放，也不能启动第二个相同 Profile。排查时需确认真实进程和 FD 持有者已退出，不能只清数据库行或锁文件。
+
+采集路由停止后，已入库且本地素材齐备的内容仍可继续分析。尚需网络素材的内容记录为延后/部分完成，不允许旁路下载；安全状态变化不重写历史采集 provenance 或历史报告。恢复后的补采仍须重新取得合格路由。
+
+## 回滚顺序
+
+1. 先停止新采集 admission/派发，保留已有运行实例完成关闭。当前没有专门的 drain CLI，应通过部署环境已有的停接新任务/停止 worker 流程执行。
+2. 确认浏览器、采集子进程与继承 FD 后代全部 drain；关闭失败、active admission 或 Profile 锁仍在时停止回滚，转人工处理。
+3. 保存当前数据库和原密钥、Profile/auth，再修改实际后端 env source，关闭 `CRAWLER_DIRECT_DEGRADE_ENABLED` / `CRAWLER_SAFETY_ENABLED`，按部署流程切回旧版本。启动配置变更不会自动把现存受控直连账号变成有效代理账号；回到代理须在 drain 后显式恢复资源/绑定/策略并重新验证登录。
+4. 保留新增状态列、事件/出口/admission/lease 表及原 `audit_index.sqlite3`、auth 数据库、scheduler 数据库、密钥、Profile 和 cookie。不要删表、重建密钥、清 cookie，或通过新的数据/锁目录逃逸旧进程占用。
+
+以上顺序是运行前提，当前未执行真实运行回滚演练。没有自动平台业务、供应商购买或 Profile 清理操作；真实灰度与跨宿主锁协调仍需单独验证。
