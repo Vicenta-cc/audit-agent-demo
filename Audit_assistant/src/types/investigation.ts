@@ -156,6 +156,13 @@ export interface ReportSupportTarget {
 }
 
 export interface ChatMessage {
+  occurredAt?: string;
+  draftData?: TaskDraft;
+  draftArtifact?: import("./investigationCreation").InvestigationDraftArtifact;
+  confirmationPreview?: ConfirmationPreview;
+  runData?: InvestigationRunProjection;
+  roundLabel?: string;
+  reportTarget?: { taskId: string; reportVersionId: string; runId: string };
   authoritativeProposalPresentation?: boolean;
   rulePresentations?: import("./investigationCreation").RuleSetProposalPresentation[];
   id: string;
@@ -211,6 +218,7 @@ export interface InvestigationSession {
     pendingAnswerDraft?: import("./investigations").InvestigationAnswerDraft;
     resumeAttempted?: boolean;
     run?: InvestigationRunProjection;
+    rounds?: import("./investigationCreation").InvestigationRound[];
     confirmationKey?: string;
     pendingReportTurn?: {
       turnId: string;

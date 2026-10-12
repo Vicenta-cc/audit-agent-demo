@@ -154,6 +154,7 @@ export function AgentCollaborationCard({
   onCompleted,
   investigationId,
   investigationTitle,
+  taskName,
   authoritative = false,
   run,
   onControlAccepted
@@ -416,6 +417,7 @@ export function AgentCollaborationCard({
 
   return (
     <div className="agent-exec-clean-card" aria-label="调查流水线执行进度">
+      {taskName ? <h3 style={{ margin: "0 0 12px", fontSize: "14px", lineHeight: 1.6 }}>{taskName}</h3> : null}
       <div className="agent-exec-clean-head">
         <span className="agent-exec-title">
           {ending ? "正在结束任务" : auditCompleted

@@ -18,6 +18,7 @@ const METRIC_TONE_CLASSES: Record<ReportMetricTone, string> = {
 
 interface InvestigationReportCardProps {
   report: ReportSummary;
+  roundLabel?: string;
   onOpenReportDrawer?: () => void;
   onOpenEvidenceDrawer?: () => void;
   onOpenKeyUserDrawer?: () => void;
@@ -26,6 +27,7 @@ interface InvestigationReportCardProps {
 
 export function InvestigationReportCard({
   report,
+  roundLabel,
   onOpenReportDrawer,
   onOpenEvidenceDrawer,
   onOpenKeyUserDrawer,
@@ -42,7 +44,7 @@ export function InvestigationReportCard({
       <div className="inv-report-head">
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <FileCheck2 size={20} style={{ color: "#2563eb" }} />
-          <h3 className="inv-report-title">{report.title}</h3>
+          <h3 className="inv-report-title">{roundLabel ? `${roundLabel} · ` : ""}{report.title}</h3>
         </div>
         <span style={{ fontSize: "11px", fontWeight: "700", color: "#166534", background: "#f0fdf4", padding: "2px 8px", borderRadius: "999px", border: "1px solid #bbf7d0" }}>
           研判报告已就绪

@@ -1,3 +1,4 @@
+import { applyWorkspaceRun } from "./workspaceRunMessages";
 import { InvestigationAccountTools } from "./InvestigationAccountTools";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useApplicationAuth } from "../auth/AuthBoundary";
@@ -559,6 +560,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     window.matchMedia("(max-width: 760px)").matches
   ));
   const [activeDrawer, setActiveDrawer] = useState<DrawerType>(null);
+  const [drawerSnapshot, setDrawerSnapshot] = useState<import("../../types/investigation").ChatMessage | null>(null);
   const [activeSubView, setActiveSubViewState] = useState<SubViewType>(
     routeState.restoreInvestigationState?.activeSubView ?? initialSubView
   );
@@ -586,10 +588,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   const [workspaceLoadError, setWorkspaceLoadError] = useState("");
   const subViewScrollRef = useRef<HTMLDivElement>(null);
   const loadingPublishedReportsRef = useRef(new Set<string>());
+  const failedPublishedReportsRef = useRef(new Set<string>());
   const pendingTurnControllersRef = useRef(new Map<string, AbortController>());
   const runPollTimersRef = useRef(new Map<string, number>());
   const restoredWorkspaceIdsRef = useRef(new Set<string>());
-  const recoveredReportVersionsRef = useRef(new Set<string>());
   const generatingPreviewSessionsRef = useRef(new Set<string>());
   const loadingHistoricalWorkspacesRef = useRef(false);
 
@@ -1244,8 +1246,12 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     deletedSessionIdsRef.current.add(id);
     const pending = session.reportBinding?.pendingTurn?.turnId || session.creationBinding?.pendingTurnId;
     if (pending) pendingTurnControllersRef.current.get(pending)?.abort();
-    window.clearTimeout(runPollTimersRef.current.get(id));
-    runPollTimersRef.current.delete(id);
+    runPollTimersRef.current.forEach((timer, key) => {
+      if (key.startsWith(`${id}/`)) {
+        window.clearTimeout(timer);
+        runPollTimersRef.current.delete(key);
+      }
+    });
     if (session.reportBinding?.workspaceId) clearHistoricalPendingTurn(session.reportBinding.workspaceId);
     const filtered = sessions.filter((session) => session.id !== id);
     setSessions((current) => current.filter((item) => item.id !== id));
@@ -1632,43 +1638,19 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     workspaceSessionId: string,
     runId: string
   ) => {
-    if (runPollTimersRef.current.has(uiSessionId)) return;
-    runPollTimersRef.current.set(uiSessionId, 0);
+    const pollKey = `${uiSessionId}/${runId}`;
+    if (runPollTimersRef.current.has(pollKey)) return;
+    runPollTimersRef.current.set(pollKey, 0);
     const poll = async () => {
       try {
         const run = await getInvestigationRun(runId);
-        const view = mapInvestigationRunState(run);
-        setSessions((current) => current.map((item) => (
-          item.id === uiSessionId && item.creationBinding
-            ? {
-              ...item,
-                updatedAt: formatSessionTimestamp(run.updated_at),
-                updatedAtIso: run.updated_at,
-                status: run.status === "PUBLISHED"
-                  ? "报告已生成"
-                  : run.status === "AUDIT_COMPLETED"
-                    ? "审核完成"
-                    : run.status === "FAILED"
-                      ? "调查失败"
-                      : run.status === "INTERRUPTED"
-                        ? "调查已中断"
-                    : "研判中",
-                executionPhase: view.phase,
-                executionProgress: run.status === "PUBLISHED"
-                  ? 100
-                  : run.status === "AUDIT_COMPLETED"
-                    ? 75
-                    : item.executionProgress,
-                creationBinding: {
-                  ...item.creationBinding,
-                  run,
-                  error: run.error_message || undefined
-                }
-              }
-            : item
-        )));
+        if (!runPollTimersRef.current.has(pollKey) || deletedSessionIdsRef.current.has(uiSessionId)) {
+          runPollTimersRef.current.delete(pollKey);
+          return;
+        }
+        setSessions((current) => current.map((item) => item.id === uiSessionId ? applyWorkspaceRun(item, run) : item));
         if (run.status === "PUBLISHED" && run.report_version_id) {
-          runPollTimersRef.current.delete(uiSessionId);
+          runPollTimersRef.current.delete(pollKey);
           void attachPublishedReport(
             uiSessionId,
             "",
@@ -1679,11 +1661,11 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           return;
         }
         if (run.status === "AUDIT_COMPLETED" && !shouldPollInvestigationRun(run)) {
-          runPollTimersRef.current.delete(uiSessionId);
+          runPollTimersRef.current.delete(pollKey);
           return;
         }
         if (!shouldPollInvestigationRun(run)) {
-          runPollTimersRef.current.delete(uiSessionId);
+          runPollTimersRef.current.delete(pollKey);
           return;
         }
       } catch (error) {
@@ -1697,8 +1679,9 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
             : item
         )));
       }
+      if (!runPollTimersRef.current.has(pollKey) || deletedSessionIdsRef.current.has(uiSessionId)) return;
       const timer = window.setTimeout(poll, 700);
-      runPollTimersRef.current.set(uiSessionId, timer);
+      runPollTimersRef.current.set(pollKey, timer);
     };
     void poll();
   };
@@ -1749,37 +1732,10 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         taskSettingsRevision: preview.task_settings_revision ?? 0,
         idempotencyKey
       });
-      const view = mapInvestigationRunState(run);
       setSessions((current) => current.map((item) => {
         if (item.id !== session.id || !item.creationBinding) return item;
-        const hasExecutionMessage = item.messages.some(
-          (message) => message.type === "agent_collaboration"
-        );
-        return {
-          ...item,
-          updatedAt: formatSessionTimestamp(run.updated_at),
-          updatedAtIso: run.updated_at,
-          status: "研判中",
-          executionPhase: view.phase,
-          draft: { ...item.draft, status: "已创建", confirmed: true },
-          messages: hasExecutionMessage
-            ? item.messages
-            : [
-                ...item.messages,
-                {
-                  id: `msg-agent-${run.run_id}`,
-                  sender: "assistant",
-                  timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
-                  type: "agent_collaboration"
-                }
-              ],
-          creationBinding: {
-            ...item.creationBinding,
-            confirmationKey: idempotencyKey,
-            run,
-            error: undefined
-          }
-        };
+        const updated = applyWorkspaceRun(item, run);
+        return { ...updated, creationBinding: { ...updated.creationBinding!, confirmationKey: idempotencyKey } };
       }));
       pollCreationRun(
         session.id,
@@ -1829,18 +1785,12 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
   useEffect(() => {
     sessions.forEach((session) => {
       const binding = session.creationBinding;
-      const run = binding?.run;
-      if (
-        !binding
-        || !run
-        || !shouldPollInvestigationRun(run)
-        || runPollTimersRef.current.has(session.id)
-      ) return;
-      pollCreationRun(
-        session.id,
-        binding.workspaceSessionId,
-        run.run_id
-      );
+      if (!binding) return;
+      const runs = new Map((binding.rounds || []).flatMap((round) => round.run ? [[round.run.run_id, round.run] as const] : []));
+      if (binding.run) runs.set(binding.run.run_id, binding.run);
+      for (const run of runs.values()) {
+        if (shouldPollInvestigationRun(run)) pollCreationRun(session.id, binding.workspaceSessionId, run.run_id);
+      }
     });
   }, [sessions]);
 
@@ -1883,8 +1833,9 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
     workspaceSessionId = "",
     runId = ""
   ) => {
-    if (loadingPublishedReportsRef.current.has(sessionId)) return;
-    loadingPublishedReportsRef.current.add(sessionId);
+    const loadKey = `${sessionId}/${reportVersionId || taskId}`;
+    if (loadingPublishedReportsRef.current.has(loadKey) || failedPublishedReportsRef.current.has(loadKey)) return;
+    loadingPublishedReportsRef.current.add(loadKey);
 
     try {
       let selectedReportVersionId = reportVersionId;
@@ -1906,17 +1857,32 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       }
 
       setSessions((current) => current.map((session) => {
-        if (session.id !== sessionId || session.reportBinding) return session;
+        if (session.id !== sessionId) return session;
+        if (session.messages.some((message) => message.reportData?.id === report.report_version_id)) return session;
+        const placeholder = session.messages.find((message) => message.id === `msg-report-${report.report_version_id}`);
         const reportMessage = {
+          ...placeholder,
+          occurredAt: report.published_at,
+          roundLabel: placeholder?.roundLabel || session.creationBinding?.rounds?.find((round) => round.run?.run_id === runId)?.label,
+          reportTarget: { taskId: report.task_id, reportVersionId: report.report_version_id, runId },
           id: `msg-report-${report.report_version_id}`,
           sender: "assistant" as const,
-          timestamp: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
+          timestamp: new Date(report.published_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }),
           type: "report_card" as const,
           reportData: buildPublishedReportSummary(report)
         };
         const hasReportPlaceholder = session.messages.some(
           (message) => message.id === reportMessage.id
         );
+        const messages = session.messages.map((message) => message.id === reportMessage.id ? reportMessage : message);
+        if (!hasReportPlaceholder) {
+          // Insert the new event without reordering live messages that have no server timestamp yet.
+          const next = session.creationBinding ? messages.findIndex((message) =>
+            Date.parse(message.occurredAt || "") > Date.parse(report.published_at)) : -1;
+          messages.splice(next < 0 ? messages.length : next, 0, reportMessage);
+        }
+        // Historical reports never replace the active draft or the latest report binding.
+        if (session.creationBinding && session.creationBinding.run?.run_id !== runId) return { ...session, messages };
         const pendingReportTurn = session.creationBinding?.pendingReportTurn;
         const updatedAtIso = latestSessionTimestamp(
           session.updatedAtIso,
@@ -1935,11 +1901,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           },
           executionPhase: "completed",
           executionProgress: 100,
-          messages: hasReportPlaceholder
-            ? session.messages.map((message) => (
-                message.id === reportMessage.id ? reportMessage : message
-              ))
-            : [...session.messages, reportMessage],
+          messages,
           creationBinding: session.creationBinding
             ? { ...session.creationBinding, pendingReportTurn: undefined }
             : session.creationBinding,
@@ -1968,6 +1930,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
         };
       }));
     } catch (error) {
+      failedPublishedReportsRef.current.add(loadKey);
       console.error("Failed to attach published report to investigation", error);
       setSessions((current) => current.map((session) => (
         session.id === sessionId
@@ -1986,29 +1949,21 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           : session
       )));
     } finally {
-      loadingPublishedReportsRef.current.delete(sessionId);
+      loadingPublishedReportsRef.current.delete(loadKey);
     }
   };
 
   useEffect(() => {
     sessions.forEach((session) => {
-      const run = session.creationBinding?.run;
-      if (
-        !run
-        || run.status !== "PUBLISHED"
-        || !run.report_version_id
-        || session.reportBinding
-      ) return;
-      const recoveryKey = `${session.id}:${run.report_version_id}`;
-      if (recoveredReportVersionsRef.current.has(recoveryKey)) return;
-      recoveredReportVersionsRef.current.add(recoveryKey);
-      void attachPublishedReport(
-        session.id,
-        "",
-        run.report_version_id,
-        session.creationBinding!.workspaceSessionId,
-        run.run_id
-      );
+      const binding = session.creationBinding;
+      if (!binding) return;
+      const runs = new Map((binding.rounds || []).flatMap((round) => round.run ? [[round.run.run_id, round.run] as const] : []));
+      if (binding.run) runs.set(binding.run.run_id, binding.run);
+      for (const run of runs.values()) {
+        if (run.status !== "PUBLISHED" || !run.report_version_id
+          || session.messages.some((message) => message.reportData?.id === run.report_version_id)) continue;
+        void attachPublishedReport(session.id, run.job_id, run.report_version_id, binding.workspaceSessionId, run.run_id);
+      }
     });
   }, [sessions]);
 
@@ -2666,11 +2621,13 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           isSidebarCollapsed={isSidebarCollapsed}
           onToggleSidebar={() => setIsSidebarCollapsed(false)}
           onUpdateDraftKeywords={handleUpdateDraftKeywords}
-          onRunControlAccepted={() => {
+          onRunControlAccepted={(runId) => {
             const binding = activeSession.creationBinding;
-            if (!binding?.run) return;
-            pollCreationRun(activeSession.id, binding.workspaceSessionId, binding.run.run_id);
+            const target = runId || binding?.run?.run_id;
+            if (binding && target) pollCreationRun(activeSession.id, binding.workspaceSessionId, target);
           }}
+          onOpenDraftSnapshot={(message, type) => { setDrawerSnapshot(message); setActiveDrawer(type); }}
+          onOpenPublishedReport={(target) => navigate(`/investigation/${encodeURIComponent(target.taskId)}/report?report=${encodeURIComponent(target.reportVersionId)}`)}
           onUpdateDraftPlatforms={handleUpdateDraftPlatforms}
           onGenerateTaskConfig={handleGenerateTaskConfig}
           onStartAgentExecution={handleStartAgentExecution}
@@ -2678,6 +2635,7 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
           onPhaseChange={handlePhaseChange}
           onSendMessage={handleSendMessage}
           onOpenDrawer={(type) => {
+            setDrawerSnapshot(null);
             if (
               type === "report"
               && (isEthnicRelationsSession(activeSession) || activeSession.reportBinding)
@@ -2709,14 +2667,14 @@ export function InvestigationPage({ initialSubView = null }: InvestigationPagePr
       <InvestigationContextDrawer
         isOpen={activeDrawer !== null}
         type={activeDrawer}
-        onClose={() => setActiveDrawer(null)}
-        draft={activeSession.draft}
+        onClose={() => { setActiveDrawer(null); setDrawerSnapshot(null); }}
+        draft={drawerSnapshot?.draftData || activeSession.draft}
         report={activeSession.messages.find((m) => m.type === "report_card")?.reportData}
         evidenceItems={activeSession.messages.find((m) => m.type === "evidence_list")?.evidenceItems}
-        activeRuleSet={activeRuleSet}
-        draftSuggestion={activeSession.creationBinding?.suggestion}
-        creationDraft={activeSession.creationBinding?.draft}
-        confirmationPreview={activeSession.creationBinding?.confirmationPreview}
+        activeRuleSet={drawerSnapshot ? undefined : activeRuleSet}
+        draftSuggestion={drawerSnapshot ? drawerSnapshot.draftArtifact?.suggestion || undefined : activeSession.creationBinding?.suggestion}
+        creationDraft={drawerSnapshot ? undefined : activeSession.creationBinding?.draft}
+        confirmationPreview={drawerSnapshot?.confirmationPreview || activeSession.creationBinding?.confirmationPreview}
         onApplyLexicon={handleApplyCreationLexicon}
         onSaveLexicon={handleSaveCreationLexicon}
         canPublishLexicon={true}

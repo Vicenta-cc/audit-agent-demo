@@ -1,3 +1,4 @@
+import { mapInvestigationRunState } from "./investigationRunState";
 import { InvestigationAccountTools } from "./InvestigationAccountTools";
 import { Fragment, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -44,7 +45,9 @@ interface InvestigationCenterAreaProps {
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onUpdateDraftKeywords: (keywords: string[]) => void;
-  onRunControlAccepted: () => void;
+  onRunControlAccepted: (runId?: string) => void;
+  onOpenDraftSnapshot?: (message: import("../../types/investigation").ChatMessage, type: "ruleset" | "task_config") => void;
+  onOpenPublishedReport?: (target: { taskId: string; reportVersionId: string }) => void;
   onUpdateDraftPlatforms: (platforms: PlatformCode[]) => void;
   onGenerateTaskConfig: (proposalMessageId: string) => void;
   onStartAgentExecution: () => void;
@@ -128,6 +131,8 @@ export function InvestigationCenterArea({
   onToggleSidebar,
   onUpdateDraftKeywords,
   onRunControlAccepted,
+  onOpenPublishedReport,
+  onOpenDraftSnapshot,
   onUpdateDraftPlatforms,
   onGenerateTaskConfig,
   onStartAgentExecution,
@@ -381,6 +386,9 @@ export function InvestigationCenterArea({
                   {card}
                 </Fragment>
               ) : card;
+              const messageDraft = msg.draftData || session.draft;
+              const messagePreview = msg.confirmationPreview || session.creationBinding?.confirmationPreview;
+              const historicalDraft = Boolean(msg.draftData);
               if (msg.type === "task_proposal") {
                 if (msg.proposalData?.interactionMode === "platform-selection") {
                   return (
@@ -392,15 +400,15 @@ export function InvestigationCenterArea({
                         ? msg.content || ""
                         : session.creationBinding
                         ? buildSuggestionAssistantCopy(
-                            session.draft,
-                            session.creationBinding.confirmationPreview
+                            messageDraft,
+                            messagePreview
                           )
                         : msg.content || ""}
                       shouldStream={!session.creationBinding && streamingMessageId === msg.id}
                       showSuggestionCard={Boolean(session.creationBinding) || streamingMessageId !== msg.id}
                       onStreamingComplete={() => handleStreamingComplete(msg.id)}
-                      draft={session.draft}
-                      preview={session.creationBinding?.confirmationPreview}
+                      draft={messageDraft}
+                      preview={messagePreview}
                       platformOptions={session.creationBinding?.suggestion?.platform_options.map((platform) => ({
                         code: platform.id,
                         label: platform.name,
@@ -412,7 +420,7 @@ export function InvestigationCenterArea({
                         ? () => onOpenDrawer("keyword_editor")
                         : undefined}
                       onGenerateConfig={() => onGenerateTaskConfig(msg.id)}
-                      onOpenAnalysisPlan={() => onOpenDrawer("ruleset")}
+                      onOpenAnalysisPlan={historicalDraft && onOpenDraftSnapshot ? () => onOpenDraftSnapshot(msg, "ruleset") : () => onOpenDrawer("ruleset")}
                       error={session.creationBinding?.error}
                     />
                   );
@@ -421,27 +429,27 @@ export function InvestigationCenterArea({
                 return withProposalPresentation(
                   <TaskConfigCard
                     key={msg.id}
-                    draft={session.draft}
+                    draft={messageDraft}
                     onUpdateKeywords={onUpdateDraftKeywords}
                     onUpdatePlatforms={onUpdateDraftPlatforms}
                     onStartExecution={onStartAgentExecution}
-                    onOpenRulesetDrawer={() => onOpenDrawer("ruleset")}
-                    onOpenConfigDrawer={() => onOpenDrawer("task_config")}
+                    onOpenRulesetDrawer={historicalDraft && onOpenDraftSnapshot ? () => onOpenDraftSnapshot(msg, "ruleset") : () => onOpenDrawer("ruleset")}
+                    onOpenConfigDrawer={historicalDraft && onOpenDraftSnapshot ? () => onOpenDraftSnapshot(msg, "task_config") : () => onOpenDrawer("task_config")}
                   />
                 );
               }
 
               if (msg.type === "task_confirmation") {
-                if (session.draft.confirmed) {
+                if (messageDraft.confirmed) {
                   return withProposalPresentation(
                     <TaskConfigCard
                       key={msg.id}
-                      draft={session.draft}
+                      draft={messageDraft}
                       onUpdateKeywords={onUpdateDraftKeywords}
                       onUpdatePlatforms={onUpdateDraftPlatforms}
                       onStartExecution={onStartAgentExecution}
-                      onOpenRulesetDrawer={() => onOpenDrawer("ruleset")}
-                      onOpenConfigDrawer={() => onOpenDrawer("task_config")}
+                      onOpenRulesetDrawer={historicalDraft && onOpenDraftSnapshot ? () => onOpenDraftSnapshot(msg, "ruleset") : () => onOpenDrawer("ruleset")}
+                      onOpenConfigDrawer={historicalDraft && onOpenDraftSnapshot ? () => onOpenDraftSnapshot(msg, "task_config") : () => onOpenDrawer("task_config")}
                     />
                   );
                 }
@@ -449,10 +457,10 @@ export function InvestigationCenterArea({
                 return withProposalPresentation(
                   <TaskConfirmationCard
                     key={msg.id}
-                    draft={session.draft}
+                    draft={messageDraft}
                     onOpenConfig={() => onOpenDrawer("task_config")}
                     onStartExecution={onStartAgentExecution}
-                    preview={session.creationBinding?.confirmationPreview}
+                    preview={messagePreview}
                     onOpenKeywordEditor={session.creationBinding ? () => onOpenDrawer("keyword_editor") : undefined}
                     isConfirming={isConfirmingCreation}
                     error={session.creationBinding?.error}
@@ -479,19 +487,19 @@ export function InvestigationCenterArea({
                 return (
                   <AgentCollaborationCard
                     key={msg.id}
-                    phase={session.executionPhase}
+                    phase={msg.runData ? mapInvestigationRunState(msg.runData).phase : session.executionPhase}
                     onPhaseChange={onPhaseChange}
-                    investigationId={session.id}
+                    investigationId={msg.runData?.run_id || session.id}
                     investigationTitle={session.title}
-                    taskName={session.draft.taskName}
-                    platformsText={session.draft.platforms.map(
+                    taskName={`${msg.roundLabel ? `${msg.roundLabel} · ` : ""}${messageDraft.taskName}`}
+                    platformsText={messageDraft.platforms.map(
                       (code) => platformOptionsList.find((platform) => platform.code === code)?.label || code
                     ).join("、")}
-                    keywordsCount={session.draft.keywords.length}
-                    ruleSetName={session.draft.matchedRuleSet}
-                    run={session.creationBinding?.run}
+                    keywordsCount={messageDraft.keywords.length}
+                    ruleSetName={messageDraft.matchedRuleSet}
+                    run={msg.runData || session.creationBinding?.run}
                     authoritative={Boolean(session.creationBinding)}
-                    onControlAccepted={onRunControlAccepted}
+                    onControlAccepted={() => onRunControlAccepted(msg.runData?.run_id)}
                   />
                 );
               }
@@ -501,10 +509,11 @@ export function InvestigationCenterArea({
                   <InvestigationReportCard
                     key={msg.id}
                     report={msg.reportData}
-                    onOpenReportDrawer={() => onOpenDrawer("report")}
-                    onOpenEvidenceDrawer={isPublishedReportSession ? undefined : () => onOpenDrawer("evidence")}
-                    onOpenKeyUserDrawer={isPublishedReportSession ? undefined : () => onOpenDrawer("key_users")}
-                    onFollowUpInvestigation={isPublishedReportSession ? undefined : () => onSendMessage(
+                    roundLabel={msg.roundLabel}
+                    onOpenReportDrawer={msg.reportTarget && onOpenPublishedReport ? () => onOpenPublishedReport(msg.reportTarget!) : () => onOpenDrawer("report")}
+                    onOpenEvidenceDrawer={(isPublishedReportSession || msg.reportTarget) ? undefined : () => onOpenDrawer("evidence")}
+                    onOpenKeyUserDrawer={(isPublishedReportSession || msg.reportTarget) ? undefined : () => onOpenDrawer("key_users")}
+                    onFollowUpInvestigation={(isPublishedReportSession || msg.reportTarget) ? undefined : () => onSendMessage(
                       msg.reportData?.id.startsWith("report-ethnic-relations")
                         ? "查看四个重点对象之间的共同评论账号与疑似关联线索。"
                         : "对这 8 个重点作者候选发起主页与关联导流网络深钻穿透。"

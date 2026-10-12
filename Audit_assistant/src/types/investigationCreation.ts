@@ -315,7 +315,19 @@ export interface InvestigationWorkspaceMessage {
   created_at: string;
 }
 
+export interface InvestigationRound {
+  round_number: number;
+  label: string;
+  draft_id: string;
+  title: string;
+  draft_revision: number;
+  draft_status: string;
+  run: InvestigationRunProjection | null;
+}
+
 export interface InvestigationWorkspaceState {
+  multi_round_enabled?: boolean;
+  rounds?: InvestigationRound[];
   resource_continuity_enabled?: boolean;
   workspace: InvestigationWorkspaceSession;
   messages: InvestigationWorkspaceMessage[];

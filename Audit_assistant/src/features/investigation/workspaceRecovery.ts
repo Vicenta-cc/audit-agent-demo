@@ -40,6 +40,7 @@ function publicMessage(
   if (artifact?.presentation_stage === "suggestion" && artifact.suggestion) {
     const suggestion = artifact.suggestion;
     return {
+      occurredAt: message.created_at,
       id: message.message_id,
       sender: message.role,
       timestamp: messageTime(message.created_at),
@@ -62,6 +63,7 @@ function publicMessage(
   }
   if (artifact?.presentation_stage === "confirmation") {
     return {
+      occurredAt: message.created_at,
       id: message.message_id,
       sender: message.role,
       timestamp: messageTime(message.created_at),
@@ -71,6 +73,7 @@ function publicMessage(
     };
   }
   return {
+    occurredAt: message.created_at,
     id: message.message_id,
     sender: message.role,
     timestamp: messageTime(message.created_at),
@@ -201,26 +204,60 @@ export function restoreInvestigationWorkspace(
       : message,
     confirmationVisible
   ));
+  const rounds = state.rounds || [];
+  const runs = rounds.length
+    ? rounds.flatMap((round) => round.run ? [round.run] : [])
+    : run ? [run] : [];
+  const artifacts = new Map<string, InvestigationDraftArtifact>();
+  for (const message of state.messages) {
+    if (message.artifact?.artifact_type === "investigation_draft") {
+      artifacts.set(message.artifact.draft_id, message.artifact);
+    }
+  }
+  if (artifact) artifacts.set(artifact.draft_id, artifact);
+  creationMessages.forEach((message, index) => {
+    const source = state.messages[index].artifact;
+    if (source?.artifact_type !== "investigation_draft") return;
+    const confirmed = runs.some((item) => item.draft_id === source.draft_id);
+    if (confirmed || source.draft_id !== artifact?.draft_id) {
+      message.draftData = { ...taskDraftFromArtifact(source), confirmed,
+        status: confirmed ? "已创建" : "配置中" };
+      message.confirmationPreview = source.confirmation_preview;
+      message.draftArtifact = source;
+      if (message.proposalData) message.proposalData.platformsConfirmed = true;
+    }
+  });
   const messages = restoreActivityTimelines(
     creationMessages,
     state.messages,
     state.activity_events
   );
-  if (run) {
+  for (const roundRun of runs) {
+    const round = rounds.find((item) => item.run?.run_id === roundRun.run_id);
+    const roundArtifact = artifacts.get(roundRun.draft_id);
+    const roundDraft: TaskDraft = roundArtifact ? { ...taskDraftFromArtifact(roundArtifact), confirmed: true, status: "已创建" }
+      : { ...emptyDraft(), taskName: round?.title || "调查任务", confirmed: true };
     messages.push({
-      id: `workspace-run:${run.run_id}`,
+      id: `workspace-run:${roundRun.run_id}`,
       sender: "assistant",
-      timestamp: messageTime(run.created_at),
-      type: "agent_collaboration"
+      timestamp: messageTime(roundRun.created_at),
+      occurredAt: roundRun.created_at,
+      type: "agent_collaboration",
+      runData: roundRun,
+      draftData: roundDraft,
+      roundLabel: round?.label
     });
-  }
-  if (run?.status === "PUBLISHED" && run.report_version_id) {
-    messages.push({
-      id: `msg-report-${run.report_version_id}`,
-      sender: "assistant",
-      timestamp: messageTime(run.updated_at),
-      type: "report_card"
-    });
+    if (roundRun.status === "PUBLISHED" && roundRun.report_version_id) {
+      messages.push({
+        id: `msg-report-${roundRun.report_version_id}`,
+        sender: "assistant",
+        timestamp: messageTime(roundRun.completed_at || roundRun.updated_at),
+        occurredAt: roundRun.completed_at || roundRun.updated_at,
+        type: "report_card",
+        roundLabel: round?.label,
+        reportTarget: { taskId: roundRun.job_id, reportVersionId: roundRun.report_version_id, runId: roundRun.run_id }
+      });
+    }
   }
   const reportMessages = state.report_messages || [];
   messages.push(...restoreActivityTimelines(
@@ -229,7 +266,7 @@ export function restoreInvestigationWorkspace(
     state.activity_events
   ));
 
-  if (state.resource_continuity_enabled) {
+  if (state.resource_continuity_enabled || rounds.length) {
     // Creation and historical report turns now coexist. Restore their actual
     // chronology, keeping activity cards immediately before their own answer.
     const times = new Map<string, number>();
@@ -238,9 +275,9 @@ export function restoreInvestigationWorkspace(
       times.set(message.message_id, Number.isFinite(time) ? time : 0);
       if (message.role === "assistant") times.set(`msg-activity-${message.turn_id}`, Number.isFinite(time) ? time : 0);
     }
-    if (run) {
-      times.set(`workspace-run:${run.run_id}`, Date.parse(run.created_at) || 0);
-      times.set(`msg-report-${run.report_version_id}`, Date.parse(run.updated_at) || 0);
+    for (const message of messages) {
+      if (message.occurredAt) times.set(message.id, Date.parse(message.occurredAt) || 0);
+      else if (times.has(message.id)) message.occurredAt = new Date(times.get(message.id)!).toISOString();
     }
     messages.sort((a, b) => (times.get(a.id) || 0) - (times.get(b.id) || 0));
   }
@@ -318,6 +355,7 @@ export function restoreInvestigationWorkspace(
         : undefined,
       resumeAttempted: false,
       run: run || undefined,
+      rounds,
       confirmationKey: artifact
         ? buildConfirmationIdempotencyKey(
             workspaceSessionId,

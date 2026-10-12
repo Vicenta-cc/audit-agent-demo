@@ -1323,3 +1323,52 @@ for (const enabled of [false, true]) {
       : '/api/investigation-workspaces/investigation-session:workspace-1/runs/run-1/report-turns');
   });
 }
+
+test("multi-round recovery keeps both runs, report targets and frozen draft cards in chronology", () => {
+  const state = workspaceState();
+  const firstArtifact = state.draft_artifact!;
+  const secondArtifact = { ...firstArtifact, draft_id: "draft-2",
+    draft: { ...firstArtifact.draft, id: "draft-2", title: "第二轮" },
+    suggestion: { ...suggestion, title: "第二轮", search_terms: ["私拍"] },
+    confirmation_preview: { ...preview, draft_id: "draft-2", resolved_search_terms: ["私拍"] } };
+  const first = run("PUBLISHED", { job_id: "job-1", report_version_id: "report-1", created_at: "2026-08-28T00:02:00Z", completed_at: "2026-08-28T00:05:00Z" });
+  const second = run("PUBLISHED", { run_id: "run-2", draft_id: "draft-2", job_id: "job-2", report_version_id: "report-2", created_at: "2026-08-28T00:06:00Z", completed_at: "2026-08-28T00:08:00Z" });
+  state.rounds = [first, second].map((run, index) => ({ round_number: index + 1, label: `第${index + 1}次调查`, draft_id: run.draft_id, title: `第${index + 1}轮`, draft_revision: 3, draft_status: "QUEUED", run }));
+  state.run = second;
+  state.draft_artifact = secondArtifact;
+  state.messages.push({ ...state.messages[1], message_id: "second-draft", created_at: "2026-08-28T00:03:00Z", artifact: secondArtifact });
+  const restored = restoreInvestigationWorkspace(state);
+  const pipelines = restored.messages.filter((message) => message.type === "agent_collaboration");
+  const reports = restored.messages.filter((message) => message.type === "report_card");
+  expect(pipelines.map((message) => message.runData?.run_id)).toEqual(["run-1", "run-2"]);
+  expect(pipelines[0].draftData?.keywords).toEqual(suggestion.search_terms);
+  expect(pipelines[1].draftData?.keywords).toEqual(["私拍"]);
+  expect(restored.messages.find((message) => message.id === "message-assistant-1")?.draftData?.taskName).toBe(publicDraft.title);
+  expect(reports.map((message) => message.reportTarget)).toEqual([
+    { runId: "run-1", taskId: "job-1", reportVersionId: "report-1" },
+    { runId: "run-2", taskId: "job-2", reportVersionId: "report-2" }
+  ]);
+  expect(restored.messages.map((message) => message.id)).toEqual([
+    "message-user-1", "message-assistant-1", "workspace-run:run-1", "second-draft",
+    "msg-report-report-1", "workspace-run:run-2", "msg-report-report-2"
+  ]);
+  expect(restoreInvestigationWorkspace(JSON.parse(JSON.stringify(state)))).toEqual(restored);
+});
+
+test("new round run updates preserve older cards and an unsubmitted later draft", async () => {
+  const { applyWorkspaceRun } = await import("../src/features/investigation/workspaceRunMessages");
+  const first = run("RUNNING");
+  let session = restoreInvestigationWorkspace(workspaceState({ run: first }));
+  const previous = session.messages.find((message) => message.runData?.run_id === first.run_id)!;
+  session = { ...session, draft: { ...session.draft, taskName: "第二轮", keywords: ["私拍"], confirmed: false },
+    creationBinding: { ...session.creationBinding!, draft: { ...publicDraft, id: "draft-2" }, run: undefined } };
+  const afterFirst = applyWorkspaceRun(session, { ...first, status: "PUBLISHED", report_version_id: "report-1" });
+  expect(afterFirst.draft).toEqual(session.draft);
+  expect(afterFirst.creationBinding?.run).toBeUndefined();
+  const second = run("QUEUED", { run_id: "run-2", draft_id: "draft-2" });
+  const started = applyWorkspaceRun(afterFirst, second);
+  expect(started.messages.filter((message) => message.type === "agent_collaboration")).toHaveLength(2);
+  expect(started.messages.find((message) => message.runData?.run_id === "run-1")?.draftData).toEqual(previous.draftData);
+  expect(started.messages.find((message) => message.runData?.run_id === "run-2")?.draftData?.keywords).toEqual(["私拍"]);
+  expect(applyWorkspaceRun(started, second).messages).toEqual(started.messages);
+});
