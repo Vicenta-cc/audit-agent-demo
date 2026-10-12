@@ -147,6 +147,21 @@ class RouteOperationStore:
             conn.execute('UPDATE route_operations SET state="acked",ack_json=?,updated_at=? WHERE operation_id=?', (json.dumps(ack, sort_keys=True), time.time(), operation_id))
             return self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
 
+    def transition(self, operation_id, *, state, owner_id, lease_version):
+        if state not in OPERATION_STATES:
+            raise ValueError('ROUTE_OPERATION_INVALID')
+        import sqlite3
+        with self._lock, sqlite3.connect(self.db_path) as conn:
+            row = self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
+            if row is None or row['owner_id'] != owner_id or row['lease_version'] != lease_version:
+                raise ValueError('ROUTE_LEASE_REJECTED')
+            if row['state'] == state:
+                return row
+            if row['state'] in ('ended', 'expired', 'drain_timeout'):
+                return row
+            conn.execute('UPDATE route_operations SET state=?,updated_at=? WHERE operation_id=?', (state, time.time(), operation_id))
+            return self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
+
 
 def direct_degraded_allowed(*, transport_error, health_pool_exhausted, risk_signal=False,
                             observed_exit='', shared_exit_key='', old_context_drained=False):
@@ -157,17 +172,6 @@ def direct_degraded_allowed(*, transport_error, health_pool_exhausted, risk_sign
     if not observed_exit or not shared_exit_key or observed_exit != shared_exit_key or not old_context_drained:
         return False
     return True
-
-    def transition(self, operation_id, *, state, owner_id, lease_version):
-        if state not in OPERATION_STATES: raise ValueError('ROUTE_OPERATION_INVALID')
-        import sqlite3
-        with self._lock, sqlite3.connect(self.db_path) as conn:
-            row = self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
-            if row is None or row['owner_id'] != owner_id or row['lease_version'] != lease_version: raise ValueError('ROUTE_LEASE_REJECTED')
-            if row['state'] == state: return row
-            if row['state'] in ('ended', 'expired', 'drain_timeout'): return row
-            conn.execute('UPDATE route_operations SET state=?,updated_at=? WHERE operation_id=?', (state, time.time(), operation_id))
-            return self._row(conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone())
 
 
 RouteError = CollectionRouteError

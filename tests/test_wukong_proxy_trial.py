@@ -5,6 +5,7 @@ from pathlib import Path
 import sqlite3
 import subprocess
 import sys
+import time
 
 import pytest
 
@@ -138,6 +139,25 @@ def test_additive_migration_auth_history_and_rollback_fail_closed(tmp_path, monk
     assert bounded['decision'] == 'MAINTENANCE_LEASE_GATE_PENDING' and not bounded['rollback_ready']
     assert seed.read_bytes() == b'unchanged-seed'
     assert accounts.get('old')['proxy_required']
+
+
+def test_route_operation_transition_preserves_terminal_state(tmp_path):
+    from backend.audit_agent.crawler_route import RouteOperation, RouteOperationStore
+
+    operation = RouteOperation.create(
+        owner_id='owner-1', account_id='account-1', profile_key='profile-1',
+        route_mode='proxy_required', expires_at=time.time() + 300,
+    )
+    store = RouteOperationStore(tmp_path / 'route-operations.sqlite3')
+
+    assert store.issue(operation)['state'] == 'issued'
+    assert store.ack(operation.operation_id, owner_id='owner-1', lease_version=1)['state'] == 'acked'
+    assert store.transition(operation.operation_id, state='draining', owner_id='owner-1', lease_version=1)['state'] == 'draining'
+    assert store.transition(operation.operation_id, state='ended', owner_id='owner-1', lease_version=1)['state'] == 'ended'
+    assert store.transition(operation.operation_id, state='issued', owner_id='owner-1', lease_version=1)['state'] == 'ended'
+
+    with pytest.raises(ValueError, match='ROUTE_LEASE_REJECTED'):
+        store.transition(operation.operation_id, state='issued', owner_id='other-owner', lease_version=1)
 
 
 def test_complete_local_evidence_still_does_not_authorize_live_trial(inputs, tmp_path):
