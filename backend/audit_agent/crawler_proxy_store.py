@@ -20,6 +20,14 @@ from .crawler_account_store import CrawlerAccountStore
 from .config import settings
 
 PROXY_STATUSES = frozenset({'active', 'maintenance', 'unavailable', 'expired', 'exit_changed'})
+PROXY_EVENT_CODES = frozenset({'', 'PROXY_UNAVAILABLE', 'PROXY_EXIT_CHANGED',
+    'PROXY_AUTH_FAILED', 'PROXY_EXPIRED', 'PROXY_CONNECTION_REFUSED',
+    'PROXY_TRANSPORT_FAILED', 'PROXY_CONFIG_INVALID', 'PROXY_REVISION_MISMATCH',
+    'PROXY_BUSY', 'SUPPLEMENT_DEFERRED', 'PROBE_BUDGET_EXHAUSTED',
+    'SCHEDULER_POLICY_CONFLICT', 'PROBE_REQUIRED', 'ROLLBACK_MAINTENANCE',
+    'FIXTURE_PAUSED', 'ACCOUNT_CHALLENGE', 'PLATFORM_429', 'AUTH_INVALID'})
+PROXY_EVENT_TYPES = frozenset({'unavailable', 'exit_changed',
+    'maintenance_recovered', 'route_configuration_changed'})
 PUBLIC_PROXY_FIELDS = frozenset({
     'id', 'provider', 'platform', 'display_name', 'config_revision', 'status',
     'expires_at', 'max_bound_accounts', 'max_active_accounts', 'cooldown_until',
@@ -157,7 +165,7 @@ class CrawlerProxyStore:
 
     @staticmethod
     def _check_revision(row, expected_revision):
-        if expected_revision is None or row['config_revision'] != expected_revision:
+        if type(expected_revision) is not int or expected_revision < 1 or row['config_revision'] != expected_revision:
             raise ValueError('PROXY_REVISION_MISMATCH')
 
     def _public(self, conn, row):
@@ -254,7 +262,11 @@ class CrawlerProxyStore:
                 conn.execute('UPDATE proxy_resources SET ' + ','.join(key+'=?' for key in updates) + ' WHERE id=?', (*updates.values(), proxy_id))
             return self._public(conn, conn.execute('SELECT * FROM proxy_resources WHERE id=?', (proxy_id,)).fetchone())
 
-    def bind(self, account_id, proxy_id, *, expected_binding_revision):
+    def bind(self, account_id, proxy_id, *, expected_binding_revision, route_mode=None):
+        if type(expected_binding_revision) is not int or expected_binding_revision < 0:
+            raise ValueError('PROXY_REVISION_MISMATCH')
+        if route_mode not in {None, 'proxy_required', 'proxy_preferred'}:
+            raise ValueError('ROUTE_STATE_INVALID')
         with self._guard('bind', proxy_id, account_id), self._lock, self.accounts._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
             account = self.accounts.get(account_id, connection=conn)
@@ -265,11 +277,16 @@ class CrawlerProxyStore:
                 raise ValueError('PROXY_REVISION_MISMATCH')
             if account['platform'] != resource['platform']:
                 raise ValueError('PROXY_PLATFORM_MISMATCH')
+            if route_mode == 'proxy_preferred' and (account['binding_revision'] != 0 or account['proxy_required']):
+                raise ValueError('PROXY_REQUIRED_POLICY_IMMUTABLE')
             if account['proxy_id'] != proxy_id:
                 count = conn.execute('SELECT COUNT(*) FROM crawler_accounts WHERE proxy_id=?', (proxy_id,)).fetchone()[0]
                 if count >= resource['max_bound_accounts']:
                     raise ValueError('PROXY_CAPACITY_CONFLICT')
-                conn.execute('UPDATE crawler_accounts SET proxy_id=?, proxy_required=1, binding_revision=binding_revision+1 WHERE id=?', (proxy_id, account_id))
+                preferred = route_mode == 'proxy_preferred' and account['binding_revision'] == 0 and not account['proxy_required']
+                if route_mode == 'proxy_preferred' and not preferred:
+                    raise ValueError('PROXY_REQUIRED_POLICY_IMMUTABLE')
+                conn.execute('UPDATE crawler_accounts SET proxy_id=?, proxy_required=?,route_mode=?, binding_revision=binding_revision+1 WHERE id=?', (proxy_id, int(not preferred), 'proxy_preferred' if preferred else 'proxy_required', account_id))
             return self.accounts.get(account_id, connection=conn)
 
     def unbind(self, account_id, *, expected_binding_revision):
@@ -384,7 +401,7 @@ class CrawlerProxyStore:
             cooldown_until = _epoch(cooldown_until)
         # Only machine codes: arbitrary messages could accidentally persist credentials.
         reason = _UNSET if stop_reason is _UNSET else str(stop_reason or '')
-        if reason is not _UNSET and reason and not re.fullmatch(r'[A-Z][A-Z0-9_]{0,79}', reason):
+        if reason is not _UNSET and reason not in PROXY_EVENT_CODES:
             raise ValueError('PROXY_INVALID_EVENT')
         with self._lock, self.accounts._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
@@ -400,6 +417,8 @@ class CrawlerProxyStore:
 
     @_notify_health_after_commit
     def observe_exit(self, proxy_id, ip, *, observed_at=None):
+        if not isinstance(ip,str):
+            raise ValueError('PROXY_INVALID_EXIT')
         try:
             ip = str(ipaddress.ip_address(ip))
         except ValueError:
@@ -449,7 +468,7 @@ class CrawlerProxyStore:
             return bool(row and observed_exit==row['shared_exit_key'] and self.accounts._exit_allowed(conn,observed_exit,row['shared_exit_generation']))
 
     def record_event(self, proxy_id, kind, *, code=''):
-        if not isinstance(kind, str) or not re.fullmatch(r'[a-z][a-z0-9_]{0,79}', kind) or not isinstance(code, str) or code and not re.fullmatch(r'[A-Z][A-Z0-9_]{0,79}', code):
+        if kind not in PROXY_EVENT_TYPES or code not in PROXY_EVENT_CODES:
             raise ValueError('PROXY_INVALID_EVENT')
         with self._lock, self.accounts._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')

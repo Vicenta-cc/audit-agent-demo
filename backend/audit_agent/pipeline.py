@@ -458,7 +458,8 @@ class AuditPipeline:
 
                 def put_stream_entry(entry) -> None:
                     with stream_enqueue_lock:
-                        if analysis_errors:
+                        if analysis_errors and not (settings.crawler_safety_enabled and request.platform == 'dy'
+                                and all(isinstance(error, CollectionRouteError) for error in analysis_errors)):
                             return
                         bundle = getattr(self, "_collection_route_context", None)
                         source_item = entry.get("item") if isinstance(entry, dict) else next(iter(entry[0]), {})
@@ -525,6 +526,18 @@ class AuditPipeline:
                             ingest_completed_batch(batch_path)
                         stop_flusher.wait(1)
 
+                def defer_stream_subject(subject, subject_key, exc):
+                    if not settings.crawler_safety_enabled or request.platform != 'dy':
+                        raise exc
+                    self.ingestion.mark_content_status(request.platform, subject_key, 'queued', task_id=self.job_id)
+                    pending = list(control().get('network_deferred_content_ids') or [])
+                    if subject_key not in pending:
+                        pending.append(subject_key)
+                    job_store.update_control(self.job_id, network_deferred_content_ids=pending, collection_partial=True)
+                    bundle = getattr(getattr(self, '_media_route_context', None), 'value', None)
+                    self._handle_stream_route_error(exc, {'item': {'collection_route_provenance': subject.collection_route_provenance}}, bundle)
+                    analysis_errors.append(exc)
+
                 def analyze_stream_ref(ref: dict) -> None:
                     if analyze_limit <= 0:
                         return
@@ -584,8 +597,9 @@ class AuditPipeline:
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
                             results.append(persisted or result)
-                        except CollectionRouteError:
-                            raise
+                        except CollectionRouteError as exc:
+                            defer_stream_subject(subject, subject_key, exc)
+                            continue
                         except Exception as exc:
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
                             analyzed_ids.add(subject.note_id)
@@ -649,8 +663,9 @@ class AuditPipeline:
                                 task_id=self.job_id,
                                 audit_result_id=int((persisted or {}).get("audit_result_id") or (persisted or {}).get("id") or 0) or None,
                             )
-                        except CollectionRouteError:
-                            raise
+                        except CollectionRouteError as exc:
+                            defer_stream_subject(subject, subject_key, exc)
+                            continue
                         except Exception as exc:
                             self._record_subject_failure(request.platform, subject_key, subject, exc)
                             analyzed_ids.add(subject.note_id)
@@ -697,9 +712,11 @@ class AuditPipeline:
                                         analyze_stream_ref(entry)
                                 except CollectionRouteError as exc:
                                     self._handle_stream_route_error(exc, entry, bundle)
-                                    # Only affected network work is frozen. Other
-                                    # queued subjects with complete local media
-                                    # still pass their normal provenance checks.
+                                    if not settings.crawler_safety_enabled or request.platform != 'dy':
+                                        raise
+                                    # Finish local queued subjects, then report the
+                                    # route error without resuming network work.
+                                    analysis_errors.append(exc)
                                     continue
                                 finally:
                                     self._media_route_context.value = None
@@ -761,10 +778,15 @@ class AuditPipeline:
                             or getattr(request, "crawler_account_id", "")
                             or ""
                         ).strip()
+                        authorized_account_ids = _authorized_crawler_account_ids(self.job_id)
+                        safety_ids = authorized_account_ids if authorized_account_ids is not None else {
+                            item['id'] for item in crawler_account_store.list(platform=request.platform)
+                        }
+                        safety_owner = str((job_store.get(self.job_id) or {}).get('owner_user_id') or 'local-user')
+                        safety_manager = AccountRotationManager(crawler_account_store, auth_state_cipher)
+                        safety_manager.recover_authorized(request.platform, safety_owner, safety_ids)
+                        safety_manager.prepare_exhausted_pool(request.platform, safety_owner, safety_ids)
                         candidates = crawler_account_store.available_accounts(request.platform)
-                        authorized_account_ids = _authorized_crawler_account_ids(
-                            self.job_id
-                        )
                         if authorized_account_ids is not None:
                             candidates = [
                                 item
@@ -773,7 +795,7 @@ class AuditPipeline:
                                 in authorized_account_ids
                             ]
                         candidates.sort(
-                            key=lambda item: (item.get('access_scope') != 'public', *crawler_account_store.fair_key(item), str(item.get('id')) != preferred_account_id)
+                            key=lambda item: (bool(selected_account()) and str(item.get('id')) != selected_account(), item.get('access_scope') != 'public', *crawler_account_store.fair_key(item)) if settings.crawler_safety_enabled and request.platform == 'dy' else (str(item.get('id')) != preferred_account_id,)
                         )
                         if str(getattr(settings, "crawler_proxy_trial_id", "") or os.environ.get("MEDIACRAWLER_PROXY_TRIAL_ID", "")).strip():
                             if not preferred_account_id:
@@ -967,7 +989,8 @@ class AuditPipeline:
                                         last_account_error = CrawlerAuthenticationError("登录态无法读取，请重新登录")
                                         job_store.log(self.job_id, "采集账号登录态无法读取，继续尝试账号池中的下一账号")
                                         continue
-                                    crawler_account_store.record_fair_selection(crawler_account_id, [item['id'] for item in candidates if item])
+                                    if selected_account() != crawler_account_id:
+                                        crawler_account_store.record_fair_selection(crawler_account_id, [item['id'] for item in candidates if item])
                                     record_execution_account()
                                     if not self.authoritative_m3:
                                         job_store.log(
@@ -989,6 +1012,13 @@ class AuditPipeline:
                                     else:
                                         with self._route_operation(crawler_account_id):
                                             candidate_output = run_with_current_account(save_root)
+                                except CollectionRouteError as exc:
+                                    if exc.code not in {'PROXY_EXPIRED','PROXY_TRANSPORT_FAILED','PROXY_CONNECTION_REFUSED'}:
+                                        raise
+                                    last_account_error = exc
+                                    if crawler_account_id:
+                                        crawler_account_store.set_route_state(crawler_account_id,state='transport_blocked',pause_reason='')
+                                    continue
                                 except CrawlerVerificationError as exc:
                                     if (candidate or {}).get("proxy_id"):
                                         risk_proxy_ids.add(candidate["proxy_id"])
@@ -1051,6 +1081,19 @@ class AuditPipeline:
                                         crawler_account_store.reset_risk(crawler_account_id)
                                 output = candidate_output
                                 break
+
+                        if output is None and not crawl_stop_requested() and isinstance(last_account_error, CollectionRouteError):
+                            degraded = safety_manager.prepare_exhausted_pool(request.platform, safety_owner, safety_ids)
+                            if degraded is not None:
+                                account = degraded
+                                crawler_account_id = degraded['id']
+                                with account_lease(request.platform, crawler_account_id) as acquired:
+                                    if acquired:
+                                        account_auth_state = auth_state_cipher.decrypt(crawler_account_store.get_auth_state_ciphertext(crawler_account_id))
+                                        record_execution_account()
+                                        # New storage subtree preserves old media provenance.
+                                        with self._route_operation(crawler_account_id):
+                                            output = run_with_current_account(crawl_dir / 'direct-recollection')
 
                         if output is None:
                             if crawl_stop_requested():
@@ -1500,11 +1543,14 @@ class AuditPipeline:
 
     def _handle_stream_route_error(self, exc: CollectionRouteError, entry, route_context=None) -> None:
         if exc.code in {"PROXY_BUSY", "SUPPLEMENT_DEFERRED"}:
+            if not settings.crawler_safety_enabled:
+                job_store.update_control(self.job_id, analysis_stop_requested=True)
             return
         if getattr(self, "_stream_route_error", None) is None:
             self._stream_route_error = exc
         # Stop the in-flight adapter immediately, before shared event persistence.
         job_store.update_control(self.job_id, crawl_stop_requested=True,
+                                 **({} if settings.crawler_safety_enabled else {'analysis_stop_requested':True}),
                                  collection_route_error=self._stream_route_error.code)
         item = entry.get("item") if isinstance(entry, dict) else next(iter(entry[0]), {})
         source = (item or {}).get("collection_route_provenance")
@@ -1525,7 +1571,8 @@ class AuditPipeline:
         job_store.update(self.job_id, status="crawl_paused" if deferred else "interrupted",
                          crawl_status=current.get("crawl_status") if current.get("crawl_status") in {"completed", "skipped"} else "stopped",
                          analysis_status="pending", error=exc.code)
-        job_store.update_control(self.job_id, failure=failure_metadata(exc.code, exc.code))
+        job_store.update_control(self.job_id, failure=failure_metadata(exc.code, exc.code),
+                                 **({'collection_partial':True, 'network_deferred':True} if settings.crawler_safety_enabled else {}))
         job_store.log(self.job_id, exc.code, level="error", error_code=exc.code,
                       retryable=deferred, action="retry_after_recovery")
 

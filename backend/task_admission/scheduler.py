@@ -41,11 +41,24 @@ def select_account(worker, row):
     ):
         yield True
         return
+    from backend.audit_agent.config import settings
     platform = config.get("platform", "xhs")
     preferred = config.get("crawler_account_id") or ""
+    from .store import AdmissionError
+    from backend.audit_agent.account_rotation import AccountRotationManager
+    all_permitted=set()
+    for candidate in account_store.list(platform=platform):
+        try:
+            with worker.store.admission.connect() as db:
+                worker.store.admission.validate_user(db,row['owner_id'],candidate['id'])
+            all_permitted.add(candidate['id'])
+        except AdmissionError:
+            continue
+    manager=AccountRotationManager(account_store)
+    manager.recover_authorized(platform,row['owner_id'],all_permitted)
+    manager.prepare_exhausted_pool(platform,row['owner_id'],all_permitted)
     accounts = account_store.available_accounts(platform)
     permitted_accounts = []
-    from .store import AdmissionError
 
     for account in accounts:
         try:
@@ -59,7 +72,7 @@ def select_account(worker, row):
     permitted_accounts.sort(
         key=lambda item: (
             item[0] != "public",
-            *account_store.fair_key(item[1]),
+            *(account_store.fair_key(item[1]) if platform=='dy' and settings.crawler_safety_enabled else ()),
             item[1]["id"] != preferred,
         )
     )

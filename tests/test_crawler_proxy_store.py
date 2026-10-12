@@ -194,7 +194,8 @@ def test_proxy_use_grant_does_not_grant_private_account(tmp_path, stores):
     assert not service.can_use_crawler_account(principal, account['id'])
     assert not service.can_manage_crawler_proxy(principal, proxy['id'])
     assert service.can_use_crawler_proxy(Principal('admin', role='admin'), proxy['id'])
-    assert service.public_crawler_account({**account, 'unknown_secret': 'secret', 'credentials': {'password': 'secret'}}) == account
+    projection = service.public_crawler_account({**account, 'unknown_secret': 'secret', 'credentials': {'password': 'secret'}})
+    assert projection == {key: value for key,value in account.items() if key not in {'shared_exit_key','recovery_claim','recovery_incident','validated_direct_generation'}}
     assert service.public_crawler_proxy({**proxy, 'password': 'secret', 'transport_ciphertext': 'secret'}) == proxy
     auth.revoke_resource(user_id=user['id'], resource_type='crawler-proxy', resource_id=proxy['id'], permission='use', actor_user_id='admin')
     with pytest.raises(AuthorizationError):

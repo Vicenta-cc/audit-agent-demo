@@ -30,6 +30,8 @@ def account_is_cooling_down(account: dict, *, now: datetime | None = None) -> bo
 
 def account_in_slow_mode(account: dict, *, now: datetime | None = None) -> bool:
     """New logins and accounts probing after a risk cooldown crawl at reduced pace."""
+    if account.get('route_mode') == 'direct_degraded':
+        return True
     if int(account.get("risk_count") or 0) > 0:
         return True
     login_at = str(account.get("auth_state_updated_at") or "").strip()
@@ -121,6 +123,7 @@ class CrawlerAccountStore:
                 ("recovery_incident", "TEXT NOT NULL DEFAULT ''"),
                 ("recovery_state", "TEXT NOT NULL DEFAULT ''"),
                 ("recovery_claim", "TEXT NOT NULL DEFAULT ''"),
+                ("validated_direct_generation", "INTEGER NOT NULL DEFAULT 0"),
         ):
             if name not in columns:
                 conn.execute(f"ALTER TABLE crawler_accounts ADD COLUMN {name} {definition}")
@@ -523,7 +526,7 @@ class CrawlerAccountStore:
             epoch = time.time()
             for account in accounts:
                 if account.get("route_mode") == "direct_degraded":
-                    if self._exit_allowed(conn, account["shared_exit_key"], account["shared_exit_generation"]):
+                    if account['validated_direct_generation'] == account['shared_exit_generation'] and self._exit_allowed(conn, account["shared_exit_key"], account["shared_exit_generation"]):
                         available.append(account)
                     continue
                 if not account["proxy_id"]:
@@ -542,7 +545,29 @@ class CrawlerAccountStore:
                     available.append(account)
             return available
 
+    def degraded_candidates(self, platform):
+        """Transport evidence only. ACL and Profile/capacity are caller-owned."""
+        if platform!='dy' or not settings.crawler_safety_enabled or not settings.crawler_direct_degrade_enabled:
+            return []
+        with self._connect() as conn:
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE name='proxy_resources'").fetchone():
+                return []
+            rows=conn.execute("SELECT a.*,p.stop_reason AS transport_error,p.expires_at AS proxy_expires FROM crawler_accounts a JOIN proxy_resources p ON p.id=a.proxy_id WHERE a.platform='dy' AND a.status='active' AND a.proxy_required=0 AND a.route_mode='proxy_preferred' AND a.route_state IN ('active','transport_blocked') AND COALESCE(a.auth_state_ciphertext,'')<>'' AND a.pause_reason='' AND (a.paused_until IS NULL OR a.paused_until<=?) AND (a.cooldown_until IS NULL OR a.cooldown_until<=?)",(time.time(),datetime.now().isoformat(timespec='seconds'))).fetchall()
+            result=[]
+            for row in rows:
+                code=row['transport_error']
+                if not code and row['proxy_expires'] is not None and row['proxy_expires']<=time.time():
+                    code='PROXY_EXPIRED'
+                if code not in {'PROXY_EXPIRED','PROXY_TRANSPORT_FAILED','PROXY_CONNECTION_REFUSED'}:
+                    continue
+                value=self._row_to_account(row,connection=conn)
+                value['transport_error']=code
+                result.append(value)
+            return sorted(result,key=self.fair_key)
+
     def next_available(self, platform: str, *, exclude_id: str = "") -> dict | None:
+        if platform == 'dy' and settings.crawler_safety_enabled:
+            return self.select_fair(platform, exclude_ids=(exclude_id,))
         accounts = self.available_accounts(platform, exclude_ids=(exclude_id,))
         return accounts[0] if accounts else None
 
@@ -626,9 +651,10 @@ class CrawlerAccountStore:
             "paused_until": row["paused_until"],
             "pause_reason": row["pause_reason"] or "",
             "skip_count": int(row["skip_count"] or 0),
+            "validated_direct_generation": int(row['validated_direct_generation'] or 0),
             "recovery_state": row["recovery_state"] or '',
             "recovery_incident": row["recovery_incident"] or '',
-            "recovery_claim": row["recovery_claim"] or '', 
+            "recovery_claim": row["recovery_claim"] or '',
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
@@ -636,7 +662,7 @@ class CrawlerAccountStore:
     ROUTE_MODES = frozenset({'proxy_required', 'proxy_preferred', 'direct_degraded', 'legacy_direct'})
     ROUTE_STATES = frozenset({'active', 'transport_blocked', 'challenge_paused', 'manual_required', 'draining', 'drain_timeout', 'recovery_check'})
     EVENT_TYPES = frozenset({'route_changed', 'transport_blocked', 'challenge_paused', 'recovery_claimed', 'recovery_succeeded', 'manual_required', 'route_admitted', 'route_ended'})
-    REASONS = frozenset({'', 'ACCOUNT_CHALLENGE', 'AUTH_INVALID', 'PLATFORM_429', 'PROXY_EXPIRED', 'PROXY_TRANSPORT_FAILED', 'PROXY_CONNECTION_REFUSED', 'POOL_EXHAUSTED', 'RECOVERY_SUCCESS', 'RECOVERY_UNCERTAIN', 'DRAIN_TIMEOUT'})
+    REASONS = frozenset({'', 'ACCOUNT_CHALLENGE', 'AUTH_INVALID', 'PLATFORM_429', 'PROXY_EXPIRED', 'PROXY_TRANSPORT_FAILED', 'PROXY_CONNECTION_REFUSED', 'POOL_EXHAUSTED', 'RECOVERY_SUCCESS', 'RECOVERY_UNCERTAIN', 'DRAIN_TIMEOUT', 'LOGIN_REVALIDATION_REQUIRED'})
 
     @staticmethod
     def _epoch(value):
@@ -654,6 +680,8 @@ class CrawlerAccountStore:
 
     @staticmethod
     def _exit_key(value):
+        if not isinstance(value,str):
+            raise ValueError('ROUTE_EXIT_INVALID')
         try:
             return str(ipaddress.ip_address(value))
         except (ValueError, TypeError):
@@ -675,7 +703,7 @@ class CrawlerAccountStore:
             row = conn.execute('SELECT * FROM crawler_shared_exits WHERE exit_key=?', (key,)).fetchone()
             if row and at < row['observed_at']:
                 raise ValueError('PROXY_STALE_OBSERVATION')
-            generation = row['generation'] if row else 1
+            generation = row['generation'] if row else conn.execute('SELECT COALESCE(MAX(generation),0)+1 FROM crawler_shared_exits').fetchone()[0]
             conn.execute("INSERT INTO crawler_shared_exits(exit_key,generation,observed_at,service_exit) VALUES(?,?,?,?) ON CONFLICT(exit_key) DO UPDATE SET observed_at=excluded.observed_at,service_exit=MAX(service_exit,excluded.service_exit)", (key,generation,at,int(service_exit)))
             return {'observed_exit_ip': key, 'observed_exit_at': at, 'shared_exit_key': key, 'shared_exit_generation': generation}
         if connection is not None:
@@ -686,12 +714,29 @@ class CrawlerAccountStore:
 
     def get_direct_route(self, account_id):
         with self._connect() as conn:
-            row = conn.execute('SELECT * FROM crawler_shared_exits WHERE service_exit=1 ORDER BY observed_at DESC LIMIT 1').fetchone()
-            if not row or not self._exit_allowed(conn,row['exit_key'],row['generation']):
+            account=conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
+            if not account: return None
+            if account['route_mode']=='direct_degraded':
+                row=conn.execute('SELECT * FROM crawler_shared_exits WHERE service_exit=1 AND exit_key=? AND generation=?',(account['shared_exit_key'],account['shared_exit_generation'])).fetchone()
+            else:
+                row=conn.execute('SELECT * FROM crawler_shared_exits WHERE service_exit=1 ORDER BY observed_at DESC LIMIT 1').fetchone()
+            recovery=account['recovery_state']=='claimed' and account['route_state']=='recovery_check'
+            if not row or not self._exit_allowed(conn,row['exit_key'],row['generation'],recovery=recovery):
                 return None
             return dict(observed_exit_ip=row['exit_key'],observed_exit_at=row['observed_at'],shared_exit_key=row['exit_key'],shared_exit_generation=row['generation'])
 
-    def admit_route(self, account_id, observed_exit, generation, operation_id, *, recovery_claim=None):
+    def mark_direct_validated(self, account_id, generation):
+        generation=self._generation(generation)
+        with self._lock,self._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row=conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
+            if not row or row['route_mode']!='direct_degraded' or row['shared_exit_generation']!=generation or not self._exit_allowed(conn,row['shared_exit_key'],generation):
+                raise ValueError('ROUTE_GENERATION_STALE')
+            conn.execute('UPDATE crawler_accounts SET validated_direct_generation=? WHERE id=?',(generation,account_id))
+
+    def admit_route(self, account_id, observed_exit, generation, operation_id, *, recovery_claim=None, login_bootstrap=False):
+        if type(login_bootstrap) is not bool:
+            raise ValueError('ROUTE_BOOTSTRAP_INVALID')
         key = self._exit_key(observed_exit)
         generation = self._generation(generation)
         if not isinstance(operation_id,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}',operation_id):
@@ -705,8 +750,10 @@ class CrawlerAccountStore:
                 return operation_id
             account = conn.execute('SELECT * FROM crawler_accounts WHERE id=?',(account_id,)).fetchone()
             recovery = bool(account and recovery_claim and account['recovery_claim']==recovery_claim and account['recovery_state']=='claimed')
-            if not account or account['status']!='active' or (account['route_state']!='active' and not recovery) or (account['paused_until'] and account['paused_until']>time.time()) or not self._exit_allowed(conn,key,generation,recovery=recovery):
+            if not account or (account['status']!='active' and not (login_bootstrap and account['status']=='login_required')) or (account['route_state']!='active' and not recovery and not (login_bootstrap and account['route_state']=='transport_blocked')) or (account['paused_until'] and account['paused_until']>time.time()) or not self._exit_allowed(conn,key,generation,recovery=recovery):
                 raise ValueError('ACCOUNT_CHALLENGE')
+            if account['route_mode']=='direct_degraded' and account['validated_direct_generation']!=generation and not (login_bootstrap or recovery):
+                raise ValueError('LOGIN_REVALIDATION_REQUIRED')
             conn.execute('INSERT INTO crawler_route_admissions(operation_id,account_id,exit_key,generation,created_at) VALUES(?,?,?,?,?)',(operation_id,account_id,key,generation,time.time()))
             conn.execute('UPDATE crawler_accounts SET shared_exit_key=?,shared_exit_generation=? WHERE id=?',(key,generation,account_id))
             return operation_id

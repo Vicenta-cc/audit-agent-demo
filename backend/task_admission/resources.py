@@ -224,6 +224,32 @@ class ExecutionLeaseBundle:
             self._close_handles()
             return False
 
+    def acquire_exit_capacity(self, observed_exit):
+        """Actual exit capacity uses inherited FDs, never timestamp expiry.
+
+        Call after observation and before business snapshot issuance. Independent
+        proxy resources and direct service routes use the same physical-exit key.
+        """
+        import ipaddress
+        try:
+            key=str(ipaddress.ip_address(observed_exit))
+        except (TypeError,ValueError):
+            raise ResourceBusy('PROXY_CONFIG_INVALID') from None
+        with self._lock:
+            if self._closing or not self._handles:
+                raise ResourceBusy('PROXY_BUSY')
+            if getattr(self,'_exit_capacity_key',None)==key:
+                return True
+            if getattr(self,'_exit_capacity_key',None) is not None:
+                raise ResourceBusy('PROXY_EXIT_CHANGED')
+            for slot in range(settings.crawler_shared_exit_active_limit):
+                handle=_open_lock(lock_root()/'exit'/(digest(key)+f'-active-{slot}.lock'))
+                if handle is not None:
+                    self._handles.append(handle)
+                    self._exit_capacity_key=key
+                    return True
+            return False
+
     @contextmanager
     def borrow(self, *, execution_id=None, owner_id=None, account_id=None):
         with self._lock:
@@ -247,18 +273,15 @@ class ExecutionLeaseBundle:
             self._closers.append(callback)
 
     def _close_handles(self):
-        error = None
-        for callback in reversed(self._closers):
-            try:
-                callback()
-            except Exception as exc:
-                error = error or exc
-        self._closers.clear()
+        # A failed child/context drain retains the remaining callbacks and FDs;
+        # it must not run the admission-release callback or free the Profile.
+        while self._closers:
+            callback=self._closers[-1]
+            callback()
+            self._closers.pop()
         for handle in reversed(self._handles):
             handle.close()
         self._handles.clear()
-        if error is not None:
-            raise error
 
     def close(self):
         with self._lock:

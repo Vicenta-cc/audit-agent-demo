@@ -65,7 +65,8 @@ class AccountRotationManager:
                 accounts = self.store.available_accounts(platform, exclude_ids=attempted)
                 if not accounts:
                     raise
-                account = accounts[0]
+                account = min(accounts,key=self.store.fair_key) if platform=='dy' and settings.crawler_safety_enabled else accounts[0]
+                self.store.record_fair_selection(account['id'],[item['id'] for item in accounts])
                 current_id = account["id"]
                 current_auth = self.cipher.decrypt(
                     self.store.get_auth_state_ciphertext(current_id)
@@ -97,3 +98,66 @@ class AccountRotationManager:
                 result='uncertain'
             self.store.finish_recovery(account_id,claim,result)
             return result
+
+    def recover_authorized(self, platform, owner_id, authorized_ids):
+        """Explicit dispatch work, never invoked by construction or listing."""
+        if platform != 'dy' or not settings.crawler_safety_enabled:
+            return
+        from .crawler_route import check_recovery_route
+        for account in self.store.list(platform=platform):
+            if account['id'] not in authorized_ids or account.get('recovery_state') != 'pending':
+                continue
+            self.recover_once(account['id'],lambda account_id,claim: check_recovery_route(
+                account_id,claim,account_store=self.store,owner_id=owner_id))
+
+    def healthy_capacity_available(self, platform, owner_id, authorized_ids):
+        """Inspect the same inherited account/proxy/physical-exit capacity FDs.
+
+        This bounded dry reservation performs no probe and issues no admission.
+        Platform request cooldown/budget remains enforced by the request gate.
+        """
+        from types import SimpleNamespace
+        from backend.task_admission.resources import ExecutionLeaseBundle, account_lease
+        for account in self.store.available_accounts(platform):
+            if account['id'] not in authorized_ids: continue
+            with account_lease(platform,account['id']) as acquired:
+                if not acquired: continue
+                key=account.get('shared_exit_key')
+                limit=1
+                proxy_id=account.get('proxy_id')
+                if account.get('route_mode')=='direct_degraded':
+                    proxy_id='service-direct'
+                elif proxy_id:
+                    with self.store._connect() as db:
+                        resource=db.execute('SELECT shared_exit_key,max_active_accounts FROM proxy_resources WHERE id=?',(proxy_id,)).fetchone()
+                    if not resource: continue
+                    key,limit=resource['shared_exit_key'],resource['max_active_accounts']
+                bundle=ExecutionLeaseBundle('capacity-check',owner_id,account['id'],SimpleNamespace(proxy_id=proxy_id) if proxy_id else None)
+                try:
+                    if not bundle.acquire(max_active_accounts=min(limit,max(1,settings.request_concurrency))): continue
+                    if key and not bundle.acquire_exit_capacity(key): continue
+                    return True
+                finally:
+                    bundle.close()
+        return False
+
+    def prepare_exhausted_pool(self, platform, owner_id, authorized_ids):
+        """Healthy capacity wins before a drained transport account may degrade.
+
+        Profile locks and zero active durable admissions prove old execution
+        drained; no timestamp or process-local lock substitutes for that proof.
+        """
+        if platform != 'dy' or not settings.crawler_safety_enabled:
+            return None
+        if self.healthy_capacity_available(platform,owner_id,authorized_ids):
+            return None
+        from backend.task_admission.resources import account_lease
+        from .crawler_route import prepare_direct_degraded
+        for candidate in self.store.degraded_candidates(platform):
+            if candidate['id'] not in authorized_ids: continue
+            with account_lease(platform,candidate['id']) as acquired:
+                if not acquired: continue
+                if prepare_direct_degraded(candidate['id'],candidate['transport_error'],True,
+                        account_store=self.store,old_context_drained=True,owner_id=owner_id):
+                    return self.store.get(candidate['id'])
+        return None
