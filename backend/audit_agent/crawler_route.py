@@ -429,7 +429,7 @@ def acquire_route_execution(account_id, execution_id, owner_id, *, account_store
                 scope_ids=managed.scope_ids, snapshot_digest=managed.snapshot_digest, proxy_expires_at=managed.expires_at or now+1200)
             bundle.route_operation_store = RouteOperationStore(str(settings.request_scheduler_db.resolve()))
             try:
-                token = bundle.account_store.admit_route(account_id, managed.observed_exit_ip, managed.exit_generation, managed.operation_id, recovery_claim=recovery_claim, login_bootstrap=bool(human_login_operation_id or allow_probe and not recovery_claim))
+                token = bundle.account_store.admit_route(account_id, managed.observed_exit_ip, managed.exit_generation, managed.operation_id, recovery_claim=recovery_claim, login_bootstrap=managed.login_bootstrap)
                 bundle.add_closer(lambda: bundle.account_store.release_route_admission(token))
                 bundle.route_operation_store.issue(operation)
                 bundle.add_closer(lambda: end_route_operation(bundle))
@@ -801,7 +801,8 @@ def record_login_challenge(bundle):
     if bundle is None or not getattr(bundle.snapshot,'managed',False):
         return
     with bundle._lock:
-        if getattr(bundle,'account_risk_recorded',False):return
+        if getattr(bundle,'account_risk_recorded',False):
+            return
         accounts=bundle.account_store
         account_id=bundle.snapshot.account_id
         claim=getattr(bundle.snapshot,'recovery_claim','')
