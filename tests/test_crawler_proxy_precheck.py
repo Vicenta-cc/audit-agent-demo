@@ -15,7 +15,7 @@ def test_real_browser_binary_ca_proxy_and_origins_precheck(tmp_path):
         fixture.assert_routed()
         assert any(e['kind']=='CONNECT' for e in fixture.events)
         assert all(o['path']=='/echo' for o in fixture.origins)
-        browser_requests=[o for o in fixture.origins if not o['user_agent'].startswith('python-')]
+        browser_requests=[o for o in fixture.origins if not (o['user_agent'].startswith('python-') or o['user_agent']=='ZhanyunProxyProbe/1.0')]
         assert len(browser_requests)==2
         assert all(o['origin_header']=='null' for o in browser_requests)
 
@@ -45,7 +45,7 @@ def test_browser_trust_is_limited_to_explicit_test_leaf_spki(tmp_path):
         # The failed pair may use its reserved HTTP attempt to diagnose auth;
         # that trusted client is allowed one echo, the browser must reach none.
         assert len(fixture.origins)==1
-        assert fixture.origins[0]['user_agent'].startswith('python-httpx/')
+        assert fixture.origins[0]['user_agent']=='ZhanyunProxyProbe/1.0'
         assert fixture.origins[0]['path']=='/echo'
         assert not fixture.traps
 

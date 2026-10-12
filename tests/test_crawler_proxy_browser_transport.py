@@ -96,6 +96,96 @@ def test_unknown_expiry_can_probe_but_cannot_start_business(tmp_path):
         fixture.assert_routed()
 
 
+@pytest.mark.parametrize('failure',['none','407','timeout'])
+def test_maintenance_api_uses_real_crawler_child_and_releases_resources(tmp_path,monkeypatch,failure):
+    import importlib.util
+    import json
+    import os
+    from pathlib import Path
+    import subprocess
+    import time
+    from backend.audit_agent.config import settings
+    from backend.audit_agent.auth_state_cipher import AuthStateCipher
+    from backend.audit_agent.crawler_account_store import CrawlerAccountStore
+    from backend.audit_agent.crawler_proxy_store import CrawlerProxyStore
+    from backend.audit_agent import crawler_route
+    from backend.task_admission.resources import proxy_edit_lease, acquire_account_handle
+
+    assert importlib.util.find_spec('playwright') is None
+    assert importlib.util.find_spec('cloakbrowser') is None
+    crawler=Path(os.environ['MEDIACRAWLER_DIR'])
+    with local_proxy(tmp_path/'network') as fixture:
+        for name,value in dict(media_crawler_dir=crawler,crawler_login_python=Path(os.environ['LOGIN_BROWSER_TEST_PYTHON']),
+                              crawler_proxy_enabled=True,app_auth_mode='disabled',request_scheduler_db=tmp_path/'scheduler.sqlite3',
+                              crawler_browser_profile_root=tmp_path/'profiles',task_resource_lock_dir=tmp_path/'locks',
+                              crawler_proxy_echo_url=fixture.url(host='echo'),crawler_proxy_probe_ttl=300,crawler_proxy_probe_budget=96).items():
+            monkeypatch.setattr(settings,name,value)
+        accounts=CrawlerAccountStore(tmp_path/'accounts.sqlite3')
+        proxies=CrawlerProxyStore(accounts)
+        account=accounts.create(platform='dy',display_name='fixture-maintenance')
+        resource=proxies.create(display_name='fixture-maintenance',endpoint=fixture.server,
+            credentials={'username':fixture.username,'password':fixture.password},expires_at=time.time()+120)
+        bound=proxies.bind(account['id'],resource['id'],expected_binding_revision=account['binding_revision'])
+        proxies.set_health(resource['id'],status='maintenance',stop_reason='FIXTURE_PAUSED')
+        monkeypatch.setattr(crawler_route,'_store',proxies)
+        # Only test trust is injected: the real production script parses its FD,
+        # creates its real session/browser, emits results and closes normally.
+        helper=Path(crawler_route.__file__).resolve().parents[2]/'scripts/crawler_proxy_probe.py'
+        wrapper=tmp_path/'trusted_probe.py'
+        wrapper.write_text('''import os,sys,runpy,functools
+from pathlib import Path
+sys.path.insert(0,os.environ['MEDIACRAWLER_DIR'])
+from cloakbrowser.config import get_binary_path
+assert Path(get_binary_path()).is_file()
+os.environ['CLOAKBROWSER_BINARY_PATH']=str(get_binary_path())
+os.environ['CLOAKBROWSER_AUTO_UPDATE']='false'
+import tools.bound_proxy as transport
+import tools.cloak_browser as browser
+transport.BoundProxySession=functools.partial(transport.BoundProxySession,verify=os.environ['FIXTURE_CA'])
+original=browser.launch_account_context
+async def trusted(*args,**kwargs):
+ kwargs['browser_args']=['--ignore-certificate-errors-spki-list='+os.environ['FIXTURE_SPKI'],'--host-resolver-rules=MAP *.proxy-test.invalid 127.0.0.1','--proxy-bypass-list=<-loopback>']
+ return await original(*args,**kwargs)
+browser.launch_account_context=trusted
+runpy.run_path(os.environ['FIXTURE_PROBE_SCRIPT'],run_name='__main__')
+''')
+        original_popen=subprocess.Popen;children=[];commands=[]
+        def child(command,**kwargs):
+            assert command[0]==str(settings.crawler_login_python)
+            assert command[1]==str(helper)
+            assert fixture.password not in json.dumps(command)+json.dumps(kwargs['env'])
+            commands.append(command)
+            env={**kwargs['env'],'FIXTURE_CA':fixture.ca,'FIXTURE_SPKI':fixture.spki,'FIXTURE_PROBE_SCRIPT':str(helper)}
+            process=original_popen([command[0],str(wrapper),*command[2:]],**{**kwargs,'env':env})
+            children.append(process)
+            return process
+        monkeypatch.setattr(subprocess,'Popen',child)
+        if failure=='407':fixture.reject=True
+        if failure=='timeout':
+            original_probe=crawler_route._run_maintenance_probe
+            monkeypatch.setattr(crawler_route,'_run_maintenance_probe',lambda bundle:original_probe(bundle,timeout=.3))
+        started=time.monotonic()
+        if failure=='none':
+            result=crawler_route.probe_account_route(account['id'],'fixture-owner',account_store=accounts,
+                proxy_id=resource['id'],expected_binding_revision=bound['binding_revision'],expected_config_revision=1)
+            assert result['observed_exit_ip']==fixture.exit_ip and result['business_enabled'] is False
+            assert result['status']=='maintenance'
+            assert proxies.get_public(resource['id'])['observed_exit_ip']==fixture.exit_ip
+            assert len(fixture.origins)==4
+            fixture.assert_routed()
+        else:
+            expected='PROXY_AUTH_FAILED' if failure=='407' else 'PROXY_UNAVAILABLE'
+            with pytest.raises(crawler_route.CollectionRouteError,match=expected):
+                crawler_route.probe_account_route(account['id'],'fixture-owner',account_store=accounts)
+            assert not fixture.origins and not fixture.traps
+            if failure=='timeout':assert time.monotonic()-started<3
+        assert commands and all(p.poll() is not None for p in children)
+        assert all(o['path']=='/echo' and not o['cookie'] and not o['authorization'] for o in fixture.origins)
+        with proxy_edit_lease(resource['id']) as editable:assert editable
+        account_handle=acquire_account_handle('dy',account['id']);assert account_handle is not None;account_handle.close()
+        assert proxies.get_public(resource['id'])['status']=='maintenance'
+
+
 def test_actual_old_v2_reopen_guard_periodic_and_child_receipt_pipe(tmp_path):
     with local_proxy(tmp_path/'network') as fixture:
         result=run_runtime_browser(fixture,tmp_path)

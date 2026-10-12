@@ -1172,6 +1172,7 @@ class CrawlerLoginV2Manager:
                         "ValueError",
                         "RuntimeError",
                         "ConnectionError",
+                        "CollectionRouteError",
                         "OSError",
                         "Exception",
                     }

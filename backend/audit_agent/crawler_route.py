@@ -760,43 +760,152 @@ def probe_account_route(account_id, owner_id, *, expected_binding_revision=None,
     from uuid import uuid4
     bundle = acquire_route_execution(account_id, 'maintenance-' + uuid4().hex, owner_id,
         account_store=account_store, snapshot=snapshot, allow_probe=True)
-    async def probe():
-        path = str(settings.media_crawler_dir.resolve())
-        if path not in sys.path:
-            sys.path.insert(0, path)
-        route_contract()
-        from tools.bound_proxy import BoundProxySession
-        from .crawler_browser import load_account_browser
-        session = BoundProxySession(snapshot, maintenance_only=True,
-            echo_url=getattr(settings, 'crawler_proxy_echo_url', ''),
-            budget_id=probe_env(bundle)['MEDIACRAWLER_PROXY_PROBE_BUDGET_ID'],
-            ttl=getattr(settings, 'crawler_proxy_probe_ttl', 300),
-            max_calls=getattr(settings, 'crawler_proxy_probe_budget', 96),
-            trial_id=getattr(settings, 'crawler_proxy_trial_id', ''))
-        context = None
-        try:
-            context, _ = await load_account_browser().launch_account_context(account_id,
-                settings.crawler_browser_profile_root, headless=True,
-                route_snapshot=snapshot, bound_proxy_session=session)
-            receipt = session.receipt
-            bundle.proxy_store.observe_exit(snapshot.proxy_id, receipt.ip, observed_at=receipt.observed_at)
-            resource = bundle.proxy_store.get_public(snapshot.proxy_id)
-            return dict(schema_version=1, proxy_id=snapshot.proxy_id, account_id=account_id,
-                config_revision=snapshot.config_revision, binding_revision=snapshot.binding_revision,
-                observed_exit_ip=receipt.ip, observed_at=receipt.observed_at,
-                status=resource['status'], business_enabled=False)
-        finally:
-            if context is not None:
-                await context.close()
-            else:
-                await session.close()
     try:
-        import asyncio
-        return asyncio.run(probe())
+        receipt = _run_maintenance_probe(bundle)
+        # Recheck frozen binding/config after the child closed its actual browser.
+        resolve_account_route(account_id, account_store=account_store,
+            expected_binding_revision=snapshot.binding_revision,
+            expected_config_revision=snapshot.config_revision, allow_probe=True)
+        bundle.proxy_store.observe_exit(snapshot.proxy_id, receipt.ip, observed_at=receipt.observed_at)
+        resource = bundle.proxy_store.get_public(snapshot.proxy_id)
+        return dict(schema_version=1, proxy_id=snapshot.proxy_id, account_id=account_id,
+            config_revision=snapshot.config_revision, binding_revision=snapshot.binding_revision,
+            observed_exit_ip=receipt.ip, observed_at=receipt.observed_at,
+            status=resource['status'], business_enabled=False)
     except Exception as exc:
         raise _safe_error(exc) from None
     finally:
         bundle.close()
+
+
+def _run_maintenance_probe(bundle, *, timeout=45):
+    """Bounded subprocess protocol; dependency imports stay in crawler Python."""
+    import json
+    import signal
+    import subprocess
+    from pathlib import Path
+    from .crawler_browser import account_browser_env, scheduler_env
+    snapshot = bundle.snapshot
+    pipe = RouteConfigPipe(snapshot)
+    process = None
+    poll = selectors.DefaultSelector()
+    try:
+        env = os.environ.copy()
+        for name in ('MEDIACRAWLER_PROXY_CONFIG_FD', 'MEDIACRAWLER_PROXY_RECEIPT_FD',
+                     'MEDIACRAWLER_PROXY_REQUIRED', 'MEDIACRAWLER_PROXY_PROBE_BUDGET_ID'):
+            env.pop(name, None)
+        env.update(account_browser_env(bundle.account_id))
+        env.update(scheduler_env())
+        env.update(probe_env(bundle))
+        env.update(pipe.env)
+        env['MEDIACRAWLER_DIR'] = str(settings.media_crawler_dir.resolve())
+        env['PYTHONUNBUFFERED'] = '1'
+        helper = Path(__file__).resolve().parents[2] / 'scripts' / 'crawler_proxy_probe.py'
+        process = subprocess.Popen([str(settings.crawler_login_python), str(helper),
+            '--account-id', bundle.account_id], cwd=settings.media_crawler_dir,
+            env=env, pass_fds=(*bundle.pass_fds, *pipe.pass_fds), stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, start_new_session=True)
+        pipe.start(process)
+        poll.register(process.stdout, selectors.EVENT_READ)
+        deadline = time.monotonic() + timeout
+        data = bytearray()
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise CollectionRouteError('PROXY_UNAVAILABLE')
+            if not poll.select(min(remaining, .25)):
+                continue
+            chunk = os.read(process.stdout.fileno(), 8192)
+            if not chunk:
+                break
+            data.extend(chunk)
+            if len(data) > 65536:
+                raise CollectionRouteError('PROXY_CONFIG_INVALID')
+        process.wait(timeout=max(.1, deadline-time.monotonic()))
+        if pipe.error:
+            raise pipe.error
+        result = None
+        for line in data.decode('utf-8').splitlines():
+            if line.startswith('PROXY_PROBE_ERROR '):
+                value = json.loads(line[len('PROXY_PROBE_ERROR '):])
+                if set(value) != {'code'}:
+                    raise CollectionRouteError('PROXY_CONFIG_INVALID')
+                raise CollectionRouteError(value['code'])
+            if line.startswith('PROXY_PROBE_RESULT '):
+                if result is not None:
+                    raise CollectionRouteError('PROXY_CONFIG_INVALID')
+                result = json.loads(line[len('PROXY_PROBE_RESULT '):])
+        fields = {'schema_version','account_id','proxy_id','binding_revision','config_revision','context_id','ip','observed_at'}
+        if process.returncode != 0 or not isinstance(result, dict) or set(result) != fields:
+            raise CollectionRouteError('PROXY_UNAVAILABLE')
+        import re
+        if (type(result['schema_version']) is not int or result['schema_version'] != 1
+            or type(result['binding_revision']) is not int or type(result['config_revision']) is not int
+            or not isinstance(result['context_id'], str)
+            or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', result['context_id'])
+            or any(result[key] != getattr(snapshot,key) for key in ('account_id','proxy_id','binding_revision','config_revision'))):
+            raise CollectionRouteError('PROXY_CONFIG_INVALID')
+        receipt = route_contract().ProbeReceipt(snapshot.proxy_id,snapshot.config_revision,
+            result['context_id'],result['ip'],result['observed_at'])
+        # Maintenance observes a changed exit; it must not authorize business
+        # against the old baseline. Validate identity, expiry and receipt freshness.
+        from dataclasses import replace
+        diagnostic_snapshot = replace(snapshot, observed_exit_ip=None, observed_exit_at=None)
+        route_contract().require_probe_receipt(diagnostic_snapshot,receipt,result['context_id'])
+        return receipt
+    except CollectionRouteError:
+        raise
+    except (OSError, subprocess.TimeoutExpired):
+        raise CollectionRouteError('PROXY_UNAVAILABLE') from None
+    except Exception as exc:
+        raise _safe_error(exc) from None
+    finally:
+        poll.close()
+        try:
+            if process is not None:
+                _stop_probe_process_group(process)
+        finally:
+            if process is not None and process.stdout is not None:
+                process.stdout.close()
+            pipe.close()
+
+
+def _stop_probe_process_group(process):
+    """Close the exact session created for this child, even after leader exit."""
+    import signal
+    import subprocess
+    pgid = process.pid  # Popen(start_new_session=True) guarantees this identity.
+    def alive():
+        # Zombies cannot retain lease FDs. Do not confuse an exited group leader
+        # with a live browser descendant, or PID existence with open resources.
+        listing = subprocess.run(['ps','-axo','pgid=,stat='], capture_output=True,
+            text=True, timeout=2, check=True).stdout
+        for line in listing.splitlines():
+            fields = line.split()
+            if len(fields) == 2 and fields[0] == str(pgid) and not fields[1].startswith('Z'):
+                return True
+        return False
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    deadline = time.monotonic() + 2
+    while alive() and time.monotonic() < deadline:
+        time.sleep(.02)
+    if alive():
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    try:
+        process.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        raise CollectionRouteError('PROXY_UNAVAILABLE') from None
+    deadline = time.monotonic() + 3
+    while alive() and time.monotonic() < deadline:
+        time.sleep(.02)
+    if alive():
+        raise CollectionRouteError('PROXY_UNAVAILABLE')
 
 
 def download_asset_hop(bundle, url, headers, timeout, verify, on_chunk, *, media_limits=None, media_token=None):

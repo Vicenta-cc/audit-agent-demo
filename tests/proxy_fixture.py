@@ -91,7 +91,7 @@ class ProxyFixture:
                     self.send_header('Content-Type', 'application/json' if self.path.startswith('/echo') else 'text/html')
                     if self.path == '/echo' and fixture.echo_cors:
                         self.send_header('Access-Control-Allow-Origin','*')
-                    ip = fixture.http_exit_ip if self.headers.get('User-Agent', '').startswith('python-') and fixture.http_exit_ip else fixture.exit_ip
+                    ip = fixture.http_exit_ip if (self.headers.get('User-Agent', '').startswith('python-') or self.headers.get('User-Agent') == 'ZhanyunProxyProbe/1.0') and fixture.http_exit_ip else fixture.exit_ip
                     body = json.dumps({'ip': ip}).encode() if self.path in ('/echo','/change','/identity') else b'<html><body>proxy fixture<img src="/image"></body></html>'
                 self.send_header('Content-Length', str(len(body)))
                 self.end_headers()
