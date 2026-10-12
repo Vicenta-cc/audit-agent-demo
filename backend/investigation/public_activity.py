@@ -64,6 +64,11 @@ PUBLIC_TOOL_ACTIVITIES: dict[str, PublicActivitySpec] = {
     "get_ruleset_proposal": PublicActivitySpec(
         "读取审核规则草案", "已读取审核规则草案。"
     ),
+    "copy_investigation_draft": PublicActivitySpec("复制调查配置", "已准备新的调查草案。"),
+    "list_investigation_rounds": PublicActivitySpec("查看调查轮次", "已读取调查轮次。"),
+    "configure_investigation_draft": PublicActivitySpec(
+        "配置调查草案", "调查草案已更新，任务尚未启动。"
+    ),
     "use_ruleset_proposal": PublicActivitySpec(
         "采用审核规则草案", "审核规则草案已用于任务草案，任务尚未启动。"
     ),

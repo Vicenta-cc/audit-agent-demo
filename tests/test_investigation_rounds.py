@@ -238,7 +238,7 @@ def test_native_catalog_unites_creation_and_collection_without_legacy_report_too
             assert kwargs['name'] not in self.names
             self.names.add(kwargs['name'])
     catalog=Catalog();register(catalog)
-    assert {'create_investigation_draft','copy_investigation_draft','list_investigation_rounds',
+    assert {'configure_investigation_draft','copy_investigation_draft','list_investigation_rounds',
             'query_conversation_reports','compare_conversation_config','confirm_and_queue_investigation'} <= catalog.names
     assert 'read_report' not in catalog.names
     t,_=rounds['conversation'].accept_message(rounds['sid'],client_message_id='empty-reports',content='有哪些报告',principal=OWNER)

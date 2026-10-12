@@ -84,6 +84,9 @@ def test_incomplete_receipt_does_not_claim_success(creation_stack, content, stat
     result, _, turn = approve(stack, first)
     with stack['creation_store']._connect() as db:
         db.execute("UPDATE investigation_creation_tool_receipts SET status=? WHERE tool_name='use_ruleset_proposal'", (status,))
+        # No trustworthy response in either recovery source. A committed operation
+        # with a result is tested separately by shared creation recovery tests.
+        db.execute("UPDATE draft_creation_operations SET result_json=''")
     assert artifact(stack, turn, messages(result)) == {}
     assert len(rows(stack['creation_store'], 'ruleset_proposal_approvals')) == 1
 
@@ -151,6 +154,7 @@ def test_adoption_call_cannot_be_relabelled_as_read(creation_stack, content):
     result, _, turn = approve(stack, first)
     with stack['creation_store']._connect() as db:
         db.execute("UPDATE investigation_creation_tool_receipts SET status='STARTED' WHERE tool_name='use_ruleset_proposal'")
+        db.execute("UPDATE draft_creation_operations SET result_json=''")
     trace = [{'role': 'assistant', 'tool_calls': [{'id': 'different-call',
         'function': {'name': 'use_ruleset_proposal', 'arguments': {}}}]}] + messages(result)
     trace[-1]['name'] = 'get_investigation_draft'

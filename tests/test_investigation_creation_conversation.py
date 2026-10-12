@@ -1316,27 +1316,12 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
         QueryInvestigationOptions(), principal=principal
     )
     ruleset = options.ruleset_revisions[0]
-    create_arguments = {
-        "title": "Hermes middleware identity",
-        "objective": "prove real registry dispatch executes each mutation once",
-        "configuration": {
-            "platform": "xhs",
-            "investigation": {
-                "mode": "search",
-                "recall_plan": {
-                    "strategy": "temporary_terms",
-                    "terms": ["世界杯博彩"],
-                    "source_lexicon_ids": [],
-                },
-            },
-            "judgement": {
-                "strategy": "existing_ruleset",
-                "ruleset_revision_id": ruleset.id,
-                "expected_ruleset_version": ruleset.version,
-                "expected_ruleset_content_hash": ruleset.content_hash,
-            },
-        },
-    }
+    manager = service.resource_management
+    selected_rule = manager.read('ruleset', ruleset.ruleset_id, principal=principal)
+    selected_lexicon = manager.read('lexicon', 'gambling', principal=principal)
+    create_arguments = {'operation': 'create', 'title': 'Hermes middleware identity',
+        'objective': 'prove real registry dispatch executes each mutation once', 'platform': 'xhs',
+        'ruleset_ref': selected_rule['resource_ref'], 'lexicon_ref': selected_lexicon['resource_ref']}
     configure_hermes_investigation_creation_tools(
         creation_stack["tool_service"],
         principal_provider=conversation.principal_for_session,
@@ -1359,7 +1344,7 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
     )
     assert tuple(
         definition["function"]["name"] for definition in definitions
-    ) == tuple(sorted(schema["name"] for schema in (*HERMES_M3_TOOL_SCHEMAS, *PRODUCT_READ_TOOL_SCHEMAS)))
+    ) == tuple(sorted(schema["name"] for schema in (*HERMES_M3_TOOL_SCHEMAS, *PRODUCT_READ_TOOL_SCHEMAS) if schema["name"] not in {"create_investigation_draft", "update_investigation_draft", "use_ruleset_proposal"}))
 
     from model_tools import handle_function_call
 
@@ -1383,13 +1368,13 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
         )
 
     created = dispatch(
-        "create_investigation_draft",
+        "configure_investigation_draft",
         create_arguments,
         turn_id="turn:create",
         tool_call_id="call:create",
     )
     replayed = dispatch(
-        "create_investigation_draft",
+        "configure_investigation_draft",
         create_arguments,
         turn_id="turn:create",
         tool_call_id="call:create",
@@ -1401,24 +1386,25 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
 
     draft = created["data"]
     update_arguments = {
+        "operation": "update",
         "draft_id": draft["draft"]["id"],
         "expected_revision": draft["draft"]["current_revision"],
         "title": "Hermes middleware identity updated",
     }
     updated = dispatch(
-        "update_investigation_draft",
+        "configure_investigation_draft",
         update_arguments,
         turn_id="turn:update",
         tool_call_id="call:update",
     )
     updated_replay = dispatch(
-        "update_investigation_draft",
+        "configure_investigation_draft",
         update_arguments,
         turn_id="turn:update",
         tool_call_id="call:update",
     )
     conflicting_update = dispatch(
-        "update_investigation_draft",
+        "configure_investigation_draft",
         {**update_arguments, "title": "conflicting update"},
         turn_id="turn:update",
         tool_call_id="call:update",
@@ -1466,12 +1452,12 @@ def test_real_hermes_0204_dispatch_supplies_stable_mutation_identity(
         turn_id="turn:unknown",
         tool_call_id="call:unknown",
         principal=principal.id,
-        tool_name="create_investigation_draft",
+        tool_name="configure_investigation_draft",
         arguments=unknown_arguments,
         is_mutation=True,
     )
     unknown = dispatch(
-        "create_investigation_draft",
+        "configure_investigation_draft",
         unknown_arguments,
         turn_id="turn:unknown",
         tool_call_id="call:unknown",
@@ -1496,7 +1482,7 @@ def test_real_hermes_registry_switches_creation_report_creation_without_tool_los
             )
 
     expected_creation = tuple(
-        sorted(schema["name"] for schema in (*HERMES_M3_TOOL_SCHEMAS, *PRODUCT_READ_TOOL_SCHEMAS))
+        sorted(schema["name"] for schema in (*HERMES_M3_TOOL_SCHEMAS, *PRODUCT_READ_TOOL_SCHEMAS) if schema["name"] not in {"create_investigation_draft", "update_investigation_draft", "use_ruleset_proposal"})
     )
     expected_report = tuple(
         sorted(schema["name"] for schema in (*M2_ACCOUNT_ACTIVITY_TOOLS, *PRODUCT_READ_TOOL_SCHEMAS))
@@ -2104,6 +2090,7 @@ def test_single_creation_turn_create_and_confirm_restores_workspace_run_and_repo
 def test_creation_mode_keeps_legacy_tools_and_adds_resource_tools() -> None:
     from backend.resource_management.tools import RESOURCE_TOOL_INPUTS
     assert set(M3_TOOL_INPUTS) == set(RESOURCE_TOOL_INPUTS) | {
+        "configure_investigation_draft",
         "copy_investigation_draft",
         "list_investigation_rounds",
         "use_ruleset_proposal",
@@ -2172,7 +2159,7 @@ def test_creation_prompt_leaves_resource_query_timing_to_the_agent() -> None:
     assert "Conversation is primary" in CREATION_SYSTEM_PROMPT
     assert "according to the user's current intent" in CREATION_SYSTEM_PROMPT
     assert "For a read-only request" in CREATION_SYSTEM_PROMPT
-    assert "without calling\ncreate_investigation_draft" in CREATION_SYSTEM_PROMPT
+    assert "without calling\nconfigure_investigation_draft" in CREATION_SYSTEM_PROMPT
     assert '"I want to investigate X" is sufficient' in normalized_prompt
     assert "When resource discovery is needed" in normalized_prompt
     assert "Complete resource identities already present" in normalized_prompt
@@ -3317,8 +3304,9 @@ def test_t1_generation_guidance_preserves_conversation_authority():
     assert "create the Draft in the same turn" in prompt
     assert "Do not ask again for permission to generate terms" in prompt
     assert "real recall 黑话库 when it is sufficiently suitable" in prompt
-    assert "Generation and editing never bind Draft Judgement" in prompt
-    assert "Only use_ruleset_proposal can bind that exact presented version" in prompt
+    assert "Generation/editing never adopt them" in prompt
+    assert "Use configure_investigation_draft for both create and update" in prompt
+    assert "wait for a LATER user message explicitly adopting it" in prompt
     assert "Preview and Confirm never generate or expand terms" in prompt
     assert "provenance references only" in prompt
 

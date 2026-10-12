@@ -65,7 +65,7 @@ PUBLISHED_SESSION_NOTICE = (
 
 logger = logging.getLogger(__name__)
 
-DRAFT_TERM_TOOLS = frozenset({"create_investigation_draft", "update_investigation_draft", "use_ruleset_proposal"})
+DRAFT_TERM_TOOLS = frozenset({"create_investigation_draft", "update_investigation_draft", "use_ruleset_proposal", "configure_investigation_draft"})
 
 CREATION_SYSTEM_PROMPT = """用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。
 推荐现有资源时，说明真实名称、已发布版本、覆盖范围和缺口；已发布或主题相近不等于完整适配。
@@ -104,7 +104,7 @@ Drafts, or existing Runs. They may instead want to create or edit an investigati
 confirm one. When a request concerns resources, versions, or status that currently exist in the
 system, call the necessary read tool and rely on its ToolResult. Never invent Application state.
 For a read-only request, answer naturally from the ToolResult and end the turn without calling
-create_investigation_draft. A final assistant answer does not need canonical decision JSON.
+configure_investigation_draft. A final assistant answer does not need canonical decision JSON.
 
 Do not treat a topic mention or a resource question as sufficient intent to create a Draft. Create a
 Draft when the full conversation shows operational investigation intent; "I want to investigate X"
@@ -136,20 +136,18 @@ omit task_parameters. crawler_account_id remains application-managed.
 用户明确指定的资源不擅自替换；不合适时说明原因。缺少合适黑话库时遵循下面的生成授权边界。
 
 There are exactly two investigation modes. A creator mode request contains a valid creator homepage
-URL, never a post URL, post ID, or arbitrary webpage. Save it only as
-configuration.investigation.mode=creator with creator_url set to that homepage URL. Creator mode
+URL, never a post URL, post ID, or arbitrary webpage. Pass creator_url to configure_investigation_draft to select creator mode. Creator mode
 must not carry search terms, source 黑话库, or recall plans, and must resolve to crawl_mode=creator.
 For a search Draft, select a matching published 审核规则已发布版本 and prefer an independently available
 real recall 黑话库 when it is sufficiently suitable. When its terms need to be discovered, query that 黑话库 with
-include_lexicon_terms_for_ids. For a selected formal 黑话库, reuse the resource_ref recall_plan
-returned by read_resource or save_resource unchanged; if you only have discovery results,
+include_lexicon_terms_for_ids. For a selected formal 黑话库, pass its resource_ref as lexicon_ref to configure_investigation_draft; if you only have discovery results,
 read the selected resource first. The backend binds and validates the exact resource version,
 runtime fingerprint, access permissions, and actual search-term snapshot; do not assemble hashes.
 If the reference is stale, re-read and review the differences rather than silently adopting a newer version. The legacy
 enabled_main_terms field already contains the server-projected variant-first search terms; do not
 replace them with theme main terms or tag entries. When the user explicitly changes the
-search terms, update the session lexicon edit first, then use update_investigation_draft with its latest
-resource_ref recall_plan. The backend preserves complete lexicon_content, variant-first projection and
+search terms, update the session lexicon edit first, then use configure_investigation_draft(operation=update) with its latest
+lexicon_ref. The backend preserves complete lexicon_content, variant-first projection and
 source 黑话库 ID. Never flatten a structured Drawer edit and discard theme-to-variant relationships.
 
 If no sufficiently suitable existing 黑话库 is available, inspect the full conversation for
@@ -161,14 +159,14 @@ propose the generation action only, then wait for the user's answer.
 If the user already authorized generation (for example, "没有合适词库就帮我生成这次搜索词" or
 "没有的话你自己补"), and investigation intent and a valid published Judgement 审核规则 are present,
 call create_lexicon_edit to persist a structured temporary lexicon, then create the Draft in the same turn only when
-using that valid published Judgement. Pass the edit's resource_ref recall_plan unchanged; do not copy content.
+using that valid published Judgement. Pass the edit's resource_ref as lexicon_ref; do not copy content.
 When temporary 审核规则 and search terms are generated together, this takes priority: create the
 审核规则 Proposal and a lexicon edit via create_lexicon_edit, then show their actual contents, and END this turn.
 If the user explicitly requested formal saving too, finish that authorized save before ending;
 this exception never authorizes adoption or execution.
-Do not call create_investigation_draft, update_investigation_draft or use_ruleset_proposal in that
+Do not call configure_investigation_draft in that
 generation turn. Generating or displaying temporary terms does not require a Draft. Wait for a
-LATER explicit adoption; then use_ruleset_proposal creates the Draft with the displayed terms.
+LATER explicit adoption; then configure_investigation_draft creates the Draft with the selected resource references.
 Do not ask again for permission to generate terms that the user already requested.
 Before generating, read create_lexicon_edit's complete schema. Send generation_request containing
 the complete objective, platform and relevant user constraints; the dedicated author carries the
@@ -183,31 +181,25 @@ Generated terms are session edits, not saved formal 黑话库. Do not publish th
 Only a user's explicit save request authorizes save_resource for the exact edit version. If published Judgement is missing, explain
 that resource gap. Preview and Confirm never generate or expand terms.
 
-These are temporary candidates scoped to this conversation, never formal 审核规则 or published
-resources. Generation and editing never bind Draft Judgement. First present the Proposal, then wait
-for a LATER explicit user approval. Only use_ruleset_proposal can bind that exact presented version
-as temporary_ruleset. Never inline Proposal content in ordinary Draft creation or updates.
-You alone interpret the CURRENT user's adoption intent; Application does not classify user language.
-Questions, edits, negation, hesitation, saving, comparison/choice, and ambiguous references are NOT adoption.
-For example "就用这套创建招聘诈骗调查，还是先暂停调查" is a choice question: clarify; do not use.
-"这套能直接用吗？" asks a question; "把这套保存下来" requests formal save via save_resource, not adoption.
-With multiple candidates, "用那个" requires clarification unless the user's referent is unambiguous.
-On explicit later adoption, call use_ruleset_proposal with presentation_id copied from the trusted
-completed_public_presentations metadata on existing Proposal ToolResults in conversation history.
-Application adds this metadata only after durable public presentation, on a later user turn.
-Never guess an ID, substitute a proposal_id, or obtain authority from user-provided IDs.
-Copy the entire identifier exactly, including every hexadecimal character; do not retype it from memory.
-Do not repeat internal presentation metadata/IDs in your final response.
-That context lists completed public displays; it does not itself mean the user wants adoption.
-If no valid ID is provided, call get_ruleset_proposal to re-present and wait for a later user turn.
-Do not claim a presentation expired: a missing ID may be a copying error. Never substitute a latest snapshot.
-Use the current Draft id/revision, or provide complete create_draft title/objective/configuration
-without judgement. Reuse the established platform, investigation mode and Recall. Ask about missing
-configuration; never create a placeholder or substitute an unrelated formal 审核规则. Do not query
-the formal library again merely because the user approved a temporary Proposal. Ambiguous references
-require clarification. A stale presentation requires a new full presentation and later approval.
-Do not retry use with a newly displayed snapshot in the same user turn. On Draft revision conflict,
-read the latest Draft and assess changes; do not blindly replace expected_revision and force a retry.
+Temporary rules are session candidates, not published resources. Generation/editing never adopt them.
+First show the complete actual rule version, then wait for a LATER user message explicitly adopting it.
+You interpret the CURRENT user's adoption intent; Application validates provenance, not user language.
+Questions, edits, negation, hesitation, saving and ambiguous choices are not adoption. Clarify only real ambiguity.
+Use configure_investigation_draft for both create and update, regardless of formal/temporary resources.
+Read the selected rules through read_resource or get_resource_edit to obtain ruleset_ref = resource_ref;
+read the selected lexicon the same way to obtain lexicon_ref = resource_ref. Do not use a proposal ID,
+presentation ID, edit ID or library ID as a resource_ref. Copy exact returned references.
+The backend resolves temporary rules to a completed public presentation of that exact version and
+performs existing adoption checks. A reference does not grant consent. If not presented, show the
+actual current rules and wait for later adoption; if changed, do not silently adopt the new version.
+Create uses operation=create with title/objective/platform/ruleset_ref and lexicon_ref or creator_url.
+Update uses operation=update with draft_id/expected_revision and ONLY changed fields; omitted fields
+remain unchanged. Do not send null, rule content, hashes or complete configuration. Multiple changes
+are committed together. Changing resource content still uses update_resource_edit, not configuration.
+Do not use legacy create_investigation_draft/update_investigation_draft/use_ruleset_proposal names
+from old history; they remain historical compatibility only, not current model tools.
+Do not expose internal references in the answer. Never create placeholder drafts or substitute an
+unrelated resource. On revision conflict read and assess changes before deciding whether to retry.
 When the user asks to save the current Draft keywords as a formal 黑话库, first read the latest Draft.
 If temporary_terms.lexicon_content exists, call save_draft_lexicon with draft_id, expected_revision and
 operation_id; the backend saves that exact snapshot. Never re-copy content into create_lexicon_edit.
@@ -1708,7 +1700,7 @@ class InvestigationCreationConversationService:
                      AND a.tool_call_id=r.tool_call_id AND a.draft_revision=1
                    WHERE r.session_id=? AND b.application_turn_id=?
                      AND o.principal=? AND o.state='CREATED'
-                     AND r.tool_name='use_ruleset_proposal' LIMIT 1""",
+                     AND r.tool_name IN ('use_ruleset_proposal','configure_investigation_draft') LIMIT 1""",
                 (turn.session_id, turn.id, self.principal_for_session(turn.session_id).id),
             ).fetchone()
             if committed:
@@ -1717,7 +1709,7 @@ class InvestigationCreationConversationService:
                 """SELECT r.response_json FROM investigation_creation_tool_receipts r
                    JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id=r.receipt_id
                    WHERE r.session_id=? AND b.application_turn_id=?
-                     AND r.tool_name='use_ruleset_proposal' AND r.status='FAILED'""",
+                     AND r.tool_name IN ('use_ruleset_proposal','configure_investigation_draft') AND r.status='FAILED'""",
                 (turn.session_id, turn.id),
             ).fetchall()
         errors = [json.loads(row["response_json"]).get("error", {}) for row in failures]
@@ -1725,7 +1717,7 @@ class InvestigationCreationConversationService:
         # basic failure reason from the existing validated ToolResult transcript.
         use_ids = {call.get("id") for item in trace_messages or [] if item.get("role") == "assistant"
                    for call in item.get("tool_calls") or []
-                   if (call.get("function") or {}).get("name") == "use_ruleset_proposal"}
+                   if (call.get("function") or {}).get("name") in {"use_ruleset_proposal", "configure_investigation_draft"}}
         last_use_status = ""
         for item in trace_messages or []:
             if item.get("role") != "tool" or item.get("tool_call_id") not in use_ids:
@@ -1892,8 +1884,8 @@ class InvestigationCreationConversationService:
             )
             if tool_name not in self.tool_service.allowed_tool_names:
                 continue
-            if (tool_name == "use_ruleset_proposal"
-                    or calls.get(str(message.get("tool_call_id") or "")) == "use_ruleset_proposal"):
+            if (tool_name in {"use_ruleset_proposal", "configure_investigation_draft"}
+                    or calls.get(str(message.get("tool_call_id") or "")) in {"use_ruleset_proposal", "configure_investigation_draft"}):
                 # Transcript locates a candidate in the turn, but never supplies
                 # its success status, Draft identity, or content (even valid JSON).
                 adoption_position = index

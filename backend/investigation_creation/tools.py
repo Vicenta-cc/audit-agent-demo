@@ -372,6 +372,10 @@ def _creation_tool_schema(schema: type[StrictModel]) -> dict[str, Any]:
     return parameters
 
 
+from . import configure
+M3_TOOL_INPUTS[configure.NAME] = configure.ConfigureDraftInput
+M3_TOOL_DESCRIPTIONS[configure.NAME] = configure.DESCRIPTION
+M3_MUTATION_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | {configure.NAME}
 M3_TOOL_INPUTS.update(RESOURCE_TOOL_INPUTS)
 M3_MUTATION_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | RESOURCE_MUTATIONS
 M3_RECORDED_TOOL_NAMES = M3_MUTATION_TOOL_NAMES | {"get_resource_edit", "get_ruleset_proposal"}
@@ -489,7 +493,7 @@ HERMES_M3_TOOL_SCHEMAS = tuple(s for s in _ALL_CREATION_TOOL_SCHEMAS
 def creation_tool_schemas():
     from copy import deepcopy
     from .rounds import TOOL_NAMES
-    schemas = deepcopy(_ALL_CREATION_TOOL_SCHEMAS)
+    schemas = [s for s in deepcopy(_ALL_CREATION_TOOL_SCHEMAS) if s["name"] not in configure.LEGACY_NAMES]
     from backend.resource_management.edit_entry import active_edit
     if active_edit.get():
         schemas = tuple(s for s in schemas if s['name'] not in M3_MUTATION_TOOL_NAMES
@@ -540,7 +544,7 @@ class InvestigationCreationToolService:
 
     @property
     def allowed_tool_names(self) -> frozenset[str]:
-        return frozenset(s['name'] for s in creation_tool_schemas()) | frozenset(product_read_tools.INPUTS) | (frozenset(continuity.INPUTS) if settings.continuous_resource_session_enabled else frozenset())
+        return frozenset(s['name'] for s in creation_tool_schemas()) | configure.LEGACY_NAMES | frozenset(product_read_tools.INPUTS) | (frozenset(continuity.INPUTS) if settings.continuous_resource_session_enabled else frozenset())
 
     def definitions(self) -> list[dict[str, Any]]:
         return [
@@ -563,6 +567,7 @@ class InvestigationCreationToolService:
         session_id: str = "",
         runtime_identity: HermesToolExecutionIdentity | None = None,
         create_operation: tuple[str, str] | None = None,
+        mutation_receipt: str | None = None,
     ) -> dict[str, Any]:
         from . import rounds
         from backend.resource_management.edit_entry import require_edit_operation
@@ -592,7 +597,8 @@ class InvestigationCreationToolService:
             return continuity.read(self.application_service, tool_name, arguments,
                                    session_id=session_id, principal=principal)
         if (settings.continuous_resource_session_enabled and not settings.investigation_multi_round_enabled and self.session_run_resolver
-                and tool_name in {'create_investigation_draft', 'use_ruleset_proposal'}):
+                and (tool_name in {'create_investigation_draft', 'use_ruleset_proposal'}
+                     or tool_name == configure.NAME and arguments.get('operation') == 'create')):
             with draft_operations.validation_phase(create_operation is not None):
                 if self.session_run_resolver(session_id, principal) is not None:
                     from .errors import ConfigurationValidationError
@@ -602,6 +608,11 @@ class InvestigationCreationToolService:
         if schema is None:
             raise ValueError("Hermes M3 tool name is not allowed")
         parsed = schema.model_validate(_without_task_parameters(tool_name, arguments))
+        if tool_name == configure.NAME:
+            with draft_operations.validation_phase(create_operation is not None):
+                draft = configure.execute(self, parsed, principal=principal, session_id=session_id,
+                    identity=runtime_identity, create_operation=create_operation, mutation_receipt=mutation_receipt)
+            return self.application_service.get_draft_view(draft.id, principal=principal).model_dump(mode='json')
         resource_ref = None
         generation_profile = None
         if tool_name in {'create_investigation_draft', 'update_investigation_draft', 'use_ruleset_proposal'}:
@@ -708,8 +719,10 @@ class InvestigationCreationToolService:
             saved = self.application_service.save_draft_ruleset(
                 **parsed.model_dump(mode='json'), principal=principal, session_id=session_id,
             )
+            from backend.resource_management.ruleset_refs import saved_view
+            saved = saved_view(self.application_service.resource_management, saved, principal=principal)
             return {key: saved[key] for key in (
-                'status', 'kind', 'resource_id', 'version', 'revision_id', 'operation_id')}
+                'status', 'kind', 'resource_id', 'version', 'revision_id', 'operation_id', 'resource_ref')}
         elif tool_name == "save_draft_lexicon":
             saved = self.application_service.save_draft_lexicon(
                 **parsed.model_dump(mode="json"), principal=principal,
@@ -852,6 +865,18 @@ class InvestigationCreationToolService:
                     application_turn_id=application_turn_id,
                 )
                 if receipt["replay"]:
+                    if receipt['status'] != 'SUCCEEDED' and tool_name == configure.NAME:
+                        committed = self.application_service.store.committed_draft_write(receipt['receipt_id'], principal.id)
+                        if committed:
+                            view = self.application_service.get_draft_view(committed[0], principal=principal)
+                            if view.draft.current_revision != committed[1]:
+                                from .errors import IdempotencyConflictError
+                                raise IdempotencyConflictError('修改已提交，草案之后又有更新；请读取当前草案，不要重复修改。',
+                                    code='DRAFT_WRITE_SUPERSEDED', details={'write_status': 'COMMITTED',
+                                    'mutation_applied': True, 'draft_id': committed[0], 'committed_revision': committed[1]})
+                            recovered = {'status': 'ok', 'data': view.model_dump(mode='json')}
+                            self.application_service.store.recover_draft_write(receipt['receipt_id'], principal.id, recovered)
+                            return recovered
                     if receipt["status"] != "SUCCEEDED":
                         from .save_recovery import saved_request
                         from backend.resource_management.snapshot_refs import tool_view
@@ -860,7 +885,9 @@ class InvestigationCreationToolService:
                                                   tool_name, raw_arguments,
                                                   session_id=identity.session_id, principal=principal)
                             if saved:
-                                return {"status": "ok", "data": tool_view(saved)}
+                                from backend.resource_management.ruleset_refs import saved_view
+                                return {"status": "ok", "data": tool_view(saved_view(
+                                    self.application_service.resource_management, saved, principal=principal))}
                     if receipt["response"] is not None:
                         return dict(receipt["response"])
                     return {
@@ -889,7 +916,8 @@ class InvestigationCreationToolService:
                     raw_arguments,
                     principal=principal,
                     session_id=identity.session_id,
-                    **({"runtime_identity": identity} if tool_name == "use_ruleset_proposal" else {}),
+                    **({"mutation_receipt": receipt["receipt_id"]} if receipt and tool_name == configure.NAME else {}),
+                    **({"runtime_identity": identity} if tool_name in {"use_ruleset_proposal", configure.NAME} else {}),
                     **({'create_operation': (receipt['operation_id'], receipt['receipt_id'])}
                        if receipt and receipt.get('operation_id') else {}),
                 )
@@ -903,7 +931,13 @@ class InvestigationCreationToolService:
                     "details": dict(getattr(exc, "details", {}) or {}),
                 },
             }
-        if receipt is not None:
+        if receipt is not None and not receipt.get("replay"):
+            if tool_name == configure.NAME and result['status'] == 'error':
+                committed = self.application_service.store.committed_draft_write(receipt['receipt_id'], principal.id)
+                if committed:
+                    result['error'].setdefault('details', {}).update(write_status='COMMITTED',
+                        mutation_applied=True, draft_id=committed[0], committed_revision=committed[1],
+                        recovery='修改已提交；读取草案确认结果，不要用新版本重复执行相同修改。')
             self.application_service.store.complete_tool_execution(
                 receipt["receipt_id"],
                 response=result,

@@ -81,7 +81,8 @@ class InvestigationCreationService:
     def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str, turn_id: str,
                             principal: Principal, tool_call_id: str = "", runtime_turn_id: str = "",
                             resource_ref: str | None = None,
-                            create_operation: tuple[str, str] | None = None) -> InvestigationDraft:
+                            create_operation: tuple[str, str] | None = None,
+                            draft_patch: dict | None = None, mutation_receipt: str | None = None) -> InvestigationDraft:
         with draft_operations.validation_phase(create_operation is not None):
             if self.conversation_store is None or not turn_id or not tool_call_id:
                 reject("PROPOSAL_APPROVAL_REQUIRED", "An authoritative current conversation turn is required.")
@@ -106,7 +107,7 @@ class InvestigationCreationService:
                     command, session_id=session_id, turn_id=turn_id, tool_call_id=tool_call_id, runtime_turn_id=runtime_turn_id or turn_id, principal=principal.id,
                     conversation_db=self.conversation_store.db_path, normalize=normalize,
                     before_write=self._edit_ref_guard(resource_ref, session_id, principal),
-                    create_operation=create_operation,
+                    create_operation=create_operation, draft_patch=draft_patch, mutation_receipt=mutation_receipt,
                 )
 
     @staticmethod
@@ -226,6 +227,7 @@ class InvestigationCreationService:
 
     def update_draft(
         self, command: UpdateDraftCommand, *, principal: Principal, resource_ref: str | None = None,
+        mutation_receipt: str | None = None,
         session_id: str = "",
     ) -> InvestigationDraft:
         command = UpdateDraftCommand.model_validate(
@@ -272,6 +274,7 @@ class InvestigationCreationService:
                     title=command.title,
                     objective=command.objective,
                     configuration=resolution.normalized_configuration,
+                    mutation_receipt=mutation_receipt,
                     before_write=self._edit_ref_guard(resource_ref, session_id, principal),
                 )
         return self.store.update_draft(
@@ -281,6 +284,7 @@ class InvestigationCreationService:
             title=command.title,
             objective=command.objective,
             configuration=effective_configuration,
+            mutation_receipt=mutation_receipt,
         )
 
     def _normalize_edit_origin(self, configuration, *, previous=None, resource_ref=None,

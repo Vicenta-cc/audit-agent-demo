@@ -21,7 +21,7 @@ COPY_TOOL = "copy_investigation_draft"
 
 
 def is_creation(tool_name, arguments):
-    return tool_name in {TOOL, COPY_TOOL} or (tool_name == ADOPT_TOOL
+    return (tool_name == 'configure_investigation_draft' and arguments.get('operation') == 'create') or tool_name in {TOOL, COPY_TOOL} or (tool_name == ADOPT_TOOL
         and bool(arguments.get('create_draft')) and not arguments.get('draft_id'))
 
 
@@ -73,13 +73,13 @@ def initialize(connection):
         receipt_id TEXT PRIMARY KEY REFERENCES investigation_creation_tool_receipts(receipt_id),
         operation_id TEXT NOT NULL REFERENCES draft_creation_operations(id))""")
     index = connection.execute("SELECT sql FROM sqlite_master WHERE name='uq_creation_turn_mutation_tool'").fetchone()
-    if index and (TOOL not in index[0] or ADOPT_TOOL not in index[0] or COPY_TOOL not in index[0]):
+    if index and (TOOL not in index[0] or ADOPT_TOOL not in index[0] or COPY_TOOL not in index[0] or 'configure_investigation_draft' not in index[0]):
         connection.execute('DROP INDEX uq_creation_turn_mutation_tool')
     connection.execute("""CREATE UNIQUE INDEX IF NOT EXISTS uq_creation_turn_mutation_tool
         ON investigation_creation_tool_receipts(session_id,turn_id,tool_name)
         WHERE is_mutation=1 AND tool_name NOT IN
         ('create_lexicon_edit','open_resource_edit','update_resource_edit','save_resource',
-         'create_investigation_draft','use_ruleset_proposal','copy_investigation_draft')""")
+         'create_investigation_draft','use_ruleset_proposal','copy_investigation_draft','configure_investigation_draft')""")
 
 
 def known_no_write(response):

@@ -48,7 +48,7 @@ def test_every_product_tool_has_an_explicit_public_activity_mapping():
         str(schema["name"])
         for catalog in catalogs
         for schema in catalog
-    } | set(M3_TOOL_INPUTS)
+    } | set(M3_TOOL_INPUTS) | {'list_completed_reports', 'read_user_manual'}
     assert set(PUBLIC_TOOL_ACTIVITIES) == expected
 
 

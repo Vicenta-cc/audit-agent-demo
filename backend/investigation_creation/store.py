@@ -256,6 +256,9 @@ class InvestigationCreationStore:
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             self._ensure_column(connection, "investigation_creation_tool_receipts", "save_arguments_json", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(connection, "investigation_creation_tool_receipts", "committed_draft_id", "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(connection, "investigation_creation_tool_receipts", "committed_draft_revision", "INTEGER NOT NULL DEFAULT 0")
+            self._ensure_column(connection, "investigation_creation_tool_receipts", "recovered_response_json", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "ruleset_proposal_approvals", "presentation_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "ruleset_proposal_approvals", "tool_call_id", "TEXT NOT NULL DEFAULT ''")
             self._ensure_column(connection, "ruleset_proposal_approvals", "runtime_turn_id", "TEXT NOT NULL DEFAULT ''")
@@ -480,7 +483,7 @@ class InvestigationCreationStore:
                 """,
                 (identity["session_id"], identity["turn_id"], identity["tool_call_id"]),
             ).fetchone()
-            if row is None and is_mutation and tool_name not in {"create_lexicon_edit", "open_resource_edit", "update_resource_edit", "save_resource"}:
+            if row is None and is_mutation and tool_name not in {"create_lexicon_edit", "open_resource_edit", "update_resource_edit", "save_resource", "configure_investigation_draft"}:
                 row = connection.execute(
                     """
                     SELECT * FROM investigation_creation_tool_receipts
@@ -505,7 +508,7 @@ class InvestigationCreationStore:
                 return {
                     "receipt_id": str(row["receipt_id"]),
                     "status": str(row["status"]),
-                    "response": json.loads(response_json) if response_json else None,
+                    "response": json.loads(row["recovered_response_json"] or response_json) if (row["recovered_response_json"] or response_json) else None,
                     "replay": True,
                 }
             connection.execute(
@@ -597,14 +600,14 @@ class InvestigationCreationStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """SELECT r.*,
-                       CASE WHEN r.status='SUCCEEDED' THEN r.response_json ELSE o.result_json END AS effective_response_json
+                       CASE WHEN r.status='SUCCEEDED' THEN r.response_json WHEN r.recovered_response_json<>'' THEN r.recovered_response_json ELSE o.result_json END AS effective_response_json
                    FROM investigation_creation_tool_receipts r
                    LEFT JOIN draft_creation_attempts a ON a.receipt_id=r.receipt_id
                    LEFT JOIN draft_creation_operations o ON o.id=a.operation_id
                    JOIN ruleset_proposal_conversation_bindings b ON b.receipt_id=r.receipt_id
                    WHERE r.session_id=? AND b.application_turn_id=? AND r.principal=?
-                     AND r.tool_name='use_ruleset_proposal' AND r.is_mutation=1
-                     AND (r.status='SUCCEEDED' OR
+                     AND r.tool_name IN ('use_ruleset_proposal','configure_investigation_draft') AND r.is_mutation=1
+                     AND (r.status='SUCCEEDED' OR r.recovered_response_json<>'' OR
                           (o.state='CREATED' AND o.active_receipt_id=r.receipt_id AND o.result_json<>'')) ORDER BY r.rowid""",
                 (session_id, turn_id, principal),
             ).fetchall()
@@ -627,6 +630,9 @@ class InvestigationCreationStore:
                         or json.loads(revision["configuration_json"]) != recorded["configuration"]):
                     raise RuntimeError("Adoption receipt does not match the durable Draft revision")
                 judgement = recorded["configuration"]["judgement"]
+                if row['tool_name'] == 'configure_investigation_draft' and judgement.get('strategy') == 'existing_ruleset':
+                    results.append(data)
+                    continue
                 # An existing binding may be returned by a no-op. Its audit need
                 # not belong to this call or to the current title/Recall revision.
                 binding = connection.execute(
@@ -678,14 +684,14 @@ class InvestigationCreationStore:
             rows = connection.execute(
                 f"""SELECT r.receipt_id, r.tool_call_id, r.tool_name,
                            r.arguments_fingerprint,
-                           CASE WHEN r.status='SUCCEEDED' THEN r.response_json ELSE o.result_json END AS effective_response_json
+                           CASE WHEN r.status='SUCCEEDED' THEN r.response_json WHEN r.recovered_response_json<>'' THEN r.recovered_response_json ELSE o.result_json END AS effective_response_json
                     FROM investigation_creation_tool_receipts r
                     LEFT JOIN draft_creation_attempts a ON a.receipt_id=r.receipt_id
                     LEFT JOIN draft_creation_operations o ON o.id=a.operation_id
                     JOIN ruleset_proposal_conversation_bindings b
                       ON b.receipt_id=r.receipt_id
                     WHERE r.session_id=? AND b.application_turn_id=?
-                      AND r.principal=? AND (r.status='SUCCEEDED' OR
+                      AND r.principal=? AND (r.status='SUCCEEDED' OR r.recovered_response_json<>'' OR
                           (o.state='CREATED' AND o.active_receipt_id=r.receipt_id AND o.result_json<>''))
                       {mutation_filter}
                     ORDER BY r.rowid""",
@@ -814,12 +820,13 @@ class InvestigationCreationStore:
         judgement = getattr(configuration, "judgement", None)
         if isinstance(judgement, TemporaryRuleSetJudgement):
             if judgement != getattr(previous, "judgement", None):
-                reject("PROPOSAL_APPROVAL_REQUIRED", "Temporary judgement can only be bound by use_ruleset_proposal.")
+                reject("PROPOSAL_ADOPTION_TOOL_REQUIRED")
 
     def use_ruleset_proposal(self, command: UseRuleSetProposalInput, *, session_id: str,
                             turn_id: str, tool_call_id: str, runtime_turn_id: str, principal: str, conversation_db: Path,
                             normalize: Callable, before_write: Callable | None = None,
-                            create_operation: tuple[str, str] | None = None) -> InvestigationDraft:
+                            create_operation: tuple[str, str] | None = None,
+                            draft_patch: dict | None = None, mutation_receipt: str | None = None) -> InvestigationDraft:
         command = UseRuleSetProposalInput.model_validate(command.model_dump(mode="json"))
         with draft_operations.validation_phase(create_operation is not None), self._connect() as connection:
             # Lock both existing SQLite stores before reading the approval basis.
@@ -858,13 +865,17 @@ class InvestigationCreationStore:
                     reject("DRAFT_NOT_EDITABLE")
                 if draft.current_revision != command.expected_revision:
                     reject("DRAFT_REVISION_STALE")
-                if getattr(draft.configuration, "judgement", None) == judgement:
+                if draft_patch is None and getattr(draft.configuration, "judgement", None) == judgement:
                     return draft
                 if not isinstance(draft.configuration, InvestigationDraftConfiguration):
                     reject("CONFIGURATION_INVALID", "Proposal approval requires a v4 Draft configuration.")
                 configuration = draft.configuration.model_copy(update={"judgement": judgement})
                 draft_id, revision = draft.id, draft.current_revision + 1
                 title, objective = draft.title, draft.objective
+                if draft_patch is not None:
+                    configuration = InvestigationDraftConfiguration.model_validate({
+                        **draft_patch['configuration'], 'judgement': judgement.model_dump(mode='json')})
+                    title, objective = draft_patch['title'], draft_patch['objective']
             else:
                 previous_approval = connection.execute(
                     "SELECT draft_id FROM ruleset_proposal_approvals WHERE session_id=? ORDER BY rowid DESC LIMIT 1",
@@ -887,11 +898,13 @@ class InvestigationCreationStore:
                              or getattr(configuration.investigation.recall_plan, "enabled_main_terms", None))):
                 reject("CONFIGURATION_INVALID", "Complete Recall configuration before adopting the Proposal.")
             payload = self._json(configuration.model_dump(mode="json"))
+            if mutation_receipt:
+                self._bind_draft_write(connection, mutation_receipt, principal, draft_id, revision)
             if command.draft_id:
                 connection.execute(
-                    """UPDATE investigation_drafts SET configuration_json=?, current_revision=?,
+                    """UPDATE investigation_drafts SET title=?, objective=?, configuration_json=?, current_revision=?,
                        updated_by=?, updated_at=? WHERE id=?""",
-                    (payload, revision, principal, now, draft_id),
+                    (title, objective, payload, revision, principal, now, draft_id),
                 )
             else:
                 connection.execute(
@@ -1017,6 +1030,7 @@ class InvestigationCreationStore:
         objective: str | None = None,
         configuration: DraftConfiguration | None = None,
         before_write: Callable | None = None,
+        mutation_receipt: str | None = None,
     ) -> InvestigationDraft:
         now = self._now_text()
         with self._connect() as connection:
@@ -1083,7 +1097,37 @@ class InvestigationCreationStore:
                     now,
                 ),
             )
+            if mutation_receipt:
+                self._bind_draft_write(connection, mutation_receipt, principal, draft_id, next_revision)
         return self.get_draft(draft_id, principal=principal)
+
+    @staticmethod
+    def _bind_draft_write(connection, receipt_id, principal, draft_id, revision):
+        changed = connection.execute("""UPDATE investigation_creation_tool_receipts
+            SET committed_draft_id=?, committed_draft_revision=?
+            WHERE receipt_id=? AND principal=? AND tool_name='configure_investigation_draft'
+              AND status='STARTED' AND committed_draft_id=''""",
+            (draft_id, revision, receipt_id, principal)).rowcount
+        if changed != 1:
+            raise IdempotencyConflictError('Draft write no longer owns the execution receipt')
+
+    def recover_draft_write(self, receipt_id, principal, response):
+        # Preserve the original failed attempt. Record separately the verified
+        # response reconstructed from the atomically bound draft revision.
+        draft = response['data']['draft']
+        with self._connect() as conn:
+            changed = conn.execute("""UPDATE investigation_creation_tool_receipts
+                SET recovered_response_json=? WHERE receipt_id=? AND principal=?
+                AND tool_name='configure_investigation_draft'
+                AND committed_draft_id=? AND committed_draft_revision=?""",
+                (self._json(response), receipt_id, principal, draft['id'], draft['current_revision'])).rowcount
+            if changed != 1:
+                raise IdempotencyConflictError('No committed draft revision for this recovery')
+
+    def committed_draft_write(self, receipt_id, principal):
+        with self._connect() as conn:
+            row = conn.execute('''SELECT committed_draft_id,committed_draft_revision FROM investigation_creation_tool_receipts WHERE receipt_id=? AND principal=? AND tool_name='configure_investigation_draft' ''', (receipt_id, principal)).fetchone()
+        return tuple(row) if row and row['committed_draft_id'] else None
 
     def get_draft(self, draft_id: str, *, principal: str) -> InvestigationDraft:
         with self._connect() as connection:

@@ -51,6 +51,7 @@ class UseRuleSetProposalInput(StrictModel):
 
 # Safe explanations also serve as the existing conversation's failure fallback.
 BINDING_FAILURES = {
+    "PROPOSAL_ADOPTION_TOOL_REQUIRED": ("此兼容接口不能更换临时规则。", "请读取规则的 resource_ref，通过 configure_investigation_draft 采用；仍需满足展示与用户采用条件。"),
     "PROPOSAL_APPROVAL_REQUIRED": ("缺少有效的当前用户回合。", "请在当前会话中重新提出采用请求。"),
     "PROPOSAL_NOT_PRESENTED": ("当前会话没有可用的这份规则展示记录。", "请先完整展示规则，再等待用户下一次确认。"),
     "INVALID_PROPOSAL_PRESENTATION": ("规则展示记录未通过完整性校验。", "请重新完整展示规则，再等待用户下一次确认。"),

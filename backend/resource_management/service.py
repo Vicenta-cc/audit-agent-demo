@@ -12,7 +12,7 @@ from backend.rulesets.compiler import compile_ruleset_content, content_hash
 from backend.rulesets.trial_profiles import TRIAL_BUNDLES, apply_trial_profile
 from .contracts import LexiconContent, LexiconEntry, ResourceError
 from .lexicon_versions import canonical, digest, content as lexicon_content, synchronize
-from . import snapshot_refs, edit_refs
+from . import snapshot_refs, edit_refs, ruleset_refs
 from .ownership import require_lexicon, recover_lexicon_owners
 
 
@@ -43,6 +43,7 @@ class ResourceManagementService:
         self.db = self.lexicons.db_path
         with self.app.store._connect() as conn:
             edit_refs.initialize(conn)
+            ruleset_refs.initialize(conn)
             conn.executescript('''
                 CREATE TABLE IF NOT EXISTS resource_edit_origins (
                     edit_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, principal_id TEXT NOT NULL,
@@ -82,7 +83,18 @@ class ResourceManagementService:
             body = {key: item[key] for key in RuleSetContent.model_fields}
             with self.rulesets.store._connect() as conn:
                 revisions = conn.execute("SELECT id,version FROM rule_set_revisions WHERE ruleset_id=? AND status='published' ORDER BY version", (resource_id,)).fetchall()
-            return {'id': resource_id, 'kind': kind, 'content': body, 'version': item['draft_revision'], 'published_revision_id': item['published_revision_id'], 'published_version': item['published_version'], 'editable': item['owner_id'] == principal.id and resource_id not in TRIAL_BUNDLES, 'content_hash': content_hash(body),
+            resource_ref = None
+            if item['published_revision_id']:
+                published = self.rulesets.get_published(item['published_revision_id'], principal=principal)
+                # Do not label an unpublished editor body with a different
+                # published version's adoption handle.
+                if content_hash(body) == published['content_hash']:
+                    with self.app.store._connect() as conn:
+                        resource_ref = ruleset_refs.issue(conn, {
+                            'strategy': 'existing_ruleset', 'ruleset_revision_id': item['published_revision_id'],
+                            'expected_ruleset_version': published['version'],
+                            'expected_ruleset_content_hash': published['content_hash']}, principal=principal)
+            return {'resource_ref': resource_ref, 'id': resource_id, 'kind': kind, 'content': body, 'version': item['draft_revision'], 'published_revision_id': item['published_revision_id'], 'published_version': item['published_version'], 'editable': item['owner_id'] == principal.id and resource_id not in TRIAL_BUNDLES, 'content_hash': content_hash(body),
                     'open_arguments': {'kind': kind, 'resource_id': resource_id},
                     'published_versions': [{'published_version': r['version'], 'open_arguments': {'kind': kind, 'resource_id': resource_id, 'revision_id': r['id']}} for r in revisions]}
         with self.lexicons._connect() as conn:
@@ -275,6 +287,9 @@ class ResourceManagementService:
             if edit_id.startswith('ruleset-proposal:'):
                 proposal = self.app.get_ruleset_proposal(edit_id, session_id=session_id)
                 result = dict(edit_id=edit_id, kind='ruleset', version=proposal.version, content_hash=proposal.content_hash, content=proposal.content.model_dump(mode='json'), source=source, proposal_snapshot=proposal.model_dump(mode='json'))
+                result['resource_ref'] = ruleset_refs.issue(conn, {'strategy': 'temporary_ruleset',
+                    'proposal_id': proposal.proposal_id, 'proposal_version': proposal.version,
+                    'content_hash': proposal.content_hash}, principal=principal, session_id=session_id)
             else:
                 row = conn.execute('SELECT * FROM lexicon_edits WHERE id=? AND session_id=?', (edit_id, session_id)).fetchone()
                 if not row or not origin:

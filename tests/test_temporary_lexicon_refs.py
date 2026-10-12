@@ -28,6 +28,7 @@ def test_edit_reference_survives_restart_and_save_but_not_edit(service):
     assert len(json.dumps(plan)) < 120
     reopened = ResourceManagementService(service.app)
     expected = TemporaryTermsRecallPlan.model_validate(edit['recall_plan']).model_dump(mode='json')
+    expected['source_edit_ref'] = edit['resource_ref']
     assert reopened.resolve_lexicon_ref(edit['resource_ref'], **CTX) == expected
     save(service, edit)
     assert service.resolve_lexicon_ref(edit['resource_ref'], **CTX) == expected

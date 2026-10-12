@@ -60,7 +60,7 @@ def tool_view(value):
     if not isinstance(value, dict):
         return value
     result = {key: tool_view(item) for key, item in value.items()}
-    if value.get('resource_ref'):
+    if value.get('resource_ref') and (value.get('kind') == 'lexicon' or 'recall_plan' in value):
         result['recall_plan'] = {'strategy': 'resource_ref', 'resource_ref': value['resource_ref']}
         result.pop('runtime_content_hash', None)
     return result
