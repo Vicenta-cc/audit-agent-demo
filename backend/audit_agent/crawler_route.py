@@ -162,17 +162,19 @@ class RouteOperationStore:
             conn.execute('BEGIN IMMEDIATE')
             row = conn.execute('SELECT * FROM route_operations WHERE operation_id=?', (operation_id,)).fetchone()
             current = self._row(row)
-            if current is None or current['owner_id'] != owner_id or current['lease_version'] != lease_version: raise ValueError('ROUTE_LEASE_REJECTED')
+            if current is None or current['owner_id'] != owner_id or current['lease_version'] != lease_version:
+                raise ValueError('ROUTE_LEASE_REJECTED')
             if type(lease_version) is not int or not snapshot_digest or not context_id:
                 raise ValueError('ROUTE_LEASE_REJECTED')
             expected = current['request'].get('snapshot_digest', '')
             if not expected or expected != snapshot_digest or current['request'].get('context_id') != context_id:
                 raise ValueError('ROUTE_SNAPSHOT_MISMATCH')
-            if current['expires_at'] <= time.time(): raise ValueError('ROUTE_LEASE_EXPIRED')
-            if current['state'] == 'acked': return current
-            if current['state'] != 'issued': raise ValueError('ROUTE_LEASE_EXPIRED')
-            expected = current['request'].get('snapshot_digest', '')
-            if expected and snapshot_digest and expected != snapshot_digest: raise ValueError('ROUTE_SNAPSHOT_MISMATCH')
+            if current['expires_at'] <= time.time():
+                raise ValueError('ROUTE_LEASE_EXPIRED')
+            if current['state'] == 'acked':
+                return current
+            if current['state'] != 'issued':
+                raise ValueError('ROUTE_LEASE_EXPIRED')
             ack = {'operation_id': operation_id, 'lease_id': current['lease_id'], 'lease_version': lease_version,
                    'snapshot_digest': snapshot_digest, 'context_id': context_id,
                    'owner_id': owner_id, 'expires_at': current['expires_at'],
@@ -1290,7 +1292,6 @@ def probe_account_route(account_id, owner_id, *, expected_binding_revision=None,
 def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_identity=''):
     """Bounded subprocess protocol; dependency imports stay in crawler Python."""
     import json
-    import signal
     import subprocess
     from pathlib import Path
     from .crawler_browser import account_browser_env, scheduler_env
@@ -1695,7 +1696,6 @@ def refresh_existing_route(account_id, *, account_store=None, owner_id='local-us
     """Refresh a stale known route by echo only; TTL never triggers fallback."""
     from .crawler_account_store import crawler_account_store
     from backend.task_admission.resources import ExecutionLeaseBundle
-    from dataclasses import replace
     accounts=account_store or crawler_account_store
     account=accounts.get(account_id)
     if not account or account['status']!='active' or account.get('route_state')!='active' or account.get('pause_reason'):
@@ -1745,7 +1745,6 @@ def refresh_existing_route(account_id, *, account_store=None, owner_id='local-us
 
 def assert_profile_browser_stopped(account_id):
     """A detached Chromium owner keeps SingletonLock even after helper exit."""
-    from pathlib import Path
     import re
     directory=settings.crawler_browser_profile_root.expanduser().resolve()/route_contract().derive_profile_key(account_id)
     singleton=directory/'SingletonLock'
