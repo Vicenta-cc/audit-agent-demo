@@ -399,3 +399,21 @@ test("scanned login session remains visible and continues polling", async ({ pag
   await expect(page.getByText(/已扫码，请在手机\s*抖音\s*确认登录/)).toBeVisible();
   await expect.poll(() => sessionReads, { timeout: 4000 }).toBeGreaterThan(1);
 });
+
+test("readonly account safety states preserve expired priority and show controlled direct mode", async ({ page }) => {
+  const items = [
+    { ...account("paused", "安全暂停账号", "dy"), collection_ready: false, route_state: "challenge_paused", collection_block_reason: "ACCOUNT_CHALLENGE_PAUSED", shared_exit_generation: 2 },
+    { ...account("unknown-safe", "未知保护账号", "dy"), collection_ready: false, collection_block_reason: "FUTURE_PROTECTION_REASON" },
+    { ...account("manual", "人工处理账号", "dy"), collection_ready: false, route_state: "manual_required", collection_block_reason: "ACCOUNT_MANUAL_REQUIRED" },
+    { ...account("direct", "低频账号", "dy"), collection_ready: true, route_mode: "direct_degraded" },
+    { ...account("expired-safe", "失效账号", "dy"), status: "expired", collection_ready: false, needs_proxy_login_validation: true, collection_block_reason: "PROXY_LOGIN_VALIDATION_REQUIRED" }
+  ];
+  await page.route("**/api/crawler-accounts", route => route.fulfill({ json: { items } }));
+  await page.goto("/crawler-accounts");
+  await expect(page.getByText("安全验证暂停", { exact: true })).toBeVisible();
+  await expect(page.getByText("采集暂不可用", { exact: true })).toBeVisible();
+  await expect(page.getByText("需人工处理", { exact: true })).toBeVisible();
+  await expect(page.getByText("受控直连 · 低频采集", { exact: true })).toBeVisible();
+  await expect(page.getByRole("table", { name: "抖音账号列表" }).getByText("已失效", { exact: true })).toBeVisible();
+  await expect(page.getByText("采集网络已变更，需校验登录", { exact: true })).toHaveCount(0);
+});

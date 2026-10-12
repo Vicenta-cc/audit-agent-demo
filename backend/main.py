@@ -241,37 +241,71 @@ def _crawler_account_public_view(account: dict, principal: Principal) -> dict:
     item["can_manage"] = not _authz_enabled() or _can_manage_crawler_account(
         principal, account
     )
+    reason = _crawler_account_collection_block_reason(account, principal)
+    item["collection_ready"] = not reason
+    item["collection_block_reason"] = reason
+    if settings.crawler_safety_enabled and account.get("route_mode") == "direct_degraded":
+        item["needs_proxy_login_validation"] = False
+    return item
+
+
+def _crawler_account_collection_block_reason(account: dict, principal: Principal) -> str:
+    """Read routing eligibility without credentials, network probes or leases."""
     import time
-    reason = ""
+    if account.get("status") != "active" or not account.get("has_auth_state"):
+        return "ACCOUNT_LOGIN_REQUIRED"
+    if account_is_cooling_down(account):
+        return "ACCOUNT_COOLDOWN"
+    safety = settings.crawler_safety_enabled and account["platform"] == "dy"
+    if safety:
+        if account.get("route_state", "active") != "active":
+            return {"manual_required": "ACCOUNT_MANUAL_REQUIRED", "recovery_check": "ACCOUNT_RECOVERY_CHECK",
+                    "challenge_paused": "ACCOUNT_CHALLENGE_PAUSED"}.get(account.get("route_state"), "ACCOUNT_ROUTE_BLOCKED")
+        if account.get("paused_until") and account["paused_until"] > time.time():
+            return "ACCOUNT_PAUSED"
+        if account.get("route_mode") == "direct_degraded":
+            if not settings.crawler_direct_degrade_enabled:
+                return "PROXY_UNAVAILABLE"
+            return "" if crawler_account_store.get_direct_route(account["id"]) else "SHARED_EXIT_UNAVAILABLE"
     proxy_id = account.get("proxy_id")
     required = bool(account.get("proxy_required") or proxy_id
                     or settings.crawler_proxy_enabled and account["platform"] == "dy")
-    if required:
-        if not proxy_id:
-            reason = "PROXY_CONFIGURATION_REQUIRED"
-        elif not settings.crawler_proxy_enabled or not _can_use_crawler_proxy(principal, proxy_id):
-            reason = "PROXY_UNAVAILABLE"
-        else:
-            # Read only routing metadata; never decrypt transport credentials.
+    if not required:
+        return ""
+    if not proxy_id:
+        return "PROXY_CONFIGURATION_REQUIRED"
+    if not settings.crawler_proxy_enabled or not _can_use_crawler_proxy(principal, proxy_id):
+        return "PROXY_UNAVAILABLE"
+    with crawler_account_store._connect() as conn:
+        exists = conn.execute("SELECT 1 FROM sqlite_master WHERE name='proxy_resources' AND type='table'").fetchone()
+        resource = conn.execute("SELECT * FROM proxy_resources WHERE id=?", (proxy_id,)).fetchone() if exists else None
+        now = time.time()
+        if (not resource or resource["platform"] != account["platform"]
+                or resource["status"] != "active" or resource["stop_reason"]
+                or resource["expires_at"] is None or resource["expires_at"] <= now
+                or resource["cooldown_until"] is not None and resource["cooldown_until"] > now):
+            return "PROXY_UNAVAILABLE"
+        if (account.get("validated_proxy_binding_revision") != account.get("binding_revision")
+                or account.get("validated_proxy_config_revision") != resource["config_revision"]):
+            return "PROXY_LOGIN_VALIDATION_REQUIRED"
+        if safety and (resource["paused_until"] is not None and resource["paused_until"] > now
+                or resource["observed_exit_at"] is None
+                or not 0 <= now - resource["observed_exit_at"] <= settings.crawler_exit_observation_ttl
+                or not crawler_account_store._exit_allowed(conn, resource["shared_exit_key"], resource["shared_exit_generation"])):
+            return "SHARED_EXIT_UNAVAILABLE"
+    return ""
+
+
+def _default_crawler_proxy_pool(principal: Principal) -> tuple[str, ...]:
+    if settings.crawler_safety_enabled:
+        ids = settings.crawler_proxy_pool_ids
+        if not ids:
             with crawler_account_store._connect() as conn:
                 exists = conn.execute("SELECT 1 FROM sqlite_master WHERE name='proxy_resources' AND type='table'").fetchone()
-                resource = conn.execute("SELECT platform,status,stop_reason,expires_at,cooldown_until,config_revision FROM proxy_resources WHERE id=?", (proxy_id,)).fetchone() if exists else None
-            now = time.time()
-            if (not resource or resource["platform"] != account["platform"]
-                    or resource["status"] != "active" or resource["stop_reason"]
-                    or resource["expires_at"] is None or resource["expires_at"] <= now
-                    or resource["cooldown_until"] is not None and resource["cooldown_until"] > now):
-                reason = "PROXY_UNAVAILABLE"
-            elif (account.get("validated_proxy_binding_revision") != account.get("binding_revision")
-                    or account.get("validated_proxy_config_revision") != resource["config_revision"]):
-                reason = "PROXY_LOGIN_VALIDATION_REQUIRED"
-    if not reason and (account.get("status") != "active" or not account.get("has_auth_state")):
-        reason = "ACCOUNT_LOGIN_REQUIRED"
-    if not reason and account_is_cooling_down(account):
-        reason = "ACCOUNT_COOLDOWN"
-    item["collection_ready"] = not reason
-    item["collection_block_reason"] = reason
-    return item
+                ids = tuple(row[0] for row in conn.execute("SELECT id FROM proxy_resources WHERE platform='dy' AND status='active'")) if exists else ()
+    else:
+        ids = (settings.crawler_proxy_default_id,) if settings.crawler_proxy_default_id else ()
+    return tuple(proxy_id for proxy_id in ids if _can_use_crawler_proxy(principal, proxy_id))
 
 
 def _authorized_crawler_accounts(principal: Principal) -> list[dict]:
@@ -1592,9 +1626,16 @@ def _proxy_http_error(exc):
     return HTTPException(status, detail=code if code.startswith("PROXY_") else "Invalid proxy configuration")
 
 
+def _crawler_proxy_readonly_view(resource: dict) -> dict:
+    return {key: value for key, value in resource.items()
+            if key not in {"endpoint", "observed_exit_ip", "shared_exit_key"}}
+
+
 @app.get("/api/crawler-proxies")
 def list_crawler_proxies(principal: Principal = Depends(principal_provider)):
     items = [item for item in _crawler_proxy_store().list() if _can_use_crawler_proxy(principal, item["id"])]
+    if _authz_enabled() and not principal.is_admin:
+        items = [_crawler_proxy_readonly_view(item) for item in items]
     return {"items": items, "enabled": settings.crawler_proxy_enabled,
             "max_active_accounts_cap": settings.request_concurrency,
             "can_manage": not _authz_enabled() or principal.is_admin}
@@ -1602,7 +1643,8 @@ def list_crawler_proxies(principal: Principal = Depends(principal_provider)):
 
 @app.get("/api/crawler-proxies/{proxy_id}")
 def get_crawler_proxy(proxy_id: str, principal: Principal = Depends(principal_provider)):
-    return {"item": _require_crawler_proxy(proxy_id, principal)}
+    resource = _require_crawler_proxy(proxy_id, principal)
+    return {"item": resource if not _authz_enabled() or principal.is_admin else _crawler_proxy_readonly_view(resource)}
 
 
 @app.post("/api/crawler-proxies", status_code=201)
@@ -1719,9 +1761,8 @@ def _shared_crawler_pool_summary() -> dict:
             account.get("status") == "active"
             and account.get("has_auth_state")
             and not account_is_cooling_down(account)
-            and not account.get("needs_proxy_login_validation", False)
             and account["id"] in available_ids
-            and not (settings.crawler_proxy_enabled and platform == "dy" and not account.get("proxy_id"))
+            and not _crawler_account_collection_block_reason(account, Principal("shared-pool", role="admin"))
         )
         if not usable:
             platform_summary["unavailable"] += 1
@@ -1754,9 +1795,13 @@ def create_crawler_account(
     selected_default_proxy = (settings.crawler_proxy_enabled and request.platform == "dy"
                               and "proxy_id" not in request.model_fields_set)
     if selected_default_proxy:
-        request.proxy_id = settings.crawler_proxy_default_id or None
-        if not request.proxy_id:
+        pool_ids = _default_crawler_proxy_pool(principal)
+        if not pool_ids:
             raise HTTPException(400, detail="PROXY_CONFIGURATION_REQUIRED")
+        resource = _crawler_proxy_store().select_pool_resource(pool_ids)
+        if resource is None:
+            raise HTTPException(409, detail="PROXY_UNAVAILABLE")
+        request.proxy_id = resource["id"]
     if request.proxy_id:
         if request.platform != "dy":
             raise HTTPException(400, detail="Proxy routing currently supports dy only")
@@ -1777,7 +1822,20 @@ def create_crawler_account(
             access_scope=request.access_scope,
         )
         if request.proxy_id:
-            item = _crawler_proxy_store().bind(str(item["id"]), request.proxy_id, expected_binding_revision=int(item.get("binding_revision") or 0))
+            excluded = set()
+            while True:
+                try:
+                    item = _crawler_proxy_store().bind(str(item["id"]), request.proxy_id, expected_binding_revision=int(item.get("binding_revision") or 0),
+                        **({"route_mode": "proxy_preferred"} if selected_default_proxy and settings.crawler_safety_enabled else {}))
+                    break
+                except (ValueError, CollectionRouteError) as exc:
+                    if not selected_default_proxy or str(exc) not in {"PROXY_CAPACITY_CONFLICT", "PROXY_BUSY"}:
+                        raise
+                    excluded.add(request.proxy_id)
+                    resource = _crawler_proxy_store().select_pool_resource(pool_ids, exclude_ids=excluded)
+                    if resource is None:
+                        raise ValueError("PROXY_CAPACITY_CONFLICT") from exc
+                    request.proxy_id = resource["id"]
         if _authz_enabled() and request.access_scope == "private":
             try:
                 auth_store.register_crawler_account(str(item["id"]), principal.id)

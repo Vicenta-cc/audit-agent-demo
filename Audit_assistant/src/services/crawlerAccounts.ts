@@ -11,6 +11,12 @@ import type {
 } from "../types/crawlerAccounts";
 
 interface ApiCrawlerAccount {
+  route_mode?: string;
+  route_state?: string;
+  paused_until?: number | null;
+  pause_reason?: string;
+  recovery_state?: string;
+  shared_exit_generation?: number;
   collection_ready?: boolean;
   collection_block_reason?: string;
   proxy_id?: string | null;
@@ -168,6 +174,12 @@ function toApiInput(input: CrawlerAccountInput) {
 function mapCrawlerAccount(item: ApiCrawlerAccount): CrawlerAccount {
   return {
     id: item.id,
+    routeMode: item.route_mode,
+    routeState: item.route_state,
+    pausedUntil: item.paused_until ? new Date(item.paused_until * 1000).toISOString() : "",
+    pauseReason: item.pause_reason,
+    recoveryState: item.recovery_state,
+    sharedExitGeneration: item.shared_exit_generation,
     collectionReady: item.collection_ready,
     collectionBlockReason: item.collection_block_reason,
     proxyId: item.proxy_id,
