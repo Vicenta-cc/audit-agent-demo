@@ -18,6 +18,8 @@ from backend.investigation_creation.conversation import (
     InvestigationCreationConversationService,
 )
 from backend.investigation_creation.principal import Principal
+from backend.investigation_creation.continuity import INPUTS as CONTINUITY_INPUTS
+from backend.report_collection.tools import DELIVERY_INPUTS as COLLECTION_INPUTS
 from backend.investigation_creation.tools import (
     HermesToolExecutionIdentity,
     InvestigationCreationToolService,
@@ -48,8 +50,41 @@ def test_every_product_tool_has_an_explicit_public_activity_mapping():
         str(schema["name"])
         for catalog in catalogs
         for schema in catalog
-    } | set(M3_TOOL_INPUTS) | {'list_completed_reports', 'read_user_manual'}
+    } | set(M3_TOOL_INPUTS) | set(COLLECTION_INPUTS) | set(CONTINUITY_INPUTS) | {'list_completed_reports', 'read_user_manual'}
     assert set(PUBLIC_TOOL_ACTIVITIES) == expected
+
+
+@pytest.mark.parametrize("tool_name", sorted(set(COLLECTION_INPUTS) | set(CONTINUITY_INPUTS)))
+@pytest.mark.parametrize("outcome", ["success", "failure", "interrupted"])
+def test_collection_and_session_activities_survive_history_recovery(
+    tmp_path, monkeypatch, tool_name, outcome,
+):
+    monkeypatch.setattr(settings, "activity_stream_enabled", True)
+    path = tmp_path / "investigation.sqlite3"
+    store = InvestigationStore(path)
+    session = store.create_session(_report_context())
+    turn, _ = store.create_turn(
+        session.id, client_message_id="collection-activity", user_input="看看刚才的报告。",
+    )
+    emitter = PublicActivityEmitter(store, enabled=lambda: True)
+    callbacks = emitter.agent_callbacks(session.id)
+    arguments = {"report_refs": ["private-report-ref"]}
+    with emitter.bind_turn(session.id, turn.id):
+        callbacks["tool_start_callback"]("private-call-id", tool_name, arguments)
+        if outcome != "interrupted":
+            result = ('{"ok":true,"data":{"text":"private-result"}}'
+                      if outcome == "success" else
+                      '{"ok":false,"error":{"message":"private-error"}}')
+            callbacks["tool_complete_callback"]("private-call-id", tool_name, arguments, result)
+
+    # The API used when reopening a chat reads the durable events, not callback memory.
+    recovered = public_activity_events_for_turns(InvestigationStore(path), [turn.id])
+    expected = {"success": "succeeded", "failure": "failed", "interrupted": "interrupted"}
+    assert [event.status for event in recovered] == ["running", expected[outcome]]
+    assert len({event.activity_id for event in recovered}) == 1
+    assert {event.label for event in recovered} == {PUBLIC_TOOL_ACTIVITIES[tool_name].label}
+    for private_value in (tool_name, "private-report-ref", "private-call-id", "private-result", "private-error"):
+        assert private_value not in str(recovered)
 
 
 @pytest.mark.parametrize(

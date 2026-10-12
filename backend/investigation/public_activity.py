@@ -51,6 +51,21 @@ PUBLIC_TOOL_ACTIVITIES: dict[str, PublicActivitySpec] = {
     "list_authorized_reports": PublicActivitySpec("读取可比较报告目录", "已读取已授权报告目录。"),
     "list_report_accounts": PublicActivitySpec("读取报告账号目录", "已读取所选报告的账号目录。"),
     "get_report_account_statistics": PublicActivitySpec("统计报告账号", "已统计所选报告的账号总数及活跃排名。"),
+    "list_conversation_reports": PublicActivitySpec(
+        "查看会话报告目录", "已读取本会话可查看的报告目录。"
+    ),
+    "query_conversation_reports": PublicActivitySpec(
+        "查询报告评论与账号", "已完成报告评论与账号查询。"
+    ),
+    "read_conversation_result": PublicActivitySpec(
+        "读取历史查询结果", "已读取所选查询结果。"
+    ),
+    "compare_conversation_config": PublicActivitySpec(
+        "比较报告规则与关键词", "已比较报告实际使用的规则与关键词。"
+    ),
+    "deliver_conversation_results": PublicActivitySpec(
+        "整理查询结果", "已整理查询结果。"
+    ),
     # Investigation creation tools.
     "query_investigation_options": PublicActivitySpec(
         "查询可用平台与审核资源", "已读取可用平台与审核资源。"
@@ -88,6 +103,12 @@ PUBLIC_TOOL_ACTIVITIES: dict[str, PublicActivitySpec] = {
         "查询调查任务状态", "已读取调查任务状态。"
     ),
     # Resource-management tools.
+    "list_session_resources": PublicActivitySpec(
+        "查看会话资源目录", "已读取本会话的资源目录。"
+    ),
+    "read_session_resource": PublicActivitySpec(
+        "读取会话资源版本", "已读取所选资源版本。"
+    ),
     "read_resource": PublicActivitySpec(
         "查询正式审核资源", "已读取正式审核资源。"
     ),
