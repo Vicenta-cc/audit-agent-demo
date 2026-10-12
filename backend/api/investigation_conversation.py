@@ -40,6 +40,13 @@ from backend.api.reporting import published_report_detail_response
 from backend.audit_agent.config import settings
 
 
+from backend.resource_management.edit_entry import EditTarget
+
+
+class CreateWorkspaceTurnRequest(CreateInvestigationTurnRequest):
+    resource_edit: EditTarget | None = None
+
+
 class CreateInvestigationWorkspaceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -274,7 +281,7 @@ def create_investigation_conversation_router(
     )
     def create_turn(
         workspace_session_id: str,
-        request: CreateInvestigationTurnRequest,
+        request: CreateWorkspaceTurnRequest,
         principal: Principal = Depends(provide_principal),
     ) -> InvestigationTurnAcceptedResponse:
         try:
@@ -283,6 +290,7 @@ def create_investigation_conversation_router(
                 client_message_id=request.client_message_id,
                 content=request.content,
                 principal=principal,
+                **({'resource_edit': request.resource_edit.model_dump()} if request.resource_edit else {}),
             )
             return InvestigationTurnAcceptedResponse(
                 session_id=turn.session_id,

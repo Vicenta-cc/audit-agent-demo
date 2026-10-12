@@ -19,9 +19,9 @@ RESOURCE_TOOL_INPUTS = {
 RESOURCE_MUTATIONS = frozenset({'create_lexicon_edit', 'open_resource_edit', 'update_resource_edit', 'save_resource'})
 RESOURCE_DESCRIPTIONS = {
     'read_resource': '查询或读取后台正式规则 ruleset 或词库 lexicon。resource_id 为空时按 query 分页检索；指定真实 ID 时返回完整内容和版本。正式词库返回 resource_ref 和可直接用于 Draft 的 recall_plan，引用绑定当前用户读取的精确版本，由后端校验，不需要填写 hash。引用过期时先重新读取并核对差异，不直接采用新版。只读，不创建编辑副本、任务或保存。任务资源选择仍可用 query_investigation_options。',
-    'open_resource_edit': '用户要求编辑已存在后台资源时，按真实 kind/resource_id 读取完整内容并建立当前会话副本，返回 edit_id、精确版本和来源。不会修改正式资源、采用资源或启动任务。系统规则仅可另存。规则副本仍为原 M3 Proposal，后续采用必须使用其已展示版本。',
+    'open_resource_edit': '用户要求编辑已存在后台资源时，按真实 kind/resource_id 读取完整内容并建立当前会话副本，返回 edit_id、精确版本和来源。不会修改正式资源、采用资源或启动任务。系统规则仅可另存。规则可传 revision_id 复制指定已发布版本（如某轮冻结配置使用的版本），留空复制当前内容。规则副本仍为原 M3 Proposal，后续采用必须使用其已展示版本。',
     'get_resource_edit': '读取当前会话完整编辑内容、版本、来源、保存回执和实际 search_terms。词库返回绑定当前会话及版本的 resource_ref recall_plan，直接传入草案，不重抄内容或 hash；编辑后必须使用新引用，旧引用不可用。规则 edit_id 就是已有 proposal_id，采用仍使用已展示版本的 presentation_id。不能把已保存旧版本误说成当前修改已保存。',
-    'update_resource_edit': '按 edit_id/expected_version 局部修改，changes 是操作数组。词库用 upsert_entry（target_id 为已有词条 ID，新增省略 target_id）、remove_entry（删变体只删该条，删主词会连同其变体删除，须在用户明确删除范围内）；规则用 update_rule/remove_rule（target_id 为 rule_id）、add_rule（target_id 为 category_id）、set_exemptions；元数据用 set_metadata：词库允许 title（名称）、description（整库说明，最多2000字）、risk_label（风险标签）；规则允许 name、domain、audit_goal。词库说明不能写入词条 note。values 只包含需要修改的字段。变体归属使用固定 ID，不因改名而丢失。相同term/platform/match_type不可重复，主词与变体也一样；停用不消除重名。改名与保留要求冲突时说明冲突并等待用户选择，不能自行删除、改名或改变其他词条属性来绕过校验。更新校验失败不会提交这次修改；失败不授予删词权限。用户已明确选择方案后按所选范围修改，无需再次确认。不会保存、采用或启动。版本冲突先读并核对，不强行更新预期版本。',
+    'update_resource_edit': '按 edit_id/expected_version 局部修改，changes 是操作数组。词库用 upsert_entry（target_id 为已有词条 ID，新增省略 target_id）、remove_entry（删变体只删该条，删主词会连同其变体删除，须在用户明确删除范围内）；规则用 update_rule/remove_rule（target_id 为 rule_id）、add_rule（target_id 为 category_id）。豁免按条操作：add_exemption 的 values 提供 exemption_id/name/condition，省略 target_id；update_exemption 的 target_id 为豁免 ID，values 仅传改动的 name/condition/enabled；remove_exemption 只传 target_id。默认通用豁免；规则内豁免额外传 rule_id。不要抄写整个豁免列表；set_exemptions 仅兼容明确要求整列表替换的操作；元数据用 set_metadata：词库允许 title（名称）、description（整库说明，最多2000字）、risk_label（风险标签）；规则允许 name、domain、audit_goal。词库说明不能写入词条 note。values 只包含需要修改的字段。变体归属使用固定 ID，不因改名而丢失。相同term/platform/match_type不可重复，主词与变体也一样；停用不消除重名。改名与保留要求冲突时说明冲突并等待用户选择，不能自行删除、改名或改变其他词条属性来绕过校验。更新校验失败不会提交这次修改；失败不授予删词权限。用户已明确选择方案后按所选范围修改，无需再次确认。不会保存、采用或启动。版本冲突先读并核对，不强行更新预期版本。',
     'save_resource': '用户明确要求保存时，把 edit_id/expected_version 的精确内容正式保存并发布，一次动作完成。mode=new 保存新生成资源，update 保存回可编辑原资源，copy 另存。operation_id 标识这一次逻辑保存，重试保持同一个值；结果未知先 get_resource_save。规则与词库分别调用，允许同轮保存多个资源。保存不等于采用、绑定 Draft 或启动；任务可以继续使用未保存内容。',
     'get_resource_save': '按原 operation_id 查询实际正式保存回执。用于响应丢失后的恢复，避免更换 ID 重复创建。只读，not_found 表示未查到已提交保存。',
 }
@@ -32,7 +32,19 @@ RESOURCE_DESCRIPTIONS["update_resource_edit"] += (
     RESOURCE_EDIT_GUIDANCE + RULESET_AUTHORING_GUIDANCE
 )
 RESOURCE_DESCRIPTIONS["open_resource_edit"] += RESOURCE_EDIT_GUIDANCE
+RESOURCE_DESCRIPTIONS['read_resource'] += ' 规则返回 published_versions：各正式版本附可直接传入 open_resource_edit 的 open_arguments；顶层 open_arguments 读取当前内容，不代表历史版本。'
+RESOURCE_DESCRIPTIONS['open_resource_edit'] = (
+    '仅复制已有资源供局部编辑。完整参数示例 {"kind":"ruleset","resource_id":"读取到的资源ID","published_version":2}；'
+    '也可直接复制 read_resource.published_versions 中目标版本的 open_arguments。不要传 version，不把版本ID放进 resource_id。'
+    '返回 update_arguments，后续原样使用其 edit_id/expected_version，再加 changes。'
+) + RESOURCE_DESCRIPTIONS['open_resource_edit']
+RESOURCE_DESCRIPTIONS['update_resource_edit'] = (
+    '已有规则/词库局部修改使用本工具。复制最新结果的 update_arguments，再加 changes。'
+    '改风险示例 {"operation":"update_rule","target_id":"原规则ID","values":{"suggested_risk_level":"high"}}；'
+    '新增通用豁免示例 {"operation":"add_exemption","values":{"exemption_id":"新ID","name":"名称","condition":"用户原文"}}。'
+) + RESOURCE_DESCRIPTIONS['update_resource_edit']
 RESOURCE_DESCRIPTIONS["create_lexicon_edit"] = (
+    "仅从零创建独立词库；新增/修改已有词条、变体、名称用 update_resource_edit，不用本工具重生成。"
     "生成临时搜索词或完整黑话库的统一入口。新生成传 generation_request：objective、platform、"
     "requirements，用户明确指定数量才传 requested_count，禁止扩展的原文词表传 exact_terms。"
     "keyword_profile " + KEYWORD_PROFILE_CATALOG_DESCRIPTION +

@@ -7,7 +7,7 @@ import sqlite3
 from uuid import uuid4
 
 from backend.audit_agent.lexicon_store import LexiconCategoryReferenceConflictError
-from backend.rulesets.contracts import RuleSetContent
+from backend.rulesets.contracts import RuleSetContent, Exemption
 from backend.rulesets.compiler import compile_ruleset_content, content_hash
 from backend.rulesets.trial_profiles import TRIAL_BUNDLES, apply_trial_profile
 from .contracts import LexiconContent, LexiconEntry, ResourceError
@@ -80,7 +80,11 @@ class ResourceManagementService:
         if kind == 'ruleset':
             item = self.rulesets.get(resource_id, principal=principal)
             body = {key: item[key] for key in RuleSetContent.model_fields}
-            return {'id': resource_id, 'kind': kind, 'content': body, 'version': item['draft_revision'], 'published_revision_id': item['published_revision_id'], 'published_version': item['published_version'], 'editable': item['owner_id'] == principal.id and resource_id not in TRIAL_BUNDLES, 'content_hash': content_hash(body)}
+            with self.rulesets.store._connect() as conn:
+                revisions = conn.execute("SELECT id,version FROM rule_set_revisions WHERE ruleset_id=? AND status='published' ORDER BY version", (resource_id,)).fetchall()
+            return {'id': resource_id, 'kind': kind, 'content': body, 'version': item['draft_revision'], 'published_revision_id': item['published_revision_id'], 'published_version': item['published_version'], 'editable': item['owner_id'] == principal.id and resource_id not in TRIAL_BUNDLES, 'content_hash': content_hash(body),
+                    'open_arguments': {'kind': kind, 'resource_id': resource_id},
+                    'published_versions': [{'published_version': r['version'], 'open_arguments': {'kind': kind, 'resource_id': resource_id, 'revision_id': r['id']}} for r in revisions]}
         with self.lexicons._connect() as conn:
             conn.execute('BEGIN IMMEDIATE')
             owner = require_lexicon(conn, resource_id, principal)
@@ -225,8 +229,26 @@ class ResourceManagementService:
             conn.execute('INSERT INTO resource_edit_history VALUES (?,1,?)', (identifier, canonical(body)))
         return self.get_edit(identifier, session_id=session_id, principal=principal)
 
-    def open(self, kind, resource_id, *, session_id, principal):
+    def open(self, kind, resource_id, *, session_id, principal, revision_id='', published_version=None):
+        if (revision_id or published_version is not None) and kind != 'ruleset':
+            raise ResourceError('只有规则支持按已发布版本建立副本。')
         resource = self.read(kind, resource_id, principal=principal)
+        if published_version is not None:
+            # Resolve only after access validation; never substitute the latest revision.
+            candidates = [r for r in resource['published_versions'] if r['published_version'] == published_version]
+            if len(candidates) != 1:
+                raise ResourceError('未找到唯一的指定发布版本，请读取资源核对 published_versions；未建立副本。', code='RESOURCE_VERSION_NOT_FOUND')
+            resolved = candidates[0]['open_arguments']['revision_id']
+            if revision_id and revision_id != resolved:
+                raise ResourceError('revision_id 与 published_version 不一致；未建立副本。', code='RESOURCE_VERSION_CONFLICT')
+            revision_id = resolved
+        if revision_id:
+            revision = self.rulesets.get_published(revision_id, principal=principal)
+            if revision['ruleset_id'] != resource_id:
+                raise ResourceError('指定版本不属于该规则。')
+            resource = {**resource, 'content': {key: revision[key] for key in RuleSetContent.model_fields},
+                        'version': revision['revision'], 'content_hash': revision['content_hash'],
+                        'published_revision_id': revision_id}
         source = {k: resource[k] for k in ('id', 'version', 'content_hash', 'editable')}
         if kind == 'lexicon':
             return self.create_lexicon(resource['content'], session_id=session_id, principal=principal, source=source)
@@ -281,6 +303,7 @@ class ResourceManagementService:
             }
         result['saves'] = saved
         result['saved'] = any(r['edit_version'] == result['version'] and r['edit_content_hash'] == result['content_hash'] for r in saved)
+        result['update_arguments'] = {'edit_id': edit_id, 'expected_version': result['version']}
         return result
 
     def list_edits(self, *, session_id, principal):
@@ -296,6 +319,8 @@ class ResourceManagementService:
         for raw in changes:
             change = raw.model_dump() if hasattr(raw, 'model_dump') else raw
             operation, target, values = change['operation'], change.get('target_id', ''), change.get('values', {})
+            if change.get('rule_id') and operation not in {'add_exemption', 'update_exemption', 'remove_exemption'}:
+                raise ResourceError('rule_id 只用于按条修改豁免。')
             if operation == 'set_metadata':
                 allowed = {'title', 'risk_label', 'description'} if current['kind'] == 'lexicon' else {'name', 'domain', 'audit_goal'}
                 if not values or not set(values) <= allowed:
@@ -316,6 +341,35 @@ class ResourceManagementService:
                     if target:
                         raise ResourceError('目标词条不存在；新增词条请省略 target_id。', code='RESOURCE_NOT_FOUND')
                     entries.append(LexiconEntry.model_validate(values).model_dump(mode='json'))
+            elif current['kind'] == 'ruleset' and operation in {'add_exemption', 'update_exemption', 'remove_exemption'}:
+                scope = body
+                key = 'general_exemptions'
+                if change.get('rule_id'):
+                    scope = next((r for c in body['categories'] for r in c['rules']
+                                  if r['rule_id'] == change['rule_id']), None)
+                    if scope is None:
+                        raise ResourceError('规则不存在。', code='RESOURCE_NOT_FOUND')
+                    key = 'rule_exemptions'
+                exemptions = scope[key]
+                existing = next((e for e in exemptions if e['exemption_id'] == target), None)
+                if operation == 'add_exemption':
+                    if target:
+                        raise ResourceError('新增豁免请在 values 提供 exemption_id，不传 target_id。')
+                    added = Exemption.model_validate(values).model_dump(mode='json')
+                    if any(e['exemption_id'] == added['exemption_id'] for e in exemptions):
+                        raise ResourceError('豁免 ID 已存在；修改已有条目请用 update_exemption。')
+                    exemptions.append(added)
+                else:
+                    if existing is None:
+                        raise ResourceError('豁免不存在。', code='RESOURCE_NOT_FOUND')
+                    if operation == 'remove_exemption':
+                        if values:
+                            raise ResourceError('删除豁免只传 target_id，不传 values。')
+                        scope[key] = [e for e in exemptions if e['exemption_id'] != target]
+                    else:
+                        if not values or not set(values) <= {'name', 'condition', 'enabled'}:
+                            raise ResourceError('修改豁免仅支持 name、condition、enabled；编号与来源保持不变。')
+                        existing.update(values)
             elif current['kind'] == 'ruleset' and operation in {'update_rule', 'remove_rule', 'add_rule', 'set_exemptions'}:
                 if operation == 'set_exemptions':
                     if set(values) != {'general_exemptions'}:

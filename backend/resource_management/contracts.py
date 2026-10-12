@@ -126,7 +126,9 @@ class CreateLexiconInput(StrictModel):
 
 class OpenResourceInput(StrictModel):
     kind: Literal['ruleset', 'lexicon']
-    resource_id: str = Field(min_length=1)
+    resource_id: str = Field(min_length=1, description='正式资源 id，不是 revision_id 或 edit_id；从读取结果复制。')
+    revision_id: str = Field(default='', description='规则指定已发布版本；留空读取当前资源。词库不支持此字段。')
+    published_version: StrictInt | None = Field(default=None, ge=1, description='规则正式发布版本号，如 v2 传 2；后台精确解析，不回退最新版。与 revision_id 同传时必须一致。不是副本 expected_version。')
 
 
 class GetEditInput(StrictModel):
@@ -134,14 +136,21 @@ class GetEditInput(StrictModel):
 
 
 class EditChange(StrictModel):
-    operation: Literal['set_metadata', 'upsert_entry', 'remove_entry', 'update_rule', 'remove_rule', 'add_rule', 'set_exemptions']
-    target_id: str = ''
-    values: dict = Field(default_factory=dict)
+    operation: Literal['set_metadata', 'upsert_entry', 'remove_entry', 'update_rule', 'remove_rule', 'add_rule', 'set_exemptions', 'add_exemption', 'update_exemption', 'remove_exemption']
+    target_id: str = Field(default='', description='修改/删除规则传 rule_id，修改/删除豁免传 exemption_id；新增豁免省略。')
+    rule_id: str = Field(default='', description='仅豁免操作：为空修改通用豁免，非空修改该规则的豁免；target_id 为豁免 ID。')
+    values: dict = Field(default_factory=dict, description='只传改动字段。update_rule 示例 {"suggested_risk_level":"high"}；add_exemption 示例 {"exemption_id":"new-id","name":"名称","condition":"原文条件"}；不是完整规则正文。')
+
+    @model_validator(mode='after')
+    def exemption_scope(self):
+        if self.rule_id and self.operation not in {'add_exemption', 'update_exemption', 'remove_exemption'}:
+            raise ValueError('rule_id is only for individual exemption operations')
+        return self
 
 
 class UpdateEditInput(GetEditInput):
-    expected_version: StrictInt = Field(ge=1)
-    changes: list[EditChange] = Field(min_length=1, max_length=100)
+    expected_version: StrictInt = Field(ge=1, description='复制最新读取/修改结果 update_arguments.expected_version，不用正式发布版本，不猜测或自动加一。')
+    changes: list[EditChange] = Field(min_length=1, max_length=100, description='局部操作数组，例如 [{"operation":"update_rule","target_id":"原规则ID","values":{"suggested_risk_level":"high"}}]。合法操作用 operation；无 set_rule/update_content 操作。')
 
 
 class SaveResourceInput(GetEditInput):

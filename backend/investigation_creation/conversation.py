@@ -182,7 +182,11 @@ Generated terms are session edits, not saved formal 黑话库. Do not publish th
 Only a user's explicit save request authorizes save_resource for the exact edit version. If published Judgement is missing, explain
 that resource gap. Preview and Confirm never generate or expand terms.
 
-When the user asks for temporary 审核规则, call create_ruleset_proposal with generation_request.
+For new 审核规则 authored from scratch, call create_ruleset_proposal with generation_request.
+A temporary change to existing rules is editing, not new generation: open_resource_edit copies
+that resource (revision_id selects a specific published version), then update_resource_edit applies
+only the requested fields. For an existing session Proposal use its edit_id directly. Do not send
+an existing resource's name or summary to the generator and claim other clauses were preserved.
 The dedicated author receives the complete rule-authoring guidance and emits canonical content;
 the existing compiler and Proposal persistence remain authoritative. Explicit requests such as "没有合适规则就生成一套" or
 "生成一套给我看看" allow generation now. An options query is optional when enough context is
@@ -772,6 +776,7 @@ class InvestigationCreationConversationService:
         client_message_id: str,
         content: str,
         principal: Principal,
+        resource_edit: dict | None = None,
     ) -> tuple[InvestigationTurn, bool]:
         user_input = str(content or "").strip()
         client_id = str(client_message_id or "").strip()
@@ -780,6 +785,16 @@ class InvestigationCreationConversationService:
         if not client_id or len(client_id) > 200:
             raise ValueError("client_message_id must contain between 1 and 200 characters")
         session = self.get_session(session_id, principal=principal)
+        if resource_edit:
+            from backend.resource_management.edit_entry import EditTarget
+            from backend.resource_management.contracts import ResourceError
+            resource_edit = EditTarget.model_validate(resource_edit).model_dump()
+            replay = self.store.get_turn_by_client_message(session.id, client_id)
+            if replay is None:
+                selected = self.tool_service.application_service.resource_management.get_edit(
+                    resource_edit['edit_id'], session_id=session.id, principal=principal)
+                if selected['version'] != resource_edit['expected_version']:
+                    raise ResourceError('编辑副本已经变化，请重新读取。', code='RESOURCE_VERSION_CONFLICT')
         sources = None
         if settings.investigation_multi_round_enabled:
             if self.report_collection is None or not self.report_collection.agent_driven:
@@ -789,7 +804,8 @@ class InvestigationCreationConversationService:
                 project(self.tool_service.application_service, session.id, principal))
         elif self.report_collection and self.report_collection.active(session.id):
             sources = self.report_collection.members(session.id, principal)
-        accepted = self.store.create_turn(session.id, client_message_id=client_id, user_input=user_input)
+        accepted = self.store.create_turn(session.id, client_message_id=client_id, user_input=user_input,
+            user_metadata={'resource_edit': resource_edit} if resource_edit else None)
         if sources is not None and not accepted[1]:
             self.report_collection.freeze(session.id, accepted[0].id, principal, sources=sources)
         return accepted
@@ -1289,7 +1305,19 @@ class InvestigationCreationConversationService:
                 projected.append(replacement)
             history = projected
         self._notify(turn.id, "call_qwen")
-        self.tool_service.begin_conversation_turn(session.id, turn.id)
+        edit_target = self.store.get_user_message_for_turn(turn.id).metadata.get('resource_edit')
+        if edit_target:
+            try:
+                selected = self.tool_service.application_service.resource_management.get_edit(
+                    edit_target['edit_id'], session_id=session.id, principal=principal)
+                if selected['version'] != edit_target['expected_version']:
+                    from backend.resource_management.contracts import ResourceError
+                    raise ResourceError('编辑副本已经变化，本轮未开始修改。', code='RESOURCE_VERSION_CONFLICT')
+            except Exception as exc:
+                self.store.fail_turn(turn.id, error_code=getattr(exc, 'code', 'RESOURCE_EDIT_UNAVAILABLE'),
+                    safe_message='所选编辑副本已变化或不可访问，本轮未开始修改。请重新读取后再试。', retryable=False)
+                return self.store.turn_result(turn.id)
+        self.tool_service.begin_conversation_turn(session.id, turn.id, resource_edit=edit_target)
         provider_route = self._provider_route(user_message)
         runtime_started = False
         runtime_finished = False
@@ -1302,6 +1330,8 @@ class InvestigationCreationConversationService:
             # this turn's slice. Hermes shallow-copies and may mutate its input.
             history = prepare_creation_history(history)
             with ExitStack() as public_streams:
+                from backend.resource_management.edit_entry import editing_entry
+                public_streams.enter_context(editing_entry(edit_target))
                 public_streams.enter_context(
                     self._activity_emitter.bind_turn(session.id, turn.id)
                 )
@@ -1760,12 +1790,13 @@ class InvestigationCreationConversationService:
         return prompt
 
     def _turn_context(self, workspace, report_error=""):
-        context = ""
+        from backend.resource_management.edit_entry import active_edit, context_text
+        context = context_text(active_edit.get())
         if settings.investigation_multi_round_enabled:
             directory = [{**{k: r[k] for k in ('round_number', 'label', 'draft_id', 'title', 'draft_revision', 'draft_status')},
                 'run': {k: r['run'][k] for k in ('run_id', 'status', 'report_version_id')} if r['run'] else None}
                 for r in workspace.rounds]
-            return '本会话调查轮次（只表示关联和状态，不是报告证据）：' + json.dumps(directory, ensure_ascii=False)
+            return context + '\n本会话调查轮次（只表示关联和状态，不是报告证据）：' + json.dumps(directory, ensure_ascii=False)
         if settings.continuous_resource_session_enabled:
             from .continuity import report_context
             context += report_context(workspace.session.id)
@@ -1798,6 +1829,16 @@ class InvestigationCreationConversationService:
             if product_mode != "creation":
                 cache_key = (session_id, product_mode)
             agent = self._agents.get(cache_key)
+            from backend.resource_management.edit_entry import active_edit
+            edit_binding = dict(active_edit.get()) if product_mode == 'creation' and active_edit.get() else None
+            if agent is not None and getattr(agent, '_resource_edit_binding', None) != edit_binding:
+                # Native tool schemas are cached on the Agent. A new explicit
+                # entry must not reuse the previous target or restricted catalog.
+                self._agents.pop(cache_key)
+                close = getattr(agent, 'close', None)
+                if callable(close):
+                    close()
+                agent = None
             if agent is None:
                 callbacks = HermesInvestigationAgentService._compose_agent_callbacks(
                     self._answer_streamer.agent_callbacks(session_id),
@@ -1828,6 +1869,7 @@ class InvestigationCreationConversationService:
                         **provider_options,
                         **callbacks,
                     )
+                agent._resource_edit_binding = edit_binding
                 self._agents[cache_key] = agent
             return agent
 

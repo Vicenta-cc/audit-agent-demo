@@ -832,7 +832,9 @@ class InvestigationStore:
         *,
         client_message_id: str,
         user_input: str,
+        user_metadata: dict | None = None,
     ) -> tuple[InvestigationTurn, bool]:
+        user_metadata = user_metadata or {}
         now = utc_now()
         turn_id = f"investigation-turn:{uuid4().hex}"
         message_id = f"investigation-message:{uuid4().hex}"
@@ -849,12 +851,13 @@ class InvestigationStore:
                 ).fetchone()
                 if existing is not None:
                     existing_content = connection.execute(
-                        "SELECT content FROM investigation_messages WHERE id = ?",
+                        "SELECT content, metadata_json FROM investigation_messages WHERE id = ?",
                         (str(existing["user_message_id"]),),
                     ).fetchone()
                     if (
                         existing_content is None
                         or str(existing_content["content"]) != user_input
+                        or json.loads(existing_content["metadata_json"]) != user_metadata
                     ):
                         raise ClientMessageConflictError()
                     return self._turn(existing), True
@@ -875,8 +878,8 @@ class InvestigationStore:
                     """
                     INSERT INTO investigation_messages (
                         id, session_id, turn_id, role, content, client_message_id,
-                        sequence, created_at
-                    ) VALUES (?, ?, ?, 'user', ?, ?, ?, ?)
+                        sequence, created_at, metadata_json
+                    ) VALUES (?, ?, ?, 'user', ?, ?, ?, ?, ?)
                     """,
                     (
                         message_id,
@@ -886,6 +889,7 @@ class InvestigationStore:
                         client_message_id,
                         sequence,
                         now,
+                        json.dumps(user_metadata, ensure_ascii=False),
                     ),
                 )
                 connection.execute(
@@ -905,7 +909,8 @@ class InvestigationStore:
             if "uq_investigation_running_turn" in str(exc) or "UNIQUE constraint failed" in str(exc):
                 existing = self.get_turn_by_client_message(session_id, client_message_id)
                 if existing is not None:
-                    if self.get_user_message_for_turn(existing.id).content != user_input:
+                    message = self.get_user_message_for_turn(existing.id)
+                    if message.content != user_input or message.metadata != user_metadata:
                         raise ClientMessageConflictError() from exc
                     return existing, True
                 raise ConcurrentTurnError() from exc

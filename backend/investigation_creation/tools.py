@@ -237,7 +237,7 @@ M3_TOOL_DESCRIPTIONS = {
         "never just replace expected_revision to force a retry. This binds a temporary Draft, not formal save or execution."
     ),
     "create_ruleset_proposal": (
-        "Generate a temporary candidate 审核规则 using generation_request (objective/platform/requirements, "
+        "Author NEW 审核规则 from scratch, not a revision of existing rules. For partial changes, use open_resource_edit then update_resource_edit; temporary-only does not mean regenerate. Generate a temporary candidate using generation_request (objective/platform/requirements, "
         "requested_count only when explicitly specified). The dedicated author receives the complete "
         "rule-authoring instructions and returns validated content. Use content instead only to import "
         "an already supplied exact canonical resource, never to bypass a generation failure. "
@@ -254,7 +254,7 @@ M3_TOOL_DESCRIPTIONS = {
         "use only conditions that negate it, never identity/certification/reputation alone."
     ),
     "update_ruleset_proposal": (
-        "Update a current Session Proposal using proposal_id, expected_version and the complete "
+        "Replace a complete Session Proposal only when the user supplied an exact full replacement. For partial changes use update_resource_edit with edit_id=proposal_id instead of copying full content. Use proposal_id, expected_version and the complete "
         "new canonical 审核规则完整内容. Application maintains content_hash. Same content is a no-op. "
         "On stale version, read current content before editing; never assume an automatic merge. "
         "Preserve category_id, rule_id and ordering for unchanged semantics. This never approves, "
@@ -395,14 +395,16 @@ M3_PARAMETER_GUIDANCE = {
         'ID。'
     ),
     'create_ruleset_proposal': (
-        '新生成传 generation_request，包含 objective、platform、requirements 和用户明确要求的 requested_count。'
+        '仅从零新建规则传 generation_request。基于已有规则修改（含临时版）使用 open_resource_edit + update_resource_edit，不调用生成器。'
+        'generation_request 包含 objective、platform、requirements 和用户明确要求的 requested_count。'
         '不要把完整历史传入专用生成步骤。仅原样导入已给定内容才传 content；两者不能同时提供。'
         'content 是完整 审核规则完整内容 对象；不要用 canonical_content。分类和规则的名称字段均叫 name；风险字段叫 '
         'suggested_risk_level；分类和规则均须有 order，规则还须有 adjudication_notes。具体必填项先读 '
         'schema。成功后展示规则及搜索词，等后续明确采用；本轮已明确授权保存时可以先完成保存，不自动采用或启动。'
     ),
     'update_ruleset_proposal': (
-        '参数为 proposal_id、expected_version、content（完整新内容）。先读取当前提案，按 rule_id 修改目标并保持其他规则。不是局部 '
+        '仅用于用户提供完整替换内容；局部修改请用 update_resource_edit（edit_id=proposal_id），不要抄写整套规则。'
+        '参数为 proposal_id、expected_version、content（完整新内容）。不是局部 '
         'patch，也不传 ruleset_id。expected_version 必须逐字取自 get_ruleset_proposal 返回的 version，不可省略或自行加一。'
         '只有修改工具返回 status=ok 才能宣称修改完成，版本以返回结果为准；报错时如实说明未完成，不把拟修改文字当作已写入。'
     ),
@@ -470,6 +472,13 @@ def creation_tool_schemas():
     from copy import deepcopy
     from .rounds import TOOL_NAMES
     schemas = deepcopy(_ALL_CREATION_TOOL_SCHEMAS)
+    from backend.resource_management.edit_entry import active_edit
+    if active_edit.get():
+        schemas = tuple(s for s in schemas if s['name'] not in M3_MUTATION_TOOL_NAMES
+                        or s['name'] in {'open_resource_edit', 'update_resource_edit', 'save_resource'})
+        for schema in schemas:
+            if schema['name'] == 'open_resource_edit':
+                schema['description'] = '本轮用户已选中编辑副本。打开其原资源只返回这份现有副本，不另建、不切换来源。' + schema['description']
     if not settings.investigation_multi_round_enabled:
         return tuple(s for s in schemas if s['name'] not in TOOL_NAMES)
     for schema in schemas:
@@ -485,6 +494,7 @@ class InvestigationCreationToolService:
         self.application_service = application_service
         self.resource_generator = resource_generator or ResourceGenerator()
         self._conversation_turns: dict[str, str] = {}
+        self._edit_targets: dict[str, dict] = {}
         self._conversation_lock = RLock()
         self.session_run_resolver = None
         self._tool_start_observer: Callable[[str, str, str], None] | None = None
@@ -497,15 +507,18 @@ class InvestigationCreationToolService:
 
         self._tool_start_observer = observer
 
-    def begin_conversation_turn(self, session_id: str, turn_id: str) -> None:
+    def begin_conversation_turn(self, session_id: str, turn_id: str, *, resource_edit=None) -> None:
         with self._conversation_lock:
             if session_id in self._conversation_turns:
                 raise RuntimeError("Session already has an executing conversation turn")
             self._conversation_turns[session_id] = turn_id
+            if resource_edit:
+                self._edit_targets[session_id] = dict(resource_edit)
 
     def end_conversation_turn(self, session_id: str) -> None:
         with self._conversation_lock:
             self._conversation_turns.pop(session_id, None)
+            self._edit_targets.pop(session_id, None)
 
     @property
     def allowed_tool_names(self) -> frozenset[str]:
@@ -534,6 +547,10 @@ class InvestigationCreationToolService:
         create_operation: tuple[str, str] | None = None,
     ) -> dict[str, Any]:
         from . import rounds
+        from backend.resource_management.edit_entry import require_edit_operation
+        with self._conversation_lock:
+            edit_target = self._edit_targets.get(session_id)
+        require_edit_operation(edit_target, tool_name, arguments, M3_MUTATION_TOOL_NAMES)
         if tool_name in rounds.TOOL_NAMES and not settings.investigation_multi_round_enabled:
             raise ValueError('Multi-round investigations are disabled')
         if settings.investigation_multi_round_enabled:
@@ -581,6 +598,22 @@ class InvestigationCreationToolService:
                 generation_profile = keyword_profile_metadata(parsed.generation_request)
             content = self.resource_generator.generate(kind, parsed.generation_request)
             parsed = schema.model_validate({"content": content.model_dump(mode="json")})
+        if edit_target and tool_name == 'open_resource_edit':
+            from backend.resource_management.contracts import ResourceError
+            from backend.resource_management.snapshot_refs import tool_view
+            selected = self.application_service.resource_management.get_edit(
+                edit_target['edit_id'], session_id=session_id, principal=principal)
+            source = selected.get('source') or {}
+            if parsed.published_version is not None:
+                revision = source.get('published_revision_id')
+                if (not revision or self.application_service.resource_management.rulesets.get_published(
+                        revision, principal=principal)['version'] != parsed.published_version):
+                    raise ResourceError('指定发布版本与已选副本来源不一致。', code='RESOURCE_EDIT_TARGET_MISMATCH')
+            if (parsed.kind != selected['kind'] or parsed.resource_id != source.get('id')
+                    or parsed.revision_id and parsed.revision_id != source.get('published_revision_id')):
+                raise ResourceError('当前入口只能打开已选副本的原来源；请用 get_resource_edit 读取选中副本。',
+                                    code='RESOURCE_EDIT_TARGET_MISMATCH')
+            return tool_view(selected)
         if tool_name in RESOURCE_TOOL_INPUTS:
             result = execute_resource(self.application_service.resource_management, tool_name, parsed,
                                       session_id=session_id, principal=principal)
@@ -710,6 +743,18 @@ class InvestigationCreationToolService:
                 # validation, receipt fencing, replay, or mutation execution.
                 pass
         raw_arguments = _without_task_parameters(tool_name, dict(arguments or {}))
+        from backend.resource_management.edit_entry import require_edit_operation
+        from backend.resource_management.contracts import ResourceError
+        with self._conversation_lock:
+            target = self._edit_targets.get(identity.session_id)
+        try:
+            require_edit_operation(target, tool_name, raw_arguments, M3_MUTATION_TOOL_NAMES)
+        except ResourceError as exc:
+            return {'status': 'error', 'error': {'code': exc.code, 'message': str(exc)}}
+        from backend.resource_management.tool_recovery import argument_error
+        contract_error = argument_error(tool_name, raw_arguments)
+        if contract_error:
+            return contract_error
         if tool_name in M3_MUTATION_TOOL_NAMES:
             try:
                 M3_TOOL_INPUTS[tool_name].model_validate(raw_arguments)
