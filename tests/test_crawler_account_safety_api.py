@@ -58,7 +58,13 @@ def test_unknown_shared_exit_and_direct_flag_fail_closed(api, monkeypatch):
     assert not main._crawler_account_public_view(accounts.get(account['id']), principal[0])['collection_ready']
     monkeypatch.setattr(settings, 'crawler_direct_degrade_enabled', True)
     item = main._crawler_account_public_view(accounts.get(account['id']), principal[0])
+    assert not item['collection_ready'] and item['collection_block_reason'] == 'LOGIN_REVALIDATION_REQUIRED'
+    accounts.mark_direct_validated(account['id'], observed['shared_exit_generation'])
+    item = main._crawler_account_public_view(accounts.get(account['id']), principal[0])
     assert item['collection_ready'] and item['route_mode'] == 'direct_degraded'
+    monkeypatch.setattr(settings, 'crawler_direct_degrade_enabled', False)
+    assert not main._crawler_account_public_view(accounts.get(account['id']), principal[0])['collection_ready']
+    monkeypatch.setattr(settings, 'crawler_direct_degrade_enabled', True)
     with accounts._connect() as conn:
         conn.execute("UPDATE crawler_shared_exits SET pause_reason='ACCOUNT_CHALLENGE'")
     assert not main._crawler_account_public_view(accounts.get(account['id']), principal[0])['collection_ready']
