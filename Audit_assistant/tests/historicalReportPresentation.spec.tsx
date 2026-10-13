@@ -131,3 +131,44 @@ test("manual images have bounded preview controls and report links retain their 
   expect(malformed).not.toContain('<img');
   expect(malformed).not.toContain('<button');
 });
+
+
+test("bold account bare URL before Chinese explanation preserves target and emphasis", () => {
+  const url = "https://www.douyin.com/user/qa-xiaoming-post";
+  for (const suffix of ["（小明）在三份报告中的评论数量分布如下：", "，分布如下", "。", ""]) {
+    const html = renderMarkdown(`账号 **${url}**${suffix}`);
+    expect(html).toContain(`href="${url}"`);
+    expect(html).toContain(`<strong><a href="${url}"`);
+    expect(html).toContain(`>${url}</a></strong>${suffix}`);
+    expect(html).not.toContain(`${url}**`);
+  }
+});
+
+test("bold URL keeps Chinese query data while separating following explanation", () => {
+  const url = "https://example.test/?q=上海（旅游）&page=2";
+  const html = renderMarkdown(`账号 **${url}**（说明）`);
+  expect(html).toContain(`<strong><a href="${encodeURI(url).replaceAll("&", "&amp;")}"`);
+  expect(html).toContain(`>${url.replaceAll("&", "&amp;")}</a></strong>（说明）`);
+});
+
+test("bare URL query and fragment retain legal Chinese punctuation and parameters", () => {
+  for (const url of [
+    "https://example.test/?q=上海（旅游）&page=2",
+    "https://example.test/?q=上海，旅游&next=2#（详情）",
+    "https://example.test/#上海（旅游）",
+    "https://example.test/?q=%E4%B8%8A%E6%B5%B7%EF%BC%88%E6%97%85%E6%B8%B8%EF%BC%89&page=2"
+  ]) {
+    const html = renderMarkdown(url);
+    expect(html).toContain(`href="${encodeURI(url).replaceAll("%25", "%").replaceAll("&", "&amp;")}"`);
+  }
+});
+
+test("explicit links, literal stars, and normal Chinese prose retain their boundaries", () => {
+  const url = "https://example.test/path**?q=上海（旅游）&page=2";
+  const html = renderMarkdown(`[原帖](${url})`);
+  expect(html).toContain(`href="${encodeURI(url).replaceAll("&", "&amp;")}"`);
+  expect(html).toContain(">原帖</a>");
+  expect(renderMarkdown("https://example.test/path**，说明")).toContain('href="https://example.test/path**"');
+  expect(renderMarkdown("https://example.test/path，后续正文")).toContain('>https://example.test/path</a>，后续正文');
+  expect(renderMarkdown("`**https://example.test/path**` ")).toContain('<code>**https://example.test/path**</code>');
+});

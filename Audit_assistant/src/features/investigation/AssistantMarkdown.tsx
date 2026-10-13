@@ -67,26 +67,49 @@ function remarkHistoricalReportTerms() {
   return (tree: MarkdownNode) => transformDisplayTerms(tree);
 }
 
-// GFM includes adjacent Chinese punctuation/text in a bare URL. Split only
-// literal autolinks; explicit Markdown links and percent-encoded URLs stay intact.
+// GFM can consume the closing ** and adjacent Chinese prose as part of a
+// literal URL. Repair only a matching opening marker, never explicit links.
 function remarkChineseAutolinks() {
   return (tree: MarkdownNode, file: { value: unknown }) => {
     const source = String(file.value);
     const visit = (node: MarkdownNode) => {
       if (!node.children) return;
-      node.children = node.children.flatMap((child) => {
-        const raw = source.slice(child.position?.start.offset, child.position?.end.offset);
+      const children: MarkdownNode[] = [];
+      for (const child of node.children) {
+        const start = child.position?.start.offset;
+        const end = child.position?.end.offset;
+        const raw = start !== undefined && end !== undefined ? source.slice(start, end) : "";
         const text = child.children?.length === 1 ? child.children[0].value : undefined;
         if (child.type === "link" && /^https?:\/\//.test(raw) && text && child.url === text) {
+          const previous = children[children.length - 1];
+          const closing = text.search(/\*\*(?=[，。；：！？、（）【】《》“”‘’]|$)/);
+          if (closing > 0 && previous?.type === "text" && previous.value?.endsWith("**") &&
+              start !== undefined && source.slice(start - 2, start) === "**") {
+            previous.value = previous.value.slice(0, -2);
+            const url = text.slice(0, closing);
+            children.push({ type: "strong", children: [
+              { ...child, url, children: [{ type: "text", value: url }] }
+            ] });
+            const suffix = text.slice(closing + 2);
+            if (suffix) children.push({ type: "text", value: suffix });
+            continue;
+          }
           const cut = text.search(/[，。；：！？、（）【】《》“”‘’]/);
-          if (cut > 0) return [
-            { ...child, url: text.slice(0, cut), children: [{ type: "text", value: text.slice(0, cut) }] },
-            { type: "text", value: text.slice(cut) }
-          ];
+          const queryOrFragment = text.search(/[?#]/);
+          // Query/fragment punctuation can be real data (e.g. q=上海（旅游）).
+          // Its boundary is ambiguous, so do not truncate it as Chinese prose.
+          if (cut > 0 && (queryOrFragment < 0 || cut < queryOrFragment)) {
+            children.push(
+              { ...child, url: text.slice(0, cut), children: [{ type: "text", value: text.slice(0, cut) }] },
+              { type: "text", value: text.slice(cut) }
+            );
+            continue;
+          }
         }
         visit(child);
-        return [child];
-      });
+        children.push(child);
+      }
+      node.children = children;
     };
     visit(tree);
   };
