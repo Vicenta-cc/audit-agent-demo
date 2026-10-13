@@ -27,6 +27,7 @@ CHALLENGE_SELECTORS = (
 )
 SAFE_IFRAME_HOSTS = {"lf-rc1.yhgfb-cn-static.com"}
 LOGIN_ENTRY_READY_SECONDS = 12
+LOGIN_DOCUMENT_READY_SECONDS = 60
 
 
 def document_allowed(url: str, *, top_level: bool) -> bool:
@@ -748,9 +749,25 @@ class DouyinLoginAdapter:
 
     async def open_login(self):
         from scripts.crawler_account_login import PLATFORMS
+        from playwright.async_api import TimeoutError
+
+        wait_for_load_state = getattr(self.page, "wait_for_load_state", None)
+        if callable(wait_for_load_state):
+            try:
+                await wait_for_load_state(
+                    "domcontentloaded", timeout=LOGIN_DOCUMENT_READY_SECONDS * 1000
+                )
+            except TimeoutError:
+                # The bounded entry loop below still records whether Douyin
+                # exposed a usable login control on a partially loaded page.
+                pass
 
         loop = asyncio.get_running_loop()
         deadline = loop.time() + LOGIN_ENTRY_READY_SECONDS
+        max_candidates = 0
+        click_attempts = 0
+        click_successes = 0
+        click_timeouts = 0
 
         async def opened():
             return bool(
@@ -789,12 +806,15 @@ class DouyinLoginAdapter:
         while True:
             if await opened():
                 return
-            for trigger in await candidates():
-                from playwright.async_api import TimeoutError
-
+            visible_candidates = await candidates()
+            max_candidates = max(max_candidates, len(visible_candidates))
+            for trigger in visible_candidates:
+                click_attempts += 1
                 try:
                     await trigger.click(timeout=2000)
+                    click_successes += 1
                 except TimeoutError:
+                    click_timeouts += 1
                     if self.page.is_closed() or not document_allowed(
                         self.page.url, top_level=True
                     ):
@@ -815,6 +835,23 @@ class DouyinLoginAdapter:
                         return
                     await asyncio.sleep(0.1)
             if loop.time() >= deadline:
+                try:
+                    ready_state = await self.page.evaluate("document.readyState")
+                except Exception:
+                    ready_state = "unknown"
+                if ready_state not in {"loading", "interactive", "complete"}:
+                    ready_state = "unknown"
+                self.login_entry_diagnostic = {
+                    "method": "click",
+                    "timeout_ms": 2000,
+                    "panel_present": False,
+                    "qr_present": False,
+                    "candidate_count": max_candidates,
+                    "click_attempts": click_attempts,
+                    "click_successes": click_successes,
+                    "click_timeouts": click_timeouts,
+                    "ready_state": ready_state,
+                }
                 raise ValueError("LOGIN_PREPARATION_FAILED")
             await asyncio.sleep(0.1)
 

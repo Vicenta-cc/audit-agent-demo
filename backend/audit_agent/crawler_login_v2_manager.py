@@ -1256,8 +1256,30 @@ class CrawlerLoginV2Manager:
                         safe_frame = (
                             f"{frame['file']}:{frame['function']}:{frame['line']}"
                         )
+                    login_entry = event.get("login_entry")
+                    safe_entry = None
+                    if isinstance(login_entry, dict):
+                        counts = {
+                            key: login_entry.get(key)
+                            for key in (
+                                "candidate_count",
+                                "click_attempts",
+                                "click_successes",
+                                "click_timeouts",
+                            )
+                        }
+                        if all(
+                            type(value) is int and 0 <= value <= 10000
+                            for value in counts.values()
+                        ) and login_entry.get("ready_state") in {
+                            "loading",
+                            "interactive",
+                            "complete",
+                            "unknown",
+                        }:
+                            safe_entry = {**counts, "ready_state": login_entry["ready_state"]}
                     logger.warning(
-                        "Douyin login failure operation=%s stage=%s exception_class=%s pattern=%s method=%s timeout_ms=%s source=%s",
+                        "Douyin login failure operation=%s stage=%s exception_class=%s pattern=%s method=%s timeout_ms=%s source=%s login_entry=%s",
                         s.operation_id,
                         stage,
                         exception_class,
@@ -1265,6 +1287,7 @@ class CrawlerLoginV2Manager:
                         method,
                         timeout_ms,
                         safe_frame,
+                        safe_entry,
                     )
             elif kind == "diagnostic":
                 phase = event.get("phase")

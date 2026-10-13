@@ -830,6 +830,7 @@ class DouyinLoginV2:
             method=match.group(1) if match else None,
             timeout_ms=timeout_ms,
             source_frame=source_frame,
+            login_entry=getattr(self.adapter, "login_entry_diagnostic", None),
         )
 
     def authentication_pending(self, observation, auth_signal):
