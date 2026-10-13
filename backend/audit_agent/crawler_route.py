@@ -12,10 +12,16 @@ import threading
 import time
 import json
 import secrets
+import logging
 from dataclasses import dataclass, asdict
 from functools import lru_cache
 
 from .config import settings
+
+BROWSER_GUARD_REASONS = frozenset({'BOUND_REQUEST_GUARD','BOUND_RUNTIME_GUARD','BOUND_DATABASE_GUARD',
+    'SHARED_ADMISSION_GUARD','SHARED_COOLDOWN_GUARD','SHARED_REQUEST_LIMIT','SHARED_ACTIVE_LIMIT',
+    'PAGE_REQUEST_LIMIT','PAGE_ROLLING_LIMIT','PAGE_LIFETIME_LIMIT','PAGE_BYTE_LIMIT','PAGE_SIZES_FAILED',
+    'CDP_GUARD_TIMEOUT','CDP_GUARD_FAILED','PERIODIC_PROBE_GUARD'})
 
 
 @lru_cache(maxsize=8)
@@ -880,6 +886,18 @@ class RouteReceiptPipe:
                             return result
                         value = json.loads(line, object_pairs_hook=unique)
                         snapshot = self.snapshot
+                        if isinstance(value,dict) and value.get('type')=='browser_guard_stopped':
+                            fields={'type','operation_id','owner_id','lease_version','snapshot_digest','context_id','reason'}
+                            if (set(value)!=fields or not snapshot.managed or type(value['lease_version']) is not int
+                                    or type(value['reason']) is not str or value['reason'] not in BROWSER_GUARD_REASONS
+                                    or any(type(value[key]) is not str or value[key]!=getattr(snapshot,key) for key in fields-{'type','reason','lease_version'})
+                                    or value['lease_version']!=snapshot.lease_version):
+                                return
+                            with self.bundle._lock:
+                                if not getattr(self.bundle,'browser_guard_first_reason',None):
+                                    self.bundle.browser_guard_first_reason=value['reason']
+                                    logging.getLogger(__name__).warning('browser_guard_stopped reason=%s',value['reason'])
+                            continue
                         if isinstance(value,dict) and value.get('type')=='route_fault':
                             if set(value)!={'type','event'}:
                                 return

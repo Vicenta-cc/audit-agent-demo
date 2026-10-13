@@ -143,9 +143,12 @@ class DouyinLoginAdapter:
                 )
             try:
                 await asyncio.wait_for(cdp.send(method, params), 3)
-            except Exception:
+            except Exception as exc:
                 # A failed guard must not leave a browser navigation parked forever.
                 if not page.is_closed():
+                    session=self.bound_proxy_session or getattr(self.context,'_bound_proxy_session',None)
+                    if session is not None:
+                        session.record_browser_guard_stop('CDP_GUARD_TIMEOUT' if isinstance(exc,asyncio.TimeoutError) else 'CDP_GUARD_FAILED')
                     await page.close()
 
         cdp.on("Fetch.requestPaused", lambda event: self.task(paused(event)))
