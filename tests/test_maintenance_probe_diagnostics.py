@@ -65,7 +65,7 @@ def test_actual_subprocess_diagnostic_does_not_replace_probe_error(tmp_path,monk
     assert 'execution_id=login-safe stage=http_echo' in caplog.text
 
 
-@pytest.mark.parametrize('failure',['partial_result','no_result','drain'])
+@pytest.mark.parametrize('failure',['partial_result','no_result','drain','profile_drain'])
 def test_failed_child_or_unconfirmed_drain_cannot_retire_health(tmp_path,monkeypatch,failure):
     c=app.route_contract()
     snapshot=c.BoundRoute('dy','a',c.derive_profile_key('a'),'p',1,1,'127.0.0.1',9,'','',time.time()+120,'203.0.113.10',time.time(),str(tmp_path/'gate.db'),c.derive_scope_ids('dy','a','p','203.0.113.10'))
@@ -75,7 +75,7 @@ def test_failed_child_or_unconfirmed_drain_cannot_retire_health(tmp_path,monkeyp
     def child(command,**kwargs):
         if len(command)>1 and command[1].endswith('crawler_proxy_probe.py'):
             output='' if failure=='no_result' else 'PROXY_PROBE_RESULT '+json.dumps(result)
-            script="import os;os.read(int(os.environ['MEDIACRAWLER_PROXY_CONFIG_FD']),65536);print("+repr(output)+",flush=True);raise SystemExit("+('0' if failure=='drain' else '1')+")"
+            script="import os;os.read(int(os.environ['MEDIACRAWLER_PROXY_CONFIG_FD']),65536);print("+repr(output)+",flush=True);raise SystemExit("+('0' if failure in {'drain','profile_drain'} else '1')+")"
             return original([sys.executable,'-c',script],**kwargs)
         return original(command,**kwargs)
     monkeypatch.setattr(subprocess,'Popen',child)
@@ -83,5 +83,8 @@ def test_failed_child_or_unconfirmed_drain_cannot_retire_health(tmp_path,monkeyp
     if failure=='drain':
         def failed_drain(process):raise app.CollectionRouteError('PROXY_UNAVAILABLE')
         monkeypatch.setattr(app,'_stop_probe_process_group',failed_drain)
+    elif failure=='profile_drain':
+        def failed_profile(account_id):raise app.CollectionRouteError('PROXY_BUSY')
+        monkeypatch.setattr(app,'assert_profile_browser_stopped',failed_profile)
     with pytest.raises(app.CollectionRouteError):app._run_maintenance_probe(bundle,timeout=5)
     assert retired==[]

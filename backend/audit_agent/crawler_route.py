@@ -1460,6 +1460,7 @@ def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_id
             if process is not None:
                 _stop_probe_process_group(process)
                 if verified_receipt is not None:
+                    assert_profile_browser_stopped(snapshot.account_id)
                     _retire_verified_probe_uncertainty(bundle,verified_receipt)
         finally:
             if process is not None and process.stdout is not None:
