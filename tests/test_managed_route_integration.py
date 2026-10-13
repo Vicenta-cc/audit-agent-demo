@@ -82,7 +82,7 @@ def test_ambiguous_or_risk_faults_never_degrade(error):
         observed_exit='198.51.100.8',shared_exit_key='198.51.100.8',old_context_drained=True)
 
 
-@pytest.mark.parametrize('mode,fault',[('proxy_preferred','none'),('direct_degraded','none'),('proxy_preferred','407'),('proxy_preferred','429'),('direct_degraded','429')])
+@pytest.mark.parametrize('mode,fault',[('proxy_preferred','none'),('direct_degraded','none'),('proxy_preferred','407'),('proxy_preferred','429'),('direct_degraded','429'),('proxy_preferred','capacity')])
 def test_real_browser_managed_ack_and_explicit_transport(tmp_path,monkeypatch,mode,fault):
     import http.server
     import ssl
@@ -159,6 +159,17 @@ async def main():
   assert session.context_id==snap.context_id
   print('BROWSER_ACK_OK',flush=True)
   import sqlite3
+  if config['stop']=='capacity':
+   page=await context.new_page();await page.goto(config['target'],wait_until='domcontentloaded');await asyncio.sleep(.1)
+   tokens=[session._reserve_browser_request() for _ in range(32)]
+   fetches=asyncio.create_task(page.evaluate('url => Promise.all(Array.from({length:40},(_,i) => fetch(url+"/capacity?i="+i).then(r=>r.text())))',config['target']))
+   await asyncio.sleep(.15)
+   assert not fetches.done() and not page.is_closed() and not getattr(session,'_browser_guard_first_reason',None)
+   for token in tokens:session._release_browser_token(token)
+   await asyncio.wait_for(fetches,10)
+   assert not page.is_closed() and not getattr(session,'_browser_guard_first_reason',None)
+   with session.budget._connect() as db:assert db.execute('SELECT SUM(active) FROM collection_browser_requests').fetchone()[0]<=32
+   await page.close();print('BROWSER_CAPACITY_QUEUED',flush=True)
   if config['stop']=='429':
    session.enter_cooldown('http_429',30)
   else:
@@ -194,6 +205,9 @@ asyncio.run(main())
                 return
             assert child.returncode==0,err[-2500:]
             assert 'BROWSER_ACK_OK' in out and 'BROWSER_PAUSE_FENCED' in out
+            if fault=='capacity':
+                assert 'BROWSER_CAPACITY_QUEUED' in out
+                assert sum('/capacity?' in o['path'] for o in fixture.origins)==40
             with __import__('sqlite3').connect(snap.scheduler_db_path) as db:
                 assert not db.execute('SELECT 1 FROM collection_route_health').fetchone()
             if mode=='proxy_preferred':
