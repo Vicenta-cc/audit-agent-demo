@@ -16,6 +16,53 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+@pytest.mark.parametrize("role", [True, False])
+def test_real_semantic_login_entry_waits_for_hydration_and_opens_qr(tmp_path, role):
+    import cv2
+    from backend.audit_agent.crawler_browser import load_account_browser
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
+
+    qr = cv2.QRCodeEncoder_create().encode("https://fixture.invalid/login-entry")
+    qr = cv2.copyMakeBorder(qr, 4, 4, 4, 4, cv2.BORDER_CONSTANT, value=255)
+    qr = cv2.resize(qr, (180, 180), interpolation=cv2.INTER_NEAREST)
+    _, png = cv2.imencode(".png", qr)
+    data = base64.b64encode(png).decode()
+    attribute = 'role="button"' if role else ""
+    html = f"""<div style="display:none">登录</div>
+    <div id="header" {attribute} style="display:none" onclick="panel.style.display='block';window.clicked=true"><span>登录</span></div>
+    <div id="panel" class="douyin_login_new_class" style="display:none;width:400px;height:300px">
+    <div id="animate_qrcode_container"><img src="data:image/png;base64,{data}"></div></div>
+    <script>setTimeout(()=>header.style.display='block',250)</script>"""
+
+    async def run():
+        browser = load_account_browser()
+        context, _ = await browser.launch_account_context(
+            "login-entry-fixture", tmp_path, headless=True
+        )
+        try:
+            page = await context.new_page()
+
+            async def fixture(route):
+                if route.request.url == "https://www.douyin.com/login-entry-fixture":
+                    await route.fulfill(body=html, content_type="text/html; charset=utf-8")
+                else:
+                    await route.abort()
+
+            await context.route("**/*", fixture)
+            await page.goto("https://www.douyin.com/login-entry-fixture")
+            adapter = DouyinLoginAdapter(context, page)
+            await adapter.open_login()
+            assert await page.evaluate("window.clicked") is True
+            assert (await adapter.observe())["phase"] == "qr_ready"
+            await page.evaluate("window.clicked=false")
+            await adapter.open_login()
+            assert await page.evaluate("window.clicked") is False
+        finally:
+            await context.close()
+
+    asyncio.run(run())
+
+
 def test_real_capture_preserves_native_text_caret(tmp_path):
     import cv2
     import numpy as np

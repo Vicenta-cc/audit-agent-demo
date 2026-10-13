@@ -2030,6 +2030,41 @@ def test_login_entry_click_timeout_accepts_only_actual_same_page_postcondition()
     asyncio.run(scenario(True, False))
 
 
+def test_login_entry_without_control_fails_explicitly_after_bounded_wait(monkeypatch):
+    from unittest.mock import AsyncMock
+    from scripts import crawler_douyin_login_adapter as module
+
+    async def run():
+        empty = SimpleNamespace(
+            first=SimpleNamespace(is_visible=AsyncMock(return_value=False)),
+            count=AsyncMock(return_value=0),
+        )
+        page = SimpleNamespace(
+            url="https://www.douyin.com",
+            get_by_role=lambda *args, **kwargs: empty,
+            get_by_text=lambda *args, **kwargs: empty,
+        )
+        adapter = module.DouyinLoginAdapter(None, page)
+        adapter.visible = AsyncMock(return_value=None)
+        waited = []
+        clock = [0.0]
+
+        async def sleep(seconds):
+            waited.append(seconds)
+            clock[0] += seconds
+
+        monkeypatch.setattr(module.asyncio, "sleep", sleep)
+        monkeypatch.setattr(
+            module.asyncio, "get_running_loop",
+            lambda: SimpleNamespace(time=lambda: clock[0]),
+        )
+        with __import__("pytest").raises(ValueError, match="LOGIN_PREPARATION_FAILED"):
+            await adapter.open_login()
+        assert 2 <= sum(waited) < 2.2
+
+    asyncio.run(run())
+
+
 def test_qr_error_after_verification_panel_disappears_enters_bounded_identity():
     from unittest.mock import AsyncMock
     from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter

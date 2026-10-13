@@ -393,7 +393,9 @@ class DouyinLoginAdapter:
         return self.identity
 
     async def visible(self, selector):
-        matches = self.page.locator(selector)
+        return await self.visible_match(self.page.locator(selector))
+
+    async def visible_match(self, matches):
         locator = matches.first
         try:
             if await locator.is_visible(timeout=100):
@@ -744,13 +746,26 @@ class DouyinLoginAdapter:
         return None
 
     async def open_login(self):
-        if await self.visible(PANEL_SELECTOR):
-            return
         from scripts.crawler_account_login import PLATFORMS
 
-        for selector in PLATFORMS["dy"]["login_triggers"]:
-            trigger = await self.visible(selector)
-            if trigger:
+        deadline = asyncio.get_running_loop().time() + 2
+        while True:
+            if await self.visible(PANEL_SELECTOR):
+                return
+            trigger = None
+            for selector in PLATFORMS["dy"]["login_triggers"]:
+                trigger = await self.visible(selector)
+                if trigger is not None:
+                    break
+            if trigger is None and document_allowed(self.page.url, top_level=True):
+                trigger = await self.visible_match(
+                    self.page.get_by_role("button", name="登录", exact=True)
+                )
+                if trigger is None:
+                    trigger = await self.visible_match(
+                        self.page.get_by_text("登录", exact=True)
+                    )
+            if trigger is not None:
                 from playwright.async_api import TimeoutError
 
                 try:
@@ -771,6 +786,9 @@ class DouyinLoginAdapter:
                     if not (panel_present or qr_present):
                         raise
                 return
+            if asyncio.get_running_loop().time() >= deadline:
+                raise ValueError("LOGIN_PREPARATION_FAILED")
+            await asyncio.sleep(0.1)
 
     async def close(self):
         self._closed = True
