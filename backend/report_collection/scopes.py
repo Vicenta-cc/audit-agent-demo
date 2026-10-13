@@ -61,6 +61,21 @@ def history_sources(service, session, turn):
     return sources
 
 
+def registered_history_sources(service, session, refs):
+    """Resolve exact registered snapshots, without reopening unrelated history."""
+    principal=service.conversation.principal_for_session(session)
+    found={}
+    with service.connect() as db:
+        for ref in dict.fromkeys(refs):
+            row=db.execute('SELECT payload FROM collection_history_sources WHERE session=? AND ref=?',
+                           (session,ref)).fetchone()
+            if row:
+                source=json.loads(row[0])
+                service.authorize(source,principal)
+                found[ref]=source
+    return found
+
+
 def validate_result_sources(service, session, data, current):
     principal=service.conversation.principal_for_session(session)
     allowed={s['ref']:s for s in current}

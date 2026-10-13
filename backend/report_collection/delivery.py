@@ -49,8 +49,12 @@ def render_delivery(service,args,session,turn,sources,*,pages=None):
     for index,ref in enumerate(refs):
         data=service.result(ref,session,sources)
         service.pin_selection(session,turn,data['sources'])
-        if data['kind'] not in {'comments','accounts'}: raise ValueError('此结果不支持列表直出。')
+        if data['kind'] not in {'comments','accounts','account_activity'}: raise ValueError('此结果不支持列表直出。')
         if 'query_filters' not in data: raise ValueError('旧结果缺少查询条件，请重新查询后交付。')
+        # Activity queries and comment queries share the same immutable rows.
+        # Adapt their presentation, never silently change the chosen activity kind.
+        if data['kind']=='account_activity' and data['query_filters'].get('activity_kind')=='comment_author':
+            data={**data,'kind':'comments'}
         all_rows=data['items']
         start=pages[index]['start'] if pages else 0
         end=pages[index]['end'] if pages else len(all_rows)
@@ -67,6 +71,8 @@ def render_delivery(service,args,session,turn,sources,*,pages=None):
             scope.append('排序：'+{'comment_count':'去重评论数','post_count':'去重帖子数','observation_count':'收录数'}.get(filters['sort_by'],'未知')+'降序')
         if filters.get('top_n'):scope.append('前'+str(filters['top_n'])+'名及并列')
         if filters.get('account_ref'):scope.append('仅统计指定账号')
+        if data['kind']=='account_activity':
+            scope.append('活动：'+{'post_author':'本人发帖','all':'本人发帖及评论'}.get(filters.get('activity_kind'),'本人活动'))
         if filters.get('text_exact') is not None:scope.append('评论原文为“'+cell(filters['text_exact'])+'”')
         if filters.get('parent_result_ref'):scope.append('仅统计此前选定的内容')
         if filters.get('common_only'):scope.append('仅统计所有所选报告都出现的账号')
@@ -74,17 +80,29 @@ def render_delivery(service,args,session,turn,sources,*,pages=None):
         # IDs. Full identities and immutable sources remain in structured metadata.
         identities={}
         for row in all_rows:
-            name=(row.get('account_name') or '未署名') if data['kind']=='comments' else ('、'.join(row['names']) or '未署名')
+            name=(row.get('account_name') or '未署名') if data['kind']!='accounts' else ('、'.join(row['names']) or '未署名')
             if row.get('account_ref'):identities.setdefault(name,set()).add(row['account_ref'])
         def author(row):
-            name=(row.get('account_name') or '未署名') if data['kind']=='comments' else ('、'.join(row['names']) or '未署名')
+            name=(row.get('account_name') or '未署名') if data['kind']!='accounts' else ('、'.join(row['names']) or '未署名')
             identity=row.get('account_ref')
             if not identity:return cell(name)+'（身份待确认）'
             ids=sorted(identities[name])
             suffix=f'（本表账号{ids.index(identity)+1}）' if len(ids)>1 else ''
             return cell(name)+suffix
         lines=[]
-        if data['kind']=='comments':
+        if data['kind']=='account_activity':
+            posts=len({r['evidence_key'] for r in all_rows if r['kind']=='post_author'})
+            comments=len({r['evidence_key'] for r in all_rows if r['kind']=='comment_author'})
+            lines=[f'**账号活动 · {len(all_rows)} 条收录记录**','；'.join(scope)+'。',
+                f'{posts} 篇原始帖子，{comments} 条原始评论；'+progress,
+                '| 序号 | 活动 | 帖子标题／评论原文 | 账号 | 风险判断 | 来源 |',
+                '| --- | --- | --- | --- | --- | --- |']
+            for i,row in enumerate(rows,start+1):
+                risk=RISK.get(row['risk_level'],'待确认') if row['audit_status']=='completed' else '未完成研判'
+                source=' · '.join(filter(None,(cell(row['source']['label']),source_links(row))))
+                role='本人发帖' if row['kind']=='post_author' else '本人评论'
+                lines.append(f"| {i} | {role} | {cell(row['text'])} | {author(row)} | {risk} | {source} |")
+        elif data['kind']=='comments':
             unique=len({r['evidence_key'] for r in all_rows})
             completed=sum(r['audit_status']=='completed' for r in all_rows)
             lines=[f'**评论明细 · {len(all_rows)} 条记录**', '；'.join(scope)+'。',

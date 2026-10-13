@@ -185,6 +185,9 @@ class ReportCollectionService:
         data = json.loads(row['payload'])
         from .scopes import validate_result_sources
         validate_result_sources(self, session, data, sources)
+        if self.agent_driven:
+            from .history_query import validate_saved
+            validate_saved(data)
         return data
 
     def previous(self, session, sources):
@@ -202,15 +205,20 @@ class ReportCollectionService:
 
     def select(self, session, turn, args):
         sources = self.sources(session,turn)
-        if args.get('scope') == 'authorized_history':
-            if not self.agent_driven or args.get('report_refs'):
-                raise ValueError('历史范围须独立选择，不可同时传会话报告引用。')
+        if args.get('report_refs'):
+            by_ref = {s['ref']:s for s in sources}
+            if self.agent_driven:
+                from .scopes import registered_history_sources
+                by_ref.update(registered_history_sources(self, session, [
+                    ref for ref in args['report_refs'] if ref not in by_ref]))
+            if any(r not in by_ref for r in args['report_refs']):
+                raise PermissionError('报告引用不属于当前会话已登记的报告；未执行查询。')
+            selected = [by_ref[r] for r in dict.fromkeys(args['report_refs'])]
+        elif args.get('scope') == 'authorized_history':
+            if not self.agent_driven:
+                raise ValueError('当前模式不支持授权历史查询。')
             from .scopes import history_sources
             selected = history_sources(self, session, turn)
-        elif args.get('report_refs'):
-            by_ref = {s['ref']:s for s in sources}
-            if any(r not in by_ref for r in args['report_refs']): raise PermissionError('报告超出本轮会话范围。')
-            selected = [by_ref[r] for r in dict.fromkeys(args['report_refs'])]
         elif args.get('scope') == 'all':
             selected = sources
         else:
@@ -353,6 +361,13 @@ class ReportCollectionService:
             self.focus(session,turn,data['result_ref'])
             return self.page(data,args['limit'],args['offset'])
         selected=self.select(session,turn,args)
+        from .history_query import constrain, historical, candidates
+        if self.agent_driven:
+            args=constrain(self,name,args,session,sources,selected)
+        is_history=self.agent_driven and historical(args,selected)
+        if (is_history and name=='query_conversation_reports' and args['kind']=='accounts'
+                and (args.get('name_contains') or args.get('account_url'))):
+            return candidates(self,args,session,turn,selected)
         if name=='query_account_activity':
             from .capabilities import activity
             return activity(self,args,session,turn,selected)
@@ -407,14 +422,14 @@ class ReportCollectionService:
             if previous['kind']=='comments':
                 include_posts = False
                 refs={r['comment_ref'] for r in previous['items']}; rows=[r for r in rows if r['comment_ref'] in refs]
-            elif previous['kind']=='accounts':
+            elif previous['kind'] in {'accounts','account_candidates'}:
                 refs={r['account_ref'] for r in previous['items']}; rows=[r for r in rows if r['account_ref'] in refs]
             else: raise ValueError('此结果不包含账号或评论。')
         if args.get('account_ref'):
             from .capabilities import account_exists
             account_exists(self,args['account_ref'],session,sources,self.observations(selected))
             rows=[r for r in rows if r['account_ref']==args['account_ref']]
-        if args.get('name_contains'):
+        if args.get('name_contains') and not args.get('account_url'):
             if args['kind']!='accounts': raise ValueError('昵称检索用于账号候选；先确认账号后查询评论。')
             term=args['name_contains'].casefold()
             refs={r['account_ref'] for r in rows if term in r['account_name'].casefold() and r['account_ref']}
@@ -489,15 +504,22 @@ class ReportCollectionService:
                 expression_metadata['comment_counts'] = comment_counts(rows)
         if self.agent_driven and (self.express_results or self.direct_delivery):
             expression_metadata['query_filters'] = {
-                key: args.get(key) for key in ('risk_level', 'account_ref', 'common_only', 'from_result_ref', 'name_contains','sort_by','top_n')}
+                key: args.get(key) for key in ('risk_level', 'account_ref', 'account_url', 'common_only', 'from_result_ref', 'name_contains','sort_by','top_n')}
             expression_metadata['query_filters']['parent_result_ref'] = parent_ref or None
             if self.analysis_tools:
                 expression_metadata['query_filters']['text_exact'] = args.get('text_exact')
             if self.direct_delivery:
                 expression_metadata['query_filters']['account_role'] = role
+        if is_history:
+            expression_metadata['history_contract']={'version':1,'account_ref':args['account_ref']}
+            # Per-report population statistics concern other accounts and are
+            # not part of account penetration. Keep the account-filtered counts.
+            report_totals=[]
+            identity_coverage={'basis':'account_bound_history',
+                'limitation':'缺少可靠身份的记录不能确认属于该账号，未纳入账号明细。'}
         return self.save(session,turn,selected,args['kind'],items,args['limit'],
             **expression_metadata,
-            scope_kind='authorized_history' if args.get('scope')=='authorized_history' else ('single_report' if len(selected)==1 else 'conversation_reports'),
+            scope_kind='authorized_history' if is_history else ('single_report' if len(selected)==1 else 'conversation_reports'),
             report_totals=report_totals,identity_coverage=identity_coverage,
             matching_count_before_top=matching_count,ranking_includes_ties=bool(args.get('top_n')),
             unresolved_identity_posts=sum(not r['account_ref'] and r['kind']=='post_author' for r in rows),

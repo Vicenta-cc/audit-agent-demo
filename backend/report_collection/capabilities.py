@@ -4,6 +4,8 @@ from .service import reference, public_source
 
 
 def account_exists(service, ref, session, sources, rows):
+    if not ref:
+        raise ValueError('请提供 account_ref 或完整 account_url，未执行账号查询。')
     if any(row['account_ref']==ref for row in rows): return
     # A known account can have zero occurrences in a newly narrowed report.
     with service.connect() as db:
@@ -21,6 +23,8 @@ def activity(service,args,session,turn,selected):
     rows=[r for r in rows if r['account_ref']==ref]
     if args.get('activity_kind')!='all':
         rows=[r for r in rows if r['kind']==args['activity_kind']]
+    if args.get('risk_level'):
+        rows=[r for r in rows if r['audit_status']=='completed' and r['risk_level']==args['risk_level']]
     if args.get('target_account_ref'):
         target=args['target_account_ref']
         account_exists(service,target,session,service.sources(session,turn),service.observations(selected))
@@ -34,13 +38,15 @@ def activity(service,args,session,turn,selected):
         'original_comment_count':len({r['evidence_key'] for r in values}),
         'report_observation_count':len(values),'parent_post_count':len({r['post_id'] for r in values})}
         for target,values in sorted(relations.items())]
+    from .history_query import historical
+    is_history=historical(args,selected)
+    contract={'history_contract':{'version':1,'account_ref':ref}} if is_history else {}
     from .analysis import query_statistics
-    statistics = query_statistics(rows, selected,
+    contract['query_statistics'] = query_statistics(rows, selected,
         include_comments=args.get('activity_kind') != 'post_author',
         include_posts=args.get('activity_kind') != 'comment_author' and not args.get('target_account_ref'))
-    return service.save(session,turn,selected,'account_activity',rows,args['limit'],
-        query_statistics=statistics,
-        account_ref=ref,scope_kind='authorized_history' if args['scope']=='authorized_history' else ('single_report' if len(selected)==1 else 'conversation_reports'),
+    return service.save(session,turn,selected,'account_activity',rows,args['limit'],**contract,
+        account_ref=ref,scope_kind='authorized_history' if is_history else ('single_report' if len(selected)==1 else 'conversation_reports'),
         statistics={'original_comments':len({r['evidence_key'] for r in rows if r['kind']=='comment_author'}),
                     'original_posts':len({r['evidence_key'] for r in rows if r['kind']=='post_author'}),
                     'report_observations':len(rows),'unknown_timestamps':sum(not r.get('published_at') for r in rows)},

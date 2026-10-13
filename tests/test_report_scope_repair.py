@@ -37,7 +37,7 @@ def test_three_scopes_historical_does_not_join_and_revoked_focus(collection):
     assert {r['label'] for r in ask(s,t,'list_conversation_reports')['reports']}=={'A','B'}
     finish(s,t);t=begin(s)
     assert ask(s,t,kind='comments',report_refs=[refs['B']],account_ref=known)['total_count']==1
-    history=ask(s,t,scope='authorized_history');finish(s,t)
+    history=ask(s,t,scope='authorized_history',account_ref=known);finish(s,t)
     with s['creation_store'].admission.connect() as db:
         db.execute("UPDATE task_admissions SET owner_id='revoked' WHERE task_id=?",(s['reports']['C'].task,))
     t=begin(s)
@@ -61,7 +61,7 @@ def test_nickname_candidates_ranking_and_unknown_identity(make_collection):
 def test_activity_uses_full_rows_not_twenty_preview(make_collection):
     s=setup(make_collection('paging'));t=begin(s)
     account=ask(s,t,kind='accounts',name_contains='常来看看')['items'][0]
-    activity=ask(s,t,'query_account_activity',account_ref=account['account_ref'],limit=1)
+    activity=ask(s,t,'query_account_activity',account_ref=account['account_ref'],activity_kind='all',limit=1)
     assert activity['statistics']['original_comments']==25
     assert activity['statistics']['original_posts']==1
     assert activity['total_count']==26 and activity['has_more']

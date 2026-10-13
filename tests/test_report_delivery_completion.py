@@ -12,7 +12,7 @@ from backend.report_collection.delivery import pending_delivery
 
 def test_history_access_note_uses_reauthorized_result_sources(collection):
     s=setup(collection);t=begin(s)
-    history=ask(s,t,scope='authorized_history')
+    history=ask(s,t,scope='authorized_history',account_url='https://www.douyin.com/user/same-user')
     raw=s['collection'].result(history['result_ref'],s['sid'],s['collection'].sources(s['sid'],t))
     labels=[r['label'] for r in raw['sources']]
     result=ask(s,t,'deliver_conversation_results',result_refs=[history['result_ref']],report_labels=labels+['D'])
