@@ -393,11 +393,25 @@ class DouyinLoginAdapter:
         return self.identity
 
     async def visible(self, selector):
-        locator = self.page.locator(selector).first
+        matches = self.page.locator(selector)
+        locator = matches.first
         try:
-            return locator if await locator.is_visible(timeout=100) else None
+            if await locator.is_visible(timeout=100):
+                return locator
+        except Exception:
+            pass
+        try:
+            count = min(await matches.count(), 20)
         except Exception:
             return None
+        for index in range(1, count):
+            candidate = matches.nth(index)
+            try:
+                if await candidate.is_visible(timeout=100):
+                    return candidate
+            except Exception:
+                continue
+        return None
 
     async def region(self, challenge_only=False):
         selectors = (

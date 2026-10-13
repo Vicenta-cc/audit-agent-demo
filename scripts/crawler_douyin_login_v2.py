@@ -1107,32 +1107,73 @@ class DouyinLoginV2:
         # Parent owns success and eligibility. Only commit acknowledgement permits exit.
 
     async def capture_preparing_evidence(self, stage):
-        if stage not in {'preparing_fallback','preparing_failed'}:return
-        captured=getattr(self,'_preparing_captures',set())
-        if stage in captured:return
-        captured.add(stage);self._preparing_captures=captured
+        if stage not in {"preparing_fallback", "preparing_failed"}:
+            return
+        captured = getattr(self, "_preparing_captures", set())
+        if stage in captured:
+            return
+        captured.add(stage)
+        self._preparing_captures = captured
         try:
             async with asyncio.timeout(3):
                 from backend.audit_agent.config import settings
-                directory=settings.data_dir/'crawler-login-diagnostics'
-                directory.mkdir(parents=True,exist_ok=True,mode=0o700);directory.chmod(0o700)
-                safe=lambda value:re.sub(r'[^A-Za-z0-9_.-]','_',str(value))[:128] or 'unknown'
-                stem=safe(self.args.account_id)+'-'+safe(self.operation_id)+'-'+stage
-                image=directory/(stem+'.png');metadata=directory/(stem+'.json')
-                page=self.adapter.page
-                values=await page.evaluate("""() => {
+
+                directory = settings.data_dir / "crawler-login-diagnostics"
+                directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+                directory.chmod(0o700)
+                def safe(value):
+                    return re.sub(r"[^A-Za-z0-9_.-]", "_", str(value))[:128] or "unknown"
+                stem = (
+                    safe(self.args.account_id)
+                    + "-"
+                    + safe(self.operation_id)
+                    + "-"
+                    + stage
+                )
+                image = directory / (stem + ".png")
+                metadata = directory / (stem + ".json")
+                page = self.adapter.page
+                values = await page.evaluate("""() => {
                   const visible = e => {const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(e).visibility!=='hidden'&&getComputedStyle(e).display!=='none'};
                   const panels=[...document.querySelectorAll('.douyin_login_new_class')];
                   const images=[...document.querySelectorAll('#animate_qrcode_container img')];
                   const buttons=panels.flatMap(p=>[...p.querySelectorAll('button,[role=button]')]);
                   return {ready:document.readyState==='complete',body_length:document.body?document.body.innerHTML.length:0,panel_count:panels.length,panel_visible:panels.filter(visible).length,image_count:images.length,image_visible:images.filter(visible).length,image_loaded:images.filter(e=>e.tagName==='IMG'&&e.complete&&e.naturalWidth>0).length,button_count:buttons.length,button_clickable:buttons.filter(e=>visible(e)&&!e.disabled).length};
                 }""")
-                fields={'ready','body_length','panel_count','panel_visible','image_count','image_visible','image_loaded','button_count','button_clickable'}
-                if not isinstance(values,dict) or set(values)!=fields or type(values['ready']) is not bool or any(type(values[k]) is not int or not 0<=values[k]<=100000000 for k in fields-{'ready'}):return
-                for path in (image,metadata):
-                    fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600);os.close(fd)
-                await page.screenshot(path=str(image),full_page=False,timeout=2000)
-                metadata.write_text(json.dumps({'stage':stage,**values},allow_nan=False))
+                fields = {
+                    "ready",
+                    "body_length",
+                    "panel_count",
+                    "panel_visible",
+                    "image_count",
+                    "image_visible",
+                    "image_loaded",
+                    "button_count",
+                    "button_clickable",
+                }
+                if (
+                    not isinstance(values, dict)
+                    or set(values) != fields
+                    or type(values["ready"]) is not bool
+                    or any(
+                        type(values[k]) is not int or not 0 <= values[k] <= 100000000
+                        for k in fields - {"ready"}
+                    )
+                ):
+                    return
+                fd = os.open(metadata, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(fd, "w") as stream:
+                    stream.write(
+                        json.dumps({"stage": stage, **values}, allow_nan=False)
+                    )
+                fd = os.open(image, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                os.close(fd)
+                await page.screenshot(
+                    path=str(image),
+                    full_page=False,
+                    timeout=2000,
+                    animations="disabled",
+                )
         except Exception:
             pass  # Passive evidence must never replace the original login result.
 

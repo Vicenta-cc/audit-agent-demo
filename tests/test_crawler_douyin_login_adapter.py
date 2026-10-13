@@ -6,6 +6,44 @@ from scripts.crawler_douyin_login_adapter import Region, document_allowed
 from scripts.crawler_douyin_login_v2 import DouyinLoginV2
 
 
+def test_visible_uses_next_match_when_first_is_hidden():
+    from unittest.mock import AsyncMock, Mock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter, QR_SELECTOR
+
+    async def run():
+        hidden = SimpleNamespace(is_visible=AsyncMock(return_value=False))
+        shown = SimpleNamespace(is_visible=AsyncMock(return_value=True))
+        matches = SimpleNamespace(
+            first=hidden, count=AsyncMock(return_value=2), nth=Mock(return_value=shown)
+        )
+        page = SimpleNamespace(locator=Mock(return_value=matches))
+        assert await DouyinLoginAdapter(None, page).visible(QR_SELECTOR) is shown
+        page.locator.assert_called_once_with(QR_SELECTOR)
+        matches.nth.assert_called_once_with(1)
+
+    asyncio.run(run())
+
+
+def test_visible_bounds_hidden_matches_and_preserves_first_visible():
+    from unittest.mock import AsyncMock, Mock
+    from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter, QR_SELECTOR
+
+    async def run():
+        first = SimpleNamespace(is_visible=AsyncMock(return_value=True))
+        hidden = SimpleNamespace(is_visible=AsyncMock(return_value=False))
+        matches = SimpleNamespace(
+            first=first, count=AsyncMock(return_value=100), nth=Mock(return_value=hidden)
+        )
+        adapter = DouyinLoginAdapter(None, SimpleNamespace(locator=lambda _: matches))
+        assert await adapter.visible(QR_SELECTOR) is first
+        matches.count.assert_not_awaited()
+        first.is_visible.return_value = False
+        assert await adapter.visible(QR_SELECTOR) is None
+        assert [call.args[0] for call in matches.nth.call_args_list] == list(range(1, 20))
+
+    asyncio.run(run())
+
+
 def test_self_identity_rejects_author_and_anonymous_responses():
     payload = {"status_code": 0, "user": {"sec_uid": "MS4wLjABAAAA-personal"}}
     assert douyin_self_response_identity(
