@@ -64,6 +64,8 @@ def render_delivery(service,args,session,turn,sources,*,pages=None):
         filters=data['query_filters']
         scope=['报告：'+'、'.join(cell(s['label']) for s in data['sources']),
             '风险：'+RISK.get(filters.get('risk_level'),'不限')]
+        if filters.get('post_ref'):
+            scope.append('帖子：'+cell(filters.get('post_title') or '指定帖子'))
         if data['kind']=='accounts' and filters.get('account_role','any')!='any':
             scope.append('账号范围：'+ROLE.get(filters['account_role'],'未知'))
         if filters.get('name_contains'):scope.append('昵称包含“'+cell(filters['name_contains'])+'”')

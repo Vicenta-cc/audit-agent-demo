@@ -402,6 +402,11 @@ class ReportCollectionService:
         identity_coverage={'unresolved_comment_observations':sum(r['kind']=='comment_author' and not r['account_ref'] for r in rows),
             'unresolved_post_observations':sum(r['kind']=='post_author' and not r['account_ref'] for r in rows),
             'basis':'selected_reports_before_account_or_risk_filters; unknown identities cannot confirm_or_exclude_account_membership'}
+        # Validate against posts, not comments: an authorized post may have no comments.
+        posts_by_ref={r['post_ref']:r for r in rows if r['kind']=='post_author'}
+        post_ref=args.get('post_ref','')
+        if post_ref and args['kind']!='comments':
+            raise ValueError('post_ref 仅用于评论查询。')
         if args['kind']=='comments': rows=[r for r in rows if r['kind']=='comment_author']
         role=args.get('account_role','any')
         if role!='any':
@@ -418,6 +423,11 @@ class ReportCollectionService:
                 parent_ref = previous['result_ref']
         if parent_ref:
             previous=self.result(parent_ref,session,sources)
+            parent_post=previous.get('query_filters',{}).get('post_ref')
+            if parent_post:
+                if post_ref and post_ref!=parent_post:
+                    raise ValueError('post_ref 与此前结果的帖子范围冲突；请对另一篇帖子重新查询。')
+                post_ref=parent_post
             # A followup can narrow a previous result, never add unseen accounts/comments.
             if previous['kind']=='comments':
                 include_posts = False
@@ -425,6 +435,10 @@ class ReportCollectionService:
             elif previous['kind'] in {'accounts','account_candidates'}:
                 refs={r['account_ref'] for r in previous['items']}; rows=[r for r in rows if r['account_ref'] in refs]
             else: raise ValueError('此结果不包含账号或评论。')
+        if post_ref:
+            if post_ref not in posts_by_ref:
+                raise ValueError('帖子引用不在本次授权报告范围；请从所选报告的帖子目录取得 post_ref，未执行查询。')
+            rows=[r for r in rows if r['post_ref']==post_ref]
         if args.get('account_ref'):
             from .capabilities import account_exists
             account_exists(self,args['account_ref'],session,sources,self.observations(selected))
@@ -506,6 +520,9 @@ class ReportCollectionService:
             expression_metadata['query_filters'] = {
                 key: args.get(key) for key in ('risk_level', 'account_ref', 'account_url', 'common_only', 'from_result_ref', 'name_contains','sort_by','top_n')}
             expression_metadata['query_filters']['parent_result_ref'] = parent_ref or None
+            if post_ref:
+                expression_metadata['query_filters'].update(post_ref=post_ref,
+                    post_title='' if is_history else posts_by_ref[post_ref]['text'])
             if self.analysis_tools:
                 expression_metadata['query_filters']['text_exact'] = args.get('text_exact')
             if self.direct_delivery:
