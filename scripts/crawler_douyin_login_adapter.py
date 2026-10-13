@@ -6,6 +6,7 @@ import asyncio
 import base64
 import hashlib
 import re
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from urllib.parse import parse_qs, urlsplit
@@ -95,6 +96,7 @@ class DouyinLoginAdapter:
         self.qr_accepted_generation = -1
         self.current_qr_error = None
         self.login_entry_diagnostic = None
+        self.network_failures = Counter()
 
     def task(self, coroutine):
         task = asyncio.create_task(coroutine)
@@ -107,6 +109,7 @@ class DouyinLoginAdapter:
         await self.install_guard(self.page)
         self.context.on("page", self._new_page)
         self.context.on("response", self._response)
+        self.context.on("requestfailed", self._request_failed)
         self.context.on("dialog", self._dialog)
         return self
 
@@ -194,8 +197,43 @@ class DouyinLoginAdapter:
             await page.close()
 
     def _response(self, response):
+        if response.status >= 400:
+            self._record_network_failure(
+                "http_" + str(response.status), response.url,
+                getattr(response.request, "resource_type", "unknown"),
+            )
         if not self._closed:
             self.task(self.observe_response(response))
+
+    def _request_failed(self, request):
+        failure = str(getattr(request, "failure", "") or "")
+        match = re.search(r"net::(ERR_[A-Z_]+)", failure)
+        self._record_network_failure(
+            match.group(1) if match else "REQUEST_FAILED",
+            request.url,
+            getattr(request, "resource_type", "unknown"),
+        )
+
+    def _record_network_failure(self, code, url, resource_type):
+        try:
+            host = (urlsplit(url).hostname or "").encode("idna").decode("ascii").lower()
+        except (ValueError, UnicodeError, AttributeError):
+            return
+        if (
+            not host
+            or len(host) > 253
+            or not re.fullmatch(r"[a-z0-9.-]+", host)
+            or not re.fullmatch(r"[A-Z0-9_]{3,48}|http_[45][0-9]{2}", str(code))
+            or not re.fullmatch(r"[a-z_]{2,24}", str(resource_type))
+        ):
+            return
+        self.network_failures[(str(code), host, str(resource_type))] += 1
+
+    def network_failure_summary(self):
+        return [
+            {"code": code, "host": host, "resource_type": resource_type, "count": count}
+            for (code, host, resource_type), count in self.network_failures.most_common(20)
+        ]
 
     async def observe_response(self, response):
         # Freeze arrival order before parsing asynchronous response bodies.
@@ -857,7 +895,8 @@ class DouyinLoginAdapter:
 
     async def close(self):
         self._closed = True
-        for event, callback in (("page", self._new_page), ("response", self._response), ("dialog", self._dialog)):
+        for event, callback in (("page", self._new_page), ("response", self._response),
+                                ("requestfailed", self._request_failed), ("dialog", self._dialog)):
             try:
                 self.context.remove_listener(event, callback)
             except Exception:

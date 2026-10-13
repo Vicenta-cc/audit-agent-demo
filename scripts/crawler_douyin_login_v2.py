@@ -1139,8 +1139,16 @@ class DouyinLoginV2:
                   const panels=[...document.querySelectorAll('.douyin_login_new_class')];
                   const images=[...document.querySelectorAll('#animate_qrcode_container img')];
                   const buttons=panels.flatMap(p=>[...p.querySelectorAll('button,[role=button]')]);
-                  return {ready:document.readyState==='complete',body_length:document.body?document.body.innerHTML.length:0,panel_count:panels.length,panel_visible:panels.filter(visible).length,image_count:images.length,image_visible:images.filter(visible).length,image_loaded:images.filter(e=>e.tagName==='IMG'&&e.complete&&e.naturalWidth>0).length,button_count:buttons.length,button_clickable:buttons.filter(e=>visible(e)&&!e.disabled).length};
+                  const completed=new Set(performance.getEntriesByType('resource').filter(e=>e.initiatorType==='script').map(e=>e.name));
+                  const scripts=[...document.scripts].map(e=>e.src).filter(Boolean);
+                  const pending=new Map();
+                  for(const src of scripts){
+                    if(completed.has(src))continue;
+                    try{const host=new URL(src,location.href).hostname.toLowerCase();if(/^[a-z0-9.-]{1,253}$/.test(host))pending.set(host,(pending.get(host)||0)+1)}catch{}
+                  }
+                  return {ready:document.readyState==='complete',body_length:document.body?document.body.innerHTML.length:0,panel_count:panels.length,panel_visible:panels.filter(visible).length,image_count:images.length,image_visible:images.filter(visible).length,image_loaded:images.filter(e=>e.tagName==='IMG'&&e.complete&&e.naturalWidth>0).length,button_count:buttons.length,button_clickable:buttons.filter(e=>visible(e)&&!e.disabled).length,script_count:scripts.length,script_completed:scripts.filter(src=>completed.has(src)).length,pending_script_hosts:[...pending].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([host,count])=>({host,count}))};
                 }""")
+                values["network_failures"] = self.adapter.network_failure_summary()
                 fields = {
                     "ready",
                     "body_length",
@@ -1151,14 +1159,20 @@ class DouyinLoginV2:
                     "image_loaded",
                     "button_count",
                     "button_clickable",
+                    "network_failures",
+                    "script_count",
+                    "script_completed",
+                    "pending_script_hosts",
                 }
                 if (
                     not isinstance(values, dict)
                     or set(values) != fields
                     or type(values["ready"]) is not bool
+                    or not isinstance(values["network_failures"], list)
+                    or not isinstance(values["pending_script_hosts"], list)
                     or any(
                         type(values[k]) is not int or not 0 <= values[k] <= 100000000
-                        for k in fields - {"ready"}
+                        for k in fields - {"ready", "network_failures", "pending_script_hosts"}
                     )
                 ):
                     return
