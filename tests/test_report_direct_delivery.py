@@ -37,7 +37,7 @@ def test_full_list_order_roles_and_access(make_collection):
     assert '风险：低风险；账号范围：评论作者' in delivery['text']
     assert '风险：不限；账号范围：同时发帖和评论的账号' in delivery['text']
     assert '场馆' not in delivery['text']
-    assert '未读取、未参与统计' in delivery['text']
+    assert '不能据此判断其他历史报告的权限或读取情况' in delivery['text']
     assert '- **A**：' in delivery['text'] and '- **D**：' in delivery['text']
     assert '- **B**：' not in delivery['text']
     assert 'SECRET' not in delivery['text']

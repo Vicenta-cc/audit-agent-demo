@@ -13,11 +13,35 @@ BRIDGE_GUIDANCE = {
 }
 
 
+def unwrap_extra_call_envelope(arguments):
+    """Accept only one redundant bridge envelope; never infer business fields.
+
+    Return a copy for the adapted shape so the model's original invocation
+    remains available in the transcript. Native resolution, session scope,
+    validation and execution still run after this format-only adaptation.
+    """
+    if not isinstance(arguments, dict) or set(arguments) != {'arguments'}:
+        return arguments
+    inner = arguments['arguments']
+    if not isinstance(inner, dict) or set(inner) != {'name', 'arguments'}:
+        return arguments
+    if not isinstance(inner['name'], str) or not inner['name'].strip():
+        return arguments
+    if not isinstance(inner['arguments'], dict):
+        return arguments
+    return deepcopy(inner)
+
+
 @contextmanager
 def creation_discovery_guidance(bridge):
     """Use under the product-mode lock and restore shared state even on failure."""
     original = bridge.bridge_tool_schemas
     original_validate = bridge.validate_deferred_call_args
+    original_resolve = bridge.resolve_underlying_call
+
+    def resolve(arguments):
+        return original_resolve(unwrap_extra_call_envelope(arguments))
+
     def validate(name, arguments):
         from backend.resource_management.tool_recovery import argument_error
         error = argument_error(name, arguments)
@@ -47,8 +71,10 @@ def creation_discovery_guidance(bridge):
         return result
     bridge.bridge_tool_schemas = schemas
     bridge.validate_deferred_call_args = validate
+    bridge.resolve_underlying_call = resolve
     try:
         yield
     finally:
         bridge.bridge_tool_schemas = original
         bridge.validate_deferred_call_args = original_validate
+        bridge.resolve_underlying_call = original_resolve

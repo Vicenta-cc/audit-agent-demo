@@ -55,7 +55,8 @@ def test_observed_bad_parameters_return_actual_schema(name, args):
 def test_bridge_recovery_is_scoped_and_valid_calls_unmodified():
     original = lambda name,args: 'original-validator'
     schemas = lambda: []
-    bridge = SimpleNamespace(bridge_tool_schemas=schemas,validate_deferred_call_args=original)
+    bridge = SimpleNamespace(bridge_tool_schemas=schemas,validate_deferred_call_args=original,
+                             resolve_underlying_call=lambda args: (None, {}, 'unused'))
     with creation_discovery_guidance(bridge):
         error = json.loads(bridge.validate_deferred_call_args('update_ruleset_proposal',{'proposal_id':'p'}))
         assert isinstance(error['error'], str)

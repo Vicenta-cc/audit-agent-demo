@@ -125,11 +125,13 @@ def render_delivery(service,args,session,turn,sources,*,pages=None):
         for label in labels:
             # The displayed list already establishes access to this report.
             # Keep the permission check and receipt, omit a duplicate prose block.
-            if label in by_label and label in displayed_labels:continue
+            # Every displayed source has already passed result authorization,
+            # including authorized history that is outside the session directory.
+            if label in displayed_labels:continue
             if label in by_label:
-                lines.append(f'- **{cell(label)}**：可以查看；本次仅确认访问权限，未查询内容。')
+                lines.append(f'- **{cell(label)}**：可以查看；未包含在本次交付列表中。')
             else:
-                lines.append(f'- **{cell(label)}**：不在当前会话可访问范围，未读取、未参与统计。')
+                lines.append(f'- **{cell(label)}**：未在当前会话目录或本次交付来源中匹配到该名称；不能据此判断其他历史报告的权限或读取情况。')
         if len(lines)>2:
             lines.append('\n同名不一定是同一账号，不能只按昵称合并。')
             blocks.append('\n'.join(lines))

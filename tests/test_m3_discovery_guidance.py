@@ -14,7 +14,11 @@ def test_discovery_guidance_is_scoped_and_restored(tmp_path, mode):
         "name": "tool_call", "description": "Original", "parameters": {"type": "object"}
     }}]
     original = lambda *a, **kw: source
-    bridge = SimpleNamespace(bridge_tool_schemas=original)
+    original_resolve = lambda args: (args.get('name'), args.get('arguments', {}), None)
+    original_validate = lambda name, args: None
+    bridge = SimpleNamespace(bridge_tool_schemas=original,
+                             validate_deferred_call_args=original_validate,
+                             resolve_underlying_call=original_resolve)
     binding = HermesRuntimeBinding()
     with patch.object(HermesRuntimeBinding, "configure_product_home"), \
          patch.object(HermesRuntimeBinding, "discover_plugins"), \
@@ -24,8 +28,11 @@ def test_discovery_guidance_is_scoped_and_restored(tmp_path, mode):
                 definition = bridge.bridge_tool_schemas(10)[0]["function"]
                 assert (definition["description"] != "Original") == (mode == "creation")
                 assert definition["parameters"] == {"type": "object"}
+                assert (bridge.resolve_underlying_call is not original_resolve) == (mode == 'creation')
                 raise RuntimeError("turn failed")
         assert bridge.bridge_tool_schemas is original
+        assert bridge.resolve_underlying_call is original_resolve
+        assert bridge.validate_deferred_call_args is original_validate
         assert source[0]["function"]["description"] == "Original"
         assert loader.call_count == (1 if mode == "creation" else 0)
 
