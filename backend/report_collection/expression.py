@@ -40,7 +40,9 @@ def express_configuration(original):
 def express_result(original):
     if original.get('kind') in {'config_diff','report_comparison','report_overview'}:
         return express_configuration(original)
-    if original.get('kind') not in ('accounts', 'comments') or 'items' not in original:
+    if original.get('kind') not in ('accounts', 'comments', 'account_activity') or 'items' not in original:
+        return original
+    if original.get('kind') == 'account_activity' and 'query_statistics' not in original:
         return original
     data = deepcopy(original)
     filters = data.pop('query_filters', None)
@@ -53,6 +55,27 @@ def express_result(original):
             data.get('next_offset') == len(data['items']) == data.get('total_count')),
         'counts_apply_to': 'selected_reports_with_query_and_parent_result_filters',
     }
+    if 'query_statistics' in data:
+        # Preserve raw fields for stored results and delivery consumers. The model
+        # receives one filtered summary and a separate whole-report reference.
+        for key in ('unique_evidence_count', 'comment_counts'):
+            data.pop(key, None)
+        totals = data.pop('report_totals', [])
+        data['report_context'] = {
+            'basis': 'entire_frozen_reports_before_query_filters',
+            'meaning': '整份报告参考统计，包含其他账号及其他风险等级；不代表本次筛选命中数量。仅作总体对照。',
+            'available': bool(totals),
+            'reports': totals,
+        }
+        for account in data['items'] if data['kind'] == 'accounts' else []:
+            for key in ('unique_comment_count', 'unique_post_count', 'observation_count', 'report_statistics'):
+                account.pop(key, None)
+            account['roles_in_filtered_result'] = account.pop('roles', [])
+    if data['kind'] == 'account_activity':
+        data['total_count_unit'] = 'report_observations'
+        if 'query_statistics' in data:
+            data['timestamp_coverage'] = {'unknown_timestamps': data.pop('statistics', {}).get('unknown_timestamps')}
+        return data
     if data['kind'] == 'comments':
         data['total_count_unit'] = 'report_observations'
         data['items'] = grouped(data['items'])

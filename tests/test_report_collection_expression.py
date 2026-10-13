@@ -18,7 +18,8 @@ def test_grouped_results_keep_raw_references_for_followups(collection):
     s['collection'].agent_driven = True
     t = begin(s)
     data = invoke(s, t)
-    assert data['total_count'] == 5 and data['unique_evidence_count'] == 4
+    assert data['total_count'] == 5
+    assert data['query_statistics']['comments']['original_comments'] == 4
     assert len(data['items']) == 4
     shared = next(g for g in data['items'] if g['visible_observation_count'] == 2)
     assert {r['risk_level'] for r in shared['report_observations']} == {'low', 'high'}

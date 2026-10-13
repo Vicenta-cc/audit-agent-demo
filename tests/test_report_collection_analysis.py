@@ -53,15 +53,16 @@ def test_membership_groups_and_exact_text_counts_use_full_filtered_data(make_col
     bridges=[r for r in all_rows['items'] if '小桥' in r['names']]
     assert len(bridges)==2 and len({r['account_ref'] for r in bridges})==2
     counts=invoke(s,t,report_refs=[refs['A'],refs['B']],text_exact='周末去江边散步',limit=1)
-    assert counts['comment_counts']=={'original_comment_count':3,'report_observation_count':4,'completed_assessment_count':4}
+    expected_counts={'original_comments':3,'report_observations':4,'completed_assessments':4}
+    assert {k:counts['query_statistics']['comments'][k] for k in expected_counts}==expected_counts
     assert counts['has_more']
     finish(s,t);t=begin(s)
     rest=invoke(s,t,'read_conversation_result',result_ref=counts['result_ref'],offset=1,limit=50)
-    assert rest['comment_counts']==counts['comment_counts']
+    assert rest['query_statistics']==counts['query_statistics']
     assert rest['query_coverage']['actual_filters']['text_exact']=='周末去江边散步'
     assert not rest['query_coverage']['page_covers_complete_query']
     same=invoke(s,t,from_result_ref=counts['result_ref'])
-    assert same['comment_counts']==counts['comment_counts']
+    assert {k:same['query_statistics']['comments'][k] for k in expected_counts}==expected_counts
     empty=invoke(s,t,text_exact='周末去江边散步。')
     assert empty['total_count']==0  # exact, not fuzzy matching or text-based identity merging
     invalid=json.loads(tools.dispatch('query_conversation_reports',{'kind':'accounts','text_exact':'x'},s['sid'],t))

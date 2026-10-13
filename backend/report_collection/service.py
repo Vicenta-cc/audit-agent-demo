@@ -394,6 +394,8 @@ class ReportCollectionService:
                 raise ValueError('账号角色条件仅用于账号查询。')
             if role in {'comment_author','post_author'}:
                 rows=[r for r in rows if r['kind']==role]
+        include_comments = role != 'post_author'
+        include_posts = args['kind'] == 'accounts' and role != 'comment_author'
         parent_ref = args.get('from_result_ref')
         if not self.agent_driven and not parent_ref and args.get('scope') == 'inherit' and not args.get('report_refs'):
             previous = self.previous(session,sources)
@@ -403,6 +405,7 @@ class ReportCollectionService:
             previous=self.result(parent_ref,session,sources)
             # A followup can narrow a previous result, never add unseen accounts/comments.
             if previous['kind']=='comments':
+                include_posts = False
                 refs={r['comment_ref'] for r in previous['items']}; rows=[r for r in rows if r['comment_ref'] in refs]
             elif previous['kind']=='accounts':
                 refs={r['account_ref'] for r in previous['items']}; rows=[r for r in rows if r['account_ref'] in refs]
@@ -421,6 +424,8 @@ class ReportCollectionService:
             if not (self.agent_driven and self.analysis_tools) or args['kind']!='comments':
                 raise ValueError('text_exact 仅用于评论查询。')
             rows=[r for r in rows if r['text']==args['text_exact']]
+        from .analysis import query_statistics
+        statistics_enabled = self.agent_driven and (self.express_results or self.direct_delivery)
         if args['kind']=='comments':
             items=rows
         else:
@@ -445,6 +450,9 @@ class ReportCollectionService:
                         'comment_count':sum(r['source']['report_ref']==s['ref'] and r['kind']=='comment_author' for r in observations),
                         'post_count':sum(r['source']['report_ref']==s['ref'] and r['kind']=='post_author' for r in observations),
                         'risk_levels':sorted({r['risk_level'] for r in observations if r['source']['report_ref']==s['ref']})} for s in selected]})
+                if statistics_enabled:
+                    items[-1]['query_statistics'] = query_statistics(observations, selected,
+                        include_comments=include_comments, include_posts=include_posts)
         matching_count=len(items)
         sort=args.get('sort_by','source_order')
         if sort!='source_order':
@@ -470,6 +478,9 @@ class ReportCollectionService:
         # Persist effective filters with raw results so later pages need not infer
         # them from model history. Old results without this metadata stay unknown.
         expression_metadata = {}
+        if statistics_enabled:
+            expression_metadata['query_statistics'] = query_statistics(evidence_rows, selected,
+                include_comments=include_comments, include_posts=include_posts)
         if self.agent_driven and self.analysis_tools:
             from .analysis import account_presence, comment_counts
             if args['kind']=='accounts':

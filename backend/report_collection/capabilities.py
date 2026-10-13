@@ -34,7 +34,12 @@ def activity(service,args,session,turn,selected):
         'original_comment_count':len({r['evidence_key'] for r in values}),
         'report_observation_count':len(values),'parent_post_count':len({r['post_id'] for r in values})}
         for target,values in sorted(relations.items())]
+    from .analysis import query_statistics
+    statistics = query_statistics(rows, selected,
+        include_comments=args.get('activity_kind') != 'post_author',
+        include_posts=args.get('activity_kind') != 'comment_author' and not args.get('target_account_ref'))
     return service.save(session,turn,selected,'account_activity',rows,args['limit'],
+        query_statistics=statistics,
         account_ref=ref,scope_kind='authorized_history' if args['scope']=='authorized_history' else ('single_report' if len(selected)==1 else 'conversation_reports'),
         statistics={'original_comments':len({r['evidence_key'] for r in rows if r['kind']=='comment_author'}),
                     'original_posts':len({r['evidence_key'] for r in rows if r['kind']=='post_author'}),
