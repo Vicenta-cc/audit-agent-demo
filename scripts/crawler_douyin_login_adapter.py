@@ -26,6 +26,7 @@ CHALLENGE_SELECTORS = (
     "iframe[src*='captcha']",
 )
 SAFE_IFRAME_HOSTS = {"lf-rc1.yhgfb-cn-static.com"}
+LOGIN_ENTRY_READY_SECONDS = 12
 
 
 def document_allowed(url: str, *, top_level: bool) -> bool:
@@ -749,7 +750,7 @@ class DouyinLoginAdapter:
         from scripts.crawler_account_login import PLATFORMS
 
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + 2
+        deadline = loop.time() + LOGIN_ENTRY_READY_SECONDS
 
         async def opened():
             return bool(

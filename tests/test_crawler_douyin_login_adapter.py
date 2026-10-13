@@ -2061,7 +2061,7 @@ def test_login_entry_without_control_fails_explicitly_after_bounded_wait(monkeyp
         )
         with __import__("pytest").raises(ValueError, match="LOGIN_PREPARATION_FAILED"):
             await adapter.open_login()
-        assert 2 <= sum(waited) < 2.2
+        assert 12 <= sum(waited) < 12.2
 
     asyncio.run(run())
 
