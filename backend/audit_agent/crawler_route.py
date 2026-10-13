@@ -896,7 +896,7 @@ class RouteReceiptPipe:
                             with self.bundle._lock:
                                 if not getattr(self.bundle,'browser_guard_first_reason',None):
                                     self.bundle.browser_guard_first_reason=value['reason']
-                                    logging.getLogger(__name__).warning('browser_guard_stopped reason=%s',value['reason'])
+                                    logging.getLogger(__name__).warning('browser_guard_stopped operation_id=%s reason=%s',snapshot.operation_id,value['reason'])
                             continue
                         if isinstance(value,dict) and value.get('type')=='route_fault':
                             if set(value)!={'type','event'}:
