@@ -126,9 +126,18 @@ class CreateLexiconInput(StrictModel):
 
 class OpenResourceInput(StrictModel):
     kind: Literal['ruleset', 'lexicon']
-    resource_id: str = Field(min_length=1, description='正式资源 id，不是 revision_id 或 edit_id；从读取结果复制。')
+    resource_id: str = Field(default='', description='正式资源 id；与 session_resource_key 二选一。')
+    session_resource_key: str = Field(default='', description='从 read_session_resource 返回的 open_arguments 复制，按当前会话精确冻结版本建立副本；读取本身不需要打开副本。')
     revision_id: str = Field(default='', description='规则指定已发布版本；留空读取当前资源。词库不支持此字段。')
     published_version: StrictInt | None = Field(default=None, ge=1, description='规则正式发布版本号，如 v2 传 2；后台精确解析，不回退最新版。与 revision_id 同传时必须一致。不是副本 expected_version。')
+
+    @model_validator(mode='after')
+    def one_source(self):
+        if bool(self.resource_id) == bool(self.session_resource_key):
+            raise ValueError('resource_id 与 session_resource_key 必须且只能提供一个')
+        if self.session_resource_key and (self.revision_id or self.published_version is not None):
+            raise ValueError('冻结资源引用不能再指定其他版本')
+        return self
 
 
 class GetEditInput(StrictModel):
@@ -154,9 +163,10 @@ class UpdateEditInput(GetEditInput):
 
 
 class SaveResourceInput(GetEditInput):
-    expected_version: StrictInt = Field(ge=1)
+    expected_version: StrictInt = Field(ge=1, description='当前编辑稿的并发校验版本，不是历史版本选择器。另存历史快照，先按 read_session_resource.open_arguments 建立副本，再保存该副本当前版本。')
     mode: Literal['new', 'update', 'copy'] = 'new'
     operation_id: str = Field(min_length=1, max_length=200)
+    name: str | None = Field(default=None, min_length=1, max_length=200, description='用户指定的正式保存名称；与保存原子提交。省略沿用稿内名称，不改变原编辑稿或已采用版本。')
 
 
 class GetSaveInput(StrictModel):

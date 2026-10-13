@@ -1,0 +1,186 @@
+{
+  "checkpoint": "P0 ordinary-chat repair source snapshot; not acceptance-certified",
+  "date": "2026-10-13",
+  "base_commit": "675872d7df03ee997862757dea0407b124e2d797",
+  "base_tag": "checkpoint/pre-p0-repair-20261013",
+  "checkpoint_tag": "checkpoint/p0-acceptance-20261013",
+  "scope": "截至 P0四类修复与普通聊天验收 的代码快照，包含该轮依赖的既有未提交改动；不包含随后 bridge-parameter-repair 描述试验。",
+  "counting_policy": [
+    "每项多轮链路按一个场景计数，必须完成全部步骤。",
+    "首次回答正确允许模型在同一次用户提交内看到参数错误后自行修正，但另列该过程。",
+    "无错误通过更严格：工具参数先失败也扣除。",
+    "人工补充纠正、修改代码后新会话重测分别记账。",
+    "普通继续属于预定步骤，不算人工纠正。",
+    "完整回答含错误附加断言也判失败。"
+  ],
+  "historical_acceptance": {
+    "original": {
+      "cases": 30,
+      "first_answer_correct": 24,
+      "error_free_correct": 16,
+      "same_turn_corrected": 8,
+      "first_answer_failed": 6,
+      "human_corrected": 4
+    },
+    "retests": {
+      "cases": 10,
+      "first_answer_correct": 7,
+      "error_free_correct": 6,
+      "same_turn_corrected": 1,
+      "first_answer_failed": 3,
+      "human_corrected": 0
+    },
+    "turns": 60,
+    "groups": {
+      "资源": {
+        "cases": 12,
+        "first_answer_correct": 11,
+        "error_free_correct": 8,
+        "same_turn_corrected": 3,
+        "first_answer_failed": 1,
+        "human_corrected": 1
+      },
+      "分批": {
+        "cases": 10,
+        "first_answer_correct": 8,
+        "error_free_correct": 4,
+        "same_turn_corrected": 4,
+        "first_answer_failed": 2,
+        "human_corrected": 1
+      },
+      "筛选": {
+        "cases": 5,
+        "first_answer_correct": 3,
+        "error_free_correct": 3,
+        "same_turn_corrected": 0,
+        "first_answer_failed": 2,
+        "human_corrected": 2
+      },
+      "权限与记忆": {
+        "cases": 3,
+        "first_answer_correct": 2,
+        "error_free_correct": 1,
+        "same_turn_corrected": 1,
+        "first_answer_failed": 1,
+        "human_corrected": 0
+      }
+    },
+    "target_met": false,
+    "limitations": "开发过程诊断样本，包含多次代码/提示调整；复测为失败题目的定向样本，不是固定版本完整盲测，不能合并成总体正确率。"
+  },
+  "version_provenance": "原始场景执行期间调整过描述；并非所有题在同一冻结版本完成。这是开发过程的逐轮统计，不能归为本提交同一冻结版本的通过率。",
+  "environment_failures": {
+    "count": 3,
+    "reason": "测试环境解释器缺少openai",
+    "model_calls": 0,
+    "included_in_model_score": false
+  },
+  "evidence_directory": "/Users/ext.wanghongtao6/Documents/Codex/acceptance/p0-repair-20261013",
+  "evidence_sha256": {
+    "plan.json": "11cb031ac66f50cf102a15ca5e6e247c16cc0bf5255616e0d26b1f7e316f0cd2",
+    "results.json": "c02343fbe01b8860589682f4cecfce0b93929ee96c9bac6a4c6993531739cb8d",
+    "attempts.json": "3f47c7306a2f0fb7fd0e9de9c93509851998ca634249c32a0f146e0b7e7bd2e8",
+    "ui-events.json": "854b81193259c03e5964eb5cee7eedc62e2b902fa4def5ceb714ca4d6fddeaff",
+    "verification.json": "f0a2847ea088605821435ab3c73552be0060b514be7b20af653793ef4eb55105",
+    "environment-failures.json": "0e0de9ca255bc3385894903299fbf11edc8f645ed29cf5cbc8d082a98a8d603a"
+  },
+  "p0_final_files": [
+    {
+      "path": "backend/investigation_creation/conversation.py",
+      "new_file": false,
+      "before_sha256": "eeb3e6c31f802a96bae44e36408ecde7afad91f8f05bcc9ad81d04686ff46640",
+      "after_sha256": "8abf6b995d105ace432fad1e2be1a8a48c51c9640158379ba92b07bbdb0d0b93"
+    },
+    {
+      "path": "backend/investigation_creation/save_recovery.py",
+      "new_file": false,
+      "before_sha256": "0508eca7f3755ec9d2391572a9d7bf25a6aadecec9dbb3ec1a4cd4d88b45b86c",
+      "after_sha256": "278a415be8c9f5a4254a5fe24f5404a4585144bb12da4ba476b1f92fac2b7b1f"
+    },
+    {
+      "path": "backend/report_collection/scopes.py",
+      "new_file": false,
+      "before_sha256": "672a701f5a0f442a06d385e1447169a40f4d897679770df9728cf39a04071962",
+      "after_sha256": "877c1f2fc8ba3deb941c2e6becf3ca3d314e5c7f87d77e3b45a39e409ba6ebfe"
+    },
+    {
+      "path": "backend/report_collection/delivery.py",
+      "new_file": false,
+      "before_sha256": "d0079890bb68f88f2ae48f33071e96e945c2d4e734028d99aae5e8a3065db75a",
+      "after_sha256": "522163c189c2112d9f0da6ebfdd4bb35bbe738e63881039e61d05119a208cb41"
+    },
+    {
+      "path": "backend/report_collection/tools.py",
+      "new_file": false,
+      "before_sha256": "7bf9331ac2ec58b4e6169e972fd7ed3916396d0d37645c7b76904e9d39c9ca6b",
+      "after_sha256": "d7e893e89c43fc902a4e622810418d7a5d2116c3a1572cbb09867ddbb13a50fc"
+    },
+    {
+      "path": "backend/report_collection/capabilities.py",
+      "new_file": false,
+      "before_sha256": "cc2eea40c86be0be49343e46a2afadef73ae8d76097ac85ca698e8b09cf7833b",
+      "after_sha256": "e7778bf69385d809bb2a3a05e998be31b39b59758b97bb072c97edf2417cd207"
+    },
+    {
+      "path": "backend/report_collection/batches.py",
+      "new_file": false,
+      "before_sha256": "3d720095a790935cc3b6b996d583e371734e2d0cc0d37636eb79bd8fc55a073e",
+      "after_sha256": "eac6433a6cf1b40b9abd67df6cf4123ad9b52d66b31b7d6efd1a8ec50c28ebaf"
+    },
+    {
+      "path": "backend/hermes_runtime/creation_discovery.py",
+      "new_file": false,
+      "before_sha256": "5032bf3a42c275465f0e45fff5e4b17748571581a9e00126ed8104ac167a80cc",
+      "after_sha256": "aba3652e0e2e724439af3b3c4656cd34506165de9c80cd163755a7b88f47e5a8"
+    },
+    {
+      "path": "backend/resource_management/service.py",
+      "new_file": false,
+      "before_sha256": "9732a180c01e34e3a2965ab0c7ddbc981eba0f6856dc60b9172df09e61c7ae62",
+      "after_sha256": "17b86125313f956e96065bda7e488670f7b3cfcd2a3be95d8acf2b10ce333af1"
+    },
+    {
+      "path": "backend/resource_management/session_state.py",
+      "new_file": false,
+      "before_sha256": "04e468c91a2f43be02a7bbaf59bb75466cf52bd747ca007eaf0469b6cad33ea8",
+      "after_sha256": "301643741a864ad6a0a56bb66276d1c610ddce183626b705c0c5a9114b93fe7b"
+    },
+    {
+      "path": "backend/resource_management/tools.py",
+      "new_file": false,
+      "before_sha256": "fad46cb27b7d255c458bcda649791f091f2ef414f41a2018352fc4a4f2976750",
+      "after_sha256": "d56ccfb7434f32e3b4d9020db11e500f9747ff58b5000d7ec35d54cc7800bbb6"
+    },
+    {
+      "path": "backend/resource_management/edit_refs.py",
+      "new_file": false,
+      "before_sha256": "11066d9fb7f04518bd9e62976c811f38756f8fb8202e04e9193190949c65bc28",
+      "after_sha256": "039b64bcaaee5837c79aca63744cae072fb7c102cdac41922175b7f85224ab59"
+    },
+    {
+      "path": "backend/resource_management/contracts.py",
+      "new_file": false,
+      "before_sha256": "1793912c7087e1cf3ca30fc5be4a5dcfbc7d382f0cbfec3285c112db33f2b80a",
+      "after_sha256": "cda8bb22dc399c493501423739b2e635d9dd6f2265e09e436ba04cf9ffbe617e"
+    },
+    {
+      "path": "backend/resource_management/edit_projection.py",
+      "new_file": true,
+      "before_sha256": null,
+      "after_sha256": "a992732fe64fb83d4db810b8997785a9e63cf32328ac19dc02079f4a0932e3f1"
+    },
+    {
+      "path": "tests/test_p0_repair.py",
+      "new_file": true,
+      "before_sha256": null,
+      "after_sha256": "b6ab7bc5688d9f5d632689d4573236a130972d8b99318dc29a43fc51eb09a9f4"
+    }
+  ],
+  "validation": "已核对15个P0最终文件与归档哈希一致；本次只做提交与Git完整性检查，没有重新跑模型。归档保留历史151项和最终说明调整后23项测试记录，以及4项既有断言不兼容记录。",
+  "excluded_trial_files": [
+    "backend/hermes_runtime/creation_discovery.py",
+    "tests/test_m3_discovery_guidance.py",
+    "tests/test_resource_tool_recovery.py"
+  ],
+  "limitations": "此标签用于恢复代码快照，不表示达到90%目标；标签不包含本地运行数据、依赖、凭证或Git之外的完整证据文件。"
+}

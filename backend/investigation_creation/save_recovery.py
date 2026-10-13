@@ -13,6 +13,7 @@ def saved_request(manager, tool_name, arguments, *, session_id, principal):
         parsed = SaveResourceInput.model_validate(arguments)
         request = dict(edit_id=parsed.edit_id, expected_version=parsed.expected_version,
                        mode=parsed.mode, session_id=session_id)
+        if parsed.name is not None:request['name']=parsed.name
         return manager.matching_save(parsed.operation_id, request=request,
                                      session_id=session_id, principal=principal)
     kind = 'ruleset' if tool_name == 'save_draft_ruleset' else 'lexicon'

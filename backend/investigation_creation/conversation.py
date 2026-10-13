@@ -209,7 +209,7 @@ For an unadopted session edit, save_resource still saves its exact edit_id/expec
 Do not reconstruct, regroup, rename, or add terms from conversation memory. If the
 latest Draft still has only legacy flat terms, explain that it must first be structured and confirmed in
 the Drawer. Saving a lexicon never mutates the Draft and never changes an already-started task.
-For re-presentation, get the current Proposal and update it with unchanged content/expected_version.
+For viewing or re-presentation, read the requested resource version. Do not open or modify an edit merely to answer a read request. Explain mutations using the returned actual target and applied_diff.
 Temporary Drafts use the same Preview/Confirm flow as formal Drafts, subject to fresh Application
 readiness validation. Adoption alone never starts execution. Execution requires a separate explicit
 confirmation and uses the bound Draft snapshot, never the live Proposal.
@@ -1332,10 +1332,13 @@ class InvestigationCreationConversationService:
         runtime_started = False
         runtime_finished = False
         delivery_state = {'local_completions': 0}
+        report_sources = None
         try:
             if settings.investigation_multi_round_enabled:
-                self.report_collection.sources(session.id, turn.id)
+                report_sources = self.report_collection.sources(session.id, turn.id)
                 self.report_collection.validate_history(session.id)
+                from backend.report_collection.scopes import authorized_history_for_model
+                history = authorized_history_for_model(self.report_collection, session.id, history)
             # Keep one immutable reference projection for the prefix fence and
             # this turn's slice. Hermes shallow-copies and may mutate its input.
             history = prepare_creation_history(history)
@@ -1351,7 +1354,7 @@ class InvestigationCreationConversationService:
                 if self.fake_runtime:
                     agent = self._agent(session.id, provider_route=provider_route)
                     from backend.hermes_runtime.adapter import turn_system_context
-                    public_streams.enter_context(turn_system_context(agent, self._turn_context(workspace_state)))
+                    public_streams.enter_context(turn_system_context(agent, self._turn_context(workspace_state, report_sources=report_sources)))
                     runtime_started = True
                     result = agent.run_conversation(
                         user_message,
@@ -1380,7 +1383,7 @@ class InvestigationCreationConversationService:
                                 agent, self.report_collection, session.id, turn.id))
                         from backend.hermes_runtime.adapter import turn_system_context
                         runtime_started = True
-                        with turn_system_context(agent, self._turn_context(workspace_state, report_error)):
+                        with turn_system_context(agent, self._turn_context(workspace_state, report_error, report_sources=report_sources)):
                             result = agent.run_conversation(
                                 user_message,
                                 system_message=self._system_message(workspace_state),
@@ -1799,13 +1802,17 @@ class InvestigationCreationConversationService:
             prompt = prompt[:start] + GUIDANCE + prompt[end:]
         return prompt
 
-    def _turn_context(self, workspace, report_error=""):
+    def _turn_context(self, workspace, report_error="", *, report_sources=None):
         from backend.resource_management.edit_entry import active_edit, context_text
         context = context_text(active_edit.get())
         if settings.investigation_multi_round_enabled:
             directory = [{**{k: r[k] for k in ('round_number', 'label', 'draft_id', 'title', 'draft_revision', 'draft_status')},
                 'run': {k: r['run'][k] for k in ('run_id', 'status', 'report_version_id')} if r['run'] else None}
                 for r in workspace.rounds]
+            if report_sources is not None:
+                reports = [{'label': s['label'], 'report_ref': s['ref'], 'report_version_id': s['version']}
+                           for s in report_sources]
+                context += '\n本轮已授权的会话报告目录（名称与引用，不是正文证据；不代表全部历史报告）：' + json.dumps(reports, ensure_ascii=False)
             return context + '\n本会话调查轮次（只表示关联和状态，不是报告证据）：' + json.dumps(directory, ensure_ascii=False)
         if settings.continuous_resource_session_enabled:
             from .continuity import report_context
@@ -2159,6 +2166,12 @@ class InvestigationCreationConversationService:
                 else []
             ),
         )
+        if self.report_collection and self.report_collection.active(turn.session_id):
+            from backend.report_collection.batches import acknowledge as acknowledge_collection
+            try:
+                acknowledge_collection(self.report_collection, turn.session_id, turn.id)
+            except Exception:
+                logger.exception('Collection delivery acknowledgment deferred for %s', turn.id)
         if comment_runtime is not None:
             from hermes_m0.comment_batches import acknowledge
             try:

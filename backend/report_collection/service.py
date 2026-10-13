@@ -3,7 +3,7 @@
 All report access goes through the injected ownership policy, including replays.
 No model argument can supply a database path, owner or conversation identity.
 """
-from collections import defaultdict
+from collections import Counter, defaultdict
 from contextlib import contextmanager
 from hashlib import sha256
 import json
@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 import sqlite3
 from uuid import uuid4
+from urllib.parse import quote
 
 from backend.hermes_runtime.report_snapshot import published_report_snapshot
 from hermes_m0.real_report_repository import PublishedReportRepository
@@ -49,6 +50,10 @@ class ReportCollectionService:
             CREATE TABLE IF NOT EXISTS collection_calls (
               id INTEGER PRIMARY KEY, session TEXT, turn TEXT, name TEXT, arguments TEXT, response TEXT);
             ''')
+            from .scopes import install
+            install(db)
+            from .batches import install as install_batches
+            install_batches(db)
 
     @contextmanager
     def connect(self):
@@ -178,9 +183,8 @@ class ReportCollectionService:
         if self.conversation.store.get_turn(row['turn']).status not in {'running','completed'}:
             raise PermissionError('结果来自未完成的轮次。')
         data = json.loads(row['payload'])
-        allowed = {s['ref']:s for s in sources}
-        if any(s['ref'] not in allowed or s != allowed[s['ref']] for s in data['sources']):
-            raise PermissionError('结果超出本轮报告范围。')
+        from .scopes import validate_result_sources
+        validate_result_sources(self, session, data, sources)
         return data
 
     def previous(self, session, sources):
@@ -188,7 +192,8 @@ class ReportCollectionService:
             rows = db.execute("SELECT focus,turn FROM collection_turns WHERE session=? AND focus<>'' ORDER BY rowid DESC",(session,)).fetchall()
         for row in rows:
             if self.conversation.store.get_turn(row['turn']).status == 'completed':
-                return self.result(row['focus'],session,sources)
+                try: return self.result(row['focus'],session,sources)
+                except PermissionError: continue  # Revoked historical focus cannot block unrelated current reports.
         return None
 
     def focus(self, session, turn, ref):
@@ -197,7 +202,12 @@ class ReportCollectionService:
 
     def select(self, session, turn, args):
         sources = self.sources(session,turn)
-        if args.get('report_refs'):
+        if args.get('scope') == 'authorized_history':
+            if not self.agent_driven or args.get('report_refs'):
+                raise ValueError('历史范围须独立选择，不可同时传会话报告引用。')
+            from .scopes import history_sources
+            selected = history_sources(self, session, turn)
+        elif args.get('report_refs'):
             by_ref = {s['ref']:s for s in sources}
             if any(r not in by_ref for r in args['report_refs']): raise PermissionError('报告超出本轮会话范围。')
             selected = [by_ref[r] for r in dict.fromkeys(args['report_refs'])]
@@ -206,7 +216,8 @@ class ReportCollectionService:
         else:
             previous = self.previous(session,sources)
             selected = previous['sources'] if previous else sources
-        if not selected: raise ValueError('会话中没有可查询报告。')
+        if not selected and args.get('scope') != 'authorized_history':
+            raise ValueError('会话中没有可查询报告。')
         self.pin_selection(session, turn, selected)
         return selected
 
@@ -257,9 +268,9 @@ class ReportCollectionService:
                     'account_ref':reference('account',[platform,stable]) if stable else '',
                     'account_name':str(author.get('nickname') or ''),
                     'text':payload.get('display_title') or payload.get('title') or '',
-                    'risk_level':finding.risk_level,'audit_status':'completed',
-                    'post_id':post.id,'source':source,'links':{
-                        **post_links,'账号主页':str(author.get('homepage_url') or author.get('profile_url') or '')}})
+                    'risk_level':finding.risk_level,'audit_status':('completed' if finding.decision in {'pass','review','reject'} else 'unknown'),
+                    'published_at':post.source.published_at, 'post_id':post.id,'source':source,'links':{
+                        **post_links,'账号主页':str(author.get('homepage_url') or author.get('profile_url') or ('https://www.douyin.com/user/'+quote(stable,safe='') if stable else ''))}})
                 for c in repo.comments_for_federation(post.id):
                     stable = c.author_source_key if c.identity_consistent and c.platform in {'dy','douyin'} else ''
                     rows.append({'kind':'comment_author','post_ref':post_ref,
@@ -267,14 +278,21 @@ class ReportCollectionService:
                         'evidence_key':reference('evidence',[c.platform,post.id,c.id]),
                         'account_ref':reference('account',[platform,stable]) if stable else '',
                         'account_name':c.author_display_name, 'text':c.text, 'risk_level':c.risk_level,
-                        'audit_status':c.audit_status, 'post_id':post.id,'links':post_links,
+                        'audit_status':c.audit_status, 'published_at':c.published_at,
+                        'post_id':post.id, 'parent_author_ref':reference('account',[platform,str(author.get('sec_uid') or '').strip()]) if platform=='douyin' and author.get('sec_uid') else '',
+                        'parent_author_name':str(author.get('nickname') or ''),
+                        'links':{**post_links, '账号主页':('https://www.douyin.com/user/'+quote(stable,safe='') if stable else '')},
                         'source':{'report_ref':s['ref'],'label':s['label'],'report_version_id':s['version']}})
             if len(rows)>100000: raise ValueError('报告内容超过第一阶段查询上限，未返回部分结果冒充全量。')
         return rows
 
     def save(self, session,turn,sources,kind,items,limit=20,offset=0,**extra):
         ref='result_'+uuid4().hex
-        data={'result_ref':ref,'sources':sources,'kind':kind,'items':items,**extra}
+        data={'result_ref':ref,'sources':sources,'kind':kind,'items':items,
+            'scope_kind':('authorized_history' if any(s.get('domain')=='authorized_history' for s in sources)
+                          else 'single_report' if len(sources)==1 else 'conversation_reports'),
+            'coverage':{'complete':True,'report_count':len(sources),
+                        'basis':'authorized_frozen_versions_not_platform_population'}, **extra}
         with self.connect() as db:
             db.execute('INSERT INTO collection_results VALUES(?,?,?,?)',(ref,turn,session,encoded(data)))
         self.focus(session,turn,ref)
@@ -284,7 +302,7 @@ class ReportCollectionService:
     def page(data,limit,offset):
         items=data['items']; end=min(len(items),offset+limit)
         return {**data, 'sources':[public_source(s) for s in data['sources']], 'items':items[offset:end],'total_count':len(items),'has_more':end<len(items),'next_offset':end,
-            'scope_note':'仅本次列出的冻结报告；数量为本结果全集，分页不改变结果。'}
+            'scope_note':'仅本次列出的授权冻结版本；数量为本结果全集，分页不改变结果，不代表平台全部。'}
 
     def validate_answer(self, session, turn, answer):
         """Validate opaque evidence citations, not the semantics of prose claims."""
@@ -317,6 +335,9 @@ class ReportCollectionService:
 
     def execute(self,name,args,session,turn):
         sources=self.sources(session,turn)
+        if name=='read_conversation_delivery':
+            from .batches import read
+            return read(self,args,session,turn,sources)
         if name=='deliver_conversation_results':
             if not (self.agent_driven and self.direct_delivery):
                 raise ValueError('直接交付未启用。')
@@ -332,6 +353,12 @@ class ReportCollectionService:
             self.focus(session,turn,data['result_ref'])
             return self.page(data,args['limit'],args['offset'])
         selected=self.select(session,turn,args)
+        if name=='query_account_activity':
+            from .capabilities import activity
+            return activity(self,args,session,turn,selected)
+        if name=='query_report_content':
+            from .capabilities import content
+            return content(self,args,session,turn,selected)
         if name=='compare_conversation_config':
             if len(selected)!=2: raise ValueError('请选择两份报告进行配置比较。')
             configs=[self.repository(s)[1] for s in selected]
@@ -349,6 +376,17 @@ class ReportCollectionService:
             return self.save(session,turn,selected,'config_diff',changes,configs=configs,
                 warning='缺失字段为未知，不能视为未使用；配置差异不能单独证明风险变化的因果关系。')
         rows=self.observations(selected)
+        report_totals=[]
+        for source in selected:
+            full=[r for r in rows if r['source']['report_ref']==source['ref']]
+            comments=[r for r in full if r['kind']=='comment_author']
+            report_totals.append({'source':public_source(source),'post_count':sum(r['kind']=='post_author' for r in full),
+                'all_comment_count':len(comments),'completed_comment_count':sum(r['audit_status']=='completed' for r in comments),
+                'completed_comment_risk_counts':dict(Counter(r['risk_level'] for r in comments if r['audit_status']=='completed')),
+                'basis':'entire_frozen_report_before_this_query_filters'})
+        identity_coverage={'unresolved_comment_observations':sum(r['kind']=='comment_author' and not r['account_ref'] for r in rows),
+            'unresolved_post_observations':sum(r['kind']=='post_author' and not r['account_ref'] for r in rows),
+            'basis':'selected_reports_before_account_or_risk_filters; unknown identities cannot confirm_or_exclude_account_membership'}
         if args['kind']=='comments': rows=[r for r in rows if r['kind']=='comment_author']
         role=args.get('account_role','any')
         if role!='any':
@@ -369,7 +407,15 @@ class ReportCollectionService:
             elif previous['kind']=='accounts':
                 refs={r['account_ref'] for r in previous['items']}; rows=[r for r in rows if r['account_ref'] in refs]
             else: raise ValueError('此结果不包含账号或评论。')
-        if args.get('account_ref'): rows=[r for r in rows if r['account_ref']==args['account_ref']]
+        if args.get('account_ref'):
+            from .capabilities import account_exists
+            account_exists(self,args['account_ref'],session,sources,self.observations(selected))
+            rows=[r for r in rows if r['account_ref']==args['account_ref']]
+        if args.get('name_contains'):
+            if args['kind']!='accounts': raise ValueError('昵称检索用于账号候选；先确认账号后查询评论。')
+            term=args['name_contains'].casefold()
+            refs={r['account_ref'] for r in rows if term in r['account_name'].casefold() and r['account_ref']}
+            rows=[r for r in rows if r['account_ref'] in refs]
         if args.get('risk_level'): rows=[r for r in rows if r['audit_status']=='completed' and r['risk_level']==args['risk_level']]
         if args.get('text_exact') is not None:
             if not (self.agent_driven and self.analysis_tools) or args['kind']!='comments':
@@ -399,6 +445,21 @@ class ReportCollectionService:
                         'comment_count':sum(r['source']['report_ref']==s['ref'] and r['kind']=='comment_author' for r in observations),
                         'post_count':sum(r['source']['report_ref']==s['ref'] and r['kind']=='post_author' for r in observations),
                         'risk_levels':sorted({r['risk_level'] for r in observations if r['source']['report_ref']==s['ref']})} for s in selected]})
+        matching_count=len(items)
+        sort=args.get('sort_by','source_order')
+        if sort!='source_order':
+            if args['kind']!='accounts': raise ValueError('数量排序仅用于账号。')
+            metric={'comment_count':'unique_comment_count','post_count':'unique_post_count','observation_count':'observation_count'}[sort]
+            items.sort(key=lambda r:(-r[metric],r['account_ref']))
+            rank=0; prior=None
+            for position,item in enumerate(items,1):
+                if item[metric]!=prior: rank=position;prior=item[metric]
+                item['rank']=rank
+            if args.get('top_n') and len(items)>args['top_n']:
+                cutoff=items[args['top_n']-1][metric]
+                items=[r for r in items if r[metric]>=cutoff]
+        elif args.get('top_n'):
+            raise ValueError('前N须指定数量排序，不能把默认顺序当排名。')
         # Count evidence for matching entities, before pagination and before the
         # per-account observation preview is truncated. Unresolved identities
         # remain a separate coverage fact; they cannot belong to a matched account.
@@ -415,9 +476,9 @@ class ReportCollectionService:
                 expression_metadata['report_presence_groups'] = account_presence(items, selected)
             else:
                 expression_metadata['comment_counts'] = comment_counts(rows)
-        if self.agent_driven and self.express_results:
+        if self.agent_driven and (self.express_results or self.direct_delivery):
             expression_metadata['query_filters'] = {
-                key: args.get(key) for key in ('risk_level', 'account_ref', 'common_only', 'from_result_ref')}
+                key: args.get(key) for key in ('risk_level', 'account_ref', 'common_only', 'from_result_ref', 'name_contains','sort_by','top_n')}
             expression_metadata['query_filters']['parent_result_ref'] = parent_ref or None
             if self.analysis_tools:
                 expression_metadata['query_filters']['text_exact'] = args.get('text_exact')
@@ -425,10 +486,14 @@ class ReportCollectionService:
                 expression_metadata['query_filters']['account_role'] = role
         return self.save(session,turn,selected,args['kind'],items,args['limit'],
             **expression_metadata,
+            scope_kind='authorized_history' if args.get('scope')=='authorized_history' else ('single_report' if len(selected)==1 else 'conversation_reports'),
+            report_totals=report_totals,identity_coverage=identity_coverage,
+            matching_count_before_top=matching_count,ranking_includes_ties=bool(args.get('top_n')),
+            unresolved_identity_posts=sum(not r['account_ref'] and r['kind']=='post_author' for r in rows),
             parent_result_ref=parent_ref or '',
             unique_evidence_count=len({r['evidence_key'] for r in evidence_rows}),
             unresolved_identity_comments=sum(not r['account_ref'] and r['kind']=='comment_author' for r in rows),
-            identity_scope='按抖音 sec_uid 关联冻结报告中的发帖者和评论者；其他平台或缺失稳定 ID 不合并。未解析身份评论数为本次筛选后的未归属记录数，不计入账号条目及账号的唯一证据数。')
+            identity_scope='按抖音 sec_uid 关联冻结报告中的发帖者和评论者；其他平台或缺失稳定 ID 不合并。不同账号不证明是不同自然人，也不证明其控制关系。未解析身份评论数为本次筛选后的未归属记录数，不计入账号条目及账号的唯一证据数。')
 
 
 def business_config(config):

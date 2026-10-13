@@ -22,7 +22,7 @@ def issue(conn, edit, *, session_id, principal, source):
         return row['ref']
     ref = 'resource-ref:' + uuid4().hex
     conn.execute('INSERT INTO lexicon_edit_refs VALUES (?,?,?,?,?,?,?)',
-                 (ref, *key, canonical([source['id']] if source else [])))
+                 (ref, *key, canonical([source['id']] if source.get('id') else [])))
     return ref
 
 

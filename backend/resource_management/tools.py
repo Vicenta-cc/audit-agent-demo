@@ -110,6 +110,12 @@ RESOURCE_PROMPT = """
 
 
 
+RESOURCE_DESCRIPTIONS['save_resource'] += ' 用户指定保存名称时传 name，保存与命名原子完成；省略才沿用稿内名称。不会改名原编辑稿或冻结任务。'
+RESOURCE_DESCRIPTIONS['open_resource_edit'] += ' 编辑或另存某轮实际使用的版本，可选 read_session_resource 返回的 open_arguments（kind/session_resource_key）；按冻结正文复制，不读取最新版替代。仅查看请直接读取，不必打开副本。'
+RESOURCE_DESCRIPTIONS['get_resource_edit'] += ' 本工具只返回当前稿；历史版本通过 list_session_resources / read_session_resource 读取，不能由当前稿结果断言历史快照不存在。item_index 按完整内容展示顺序给出一基 position 与 target_id 对应关系；按当前目标版本定位，不从相邻资源沿用条目 ID。'
+RESOURCE_DESCRIPTIONS['update_resource_edit'] += ' 回执 applied_diff 是实际持久化前后差异，解释操作时以它及返回的目标资源为准。'
+
+
 def execute_resource(service, name, parsed, *, session_id, principal):
     args = parsed.model_dump(mode='json')
     ctx = dict(session_id=session_id, principal=principal)

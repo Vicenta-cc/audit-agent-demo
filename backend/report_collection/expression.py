@@ -16,7 +16,30 @@ def grouped(rows):
              'report_observations': values} for key, values in groups.items()]
 
 
+def known_configuration(config):
+    return {key:({'status':'unknown','meaning':'冻结资料未记录；不能判定未设置、未使用或与另一报告相同。'}
+                 if value is None else deepcopy(value))
+            for key,value in config.items()}
+
+
+def express_configuration(original):
+    data=deepcopy(original)
+    if 'configs' in data:data['configs']=[known_configuration(c) for c in data['configs']]
+    changes=data.get('configuration_changes',data.get('items',[]) if data.get('kind')=='config_diff' else [])
+    for change in changes:
+        if not change.get('known',False):
+            change['comparison_status']='unknown_cannot_determine_change'
+            for side in ('before','after'):
+                if change.get(side) is None:
+                    change[side]={'status':'unknown','meaning':'未记录，不能当作未设置或相同。'}
+    if data.get('kind')=='report_overview':
+        for item in data.get('items',[]):item['configuration']=known_configuration(item['configuration'])
+    return data
+
+
 def express_result(original):
+    if original.get('kind') in {'config_diff','report_comparison','report_overview'}:
+        return express_configuration(original)
     if original.get('kind') not in ('accounts', 'comments') or 'items' not in original:
         return original
     data = deepcopy(original)

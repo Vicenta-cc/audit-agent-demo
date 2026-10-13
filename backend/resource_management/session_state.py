@@ -12,7 +12,8 @@ from pathlib import Path
 import sqlite3
 
 from .lexicon_versions import digest
-from .contracts import LexiconContent
+from .contracts import LexiconContent, ResourceError
+from backend.rulesets.contracts import RuleSetContent
 from backend.rulesets.compiler import content_hash as rule_hash
 
 
@@ -53,6 +54,25 @@ def _summary(item):
     return {k: v for k, v in item.items() if k != '_content'}
 
 
+def editable_snapshot(detail,kind):
+    content=detail.get('content') or {}
+    body=None
+    if detail['type'] in {'edit_version','formal_resource'} and detail.get('kind')==kind:
+        body=content
+    elif detail['type']=='run':
+        if kind=='lexicon':body=(content.get('recall_plan') or {}).get('lexicon_content')
+        else:
+            source=content.get('temporary_ruleset') or content.get('ruleset_revision') or {}
+            body=source.get('content') or {k:source[k] for k in RuleSetContent.model_fields if k in source}
+    elif detail['type']=='draft_revision':
+        if kind=='lexicon':body=(content.get('recall_plan') or {}).get('lexicon_content')
+        else:body=(content.get('judgement') or {}).get('content')
+    if not body:
+        raise ResourceError('该版本没有保存完整资源正文，不能用最新资源或搜索词代替冻结内容。',code='RESOURCE_SNAPSHOT_UNAVAILABLE')
+    model=LexiconContent if kind=='lexicon' else RuleSetContent
+    return model.model_validate(body).model_dump(mode='json')
+
+
 class SessionResourceReader:
     def __init__(self, creation_db, resource_db, conversation_db):
         self.creation_db = Path(creation_db)
@@ -91,9 +111,17 @@ class SessionResourceReader:
         item = next((i for i in items if i['key'] == key), None)
         if item is None:
             raise ResourceStateError('RESOURCE_STATE_NOT_FOUND', '资源版本不存在或不属于当前会话。', 404)
-        return {**_summary(item), 'content': item.get('_content'),
+        result={**_summary(item), 'content': item.get('_content'),
                 'read_status': 'partial' if issues else 'complete', 'issues': issues,
                 'consistency': 'per_database_snapshot', 'revalidate_before_write': True}
+        options=[]
+        for kind in ('ruleset','lexicon'):
+            try:editable_snapshot(result,kind)
+            except ValueError:continue
+            except ResourceError:continue
+            options.append({'kind':kind,'session_resource_key':key})
+        result['open_arguments']=options
+        return result
 
     def _load(self, session_id, principal):
         try:

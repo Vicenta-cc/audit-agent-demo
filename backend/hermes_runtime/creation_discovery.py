@@ -4,41 +4,14 @@ from copy import deepcopy
 import json
 
 BRIDGE_GUIDANCE = {
-    'tool_search': (
-        '资源工具选择：新建独立规则/词库才用 create_ruleset_proposal/create_lexicon_edit。'
-        '修改已有内容必须用 update_resource_edit；'
-        '正式资源先 open_resource_edit 复制指定版本，已有会话稿先 get_resource_edit。'
-        '禁止用生成或整稿替换代替局部编辑。'
-        ' 仅未知业务工具名时搜索。'
-        '返回工具名和用途，不是参数 schema；'
-        '下一步直接调用 tool_describe。'
-    ),
-    'tool_describe': (
-        '资源工具选择：新建独立规则/词库才用 create_ruleset_proposal/create_lexicon_edit。'
-        '修改已有内容必须用 update_resource_edit；'
-        '正式资源先 open_resource_edit 复制指定版本，已有会话稿先 get_resource_edit。'
-        '禁止用生成或整稿替换代替局部编辑。'
-        ' 直接调用本函数，参数示例 {"name":"update_resource_edit"}。'
-        '不要通过 tool_call 调用本函数。'
-        '首次使用业务工具且完整参数 schema 未在上下文时，先读取它；'
-        '已读过则复用。'
-    ),
-    'tool_call': (
-        '资源工具选择：新建独立规则/词库才用 create_ruleset_proposal/create_lexicon_edit。'
-        '修改已有内容必须用 update_resource_edit；'
-        '正式资源先 open_resource_edit 复制指定版本，已有会话稿先 get_resource_edit。'
-        '禁止用生成或整稿替换代替局部编辑。'
-        ' 仅执行业务工具。'
-        '修改已有规则或词库（包括临时修改版）先用 open_resource_edit 复制指定来源，再用 update_resource_edit 提交局部改动；'
-        '已有会话副本直接编辑。'
-        'create_ruleset_proposal 是从零生成，不用于保留原文的修改。'
-        '必须同时传 name 和 arguments，例如 {"name":"query_investigation_options","arguments":{"platform":"dy","mode":"search"}}。'
-        'name 不得是 tool_search/tool_describe/tool_call。'
-        'arguments 必须符合已读取的业务 schema；'
-        '从零生成用 generation_request，content 仅原样导入完整正文。'
-        '参数报错先核对工具是否适用，不要为了补齐必填正文而把局部编辑改成整稿替换。'
-    ),
+    'tool_search': '未知业务工具名时搜索。返回名称和用途；参数定义用 tool_describe 读取。已知工具名可直接读取定义。',
+    'tool_describe': '直接调用本函数读取业务工具完整定义，例如 {"name":"update_resource_edit"}；不要通过 tool_call 调用。已在上下文的定义可复用。',
+    'tool_call': ('按已读取的业务定义调用，必须同时传 name 和 arguments。name 是业务工具名，不是 tool_search/tool_describe/tool_call。'
+                  '新建、局部编辑、整稿替换、保存和采用是不同操作，按当前用户要求选择。'
+                  '读取问题使用只读工具；修改前定位真实资源和版本，已有编辑稿可继续使用。'
+                  '参数错误核对定义，不通过生成整稿替代局部修改。'),
 }
+
 
 @contextmanager
 def creation_discovery_guidance(bridge):

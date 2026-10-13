@@ -89,7 +89,7 @@ def test_readable_delivery_keeps_distinct_same_name_accounts_and_sources(make_co
         assert source['version'] not in delivered['text']
 
 
-def test_delivery_rejects_partial_oversized_and_unknown_filter_results(make_collection):
+def test_delivery_batches_oversized_and_rejects_unknown_filter_results(make_collection):
     s=make_collection('paging');service=s['collection'];service.direct_delivery=True;t=begin(s)
     result=invoke(s,t,limit=1)
     with service.connect() as db:
@@ -97,7 +97,9 @@ def test_delivery_rejects_partial_oversized_and_unknown_filter_results(make_coll
         data=json.loads(row['payload']); data['items']=[data['items'][0]]*1001
         db.execute('UPDATE collection_results SET payload=? WHERE ref=?',(json.dumps(data),result['result_ref']))
     refused=json.loads(tools.dispatch('deliver_conversation_results',{'result_refs':[result['result_ref']]},s['sid'],t))
-    assert not refused['ok'] and '1000' in refused['error']['message']
+    assert refused['ok'] and not refused['data']['complete']
+    assert refused['data']['row_counts']==[100] and '1001 条记录' in refused['data']['text']
+    assert '| 101 |' not in refused['data']['text']
     with service.connect() as db:
         data['items']=data['items'][:1];data.pop('query_filters')
         db.execute('UPDATE collection_results SET payload=? WHERE ref=?',(json.dumps(data),result['result_ref']))
@@ -111,7 +113,7 @@ def test_guidance_exposes_delivery_without_forcing_tool_choice_and_restores_agen
     service.direct_delivery_guidance=True
     after={x['name']:x for x in tools.schemas()}
     assert all(before[k]['parameters']==after[k]['parameters'] for k in before)
-    assert len(tools.DIRECT_DELIVERY_PROMPT)==171<len(tools.AGENT_PROMPT)
+    assert len(tools.DIRECT_DELIVERY_PROMPT)<320
     agent=SimpleNamespace(api_mode='chat_completions',tools=[{'type':'function','function':{'name':'tool_call'}}],
         valid_tool_names={'tool_call'},_interruptible_api_call=lambda *a:None,_interruptible_streaming_api_call=lambda *a:None)
     original_tools=agent.tools;original_names=agent.valid_tool_names

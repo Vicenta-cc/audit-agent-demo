@@ -8,6 +8,8 @@ import { ManualImage } from "./ManualImage";
 interface MarkdownNode {
   type: string;
   value?: string;
+  url?: string;
+  position?: { start: { offset?: number }; end: { offset?: number } };
   children?: MarkdownNode[];
 }
 
@@ -65,6 +67,31 @@ function remarkHistoricalReportTerms() {
   return (tree: MarkdownNode) => transformDisplayTerms(tree);
 }
 
+// GFM includes adjacent Chinese punctuation/text in a bare URL. Split only
+// literal autolinks; explicit Markdown links and percent-encoded URLs stay intact.
+function remarkChineseAutolinks() {
+  return (tree: MarkdownNode, file: { value: unknown }) => {
+    const source = String(file.value);
+    const visit = (node: MarkdownNode) => {
+      if (!node.children) return;
+      node.children = node.children.flatMap((child) => {
+        const raw = source.slice(child.position?.start.offset, child.position?.end.offset);
+        const text = child.children?.length === 1 ? child.children[0].value : undefined;
+        if (child.type === "link" && /^https?:\/\//.test(raw) && text && child.url === text) {
+          const cut = text.search(/[，。；：！？、（）【】《》“”‘’]/);
+          if (cut > 0) return [
+            { ...child, url: text.slice(0, cut), children: [{ type: "text", value: text.slice(0, cut) }] },
+            { type: "text", value: text.slice(cut) }
+          ];
+        }
+        visit(child);
+        return [child];
+      });
+    };
+    visit(tree);
+  };
+}
+
 const components: Components = {
   img: ({ src, alt }) => src?.startsWith("/api/user-manual/images/")
     ? createElement(ManualImage, { src, alt }) : createElement("img", { src, alt }),
@@ -116,7 +143,7 @@ export function AssistantMarkdown({ content, className = "" }: AssistantMarkdown
     createElement(
       ReactMarkdown,
       {
-        remarkPlugins: [remarkGfm, remarkHistoricalReportTerms],
+        remarkPlugins: [remarkGfm, remarkChineseAutolinks, remarkHistoricalReportTerms],
         components,
         skipHtml: true
       },

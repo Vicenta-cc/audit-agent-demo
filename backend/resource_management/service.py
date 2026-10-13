@@ -76,7 +76,9 @@ class ResourceManagementService:
                 title = value.get('name') or value.get('title') or ''
                 if query.casefold() not in (title + ' ' + value['id']).casefold():
                     continue
-                items.append({'id': value['id'], 'title': title, 'kind': kind, 'editable': value.get('owner_id', principal.id) == principal.id and value['id'] not in TRIAL_BUNDLES})
+                items.append({'id': value['id'], 'title': title, 'kind': kind,
+                              **{k:value[k] for k in ('created_at','updated_at') if k in value},
+                              'editable': value.get('owner_id', principal.id) == principal.id and value['id'] not in TRIAL_BUNDLES})
             return {'items': items[offset:offset + limit], 'has_more': len(items) > offset + limit}
         if kind == 'ruleset':
             item = self.rulesets.get(resource_id, principal=principal)
@@ -241,7 +243,29 @@ class ResourceManagementService:
             conn.execute('INSERT INTO resource_edit_history VALUES (?,1,?)', (identifier, canonical(body)))
         return self.get_edit(identifier, session_id=session_id, principal=principal)
 
-    def open(self, kind, resource_id, *, session_id, principal, revision_id='', published_version=None):
+    def open(self, kind, resource_id='', *, session_id, principal, revision_id='', published_version=None, session_resource_key=''):
+        if session_resource_key:
+            if resource_id or revision_id or published_version is not None:
+                raise ResourceError('冻结来源不能与其他资源或版本同时指定。')
+            from .session_state import SessionResourceReader, editable_snapshot
+            reader=SessionResourceReader(self.app.store.db_path, self.db, self.app.conversation_store.db_path)
+            detail=reader.detail(session_id, session_resource_key, principal=principal)
+            body=editable_snapshot(detail,kind)
+            source={'session_resource_key':session_resource_key,'content_hash':digest(body),
+                    'editable':False,'snapshot_kind':kind}
+            if kind=='lexicon':
+                return self.create_lexicon(body,session_id=session_id,principal=principal,source=source)
+            parsed=self.app._validated_proposal_content(body)
+            compile_ruleset_content(parsed)
+            with self.app.store._connect() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                proposal=self.app.store.create_ruleset_proposal(session_id=session_id,content=parsed,
+                    content_hash=content_hash(parsed),connection=conn)
+                self._origin(conn,proposal.proposal_id,session_id,principal,kind,source)
+                conn.execute('INSERT OR IGNORE INTO resource_edit_history VALUES (?,?,?)',
+                             (proposal.proposal_id,proposal.version,canonical(body)))
+            return self.get_edit(proposal.proposal_id,session_id=session_id,principal=principal)
+        if not resource_id:raise ResourceError('请选择资源来源。')
         if (revision_id or published_version is not None) and kind != 'ruleset':
             raise ResourceError('只有规则支持按已发布版本建立副本。')
         resource = self.read(kind, resource_id, principal=principal)
@@ -313,12 +337,14 @@ class ResourceManagementService:
             result['recall_plan'] = {
                 'strategy': 'temporary_terms',
                 'terms': result['search_terms'],
-                'source_lexicon_ids': [source['id']] if source else [],
+                'source_lexicon_ids': [source['id']] if source.get('id') else [],
                 'lexicon_content': result['content'],
             }
         result['saves'] = saved
         result['saved'] = any(r['edit_version'] == result['version'] and r['edit_content_hash'] == result['content_hash'] for r in saved)
         result['update_arguments'] = {'edit_id': edit_id, 'expected_version': result['version']}
+        from .edit_projection import item_index
+        result['item_index']=item_index(result['kind'],result['content'])
         return result
 
     def list_edits(self, *, session_id, principal):
@@ -419,7 +445,11 @@ class ResourceManagementService:
                 version = expected_version + (body != current['content'])
                 conn.execute('UPDATE lexicon_edits SET version=?,content_json=?,updated_at=? WHERE id=?', (version, canonical(body), now(), edit_id))
                 conn.execute('INSERT OR IGNORE INTO resource_edit_history VALUES (?,?,?)', (edit_id, version, canonical(body)))
-        return {**self.get_edit(edit_id, session_id=session_id, principal=principal), 'previous_version': expected_version, 'changes': [c.model_dump() if hasattr(c, 'model_dump') else c for c in changes]}
+        from .edit_projection import differences
+        result=self.get_edit(edit_id,session_id=session_id,principal=principal)
+        return {**result, 'previous_version': expected_version,
+                'applied_diff':differences(current['content'],result['content']),
+                'changes': [c.model_dump() if hasattr(c, 'model_dump') else c for c in changes]}
 
     def get_save(self, operation_id, *, session_id, principal):
         with self.lexicons._connect() as conn:
@@ -443,8 +473,11 @@ class ResourceManagementService:
             return None
         return saved
 
-    def save(self, edit_id, expected_version, mode, operation_id, *, session_id, principal):
+    def save(self, edit_id, expected_version, mode, operation_id, *, session_id, principal, name=None):
         request = dict(edit_id=edit_id, expected_version=expected_version, mode=mode, session_id=session_id)
+        if name is not None:
+            if not name.strip():raise ResourceError('保存名称不能为空。')
+            request['name']=name
         request_hash = digest(request)
         with self.lexicons._connect() as conn:
             previous = conn.execute('SELECT * FROM resource_save_receipts WHERE principal_id=? AND operation_id=?', (principal.id, operation_id)).fetchone()
@@ -460,7 +493,8 @@ class ResourceManagementService:
         if mode == 'update' and (not source or not source.get('editable')):
             raise ResourceError('没有可更新的原资源；请另存一份。', code='RESOURCE_FORBIDDEN')
         identifier = source['id'] if mode == 'update' else ('ruleset.' if edit['kind'] == 'ruleset' else 'custom_') + uuid4().hex[:16]
-        body = edit['content']
+        body = deepcopy(edit['content'])
+        if name is not None:body['name' if edit['kind']=='ruleset' else 'title']=name
         if edit['kind'] == 'ruleset':
             parsed = RuleSetContent.model_validate(body)
             self.rulesets._validate_operator_content(parsed)
@@ -484,7 +518,8 @@ class ResourceManagementService:
                     receipt = json.loads(row[0])
                     if receipt.get('edit_id') == edit_id:
                         same_edit.append(receipt)
-            exact = next((r for r in reversed(same_edit) if r['edit_version'] == expected_version and r['edit_content_hash'] == edit['content_hash']), None)
+            exact = next((r for r in reversed(same_edit) if r['edit_version'] == expected_version and r['edit_content_hash'] == edit['content_hash']
+                          and r.get('resource_name')==(parsed.name if edit['kind']=='ruleset' else parsed.title)), None)
             if exact:
                 identifier = exact['resource_id']
                 formal = {k: exact[k] for k in ('resource_version', 'version', 'content_hash', 'revision_id', 'search_terms', 'resource_ref') if k in exact}
