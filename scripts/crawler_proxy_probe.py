@@ -6,6 +6,49 @@ import os
 from pathlib import Path
 import sys
 
+_diagnostic_emitted = False
+
+
+def emit_probe_diagnostic(exc, stage='unknown'):
+    """Fixed diagnostic enums only; exception messages and paths stay private."""
+    global _diagnostic_emitted
+    if _diagnostic_emitted:return
+    stages={'unknown','browser_startup','browser_echo','http_echo','login_check','cleanup'}
+    stage=stage if stage in stages else 'unknown'
+    error_class,category='unknown','unknown'
+    inferred_stage=None;probe_frame=False
+    current=exc;seen=set()
+    for _ in range(16):
+        if current is None or id(current) in seen:break
+        seen.add(id(current))
+        if stage!='cleanup':
+            frame=current.__traceback__
+            while frame:
+                if Path(frame.tb_frame.f_code.co_filename).name=='bound_proxy.py':
+                    if frame.tb_frame.f_code.co_name in {'open_context','_probe','_probe_locked'}:probe_frame=True
+                    if inferred_stage is None and frame.tb_frame.f_code.co_name=='_browser_sample':inferred_stage='browser_echo'
+                    elif inferred_stage is None and frame.tb_frame.f_code.co_name=='_http_sample':inferred_stage='http_echo'
+                frame=frame.tb_next
+        cls=type(current)
+        if isinstance(current,TimeoutError) or cls.__module__.startswith('playwright.') and cls.__name__=='TimeoutError':
+            if category=='unknown':error_class,category='timeout','timeout'
+        elif cls.__module__=='httpx' or cls.__module__.startswith('httpx.'):
+            if category=='unknown':error_class='httpx'
+        elif cls.__module__.startswith('playwright.'):
+            if category=='unknown':error_class='playwright'
+        elif getattr(current,'code',None) in {'PROXY_AUTH_FAILED','PROXY_CONNECTION_REFUSED','PROXY_TRANSPORT_FAILED'}:
+            if category=='unknown':
+                error_class='route'
+                category='proxy_auth' if current.code=='PROXY_AUTH_FAILED' else 'transport'
+        elif error_class=='unknown' and cls.__module__=='builtins':
+            error_class='os' if isinstance(current,OSError) else 'runtime' if isinstance(current,RuntimeError) else 'value' if isinstance(current,ValueError) else 'unknown'
+        elif error_class=='unknown' and cls.__module__=='tools.collection_route' and cls.__name__=='CollectionRouteError':error_class='route'
+        current=current.__cause__ or current.__context__
+    if inferred_stage is not None:stage=inferred_stage
+    elif probe_frame and stage=='browser_startup':stage='unknown'
+    _diagnostic_emitted=True
+    print('PROXY_PROBE_DIAGNOSTIC '+json.dumps({'stage':stage,'error_class':error_class,'category':category},allow_nan=False),flush=True)
+
 
 async def probe(account_id, *, check_login=False, expected_identity='', hold_context=False):
     crawler_root = Path(os.environ['MEDIACRAWLER_DIR']).resolve()
@@ -19,6 +62,7 @@ async def probe(account_id, *, check_login=False, expected_identity='', hold_con
         options=dict(reuse_existing_policy=True,account_policy=json.loads(os.environ['MEDIACRAWLER_ASSET_ACCOUNT_POLICY']))
     session = BoundProxySession(snapshot, maintenance_only=not check_login and not hold_context, **options)
     context = None
+    stage='browser_startup'
     try:
         context, _ = await launch_account_context(account_id,
             Path(os.environ['MEDIACRAWLER_CLOAK_PROFILE_ROOT']), headless=True,
@@ -26,6 +70,7 @@ async def probe(account_id, *, check_login=False, expected_identity='', hold_con
         receipt = session.receipt
         login_result = 'uncertain'
         if check_login:
+            stage='login_check'
             from scripts.crawler_douyin_login_adapter import DouyinLoginAdapter
             page = await context.new_page()
             adapter = await DouyinLoginAdapter(context, page, block_media=True, bound_proxy_session=session).install()
@@ -56,11 +101,18 @@ async def probe(account_id, *, check_login=False, expected_identity='', hold_con
             command=await asyncio.wait_for(asyncio.to_thread(sys.stdin.readline),1200)
             if command.strip() not in {'close',''}:
                 raise ValueError('PROXY_CONFIG_INVALID')
+    except Exception as exc:
+        emit_probe_diagnostic(exc,stage)
+        raise
     finally:
-        if context is not None:
-            await context.close()
-        else:
-            await session.close()
+        try:
+            if context is not None:
+                await context.close()
+            else:
+                await session.close()
+        except Exception as exc:
+            emit_probe_diagnostic(exc,'cleanup')
+            raise
 
 
 if __name__ == '__main__':
@@ -73,6 +125,7 @@ if __name__ == '__main__':
     try:
         asyncio.run(probe(args.account_id, check_login=args.check_login, expected_identity=args.expected_identity,hold_context=args.hold_context))
     except Exception as exc:
+        emit_probe_diagnostic(exc)
         allowed = {'PROXY_BUSY','PROXY_REVISION_MISMATCH','PROXY_EXIT_CHANGED',
                    'PROXY_UNAVAILABLE','PROXY_AUTH_FAILED','PROXY_CONFIG_INVALID',
                    'PROBE_BUDGET_EXHAUSTED','SCHEDULER_POLICY_CONFLICT'}

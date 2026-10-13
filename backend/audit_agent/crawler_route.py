@@ -1330,6 +1330,29 @@ def probe_account_route(account_id, owner_id, *, expected_binding_revision=None,
         bundle.close()
 
 
+def _consume_probe_diagnostic(line,bundle):
+    """Diagnostics are optional, private and never authorize a route or result."""
+    def unique(pairs):
+        value={}
+        for key,entry in pairs:
+            if key in value:raise ValueError('duplicate')
+            value[key]=entry
+        return value
+    try:
+        value=json.loads(line,object_pairs_hook=unique)
+        if not isinstance(value,dict) or set(value)!={'stage','error_class','category'}:return False
+        allowed={'stage':{'unknown','browser_startup','browser_echo','http_echo','login_check','cleanup'},
+            'error_class':{'unknown','route','timeout','playwright','httpx','os','runtime','value'},
+            'category':{'unknown','timeout','proxy_auth','transport'}}
+        if any(type(value[key]) is not str or value[key] not in allowed[key] for key in allowed):return False
+    except (ValueError,TypeError):return False
+    import re
+    execution_id=getattr(bundle,'execution_id','')
+    if not isinstance(execution_id,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,128}',execution_id):execution_id='unknown'
+    logging.getLogger(__name__).warning('proxy_probe_diagnostic execution_id=%s stage=%s error_class=%s category=%s',execution_id,value['stage'],value['error_class'],value['category'])
+    return True
+
+
 def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_identity=''):
     """Bounded subprocess protocol; dependency imports stay in crawler Python."""
     import json
@@ -1384,7 +1407,12 @@ def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_id
         if pipe.error:
             raise pipe.error
         result = None
+        diagnostic_seen=False
         for line in data.decode('utf-8').splitlines():
+            if line.startswith('PROXY_PROBE_DIAGNOSTIC '):
+                if not diagnostic_seen:
+                    diagnostic_seen=_consume_probe_diagnostic(line[len('PROXY_PROBE_DIAGNOSTIC '):],bundle)
+                continue
             if line.startswith('PROXY_PROBE_ERROR '):
                 value = json.loads(line[len('PROXY_PROBE_ERROR '):])
                 if set(value) != {'code'}:
