@@ -1363,6 +1363,7 @@ def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_id
     pipe = RouteConfigPipe(snapshot)
     receipt_pipe = RouteReceiptPipe(bundle) if snapshot.managed else None
     process = None
+    verified_receipt = None
     poll = selectors.DefaultSelector()
     try:
         env = os.environ.copy()
@@ -1445,6 +1446,7 @@ def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_id
             if result['login_result'] not in {'success', 'challenge', 'uncertain'}:
                 raise CollectionRouteError('PROXY_CONFIG_INVALID')
             return result['login_result']
+        verified_receipt=receipt
         return receipt
     except CollectionRouteError:
         raise
@@ -1457,12 +1459,39 @@ def _run_maintenance_probe(bundle, *, timeout=45, check_login=False, expected_id
         try:
             if process is not None:
                 _stop_probe_process_group(process)
+                if verified_receipt is not None:
+                    _retire_verified_probe_uncertainty(bundle,verified_receipt)
         finally:
             if process is not None and process.stdout is not None:
                 process.stdout.close()
             pipe.close()
             if receipt_pipe:
                 receipt_pipe.close()
+
+
+def _retire_verified_probe_uncertainty(bundle,receipt):
+    """Parent-only compare/delete after complete validated probe and group drain."""
+    snapshot=bundle.snapshot
+    if snapshot.route_mode in {'direct_degraded','legacy_direct'} or snapshot.observed_exit_ip is None or receipt.ip!=snapshot.observed_exit_ip:
+        return
+    now=time.time()
+    if snapshot.expires_at is None or snapshot.expires_at<=now or not 0<=now-receipt.observed_at<=settings.crawler_proxy_probe_ttl:
+        return
+    accounts=getattr(bundle,'account_store',None)
+    if accounts is None:return
+    with accounts._connect() as db:
+        db.execute('ATTACH DATABASE ? AS probe_health',(snapshot.scheduler_db_path,))
+        db.execute('BEGIN IMMEDIATE')
+        resource=db.execute('SELECT * FROM proxy_resources WHERE id=?',(snapshot.proxy_id,)).fetchone()
+        account=db.execute('SELECT proxy_id,binding_revision FROM crawler_accounts WHERE id=?',(snapshot.account_id,)).fetchone()
+        if (not account or tuple(account)!=(snapshot.proxy_id,snapshot.binding_revision) or not resource
+                or resource['config_revision']!=snapshot.config_revision or resource['observed_exit_ip']!=receipt.ip
+                or resource['status']!='active' or resource['stop_reason'] or resource['pause_reason']
+                or resource['expires_at'] is None or resource['expires_at']<=now
+                or resource['cooldown_until'] is not None and resource['cooldown_until']>now):return
+        exists=db.execute("SELECT 1 FROM probe_health.sqlite_master WHERE type='table' AND name='collection_route_health'").fetchone()
+        if exists:
+            db.execute("DELETE FROM probe_health.collection_route_health WHERE proxy_id=? AND config_revision=? AND stop_code='PROXY_UNAVAILABLE'",(snapshot.proxy_id,snapshot.config_revision))
 
 
 def _stop_probe_process_group(process):

@@ -515,7 +515,14 @@ runpy.run_path(os.environ['FIXTURE_HELPER'],run_name='__main__')
         monkeypatch.setattr(subprocess,'Popen',local_child)
         try:
             # A real original browser has ended; a new helper must preserve its source route.
+            with accounts._connect() as health_db:
+                health_db.execute('ATTACH DATABASE ? AS probe_health',(old.scheduler_db_path,))
+                health_db.execute('CREATE TABLE IF NOT EXISTS probe_health.collection_route_health(proxy_id TEXT,config_revision INTEGER,stop_code TEXT,PRIMARY KEY(proxy_id,config_revision))')
+                health_db.execute('INSERT OR REPLACE INTO probe_health.collection_route_health VALUES(?,?,?)',(old.proxy_id,old.config_revision,'PROXY_UNAVAILABLE'))
             original_receipt=app._run_maintenance_probe(bundle)
+            with accounts._connect() as health_db:
+                health_db.execute('ATTACH DATABASE ? AS probe_health',(old.scheduler_db_path,))
+                assert not health_db.execute('SELECT * FROM probe_health.collection_route_health').fetchall()
             assert children[0].poll()==0
             source=app.route_contract().collection_route_provenance(old,original_receipt,observation_id='source-observation',source_task_id='source-task',source_batch_id='source-batch',collected_at=time.time(),context_id=old.context_id)
             monkeypatch.syspath_prepend(str(app.settings.media_crawler_dir))
