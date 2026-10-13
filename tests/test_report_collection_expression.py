@@ -84,3 +84,52 @@ def test_expression_matches_historical_trial_and_old_filters_stay_unknown(collec
     s['collection'].express_results = False
     historical_control = invoke(s, t)
     assert 'query_coverage' not in historical_control and 'query_filters' not in historical_control
+
+
+def test_post_lookup_reports_search_state_without_selecting_target(collection):
+    s = collection
+    s['collection'].agent_driven = True
+    t = begin(s)
+    directory = invoke(s, t, 'query_report_content', kind='posts', limit=1)
+    assert directory['post_lookup']['state'] == 'directory'
+    assert directory['has_more']
+    later = invoke(s, t, 'read_conversation_result', result_ref=directory['result_ref'], offset=1)
+    assert later['post_lookup']['state'] == 'directory'
+    assert not later['post_lookup']['page_covers_all_matches']
+    target = later['items'][-1]
+    found = invoke(s, t, 'query_report_content', kind='posts', post_ref=target['post_ref'])
+    assert found['post_lookup']['state'] == 'single_filtered_match'
+    assert found['post_lookup']['page_covers_all_matches']
+    assert found['items'][0]['post_ref'] == target['post_ref']
+    empty = invoke(s, t, 'query_report_content', kind='posts', text_contains='absent-title-XYZ')
+    assert empty['post_lookup']['state'] == 'no_filtered_match'
+    with s['collection'].connect() as db:
+        raw = json.loads(db.execute('SELECT payload FROM collection_results WHERE ref=?',
+                                   (found['result_ref'],)).fetchone()[0])
+    assert 'post_lookup' not in raw
+    assert found['items'] == raw['items']
+    with s['creation_store'].admission.connect() as db:
+        db.execute("UPDATE task_admissions SET owner_id='revoked' WHERE task_id IN ('task-A','task-B')")
+    denied = json.loads(dispatch('read_conversation_result', {'result_ref':found['result_ref']}, s['sid'], t))
+    assert not denied['ok']
+
+
+def test_post_lookup_does_not_confuse_preview_filter_or_record_identity():
+    from copy import deepcopy
+    base = {'kind':'report_posts', 'query_filters':{'text_contains':'needle'},
+            'coverage':{'complete':True}, 'total_count':2, 'has_more':False, 'next_offset':2,
+            'items':[{'title':'one','body':'needle','post_ref':'A'},
+                     {'title':'one','source':{'label':'needle'},'post_ref':'B'}]}
+    snapshot = deepcopy(base)
+    data = express_result(base)
+    assert base == snapshot
+    assert data['post_lookup']['state'] == 'multiple_filtered_matches'
+    assert data['post_lookup']['count_unit'] == 'report_post_records_not_deduplicated_original_posts'
+    assert 'title_body_source' in data['post_lookup']['text_match_basis']
+    data = express_result({**base,'query_filters':{'risk_level':'high'},'total_count':1,'items':base['items'][:1]})
+    assert data['post_lookup']['state'] == 'directory'
+    assert express_result({**base,'coverage':{'complete':False}})['post_lookup']['state'] == 'incomplete_search'
+    old = dict(base);old.pop('query_filters')
+    assert express_result(old)['post_lookup']['state'] == 'unknown'
+    tail = express_result({**base,'items':base['items'][1:]})
+    assert not tail['post_lookup']['page_covers_all_matches']

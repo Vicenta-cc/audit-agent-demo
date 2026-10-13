@@ -37,7 +37,41 @@ def express_configuration(original):
     return data
 
 
+def express_post_lookup(original):
+    """Explain search coverage without selecting a post for the user."""
+    data = deepcopy(original)
+    filters = data.get('query_filters')
+    if not isinstance(filters, dict):
+        data['post_lookup'] = {'state':'unknown', 'meaning':'旧结果未记录查询条件，不能据此确认目标或匹配唯一性。'}
+        return data
+    targeted = bool(filters.get('text_contains') or filters.get('post_ref'))
+    complete = data.get('coverage', {}).get('complete') is True
+    count = data['total_count']
+    state = ('directory' if not targeted else 'incomplete_search' if not complete else
+             'no_filtered_match' if count == 0 else 'single_filtered_match' if count == 1 else
+             'multiple_filtered_matches')
+    meanings = {
+        'directory':'这是目录读取，尚未按用户指向检索。可在相同报告范围用 text_contains 缩小查找；目录预览不能证明目标不存在或唯一。',
+        'incomplete_search':'查询覆盖不完整，不能确认全范围匹配数或唯一性。',
+        'no_filtered_match':'当前字面条件没有命中；不等于相关主题或用户目标不存在。可核对用词及报告范围。',
+        'single_filtered_match':'当前条件完整命中一条报告帖子记录。核对标题、来源及正文是否符合用户指向后，可用其 post_ref 查询评论；简称与完整标题不逐字相同不单独构成歧义。',
+        'multiple_filtered_matches':'当前条件命中多条报告帖子记录；核对候选来源和内容，必要时缩小条件或请用户选择，不能擅自取首项。',
+    }
+    data['post_lookup'] = {
+        'state':state, 'filtered_record_count':count,
+        'count_unit':'report_post_records_not_deduplicated_original_posts',
+        'query_coverage_complete':complete,
+        'page_covers_all_matches':(data.get('has_more') is False and
+            data.get('next_offset') == len(data.get('items', [])) == count),
+        'text_match_basis':'literal_substring_of_post_record_including_title_body_source_and_assessment',
+        'meaning':meanings[state],
+    }
+    return data
+
+
 def express_result(original):
+    if original.get('kind') == 'report_posts':
+        return express_post_lookup(original)
     if original.get('kind') in {'config_diff','report_comparison','report_overview'}:
         return express_configuration(original)
     if original.get('kind') not in ('accounts', 'comments', 'account_activity') or 'items' not in original:
