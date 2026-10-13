@@ -748,24 +748,47 @@ class DouyinLoginAdapter:
     async def open_login(self):
         from scripts.crawler_account_login import PLATFORMS
 
-        deadline = asyncio.get_running_loop().time() + 2
-        while True:
-            if await self.visible(PANEL_SELECTOR):
-                return
-            trigger = None
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 2
+
+        async def opened():
+            return bool(
+                self.qr_ticket
+                or await self.visible(PANEL_SELECTOR)
+                or await self.visible(QR_SELECTOR)
+            )
+
+        async def candidates():
+            values = []
             for selector in PLATFORMS["dy"]["login_triggers"]:
                 trigger = await self.visible(selector)
                 if trigger is not None:
-                    break
-            if trigger is None and document_allowed(self.page.url, top_level=True):
-                trigger = await self.visible_match(
-                    self.page.get_by_role("button", name="登录", exact=True)
-                )
-                if trigger is None:
-                    trigger = await self.visible_match(
-                        self.page.get_by_text("登录", exact=True)
+                    values.append(trigger)
+            if document_allowed(self.page.url, top_level=True):
+                semantic_matches = []
+                get_by_role = getattr(self.page, "get_by_role", None)
+                get_by_text = getattr(self.page, "get_by_text", None)
+                if callable(get_by_role):
+                    semantic_matches.append(
+                        get_by_role("button", name="登录", exact=True)
                     )
-            if trigger is not None:
+                if callable(get_by_text):
+                    semantic_matches.append(get_by_text("登录", exact=True))
+                for matches in semantic_matches:
+                    count = min(await matches.count(), 20)
+                    for index in range(count):
+                        trigger = matches.nth(index)
+                        try:
+                            if await trigger.is_visible(timeout=100):
+                                values.append(trigger)
+                        except Exception:
+                            continue
+            return values
+
+        while True:
+            if await opened():
+                return
+            for trigger in await candidates():
                 from playwright.async_api import TimeoutError
 
                 try:
@@ -776,7 +799,7 @@ class DouyinLoginAdapter:
                     ):
                         raise
                     panel_present = await self.visible(PANEL_SELECTOR) is not None
-                    qr_present = await self.visible(QR_SELECTOR) is not None
+                    qr_present = bool(self.qr_ticket or await self.visible(QR_SELECTOR))
                     self.login_entry_diagnostic = {
                         "method": "click",
                         "timeout_ms": 2000,
@@ -784,9 +807,13 @@ class DouyinLoginAdapter:
                         "qr_present": qr_present,
                     }
                     if not (panel_present or qr_present):
-                        raise
-                return
-            if asyncio.get_running_loop().time() >= deadline:
+                        continue
+                postcondition_deadline = min(deadline, loop.time() + 0.2)
+                while loop.time() < postcondition_deadline:
+                    if await opened():
+                        return
+                    await asyncio.sleep(0.1)
+            if loop.time() >= deadline:
                 raise ValueError("LOGIN_PREPARATION_FAILED")
             await asyncio.sleep(0.1)
 

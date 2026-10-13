@@ -2021,7 +2021,8 @@ def test_login_entry_click_timeout_accepts_only_actual_same_page_postcondition()
             }
             assert "SECRET" not in str(adapter.login_entry_diagnostic)
         else:
-            with __import__("pytest").raises(pw.TimeoutError):
+            expected = pw.TimeoutError if not trusted else ValueError
+            with __import__("pytest").raises(expected):
                 await adapter.open_login()
         assert state["clicked"]
 

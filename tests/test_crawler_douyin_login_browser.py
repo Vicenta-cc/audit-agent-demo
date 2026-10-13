@@ -29,6 +29,7 @@ def test_real_semantic_login_entry_waits_for_hydration_and_opens_qr(tmp_path, ro
     data = base64.b64encode(png).decode()
     attribute = 'role="button"' if role else ""
     html = f"""<div style="display:none">登录</div>
+    <div role="button" style="width:60px;height:30px" onclick="window.decoyClicked=true">登录</div>
     <div id="header" {attribute} style="display:none" onclick="panel.style.display='block';window.clicked=true"><span>登录</span></div>
     <div id="panel" class="douyin_login_new_class" style="display:none;width:400px;height:300px">
     <div id="animate_qrcode_container"><img src="data:image/png;base64,{data}"></div></div>
@@ -52,6 +53,7 @@ def test_real_semantic_login_entry_waits_for_hydration_and_opens_qr(tmp_path, ro
             await page.goto("https://www.douyin.com/login-entry-fixture")
             adapter = DouyinLoginAdapter(context, page)
             await adapter.open_login()
+            assert await page.evaluate("window.decoyClicked") is True
             assert await page.evaluate("window.clicked") is True
             assert (await adapter.observe())["phase"] == "qr_ready"
             await page.evaluate("window.clicked=false")
