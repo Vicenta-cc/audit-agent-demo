@@ -11,22 +11,43 @@ _CONSTRAINTS = {
     'generated enabled themes require enabled variants': 'theme_without_active_variants',
     'original terms or order were changed': 'exact_terms_mismatch',
     'explicit resource count was not preserved': 'requested_count_mismatch',
+    'application_stages must not contain duplicates': 'duplicate_application_stage',
 }
 _FIELDS = frozenset({
     'title', 'risk_label', 'description', 'themes', 'variants', 'alternatives', 'tags',
     'term', 'note', 'platform', 'match_type', 'risk_level', 'entries', 'id', 'kind',
     'parent_id', 'enabled', 'categories', 'rules', 'name', 'domain', 'audit_goal',
     'category_id', 'rule_id', 'general_exemptions', 'rule_exemptions', 'hit_condition',
+    'exemption_id', 'condition', 'application_stages', 'adjudication_notes',
+    'suggested_risk_level', 'order', 'schema_version', 'source_mappings', 'source_file',
+    'source_locator', 'migrated_semantics',
 })
 
 
+class AuthoringConflict(ValueError):
+    """A program-produced pair of structural paths, with no term contents."""
+    def __init__(self, path, conflicts_with):
+        super().__init__('duplicate term/platform/match_type')
+        self.path = path
+        self.conflicts_with = conflicts_with
+
+
+def _safe_path(path):
+    return [part if isinstance(part, int) or part in _FIELDS else '<field>'
+            for part in path[:12]]
+
+
 def validation_details(exc, stage):
+    if isinstance(exc, AuthoringConflict):
+        return {'validation_stage': stage, 'validation_errors': [{
+            'path': _safe_path(exc.path), 'conflicts_with': _safe_path(exc.conflicts_with),
+            'type': 'constraint_error', 'constraint': 'duplicate_term_platform_match_type',
+        }], 'validation_error_count': 1}
     if isinstance(exc, ValidationError):
         errors = []
         for error in exc.errors(include_url=False, include_context=False, include_input=False)[:20]:
             # Extra-field names and validator messages can themselves contain input text.
-            path = [part if isinstance(part, int) or part in _FIELDS else '<field>'
-                    for part in error['loc'][:12]]
+            path = _safe_path(error['loc'])
             message = error['msg'].removeprefix('Value error, ')
             errors.append({'path': path, 'type': error['type'],
                            'constraint': _CONSTRAINTS.get(message, 'schema_validation')})

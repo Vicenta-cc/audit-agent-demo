@@ -25,6 +25,9 @@ RESOURCE_DESCRIPTIONS = {
     'save_resource': '用户明确要求保存时，把 edit_id/expected_version 的精确内容正式保存并发布，一次动作完成。mode=new 保存新生成资源，update 保存回可编辑原资源，copy 另存。operation_id 标识这一次逻辑保存，重试保持同一个值；结果未知先 get_resource_save。规则与词库分别调用，允许同轮保存多个资源。返回正式保存版本的 resource_ref；若用户要求草案换用已保存版本，把该引用传给 configure_investigation_draft。旧编辑稿引用仍指向原编辑版本，不自动改指正式资源。保存不等于采用、绑定 Draft 或启动；任务可以继续使用未保存内容。',
     'get_resource_save': '按原 operation_id 查询实际正式保存回执。用于响应丢失后的恢复，避免更换 ID 重复创建。只读，not_found 表示未查到已提交保存。',
 }
+RESOURCE_DESCRIPTIONS['read_resource'] = (
+    '只读正式资源。必填 kind=ruleset|lexicon；resource_id 用资源ID，不用版本ID。\n'
+) + RESOURCE_DESCRIPTIONS['read_resource']
 
 # Native deferred discovery delivers these only when the tool is described.
 # A mixed resource editor retains both sets of guidance; applicability is explicit.
@@ -71,7 +74,8 @@ RESOURCE_EDIT_TOOL_GUIDANCE = {
         '已有会话编辑稿无需再复制，直接 get_resource_edit。'
     ),
     'get_resource_edit': (
-        '【已有会话稿的读取入口】需要查看或继续修改已存在的编辑稿时用本工具读取真实内容和版本；'
+        '只读当前编辑稿，仅传 edit_id；不传 expected_version。\n'
+        '原样复制 read_arguments。需要查看或继续修改已存在的编辑稿时用本工具读取真实内容和版本；'
         '后续局部修改必须用 update_resource_edit，不重新生成。'
     ),
     'update_resource_edit': (
@@ -86,7 +90,7 @@ for _name, _guidance in RESOURCE_EDIT_TOOL_GUIDANCE.items():
 
 RESOURCE_PROMPT = """
 规则库与黑话库的创建、编辑原则：
-1. 新建独立资源：新规则用 create_ruleset_proposal，新词库用 create_lexicon_edit，传 generation_request。
+1. 新建独立资源：新规则用 create_ruleset_proposal，新词库用 create_lexicon_edit，仅传 generation_request；原样导入用户给定的完整结构化正文用 import_resource(kind, content)。
 2. 修改已有资源：先定位目标及版本；正式资源用 open_resource_edit 复制，已有会话编辑稿用 get_resource_edit 读取。再用 update_resource_edit，只提交指定字段或条目变更，保留其余内容、编号和顺序。豁免按条增删改。
 3. “新增一条”“生成一个变体”“做临时修改版”只要针对已有资源，都属于编辑，不以整套生成替代。临时、不保存只决定是否正式保存，不决定使用生成工具。
 4. 明确要求整体重做时，区分独立新资源与已有稿整体替换；后者先读取原稿，按工具契约用 update_ruleset_proposal，不把局部修改扩大为整体替换。
@@ -98,7 +102,7 @@ RESOURCE_PROMPT = """
 
 词库主词用于主题归类；启用主词有启用变体时搜索变体，否则搜索主词。停用主词整组不参与；标签不参与搜索。新建完整黑话库默认生成变体。
 用户明确指定搜索词且未要求扩展时，实际搜索词只包含指定词。可加不参与搜索的主题主词归类，不自行扩展召回词或标签；明确授权扩展时先说明范围。采集规模沿用系统配置，不能把采集量当作资源条数。
-新生成时，generation_request 完整传递主题、平台及约束；原文词表用 exact_terms，明确指定资源条数才用 requested_count。专用生成步骤负责质量指导与结构化生成；content 仅用于已有完整结构化内容的原样导入，不用于绕过生成失败。
+新生成时，generation_request 完整传递主题、平台及约束；原文词表用 exact_terms，明确指定资源条数才用 requested_count。专用生成步骤负责质量指导与结构化生成；import_resource 仅用于已有完整结构化内容的原样导入，不用于绕过生成失败。失败回执 retryable=true 才可本轮纠正一次；同一调用身份只重放回执，不重新生成。
 
 编辑操作、参数、冲突与删除范围要求见 open_resource_edit / update_resource_edit 的完整说明，调用前读取。版本冲突先读取并核对，不强行写入；明确保留的内容不为消除冲突而改动。
 用户要任务使用资源时，沿用展示采用、Draft 预览、明确启动流程。规则采用须遵循上文的后续回合确认；保存不代表采用。已确认 Draft 不修改，按新调查流程准备新 Draft，不修改既有任务。

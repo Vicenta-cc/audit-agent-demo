@@ -265,6 +265,11 @@ class InvestigationCreationStore:
                 connection.execute('DROP INDEX uq_creation_turn_mutation_tool')
                 connection.execute("CREATE UNIQUE INDEX uq_creation_turn_mutation_tool ON investigation_creation_tool_receipts(session_id,turn_id,tool_name) WHERE is_mutation=1 AND tool_name NOT IN ('create_lexicon_edit','open_resource_edit','update_resource_edit','save_resource')")
             draft_operations.initialize(connection)
+            # Failed authoring attempts may be corrected once; successful rule
+            # creation remains unique per turn in both the store and database.
+            connection.execute('''CREATE UNIQUE INDEX IF NOT EXISTS uq_creation_ruleset_success
+                ON investigation_creation_tool_receipts(session_id,turn_id,tool_name)
+                WHERE is_mutation=1 AND tool_name='create_ruleset_proposal' AND status='SUCCEEDED' ''')
             from backend.resource_management.selections import initialize as initialize_selections
             initialize_selections(connection)
             from backend.resource_management.ruleset_refs import initialize as initialize_ruleset_refs
@@ -525,7 +530,21 @@ class InvestigationCreationStore:
                 """,
                 (identity["session_id"], identity["turn_id"], identity["tool_call_id"]),
             ).fetchone()
-            if row is None and is_mutation and tool_name not in {"create_lexicon_edit", "open_resource_edit", "update_resource_edit", "save_resource", "configure_investigation_draft"}:
+            from . import generation_attempts
+            generation_retry_remaining = None
+            if row is None and is_mutation and tool_name in generation_attempts.TOOLS:
+                prior = connection.execute(
+                    '''SELECT * FROM investigation_creation_tool_receipts
+                       WHERE session_id=? AND turn_id=? AND tool_name=? AND is_mutation=1 ORDER BY rowid''',
+                    (identity['session_id'], identity['turn_id'], tool_name),
+                ).fetchall()
+                if any(item['principal'] != identity['principal'] for item in prior):
+                    raise IdempotencyConflictError('tool execution principal changed')
+                row = generation_attempts.prior_receipt(prior, tool_name=tool_name,
+                    arguments=arguments, fingerprint=fingerprint)
+                if isinstance(arguments.get('generation_request'), dict):
+                    generation_retry_remaining = max(0, 1 - sum(generation_attempts.is_generation(item) for item in prior))
+            elif row is None and is_mutation and tool_name not in {"open_resource_edit", "update_resource_edit", "save_resource", "configure_investigation_draft"}:
                 row = connection.execute(
                     """
                     SELECT * FROM investigation_creation_tool_receipts
@@ -571,7 +590,7 @@ class InvestigationCreationStore:
                     int(is_mutation),
                     now,
                     json.dumps(arguments, ensure_ascii=False, sort_keys=True)
-                    if tool_name in RESOURCE_SAVE_TOOLS else '',
+                    if tool_name in RESOURCE_SAVE_TOOLS or tool_name in generation_attempts.TOOLS else '',
                 ),
             )
             if application_turn_id:
@@ -581,6 +600,7 @@ class InvestigationCreationStore:
             "status": "STARTED",
             "response": None,
             "replay": False,
+            "generation_retry_remaining": generation_retry_remaining,
         }
 
     def complete_tool_execution(

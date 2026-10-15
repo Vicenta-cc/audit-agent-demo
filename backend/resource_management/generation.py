@@ -22,6 +22,7 @@ from .recall_prompt import RECALL_GENERATION_PROMPT
 from .keyword_profiles import selected_keyword_profile
 from .lexicon_authoring import GeneratedLexicon, LEXICON_AUTHORING_VERSION
 from .generation_diagnostics import validation_details
+from .ruleset_authoring import GeneratedRuleSet, RULESET_AUTHORING_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ AUTHOR_IDENTITY = """你是内容审核平台的资源编写器，只为人工�
 def generation_messages(kind: str, request: ResourceGenerationRequest) -> list[dict]:
     if kind not in {"lexicon", "ruleset"}:
         raise ValueError("unsupported resource kind")
-    schema = GeneratedLexicon if kind == "lexicon" else RuleSetContent
+    schema = GeneratedLexicon if kind == "lexicon" else GeneratedRuleSet
     guidance = (RECALL_GENERATION_PROMPT + LEXICON_DOMAIN_GUIDANCE if kind == "lexicon"
                 else RULESET_AUTHORING_GUIDANCE)
     if kind == "lexicon":
@@ -46,7 +47,15 @@ def generation_messages(kind: str, request: ResourceGenerationRequest) -> list[d
                      "依据不足填未评估，不统一套用默认中风险。"
                      "不填写 id、kind、parent_id、enabled；"
                      "这些存储字段由后端构造，主题和 variants 默认启用，tags 不参与搜索。"
-                     "仅用户明确要求停用备选时放入 alternatives，后端将其停用。")
+                     "仅用户明确要求停用备选时放入 alternatives，后端将其停用。"
+                     "全库所有 themes、variants、alternatives、tags 的 term/platform/match_type 组合必须唯一，"
+                     "包括主题本身和停用备选；主题与搜索词同名同平台同匹配类型也冲突。"
+                     "主题名称应概括分组，与实际候选词区分。"
+                     "不为通过校验擅自删词、改名或去重。")
+    else:
+        guidance += ("\n只生成名称、条件、分类、风险、适用阶段、裁定说明及豁免等业务字段。"
+                     "不要填写 schema_version、category_id、rule_id、exemption_id 或 order；"
+                     "后端按数组次序生成新资源的标识和顺序，不补造缺失的业务内容。")
     # Profiles do not replace shared quality guidance or the user's original requirements.
     payload = request.model_dump(mode="json", exclude={"keyword_profile"})
     profile = selected_keyword_profile(kind, request)
@@ -64,15 +73,39 @@ def generation_messages(kind: str, request: ResourceGenerationRequest) -> list[d
 
 def _failure(code: str, message: str, **details) -> ResourceError:
     return ResourceError(message, code=code, details={
-        "retryable": False, "mutation_applied": False, "resource_created": False, **details,
+        "retryable": False, "mutation_applied": False, "resource_created": False,
+        "generation_stage": "generation", **details,
     })
 
 
 def _validate_content(kind: str, content: str, request: ResourceGenerationRequest):
-    schema = GeneratedLexicon if kind == "lexicon" else RuleSetContent
+    schema = GeneratedLexicon if kind == "lexicon" else GeneratedRuleSet
     stage = "authoring_schema"
     try:
-        parsed = schema.model_validate_json(content)
+        # Continue accepting fully valid legacy storage-shaped output without
+        # advertising mechanical fields in the new generation schema.
+        if kind == "ruleset":
+            try:
+                body = json.loads(content)
+            except (ValueError, TypeError):
+                body = None
+            categories = body.get("categories", []) if isinstance(body, dict) else []
+            legacy = isinstance(body, dict) and (
+                "schema_version" in body or (
+                    isinstance(categories, list) and any(
+                        isinstance(category, dict) and "category_id" in category
+                        for category in categories
+                    )
+                )
+            )
+            if legacy:
+                # Validate all legacy fields before discarding mechanical ones;
+                # partial/invalid IDs are not a route around authoring validation.
+                parsed = GeneratedRuleSet.from_content(RuleSetContent.model_validate_json(content))
+            else:
+                parsed = schema.model_validate_json(content)
+        else:
+            parsed = schema.model_validate_json(content)
         if kind == "lexicon":
             stage = "storage_contract"
             parsed = parsed.to_content()
@@ -93,6 +126,9 @@ def _validate_content(kind: str, content: str, request: ResourceGenerationReques
             # threshold. Preserve valid output; never trim it to fit the target.
             count = len(terms)
         else:
+            stage = "storage_contract"
+            if isinstance(parsed, GeneratedRuleSet):
+                parsed = parsed.to_content()
             stage = "rule_constraints"
             count = sum(len(category.rules) for category in parsed.categories)
         if request.requested_count is not None and count != request.requested_count:
@@ -101,7 +137,7 @@ def _validate_content(kind: str, content: str, request: ResourceGenerationReques
         # Never include an unvalidated model payload in the next Agent request.
         details = validation_details(exc, stage)
         raise _failure("RESOURCE_GENERATION_INVALID", "生成内容未通过结构或数量校验，未创建资源。",
-                       **details) from exc
+                       retryable=True, generation_stage="validation", **details) from exc
     return parsed
 
 
@@ -171,7 +207,7 @@ class ResourceGenerator:
                     "response_hash": hashlib.sha256((raw_content or '').encode()).hexdigest(),
                     "http_status": http_status, "provider_request_id": request_id,
                     "finish_reason": finish,
-                    "authoring_version": LEXICON_AUTHORING_VERSION if kind == "lexicon" else None,
+                    "authoring_version": LEXICON_AUTHORING_VERSION if kind == "lexicon" else RULESET_AUTHORING_VERSION,
                 }
                 exc.details.update(metadata)
                 logger.warning("resource_generation_invalid diagnostics=%s",
@@ -199,7 +235,19 @@ class ResourceGenerator:
             else:
                 code, message = "RESOURCE_GENERATION_PROVIDER_ERROR", "资源生成接口失败，未创建资源。"
             outcome = code
-            raise _failure(code, message, http_status=http_status, provider_request_id=request_id) from exc
+            # Only established transient provider/transport failures permit a new
+            # bounded caller attempt. Never infer retryability from error text.
+            import httpx
+            from openai import APIConnectionError, APITimeoutError
+            retryable = code == "RESOURCE_GENERATION_PROVIDER_ERROR" and (
+                isinstance(exc, (httpx.TransportError, APIConnectionError, APITimeoutError,
+                                 TimeoutError, ConnectionError))
+                or http_status in {408, 409, 429, 500, 502, 503, 504}
+            )
+            raise _failure(code, message, retryable=retryable, generation_stage="generation",
+                           error_type="transport_error" if retryable and http_status is None
+                           else "provider_response_error", http_status=http_status,
+                           provider_request_id=request_id) from exc
         finally:
             logger.info("resource_generation kind=%s model=%s request_hash=%s outcome=%s "
                         "http_status=%s request_id=%s finish_reason=%s elapsed_ms=%s "
