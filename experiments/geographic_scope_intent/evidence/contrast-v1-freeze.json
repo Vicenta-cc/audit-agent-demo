@@ -1,0 +1,535 @@
+{
+  "version": "geo-intent-p0-contrast-v1",
+  "frozen_at_utc": "2026-10-14T10:31:15.862907+00:00",
+  "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "branch": "codex/geographic-relevance-p0",
+  "model": "deepseek-v4-pro-ga-260813",
+  "provider_host": "api.qhose.net",
+  "base_url": "https://api.qhose.net/v1",
+  "configuration_source": "/Users/ext.wanghongtao6/Documents/Codex/acceptance/unified-draft-frontend-20261012/environment.private.json",
+  "configuration_root": "/Users/ext.wanghongtao6/.codex/worktrees/unified-report-query-phase1/xhs-audit-agent-demo",
+  "authorization": "用户授权18条三组对照，最多162次真实模型请求；不重试、不扩大样本、不改正式业务、不进入P1",
+  "counts": {
+    "unique_cases": 18,
+    "case_runs": 54,
+    "intent_sets": 7,
+    "draft_sets": 5
+  },
+  "limits": {
+    "total_requests": 162,
+    "full_requests_per_case": 4,
+    "bridge_requests_per_case": 4,
+    "simple_requests_per_case": 1,
+    "full_bridge_tool_requests": 12,
+    "simple_tool_requests": 1,
+    "timeout_seconds": 45,
+    "automatic_retries": 0
+  },
+  "schedule_seed": 20261014,
+  "schedule": [
+    {
+      "case_id": "city-kelamayi",
+      "arm": "full"
+    },
+    {
+      "case_id": "city-kelamayi",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "city-kelamayi",
+      "arm": "simple"
+    },
+    {
+      "case_id": "only-kelamayi",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "only-kelamayi",
+      "arm": "simple"
+    },
+    {
+      "case_id": "only-kelamayi",
+      "arm": "full"
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "arm": "simple"
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "arm": "full"
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "change-daqing",
+      "arm": "full"
+    },
+    {
+      "case_id": "change-daqing",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "change-daqing",
+      "arm": "simple"
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "arm": "simple"
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "arm": "full"
+    },
+    {
+      "case_id": "province-xinjiang",
+      "arm": "simple"
+    },
+    {
+      "case_id": "province-xinjiang",
+      "arm": "full"
+    },
+    {
+      "case_id": "province-xinjiang",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "keep-rules",
+      "arm": "full"
+    },
+    {
+      "case_id": "keep-rules",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "keep-rules",
+      "arm": "simple"
+    },
+    {
+      "case_id": "defer-missing-all",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "defer-missing-all",
+      "arm": "simple"
+    },
+    {
+      "case_id": "defer-missing-all",
+      "arm": "full"
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "arm": "simple"
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "arm": "full"
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "arm": "full"
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "arm": "simple"
+    },
+    {
+      "case_id": "new-round-national",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "new-round-national",
+      "arm": "simple"
+    },
+    {
+      "case_id": "new-round-national",
+      "arm": "full"
+    },
+    {
+      "case_id": "named-resource",
+      "arm": "simple"
+    },
+    {
+      "case_id": "named-resource",
+      "arm": "full"
+    },
+    {
+      "case_id": "named-resource",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "pasted-post",
+      "arm": "full"
+    },
+    {
+      "case_id": "pasted-post",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "pasted-post",
+      "arm": "simple"
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "arm": "simple"
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "arm": "full"
+    },
+    {
+      "case_id": "denied-city",
+      "arm": "simple"
+    },
+    {
+      "case_id": "denied-city",
+      "arm": "full"
+    },
+    {
+      "case_id": "denied-city",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "clear-unlimited",
+      "arm": "full"
+    },
+    {
+      "case_id": "clear-unlimited",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "clear-unlimited",
+      "arm": "simple"
+    },
+    {
+      "case_id": "keep-title",
+      "arm": "bridge"
+    },
+    {
+      "case_id": "keep-title",
+      "arm": "simple"
+    },
+    {
+      "case_id": "keep-title",
+      "arm": "full"
+    },
+    {
+      "case_id": "assistant-city",
+      "arm": "simple"
+    },
+    {
+      "case_id": "assistant-city",
+      "arm": "full"
+    },
+    {
+      "case_id": "assistant-city",
+      "arm": "bridge"
+    }
+  ],
+  "sha256": {
+    "experiments/geographic_scope_intent/CONTRAST_PLAN.md": "8422c2d477eb4c25e61f5d1f7eb4cdcf93e99947f189b7ae032dd7ef52ef4937",
+    "experiments/geographic_scope_intent/__init__.py": "88483891e5c7baf064a27cacf262dd163b2c0049ebedfc40e26cc3698307a5f9",
+    "experiments/geographic_scope_intent/baseline_prompt.txt": "dd91b3c92ff4bf197b2423f9cf5e9cf497ac6b653c176dc70a423e696919b8a0",
+    "experiments/geographic_scope_intent/baseline_tools.json": "ab0138e3e60d2f46d872286363b44c4f3c7222f6e40ad507bb7416b7367f87a8",
+    "experiments/geographic_scope_intent/candidate_guidance.txt": "19a7a291370376dfce3f91e4e34c2ff6e358887bbb9848bb6a51b2ba9fcdd81f",
+    "experiments/geographic_scope_intent/candidate_schema.json": "3342205e7451d5d582f4bf2194088a48c7ee2b6226bff8b42b12d46ed7e76028",
+    "experiments/geographic_scope_intent/cases.jsonl": "f79a162ea5e54b27471cbe045d698573ada51e52950d1239e920b3731d0fda38",
+    "experiments/geographic_scope_intent/continuity_guidance.txt": "955b301831ca86bdf013da200e09412084128dc881a4b05918eadefedb65d155",
+    "experiments/geographic_scope_intent/contract.py": "3a40cd3227922e3cee988c0f711e3db6624c22cf70109f9ab1484231f6b7a9d6",
+    "experiments/geographic_scope_intent/contrast_guidance.txt": "d344840d3a8e3680b58b81b4ec1ec5919a3802f998d5c1af74f4061ae25b6784",
+    "experiments/geographic_scope_intent/contrast_intent.py": "1c4dbf312eb4559fea02dfa160e5e28198b6d1028ca1f304a8a7e6644b1b3613",
+    "experiments/geographic_scope_intent/contrast_labels.json": "e426c53ac26e0e906e975ea60cd3a35f4942b1fc7ebbe18ca5405d3a7b52d258",
+    "experiments/geographic_scope_intent/contrast_runner.py": "07cd20e23c64009e0dbff04a1d06a490bff9868d3a46b0257660de0d37347296",
+    "experiments/geographic_scope_intent/contrast_schema.json": "171a29f89ad503c2c395d8da63e82b8b8b7d994f0807bba86339e7d2914fd7c8",
+    "experiments/geographic_scope_intent/contrast_scoring.py": "a0393e1a3e6f2466421925c8686ea50560d505a7672270745cfba40fc8b99e17",
+    "experiments/geographic_scope_intent/data.py": "d93a964af32748d4c36002bf6aec645ef2141b039f63a218a9be349bfeb2dca2",
+    "experiments/geographic_scope_intent/manifest.json": "4f94ba66546d544517c3db8af74dea1b25796f851f68d7ecad295b76c3965b6c",
+    "experiments/geographic_scope_intent/rounds_guidance.txt": "7b00b3132903ceb56cd1a961c758bc25f1d76bfea47b45264ea1529182449f92",
+    "experiments/geographic_scope_intent/runner.py": "3742a4abb3b3af78bc1cec6cc88803e1541c17fec2c636c860bbd30919bd3047",
+    "experiments/geographic_scope_intent/sandbox.py": "1a1c3070e0d84fa4dd49926e7fd7a4d451c90f3af070465299dc75df1e007fa7",
+    "experiments/geographic_scope_intent/scoring.py": "0c3802e4773437205ee5329bbf05fdfeed5db86b306557e7c8f9a946f45bcf7b",
+    "experiments/geographic_scope_intent/scripted_smoke.json": "338940d59a483737ce86c5369140db464ace3b3ac8031182e8ce740e135cc8ba",
+    "experiments/geographic_scope_intent/snapshot.py": "f60cfc39ddbcbf3c5ab8fcbc8b726883a249079c2b26978b38b20c9962793922",
+    "outputs/geographic-scope-intent/run-authorized-eval.py": "c9576e3b43db6ec1b48e38e71fac35fe061a0a07e7a5ab6e124e89329c3be01c",
+    "tests/test_geographic_scope_contract.py": "17782e758d3013d199522aea9870f06c0ccd02ffbeaa3cba0dec61463f9801f4",
+    "tests/test_geographic_scope_contrast_intent.py": "150bc3684e749e06450c3ab994d6198437bb20d9171653be51847f5282b7c0e1",
+    "tests/test_geographic_scope_contrast_runner.py": "9627d15ef3e416745cb8706c7a42397270ef1762e7502705b0ba29a62a1b8b04",
+    "tests/test_geographic_scope_contrast_scoring.py": "2d963a740c2238f4730b40639663a10b8751de2b932d5f3efe0f62b3e84f58b3",
+    "tests/test_geographic_scope_data.py": "0fd7276cbaaeb742351a0654f2ea6cd1858a5334bcb7b738eed08a54a077146c",
+    "tests/test_geographic_scope_runner.py": "7f63186d7bfbd7258b27dc6f91d0f54eb1ef29ad3e0cd6e35bf38a2833ba4ad6",
+    "tests/test_geographic_scope_scoring.py": "56834c31669244b1e3ee1a1158746826a5e8fec9625c256e4658da12362b4242"
+  },
+  "sources_sha256": {
+    "backend/investigation_creation/conversation.py": "8abf6b995d105ace432fad1e2be1a8a48c51c9640158379ba92b07bbdb0d0b93",
+    "backend/investigation_creation/configure.py": "aaf68530d1753c6ea42b2cbc150b109d2b99adf9fe4d6da915b569aa380d3f39",
+    "backend/investigation_creation/contracts.py": "11c88e0928f186795652fcb325cb7cfb31bef9b5c5c3f60ab28d12040d11a057",
+    "backend/investigation_creation/tools.py": "f7c88c0ffa4b49cecd098aac6178f8c9f2aced4337e8f980d8c6d3d135a2058a",
+    "backend/resource_management/tools.py": "d56ccfb7434f32e3b4d9020db11e500f9747ff58b5000d7ec35d54cc7800bbb6",
+    "backend/investigation_creation/rounds.py": "920b6f4812c0fbc2648e6c828d2d060c0e7ce8b1ccc91c407ef33626bb8f999f",
+    "backend/investigation_creation/continuity.py": "0e1b8e9060a7ea9a7e54e4e0cde7af56facb1fb77b79bd8ab989ec7ffcac90c2",
+    "backend/audit_agent/config.py": "a720426d186a64940c44640004e068675a52207dfc9deb489e63bf91d54f34f6"
+  },
+  "initial_request_sha256": {
+    "city-kelamayi:full": "13456f7f7570a79d0d2e79d19055e54d91fe60c03a69c3cde0f40f98a1fc9d5f",
+    "city-kelamayi:bridge": "1f64e7b34e49dc2b25f8d9e0b3983dce7dd4a43698aefac19237c209c1d5dc03",
+    "city-kelamayi:simple": "19dd96085ef031322fd595bb295f4267245d363709cdda85a2f46e1d6b09a094",
+    "only-kelamayi:bridge": "0b2546a850090364f0d54ee03e2cb59566541256967b3daed11a1647975895a0",
+    "only-kelamayi:simple": "a6373087aa5e4f6f1efd7c01bcf901249ba7ccc4d96c441f952d2105e1dc6828",
+    "only-kelamayi:full": "958523eb7387f2e0bd0379bfa191e9d30639f6cfdc37df0c22c6ae72670163cb",
+    "keep-denial-clear:simple": "ed82edb6862e54922b1a3c8faff47b3297fc6a8235b8b6766175850f26a7dd04",
+    "keep-denial-clear:full": "2996701b7138f29597c62a82aa3bdc3e587b5d8a60a0ec66ae445948d5eef7b5",
+    "keep-denial-clear:bridge": "2f2d326c9a663e4f0c8aadb99e13ba534ce0dc058bb608b5b42aaca2dcf57cbb",
+    "change-daqing:full": "15fc07ad82575fdc2ff8ac0accd1eb7f826372d53ee46f0682e1183a9341e67c",
+    "change-daqing:bridge": "fa6edffd3aca1d2ac00b2e3c4994927f102add067ef20f36240ac761813f20e2",
+    "change-daqing:simple": "ce9084129beab958c32f7ac869488877fc776f539f7568340b20ec64944c5418",
+    "adoption-temp-later:bridge": "9534b2c93f2c4e5071c5f6a77c6fa6505c10b3bfb3ca30dcfe856666bf3cea51",
+    "adoption-temp-later:simple": "3cb32ea3794d9d2f73f6489ad537d484e21de90d3f3b978689ccd3c4c36b61a7",
+    "adoption-temp-later:full": "a1f20a8fa28e03464f2edf55024c831765b0b9c9b0793c766e59282003f4105b",
+    "province-xinjiang:simple": "1961848da3913cc992a39866ed49131e3452b44fda31e7f514334cb48846ac2f",
+    "province-xinjiang:full": "bce1b820078fb1e7b9461a922497de97f41844f9f17fc3b462d616b81a8139e8",
+    "province-xinjiang:bridge": "9d6d60cb0e68c3edec918075d923b2286c89b01ecfa8cb60060b1c857cdd342a",
+    "keep-rules:full": "658e951829ee4b0b0694be047e954b7e5960f30e1937a946a1d280c1e558e6c5",
+    "keep-rules:bridge": "2785f5cc05c457b3ec31947e110785e50906972c760609e8f802ea5cdd3b3647",
+    "keep-rules:simple": "a13c96c5d09bf4d0e58b8bee117ee3f30f2e0a7c19a711ff268679b37375cf33",
+    "defer-missing-all:bridge": "816d1b26cd56230b665fbd3868b693ac8f845d793e17f9f4880a9b7bbe083470",
+    "defer-missing-all:simple": "c84064a18aac674718ad889e2a683867402a1f0de67727c09e0a6816705c2d69",
+    "defer-missing-all:full": "d92702551154c44b0b9297ed2f1fd597bc960ba685c4e11941718577e87fe1c3",
+    "adoption-temp-first:simple": "6c7bf9a1ce560a5f000510d3e0116de1bc266c07476f3fe387f882ef3fcb4cb5",
+    "adoption-temp-first:full": "1b81decc34f55d04413a175daecbadd2516417b5cbf85d1c09f9e9af5b10b57e",
+    "adoption-temp-first:bridge": "95f7a20641b73413bae90946002a53e5d82c26b2789694bbaae9137ef865aa80",
+    "ambiguous-chaoyang:full": "fb903c1e7749f25b3736851ba76079d893eb4ac607d9c7bbb68cf7980e9e0973",
+    "ambiguous-chaoyang:bridge": "6d98d2c4127f3497620592449be46f797e69de235052f443d2411215444d1a4c",
+    "ambiguous-chaoyang:simple": "0f4d325fd807c70be0568e8a0af1b2ddc35fa63178416577009112dbdec74c8c",
+    "new-round-national:bridge": "6db5609d845c4b692ba026c95097db4f227dea4c7e6c703f31f47b37c872289c",
+    "new-round-national:simple": "c19d71613de513daecea44f9793f08b98a38e5e228e988c507997205acde3d9d",
+    "new-round-national:full": "1a50d8b39e22a60bb81418d9d06c8e0444d209801e71a494fc07c7921f7b4414",
+    "named-resource:simple": "e3795036cbca8cc9763f3f7fb0f313b1812c1a23f6eea284a7e0c66d31155330",
+    "named-resource:full": "b2cb325c2268b8f04d0664f2de4652eb4ef7120577e1a3b16a70659b3fb5fed1",
+    "named-resource:bridge": "f4363502e64af45cf843c22eaf97d51a94a6557bf31664f6cad510856c72495f",
+    "pasted-post:full": "a58e753f89bbe120544ac714c7a7f6b45c2451cdb4e0fbb299553bbcc0128ac0",
+    "pasted-post:bridge": "f0dcb9129657c1169fe413040fa35c065f03f5671be9e09ba0e327d3b5415480",
+    "pasted-post:simple": "130d3fd6e54b65c4d840439958e5a11a642d52819ff1fb43c8b50c56192c221d",
+    "creator-kelamayi:bridge": "e2e72b2b62c845e6e3bd849d146107d3688fb976664223131439efd71f0ac6a6",
+    "creator-kelamayi:simple": "869313e5a9b6006bf239c261766286b74136b8d90050237fd03c78315a3d3d03",
+    "creator-kelamayi:full": "0a5d24b5d55b44ff32917c78013d81ed406f7d641ad0b164a67c1782a0d13dc0",
+    "denied-city:simple": "ace4ed7103da49504148946901822114d3093ddfbd65b44c5fc8d4e9c24f274b",
+    "denied-city:full": "8d2fbcc71fb619a285b4a4ab471a56287e0b713e97443d1b4ad1c20bc9d88046",
+    "denied-city:bridge": "fc6528666b4e1ef06de23b2d98ba1c8f0a81f021747ec34a3f11ef354d7c0987",
+    "clear-unlimited:full": "17a4d171766438f8b7e5dabf9f1c294c9f3a0ef496262760ab2ffe787246a66a",
+    "clear-unlimited:bridge": "5a484b684d53f4e5b65b3d54b7ab4c1e6453a1a607c0b6a80f9e0899735e8dc8",
+    "clear-unlimited:simple": "3082cd389aa083be848759e23eae9036998958b0d78d6bd5a7237a79749405b3",
+    "keep-title:bridge": "74b3e036b4773cfa655a2e73d21d17de163929e840c718f3827accaa2d78f51f",
+    "keep-title:simple": "c73002a3afff27db2ace975d9a33f3a6e9add9c2d6a675578e8eac27460dc2a0",
+    "keep-title:full": "32e0dea65466c8e5e13689fd60584cb37e5c43c5f10b908ef4248fb7607b9137",
+    "assistant-city:simple": "82c3e745f24f09e0b7dbddb9a9e36a6e7e83ff086c0f80ccf35cd8cd3accdf5a",
+    "assistant-city:full": "e2354f721f1cbf24069a10f8af2eece45c19ba9fdedaf908e1b491681a9facfd",
+    "assistant-city:bridge": "8f4f3990c11fbbb4b8dfeff7e9058998f7faacf21d5ae4e03bd068b4ab386890"
+  },
+  "input_leak_checks_passed": 54,
+  "labels": {
+    "city-kelamayi": {
+      "action": "set",
+      "target_text": "克拉玛依",
+      "selection_policy": "local_first_with_supplement",
+      "source_quote": "用已发布综合舆情规则和欠薪词库，在抖音调查克拉玛依最近的负面舆情。",
+      "source_evidence_span": "调查克拉玛依最近的负面舆情",
+      "workflow_state": "ready",
+      "old_label": "set",
+      "critical_negative": false
+    },
+    "province-xinjiang": {
+      "action": "set",
+      "target_text": "新疆",
+      "selection_policy": "local_first_with_supplement",
+      "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+      "source_evidence_span": "查新疆欠薪",
+      "workflow_state": "ready",
+      "old_label": "set",
+      "critical_negative": false
+    },
+    "only-kelamayi": {
+      "action": "set",
+      "target_text": "克拉玛依",
+      "selection_policy": "local_only",
+      "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+      "source_evidence_span": "只要克拉玛依，不要其他地区",
+      "workflow_state": "ready",
+      "old_label": "set",
+      "critical_negative": false
+    },
+    "change-daqing": {
+      "action": "set",
+      "target_text": "大庆",
+      "selection_policy": "local_first_with_supplement",
+      "source_quote": "改查大庆，规则和词库保持现在的。",
+      "source_evidence_span": "改查大庆",
+      "workflow_state": "ready",
+      "old_label": "set",
+      "critical_negative": false
+    },
+    "clear-unlimited": {
+      "action": "clear",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": "不限制地区了，其他设置不变。",
+      "source_evidence_span": "不限制地区了",
+      "workflow_state": "ready",
+      "old_label": "clear",
+      "critical_negative": false
+    },
+    "keep-title": {
+      "action": "keep",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": null,
+      "source_evidence_span": null,
+      "workflow_state": "ready",
+      "old_label": "keep",
+      "critical_negative": true
+    },
+    "keep-rules": {
+      "action": "keep",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": null,
+      "source_evidence_span": null,
+      "workflow_state": "ready",
+      "old_label": "keep",
+      "critical_negative": true
+    },
+    "creator-kelamayi": {
+      "action": "keep",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": null,
+      "source_evidence_span": null,
+      "workflow_state": "ready",
+      "old_label": "keep",
+      "critical_negative": true
+    },
+    "named-resource": {
+      "action": "keep",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": null,
+      "source_evidence_span": null,
+      "workflow_state": "ready",
+      "old_label": "keep",
+      "critical_negative": true
+    },
+    "pasted-post": {
+      "action": "no_task",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": null,
+      "source_evidence_span": null,
+      "workflow_state": "not_applicable",
+      "old_label": "no_task",
+      "critical_negative": true
+    },
+    "ambiguous-chaoyang": {
+      "action": "clarify",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": null,
+      "source_evidence_span": null,
+      "workflow_state": "not_applicable",
+      "old_label": "clarify",
+      "critical_negative": true
+    },
+    "defer-missing-all": {
+      "action": "set",
+      "target_text": "乌鲁木齐",
+      "selection_policy": "local_first_with_supplement",
+      "source_quote": "调查乌鲁木齐欠薪，先帮我准备规则和词库。",
+      "source_evidence_span": "调查乌鲁木齐欠薪",
+      "workflow_state": "defer",
+      "old_label": "defer",
+      "critical_negative": false
+    },
+    "denied-city": {
+      "action": "keep",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": null,
+      "source_evidence_span": null,
+      "workflow_state": "ready",
+      "old_label": "keep",
+      "critical_negative": true
+    },
+    "keep-denial-clear": {
+      "action": "keep",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": null,
+      "source_evidence_span": null,
+      "workflow_state": "ready",
+      "old_label": "keep",
+      "critical_negative": true
+    },
+    "adoption-temp-first": {
+      "action": "set",
+      "target_text": "克拉玛依",
+      "selection_policy": "local_first_with_supplement",
+      "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+      "source_evidence_span": "调查克拉玛依的欠薪舆情",
+      "workflow_state": "defer",
+      "old_label": "defer",
+      "critical_negative": false
+    },
+    "adoption-temp-later": {
+      "action": "set",
+      "target_text": "克拉玛依",
+      "selection_policy": "local_first_with_supplement",
+      "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+      "source_evidence_span": "调查克拉玛依的欠薪舆情",
+      "workflow_state": "ready",
+      "old_label": "set",
+      "critical_negative": false
+    },
+    "new-round-national": {
+      "action": "keep",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": null,
+      "source_evidence_span": null,
+      "workflow_state": "ready",
+      "old_label": "keep",
+      "critical_negative": true
+    },
+    "assistant-city": {
+      "action": "keep",
+      "target_text": null,
+      "selection_policy": null,
+      "source_quote": null,
+      "source_evidence_span": null,
+      "workflow_state": "ready",
+      "old_label": "keep",
+      "critical_negative": true
+    }
+  },
+  "notes": [
+    "All 18 reused synthetic dev cases; diagnostic contrast, not independent holdout.",
+    "Observer receipts never consult annotation/source/region truth; semantics scored offline.",
+    "B adds record duty/outlet; C removes business prompt/tools: combined interventions.",
+    "Successful simple tool output ends recorded after one request, no acknowledgment request."
+  ]
+}

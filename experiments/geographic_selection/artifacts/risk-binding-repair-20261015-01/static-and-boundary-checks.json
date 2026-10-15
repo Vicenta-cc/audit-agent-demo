@@ -1,0 +1,116 @@
+{
+  "head": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "branch": "codex/geographic-relevance-p4",
+  "tracked_file_bytes_unchanged": 1570,
+  "original_delivery_changed_paths": [
+    "backend/audit_agent/scoped_execution.py",
+    "backend/audit_agent/scoped_selection.py",
+    "backend/audit_agent/scoped_selection_store.py",
+    "experiments/geographic_selection/REPORT.md",
+    "tests/test_scoped_execution.py",
+    "tests/test_scoped_selection.py",
+    "tests/test_scoped_selection_store.py"
+  ],
+  "acceptance_evidence_unchanged": [
+    {
+      "path": "experiments/geographic_selection/ACCEPTANCE-20261015.md",
+      "sha256": "2f60b52710a3002fad0880fc7d6318b713350442df21d85dd4f5acbb655722fd"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/DELIVERY_MANIFEST.json",
+      "sha256": "c08ad9d6998b1bcdc9c04de36ee8b082b5911170110d8ffedcc5477315019931"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/checks.json",
+      "sha256": "1ab9be23a98d84454d357b0803325991029955502cc8d909e8bb6f5f5724a981"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/independent-review.md",
+      "sha256": "f92eedd221f811f25066940c6e0efb5d466b7625cc246a1b3a503dbd67fae8a1"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/input-audit.json",
+      "sha256": "6a6cd916625e139ff8871b00a83c839236e89fdd8797133eec243e0518abfe1d"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/pytest.log",
+      "sha256": "5fbee40a76c68e662ad4862a52414320fb654c2414a39a0887034f368be60046"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/reproduce_review_findings.json",
+      "sha256": "867ab303db9a23e06548b3b2d4e023ff43d792faf4b4c0b223ed42d32e5fc8c0"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/reproduce_review_findings.py",
+      "sha256": "d1adf477ed9f3f251254d8c2088f0420c666f20f29b155e0903f4eaa280ccf3d"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/rerun.py",
+      "sha256": "f903b4c3954bec43ea379ac91fe7071ddc53a75be408416afaa03051ce95e77d"
+    }
+  ],
+  "compiled_files": [
+    "backend/audit_agent/scoped_execution.py",
+    "backend/audit_agent/scoped_selection.py",
+    "backend/audit_agent/scoped_selection_store.py",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/focused-final/rerun.py",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/full-regression/rerun.py",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/red-before-fix/rerun.py",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/reproduce_fixed.py",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/rerun.py",
+    "experiments/geographic_selection/bridge.py",
+    "experiments/geographic_selection/demo.py",
+    "experiments/geographic_selection/fixtures.py",
+    "experiments/geographic_selection/offline_guard.py",
+    "experiments/geographic_selection/run_checks.py",
+    "experiments/geographic_selection/verify_inputs.py",
+    "tests/test_scoped_bridge.py",
+    "tests/test_scoped_execution.py",
+    "tests/test_scoped_selection.py",
+    "tests/test_scoped_selection_store.py"
+  ],
+  "whitespace_checked_files": [
+    "backend/audit_agent/scoped_execution.py",
+    "backend/audit_agent/scoped_selection.py",
+    "backend/audit_agent/scoped_selection_store.py",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/focused-final/rerun.py",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/full-regression/rerun.py",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/red-before-fix/rerun.py",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/reproduce_fixed.py",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/rerun.py",
+    "experiments/geographic_selection/bridge.py",
+    "experiments/geographic_selection/demo.py",
+    "experiments/geographic_selection/fixtures.py",
+    "experiments/geographic_selection/offline_guard.py",
+    "experiments/geographic_selection/run_checks.py",
+    "experiments/geographic_selection/verify_inputs.py",
+    "tests/test_scoped_bridge.py",
+    "tests/test_scoped_execution.py",
+    "tests/test_scoped_selection.py",
+    "tests/test_scoped_selection_store.py",
+    "experiments/geographic_selection/REPORT.md"
+  ],
+  "existing_product_imports_of_new_modules": [],
+  "original_delivery_evidence_and_manifest_unchanged": true,
+  "checked_at": "2026-10-15T13:48:26.779596+00:00",
+  "tested_source_sha256_unchanged": true,
+  "pinned_inputs": {
+    "verified_git_files": 43,
+    "verified_exports": 11,
+    "tag_commit_tree_matches": true,
+    "p1_readonly_files_unchanged": true,
+    "doc_observation_matches": true,
+    "pinned_docs_unchanged": true
+  },
+  "final_test_counts": {
+    "warnings": 2,
+    "passed": 284
+  },
+  "final_guard_metrics": {
+    "network_attempts": 0,
+    "process_attempts": 0,
+    "real_model_attempts": 0,
+    "crawler_launch_attempts": 0,
+    "forbidden_database_attempts": 0
+  }
+}

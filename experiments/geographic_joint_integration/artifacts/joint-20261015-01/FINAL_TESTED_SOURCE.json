@@ -1,0 +1,44 @@
+{
+  "files": [
+    {
+      "path": "experiments/geographic_joint_integration/adapter.py",
+      "bytes": 12003,
+      "sha256": "e20ac7f5e821da3176a40b52b311ab13b400538d37cfe0146884c9a41cdec386"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/audit.py",
+      "bytes": 3835,
+      "sha256": "2cf1961ba4dfc6d9c2878dcd5809cfd8cc2bac811b15712ba8389ecab9113a22"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/replay.py",
+      "bytes": 1413,
+      "sha256": "161a5afd0bb452a00ddbb8632625f8294289cc5857e5ee1165e87ee3664d4c95"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/run_offline.py",
+      "bytes": 9944,
+      "sha256": "e5a27c42110fe85ef46cf15fa65be79fdf9a7e2c649b69f1e776d0a276552ebd"
+    },
+    {
+      "path": "experiments/geographic_joint_integration/scenarios.py",
+      "bytes": 10377,
+      "sha256": "f5c298db84959b16aab5b2e1b4c65e7bbcedc85a4bc521cd94f6fe89632fcb92"
+    },
+    {
+      "path": "tests/test_geographic_joint_adapter.py",
+      "bytes": 10927,
+      "sha256": "90c021a729ec837cf6f02e8f38c8806eae92a559065792ec8b9deb16c4e0cebf"
+    },
+    {
+      "path": "tests/test_geographic_joint_execution.py",
+      "bytes": 17998,
+      "sha256": "f4888b2b7b62de23e69550afcd7ee7220d4d98b675109ccb7d4f6706980fdb34"
+    },
+    {
+      "path": "tests/test_geographic_joint_risk.py",
+      "bytes": 25724,
+      "sha256": "ce35409cbc01e50b8b5032bb8c3984e822a15042255573aba8cfddda45f5fd1d"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+
+> xhs-audit-agent-frontend-v2@0.1.0 test
+> playwright test --config=playwright.config.ts tests/geographicScopeDisplay.spec.ts
+
+[WebServer] (node:1822) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 23 tests using 1 worker
+
+(node:1826) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/23] tests/geographicScopeDisplay.spec.ts:74:1 › scope display handles canonical province, city, municipality, policies and omitted legacy fields
+[2/23] tests/geographicScopeDisplay.spec.ts:96:1 › pending latest requirement hides previously resolved target and server blockers remain readable
+[3/23] tests/geographicScopeDisplay.spec.ts:110:1 › workspace recovery retains pending and resolved projections without freezing blocked draft or polluting old snapshots
+[4/23] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render resolved scope read-only
+[5/23] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render province scope read-only
+[6/23] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render pending scope read-only
+[7/23] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render ambiguous scope read-only
+[8/23] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render local_only scope read-only
+[9/23] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render legacy scope read-only
+[10/23] tests/geographicScopeDisplay.spec.ts:210:3 › real service fixture resolved workspace restores into original card and drawer
+[11/23] tests/geographicScopeDisplay.spec.ts:210:3 › real service fixture pending workspace restores into original card and drawer
+[12/23] tests/geographicScopeDisplay.spec.ts:210:3 › real service national resolved workspace restores into original card and drawer
+[13/23] tests/geographicScopeDisplay.spec.ts:210:3 › real service national pending workspace restores into original card and drawer
+[14/23] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: resolved geography
+[15/23] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: pending geography
+[16/23] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: unsupported geographic mode
+[17/23] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: missing rule resource
+[18/23] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: missing recall resource
+[19/23] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: missing crawler account
+[20/23] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: unknown blocker
+[21/23] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: geographic code without geographic state
+[22/23] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: historical read-only card
+[23/23] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: missing platform
+  23 passed (8.9s)

@@ -1,0 +1,78 @@
+{
+  "audit_index.sqlite3:lexicon_categories": {
+    "count": 10,
+    "sha256": "16a4a4de562e4fb31661addf264d41ef3e6199b99707a3edecc2049660da763f"
+  },
+  "audit_index.sqlite3:lexicon_keywords": {
+    "count": 50,
+    "sha256": "69d7dd4424464037ff38c74cfd61c5f40b51dfdc22e54040d9734c4b37a46f29"
+  },
+  "audit_index.sqlite3:lexicon_prompt_profiles": {
+    "count": 8,
+    "sha256": "14feea4a0fc4ebafd1c15460cd74100c29b70722639c58cadad87335fd565fed"
+  },
+  "audit_index.sqlite3:lexicon_metadata": {
+    "count": 1,
+    "sha256": "91b2b9e0abad9f5452d5ca2947b8240c115a4d960522415c127a08133694eb39"
+  },
+  "audit_index.sqlite3:lexicon_content_versions": {
+    "count": 10,
+    "sha256": "a028359c4ab992289276b6cf2542d79350fa11863cc7edb98b5d74df1b8a7457"
+  },
+  "audit_index.sqlite3:rule_sets": {
+    "count": 2,
+    "sha256": "fd637b58781206ff101450889eb96ef1972cbaf070a1df3dd6df0adb236259f1"
+  },
+  "audit_index.sqlite3:rule_set_revisions": {
+    "count": 3,
+    "sha256": "54bcabe23409342c70d3574896f1a4bf742ee5d03e07e07b349dfe04e8c91e32"
+  },
+  "audit_index.sqlite3:rule_set_publish_idempotency": {
+    "count": 1,
+    "sha256": "4f42a4d8cdab5cbcba9372f0380cc812659ad06800b40b0b7fbdfaa0e521d7d6"
+  },
+  "audit_index.sqlite3:lexicon_snapshot_refs": {
+    "count": 5,
+    "sha256": "493831544b121e5638b9b9c16d4dbae8d185ecca92808c774be5cbe16da84b79"
+  },
+  "audit_index.sqlite3:resource_save_receipts": {
+    "count": 2,
+    "sha256": "c6fa3c5bb0ff4a0b2088d9866153809cdad84e563d0574c0dad73702827e44a8"
+  },
+  "audit_index.sqlite3:jobs": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "investigation_creation.sqlite3:ruleset_proposals": {
+    "count": 3,
+    "sha256": "d7eed7fddc37dcb89f0b076dc6514a489a28397ab12efc6cfc52ccd63dcbaf0f"
+  },
+  "investigation_creation.sqlite3:ruleset_proposal_approvals": {
+    "count": 2,
+    "sha256": "9d8e0f9695c26787188664cdbdb9e479ac91c29d34f47f3e1aacc3829e1687bc"
+  },
+  "investigation_creation.sqlite3:lexicon_edits": {
+    "count": 6,
+    "sha256": "3e15a75763b0887a0b01e6415a549c45deb437ed4910f2be33def4840405fae5"
+  },
+  "investigation_creation.sqlite3:resource_edit_history": {
+    "count": 9,
+    "sha256": "e6b7ff95d1c07ba259c7123c3a8b96697f9285196ddf453d7e27730408abb1d8"
+  },
+  "investigation_creation.sqlite3:resource_edit_origins": {
+    "count": 6,
+    "sha256": "9a59896223eaf85ef03753fba7ff18dda00ac0c76d5b11f95936783bba07684a"
+  },
+  "investigation_creation.sqlite3:lexicon_edit_refs": {
+    "count": 6,
+    "sha256": "ae4636a4ea89852d2001dc71bb84d564204d2f1622ecd894b13df6d488348878"
+  },
+  "investigation_creation.sqlite3:ruleset_resource_refs": {
+    "count": 4,
+    "sha256": "b804dfee8e98e37cb256433a2799d7fd10b87b64a5141260215fd871022f4606"
+  },
+  "investigation_creation.sqlite3:investigation_runs": {
+    "count": 0,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  }
+}

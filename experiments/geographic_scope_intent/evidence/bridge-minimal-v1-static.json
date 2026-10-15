@@ -1,0 +1,20 @@
+{
+  "kind": "candidate_pre_call_static",
+  "new_real_calls": 0,
+  "original_files_verified": 31,
+  "candidate_inputs": 72,
+  "compiled_files": 3,
+  "four_variants": [
+    "confirmation",
+    "state",
+    "recording",
+    "combined"
+  ],
+  "full_tools_unchanged": true,
+  "tool_choice_absent": true,
+  "candidate_requests_contain_no_expected": true,
+  "automatic_scope_injection": false,
+  "per_group_budget": 72,
+  "total_budget": 288,
+  "network_blocked_for_local_check": true
+}

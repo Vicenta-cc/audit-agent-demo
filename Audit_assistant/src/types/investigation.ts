@@ -169,7 +169,8 @@ export interface ChatMessage {
   sender: "user" | "assistant" | "system";
   timestamp: string;
   content?: string;
-  type?: "text" | "task_proposal" | "task_confirmation" | "agent_collaboration" | "historical_progress" | "report_card" | "evidence_list" | "comparison_list" | "grounded_answer" | "activity_timeline";
+  type?: "text" | "task_proposal" | "task_confirmation" | "agent_collaboration" | "historical_progress" | "report_card" | "evidence_list" | "comparison_list" | "grounded_answer" | "activity_timeline" | "region_selection";
+  regionSelection?: import("./investigationCreation").RegionSelectionHistoryEntry;
   activityEvents?: InvestigationActivityEvent[];
   proposalData?: {
     taskName: string;

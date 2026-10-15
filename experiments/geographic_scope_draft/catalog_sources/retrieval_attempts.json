@@ -1,0 +1,157 @@
+{
+  "retrieved_date": "2026-10-15",
+  "status": "blocked_no_verified_national_raw_catalog",
+  "verified_national_record_count": 0,
+  "attempts": [
+    {
+      "url": "https://www.mca.gov.cn/mzsj/xzqh/2025/202401xzqh.html",
+      "expected_material": "2024年中华人民共和国县以上行政区划代码",
+      "methods": {
+        "web.open": "not accessible",
+        "python3 urllib": "SSL UNEXPECTED_EOF_WHILE_READING",
+        "curl": "exit 35: LibreSSL SSL_connect SSL_ERROR_SYSCALL"
+      }
+    },
+    {
+      "url": "https://dmfw.mca.gov.cn/",
+      "expected_material": "中国国家地名信息库",
+      "methods": {
+        "web.open": "not accessible",
+        "python3 urllib": "SSL UNEXPECTED_EOF_WHILE_READING"
+      }
+    },
+    {
+      "url": "https://dmfw.mca.gov.cn/XzqhVersionPublish.html",
+      "expected_material": "行政区划代码发布入口（第三方链接提示2025年度，原文尚未取得核验）",
+      "methods": {
+        "web.open": "Internal Error",
+        "in_app_browser": "net::ERR_CONNECTION_CLOSED"
+      }
+    },
+    {
+      "url": "http://www.mca.gov.cn/mzsj/xzqh/2025/202401xzqh.html",
+      "methods": {
+        "python3 urllib": "Remote end closed connection without response"
+      }
+    },
+    {
+      "url": "http://dmfw.mca.gov.cn/",
+      "methods": {
+        "python3 urllib": "Remote end closed connection without response"
+      }
+    },
+    {
+      "url": "https://xzqh.mca.gov.cn/",
+      "methods": {
+        "python3 urllib": "SSL UNEXPECTED_EOF_WHILE_READING"
+      }
+    },
+    {
+      "url": "https://www.stats.gov.cn/sj/tjbz/tjyqhdmhcxhfdm/2023/index.html",
+      "expected_material": "2023统计用区划代码（统计范围不等于行政建制，不能直接当名录）",
+      "methods": {
+        "web.open": "Internal Error",
+        "curl": "exit 35: LibreSSL SSL_connect SSL_ERROR_SYSCALL"
+      }
+    },
+    {
+      "url": "https://r.jina.ai/https://www.mca.gov.cn/mzsj/xzqh/2025/202401xzqh.html",
+      "methods": {
+        "curl": "HTTP response body code 422 / Request failed: Could not resolve hostname"
+      },
+      "note": "公共页面检索代理尝试，未取得原始资料"
+    }
+  ],
+  "official_reference_urls": [
+    {
+      "url": "https://www.moj.gov.cn/pub/sfbgw/flfggz/flfggzbmgz/202512/t20251204_528920.html",
+      "title": "行政区划代码管理办法",
+      "role": "机制说明，绝非全量名录",
+      "fact": "第十六条规定通过国家地名信息库发布上年度末行政区划代码；第十九条保留盟、旗等实际类型"
+    },
+    {
+      "url": "https://app.www.gov.cn/govdata/gov/202212/25/495555/article.html",
+      "title": "民政部关于启用中国·国家地名信息库2022版的公告",
+      "role": "官方证明 dmfw.mca.gov.cn 为地名库入口"
+    },
+    {
+      "url": "https://mca.nx.gov.cn/zwgk/nr/tjxx/202410/t20241011_4690438.html",
+      "title": "宁夏回族自治区行政区划代码表",
+      "role": "单省公开资料，资料截止2024-09-05；不能证明全国覆盖"
+    }
+  ],
+  "candidate_mirrors_not_adopted": [
+    {
+      "url": "https://github.com/caijf/lcn",
+      "reason": "第三方加工；示例存在虚拟110100北京市节点，违反P1直辖市真实层级要求"
+    },
+    {
+      "url": "https://gitee.com/netnr/zoning/releases",
+      "reason": "第三方发布链接可用于定位官方入口，但尚未直接核验官方原文"
+    },
+    {
+      "url": "https://github.com/LionixQ/administrative-division-code-of-China",
+      "reason": "第三方整理，尚未核验官方原始数据"
+    }
+  ],
+  "artifact_policy": "未将搜索摘要、规则页面或第三方加工数据冒充官方全量原始资料；未创建运行时名录。",
+  "official_candidates_rejected": [
+    {
+      "url": "https://tjj.jl.gov.cn/tjsj/tjbz/200805/t20080520_5118059.html",
+      "material": "全国县及县以上行政区划代码表 GB/T 2260-1999",
+      "reason": "官方网页但资料为1999版本，不属于接受的2020–2024全量资料。"
+    },
+    {
+      "url": "https://www.safe.gov.cn/safe/file/file/20250508/f94fb5027d834c1d8657b5095c633ab7.pdf",
+      "material": "中国大陆行政区划代码表",
+      "reason": "包含北京市崇文区110103、宣武区110104及密云县等历史记录；上传日期不能代表行政名录基准日期。"
+    },
+    {
+      "url": "https://xxgk.mot.gov.cn/2020/jigou/syj/202006/P020240417564270916061.pdf",
+      "material": "系统数据接口服务说明 V1.0 附件4.1",
+      "reason": "包含崇文区、宣武区、塘沽区以及110140经济技术开发区/119900北京市市本级等扩展代码，不是可直接导入的现行行政建制名录。"
+    },
+    {
+      "url": "https://www.mee.gov.cn/uplodfile/%E9%99%843%E7%94%9F%E6%B4%BB%E6%BA%90-%E9%99%84%E8%A1%A8%20%E7%94%9F%E6%B4%BB%E6%BA%90%E4%BA%A7%E6%8E%92%E6%B1%A1%E7%B3%BB%E6%95%B0%E6%89%8B%E5%86%8C.pdf",
+      "material": "生活污染源产排污系数手册 表2-1",
+      "reason": "页面17包含莱芜市371200；页面14包含222500梅河口市、222600公主岭市、228100长白山保护开发区管委会，页面15将310100标为上海市。含历史与统计扩展编码，不可作为行政建制全国名录。"
+    },
+    {
+      "url": "https://www.gov.cn/gzdt/att/att/site1/20091113/00123f3eabca0c6759ac01.pdf",
+      "material": "建筑气候相关表",
+      "reason": "2009年上传且包含吕梁地区，过时，不采用。"
+    }
+  ],
+  "partial_official_sources": [
+    {
+      "url": "https://mzj.beijing.gov.cn/art/2024/1/5/art_9984_672526.html",
+      "scope": "北京市",
+      "material_date": "2023",
+      "note": "省级单独公开表；未获取全国配套原始文件。"
+    },
+    {
+      "url": "https://ynmz.yn.gov.cn/index.php/cms/quhuadaima.html",
+      "scope": "云南省",
+      "material_date": "2026-01-31",
+      "note": "单省现行表。"
+    },
+    {
+      "url": "https://mzt.xizang.gov.cn/zxzx/tzgg/202607/t20260729_551733.html",
+      "scope": "西藏自治区",
+      "material_date": "2026-06-30",
+      "note": "单省现行表。"
+    },
+    {
+      "url": "https://mzt.xinjiang.gov.cn/xjmzt/c112990/202607/d4e25e9ed58e4371a1798d6e623ffc3d.shtml",
+      "scope": "新疆维吾尔自治区",
+      "material_date": "2026-06-30",
+      "note": "单省现行表。"
+    },
+    {
+      "url": "https://mca.nx.gov.cn/xwzx/tzgg/202206/t20220630_3594322.html",
+      "scope": "宁夏回族自治区",
+      "material_date": "2022-06-30",
+      "note": "单省名录PDF入口。"
+    }
+  ]
+}

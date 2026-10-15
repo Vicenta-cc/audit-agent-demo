@@ -1,0 +1,62 @@
+
+> xhs-audit-agent-frontend-v2@0.1.0 test
+> playwright test --config=playwright.config.ts tests/crawlerAccountsPage.spec.ts --grep ordinary user sees only private accounts plus shared pool capacity
+
+[WebServer] (node:3741) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 1 test using 1 worker
+
+(node:3743) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/1] tests/crawlerAccountsPage.spec.ts:121:1 › ordinary user sees only private accounts plus shared pool capacity
+[WebServer] 4:12:43 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:12:43 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:12:43 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:12:43 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:12:43 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+  1) tests/crawlerAccountsPage.spec.ts:121:1 › ordinary user sees only private accounts plus shared pool capacity 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Alice 私有账号', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('Alice 私有账号', { exact: true })
+
+
+      139 |
+      140 |   await expect(page.getByRole("button", { name: "添加私有账号" })).toBeVisible();
+    > 141 |   await expect(page.getByText("Alice 私有账号", { exact: true })).toBeVisible();
+          |                                                               ^
+      142 |   await expect(page.getByLabel("公共账号池概况")).toContainText("公共账号总数3");
+      143 |   await expect(page.getByLabel("公共账号池概况")).toContainText("当前空闲1");
+      144 |   await expect(page.getByLabel("公共账号池概况")).toContainText("正在使用1");
+        at /private/tmp/p1-frontend-a4997d3-qFB8ty/Audit_assistant/tests/crawlerAccountsPage.spec.ts:141:63
+
+    Error Context: ../../../../tmp/xhs-m3-authoritative-playwright-results/crawlerAccountsPage-ordina-9a217-s-plus-shared-pool-capacity/error-context.md
+
+
+  1 failed
+    tests/crawlerAccountsPage.spec.ts:121:1 › ordinary user sees only private accounts plus shared pool capacity 

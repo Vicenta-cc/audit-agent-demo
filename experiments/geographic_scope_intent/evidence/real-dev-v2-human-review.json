@@ -1,0 +1,1661 @@
+{
+  "kind": "implementation_session_human_review",
+  "method": "逐例阅读初始请求用户历史、全部模型响应、工具参数与模拟回执；不使用额外模型判分。范围判分不代表全部业务动作完成。",
+  "raw_result": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/real-dev-v2.json",
+  "cases": [
+    {
+      "case_id": "city-kelamayi",
+      "expected_label": "set",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "正确 set 克拉玛依/local_first_with_supplement，摘录用户原话；模拟 create 成功。最终提到未来确认启动，但未实际调用或声称已启动。",
+      "manual_boundary": true,
+      "actual_scope_changes": [
+        {
+          "action": "set",
+          "target_text": "克拉玛依",
+          "source_quote": "在抖音调查克拉玛依最近的负面舆情",
+          "selection_policy": "local_first_with_supplement"
+        }
+      ],
+      "auto_errors": [],
+      "requests": 4,
+      "responses": 4,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [
+                {
+                  "id": "fixture-ruleset",
+                  "name": "综合舆情规则",
+                  "published_version": 1
+                }
+              ],
+              "lexicons": [
+                {
+                  "id": "fixture-lexicon",
+                  "name": "欠薪调查词库"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search",
+            "include_lexicon_terms_for_ids": [
+              "fixture-lexicon"
+            ],
+            "include_ruleset_details_for_revision_ids": [
+              "fixture-ruleset"
+            ]
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [
+                {
+                  "id": "fixture-ruleset",
+                  "name": "综合舆情规则",
+                  "published_version": 1
+                }
+              ],
+              "lexicons": [
+                {
+                  "id": "fixture-lexicon",
+                  "name": "欠薪调查词库"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "create",
+            "title": "克拉玛依最近负面舆情调查",
+            "objective": "调查克拉玛依最近的负面舆情，重点覆盖欠薪相关讨论",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "克拉玛依",
+              "source_quote": "在抖音调查克拉玛依最近的负面舆情",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:city-kelamayi",
+              "revision": 1,
+              "scope": {
+                "action": "set",
+                "target_text": "克拉玛依",
+                "source_quote": "在抖音调查克拉玛依最近的负面舆情",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "title": "克拉玛依最近负面舆情调查",
+              "objective": "调查克拉玛依最近的负面舆情，重点覆盖欠薪相关讨论",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 0
+    },
+    {
+      "case_id": "province-xinjiang",
+      "expected_label": "set",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "model_semantic",
+      "reason": "词库名克拉玛依引发多余地域/策略确认；4 条响应后正常最终说明但未 configure，漏设新疆。",
+      "manual_boundary": false,
+      "actual_scope_changes": [],
+      "auto_errors": [
+        "expected_one_configure_call",
+        "expected_one_scope_change",
+        "action_failed",
+        "target_failed",
+        "policy_failed",
+        "source_failed",
+        "boundary_failed"
+      ],
+      "requests": 4,
+      "responses": 4,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [
+                {
+                  "id": "fixture-ruleset",
+                  "name": "综合舆情规则",
+                  "published_version": 1
+                }
+              ],
+              "lexicons": [
+                {
+                  "id": "fixture-lexicon",
+                  "name": "欠薪调查词库"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search",
+            "include_lexicon_terms_for_ids": [
+              "fixture-lexicon"
+            ],
+            "include_ruleset_details_for_revision_ids": [
+              "fixture-ruleset"
+            ]
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [
+                {
+                  "id": "fixture-ruleset",
+                  "name": "综合舆情规则",
+                  "published_version": 1
+                }
+              ],
+              "lexicons": [
+                {
+                  "id": "fixture-lexicon",
+                  "name": "欠薪调查词库"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "ruleset",
+            "resource_id": "fixture-ruleset"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "resource_ref": "resource-ref:11111111111111111111111111111111",
+              "kind": "ruleset",
+              "content": {
+                "schema_version": 0,
+                "name": "综合舆情规则",
+                "domain": "劳动争议",
+                "audit_goal": "识别欠薪及公共服务争议",
+                "general_exemptions": [],
+                "categories": [
+                  {
+                    "category_id": "labor",
+                    "name": "劳动权益",
+                    "description": "欠薪争议",
+                    "order": 0,
+                    "rules": [
+                      {
+                        "rule_id": "pay",
+                        "name": "欠薪",
+                        "hit_condition": "内容实质描述欠薪或拖欠工资争议",
+                        "suggested_risk_level": "medium",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "引用关键词不足以证明违规，结合上下文判断",
+                        "enabled": true,
+                        "order": 0,
+                        "source_mappings": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "version": 1,
+              "editable": true,
+              "id": "fixture-ruleset",
+              "published_revision_id": "fixture-rules-revision",
+              "published_version": 1,
+              "open_arguments": {
+                "kind": "ruleset",
+                "resource_id": "fixture-ruleset"
+              },
+              "published_versions": [
+                {
+                  "published_version": 1,
+                  "open_arguments": {
+                    "kind": "ruleset",
+                    "resource_id": "fixture-ruleset",
+                    "revision_id": "fixture-rules-revision"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "lexicon",
+            "resource_id": "fixture-lexicon"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "resource_ref": "resource-ref:22222222222222222222222222222222",
+              "kind": "lexicon",
+              "content": {
+                "title": "克拉玛依欠薪词库",
+                "risk_label": "劳动争议",
+                "description": "合成评测词库",
+                "entries": [
+                  {
+                    "id": "pay",
+                    "term": "欠薪",
+                    "kind": "main",
+                    "parent_id": "",
+                    "enabled": true,
+                    "platform": "全平台",
+                    "match_type": "黑话词",
+                    "risk_level": "中",
+                    "note": ""
+                  },
+                  {
+                    "id": "pay-variant",
+                    "term": "拖欠工资",
+                    "kind": "variant",
+                    "parent_id": "pay",
+                    "enabled": true,
+                    "platform": "全平台",
+                    "match_type": "黑话词",
+                    "risk_level": "中",
+                    "note": ""
+                  }
+                ]
+              },
+              "version": 1,
+              "editable": true,
+              "id": "fixture-lexicon",
+              "search_terms": [
+                "欠薪",
+                "拖欠工资"
+              ],
+              "recall_plan": {
+                "strategy": "existing_lexicon",
+                "lexicon_id": "fixture-lexicon",
+                "enabled_main_terms": [
+                  "欠薪",
+                  "拖欠工资"
+                ],
+                "expected_runtime_content_hash": "fixture-only"
+              }
+            }
+          }
+        }
+      ],
+      "raw_trace_index": 1
+    },
+    {
+      "case_id": "only-kelamayi",
+      "expected_label": "set",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "正确 set 克拉玛依/local_only，来源为用户只要当地原句，模拟 create 成功。",
+      "manual_boundary": true,
+      "actual_scope_changes": [
+        {
+          "action": "set",
+          "target_text": "克拉玛依",
+          "source_quote": "只要克拉玛依，不要其他地区",
+          "selection_policy": "local_only"
+        }
+      ],
+      "auto_errors": [],
+      "requests": 3,
+      "responses": 3,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [
+                {
+                  "id": "fixture-ruleset",
+                  "name": "综合舆情规则",
+                  "published_version": 1
+                }
+              ],
+              "lexicons": [
+                {
+                  "id": "fixture-lexicon",
+                  "name": "欠薪调查词库"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "create",
+            "title": "克拉玛依抖音调查",
+            "objective": "在抖音搜索并调查克拉玛依地区相关内容，采用现有审核规则与欠薪调查词库，仅限克拉玛依本地内容。",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "克拉玛依",
+              "source_quote": "只要克拉玛依，不要其他地区",
+              "selection_policy": "local_only"
+            }
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:only-kelamayi",
+              "revision": 1,
+              "scope": {
+                "action": "set",
+                "target_text": "克拉玛依",
+                "source_quote": "只要克拉玛依，不要其他地区",
+                "selection_policy": "local_only"
+              },
+              "title": "克拉玛依抖音调查",
+              "objective": "在抖音搜索并调查克拉玛依地区相关内容，采用现有审核规则与欠薪调查词库，仅限克拉玛依本地内容。",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 2
+    },
+    {
+      "case_id": "change-daqing",
+      "expected_label": "set",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "update revision2→3，set 大庆/默认策略，引用当前换地域原话；规则词库引用不变。",
+      "manual_boundary": true,
+      "actual_scope_changes": [
+        {
+          "action": "set",
+          "target_text": "大庆",
+          "source_quote": "改查大庆，规则和词库保持现在的。",
+          "selection_policy": "local_first_with_supplement"
+        }
+      ],
+      "auto_errors": [],
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "大庆",
+              "source_quote": "改查大庆，规则和词库保持现在的。",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "fixture-draft",
+              "revision": 3,
+              "scope": {
+                "action": "set",
+                "target_text": "大庆",
+                "source_quote": "改查大庆，规则和词库保持现在的。",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 3
+    },
+    {
+      "case_id": "clear-unlimited",
+      "expected_label": "clear",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "仅 clear，引用当前取消地域原话；scope=None，规则词库不变。",
+      "manual_boundary": true,
+      "actual_scope_changes": [
+        {
+          "action": "clear",
+          "source_quote": "不限制地区了，其他设置不变。"
+        }
+      ],
+      "auto_errors": [],
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "relevance_scope_change": {
+              "action": "clear",
+              "source_quote": "不限制地区了，其他设置不变。"
+            }
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "fixture-draft",
+              "revision": 3,
+              "scope": null,
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 4
+    },
+    {
+      "case_id": "keep-title",
+      "expected_label": "keep",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "仅更新标题十月欠薪专项，未传 scope change；克拉玛依及资源引用保持。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "title": "十月欠薪专项"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "fixture-draft",
+              "revision": 3,
+              "scope": {
+                "target_text": "克拉玛依",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+              "title": "十月欠薪专项"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 5
+    },
+    {
+      "case_id": "keep-rules",
+      "expected_label": "keep",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "先合法读取当前草案及指定规则，再 update 同一规则引用；成都范围/策略/词库保留。fixture 列出的新规则引用与旧引用相同，未验证不同规则版本切换。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 4,
+      "responses": 4,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "get_investigation_draft",
+          "arguments": {
+            "draft_id": "fixture-draft"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "draft_id": "fixture-draft",
+              "revision": 2,
+              "scope": {
+                "target_text": "成都",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            }
+          }
+        },
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [
+                {
+                  "id": "fixture-ruleset",
+                  "name": "综合舆情规则",
+                  "published_version": 1
+                }
+              ],
+              "lexicons": [
+                {
+                  "id": "fixture-lexicon",
+                  "name": "欠薪调查词库"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "ruleset",
+            "resource_id": "fixture-ruleset"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "resource_ref": "resource-ref:11111111111111111111111111111111",
+              "kind": "ruleset",
+              "content": {
+                "schema_version": 0,
+                "name": "综合舆情规则",
+                "domain": "劳动争议",
+                "audit_goal": "识别欠薪及公共服务争议",
+                "general_exemptions": [],
+                "categories": [
+                  {
+                    "category_id": "labor",
+                    "name": "劳动权益",
+                    "description": "欠薪争议",
+                    "order": 0,
+                    "rules": [
+                      {
+                        "rule_id": "pay",
+                        "name": "欠薪",
+                        "hit_condition": "内容实质描述欠薪或拖欠工资争议",
+                        "suggested_risk_level": "medium",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "引用关键词不足以证明违规，结合上下文判断",
+                        "enabled": true,
+                        "order": 0,
+                        "source_mappings": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "version": 1,
+              "editable": true,
+              "id": "fixture-ruleset",
+              "published_revision_id": "fixture-rules-revision",
+              "published_version": 1,
+              "open_arguments": {
+                "kind": "ruleset",
+                "resource_id": "fixture-ruleset"
+              },
+              "published_versions": [
+                {
+                  "published_version": 1,
+                  "open_arguments": {
+                    "kind": "ruleset",
+                    "resource_id": "fixture-ruleset",
+                    "revision_id": "fixture-rules-revision"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "fixture-draft",
+              "revision": 3,
+              "scope": {
+                "target_text": "成都",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 6
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "expected_label": "keep",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "账号作者籍贯与内容地域正确区分；create 账号草案省略 scope，scope=None。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 4,
+      "responses": 4,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "creator"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [
+                {
+                  "id": "fixture-ruleset",
+                  "name": "综合舆情规则",
+                  "published_version": 1
+                }
+              ],
+              "lexicons": [
+                {
+                  "id": "fixture-lexicon",
+                  "name": "欠薪调查词库"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "ruleset",
+            "resource_id": "fixture-ruleset"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "resource_ref": "resource-ref:11111111111111111111111111111111",
+              "kind": "ruleset",
+              "content": {
+                "schema_version": 0,
+                "name": "综合舆情规则",
+                "domain": "劳动争议",
+                "audit_goal": "识别欠薪及公共服务争议",
+                "general_exemptions": [],
+                "categories": [
+                  {
+                    "category_id": "labor",
+                    "name": "劳动权益",
+                    "description": "欠薪争议",
+                    "order": 0,
+                    "rules": [
+                      {
+                        "rule_id": "pay",
+                        "name": "欠薪",
+                        "hit_condition": "内容实质描述欠薪或拖欠工资争议",
+                        "suggested_risk_level": "medium",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "引用关键词不足以证明违规，结合上下文判断",
+                        "enabled": true,
+                        "order": 0,
+                        "source_mappings": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "version": 1,
+              "editable": true,
+              "id": "fixture-ruleset",
+              "published_revision_id": "fixture-rules-revision",
+              "published_version": 1,
+              "open_arguments": {
+                "kind": "ruleset",
+                "resource_id": "fixture-ruleset"
+              },
+              "published_versions": [
+                {
+                  "published_version": 1,
+                  "open_arguments": {
+                    "kind": "ruleset",
+                    "resource_id": "fixture-ruleset",
+                    "revision_id": "fixture-rules-revision"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "create",
+            "title": "抖音账号作者调查（克拉玛依）",
+            "objective": "调查抖音账号 fixture-user 的作者，作者来自克拉玛依，使用综合舆情规则进行审核",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "creator_url": "https://www.douyin.com/user/fixture-user"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:creator-kelamayi",
+              "revision": 1,
+              "scope": null,
+              "title": "抖音账号作者调查（克拉玛依）",
+              "objective": "调查抖音账号 fixture-user 的作者，作者来自克拉玛依，使用综合舆情规则进行审核",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "creator_url": "https://www.douyin.com/user/fixture-user"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 7
+    },
+    {
+      "case_id": "named-resource",
+      "expected_label": "keep",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "loop_limit",
+      "reason": "正确把词库地名与全国范围分开，最后 create scope=None 成功；重复读取用完4响应，没有最终文本，按循环限制失败，不删除分母。",
+      "manual_boundary": false,
+      "actual_scope_changes": [],
+      "auto_errors": [
+        "termination:loop_limit",
+        "boundary_failed"
+      ],
+      "requests": 4,
+      "responses": 4,
+      "termination": "loop_limit",
+      "tool_calls": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [
+                {
+                  "id": "fixture-ruleset",
+                  "name": "综合舆情规则",
+                  "published_version": 1
+                }
+              ],
+              "lexicons": [
+                {
+                  "id": "fixture-lexicon",
+                  "name": "克拉玛依欠薪词库"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "mode": "search",
+            "platform": "dy",
+            "include_lexicon_terms_for_ids": [
+              "fixture-lexicon"
+            ],
+            "include_ruleset_details_for_revision_ids": [
+              "fixture-ruleset"
+            ]
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [
+                {
+                  "id": "fixture-ruleset",
+                  "name": "综合舆情规则",
+                  "published_version": 1
+                }
+              ],
+              "lexicons": [
+                {
+                  "id": "fixture-lexicon",
+                  "name": "克拉玛依欠薪词库"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "ruleset",
+            "resource_id": "fixture-ruleset"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "resource_ref": "resource-ref:11111111111111111111111111111111",
+              "kind": "ruleset",
+              "content": {
+                "schema_version": 0,
+                "name": "综合舆情规则",
+                "domain": "劳动争议",
+                "audit_goal": "识别欠薪及公共服务争议",
+                "general_exemptions": [],
+                "categories": [
+                  {
+                    "category_id": "labor",
+                    "name": "劳动权益",
+                    "description": "欠薪争议",
+                    "order": 0,
+                    "rules": [
+                      {
+                        "rule_id": "pay",
+                        "name": "欠薪",
+                        "hit_condition": "内容实质描述欠薪或拖欠工资争议",
+                        "suggested_risk_level": "medium",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "引用关键词不足以证明违规，结合上下文判断",
+                        "enabled": true,
+                        "order": 0,
+                        "source_mappings": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "version": 1,
+              "editable": true,
+              "id": "fixture-ruleset",
+              "published_revision_id": "fixture-rules-revision",
+              "published_version": 1,
+              "open_arguments": {
+                "kind": "ruleset",
+                "resource_id": "fixture-ruleset"
+              },
+              "published_versions": [
+                {
+                  "published_version": 1,
+                  "open_arguments": {
+                    "kind": "ruleset",
+                    "resource_id": "fixture-ruleset",
+                    "revision_id": "fixture-rules-revision"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "lexicon",
+            "resource_id": "fixture-lexicon"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "resource_ref": "resource-ref:22222222222222222222222222222222",
+              "kind": "lexicon",
+              "content": {
+                "title": "克拉玛依欠薪词库",
+                "risk_label": "劳动争议",
+                "description": "合成评测词库",
+                "entries": [
+                  {
+                    "id": "pay",
+                    "term": "欠薪",
+                    "kind": "main",
+                    "parent_id": "",
+                    "enabled": true,
+                    "platform": "全平台",
+                    "match_type": "黑话词",
+                    "risk_level": "中",
+                    "note": ""
+                  },
+                  {
+                    "id": "pay-variant",
+                    "term": "拖欠工资",
+                    "kind": "variant",
+                    "parent_id": "pay",
+                    "enabled": true,
+                    "platform": "全平台",
+                    "match_type": "黑话词",
+                    "risk_level": "中",
+                    "note": ""
+                  }
+                ]
+              },
+              "version": 1,
+              "editable": true,
+              "id": "fixture-lexicon",
+              "search_terms": [
+                "欠薪",
+                "拖欠工资"
+              ],
+              "recall_plan": {
+                "strategy": "existing_lexicon",
+                "lexicon_id": "fixture-lexicon",
+                "enabled_main_terms": [
+                  "欠薪",
+                  "拖欠工资"
+                ],
+                "expected_runtime_content_hash": "fixture-only"
+              }
+            }
+          }
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "create",
+            "title": "全国欠薪调查",
+            "objective": "围绕欠薪、拖欠工资争议开展全国范围舆情调查",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:named-resource",
+              "revision": 1,
+              "scope": null,
+              "title": "全国欠薪调查",
+              "objective": "围绕欠薪、拖欠工资争议开展全国范围舆情调查",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 8
+    },
+    {
+      "case_id": "pasted-post",
+      "expected_label": "no_task",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "无工具或草案创建，询问转发线索意图；末尾条件式承诺未来限定克拉玛依属于过度推断，尚未实际误设，记录体验风险。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 1,
+      "responses": 1,
+      "termination": "final",
+      "tool_calls": [],
+      "raw_trace_index": 9
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "expected_label": "clarify",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "列出北京/辽宁/长春候选澄清，未猜测设置；开头倾向北京但紧接明确澄清，未执行。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 1,
+      "responses": 1,
+      "termination": "final",
+      "tool_calls": [],
+      "raw_trace_index": 10
+    },
+    {
+      "case_id": "defer-missing-all",
+      "expected_label": "defer",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "规则词库缺失，未创建占位草案；再次请求已经表达的资源准备授权及地域确认，记录冗余澄清。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [],
+              "lexicons": []
+            }
+          }
+        }
+      ],
+      "raw_trace_index": 11
+    },
+    {
+      "case_id": "denied-city",
+      "expected_label": "keep",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "识别克拉玛依只是例子、全国范围；未传 scope。追问主题，未创建草案；范围判分不代表全部业务任务完成。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 1,
+      "responses": 1,
+      "termination": "final",
+      "tool_calls": [],
+      "raw_trace_index": 12
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "expected_label": "keep",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "仅标题复查；明确不要取消地域的否定正确处理，原范围和引用保持。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "title": "复查"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "fixture-draft",
+              "revision": 3,
+              "scope": {
+                "target_text": "克拉玛依",
+                "selection_policy": "local_first_with_supplement"
+              },
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+              "title": "复查"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 13
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "expected_label": "defer",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "资源缺失不创建占位；未设置范围，要求资源准备方式/平台确认，记录冗余澄清。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [],
+              "lexicons": []
+            }
+          }
+        }
+      ],
+      "raw_trace_index": 14
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "expected_label": "set",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "model_semantic",
+      "reason": "已授权采用资源 create 成功但 scope=None，地名仅在标题/目标；承认此前明确限定仍追问是否加入，漏识别多轮地域。说明模拟且未真实启动，无判分误伤。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [
+        "expected_one_scope_change",
+        "action_failed",
+        "target_failed",
+        "policy_failed",
+        "source_failed"
+      ],
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "create",
+            "title": "克拉玛依欠薪舆情调查",
+            "objective": "调查克拉玛依地区欠薪及拖欠工资相关舆情",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:adoption-temp-later",
+              "revision": 1,
+              "scope": null,
+              "title": "克拉玛依欠薪舆情调查",
+              "objective": "调查克拉玛依地区欠薪及拖欠工资相关舆情",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 15
+    },
+    {
+      "case_id": "new-round-national",
+      "expected_label": "keep",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "独立 create 全国新草案，未 copy 或继承旧克拉玛依；精确 resource_id 读取成功。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 4,
+      "responses": 4,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "platforms": [
+                "dy"
+              ],
+              "rulesets": [
+                {
+                  "id": "fixture-ruleset",
+                  "name": "综合舆情规则",
+                  "published_version": 1
+                }
+              ],
+              "lexicons": [
+                {
+                  "id": "fixture-lexicon",
+                  "name": "欠薪调查词库"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "ruleset",
+            "resource_id": "fixture-ruleset"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "resource_ref": "resource-ref:11111111111111111111111111111111",
+              "kind": "ruleset",
+              "content": {
+                "schema_version": 0,
+                "name": "综合舆情规则",
+                "domain": "劳动争议",
+                "audit_goal": "识别欠薪及公共服务争议",
+                "general_exemptions": [],
+                "categories": [
+                  {
+                    "category_id": "labor",
+                    "name": "劳动权益",
+                    "description": "欠薪争议",
+                    "order": 0,
+                    "rules": [
+                      {
+                        "rule_id": "pay",
+                        "name": "欠薪",
+                        "hit_condition": "内容实质描述欠薪或拖欠工资争议",
+                        "suggested_risk_level": "medium",
+                        "rule_exemptions": [],
+                        "application_stages": [
+                          "comment_audit",
+                          "fusion_audit"
+                        ],
+                        "adjudication_notes": "引用关键词不足以证明违规，结合上下文判断",
+                        "enabled": true,
+                        "order": 0,
+                        "source_mappings": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "version": 1,
+              "editable": true,
+              "id": "fixture-ruleset",
+              "published_revision_id": "fixture-rules-revision",
+              "published_version": 1,
+              "open_arguments": {
+                "kind": "ruleset",
+                "resource_id": "fixture-ruleset"
+              },
+              "published_versions": [
+                {
+                  "published_version": 1,
+                  "open_arguments": {
+                    "kind": "ruleset",
+                    "resource_id": "fixture-ruleset",
+                    "revision_id": "fixture-rules-revision"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "lexicon",
+            "resource_id": "fixture-lexicon"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "FIXTURE_READ",
+            "data": {
+              "simulated": true,
+              "resource_ref": "resource-ref:22222222222222222222222222222222",
+              "kind": "lexicon",
+              "content": {
+                "title": "克拉玛依欠薪词库",
+                "risk_label": "劳动争议",
+                "description": "合成评测词库",
+                "entries": [
+                  {
+                    "id": "pay",
+                    "term": "欠薪",
+                    "kind": "main",
+                    "parent_id": "",
+                    "enabled": true,
+                    "platform": "全平台",
+                    "match_type": "黑话词",
+                    "risk_level": "中",
+                    "note": ""
+                  },
+                  {
+                    "id": "pay-variant",
+                    "term": "拖欠工资",
+                    "kind": "variant",
+                    "parent_id": "pay",
+                    "enabled": true,
+                    "platform": "全平台",
+                    "match_type": "黑话词",
+                    "risk_level": "中",
+                    "note": ""
+                  }
+                ]
+              },
+              "version": 1,
+              "editable": true,
+              "id": "fixture-lexicon",
+              "search_terms": [
+                "欠薪",
+                "拖欠工资"
+              ],
+              "recall_plan": {
+                "strategy": "existing_lexicon",
+                "lexicon_id": "fixture-lexicon",
+                "enabled_main_terms": [
+                  "欠薪",
+                  "拖欠工资"
+                ],
+                "expected_runtime_content_hash": "fixture-only"
+              }
+            }
+          }
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "create",
+            "title": "全国欠薪舆情调查",
+            "objective": "调查全国范围内欠薪、拖欠工资相关讨论",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:new-round-national",
+              "revision": 1,
+              "scope": null,
+              "title": "全国欠薪舆情调查",
+              "objective": "调查全国范围内欠薪、拖欠工资相关讨论",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 16
+    },
+    {
+      "case_id": "assistant-city",
+      "expected_label": "keep",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "采用用户全国要求 create scope=None，未继承 assistant 提议的城市。",
+      "manual_boundary": true,
+      "actual_scope_changes": [],
+      "auto_errors": [],
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "tool_calls": [
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "create",
+            "title": "全国范围调查",
+            "objective": "对全国范围的相关讨论进行调查",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "DRAFT_SIMULATED",
+            "captured_only": true,
+            "data": {
+              "draft_id": "simulated-draft:assistant-city",
+              "revision": 1,
+              "scope": null,
+              "title": "全国范围调查",
+              "objective": "对全国范围的相关讨论进行调查",
+              "platform": "dy",
+              "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+              "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+            },
+            "notice": "仅内存模拟草案；未写入正式 store，地域执行未接入。"
+          }
+        }
+      ],
+      "raw_trace_index": 17
+    }
+  ],
+  "overall_disagreements": [],
+  "manual_passed": 15,
+  "manual_evaluated": 18
+}

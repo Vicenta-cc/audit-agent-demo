@@ -1,0 +1,154 @@
+{
+  "head": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "branch": "codex/geographic-relevance-p4",
+  "tracked_changes": [],
+  "p1_readonly": [
+    {
+      "path": "backend/investigation_creation/scope_intent.py",
+      "sha256": "48957e3ac18428b3505890582f7415d2a7c5afd691e10211f324743c1afe2d6f",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/scope_selection.py",
+      "sha256": "fcded0f2d72ada12d952cababa1666046ca8a9beaccc5575b6221c4c37f53240",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/geographic_catalog.py",
+      "sha256": "8b8b3efef9cec6fedd2b17afda9d358c8fc8713b19a3f9a07fde144206b4f6a9",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/data/geographic_catalog.json",
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/configure.py",
+      "sha256": "6071841e23aa71d9f173e095707234ab3048e4c4f48af2e8c5addad6d36dff86",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/contracts.py",
+      "sha256": "007976d1c96187e0d9b6fe32c2e623267711cc399f0753a3592e6e002228c583",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/resources.py",
+      "sha256": "e7b0b27ece555ec757f147ade764eca2aeab9f5a2524b9303c4d84a6da060599",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/service.py",
+      "sha256": "15c2a1f1c9612d71bd386e905bab7cf9f0718f9df68ff4f46eda806d462ea96a",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/store.py",
+      "sha256": "6f57cab3593bd86f56fc04fa59852c0b7a341b94e5df66ce543327ecac0843c9",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/adapters.py",
+      "sha256": "a50d39de0d11c2a3de5e36122f38488e66472f41242bae1ae723daf956f6a403",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/frozen.py",
+      "sha256": "663159bce6f30cfd05eb4b0d35e4f56cb0a7996b1b99208367df97cde1d844a0",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/frozen_preview.py",
+      "sha256": "a8e0a072d1e60c2ef477baffe310ad232664ac062d7cd5ec020c7270fd8d822f",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/conversation.py",
+      "sha256": "65f5965c571087c89515ed052391d234ec4bf180272b8296d550468918b062cb",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/tools.py",
+      "sha256": "6ed0e96d51045c5f38b4f52e7f44657dc0f8b3d5574372237305a4cb7034be31",
+      "unchanged": true
+    },
+    {
+      "path": "backend/investigation_creation/generation_attempts.py",
+      "sha256": "22f18a87a522f37b9db8497b989771e70161411f1b9622a85904d41f0be4f17f",
+      "unchanged": true
+    },
+    {
+      "path": "backend/audit_agent/triage.py",
+      "sha256": "3a6cb0906064b458ef99ba0bb97fb1c3b57c0f4fb0ee69dfd25efb0160b7e2a3",
+      "unchanged": true
+    },
+    {
+      "path": "backend/audit_agent/triage_matcher.py",
+      "sha256": "aa8c3d2bbfa46caea7220a34baa13b9db7a6dd132d06130a60af4fd28a265724",
+      "unchanged": true
+    },
+    {
+      "path": "backend/audit_agent/task_settings.py",
+      "sha256": "6f46cc8de5dfb91c0f39a06997a0f24c547b794cd949de794af0bcdc2182d0c2",
+      "unchanged": true
+    },
+    {
+      "path": "backend/audit_agent/job_store.py",
+      "sha256": "dc5a4f20fc67257ea8b2a9272d359d00b10b7b2d1f2e955a843c731bd41b7776",
+      "unchanged": true
+    },
+    {
+      "path": "backend/audit_agent/pipeline.py",
+      "sha256": "58de3d3dfff2c17e269a1700f9626957129227764eca7595fef5f65ba5107f4e",
+      "unchanged": true
+    },
+    {
+      "path": "backend/resource_management/ruleset_refs.py",
+      "sha256": "0fbc9806a2aee4d950df65512f677c4d872e006d2bb548bca1a9e9d097365452",
+      "unchanged": true
+    },
+    {
+      "path": "backend/resource_management/tool_facades.py",
+      "sha256": "fb09ce48255affd098a2b7aff395ede0468ee6660dd0fc7bed619b1260deacfa",
+      "unchanged": true
+    },
+    {
+      "path": "docs/geographic-p0p1-final-20261015.md",
+      "sha256": "97b188d4b4cc2200bd2882647eb8eadb15b28b821dc6b2419af227eb47a1a4b9",
+      "unchanged": true
+    },
+    {
+      "path": "backend/audit_agent/crawler_adapter.py",
+      "sha256": "951dc5b43b763bd5ba631a07329e98fe6a305a0f297d7c8960d6cc62ce13a7a9",
+      "unchanged": true
+    },
+    {
+      "path": "tests/test_triage_engine.py",
+      "sha256": "1e3cb936cfb958db5097d3fd9f10234897dac1f84e3257f1c89a5d95cc8c57ff",
+      "unchanged": true
+    },
+    {
+      "path": "tests/test_triage_matcher.py",
+      "sha256": "eea9a3a58e5623864876c7d4ac4c01b8da59caee84ab801b2950b7c11098df94",
+      "unchanged": true
+    },
+    {
+      "path": "tests/test_triaged_search.py",
+      "sha256": "0d5ef77221bb4e0aafc32ea28b3391e979577f96fbc6f5f112caa1e44e01c051",
+      "unchanged": true
+    },
+    {
+      "path": "tests/test_triage_account_rotation.py",
+      "sha256": "a828784455ef98ce95d500961cd63923d61b3e015e63085f34b248ae988636fd",
+      "unchanged": true
+    },
+    {
+      "path": "tests/test_geographic_draft_configuration.py",
+      "sha256": "8b04094455764b57a1b5698fe54adc7e40027bd6d89ccdbb7ce8a548ae0ca89a",
+      "unchanged": true
+    }
+  ],
+  "git_status": "?? backend/audit_agent/scoped_execution.py\n?? backend/audit_agent/scoped_selection.py\n?? backend/audit_agent/scoped_selection_store.py\n?? experiments/geographic_selection/\n?? tests/test_scoped_bridge.py\n?? tests/test_scoped_execution.py\n?? tests/test_scoped_selection.py\n?? tests/test_scoped_selection_store.py\n",
+  "commit_push_merge_deploy_performed": false
+}

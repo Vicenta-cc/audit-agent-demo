@@ -1,0 +1,110 @@
+{
+  "compiled_files": [
+    "backend/audit_agent/scoped_execution.py",
+    "backend/audit_agent/scoped_selection.py",
+    "backend/audit_agent/scoped_selection_store.py",
+    "experiments/geographic_selection/bridge.py",
+    "experiments/geographic_selection/demo.py",
+    "experiments/geographic_selection/fixtures.py",
+    "experiments/geographic_selection/offline_guard.py",
+    "experiments/geographic_selection/run_checks.py",
+    "experiments/geographic_selection/verify_inputs.py",
+    "tests/test_scoped_bridge.py",
+    "tests/test_scoped_execution.py",
+    "tests/test_scoped_selection.py",
+    "tests/test_scoped_selection_store.py"
+  ],
+  "compile_exit_code": 0,
+  "new_file_whitespace_checks": [
+    {
+      "path": "backend/audit_agent/scoped_execution.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "backend/audit_agent/scoped_selection.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "backend/audit_agent/scoped_selection_store.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "experiments/geographic_selection/bridge.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "experiments/geographic_selection/demo.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "experiments/geographic_selection/fixtures.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "experiments/geographic_selection/offline_guard.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "experiments/geographic_selection/run_checks.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "experiments/geographic_selection/verify_inputs.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "tests/test_scoped_bridge.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "tests/test_scoped_execution.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "tests/test_scoped_selection.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "tests/test_scoped_selection_store.py",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "experiments/geographic_selection/INTERFACE_GAPS.md",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "experiments/geographic_selection/README.md",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "experiments/geographic_selection/REPORT.md",
+      "exit_code": 1,
+      "diagnostics": ""
+    },
+    {
+      "path": "experiments/geographic_selection/.gitignore",
+      "exit_code": 1,
+      "diagnostics": ""
+    }
+  ],
+  "no_index_exit_note": "Exit 1 with empty diagnostics is expected for added files; whitespace errors fail separately.",
+  "git_diff_check": 0,
+  "tracked_changes": [],
+  "existing_product_imports_of_new_modules": [],
+  "python_lint_typecheck": "No project Python lint/typecheck config; not applicable; no dependencies added."
+}

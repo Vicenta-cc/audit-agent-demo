@@ -1,0 +1,18 @@
+{
+  "historical_freeze_match": true,
+  "business_sources_and_snapshots_match": true,
+  "python_compile_files": 6,
+  "real_model_calls": 0,
+  "checkouts": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo": {
+      "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+      "branch": "codex/geographic-relevance-p0",
+      "status": "?? experiments/geographic_scope_intent/\n?? tests/test_geographic_scope_contract.py\n?? tests/test_geographic_scope_contrast_intent.py\n?? tests/test_geographic_scope_contrast_runner.py\n?? tests/test_geographic_scope_contrast_scoring.py\n?? tests/test_geographic_scope_data.py\n?? tests/test_geographic_scope_runner.py\n?? tests/test_geographic_scope_scoring.py\n"
+    },
+    "/Users/ext.wanghongtao6/.codex/worktrees/unified-report-query-phase1/xhs-audit-agent-demo": {
+      "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+      "branch": "codex/investigation-rounds-phase2",
+      "status": " M backend/report_collection/analysis.py\n M backend/report_collection/expression.py\n M backend/report_collection/tools.py\n M tests/test_report_collection_expression.py\n?? tests/test_report_query_complete_distributions.py\n?? tests/test_report_query_read_contract.py\n"
+    }
+  }
+}

@@ -20,6 +20,9 @@ export function buildSuggestionBlockerLink(preview?: ConfirmationPreview) {
 }
 
 export function buildSuggestionAssistantCopy(draft: TaskDraft, preview?: ConfirmationPreview) {
+  if (preview?.relevance_scope_state?.status === "pending") {
+    return "调查地域尚待确认，请先选择或填写省级地域、地级市或直辖市。其他调查配置保持不变。";
+  }
   if (preview?.temporary_ruleset && preview.blockers.every(
     (blocker) => blocker.code === "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE"
   )) {

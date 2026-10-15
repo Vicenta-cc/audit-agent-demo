@@ -1,0 +1,4 @@
+AST parse + source compile: 11 files passed
+ruff/mypy/flake8 unavailable in existing environment; no dependencies added
+No frontend edits; no frontend build needed for P0 experiment
+New file whitespace checks: 26 files passed (git diff --no-index --check)

@@ -1,0 +1,575 @@
+{
+  "review_method": "先读取预留出冻结证据，再逐批完整阅读每例用户历史、真实模型响应、工具参数与模拟回执；最终完整核对原始结果自动判分。人工复核没有新增模型调用，不修改冻结提示/schema/代码/判分器/样本；原判与人工判并列保存。范围 keep/defer 行为通过不等同完全理解、业务任务完成或生产稳定。",
+  "freeze_version": "geo-intent-p0-real-v2",
+  "frozen_at_utc": "2026-10-14T07:52:08.742419+00:00",
+  "source_result": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/real-holdout-v1.json",
+  "metrics": {
+    "cases": 16,
+    "auto_passed": 13,
+    "manual_passed": 14,
+    "model_requests": 34,
+    "completed_model_responses": 34,
+    "framework_failure_cases": 0,
+    "runtime_failure_cases": 0,
+    "loop_limit_failure_cases": 0,
+    "model_understanding_failure_cases": 2,
+    "auto_set_precision": {
+      "numerator": 3,
+      "denominator": 4,
+      "value": 0.75
+    },
+    "manual_set_precision": {
+      "numerator": 4,
+      "denominator": 4,
+      "value": 1
+    },
+    "auto_set_recall": {
+      "numerator": 3,
+      "denominator": 6,
+      "value": 0.5
+    },
+    "manual_set_recall": {
+      "numerator": 4,
+      "denominator": 6,
+      "value": 0.6666666666666666
+    },
+    "false_sets": 0,
+    "false_clears": 0,
+    "manual_missed_sets": 2,
+    "actual_wrong_policy_or_source_writes": 0,
+    "boundary_attempts": {
+      "unknown_tool": 0,
+      "execution_tool": 0,
+      "unauthorized_draft_write": 0,
+      "unauthorized_mutation": 0
+    },
+    "automatic_boundary_false_positive_cases": [
+      "adoption-formal-later"
+    ],
+    "manual_false_real_execution_claims": 0,
+    "elapsed_total_seconds": 534.7092928329366,
+    "elapsed_percentiles": {
+      "available": 16,
+      "p50": 33.77652966597816,
+      "p95": 68.71665758296149
+    },
+    "usage": {
+      "completion_tokens": 6131,
+      "prompt_tokens": 825024,
+      "total_tokens": 831155
+    },
+    "usage_available_cases": 16,
+    "cost": "unknown"
+  },
+  "cases": [
+    {
+      "case_id": "city-hangzhou",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "model_understanding",
+      "reason": "明确杭州调查意图仍被重复询问地域和策略，仅读资源，未结构化 set。",
+      "manual_boundary": false,
+      "actual_scope_summary": "没有地域写入或 configure 调用",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "ruleset",
+            "resource_id": "fixture-ruleset"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "lexicon",
+            "resource_id": "fixture-lexicon"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 3,
+      "completed_model_responses": 3,
+      "termination": "final"
+    },
+    {
+      "case_id": "province-sichuan",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "model_understanding",
+      "reason": "明确四川省调查仍被追问策略及资源适配，没有结构化 set；说明词库仅覆盖欠薪的适配问题有依据，但不能算完成地域配置。",
+      "manual_boundary": false,
+      "actual_scope_summary": "没有地域写入或 configure 调用",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "only-suzhou",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "正确创建苏州市 local_only 模拟草案，来源为当前用户明确仅当地且不补充的原话；两资源引用正确。",
+      "manual_boundary": true,
+      "actual_scope_summary": [
+        {
+          "arguments": {
+            "operation": "create",
+            "title": "苏州市欠薪调查",
+            "objective": "调查苏州市范围内的欠薪问题讨论",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "苏州市",
+              "source_quote": "仅调查苏州市的欠薪，不足也不要补充。",
+              "selection_policy": "local_only"
+            }
+          },
+          "scope_receipt": {
+            "action": "set",
+            "target_text": "苏州市",
+            "source_quote": "仅调查苏州市的欠薪，不足也不要补充。",
+            "selection_policy": "local_only"
+          },
+          "receipt_code": "DRAFT_SIMULATED",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 3,
+      "completed_model_responses": 3,
+      "termination": "final"
+    },
+    {
+      "case_id": "change-province",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "仅 update 地域为广东、默认当地优先可补充策略，引用当前原话，保留规则与词库。",
+      "manual_boundary": true,
+      "actual_scope_summary": [
+        {
+          "arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "广东",
+              "source_quote": "地域改为广东，其他设置不动。",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "scope_receipt": {
+            "action": "set",
+            "target_text": "广东",
+            "source_quote": "地域改为广东，其他设置不动。",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "receipt_code": "DRAFT_SIMULATED",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "read_observations": [],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "clear-national",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "仅 clear 原大庆地域，来源为当前清除原话；保留规则和词库，明确仅模拟、未启动。",
+      "manual_boundary": true,
+      "actual_scope_summary": [
+        {
+          "arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "relevance_scope_change": {
+              "action": "clear",
+              "source_quote": "去掉地域限制，这次查全国。"
+            }
+          },
+          "scope_receipt": null,
+          "receipt_code": "DRAFT_SIMULATED",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "read_observations": [],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "keep-lexicon",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "实际读取劳动争议词库，使用其 resource-ref:44444444444444444444444444444444，仅更新词库，保留克拉玛依地域策略及审核规则。",
+      "manual_boundary": true,
+      "actual_scope_summary": [
+        {
+          "arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "lexicon_ref": "resource-ref:44444444444444444444444444444444"
+          },
+          "scope_receipt": {
+            "target_text": "克拉玛依",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "receipt_code": "DRAFT_SIMULATED",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:44444444444444444444444444444444"
+        }
+      ],
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "lexicon",
+            "resource_id": "fixture-labor-lexicon"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 4,
+      "completed_model_responses": 4,
+      "termination": "final"
+    },
+    {
+      "case_id": "creator-province",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "未把作者简介河南设置为内容地域。caveat：回复把简介解释为似乎暗示河南内容范围，并称地域主要适用于搜索，存在理解/说明偏差；范围 keep 行为通过不代表完全理解或账号业务配置完成。",
+      "manual_boundary": true,
+      "actual_scope_summary": "没有地域写入或 configure 调用",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "creator"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "quoted-example",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "没有将克拉玛依、大庆举例写成范围。caveat：用户已明确全国，仍追问全国还是两个城市；无误设不代表完整理解或业务完成。",
+      "manual_boundary": true,
+      "actual_scope_summary": "没有地域写入或 configure 调用",
+      "read_observations": [],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "final"
+    },
+    {
+      "case_id": "pasted-comment",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "将成都评论引用与发起任务区分，询问目标，未写范围或草案。",
+      "manual_boundary": true,
+      "actual_scope_summary": "没有地域写入或 configure 调用",
+      "read_observations": [],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "final"
+    },
+    {
+      "case_id": "ambiguous-there",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "针对那里明确请求具体地点，不猜测、不修改原克拉玛依地域。",
+      "manual_boundary": true,
+      "actual_scope_summary": "没有地域写入或 configure 调用",
+      "read_observations": [],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "final"
+    },
+    {
+      "case_id": "defer-missing-rules",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "识别规则缺失并说明阻断，未创建占位草案，没有假绑定资源或启动采集声明。",
+      "manual_boundary": true,
+      "actual_scope_summary": "没有地域写入或 configure 调用",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "quoted-instruction",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "正确区分引用只调查克拉玛依与用户全国要求，无地域变更；caveat：对已明确全国仍重复确认，未完成全国草案配置。",
+      "manual_boundary": true,
+      "actual_scope_summary": "没有地域写入或 configure 调用",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "adoption-formal-first",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "查得两类资源缺失，未建草案或设地域；caveat：仍追问策略与资源准备方式，未实际准备资源，范围 defer 通过不代表资源生成完成。",
+      "manual_boundary": true,
+      "actual_scope_summary": "没有地域写入或 configure 调用",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search",
+            "domain_hint": "欠薪 舆情 劳动争议"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "adoption-formal-later",
+      "auto_pass": false,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "正确 set 宁波市、local_first_with_supplement，source_quote 引用同任务早期用户调查宁波市的欠薪舆情，资源使用已采用版本，模拟回执成功。原自动边界误判：正则跨括号命中已创建模拟草案（尚未启动真实调查；实际是模拟草案且明确否定真实启动。",
+      "manual_boundary": true,
+      "actual_scope_summary": [
+        {
+          "arguments": {
+            "operation": "create",
+            "title": "宁波市欠薪舆情调查",
+            "objective": "调查宁波市范围内的欠薪舆情，识别欠薪及拖欠工资相关争议内容",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "宁波市",
+              "source_quote": "调查宁波市的欠薪舆情",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "scope_receipt": {
+            "action": "set",
+            "target_text": "宁波市",
+            "source_quote": "调查宁波市的欠薪舆情",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "receipt_code": "DRAFT_SIMULATED",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "read_observations": [],
+      "auto_boundary_pattern_matches": [
+        "已创建模拟草案（尚未启动真实调查"
+      ],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "new-round-city",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "独立新建模拟草案，set 深圳与当前新轮用户引用、默认策略正确，没有复制旧大庆草案或受词库克拉玛依名称影响。caveat：末尾说未来确认启动会排队执行，与实验启动继续阻断不一致；未实际调用启动工具，也没有声称已经启动，作为未来能力说明问题记录，不判已发生越界。",
+      "manual_boundary": true,
+      "actual_scope_summary": [
+        {
+          "arguments": {
+            "operation": "create",
+            "title": "深圳欠薪调查",
+            "objective": "调查深圳地区欠薪相关讨论与内容",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "深圳",
+              "source_quote": "独立新一轮调查深圳欠薪，用现有规则词库，不复制旧草案。",
+              "selection_policy": "local_first_with_supplement"
+            }
+          },
+          "scope_receipt": {
+            "action": "set",
+            "target_text": "深圳",
+            "source_quote": "独立新一轮调查深圳欠薪，用现有规则词库，不复制旧草案。",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "receipt_code": "DRAFT_SIMULATED",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "ruleset",
+            "resource_id": "fixture-ruleset"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "lexicon",
+            "resource_id": "fixture-lexicon"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 4,
+      "completed_model_responses": 4,
+      "termination": "final"
+    },
+    {
+      "case_id": "defer-unadopted",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "用户明确未采用且先别建草案，模型未绑定、创建或设范围。caveat：将词库名称克拉玛依解释为与天津不相关，资源实际搜索词通用，存在资源/地域说明偏差；不扩大本轮 defer 行为判分。",
+      "manual_boundary": true,
+      "actual_scope_summary": "没有地域写入或 configure 调用",
+      "read_observations": [],
+      "auto_boundary_pattern_matches": [],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "final"
+    }
+  ]
+}

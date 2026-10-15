@@ -1,0 +1,618 @@
+{
+  "id": "E10",
+  "expectation": {
+    "decision": "apply",
+    "status": "pending",
+    "target": null
+  },
+  "sessions": [
+    "investigation-session:72f26873d53f4a6ba4bd8ee9ffe21dde"
+  ],
+  "setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references",
+  "started_at": "2026-10-15T08:56:18.416685+00:00",
+  "snapshot": {
+    "session_id": "investigation-session:72f26873d53f4a6ba4bd8ee9ffe21dde",
+    "draft": {
+      "id": "investigation-draft:0baab732c281451b81cf1bbf8e4d2d7a",
+      "current_revision": 1,
+      "title": "北京市朝阳区火灾舆情调查",
+      "objective": "调查北京市朝阳区火灾相关舆情，关注未经证实的断言、煽动表达及违规信息。",
+      "configuration": {
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "enabled_main_terms": [
+              "舆情事件"
+            ],
+            "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+            "lexicon_id": "custom_f43c26f2445a4a0e",
+            "strategy": "existing_lexicon"
+          }
+        },
+        "judgement": {
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+          "expected_ruleset_version": 1,
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "strategy": "existing_ruleset"
+        },
+        "platform": "dy",
+        "relevance_scope": {
+          "content_unit": "parent_post_event",
+          "province": {
+            "aliases": [
+              "北京"
+            ],
+            "name": "北京市"
+          },
+          "schema_version": "geo-scope-v1",
+          "selection_policy": "local_first_with_supplement",
+          "target": {
+            "aliases": [
+              "北京"
+            ],
+            "name": "北京市"
+          },
+          "topic": null
+        },
+        "relevance_scope_state": {
+          "application_turn_id": "investigation-turn:335aa355144249c38c6af38fb4f68640",
+          "candidates": [
+            {
+              "kind": "直辖市",
+              "level": "province",
+              "name": "北京市",
+              "province_name": "北京市"
+            }
+          ],
+          "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+          "copied_from_draft_id": "",
+          "draft_id": "investigation-draft:0baab732c281451b81cf1bbf8e4d2d7a",
+          "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+          "province": {
+            "aliases": [
+              "北京"
+            ],
+            "name": "北京市"
+          },
+          "province_code": "110000",
+          "reason": "",
+          "selection_policy": "local_first_with_supplement",
+          "session_id": "investigation-session:72f26873d53f4a6ba4bd8ee9ffe21dde",
+          "source_quote": "调查朝阳区火灾",
+          "source_sequence": 1,
+          "source_turn_id": "investigation-turn:b2ed500405ce448c808b1bb447bd79cf",
+          "source_user_message_id": "investigation-message:7a41f7cbe8dd4a5e9f8dbd2dd3ee3ff0",
+          "status": "resolved",
+          "target": {
+            "aliases": [
+              "北京"
+            ],
+            "name": "北京市"
+          },
+          "target_code": "110000",
+          "target_level": "province",
+          "target_text": "北京市",
+          "task_anchor_turn_id": "investigation-turn:b2ed500405ce448c808b1bb447bd79cf"
+        },
+        "schema_version": "investigation-draft-config-v4"
+      }
+    },
+    "public_draft": {
+      "id": "investigation-draft:0baab732c281451b81cf1bbf8e4d2d7a",
+      "status": "DRAFT",
+      "current_revision": 1,
+      "title": "北京市朝阳区火灾舆情调查",
+      "objective": "调查北京市朝阳区火灾相关舆情，关注未经证实的断言、煽动表达及违规信息。",
+      "configuration": {
+        "schema_version": "investigation-draft-config-v4",
+        "platform": "dy",
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "strategy": "existing_lexicon",
+            "lexicon_id": "custom_f43c26f2445a4a0e",
+            "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+            "enabled_main_terms": [
+              "舆情事件"
+            ]
+          }
+        },
+        "judgement": {
+          "strategy": "existing_ruleset",
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "expected_ruleset_version": 1,
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1"
+        },
+        "relevance_scope": {
+          "schema_version": "geo-scope-v1",
+          "target": {
+            "name": "北京市",
+            "aliases": [
+              "北京"
+            ]
+          },
+          "province": {
+            "name": "北京市",
+            "aliases": [
+              "北京"
+            ]
+          },
+          "topic": null,
+          "selection_policy": "local_first_with_supplement",
+          "content_unit": "parent_post_event"
+        },
+        "relevance_scope_state": {
+          "status": "resolved",
+          "target_text": "北京市",
+          "selection_policy": "local_first_with_supplement",
+          "reason": "",
+          "candidates": [
+            {
+              "name": "北京市",
+              "level": "province",
+              "kind": "直辖市",
+              "province_name": "北京市"
+            }
+          ],
+          "target": {
+            "name": "北京市",
+            "aliases": [
+              "北京"
+            ]
+          },
+          "province": {
+            "name": "北京市",
+            "aliases": [
+              "北京"
+            ]
+          }
+        }
+      },
+      "created_at": "2026-10-15T08:56:55.638804+00:00",
+      "updated_at": "2026-10-15T08:56:55.638804+00:00",
+      "confirmed_revision": null,
+      "confirmed_at": ""
+    },
+    "preview": {
+      "relevance_scope": {
+        "schema_version": "geo-scope-v1",
+        "target": {
+          "name": "北京市",
+          "aliases": [
+            "北京"
+          ]
+        },
+        "province": {
+          "name": "北京市",
+          "aliases": [
+            "北京"
+          ]
+        },
+        "topic": null,
+        "selection_policy": "local_first_with_supplement",
+        "content_unit": "parent_post_event"
+      },
+      "relevance_scope_state": {
+        "status": "resolved",
+        "target_text": "北京市",
+        "selection_policy": "local_first_with_supplement",
+        "reason": "",
+        "candidates": [
+          {
+            "name": "北京市",
+            "level": "province",
+            "kind": "直辖市",
+            "province_name": "北京市"
+          }
+        ],
+        "target": {
+          "name": "北京市",
+          "aliases": [
+            "北京"
+          ]
+        },
+        "province": {
+          "name": "北京市",
+          "aliases": [
+            "北京"
+          ]
+        }
+      },
+      "max_post_limit": 10,
+      "task_settings_revision": 0,
+      "requested_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 1,
+        "analysis_batch_size": 5
+      },
+      "effective_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 10,
+        "analysis_batch_size": 5
+      },
+      "estimated_max_contents": 1,
+      "draft_id": "investigation-draft:0baab732c281451b81cf1bbf8e4d2d7a",
+      "draft_revision": 1,
+      "title": "北京市朝阳区火灾舆情调查",
+      "objective": "调查北京市朝阳区火灾相关舆情，关注未经证实的断言、煽动表达及违规信息。",
+      "mode": "search",
+      "platform": "dy",
+      "resolved_search_terms": [
+        "舆情事件"
+      ],
+      "unused_search_terms": [],
+      "search_terms_notice": "",
+      "creator_url": "",
+      "recall_plan": {
+        "strategy": "existing_lexicon",
+        "lexicon_id": "custom_f43c26f2445a4a0e",
+        "lexicon_title": "独立测试通用舆情词库",
+        "runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+        "enabled_main_term_count": 1,
+        "enabled_main_terms": [
+          "舆情事件"
+        ],
+        "temporary_terms": [],
+        "source_lexicon_ids": [],
+        "lexicon_content": {
+          "title": "独立测试通用舆情词库",
+          "risk_label": "",
+          "description": "",
+          "entries": [
+            {
+              "id": "generic-topic",
+              "term": "舆情事件",
+              "kind": "main",
+              "parent_id": "",
+              "enabled": true,
+              "platform": "全平台",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": ""
+            }
+          ]
+        }
+      },
+      "ruleset_revision": {
+        "id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+        "ruleset_id": "ruleset.72b79ad82ad3",
+        "name": "独立测试通用舆情规则",
+        "domain": "public_opinion",
+        "version": 1,
+        "content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+        "enabled_rule_count": 1,
+        "available": true
+      },
+      "temporary_ruleset": null,
+      "max_notes": 1,
+      "max_posts_per_keyword": 1,
+      "max_comments_per_post": 300,
+      "get_sub_comment": false,
+      "blockers": [
+        {
+          "code": "collection_service_unavailable",
+          "message": "抖音采集服务当前不可用，请稍后重试。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        },
+        {
+          "code": "RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE",
+          "message": "地域执行能力尚未接通，当前不能启动。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        }
+      ],
+      "can_confirm": false
+    },
+    "receipts": [
+      {
+        "tool_name": "configure_investigation_draft",
+        "status": "SUCCEEDED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:72f26873d53f4a6ba4bd8ee9ffe21dde:investigation-turn:335aa355144249c38c6af38fb4f68640:45856a92"
+      }
+    ]
+  },
+  "evaluation": {
+    "pass": false,
+    "errors": [
+      "status expected pending, got resolved",
+      "target expected None, got 北京市"
+    ],
+    "observed_status": "resolved",
+    "observed_target": "北京市",
+    "scope": {
+      "content_unit": "parent_post_event",
+      "province": {
+        "aliases": [
+          "北京"
+        ],
+        "name": "北京市"
+      },
+      "schema_version": "geo-scope-v1",
+      "selection_policy": "local_first_with_supplement",
+      "target": {
+        "aliases": [
+          "北京"
+        ],
+        "name": "北京市"
+      },
+      "topic": null
+    },
+    "scope_state": {
+      "application_turn_id": "investigation-turn:335aa355144249c38c6af38fb4f68640",
+      "candidates": [
+        {
+          "kind": "直辖市",
+          "level": "province",
+          "name": "北京市",
+          "province_name": "北京市"
+        }
+      ],
+      "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+      "copied_from_draft_id": "",
+      "draft_id": "investigation-draft:0baab732c281451b81cf1bbf8e4d2d7a",
+      "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+      "province": {
+        "aliases": [
+          "北京"
+        ],
+        "name": "北京市"
+      },
+      "province_code": "110000",
+      "reason": "",
+      "selection_policy": "local_first_with_supplement",
+      "session_id": "investigation-session:72f26873d53f4a6ba4bd8ee9ffe21dde",
+      "source_quote": "调查朝阳区火灾",
+      "source_sequence": 1,
+      "source_turn_id": "investigation-turn:b2ed500405ce448c808b1bb447bd79cf",
+      "source_user_message_id": "investigation-message:7a41f7cbe8dd4a5e9f8dbd2dd3ee3ff0",
+      "status": "resolved",
+      "target": {
+        "aliases": [
+          "北京"
+        ],
+        "name": "北京市"
+      },
+      "target_code": "110000",
+      "target_level": "province",
+      "target_text": "北京市",
+      "task_anchor_turn_id": "investigation-turn:b2ed500405ce448c808b1bb447bd79cf"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "investigation-turn:b2ed500405ce448c808b1bb447bd79cf",
+      "session_id": "investigation-session:72f26873d53f4a6ba4bd8ee9ffe21dde",
+      "user": "调查朝阳区火灾",
+      "status": "completed",
+      "answer": "抱歉，目前调查范围最小支持到地级市（含直辖市），区县一级暂不支持，所以没法直接按“朝阳区”这个范围来配置。\n\n如果你想查的是北京市朝阳区的火灾，可以把范围设为**北京市**，我再帮你继续配置。需要我按北京市来建吗？",
+      "safe_message": "",
+      "seconds": 12.11,
+      "accounting": {
+        "id": "investigation-turn:b2ed500405ce448c808b1bb447bd79cf",
+        "status": "completed",
+        "input_tokens": 102,
+        "output_tokens": 62,
+        "total_tokens": 6820,
+        "llm_call_count": 1,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [],
+      "configure_describe_receipts": [],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 6758,
+            "output_tokens": 62,
+            "total_tokens": 6820,
+            "latency_seconds": 3.7
+          }
+        ],
+        "llm_call_count": 1,
+        "total_tokens": 6820,
+        "tool_lifecycle_and_exit": [
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=1/12 budget=1/12 tool_turns=0 last_msg_role=assistant response_len=107 session=investigation-session:72f26873d53f4a6ba4bd8ee9ffe21dde"
+        ]
+      }
+    },
+    {
+      "turn_id": "investigation-turn:335aa355144249c38c6af38fb4f68640",
+      "session_id": "investigation-session:72f26873d53f4a6ba4bd8ee9ffe21dde",
+      "user": "在抖音调查，使用现有“独立测试通用舆情规则”和“独立测试通用舆情词库”。这些测试资源按原样使用即可。请生成调查草案，不启动采集，不正式保存新资源。",
+      "status": "completed",
+      "answer": "草案已生成。\n\n**调查草案已创建**（未启动采集，未保存新资源）：\n\n| 项目 | 内容 |\n|---|---|\n| 标题 | 北京市朝阳区火灾舆情调查 |\n| 平台 | 抖音 |\n| 调查地域 | 北京市（区县不支持，已按你同意设为北京市，策略为当地优先＋补充） |\n| 审核规则 | 独立测试通用舆情规则（v1） |\n| 黑话库 | 独立测试通用舆情词库（实际搜索词：舆情事件） |\n\n两点提醒：\n- 词库只启用了一个搜索词“舆情事件”，覆盖面较窄，可能影响召回结果，按你的要求原样使用未做改动。\n- 当前抖音采集服务不可用、地域执行能力尚未接通，所以**暂不能启动**；草案已就绪，等服务恢复后可再确认启动。",
+      "safe_message": "",
+      "seconds": 31.8,
+      "accounting": {
+        "id": "investigation-turn:335aa355144249c38c6af38fb4f68640",
+        "status": "completed",
+        "input_tokens": 11134,
+        "output_tokens": 999,
+        "total_tokens": 70501,
+        "llm_call_count": 7,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "query_investigation_options"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "create",
+            "title": "北京市朝阳区火灾舆情调查",
+            "objective": "调查北京市朝阳区火灾相关舆情，关注未经证实的断言、煽动表达及违规信息。",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:6afacaf1bfc74ecc827d1a3792cbc4cc",
+            "lexicon_ref": "resource-ref:249595165fe9479380e0cbce87898527",
+            "scope_decision": "apply",
+            "relevance_scope_change": {
+              "action": "set",
+              "target_text": "北京市",
+              "source_quote": "调查朝阳区火灾",
+              "selection_policy": "local_first_with_supplement"
+            }
+          }
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [
+        "{\"name\": \"configure_investigation_draft\", \"description\": \"创建或局部更新调查草案的唯一配置入口。operation 明确为 create 或 update。create 提供标题、目标、平台、ruleset_ref，以及 lexicon_ref（关键词调查）或 creator_url（账号调查）。create 必须明确传 scope_decision：apply 同时传 relevance_scope_change.action=set；none 必须省略 relevance_scope_change。缺失或矛盾会在写入前拒绝。update 提供 draft_id/expected_revision，只传变化字段，省略的内容由后台原样保留；不传 null 或整份 configuration。update 不传 create 专用的 scope_decision；地域沿用省略保留、set 修改、clear 取消。正式和临时规则都填 ruleset_ref，正式和临时词库都填 lexicon_ref；引用从 read_resource/get_resource_edit 取得，不能猜测引用或抄写内容、hash、presentation_id。临时规则仍须先完整展示，等待后续用户明确采用；引用不是同意凭证。多个字段一起校验、一起提交。词库按其主词、变体与启用状态计算搜索词；改词条或启用状态先 update_resource_edit，再取新引用。本工具不修改资源正文、不保存资源、不启动任务；启动仍使用现有确认工具。版本冲突先读草案并核对，不强行替换版本重试。本次调查对象、议题或事件名称包含地域时默认采用该地域，无需用户另说某地的舆情或明确限定。例如调查克拉玛依大火、深圳楼市、新疆棉花争议，分别采用克拉玛依、深圳、新疆；议题与地域分别保存，不能只写入标题、目标或词库。设置或换地域时，relevance_scope_change传action=set、用户原始地名target_text、真实用户原话source_quote和selection_policy。同任务用户最新明确更换、取消或要求全国且不限制地域优先；关注全国网友讨论该事件不等于取消事件地域。资源齐备并获采用授权时，回看同任务真实用户历史中的调查对象和后续变更或取消；本轮只说采用资源不表示放弃此前地域，创建时引用原要求并一并配置，不要求用户重复。明确只要当地、不补充选local_only，其余有地域的调查选local_first_with_supplement，无需为默认策略重复确认。创建前明确取消地域时选scope_decision=none；已有草案取消时只传action=clear和source_quote；只改资源或标题时省略地域变化保留原地域，不能传null。不要从账号背景、资源名称、引用举例、否定、助手建议或仅修改标题推断地域；用户没提地名时不靠事件常识补地点；不填行政代码、身份或来源ID。调查目标支持单一省级地域或地级市（含直辖市）；地域简称直接传原文解析，解析成功直接报告。省市同名简称、下级地域、未知名或指代不明也传原文解析，仅按真实pending回执及候选提示澄清；区县同名不阻断明确城市别名，不自行猜测纠错或扩大范围。已有草案不能只口头澄清而保留可启动状态。条件齐备且用户已明确要求时直接修改草案，成功后报告，无需再问是否应用；资源展示和后续采用授权仍须满足。地域仅保存和展示，执行尚未接通，不能声称已经限定采集或可以启动地域调查。\", \"parameters\": {\"$defs\": {\"Platform\": {\"enum\": [\"xhs\", \"dy\", \"ks\"], \"title\": \"Platform\", \"type\": \"string\"}, \"RelevanceScopeChange\": {\"additionalProperties\": false, \"properties\": {\"action\": {\"enum\": [\"set\", \"clear\"], \"title\": \"Action\", \"type\": \"string\"}, \"source_quote\": {\"maxLength\": 4000, \"minLength\": 1, \"title\": \"Source Quote\", \"type\": \"string\"}, \"target_text\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Target Text\", \"default\": null}, \"selection_policy\": {\"enum\": [\"local_only\", \"local_first_with_supplement\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Selection Policy\", \"default\": null}}, \"required\": [\"action\", \"source_quote\"], \"title\": \"RelevanceScopeChange\", \"type\": \"object\"}}, \"additionalProperties\": false, \"properties\": {\"operation\": {\"enum\": [\"create\", \"update\"], \"title\": \"Operation\", \"type\": \"string\"}, \"draft_id\": {\"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Draft Id\", \"default\": null}, \"expected_revision\": {\"minimum\": 1, \"type\": \"integer\", \"nullable\": true, \"title\": \"Expected Revision\", \"default\": null}, \"title\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Title\", \"default\": null}, \"objective\": {\"maxLength\": 4000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Objective\", \"default\": null}, \"platform\": {\"$ref\": \"#/$defs/Platform\", \"nullable\": true}, \"ruleset_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Ruleset Ref\", \"default\": null}, \"lexicon_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Lexicon Ref\", \"default\": null}, \"creator_url\": {\"maxLength\": 2000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Creator Url\", \"default\": null}, \"scope_decision\": {\"enum\": [\"apply\", \"none\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Scope Decision\", \"description\": \"仅 create 必填：调查对象/事件名称包含地域选 apply 并传 set；无地域或已明确取消选 none 且不传 change。update 省略。\", \"default\": null}, \"relevance_scope_change\": {\"$ref\": \"#/$defs/RelevanceScopeChange\", \"nullable\": true}}, \"required\": [\"operation\"], \"title\": \"ConfigureDraftInput\", \"type\": \"object\"}}"
+      ],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 6870,
+            "output_tokens": 85,
+            "total_tokens": 6955,
+            "latency_seconds": 3.3
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 8507,
+            "output_tokens": 160,
+            "total_tokens": 8667,
+            "latency_seconds": 4.3
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 9119,
+            "output_tokens": 161,
+            "total_tokens": 9280,
+            "latency_seconds": 3.6
+          },
+          {
+            "number": 4,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 9591,
+            "output_tokens": 100,
+            "total_tokens": 9691,
+            "latency_seconds": 3.0
+          },
+          {
+            "number": 5,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 10153,
+            "output_tokens": 93,
+            "total_tokens": 10246,
+            "latency_seconds": 3.0
+          },
+          {
+            "number": 6,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 11666,
+            "output_tokens": 218,
+            "total_tokens": 11884,
+            "latency_seconds": 5.1
+          },
+          {
+            "number": 7,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 13596,
+            "output_tokens": 182,
+            "total_tokens": 13778,
+            "latency_seconds": 5.4
+          }
+        ],
+        "llm_call_count": 7,
+        "total_tokens": 70501,
+        "tool_lifecycle_and_exit": [
+          "tool query_investigation_options completed (0.03s, 3974 chars)",
+          "tool read_resource completed (0.00s, 624 chars)",
+          "tool read_resource completed (0.01s, 1194 chars)",
+          "tool tool_describe completed (0.00s, 3682 chars)",
+          "tool configure_investigation_draft completed (0.05s, 4681 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=7/12 budget=7/12 tool_turns=6 last_msg_role=assistant response_len=308 session=investigation-session:72f26873d53f4a6ba4bd8ee9ffe21dde"
+        ]
+      }
+    }
+  ],
+  "ended_at": "2026-10-15T08:57:02.509673+00:00",
+  "session_tool_receipts": []
+}

@@ -1,0 +1,47 @@
+{
+  "interpreter": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+  "interpreter_resolved": "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12",
+  "command": [
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest",
+    "tests/test_scoped_execution.py",
+    "tests/test_scoped_selection_store.py",
+    "tests/test_scoped_selection.py",
+    "-k",
+    "first_risk_rejects_old_record or risk_write_and_query_barrier or selector_rejects_self_consistent"
+  ],
+  "actual_guarded_command": [
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+    "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/red-before-fix/rerun.py",
+    "tests/test_scoped_execution.py",
+    "tests/test_scoped_selection_store.py",
+    "tests/test_scoped_selection.py",
+    "-k",
+    "first_risk_rejects_old_record or risk_write_and_query_barrier or selector_rejects_self_consistent"
+  ],
+  "exit_code": 1,
+  "guard_metrics": {
+    "network_attempts": 0,
+    "process_attempts": 0,
+    "real_model_attempts": 0,
+    "crawler_launch_attempts": 0,
+    "forbidden_database_attempts": 0
+  },
+  "test_counts": {
+    "deselected": 78,
+    "failed": 9
+  },
+  "database_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi",
+  "database_paths": [
+    "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_first_risk_rejects_old_re0/p4.sqlite",
+    "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_first_risk_rejects_old_re1/p4.sqlite",
+    "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_first_risk_rejects_old_re2/p4.sqlite",
+    "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_risk_write_and_query_barr0/bound.sqlite",
+    "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_risk_write_and_query_barr1/bound.sqlite",
+    "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_risk_write_and_query_barr2/bound.sqlite"
+  ],
+  "log": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo/experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/red-before-fix/pytest.log"
+}

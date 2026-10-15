@@ -1,0 +1,27 @@
+{
+  "head": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "branch": "codex/geographic-relevance-p234-offline",
+  "p1_files_unchanged": 1570,
+  "imported_files_unchanged": 209,
+  "upstream_source_trees_match_snapshot": true,
+  "p3_git_exports_identical": 22,
+  "new_files": [
+    "experiments/geographic_joint_integration/CASE_MATRIX.md",
+    "experiments/geographic_joint_integration/INTERFACE_GAPS.md",
+    "experiments/geographic_joint_integration/INTERFACE_MAP.md",
+    "experiments/geographic_joint_integration/README.md",
+    "experiments/geographic_joint_integration/REPORT.md",
+    "experiments/geographic_joint_integration/SOURCE_INVENTORY.md",
+    "experiments/geographic_joint_integration/adapter.py",
+    "experiments/geographic_joint_integration/audit.py",
+    "experiments/geographic_joint_integration/replay.py",
+    "experiments/geographic_joint_integration/run_offline.py",
+    "experiments/geographic_joint_integration/scenarios.py",
+    "tests/test_geographic_joint_adapter.py",
+    "tests/test_geographic_joint_execution.py",
+    "tests/test_geographic_joint_risk.py"
+  ],
+  "syntax_and_whitespace": "passed",
+  "lint_typecheck": "not configured; no dependency installation",
+  "p4_original_session_reacceptance": "pending; user authorized offline continuation"
+}

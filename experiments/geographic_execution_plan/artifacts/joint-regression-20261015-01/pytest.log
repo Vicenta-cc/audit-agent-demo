@@ -1,0 +1,177 @@
+........................................................................ [ 10%]
+........................................................................ [ 20%]
+........................................................................ [ 31%]
+........................................................................ [ 41%]
+........................................................................ [ 52%]
+........................................................................ [ 62%]
+.......................................FF.......F..F.................... [ 73%]
+........................................................................ [ 83%]
+........................................................................ [ 94%]
+......................................                                   [100%]
+=================================== FAILURES ===================================
+_______________ test_prompts_are_formatted_with_the_setting[10] ________________
+
+value = '10'
+
+    @pytest.mark.parametrize("value", ["10", "6"])
+    def test_prompts_are_formatted_with_the_setting(value):
+        prompts = json.loads(_fresh_python(PROMPT_SOURCES, value))
+        assert f"默认只生成 1 至 {value} 个最终可直接搜索的实际搜索词" in prompts["recall"]
+        assert f"每个任务只搜索前 {value} 个实际搜索词" in prompts["recall"]
+        assert "词库全部保留、全部用于研判" in prompts["recall"]
+>       assert f"默认整组 1 至 {value} 个实际搜索词" in prompts["resource"]
+E       AssertionError: assert '默认整组 1 至 10 个实际搜索词' in '\n规则库与黑话库的创建、编辑原则：\n1. 新建独立资源：新规则用 create_ruleset_proposal，新词库用 create_lexicon_edit，仅传 generation_request；原样导入用户给定的完整...知查询原回执，保存用原 operation_id 查询 get_resource_save。没有成功回执不能宣称完成。\n生成拦截、截断或失败时，本轮不换说法、content 或模型重试。保留已成功步骤，仅继续未完成且获授权的部分。\n'
+
+tests/test_search_terms_cap.py:71: AssertionError
+________________ test_prompts_are_formatted_with_the_setting[6] ________________
+
+value = '6'
+
+    @pytest.mark.parametrize("value", ["10", "6"])
+    def test_prompts_are_formatted_with_the_setting(value):
+        prompts = json.loads(_fresh_python(PROMPT_SOURCES, value))
+        assert f"默认只生成 1 至 {value} 个最终可直接搜索的实际搜索词" in prompts["recall"]
+        assert f"每个任务只搜索前 {value} 个实际搜索词" in prompts["recall"]
+        assert "词库全部保留、全部用于研判" in prompts["recall"]
+>       assert f"默认整组 1 至 {value} 个实际搜索词" in prompts["resource"]
+E       AssertionError: assert '默认整组 1 至 6 个实际搜索词' in '\n规则库与黑话库的创建、编辑原则：\n1. 新建独立资源：新规则用 create_ruleset_proposal，新词库用 create_lexicon_edit，仅传 generation_request；原样导入用户给定的完整...知查询原回执，保存用原 operation_id 查询 get_resource_save。没有成功回执不能宣称完成。\n生成拦截、截断或失败时，本轮不换说法、content 或模型重试。保留已成功步骤，仅继续未完成且获授权的部分。\n'
+
+tests/test_search_terms_cap.py:71: AssertionError
+___ test_task_creation_caps_search_terms_for_every_source[formal-temporary] ____
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x10dade6c0>, 'resource_db...45c0>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x10e2e6bd0>, ...}
+source = 'temporary', rules = 'formal'
+
+    @pytest.mark.parametrize("source", ["saved", "temporary", "plain"])
+    @pytest.mark.parametrize("rules", ["formal", "temporary"])
+    def test_task_creation_caps_search_terms_for_every_source(creation_stack, source, rules):
+        stack = creation_stack
+        app = stack["app_service"]
+        principal = Principal("principal-a")
+        ctx = dict(session_id="cap-task-session", principal=principal)
+        manager = app.resource_management
+        args = _t1_temporary_arguments(stack)
+        if source == "plain":
+            plan = {"strategy": "temporary_terms", "terms": PLAIN, "source_lexicon_ids": []}
+            kept, unused = PLAIN[:10], PLAIN[10:]
+        else:
+            lexicon = big_lexicon()
+            selected = manager.create_lexicon(lexicon.storage_dict(), **ctx)
+            if source == "saved":
+                selected = manager.save(selected["edit_id"], 1, mode="new", operation_id="cap-save", **ctx)
+            plan = manager.resolve_lexicon_ref(selected["resource_ref"], **ctx)
+            kept, unused = LEXICON_KEPT, LEXICON_UNUSED
+        args["configuration"]["investigation"]["recall_plan"] = plan
+        if rules == "temporary":
+            rule_body = json.loads((Path(__file__).parent / "fixtures/recruitment_fraud_ruleset.json").read_text())
+            shown = _run_scripted_creation_turn(stack, content="生成并展示临时规则，不启动",
+                actions=[("create_ruleset_proposal", {"content": rule_body})])
+            args["configuration"].pop("judgement", None)
+            args["configuration"].pop("schema_version", None)
+            result, _, _ = approve(stack, shown, arguments={"create_draft": args})
+            assert result["status"] == "ok", result
+            draft = app.get_draft(result["data"]["draft"]["id"], principal=principal)
+        else:
+>           draft = app.create_draft(CreateDraftCommand.model_validate(args), principal=principal)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_search_terms_cap.py:220: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+backend/investigation_creation/service.py:195: in create_draft
+    configuration = self._normalize_edit_origin(configuration, resource_ref=resource_ref, session_id=session_id, principal=principal)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <backend.investigation_creation.service.InvestigationCreationService object at 0x10e2e6bd0>
+configuration = InvestigationDraftConfiguration(schema_version='investigation-draft-config-v4', platform=<Platform.XHS: 'xhs'>, invest...e04c2201fa0d8cde364fba649c54c89ee77adf8d55cc'), task_parameters=None, relevance_scope=None, relevance_scope_state=None)
+previous = None, resource_ref = None, session_id = ''
+principal = Principal(id='principal-a', role='user', session_id='', expires_at='')
+
+    def _normalize_edit_origin(self, configuration, *, previous=None, resource_ref=None,
+                              session_id='', principal):
+        """Only resolved server handles may establish an edit origin.
+    
+        An unchanged adopted snapshot retains its origin even after the live edit
+        advances. Editing the snapshot in the drawer explicitly detaches it.
+        """
+        mode = configuration.investigation
+        if mode.mode != 'search' or mode.recall_plan.strategy != 'temporary_terms':
+            return configuration
+        plan = mode.recall_plan
+        if not plan.source_edit_ref:
+            return configuration
+        if resource_ref == plan.source_edit_ref:
+            resolved = self.resource_management.resolve_lexicon_ref(resource_ref, session_id=session_id, principal=principal)
+            if resolved == plan.model_dump(mode='json'):
+                return configuration
+        if previous and previous.investigation.mode == 'search':
+            prior = previous.investigation.recall_plan
+            if prior.strategy == 'temporary_terms' and prior.source_edit_ref == plan.source_edit_ref:
+                if prior.model_dump(mode='json') == plan.model_dump(mode='json'):
+                    return configuration
+                # The drawer modifies the adopted copy, not the originating edit.
+                return configuration.model_copy(update={
+                    'investigation': mode.model_copy(update={
+                        'recall_plan': plan.model_copy(update={'source_edit_ref': None})
+                    })
+                })
+>       raise ConfigurationValidationError('词库来源须通过当前会话的有效资源引用建立。', code='RESOURCE_REF_INVALID')
+E       backend.investigation_creation.errors.ConfigurationValidationError: 词库来源须通过当前会话的有效资源引用建立。
+
+backend/investigation_creation/service.py:385: ConfigurationValidationError
+__ test_task_creation_caps_search_terms_for_every_source[temporary-temporary] __
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x10c4a3680>, 'resource_db...9940>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x10c48a690>, ...}
+source = 'temporary', rules = 'temporary'
+
+    @pytest.mark.parametrize("source", ["saved", "temporary", "plain"])
+    @pytest.mark.parametrize("rules", ["formal", "temporary"])
+    def test_task_creation_caps_search_terms_for_every_source(creation_stack, source, rules):
+        stack = creation_stack
+        app = stack["app_service"]
+        principal = Principal("principal-a")
+        ctx = dict(session_id="cap-task-session", principal=principal)
+        manager = app.resource_management
+        args = _t1_temporary_arguments(stack)
+        if source == "plain":
+            plan = {"strategy": "temporary_terms", "terms": PLAIN, "source_lexicon_ids": []}
+            kept, unused = PLAIN[:10], PLAIN[10:]
+        else:
+            lexicon = big_lexicon()
+            selected = manager.create_lexicon(lexicon.storage_dict(), **ctx)
+            if source == "saved":
+                selected = manager.save(selected["edit_id"], 1, mode="new", operation_id="cap-save", **ctx)
+            plan = manager.resolve_lexicon_ref(selected["resource_ref"], **ctx)
+            kept, unused = LEXICON_KEPT, LEXICON_UNUSED
+        args["configuration"]["investigation"]["recall_plan"] = plan
+        if rules == "temporary":
+            rule_body = json.loads((Path(__file__).parent / "fixtures/recruitment_fraud_ruleset.json").read_text())
+            shown = _run_scripted_creation_turn(stack, content="生成并展示临时规则，不启动",
+                actions=[("create_ruleset_proposal", {"content": rule_body})])
+            args["configuration"].pop("judgement", None)
+            args["configuration"].pop("schema_version", None)
+            result, _, _ = approve(stack, shown, arguments={"create_draft": args})
+>           assert result["status"] == "ok", result
+E           AssertionError: {'status': 'error', 'error': {'code': 'RESOURCE_REF_INVALID', 'message': '词库来源须通过当前会话的有效资源引用建立。', 'details': {'write_status': 'NOT_STARTED', 'mutation_applied': False, 'draft_created': False, 'retryable': False, ...}}}
+E           assert 'error' == 'ok'
+E             
+E             - ok
+E             + error
+
+tests/test_search_terms_cap.py:217: AssertionError
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_search_terms_cap.py::test_prompts_are_formatted_with_the_setting[10]
+FAILED tests/test_search_terms_cap.py::test_prompts_are_formatted_with_the_setting[6]
+FAILED tests/test_search_terms_cap.py::test_task_creation_caps_search_terms_for_every_source[formal-temporary]
+FAILED tests/test_search_terms_cap.py::test_task_creation_caps_search_terms_for_every_source[temporary-temporary]
+4 failed, 682 passed, 2 warnings in 150.83s (0:02:30)

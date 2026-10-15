@@ -1,0 +1,34 @@
+{
+  "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+  "baseline_ref": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "baseline_commit": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "archive_command": [
+    "git",
+    "archive",
+    "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+    "backend",
+    "tests"
+  ],
+  "archive_sha256": "2730d665390215c7b201723ab91a639c4258e14e8af14564ee94174ce09945c4",
+  "archive_scope": [
+    "backend",
+    "tests"
+  ],
+  "cwd": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/geo-p1-baseline-dw2hj3hw",
+  "pytest_argv": [
+    "tests/test_search_terms_cap.py::test_prompts_are_formatted_with_the_setting[10]",
+    "tests/test_search_terms_cap.py::test_prompts_are_formatted_with_the_setting[6]",
+    "tests/test_search_terms_cap.py::test_task_creation_caps_search_terms_for_every_source[formal-temporary]",
+    "tests/test_search_terms_cap.py::test_task_creation_caps_search_terms_for_every_source[temporary-temporary]",
+    "-q",
+    "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo/experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/junit.xml",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "application_code_source": "all backend/ files from exact P1 git archive; no P2 backend path",
+  "test_file_sha256": "82a281f69529356e2e7b348bca22aec6ab599f40f4a241a030bbd1d9f0892ec3",
+  "p2_infrastructure_only": [
+    "offline_guards.py",
+    "generated sitecustomize bootstrap"
+  ]
+}

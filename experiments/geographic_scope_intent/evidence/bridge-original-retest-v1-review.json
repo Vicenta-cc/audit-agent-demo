@@ -1,0 +1,793 @@
+{
+  "kind": "all18_all46_responses_manual_review_not_user_acceptance",
+  "version": "geo-intent-p0-original-bridge-retest-v1",
+  "reviewed_at": "2026-10-14T20:26:00.303466+08:00",
+  "source_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/bridge-original-retest-v1/results.json",
+  "source_sha256": "df536d9183a429c7106b9d902c89dd693c12f2b1a77c80a6af9783aee0c64b1e",
+  "reviewed_cases": 18,
+  "reviewed_responses": 46,
+  "new_model_calls_for_review": 0,
+  "strict_intent_auto": 11,
+  "strict_intent_manual": 11,
+  "raw_original_complete": 11,
+  "offline_review_original_complete": 13,
+  "review_difference_cases": [
+    "adoption-temp-later",
+    "pasted-post"
+  ],
+  "independent_review": "bridge_real_entry_review independently read all18/all46, agrees strict11/18, set5/5 and5/7, cfg8/14, clear0/1, two original scoring false negatives; did not call models or change files.",
+  "rows": [
+    {
+      "case_id": "city-kelamayi",
+      "expected": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "用已发布综合舆情规则和欠薪词库，在抖音调查克拉玛依最近的负面舆情。",
+        "source_evidence_span": "调查克拉玛依最近的负面舆情",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "requests": 4,
+      "responses": 4,
+      "termination": "loop_limit",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "set",
+          "target_text": "克拉玛依",
+          "source_quote": "在抖音调查克拉玛依最近的负面舆情",
+          "selection_policy": "local_first_with_supplement"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "完整克拉玛依set、默认策略与当前用户引用；第4响应已模拟配置，scope及资源引用正确。loop_limit只表示没有第5次文字确认，不是草案未落地。",
+      "actual_configure_successes": 1,
+      "accepted_draft_snapshots": [
+        {
+          "draft_id": "simulated-draft:city-kelamayi",
+          "revision": 1,
+          "scope": {
+            "action": "set",
+            "target_text": "克拉玛依",
+            "source_quote": "在抖音调查克拉玛依最近的负面舆情",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "title": "克拉玛依近期负面舆情调查",
+          "objective": "在抖音调查克拉玛依最近的负面舆情，重点关注欠薪争议",
+          "platform": "dy",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "draft_set_pass": true,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": false,
+      "offline_review_original_complete": false,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": false,
+      "repaired_b_manual_intent": false
+    },
+    {
+      "case_id": "only-kelamayi",
+      "expected": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_only",
+        "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+        "source_evidence_span": "只要克拉玛依，不要其他地区",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "requests": 3,
+      "responses": 3,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "set",
+          "target_text": "克拉玛依",
+          "source_quote": "只要克拉玛依，不要其他地区",
+          "selection_policy": "local_only"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "完整克拉玛依set、local_only与排他原话；成功创建模拟草案并明确尚未启动真实调查。",
+      "actual_configure_successes": 1,
+      "accepted_draft_snapshots": [
+        {
+          "draft_id": "simulated-draft:only-kelamayi",
+          "revision": 1,
+          "scope": {
+            "action": "set",
+            "target_text": "克拉玛依",
+            "source_quote": "只要克拉玛依，不要其他地区",
+            "selection_policy": "local_only"
+          },
+          "platform": "dy",
+          "title": "克拉玛依地域调查",
+          "objective": "调查克拉玛依当地相关内容讨论，仅限克拉玛依地区，不补充其他地区",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "draft_set_pass": true,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": false
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 3,
+      "responses": 3,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "keep"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "正确keep，update标题为复查；克拉玛依范围、策略及两资源引用保留。",
+      "actual_configure_successes": 1,
+      "accepted_draft_snapshots": [
+        {
+          "draft_id": "fixture-draft",
+          "revision": 3,
+          "scope": {
+            "target_text": "克拉玛依",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+          "title": "复查"
+        }
+      ],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": true
+    },
+    {
+      "case_id": "change-daqing",
+      "expected": {
+        "action": "set",
+        "target_text": "大庆",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "改查大庆，规则和词库保持现在的。",
+        "source_evidence_span": "改查大庆",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "set",
+          "target_text": "大庆",
+          "source_quote": "改查大庆，规则和词库保持现在的。",
+          "selection_policy": "local_first_with_supplement"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "同一响应record与update，正确换为大庆、默认策略，当前换地域引用完整；无关资源保留。条件式未来启动建议单列，不是已经执行。",
+      "actual_configure_successes": 1,
+      "accepted_draft_snapshots": [
+        {
+          "draft_id": "fixture-draft",
+          "revision": 3,
+          "scope": {
+            "action": "set",
+            "target_text": "大庆",
+            "source_quote": "改查大庆，规则和词库保持现在的。",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "draft_set_pass": true,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": false
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "expected": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+        "source_evidence_span": "调查克拉玛依的欠薪舆情",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "requests": 3,
+      "responses": 3,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "set",
+          "target_text": "克拉玛依",
+          "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+          "selection_policy": "local_first_with_supplement"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "引用同轮较早用户克拉玛依要求，资源采用后set正确落地。原完整判分误伤“已创建调查草案（模拟，尚未启动真实调查）”，仅离线解除误伤，原判保留。",
+      "actual_configure_successes": 1,
+      "accepted_draft_snapshots": [
+        {
+          "draft_id": "simulated-draft:adoption-temp-later",
+          "revision": 1,
+          "scope": {
+            "action": "set",
+            "target_text": "克拉玛依",
+            "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "title": "克拉玛依欠薪舆情调查",
+          "objective": "调查克拉玛依地区欠薪相关舆情讨论",
+          "platform": "dy",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "draft_set_pass": true,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": false,
+      "offline_review_original_complete": true,
+      "offline_difference": "引用同轮较早用户克拉玛依要求，资源采用后set正确落地。原完整判分误伤“已创建调查草案（模拟，尚未启动真实调查）”，仅离线解除误伤，原判保留。",
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": false
+    },
+    {
+      "case_id": "province-xinjiang",
+      "expected": {
+        "action": "set",
+        "target_text": "新疆",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+        "source_evidence_span": "查新疆欠薪",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "requests": 4,
+      "responses": 4,
+      "termination": "loop_limit",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "set",
+          "target_text": "新疆",
+          "source_quote": "查新疆欠薪，在抖音做调查",
+          "selection_policy": "local_first_with_supplement"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "完整新疆set与用户引用；第4响应配置成功，资源引用与scope正确。loop_limit未改写，实际落地通过。",
+      "actual_configure_successes": 1,
+      "accepted_draft_snapshots": [
+        {
+          "draft_id": "simulated-draft:province-xinjiang",
+          "revision": 1,
+          "scope": {
+            "action": "set",
+            "target_text": "新疆",
+            "source_quote": "查新疆欠薪，在抖音做调查",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "title": "新疆欠薪抖音调查",
+          "objective": "在抖音调查新疆地区欠薪相关讨论与线索",
+          "platform": "dy",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "draft_set_pass": true,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": false,
+      "offline_review_original_complete": false,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": false
+    },
+    {
+      "case_id": "keep-rules",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 4,
+      "responses": 4,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [],
+      "strict_intent_auto": false,
+      "strict_intent_manual": false,
+      "natural_action_target_status": "correct",
+      "manual_reason": "没有record；读取规则和已有草案后确认ruleset_ref本来相同，合理no-op。成都scope、策略及词库保留，不把no-op计作新configure。",
+      "actual_configure_successes": 0,
+      "accepted_draft_snapshots": [],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": true,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": false,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": true
+    },
+    {
+      "case_id": "defer-missing-all",
+      "expected": {
+        "action": "set",
+        "target_text": "乌鲁木齐",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "调查乌鲁木齐欠薪，先帮我准备规则和词库。",
+        "source_evidence_span": "调查乌鲁木齐欠薪",
+        "workflow_state": "defer",
+        "old_label": "defer",
+        "critical_negative": false
+      },
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [],
+      "strict_intent_auto": false,
+      "strict_intent_manual": false,
+      "natural_action_target_status": "correct",
+      "manual_reason": "没有record；自然文本认出乌鲁木齐欠薪并正确说明资源不足，但重复询问生成授权/地域策略，明确地域未结构化保留。不能补成set通过。",
+      "actual_configure_successes": 0,
+      "accepted_draft_snapshots": [],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": false,
+      "repaired_b_manual_intent": false
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "expected": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+        "source_evidence_span": "调查克拉玛依的欠薪舆情",
+        "workflow_state": "defer",
+        "old_label": "defer",
+        "critical_negative": false
+      },
+      "requests": 2,
+      "responses": 1,
+      "termination": "timeout",
+      "error_type": "ReadTimeout",
+      "record_arguments": [],
+      "strict_intent_auto": false,
+      "strict_intent_manual": false,
+      "natural_action_target_status": "unobservable_runtime_failure",
+      "manual_reason": "先query资源，第二次模型请求45秒ReadTimeout；没有record或地域自然判断，语义未知。保留为失败分母，不重试、不归为确定模型理解错误。",
+      "actual_configure_successes": 0,
+      "accepted_draft_snapshots": [],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": false,
+      "offline_review_original_complete": false,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": false,
+      "repaired_b_manual_intent": false
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "expected": {
+        "action": "clarify",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "not_applicable",
+        "old_label": "clarify",
+        "critical_negative": true
+      },
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "clarify",
+          "question": "请问“朝阳”具体指哪个地域？是北京市朝阳区、辽宁省朝阳市，还是其他地点？"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "完整clarify问题及自然澄清，未猜朝阳目标、未配置草案。追加默认策略确认不是必须，作为冗余问题保留。",
+      "actual_configure_successes": 0,
+      "accepted_draft_snapshots": [],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": false,
+      "old_b_actual_configured": false,
+      "repaired_b_manual_intent": false
+    },
+    {
+      "case_id": "new-round-national",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 1,
+      "responses": 0,
+      "termination": "timeout",
+      "error_type": "ReadTimeout",
+      "record_arguments": [],
+      "strict_intent_auto": false,
+      "strict_intent_manual": false,
+      "natural_action_target_status": "unobservable_runtime_failure",
+      "manual_reason": "第一次模型请求ReadTimeout，0响应；独立新轮keep无法评估，不因未调用工具就判反例通过。",
+      "actual_configure_successes": 0,
+      "accepted_draft_snapshots": [],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": false,
+      "offline_review_original_complete": false,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": false
+    },
+    {
+      "case_id": "named-resource",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 4,
+      "responses": 4,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [],
+      "strict_intent_auto": false,
+      "strict_intent_manual": false,
+      "natural_action_target_status": "partial",
+      "manual_reason": "没有record或configure；读取后明确通用搜索词不含克拉玛依、可做全国调查，但又反问全国还是当地，属不必要澄清/流程未完成。实际scope未误设。",
+      "actual_configure_successes": 0,
+      "accepted_draft_snapshots": [],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": true
+    },
+    {
+      "case_id": "pasted-post",
+      "expected": {
+        "action": "no_task",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "not_applicable",
+        "old_label": "no_task",
+        "critical_negative": true
+      },
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "no_task"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "正确no_task，说明转发内容不构成任务并询问用户目的。原complete文字正则未覆盖“请问你希望我做什么”，人工满足澄清目的；未擅自创建。",
+      "actual_configure_successes": 0,
+      "accepted_draft_snapshots": [],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": false,
+      "offline_review_original_complete": true,
+      "offline_difference": "正确no_task，说明转发内容不构成任务并询问用户目的。原complete文字正则未覆盖“请问你希望我做什么”，人工满足澄清目的；未擅自创建。",
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": false,
+      "repaired_b_manual_intent": true
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [],
+      "strict_intent_auto": false,
+      "strict_intent_manual": false,
+      "natural_action_target_status": "correct",
+      "manual_reason": "自然文本明确作者背景不等于任务地域，scope不新增；没有record/工具/草案，重复询问已有创建授权，不能把final计作落地。",
+      "actual_configure_successes": 0,
+      "accepted_draft_snapshots": [],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": false,
+      "repaired_b_manual_intent": true
+    },
+    {
+      "case_id": "denied-city",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "keep"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "正确keep，不把例子当地域；随后要求补调查主题，无configure，地域判断通过但草案未落地。",
+      "actual_configure_successes": 0,
+      "accepted_draft_snapshots": [],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": false,
+      "repaired_b_manual_intent": true
+    },
+    {
+      "case_id": "clear-unlimited",
+      "expected": {
+        "action": "clear",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": "不限制地区了，其他设置不变。",
+        "source_evidence_span": "不限制地区了",
+        "workflow_state": "ready",
+        "old_label": "clear",
+        "critical_negative": false
+      },
+      "requests": 2,
+      "responses": 2,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "clear",
+          "source_quote": "不限制地区了，其他设置不变。"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "clear及取消原话完整正确；仅record后再次问是否应用，没有configure，原草案地域仍在。未虚假声称草案已清除。",
+      "actual_configure_successes": 0,
+      "accepted_draft_snapshots": [],
+      "draft_set_pass": null,
+      "draft_clear_pass": false,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": false,
+      "offline_review_original_complete": false,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": false
+    },
+    {
+      "case_id": "keep-title",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 3,
+      "responses": 3,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "keep"
+        }
+      ],
+      "strict_intent_auto": true,
+      "strict_intent_manual": true,
+      "natural_action_target_status": "correct",
+      "manual_reason": "正确keep并update标题十月欠薪专项；原克拉玛依范围、策略及资源保留。",
+      "actual_configure_successes": 1,
+      "accepted_draft_snapshots": [
+        {
+          "draft_id": "fixture-draft",
+          "revision": 3,
+          "scope": {
+            "target_text": "克拉玛依",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+          "title": "十月欠薪专项"
+        }
+      ],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": true
+    },
+    {
+      "case_id": "assistant-city",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 4,
+      "responses": 4,
+      "termination": "final",
+      "error_type": null,
+      "record_arguments": [
+        {
+          "action": "clear",
+          "source_quote": "请做全国调查，采用现有规则词库。"
+        }
+      ],
+      "strict_intent_auto": false,
+      "strict_intent_manual": false,
+      "natural_action_target_status": "incorrect",
+      "manual_reason": "既有草案为None，助手建议克拉玛依不是用户范围；却record clear并声称取消此前地域，预期keep，属关键反例记录误清1。configure未带scope_change，实际新草案scope=None正确，实际误清0。",
+      "actual_configure_successes": 1,
+      "accepted_draft_snapshots": [
+        {
+          "draft_id": "simulated-draft:assistant-city",
+          "revision": 1,
+          "scope": null,
+          "title": "全国欠薪相关舆情调查",
+          "objective": "调查全国范围内欠薪相关舆情讨论",
+          "platform": "dy",
+          "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+          "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+        }
+      ],
+      "draft_set_pass": null,
+      "draft_clear_pass": null,
+      "reasonable_existing_draft_no_op": false,
+      "raw_original_complete": true,
+      "offline_review_original_complete": true,
+      "offline_difference": null,
+      "old_b_strict_intent": true,
+      "old_b_actual_configured": true,
+      "repaired_b_manual_intent": false
+    }
+  ]
+}

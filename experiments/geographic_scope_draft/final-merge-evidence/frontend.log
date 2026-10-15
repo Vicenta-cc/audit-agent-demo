@@ -1,0 +1,138 @@
+
+> xhs-audit-agent-frontend-v2@0.1.0 test
+> playwright test tests/geographicScopeDisplay.spec.ts tests/investigationCreation.spec.tsx tests/mixedProposalPresentation.spec.ts tests/proposalPresentation.spec.ts
+
+[WebServer] (node:44538) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 99 tests using 1 worker
+
+(node:44540) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/99] tests/geographicScopeDisplay.spec.ts:74:1 › scope display handles canonical province, city, municipality, policies and omitted legacy fields
+[2/99] tests/geographicScopeDisplay.spec.ts:96:1 › pending latest requirement hides previously resolved target and server blockers remain readable
+[3/99] tests/geographicScopeDisplay.spec.ts:115:1 › workspace recovery retains pending and resolved projections without freezing blocked draft or polluting old snapshots
+[4/99] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render resolved scope read-only
+[5/99] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render province scope read-only
+[6/99] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render pending scope read-only
+[7/99] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render ambiguous scope read-only
+[8/99] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render local_only scope read-only
+[9/99] tests/geographicScopeDisplay.spec.ts:136:3 › original card and drawer render legacy scope read-only
+[10/99] tests/geographicScopeDisplay.spec.ts:215:3 › real service fixture resolved workspace restores into original card and drawer
+[11/99] tests/geographicScopeDisplay.spec.ts:215:3 › real service fixture pending workspace restores into original card and drawer
+[12/99] tests/geographicScopeDisplay.spec.ts:215:3 › real service national resolved workspace restores into original card and drawer
+[13/99] tests/geographicScopeDisplay.spec.ts:215:3 › real service national pending workspace restores into original card and drawer
+[14/99] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: resolved geography
+[15/99] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: pending geography
+[16/99] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: unsupported geographic mode
+[17/99] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing rule resource
+[18/99] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing recall resource
+[19/99] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing crawler account
+[20/99] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: unknown blocker
+[21/99] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: geographic code without geographic state
+[22/99] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: historical read-only card
+[23/99] tests/geographicScopeDisplay.spec.ts:294:3 › suggestion preview allows only geographic readiness blockers: missing platform
+[24/99] tests/geographicScopeDisplay.spec.ts:339:3 › suggestion card retains resolved geography when collection service blocks confirmation
+[25/99] tests/geographicScopeDisplay.spec.ts:339:3 › suggestion card retains pending geography when collection service blocks confirmation
+[26/99] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: choose
+[27/99] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: manual
+[28/99] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: invalid
+[29/99] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: retry
+[30/99] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: conflict
+[31/99] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: busy
+[32/99] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: history
+[33/99] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: duplicate
+[34/99] tests/geographicScopeDisplay.spec.ts:382:3 › direct geographic clarification: resolved-edit
+[35/99] tests/geographicScopeDisplay.spec.ts:529:1 › region selection history survives repeated choices and refresh without replaying actions
+[36/99] tests/geographicScopeDisplay.spec.ts:529:1 › region selection history survives repeated choices and refresh without replaying actions via intermediate clarification
+[37/99] tests/geographicScopeDisplay.spec.ts:649:1 › region selection recovery uses sequence anchors, retains snapshots and accepts legacy states
+[38/99] tests/investigationCreation.spec.tsx:160:1 › temporary approval survives recovery and blocks execution
+[39/99] tests/investigationCreation.spec.tsx:177:1 › authoritative Proposal survives conversation recovery without prose sanitization
+[40/99] tests/investigationCreation.spec.tsx:196:3 › mixed Proposal preserves suggestion message identity and Draft behavior
+[41/99] tests/investigationCreation.spec.tsx:196:3 › mixed Proposal preserves confirmation message identity and Draft behavior
+[42/99] tests/investigationCreation.spec.tsx:312:1 › renders real Draft and ConfirmationPreview fields
+[43/99] tests/investigationCreation.spec.tsx:327:1 › reads the durable creation workspace and public messages
+[44/99] tests/investigationCreation.spec.tsx:364:1 › new investigation uses the backend workspace identity as the route identity
+[45/99] tests/investigationCreation.spec.tsx:382:1 › restores the real suggestion card from structured artifact without parsing assistant text
+[46/99] tests/investigationCreation.spec.tsx:405:1 › binds a recovered current public artifact to the last assistant message
+[47/99] tests/investigationCreation.spec.tsx:423:1 › replaces a legacy suggestion-null message artifact with the current projection
+[48/99] tests/investigationCreation.spec.tsx:450:1 › real analysis-plan drawer projects public resources without mock rule details
+[49/99] tests/investigationCreation.spec.tsx:463:1 › restores the final confirmation card and selected platform after refresh
+[50/99] tests/investigationCreation.spec.tsx:499:1 › restores both recovered suggestion and persisted confirmation artifacts
+[51/99] tests/investigationCreation.spec.tsx:540:1 › suggestion platform buttons are single-select and contain no Weibo candidate
+[52/99] tests/investigationCreation.spec.tsx:547:1 › restores a pending Turn without inventing a Draft or a replacement Turn
+[53/99] tests/investigationCreation.spec.tsx:579:1 › restores the same confirmed Run and published report version in one workspace
+[54/99] tests/investigationCreation.spec.tsx:595:1 › restores an audit-completed Run without claiming a generated report
+[55/99] tests/investigationCreation.spec.tsx:611:1 › restores report messages and a pending report Turn in the same workspace
+[56/99] tests/investigationCreation.spec.tsx:660:1 › restores only the latest running creation answer draft
+[57/99] tests/investigationCreation.spec.tsx:690:1 › workspace state API failures stay explicit and never produce a demo fallback
+[58/99] tests/investigationCreation.spec.tsx:705:1 › blockers disable confirmation and expose the management URL
+[59/99] tests/investigationCreation.spec.tsx:740:1 › creation diagnostics fail closed into user-facing copy
+[60/99] tests/investigationCreation.spec.tsx:754:1 › creator workspace recovery preserves the homepage URL and carries no search terms
+[61/99] tests/investigationCreation.spec.tsx:817:1 › Draft edits use expected_revision and preserve structured 409 errors
+[62/99] tests/investigationCreation.spec.tsx:839:1 › generate task configuration persists a real workspace confirmation-preview Turn
+[63/99] tests/investigationCreation.spec.tsx:881:1 › confirmation is explicit and reuses the caller's idempotency key
+[64/99] tests/investigationCreation.spec.tsx:900:1 › maps only real Run projection states, including parallel crawl and analysis
+[65/99] tests/investigationCreation.spec.tsx:938:1 › maps one real report post and its five-category Evidence without invented task output ids
+[66/99] tests/investigationCreation.spec.tsx:994:1 › analysis progress counts come only from Run task statistics
+[67/99] tests/investigationCreation.spec.tsx:1007:1 › analysis progress uses the planned post count until collection finishes
+[68/99] tests/investigationCreation.spec.tsx:1031:1 › analysis progress keeps the planned denominator while collection can still resume
+[69/99] tests/investigationCreation.spec.tsx:1066:1 › analysis progress on a cancelled run counts ingested posts but is never complete
+[70/99] tests/investigationCreation.spec.tsx:1074:1 › analysis progress shows the planned count before the job exists
+[71/99] tests/investigationCreation.spec.tsx:1081:1 › streamed audit results keep the planned denominator while collection runs
+[72/99] tests/investigationCreation.spec.tsx:1101:1 › run progress exposes only curated business counts and sanitizes provider failures
+[73/99] tests/investigationCreation.spec.tsx:1123:1 › empty crawl stays failed on workspace recovery and explains that no audit or report ran
+[74/99] tests/investigationCreation.spec.tsx:1134:1 › RUNNING records come directly from the current Job projection
+[75/99] tests/investigationCreation.spec.tsx:1134:1 › AUDIT_COMPLETED records come directly from the current Job projection
+[76/99] tests/investigationCreation.spec.tsx:1134:1 › INTERRUPTED records come directly from the current Job projection
+[77/99] tests/investigationCreation.spec.tsx:1181:1 › published M3 records fail closed when the ReportVersion has no structured report
+[78/99] tests/investigationCreation.spec.tsx:1196:1 › authoritative M3 progress is server-backed and reduced motion remains static
+[79/99] tests/investigationCreation.spec.tsx:1218:1 › published report questions use the workspace/run handoff without report_session_id
+[80/99] tests/investigationCreation.spec.tsx:1245:1 › published M3 report detail uses the Principal-scoped workspace/run route
+[81/99] tests/investigationCreation.spec.tsx:1278:1 › continuous workspace restores post-report resource turns after the report
+[82/99] tests/investigationCreation.spec.tsx:1294:3 › published workspace sends chat through report-only endpoint
+[83/99] tests/investigationCreation.spec.tsx:1294:3 › published workspace sends chat through continuous endpoint
+[84/99] tests/investigationCreation.spec.tsx:1328:1 › multi-round recovery keeps both runs, report targets and frozen draft cards in chronology
+[85/99] tests/investigationCreation.spec.tsx:1359:1 › new round run updates preserve older cards and an unsubmitted later draft
+[86/99] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding suggestion remains editable and cannot execute at 1280px
+[87/99] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding confirmation remains editable and cannot execute at 1280px
+[88/99] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding suggestion remains editable and cannot execute at 390px
+[89/99] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding confirmation remains editable and cannot execute at 390px
+[90/99] tests/mixedProposalPresentation.spec.ts:90:5 › Draft-only suggestion: first render, refresh and actions
+[91/99] tests/mixedProposalPresentation.spec.ts:90:5 › mixed suggestion: first render, refresh and actions
+[92/99] tests/mixedProposalPresentation.spec.ts:90:5 › Draft-only confirmation: first render, refresh and actions
+[93/99] tests/mixedProposalPresentation.spec.ts:90:5 › mixed confirmation: first render, refresh and actions
+[94/99] tests/mixedProposalPresentation.spec.ts:129:3 › binding failure fallback remains visible after recovery at 1280px
+[95/99] tests/mixedProposalPresentation.spec.ts:129:3 › binding failure fallback remains visible after recovery at 390px
+[96/99] tests/mixedProposalPresentation.spec.ts:143:3 › T5 ready temporary Confirm survives refresh at 390px
+[97/99] tests/mixedProposalPresentation.spec.ts:143:3 › T5 ready temporary Confirm survives refresh at 1440px
+[98/99] tests/proposalPresentation.spec.ts:4:3 › Legacy proposal renders readable Markdown at 1280px
+[WebServer] 7:53:02 PM [vite] http proxy error: /api/auth/config
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 7:53:02 PM [vite] http proxy error: /api/auth/config
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 7:53:02 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[99/99] tests/proposalPresentation.spec.ts:4:3 › Legacy proposal renders readable Markdown at 390px
+[WebServer] 7:53:02 PM [vite] http proxy error: /api/auth/config
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 7:53:02 PM [vite] http proxy error: /api/auth/config
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 7:53:02 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+  99 passed (28.0s)

@@ -1,0 +1,10 @@
+{
+  "backend_openapi": "HTTP 200",
+  "frontend": "HTTP 200",
+  "region_selection_routes": [
+    "/api/investigation-workspaces/{session_id}/drafts/{draft_id}/relevance-scope"
+  ],
+  "draft_tables_unchanged": 3,
+  "resource_and_execution_tables_unchanged": 19,
+  "new_model_calls": 0
+}

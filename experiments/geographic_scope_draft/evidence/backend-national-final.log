@@ -1,0 +1,147 @@
+........................................................................ [ 19%]
+................................................. [ 32%]
+........................................................................ [ 51%]
+......................................................FFFF.............. [ 71%]
+.................................................................FF....F [ 90%]
+FF.FF...............................                                     [100%]
+=================================== FAILURES ===================================
+_________ test_guidance_is_available_through_native_deferred_describe __________
+tests/test_creation_prompt_isolation.py:74: in test_guidance_is_available_through_native_deferred_describe
+    assert result["name"] == name, result
+           ^^^^^^^^^^^^^^
+E   KeyError: 'name'
+________ test_global_prompt_keeps_authority_but_not_authoring_payloads _________
+tests/test_creation_prompt_isolation.py:116: in test_global_prompt_keeps_authority_but_not_authoring_payloads
+    assert boundary in product
+E   AssertionError: assert 'Only use_ruleset_proposal' in '用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。\n地域配置：由你判断用户是否明确限定本次内容讨论的地域。账号背景、资源名称、引用例子、否定和助手建议不等于地域要求。\n明确设置或换地域时，通过 configure_inv...知查询原回执，保存用原 operation_id 查询 get_resource_save。没有成功回执不能宣称完成。\n生成拦截、截断或失败时，本轮不换说法、content 或模型重试。保留已成功步骤，仅继续未完成且获授权的部分。\n'
+__ test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes ___
+tests/test_creation_prompt_isolation.py:135: in test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes
+    assert instruction in CREATION_SYSTEM_PROMPT
+E   assert 'reuse the resource_ref recall_plan' in "用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。\n地域配置：由你判断用户是否明确限定本次内容讨论的地域。账号背景、资源名称、引用例子、否定和助手建议不等于地域要求。\n明确设置或换地域时，通过 configure_inv...\nauthoritative. When a Draft or Run tool succeeds, briefly explain its public artifact in the user's\nlanguage.\n\n\n"
+_____ test_original_prompt_lines_are_preserved_or_explicitly_accounted_for _____
+tests/test_creation_prompt_isolation.py:269: in test_original_prompt_lines_are_preserved_or_explicitly_accounted_for
+    assert normalize(_current_fallback_wording(line)) in current, (name, index, line)
+E   AssertionError: ('CREATION_SYSTEM_PROMPT', 38, 'create_investigation_draft. A final assistant answer does not need canonical decision JSON.')
+E   assert 'create_investigation_draft.AfinalassistantanswerdoesnotneedcanonicaldecisionJSON.' in '用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。地域配置：由你判断用户是否明确限定本次内容讨论的地域。账号背景、资源名称、引用例子、否定和助手建议不等于地域要求。明确设置或换地域时，通过configure_investig...main/variant/tag)、parent_id、enabled；变体指向主词。这是同一编辑稿生命周期，不是临时/正式两套词库。不正式保存、不采用、不启动。生成失败时不得改走content编造成功；如实报告错误，保留此前成功操作。'
+E    +  where 'create_investigation_draft.AfinalassistantanswerdoesnotneedcanonicaldecisionJSON.' = <function test_original_prompt_lines_are_preserved_or_explicitly_accounted_for.<locals>.<lambda> at 0x128e780e0>('create_investigation_draft. A final assistant answer does not need canonical decision JSON.')
+E    +    where 'create_investigation_draft. A final assistant answer does not need canonical decision JSON.' = _current_fallback_wording('create_investigation_draft. A final assistant answer does not need canonical decision JSON.')
+___________ test_real_input_retains_true_levels_and_exclusion_audit ____________
+tests/test_cn_division_catalog_import.py:25: in test_real_input_retains_true_levels_and_exclusion_audit
+    rows, excluded = transform_cn_division(snapshot())
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:225: in transform_cn_division
+    require(isinstance(review, dict) and set(review) == {'supplements', 'aliases', 'coverage_review', 'identity_benchmark'}, 'invalid snapshot review')
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:40: in require
+    raise CatalogValidationError(message)
+E   backend.investigation_creation.geographic_catalog.CatalogValidationError: invalid snapshot review
+__________ test_alias_collisions_remain_including_county_and_province __________
+tests/test_cn_division_catalog_import.py:41: in test_alias_collisions_remain_including_county_and_province
+    rows, _ = transform_cn_division(snapshot())
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:225: in transform_cn_division
+    require(isinstance(review, dict) and set(review) == {'supplements', 'aliases', 'coverage_review', 'identity_benchmark'}, 'invalid snapshot review')
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:40: in require
+    raise CatalogValidationError(message)
+E   backend.investigation_creation.geographic_catalog.CatalogValidationError: invalid snapshot review
+_________ test_tampered_snapshot_rejected[<lambda>-official province] __________
+tests/test_cn_division_catalog_import.py:62: in test_tampered_snapshot_rejected
+    with pytest.raises(CatalogValidationError, match=message):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: Regex pattern did not match.
+E     Expected regex: 'official province'
+E     Actual message: 'invalid snapshot review'
+_____________ test_tampered_snapshot_rejected[<lambda>-short form] _____________
+tests/test_cn_division_catalog_import.py:62: in test_tampered_snapshot_rejected
+    with pytest.raises(CatalogValidationError, match=message):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: Regex pattern did not match.
+E     Expected regex: 'short form'
+E     Actual message: 'invalid snapshot review'
+_________ test_tampered_snapshot_rejected[<lambda>-canonical identity] _________
+tests/test_cn_division_catalog_import.py:62: in test_tampered_snapshot_rejected
+    with pytest.raises(CatalogValidationError, match=message):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: Regex pattern did not match.
+E     Expected regex: 'canonical identity'
+E     Actual message: 'invalid snapshot review'
+______ test_real_source_raw_and_normalized_are_reproducible_and_packaged _______
+tests/test_cn_division_catalog_import.py:78: in test_real_source_raw_and_normalized_are_reproducible_and_packaged
+    records = read_source(manifest['source'], SOURCE)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:162: in read_source
+    reproduced = transform_raw(raw, source['transform']['id'])
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:145: in transform_raw
+    value = {'records': transform_cn_division(value)[0]}
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:225: in transform_cn_division
+    require(isinstance(review, dict) and set(review) == {'supplements', 'aliases', 'coverage_review', 'identity_benchmark'}, 'invalid snapshot review')
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:40: in require
+    raise CatalogValidationError(message)
+E   backend.investigation_creation.geographic_catalog.CatalogValidationError: invalid snapshot review
+_______________ test_offline_rebuild_exact_package_and_evidence ________________
+tests/test_cn_division_catalog_import.py:92: in test_offline_rebuild_exact_package_and_evidence
+    catalog, report = rebuild(tmp_path, out)
+                      ^^^^^^^^^^^^^^^^^^^^^^
+scripts/import_cn_division_catalog.py:39: in rebuild
+    normalized = transform_raw(raw, 'cn_division_snapshot_v1')
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:145: in transform_raw
+    value = {'records': transform_cn_division(value)[0]}
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:225: in transform_cn_division
+    require(isinstance(review, dict) and set(review) == {'supplements', 'aliases', 'coverage_review', 'identity_benchmark'}, 'invalid snapshot review')
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/investigation_creation/geographic_catalog.py:40: in require
+    raise CatalogValidationError(message)
+E   backend.investigation_creation.geographic_catalog.CatalogValidationError: invalid snapshot review
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+  /Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/backend/main.py:1361: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+  /Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.venv/lib/python3.12/site-packages/fastapi/applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests/test_investigation_creation_m3.py::LegacyApiCompatibilityTest::test_old_post_jobs_accepts_existing_creator_url_and_legacy_id
+  /Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/backend/main.py:1382: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_creation_prompt_isolation.py::test_guidance_is_available_through_native_deferred_describe
+FAILED tests/test_creation_prompt_isolation.py::test_global_prompt_keeps_authority_but_not_authoring_payloads
+FAILED tests/test_creation_prompt_isolation.py::test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes
+FAILED tests/test_creation_prompt_isolation.py::test_original_prompt_lines_are_preserved_or_explicitly_accounted_for
+FAILED tests/test_cn_division_catalog_import.py::test_real_input_retains_true_levels_and_exclusion_audit
+FAILED tests/test_cn_division_catalog_import.py::test_alias_collisions_remain_including_county_and_province
+FAILED tests/test_cn_division_catalog_import.py::test_tampered_snapshot_rejected[<lambda>-official province]
+FAILED tests/test_cn_division_catalog_import.py::test_tampered_snapshot_rejected[<lambda>-short form]
+FAILED tests/test_cn_division_catalog_import.py::test_tampered_snapshot_rejected[<lambda>-canonical identity]
+FAILED tests/test_cn_division_catalog_import.py::test_real_source_raw_and_normalized_are_reproducible_and_packaged
+FAILED tests/test_cn_division_catalog_import.py::test_offline_rebuild_exact_package_and_evidence
+11 failed, 362 passed, 5 warnings, 23 subtests passed in 49.97s

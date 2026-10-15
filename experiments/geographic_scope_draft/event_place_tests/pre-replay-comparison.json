@@ -1,0 +1,38 @@
+{
+  "baseline": {
+    "passed": 384,
+    "failed": 4,
+    "subtests_passed": 23,
+    "seconds": 57.57,
+    "failed_nodes": [
+      "tests/test_creation_prompt_isolation.py::test_guidance_is_available_through_native_deferred_describe",
+      "tests/test_creation_prompt_isolation.py::test_global_prompt_keeps_authority_but_not_authoring_payloads",
+      "tests/test_creation_prompt_isolation.py::test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes",
+      "tests/test_creation_prompt_isolation.py::test_original_prompt_lines_are_preserved_or_explicitly_accounted_for"
+    ]
+  },
+  "final": {
+    "passed": 437,
+    "failed": 4,
+    "subtests_passed": 23,
+    "seconds": 67.96,
+    "failed_nodes": [
+      "tests/test_creation_prompt_isolation.py::test_guidance_is_available_through_native_deferred_describe",
+      "tests/test_creation_prompt_isolation.py::test_global_prompt_keeps_authority_but_not_authoring_payloads",
+      "tests/test_creation_prompt_isolation.py::test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes",
+      "tests/test_creation_prompt_isolation.py::test_original_prompt_lines_are_preserved_or_explicitly_accounted_for"
+    ]
+  },
+  "new_tests_passed": 53,
+  "new_failures": 0,
+  "same_failed_nodes": true,
+  "targeted": {
+    "passed": 128,
+    "seconds": 29.67
+  },
+  "ast_parse_changed_test_files": 4,
+  "model_requests": 0,
+  "collection_requests": 0,
+  "production_database_writes": 0,
+  "boundary": "Programmatic tool/service/SQLite verification; not model semantic accuracy or live frontend evidence."
+}

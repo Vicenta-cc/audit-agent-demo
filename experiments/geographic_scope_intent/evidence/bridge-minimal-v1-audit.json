@@ -1,0 +1,92 @@
+{
+  "kind": "four_candidate_final_audit",
+  "audited_at": "2026-10-14T21:15:44.061842+08:00",
+  "head": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "branch": "codex/geographic-relevance-p0",
+  "freeze_sha256": "13687cc375f360323b7bc725eca8445eb53d492b35f62c4cfd65d74eb4bc88db",
+  "original31_verified": true,
+  "candidate4_and_wrapper_unchanged_since_freeze": true,
+  "first_requests_verified": 72,
+  "historical_artifacts_unchanged": 107,
+  "other_workspace_changes_unchanged": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo": 104,
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo": 242,
+    "/Users/ext.wanghongtao6/.codex/worktrees/unified-report-query-phase1/xhs-audit-agent-demo": 11
+  },
+  "groups": {
+    "confirmation": {
+      "ledger_counts": {
+        "request": 50,
+        "response": 50
+      },
+      "raw_sha256": "ba7cba94436489b2a43e28271785ff44716a300cd03c7a462ad35646bae274b7",
+      "ledger_sha256": "a01f1ea99f2876c9c7dea41acff07c5d00c132372ffaf0dec73060e92aeac340",
+      "review_sha256": "5afb0a37adda491d1c962cf9990f5af85280261456e2b40f4aefac9dbe508384",
+      "all18_replayed_offline": true
+    },
+    "state": {
+      "ledger_counts": {
+        "request": 44,
+        "error": 2,
+        "response": 42
+      },
+      "raw_sha256": "0060618ac5c96eae87fc13f600dd5a49b987bf098cb3494f1ffe88a48fa7b1d0",
+      "ledger_sha256": "1fec0673b083540cfd5d6c6a4375dd04338633cfae205dde79c6526ad6585498",
+      "review_sha256": "55bc02d3544d3e55a94e82f7da2614b3ff8d5eb59183dc06bbb6ca44e6adb91b",
+      "all18_replayed_offline": true
+    },
+    "recording": {
+      "ledger_counts": {
+        "request": 53,
+        "response": 52,
+        "error": 1
+      },
+      "raw_sha256": "5c0f0bde05186c1e9e0ccf4d671fbbe15035f4ceb8df3b6053bf64cf57d4fed3",
+      "ledger_sha256": "09a51143cf882096003c03b170f0eab184a5233579c86fa841d37058eac96967",
+      "review_sha256": "2f2880cac80548814770bda8cd92e791c863c2ec99d8579cd4624883f454b56c",
+      "all18_replayed_offline": true
+    },
+    "combined": {
+      "ledger_counts": {
+        "request": 47,
+        "response": 46,
+        "error": 1
+      },
+      "raw_sha256": "795fe5dbae96677a5b2f32de28eb274e45c0b92b2c2ad3b213cfea7c76dd3ae3",
+      "ledger_sha256": "422457fa602bffb429b9c7100aa6306753185fc0141614523647e670b3f476d2",
+      "review_sha256": "5547e98551919bb2dea81d3e94434c516fadf3dca8428e13e983933c67ff9696",
+      "all18_replayed_offline": true
+    }
+  },
+  "ledger_counts": {
+    "request": 194,
+    "response": 190,
+    "error": 4
+  },
+  "request_limit": 288,
+  "unused_budget": 94,
+  "request_outcome_bijection": true,
+  "each_case_request_limit": 4,
+  "each_case_tool_limit": 12,
+  "automatic_retries": 0,
+  "full_offline_request_response_receipt_replays": 72,
+  "new_real_calls_for_audit": 0,
+  "simulated_tool_receipts": 164,
+  "real_execution_tool_attempts": 0,
+  "malformed_tool_json": 0,
+  "usage": {
+    "prompt_tokens": 4789647,
+    "completion_tokens": 27734,
+    "total_tokens": 4817381
+  },
+  "privacy_scan_files": 42,
+  "secrets_or_authorization_headers_exposed": false,
+  "summary_sha256": "0731c31b2cc791e5d57ea8c34f5cb1f6b8601ff5392dfa36969c12935e2d00ec",
+  "documents_sha256": {
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/README.md": "73e7934f409671f4dff4caaaa15b47d1e56a785885734cad502258514e46ae96",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/REPORT.md": "a08200a458220b8b7fa40d6c817543ad7e9c66b0e23522e0eda18722947154ed",
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-p0-handoff.md": "cd0997c9864a1e5f070b88f8a25ab80f26530fc759ff047f47619afeddb7cd4b",
+    "/Users/ext.wanghongtao6/Documents/Codex/projects/xhs-audit-agent-demo/.omx/plans/geographic-relevance-implementation.md": "9eb6587e64e1c21f9d0eaa1267f9ed006dcc409b76f5ed3c45809314aca00180"
+  },
+  "status": "P0四候选真实模型评测已完成、待原会话验收；P0未整体通过"
+}

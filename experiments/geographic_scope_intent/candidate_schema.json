@@ -1,0 +1,212 @@
+{
+  "$defs": {
+    "ClearScopeChange": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "clear",
+          "title": "Action",
+          "type": "string"
+        },
+        "source_quote": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Source Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "source_quote"
+      ],
+      "title": "ClearScopeChange",
+      "type": "object"
+    },
+    "Platform": {
+      "enum": [
+        "xhs",
+        "dy",
+        "ks"
+      ],
+      "title": "Platform",
+      "type": "string"
+    },
+    "SetScopeChange": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "const": "set",
+          "title": "Action",
+          "type": "string"
+        },
+        "target_text": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Target Text",
+          "type": "string"
+        },
+        "source_quote": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Source Quote",
+          "type": "string"
+        },
+        "selection_policy": {
+          "enum": [
+            "local_only",
+            "local_first_with_supplement"
+          ],
+          "title": "Selection Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "target_text",
+        "source_quote",
+        "selection_policy"
+      ],
+      "title": "SetScopeChange",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "operation": {
+      "enum": [
+        "create",
+        "update"
+      ],
+      "title": "Operation",
+      "type": "string"
+    },
+    "draft_id": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Draft Id"
+    },
+    "expected_revision": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Revision"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "objective": {
+      "anyOf": [
+        {
+          "maxLength": 4000,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Objective"
+    },
+    "platform": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Platform"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "ruleset_ref": {
+      "anyOf": [
+        {
+          "pattern": "^resource-ref:[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ruleset Ref"
+    },
+    "lexicon_ref": {
+      "anyOf": [
+        {
+          "pattern": "^resource-ref:[0-9a-f]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lexicon Ref"
+    },
+    "creator_url": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Creator Url"
+    },
+    "relevance_scope_change": {
+      "discriminator": {
+        "mapping": {
+          "clear": "#/$defs/ClearScopeChange",
+          "set": "#/$defs/SetScopeChange"
+        },
+        "propertyName": "action"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SetScopeChange"
+        },
+        {
+          "$ref": "#/$defs/ClearScopeChange"
+        }
+      ],
+      "title": "Relevance Scope Change"
+    }
+  },
+  "required": [
+    "operation"
+  ],
+  "title": "CandidateConfigureInput",
+  "type": "object"
+}

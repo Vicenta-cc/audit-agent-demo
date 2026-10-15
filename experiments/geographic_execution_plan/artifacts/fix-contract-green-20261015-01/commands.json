@@ -1,0 +1,14 @@
+{
+  "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+  "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+  "pytest_argv": [
+    "tests/test_geographic_execution_plan_integration.py",
+    "-k",
+    "search_cap_preserves or structured_rule_snapshot_cannot",
+    "-q",
+    "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo/experiments/geographic_execution_plan/artifacts/fix-contract-green-20261015-01/junit.xml",
+    "-p",
+    "no:cacheprovider"
+  ],
+  "guard_before_collection": true
+}

@@ -1,0 +1,43 @@
+{
+  "session_id": "investigation-session:df20bb8a6a7346a9b4429b5c32d28cfe",
+  "draft_id": "investigation-draft:f0ce9dcc74664fdea2f5ad45c9aa58b4",
+  "current_revision": 5,
+  "current_region": "吉林市（吉林省）",
+  "manual_ambiguity_history": {
+    "status": "pending",
+    "target_text": "吉林",
+    "selection_policy": null,
+    "reason": "地域名称存在歧义，请明确选择省级地域或地级市，并提供完整名称。",
+    "candidates": [
+      {
+        "name": "吉林省",
+        "level": "province",
+        "kind": "省",
+        "province_name": "吉林省"
+      },
+      {
+        "name": "吉林市",
+        "level": "prefecture",
+        "kind": "地级市",
+        "province_name": "吉林省"
+      }
+    ],
+    "target": null,
+    "province": null
+  },
+  "invalid_county_input_preserved_original": true,
+  "refresh_preserved_question_candidates_and_selection": true,
+  "historical_buttons_readonly": true,
+  "resource_tables_unchanged": 19,
+  "non_geographic_configuration_unchanged": true,
+  "deepseek_turn": {
+    "id": "investigation-turn:6b0c8ee7f7b94645bdb2f09b16f25fb5",
+    "status": "completed",
+    "llm_call_count": 2,
+    "error_code": ""
+  },
+  "model_reply_file": "model-reply.txt",
+  "backend_focused_tests_passed": 41,
+  "frontend_geographic_tests_passed": 37,
+  "frontend_build_passed": true
+}

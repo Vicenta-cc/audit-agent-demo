@@ -1,0 +1,2466 @@
+{
+  "kind": "implementation_session_offline_review_all18_not_external_acceptance",
+  "evaluation_version": "geo-intent-p0-bridge-real-v1",
+  "reviewed_at_utc": "2026-10-14T11:46:49.846412+00:00",
+  "source_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/bridge-real-v1/results.json",
+  "source_sha256": "90c98f30e7d19e8c5bb37df84ba088f1b68a9c6b11e8c5387b3d46b7c0b5e414",
+  "cases": 18,
+  "responses_reviewed": 31,
+  "new_model_calls_for_review": 0,
+  "auto_intent_passed": 8,
+  "manual_intent_passed": 7,
+  "auto_protocol_passed": 6,
+  "manual_protocol_passed": 5,
+  "rows": [
+    {
+      "case_id": "city-kelamayi",
+      "user": "用已发布综合舆情规则和欠薪词库，在抖音调查克拉玛依最近的负面舆情。",
+      "expected": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "用已发布综合舆情规则和欠薪词库，在抖音调查克拉玛依最近的负面舆情。",
+        "source_evidence_span": "调查克拉玛依最近的负面舆情",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "tool_error",
+      "accepted_intent": null,
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "set",
+            "selection_policy": "local_first_with_supplement",
+            "source_quote": "在 \r \t",
+            "target_text": "在 \r \t"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": false,
+            "code": "SOURCE_NOT_FOUND",
+            "source": {
+              "ok": false,
+              "code": "SOURCE_NOT_FOUND",
+              "message_id": null
+            }
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": false,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "schema": false,
+        "receipt": false,
+        "pass": false,
+        "errors": [
+          "missing_or_invalid_record",
+          "missing_or_mismatched_draft_snapshot"
+        ],
+        "predicted_action": null,
+        "snapshot": false,
+        "eligible_set": true,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "city-kelamayi",
+        "label": "set",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:tool_error",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "city-kelamayi",
+        "label": "set",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:tool_error",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "invalid_target_and_source",
+      "review_note": "record字符串为“在”和空白转义片段，非克拉玛依与完整用户来源；SOURCE_NOT_FOUND阻断，未进入资源流程。旧正确record但四轮未配置，本轮不能视作额度修复验证。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 4,
+        "termination": "loop_limit",
+        "draft_actually_configured": false,
+        "original_complete_pass": false,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "only-kelamayi",
+      "user": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+      "expected": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_only",
+        "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+        "source_evidence_span": "只要克拉玛依，不要其他地区",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "region_unresolved",
+      "accepted_intent": {
+        "action": "set",
+        "selection_policy": "local_only",
+        "source_quote": "只",
+        "target_text": "只"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "set",
+            "selection_policy": "local_only",
+            "source_quote": "只",
+            "target_text": "只"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": false,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "schema": false,
+        "receipt": false,
+        "pass": false,
+        "errors": [
+          "missing_or_invalid_record",
+          "missing_or_mismatched_draft_snapshot"
+        ],
+        "predicted_action": null,
+        "snapshot": false,
+        "eligible_set": true,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "only-kelamayi",
+        "label": "set",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:region_unresolved",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "only-kelamayi",
+        "label": "set",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:region_unresolved",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "invalid_target_and_source",
+      "review_note": "action=set/local_only正确，但target/source均“只”，不代表克拉玛依范围；region_unresolved，草案未创建。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 4,
+        "termination": "loop_limit",
+        "draft_actually_configured": true,
+        "original_complete_pass": false,
+        "set_scope_landing_pass": true
+      }
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "user": "不要取消地域，原来的克拉玛依保留，只改标题为复查。",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 2,
+      "responses": 2,
+      "termination": "draft_ready",
+      "accepted_intent": {
+        "action": "keep"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "keep"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": true,
+      "manual_intent_pass": true,
+      "auto_protocol_pass": true,
+      "manual_protocol_pass": true,
+      "auto_landing": {
+        "pass": true,
+        "errors": [],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": true,
+        "scope_preserved": true,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "keep-denial-clear",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:draft_ready",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "configure_investigation_draft"
+          ]
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "keep-denial-clear",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": true,
+        "pass": true,
+        "errors": [],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "configure_investigation_draft"
+          ]
+        }
+      },
+      "draft": {
+        "draft_id": "fixture-draft",
+        "revision": 3,
+        "scope": {
+          "target_text": "克拉玛依",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+        "title": "复查"
+      },
+      "scope_before": {
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "failure_category": "passed",
+      "review_note": "keep正确；2请求更新标题复查，克拉玛依原范围及规则/词库引用保留，模拟配置后本地结束。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 3,
+        "termination": "final",
+        "draft_actually_configured": true,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "change-daqing",
+      "user": "改查大庆，规则和词库保持现在的。",
+      "expected": {
+        "action": "set",
+        "target_text": "大庆",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "改查大庆，规则和词库保持现在的。",
+        "source_evidence_span": "改查大庆",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "region_unresolved",
+      "accepted_intent": {
+        "action": "set",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "改",
+        "target_text": "查"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "set",
+            "selection_policy": "local_first_with_supplement",
+            "source_quote": "改",
+            "target_text": "查"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": false,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "schema": false,
+        "receipt": false,
+        "pass": false,
+        "errors": [
+          "missing_or_invalid_record",
+          "missing_or_mismatched_draft_snapshot"
+        ],
+        "predicted_action": null,
+        "snapshot": false,
+        "eligible_set": true,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "change-daqing",
+        "label": "set",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:region_unresolved",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "change-daqing",
+        "label": "set",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:region_unresolved",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": {
+        "draft_id": "fixture-draft",
+        "revision": 2,
+        "scope": {
+          "target_text": "克拉玛依",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "scope_before": {
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "failure_category": "invalid_target_and_source",
+      "review_note": "target=查/source=改无法表达改查大庆；归一化阻断，旧克拉玛依草案及无关资源保持原状态。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 3,
+        "termination": "final",
+        "draft_actually_configured": true,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": true
+      }
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "user": "采用你刚展示的这套规则和词库，创建抖音调查草案。",
+      "expected": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+        "source_evidence_span": "调查克拉玛依的欠薪舆情",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "tool_error",
+      "accepted_intent": null,
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "set",
+            "selection_policy": "local_first_with_supplement",
+            "source_quote": "查",
+            "target_text": "查"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": false,
+            "code": "SOURCE_AMBIGUOUS",
+            "source": {
+              "ok": false,
+              "code": "SOURCE_AMBIGUOUS",
+              "message_id": null,
+              "candidate_message_ids": [
+                "conversation-adoption-temp-t1-user-10",
+                "conversation-adoption-temp-t3-user-30"
+              ]
+            }
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": false,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "schema": false,
+        "receipt": false,
+        "pass": false,
+        "errors": [
+          "missing_or_invalid_record",
+          "missing_or_mismatched_draft_snapshot"
+        ],
+        "predicted_action": null,
+        "snapshot": false,
+        "eligible_set": true,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "adoption-temp-later",
+        "label": "set",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:tool_error",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "adoption-temp-later",
+        "label": "set",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:tool_error",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "invalid_target_and_source",
+      "review_note": "target/source为单字“查”，当前与历史用户均含该字，SOURCE_AMBIGUOUS；未引用同轮最初克拉玛依要求，未采用或配置资源。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 2,
+        "termination": "final",
+        "draft_actually_configured": true,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": true
+      }
+    },
+    {
+      "case_id": "province-xinjiang",
+      "user": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+      "expected": {
+        "action": "set",
+        "target_text": "新疆",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+        "source_evidence_span": "查新疆欠薪",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "region_unresolved",
+      "accepted_intent": {
+        "action": "set",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "查",
+        "target_text": "查"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "set",
+            "selection_policy": "local_first_with_supplement",
+            "source_quote": "查",
+            "target_text": "查"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": false,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "schema": false,
+        "receipt": false,
+        "pass": false,
+        "errors": [
+          "missing_or_invalid_record",
+          "missing_or_mismatched_draft_snapshot"
+        ],
+        "predicted_action": null,
+        "snapshot": false,
+        "eligible_set": true,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "province-xinjiang",
+        "label": "set",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:region_unresolved",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "province-xinjiang",
+        "label": "set",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:region_unresolved",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "invalid_target_and_source",
+      "review_note": "target/source均“查”；新疆范围未正确记录，region_unresolved，未配置。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 4,
+        "termination": "final",
+        "draft_actually_configured": true,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": true
+      }
+    },
+    {
+      "case_id": "keep-rules",
+      "user": "换用刚发布的综合舆情规则，范围还是原来的。",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 2,
+      "responses": 2,
+      "termination": "tool_error",
+      "accepted_intent": {
+        "action": "keep"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "keep"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": true,
+      "manual_intent_pass": true,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "pass": false,
+        "errors": [
+          "scope_or_draft_not_preserved"
+        ],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "keep-rules",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:tool_error",
+          "tool_receipt:FIXTURE_ARGUMENT_MISMATCH",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "read_resource"
+          ]
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "keep-rules",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:tool_error",
+          "tool_receipt:FIXTURE_ARGUMENT_MISMATCH",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "read_resource"
+          ]
+        }
+      },
+      "draft": {
+        "draft_id": "fixture-draft",
+        "revision": 2,
+        "scope": {
+          "target_text": "成都",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "scope_before": {
+        "target_text": "成都",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "failure_category": "fixture_read_coverage",
+      "review_note": "补出正确keep；read_resource(kind=ruleset,query=综合舆情)通过工具schema但未命中fixture精确参数，FIXTURE_ARGUMENT_MISMATCH。属于实验读取承接限制，非地域理解错误；原成都范围保留、用户规则变更未落地。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": false,
+        "record_count": 0,
+        "requests": 4,
+        "termination": "loop_limit",
+        "draft_actually_configured": true,
+        "original_complete_pass": false,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "defer-missing-all",
+      "user": "调查乌鲁木齐欠薪，先帮我准备规则和词库。",
+      "expected": {
+        "action": "set",
+        "target_text": "乌鲁木齐",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "调查乌鲁木齐欠薪，先帮我准备规则和词库。",
+        "source_evidence_span": "调查乌鲁木齐欠薪",
+        "workflow_state": "defer",
+        "old_label": "defer",
+        "critical_negative": false
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "deferred_resources",
+      "accepted_intent": {
+        "action": "set",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "先",
+        "target_text": "先"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "set",
+            "selection_policy": "local_first_with_supplement",
+            "source_quote": "先",
+            "target_text": "先"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": false,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "pass": true,
+        "errors": [],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": false,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "defer-missing-all",
+        "label": "defer",
+        "mode": "real",
+        "action": false,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:deferred_resources",
+          "missing_expected_response",
+          "action_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "defer-missing-all",
+        "label": "defer",
+        "mode": "real",
+        "action": false,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:deferred_resources",
+          "missing_expected_response",
+          "action_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "invalid_target_and_source",
+      "review_note": "识别set/default策略但target/source为“先”，不是乌鲁木齐要求；资源延期终止正确且无草案，保存错误意图不能算语义通过。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 2,
+        "termination": "final",
+        "draft_actually_configured": false,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "user": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+      "expected": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+        "source_evidence_span": "调查克拉玛依的欠薪舆情",
+        "workflow_state": "defer",
+        "old_label": "defer",
+        "critical_negative": false
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "deferred_resources",
+      "accepted_intent": {
+        "action": "set",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "查",
+        "target_text": "查"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "set",
+            "selection_policy": "local_first_with_supplement",
+            "source_quote": "查",
+            "target_text": "查"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": false,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "pass": true,
+        "errors": [],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": false,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "adoption-temp-first",
+        "label": "defer",
+        "mode": "real",
+        "action": false,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:deferred_resources",
+          "missing_expected_response",
+          "action_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "adoption-temp-first",
+        "label": "defer",
+        "mode": "real",
+        "action": false,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:deferred_resources",
+          "missing_expected_response",
+          "action_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "invalid_target_and_source",
+      "review_note": "target/source均“查”并非克拉玛依范围；资源未就绪时正确停止、不生成真实资源，但地域意图失败。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 2,
+        "termination": "final",
+        "draft_actually_configured": false,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "user": "采用现有规则词库，查朝阳的负面舆情。",
+      "expected": {
+        "action": "clarify",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "not_applicable",
+        "old_label": "clarify",
+        "critical_negative": true
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "clarification_required",
+      "accepted_intent": {
+        "action": "clarify",
+        "question": "您 \t \t \t \t \t"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "clarify",
+            "question": "您 \t \t \t \t \t"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": true,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": true,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "pass": true,
+        "errors": [],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": false,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "ambiguous-chaoyang",
+        "label": "clarify",
+        "mode": "real",
+        "action": false,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:clarification_required",
+          "missing_expected_response",
+          "action_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "ambiguous-chaoyang",
+        "label": "clarify",
+        "mode": "real",
+        "action": false,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:clarification_required",
+          "missing_expected_response",
+          "action_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "ineffective_clarification",
+      "review_note": "补出clarify记录，但question只含“您”和空白转义片段，无法询问朝阳行政归属；自动schema非空即通过，人工地域/协议均改失败。没有猜测地名、没有草案。",
+      "disagreement": "非空字符串不等于有效地域澄清问题；保留自动原判，人工改为失败。",
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": false,
+        "record_count": 0,
+        "requests": 1,
+        "termination": "final",
+        "draft_actually_configured": false,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "new-round-national",
+      "user": "独立新一轮调查全国欠薪，用现有规则词库，不复制旧草案。",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "tool_error",
+      "accepted_intent": null,
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "set",
+            "selection_policy": "local_first_with_supplement",
+            "source_quote": "用  \t",
+            "target_text": "（"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": false,
+            "code": "SOURCE_NOT_FOUND",
+            "source": {
+              "ok": false,
+              "code": "SOURCE_NOT_FOUND",
+              "message_id": null
+            }
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": false,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "pass": false,
+        "errors": [
+          "scope_or_draft_not_preserved"
+        ],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "new-round-national",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:tool_error",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "new-round-national",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:tool_error",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "false_set_attempt",
+      "review_note": "全国独立新轮应keep，模型却set(target=（,source=用+空白转义)，SOURCE_NOT_FOUND拒绝。生成层误设1，实际草案未设、未继承旧范围。关键反例失败。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": true,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 4,
+        "termination": "loop_limit",
+        "draft_actually_configured": true,
+        "original_complete_pass": false,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "named-resource",
+      "user": "用“克拉玛依欠薪词库”做全国欠薪调查，规则用现有综合规则。",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 4,
+      "responses": 4,
+      "termination": "workflow_budget_exhausted",
+      "accepted_intent": {
+        "action": "keep"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "keep"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": true,
+      "manual_intent_pass": true,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "pass": false,
+        "errors": [
+          "scope_or_draft_not_preserved"
+        ],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "named-resource",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:workflow_budget_exhausted",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "query_investigation_options",
+            "query_investigation_options",
+            "read_resource",
+            "read_resource"
+          ]
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "named-resource",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:workflow_budget_exhausted",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "query_investigation_options",
+            "query_investigation_options",
+            "read_resource",
+            "read_resource"
+          ]
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "workflow_budget",
+      "review_note": "keep正确区分资源名和全国范围；4响应(记录+3轮读取)，重复查询与最后两资源读取未配草案。仍额度耗尽，地域记录保留。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 4,
+        "termination": "loop_limit",
+        "draft_actually_configured": true,
+        "original_complete_pass": false,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "pasted-post",
+      "user": "转发：克拉玛依某工厂拖欠工资，网友说已经三个月了。",
+      "expected": {
+        "action": "no_task",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "not_applicable",
+        "old_label": "no_task",
+        "critical_negative": true
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "no_task",
+      "accepted_intent": {
+        "action": "no_task"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "no_task"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": true,
+      "manual_intent_pass": true,
+      "auto_protocol_pass": true,
+      "manual_protocol_pass": true,
+      "auto_landing": {
+        "pass": true,
+        "errors": [],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": false,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "pasted-post",
+        "label": "no_task",
+        "mode": "real",
+        "action": false,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:no_task",
+          "missing_expected_response",
+          "action_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "pasted-post",
+        "label": "no_task",
+        "mode": "real",
+        "action": false,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:no_task",
+          "missing_expected_response",
+          "action_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "passed",
+      "review_note": "仅粘贴帖子，正确no_task，一次record后本地终止；无草案。原判要求final文本不适合新协议，协议通过。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 2,
+        "termination": "final",
+        "draft_actually_configured": false,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "user": "这个账号作者来自克拉玛依，请使用现有综合规则调查他，账号 https://www.douyin.com/user/fixture-user。",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 4,
+      "responses": 4,
+      "termination": "draft_ready",
+      "accepted_intent": {
+        "action": "keep"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "keep"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": true,
+      "manual_intent_pass": true,
+      "auto_protocol_pass": true,
+      "manual_protocol_pass": true,
+      "auto_landing": {
+        "pass": true,
+        "errors": [],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": true,
+        "scope_preserved": true,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "creator-kelamayi",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:draft_ready",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "query_investigation_options",
+            "read_resource",
+            "read_resource",
+            "configure_investigation_draft"
+          ]
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "creator-kelamayi",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": true,
+        "pass": true,
+        "errors": [],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "query_investigation_options",
+            "read_resource",
+            "read_resource",
+            "configure_investigation_draft"
+          ]
+        }
+      },
+      "draft": {
+        "draft_id": "simulated-draft:creator-kelamayi",
+        "revision": 1,
+        "scope": null,
+        "title": "抖音账号调查（作者来自克拉玛依）",
+        "objective": "对抖音账号 https://www.douyin.com/user/fixture-user 的作者进行调查，作者来自克拉玛依，使用现有综合规则研判其内容。",
+        "platform": "dy",
+        "creator_url": "https://www.douyin.com/user/fixture-user",
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111"
+      },
+      "scope_before": null,
+      "failure_category": "passed",
+      "review_note": "作者背景不成为范围：keep正确；第4响应configure创建账号模拟草案scope=None，不请求第5确认。旧B只keep未cfg，新版实际落地。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 2,
+        "termination": "final",
+        "draft_actually_configured": false,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "denied-city",
+      "user": "不是要查克拉玛依，我是拿它举例；现在请做全国调查，用现有规则词库。",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 4,
+      "responses": 4,
+      "termination": "draft_ready",
+      "accepted_intent": {
+        "action": "keep"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "keep"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": true,
+      "manual_intent_pass": true,
+      "auto_protocol_pass": true,
+      "manual_protocol_pass": true,
+      "auto_landing": {
+        "pass": true,
+        "errors": [],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": true,
+        "scope_preserved": true,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "denied-city",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:draft_ready",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "query_investigation_options",
+            "read_resource",
+            "read_resource",
+            "configure_investigation_draft"
+          ]
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "denied-city",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": true,
+        "pass": true,
+        "errors": [],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "query_investigation_options",
+            "read_resource",
+            "read_resource",
+            "configure_investigation_draft"
+          ]
+        }
+      },
+      "draft": {
+        "draft_id": "simulated-draft:denied-city",
+        "revision": 1,
+        "scope": null,
+        "title": "全国欠薪舆情调查",
+        "objective": "全国范围排查欠薪及拖欠工资相关舆情",
+        "platform": "dy",
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "scope_before": null,
+      "failure_category": "passed",
+      "review_note": "举例/否定克拉玛依不成为范围：keep正确；第4响应创建全国模拟草案scope=None，不请求第5ack。旧B未配置，新版实际落地。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 2,
+        "termination": "final",
+        "draft_actually_configured": false,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "clear-unlimited",
+      "user": "不限制地区了，其他设置不变。",
+      "expected": {
+        "action": "clear",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": "不限制地区了，其他设置不变。",
+        "source_evidence_span": "不限制地区了",
+        "workflow_state": "ready",
+        "old_label": "clear",
+        "critical_negative": false
+      },
+      "requests": 2,
+      "responses": 2,
+      "termination": "draft_not_configured",
+      "accepted_intent": {
+        "action": "clear",
+        "source_quote": "不"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "clear",
+            "source_quote": "不"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": false,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "schema": false,
+        "receipt": false,
+        "pass": false,
+        "errors": [
+          "missing_or_invalid_record",
+          "missing_or_mismatched_draft_snapshot"
+        ],
+        "predicted_action": null,
+        "snapshot": false,
+        "eligible_set": false,
+        "eligible_clear": true,
+        "draft_expected": true,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "clear-unlimited",
+        "label": "clear",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:draft_not_configured",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "clear-unlimited",
+        "label": "clear",
+        "mode": "real",
+        "action": false,
+        "target": false,
+        "policy": false,
+        "source": false,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:draft_not_configured",
+          "expected_one_configure_call",
+          "expected_one_scope_change",
+          "action_failed",
+          "target_failed",
+          "policy_failed",
+          "source_failed",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": {
+        "draft_id": "fixture-draft",
+        "revision": 2,
+        "scope": {
+          "target_text": "克拉玛依",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+      },
+      "scope_before": {
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "failure_category": "invalid_source_and_missing_configuration",
+      "review_note": "action=clear正确，source=不无取消地域的语义证据；第二响应口头说已取消范围，未configure，原克拉玛依scope仍在。模拟状态表述不实1；明确未启动真实任务，非真实执行既成声明。",
+      "disagreement": null,
+      "simulated_state_false_claim": true,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 3,
+        "termination": "final",
+        "draft_actually_configured": true,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "keep-title",
+      "user": "只把标题改为十月欠薪专项。",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 2,
+      "responses": 2,
+      "termination": "draft_ready",
+      "accepted_intent": {
+        "action": "keep"
+      },
+      "raw_record_calls": [
+        {
+          "name": "record_geographic_intent",
+          "arguments": {
+            "action": "keep"
+          },
+          "receipt": {
+            "simulated": true,
+            "mutation_applied": false,
+            "ok": true,
+            "code": "INTENT_RECORDED",
+            "captured_only": true,
+            "notice": "地域已在隔离内存记录；语义正确性仍需复核，未配置或启动真实任务。"
+          }
+        }
+      ],
+      "generated_record_calls": 1,
+      "auto_intent_pass": true,
+      "manual_intent_pass": true,
+      "auto_protocol_pass": true,
+      "manual_protocol_pass": true,
+      "auto_landing": {
+        "pass": true,
+        "errors": [],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": true,
+        "scope_preserved": true,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "keep-title",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:draft_ready",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "configure_investigation_draft"
+          ]
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "keep-title",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": true,
+        "pass": true,
+        "errors": [],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": [
+            "configure_investigation_draft"
+          ]
+        }
+      },
+      "draft": {
+        "draft_id": "fixture-draft",
+        "revision": 3,
+        "scope": {
+          "target_text": "克拉玛依",
+          "selection_policy": "local_first_with_supplement"
+        },
+        "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+        "lexicon_ref": "resource-ref:22222222222222222222222222222222",
+        "title": "十月欠薪专项"
+      },
+      "scope_before": {
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement"
+      },
+      "failure_category": "passed",
+      "review_note": "keep正确，仅更新标题十月欠薪专项；旧克拉玛依范围及规则/词库refs保留，2响应本地收尾。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": false,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 4,
+        "termination": "final",
+        "draft_actually_configured": true,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": false
+      }
+    },
+    {
+      "case_id": "assistant-city",
+      "user": "请做全国调查，采用现有规则词库。",
+      "expected": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "requests": 1,
+      "responses": 1,
+      "termination": "invalid_json",
+      "accepted_intent": null,
+      "raw_record_calls": [],
+      "generated_record_calls": 1,
+      "auto_intent_pass": false,
+      "manual_intent_pass": false,
+      "auto_protocol_pass": false,
+      "manual_protocol_pass": false,
+      "auto_landing": {
+        "pass": false,
+        "errors": [
+          "scope_or_draft_not_preserved"
+        ],
+        "eligible_set": false,
+        "eligible_clear": false,
+        "draft_expected": true,
+        "draft_landed": false,
+        "scope_preserved": false,
+        "observed_scope_changes": []
+      },
+      "raw_original_score": {
+        "case_id": "assistant-city",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:invalid_json",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "effective_compatibility_score": {
+        "case_id": "assistant-city",
+        "label": "keep",
+        "mode": "real",
+        "action": true,
+        "target": true,
+        "policy": true,
+        "source": true,
+        "boundary": false,
+        "pass": false,
+        "errors": [
+          "termination:invalid_json",
+          "boundary_failed"
+        ],
+        "observed": {
+          "scope_changes": [],
+          "boundary_attempts": {
+            "unknown_tool": 0,
+            "execution_tool": 0,
+            "unauthorized_draft_write": 0,
+            "unauthorized_mutation": 0
+          },
+          "tool_names": []
+        }
+      },
+      "draft": null,
+      "scope_before": null,
+      "failure_category": "invalid_json_generated_clear",
+      "review_note": "用户全国范围且助手城市推荐应keep；生成action=clear+超长空白转义source串，completion4096、finish_reason=length，JSON未闭合。解析拒绝前未dispatch；生成层误清企图1、实际误清0，不能从分母剔除。",
+      "disagreement": null,
+      "simulated_state_false_claim": false,
+      "generated_false_set": false,
+      "generated_invalid_json_false_clear": true,
+      "actual_wrong_scope_mutation": false,
+      "old": {
+        "intent_pass": true,
+        "record_count": 1,
+        "requests": 3,
+        "termination": "final",
+        "draft_actually_configured": true,
+        "original_complete_pass": true,
+        "set_scope_landing_pass": false
+      }
+    }
+  ],
+  "note": "全部原请求构造/模型响应/工具参数/回执/草案与标签离线逐例复核；人工口径为实施会话判读，待原会话验收。未更改响应、冻结提示/schema或自动原判。"
+}

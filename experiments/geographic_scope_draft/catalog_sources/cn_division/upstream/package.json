@@ -1,0 +1,61 @@
+{
+  "name": "cn-division",
+  "version": "2026.0.1",
+  "description": "2026年中国行政区划数据，基于民政部地名服务（dmfw）最新数据",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "miniprogram": "miniprogram_dist",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./cascader-pca": {
+      "types": "./miniprogram_dist/cascader-pca.d.ts",
+      "require": "./miniprogram_dist/cascader-pca.cjs",
+      "default": "./miniprogram_dist/cascader-pca.js"
+    },
+    "./dist/code/pca.json": "./dist/code/pca.json",
+    "./dist/no-code/pca.json": "./dist/no-code/pca.json",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "fetch": "node lib/fetch.js",
+    "build": "node lib/build.js",
+    "update": "npm run fetch && npm run build",
+    "test": "node test/index.js",
+    "test:special": "node --test test/special-handling.test.js"
+  },
+  "keywords": [
+    "中国",
+    "行政区划",
+    "省市区",
+    "antd",
+    "cascader",
+    "2026",
+    "民政部"
+  ],
+  "author": "kk",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kk-418/cn-division.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kk-418/cn-division/issues"
+  },
+  "homepage": "https://github.com/kk-418/cn-division#readme",
+  "files": [
+    "dist/",
+    "miniprogram_dist/",
+    "lib/build.js",
+    "lib/fetch.js",
+    "lib/city-code.js",
+    "lib/supplemental-counties.js",
+    "index.js",
+    "index.d.ts",
+    "README.md",
+    "LICENSE"
+  ]
+}

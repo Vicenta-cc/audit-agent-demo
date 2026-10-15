@@ -1,0 +1,417 @@
+{
+  "baseline": "a4997d3969beab3d499a218e7a7aee025fea46d9",
+  "files": {
+    ".gitignore": {
+      "bytes": 449,
+      "sha256": "780f02a542830e411d43cef630fced7c06b819753782d80676d3ab8b22bf3b58"
+    },
+    "Audit_assistant/src/features/investigation/InvestigationContextDrawer.tsx": {
+      "bytes": 25722,
+      "sha256": "ba0639310b99e066e5b685aded82caffdd3436be7fce81018c9b1aa878106f42"
+    },
+    "Audit_assistant/src/features/investigation/InvestigationPage.tsx": {
+      "bytes": 112710,
+      "sha256": "2ab65094d9a616614f3eb710c9c48c25e6a3c86fdbd558bc820ea48e32b57acc"
+    },
+    "Audit_assistant/src/features/investigation/TaskConfirmationCard.tsx": {
+      "bytes": 6320,
+      "sha256": "434dc33206ac249005f87cc57f7384915d091869a75e62c516a999d63e03b88b"
+    },
+    "Audit_assistant/src/features/investigation/confirmationView.ts": {
+      "bytes": 7401,
+      "sha256": "3d463949d55b4a8df8da8a21cfc6dd765bdc4cd40aa9717ce649f9dd41468ddb"
+    },
+    "Audit_assistant/src/types/investigationCreation.ts": {
+      "bytes": 10336,
+      "sha256": "0a22d2332a6f07525c3a564983a11625688bd7c40ca3dfe679aa6441e000cae4"
+    },
+    "Audit_assistant/tests/geographicScopeDisplay.spec.ts": {
+      "bytes": 16295,
+      "sha256": "9541a7a1194da5ad7ea39b192bfe3397819b845bab437be7d2e5ed8e6a51bf57"
+    },
+    "backend/api/investigation_creation.py": {
+      "bytes": 11488,
+      "sha256": "9eae1740deb04a53b2b7789fb84f655d07b009df987d3627456152f88dd1e135"
+    },
+    "backend/investigation_creation/approval.py": {
+      "bytes": 7687,
+      "sha256": "c6b52733ad06433e7845962fcaee6ea006bcbb44edabef5d0bb0fd13937bfb83"
+    },
+    "backend/investigation_creation/configure.py": {
+      "bytes": 8490,
+      "sha256": "598cb5f5df1f2c38cc1f44d2b9e8cdeae83f2f92ee80312eb6cbf627f49c7c13"
+    },
+    "backend/investigation_creation/contracts.py": {
+      "bytes": 46142,
+      "sha256": "007976d1c96187e0d9b6fe32c2e623267711cc399f0753a3592e6e002228c583"
+    },
+    "backend/investigation_creation/conversation.py": {
+      "bytes": 117857,
+      "sha256": "3d768e70a83f0ef9afa4c84bcaeb7d40f78c56041abbd11e1214ba18ef6d471e"
+    },
+    "backend/investigation_creation/data/geographic_catalog.json": {
+      "bytes": 677345,
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6"
+    },
+    "backend/investigation_creation/geographic_catalog.py": {
+      "bytes": 19381,
+      "sha256": "8b8b3efef9cec6fedd2b17afda9d358c8fc8713b19a3f9a07fde144206b4f6a9"
+    },
+    "backend/investigation_creation/public_projection.py": {
+      "bytes": 8840,
+      "sha256": "8665c4937a2df62d252e3502f3ffa156dfd6e03c2717d5dbcea27c9fcd4889fc"
+    },
+    "backend/investigation_creation/resources.py": {
+      "bytes": 53160,
+      "sha256": "e7b0b27ece555ec757f147ade764eca2aeab9f5a2524b9303c4d84a6da060599"
+    },
+    "backend/investigation_creation/scope_intent.py": {
+      "bytes": 11668,
+      "sha256": "df45a9236b232e2137edb8ca97639cfa0765c1c568cf3cf55b429c6acb9b87be"
+    },
+    "backend/investigation_creation/service.py": {
+      "bytes": 35940,
+      "sha256": "1f1e76bd2a6dde3a125d5fc7d28db4018c4e348efb78a94748d79e9771125c17"
+    },
+    "backend/investigation_creation/store.py": {
+      "bytes": 104010,
+      "sha256": "3f020234af6e392cda478a8c0fab8129942a30e18572cb80fb20f0c30439e108"
+    },
+    "backend/investigation_creation/tools.py": {
+      "bytes": 58326,
+      "sha256": "5d1e25106c1cbecc865e3babf6552b9e0512cc31f7ea0a95d79bb18c7cb05757"
+    },
+    "experiments/geographic_scope_draft/REPORT.md": {
+      "bytes": 11692,
+      "sha256": "f706434142883673bf262251d42c6f3a47654bac3ac6e965b9c3de23dbd5939d"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/README.md": {
+      "bytes": 5124,
+      "sha256": "8c79d8f5ce68e9a6d32ad6c14959e8002ee5d67acbfb7a16422e9e700624ea08"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/excluded.json": {
+      "bytes": 13466,
+      "sha256": "f21ac0f096194ab8a5c67e1ac18d26de6fc9515686b426b8209008514b5a8c16"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/generation_report.json": {
+      "bytes": 11210,
+      "sha256": "eedd66ddf209287eec8e8927e389673af30f6199197ee973b8f61169f2b0cdb5"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/manifest.json": {
+      "bytes": 2177,
+      "sha256": "c49d2c8850bbd62df380e8084dbf7b9ba21ecc6992db11e8e466f1fc80254a42"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/normalized.json": {
+      "bytes": 612794,
+      "sha256": "3ae65e9f130492b1cf9150d4630f7f9e63ed7d016f4d0f43545440df8674f750"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/review.json": {
+      "bytes": 528223,
+      "sha256": "dd12bccf3a110629cc45867dac38c8a932a613a52e6bea7c2b35093b40dad8b2"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/snapshot.json": {
+      "bytes": 796793,
+      "sha256": "1662df76ab88778307049e1ff9182892c68d9df071aa287d1016bce13dce4b42"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/upstream/LICENSE": {
+      "bytes": 1035,
+      "sha256": "1847e0e0698142ed4347c1441a9fa81c8fbddd44b1d8bbcd5e3647f991759d7f"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/upstream/dist/code/cities.json": {
+      "bytes": 14924,
+      "sha256": "c5bc774fcf24b139d71a22a851266b8399d94a8a3ff0a7b7514c011fa12d3dbe"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/upstream/dist/code/counties.json": {
+      "bytes": 129362,
+      "sha256": "1ee1d75e9072e09ec9993025a6bec2543b23c7fc24b6dd668a0a5536e178ae16"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/upstream/dist/code/provinces.json": {
+      "bytes": 833,
+      "sha256": "6f48fb4fd851fb85735effbcc93921c3ba61adadf3f1b3bc2b7cd947f132176b"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/upstream/lib/build.js": {
+      "bytes": 10341,
+      "sha256": "dddbb22e904976b2cbc82656f82a363d2ffeae3515b466816635ac403d626187"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/upstream/lib/fetch.js": {
+      "bytes": 10258,
+      "sha256": "3cc5070fdf0464543afd28b3c2352d151f3840a045436b658c6cab98c7b485b0"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/cn_division/upstream/package.json": {
+      "bytes": 1564,
+      "sha256": "53b0ab51c342a0c837f0912fd1a754c539bf58050c99fd31e718e00e543ec095"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/EVIDENCE.md": {
+      "bytes": 5717,
+      "sha256": "86726b4848c6b9fc3516a4f8b36866a291a0cda77acdb57ee3edef056fd0ecf1"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/SHA256.json": {
+      "bytes": 1601,
+      "sha256": "68ed04e5663c2658796ff1564b82993f85b2c8e0bd81843bd5ad093ce59cea17"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/comparison_report.json": {
+      "bytes": 840,
+      "sha256": "8fb8aca9870bcbf709d316840c15a5bd5184b10060168c79f089a3849e228cb3"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/counts_2024_web_extract.json": {
+      "bytes": 25945,
+      "sha256": "8221b68934a8f8e457d9d65f506414afefc9c569ca369e9658a43eadcab5fd4d"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/laiwu_change_web_extract.json": {
+      "bytes": 430,
+      "sha256": "f90fc4586a1845b7350a9f4af7c42bae15c9acb1964df7948f227aae6b8ffb29"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/locpg_web_extract.json": {
+      "bytes": 5041,
+      "sha256": "052d674f93e452047c868f252302566bb1e361b293ffe4cdc62e226b9c186581"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/nagqu_2026_web_extract.json": {
+      "bytes": 721,
+      "sha256": "9ae4f626bb1074000ad53b7266e9c74841d9a62865ddf8d0a5bca114dad314df"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/official_changes_search_extract.json": {
+      "bytes": 23844,
+      "sha256": "1aebd657d46e8d2694e8b60018cebe8dae106cc78470cacdea62c74136f23660"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/province_34_benchmark.json": {
+      "bytes": 12535,
+      "sha256": "9dedd9934da96db9543f7ac4da6faf0424a97b27ef263c35a76dfc165a701ed5"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/province_prefecture_benchmark.json": {
+      "bytes": 86931,
+      "sha256": "5129649547d8c8284c7c20ea7e9fa00afa438fd918d40b3ff42345f35c73fd1a"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/province_supplements.json": {
+      "bytes": 1800,
+      "sha256": "b57cea6867e922ec48bd6932e472df960f65031d58c6166bd697c5abd9e5b395"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/recent_change_search_extract.json": {
+      "bytes": 28194,
+      "sha256": "639488152c26ac52c58de98d520f803e8b7ae28cfacae018139830d3de709790"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/reproduce_verification.py": {
+      "bytes": 4596,
+      "sha256": "17f084d33003ce35800596f87e5a8d105426b9a611c556ab089fdadd2d12cb3b"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/urls.json": {
+      "bytes": 312,
+      "sha256": "e702e5ff1686997c25c1fccff3c2f07b94dfded1f63e66369d9cf26c83c60ea2"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/wuhu_2016_extracted_codes.json": {
+      "bytes": 90955,
+      "sha256": "82bd526a1ce99b08ffc8da28e6c3da9402e5750184d30b207538e27afb8edde0"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/wuhu_2016_web_extract.json": {
+      "bytes": 24052,
+      "sha256": "bdb0eb5a61fae5b09dc241b6a51d7f63fa034c91ef85d37f87918b07a39167dd"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/official_verification/wuhu_2016_web_full_extract.json": {
+      "bytes": 271867,
+      "sha256": "7c017525ce2355ff469ac45db75b35dab51f77bdbc484aac56fe628f9425c7cc"
+    },
+    "experiments/geographic_scope_draft/catalog_sources/retrieval_attempts.json": {
+      "bytes": 6573,
+      "sha256": "007ef7498ebd62156c2c82e4dcd1d530e1c882377d977fded3a5a455cdb1a022"
+    },
+    "experiments/geographic_scope_draft/evidence/CITY_POLICY_VALIDATION.json": {
+      "bytes": 1612,
+      "sha256": "c0d0207d20d3bdcefe0a0d1533b360b0d085a3089bb498f36fc9f12e64c4e3ac"
+    },
+    "experiments/geographic_scope_draft/evidence/ENVIRONMENT_RETEST.md": {
+      "bytes": 3416,
+      "sha256": "39dc1e4bd2a20b91e72f730d653099027638bb3c99ff99bda80ef579d303b474"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-baseline.log": {
+      "bytes": 9996,
+      "sha256": "e50889990fdc556bf13d9efd2afe773b67f2aac77d7d80f15a34ec466152cf6d"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-catalog-final-command.json": {
+      "bytes": 923,
+      "sha256": "6419581c8c308901bf87e12db5a2a46a899df1b2f7d67dbe34c661afc8ec51ef"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-catalog-final.log": {
+      "bytes": 6884,
+      "sha256": "0816ffc36556d10a362b3fd72aed90ff2800908d95fe957353c181757d185e8e"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-city-final-command.json": {
+      "bytes": 4232,
+      "sha256": "12f89438805ffd2794a4fc667cea7b54b3a24bec781acf52f47d8a2910a04c55"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-city-final.log": {
+      "bytes": 6884,
+      "sha256": "cdde5658564151388b50270e5d0c5b343ba95413ad857b565570ff2bbee0680e"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-city-policy.log": {
+      "bytes": 696,
+      "sha256": "bcaa1f5955d988f9eb9d82271bd6465eee77b76697d419ea834427122152e29b"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-final-command.txt": {
+      "bytes": 1605,
+      "sha256": "058bf0f737ccec3b2cca72529c1ead06da472a6b4fee828186921d05c152dbdf"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-final.log": {
+      "bytes": 6804,
+      "sha256": "4ad557de46819fca596d3bd7de5efbf87414edc488cedcd9f3e06eb6c2cb645b"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-geographic-final.log": {
+      "bytes": 695,
+      "sha256": "7a1ae17bf3a8b647f33e9eb435884ecf6a0e9373b3a3e47adcd76658fcd4bd9d"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-hermes-baseline.log": {
+      "bytes": 6742,
+      "sha256": "a53ebdb0cdffdd0c8c46db4f6bed178565b6ce59d08ddbfb9c8a792fd04bb882"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-hermes-p1.log": {
+      "bytes": 6724,
+      "sha256": "6fc7b006e4ec58aeb29a3e54fc1ec0470bc92d28a0c126a18383f858ed3198d0"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-national-final-command.json": {
+      "bytes": 924,
+      "sha256": "637523ea3d3207bacd7c5f2497968172d648cdee50225924619cdc9c040d49be"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-national-final.log": {
+      "bytes": 13105,
+      "sha256": "7e09d59975afeb6da14b4c08f22526ee3d8e1cdda2ce3ec1a1fa0c36c32b4d08"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-regression.log": {
+      "bytes": 9978,
+      "sha256": "5994f59f0efbd6f332fbfa70734d464ebc51336344ef8aa184e08ac8a60760b1"
+    },
+    "experiments/geographic_scope_draft/evidence/backend-targeted.log": {
+      "bytes": 13429,
+      "sha256": "a2873eae8ede4450ad452a8c5197b766834ab4d50a55ab59fdc2aace5faef336"
+    },
+    "experiments/geographic_scope_draft/evidence/catalog-final.log": {
+      "bytes": 615,
+      "sha256": "c6a3595e3977d6cd9559ccdf865d17afab8a8a35937738c6cbc18dbdd190d25b"
+    },
+    "experiments/geographic_scope_draft/evidence/catalog-import-help.txt": {
+      "bytes": 1411,
+      "sha256": "4723583efc5790031fa2533760ee986b43cc80a69944295fb141d36788aa5cc1"
+    },
+    "experiments/geographic_scope_draft/evidence/catalog-import-tests.log": {
+      "bytes": 99,
+      "sha256": "159a8b4d5719d8e5fe807db4953227bfb7ea511931459e6d2d594f6e96fc5f3b"
+    },
+    "experiments/geographic_scope_draft/evidence/city-policy-test-command.json": {
+      "bytes": 4097,
+      "sha256": "1220aad171a3062f39aab879b30996e7d913c2f5d9e5204c7e25895616652b8f"
+    },
+    "experiments/geographic_scope_draft/evidence/environment-retest-commands.json": {
+      "bytes": 3874,
+      "sha256": "91dccd6c4bf71dd8ae76375023997bf5232faf9d12ccfc02d01d897815218661"
+    },
+    "experiments/geographic_scope_draft/evidence/frontend-baseline.md": {
+      "bytes": 1441,
+      "sha256": "47aca1766d22deda363064b8935f9e5017f2c438669905baa8b97783dc680d15"
+    },
+    "experiments/geographic_scope_draft/evidence/frontend-build.log": {
+      "bytes": 744,
+      "sha256": "2bce37d59dde3ec57264df066c0e067ee2e27d63e12f78aea2bacef234cebf4f"
+    },
+    "experiments/geographic_scope_draft/evidence/frontend-final-build.log": {
+      "bytes": 744,
+      "sha256": "59bb0ca05d26b9a484f9855da7a3990b626a9222be56a170be37ed43dd207a49"
+    },
+    "experiments/geographic_scope_draft/evidence/frontend-final-playwright.log": {
+      "bytes": 8967,
+      "sha256": "d009dd2755ed7bfafd8f5c020c14956fc4f670a5a3c652dff3bd9f492ef6a232"
+    },
+    "experiments/geographic_scope_draft/evidence/frontend-final-typecheck.log": {
+      "bytes": 63,
+      "sha256": "6e7f3fdc8a04cb309a2e07fb3d39c091bb7a911514c3556dd43422d3a62bb26d"
+    },
+    "experiments/geographic_scope_draft/evidence/frontend-playwright.log": {
+      "bytes": 8431,
+      "sha256": "a294f1be104c7e02b96cbb55e878082ace0608407e398cc7081c6340c46732e4"
+    },
+    "experiments/geographic_scope_draft/evidence/frontend-typecheck.log": {
+      "bytes": 63,
+      "sha256": "6e7f3fdc8a04cb309a2e07fb3d39c091bb7a911514c3556dd43422d3a62bb26d"
+    },
+    "experiments/geographic_scope_draft/evidence/hermes-source-sha256.txt": {
+      "bytes": 753,
+      "sha256": "0378ee6c43e672adb1c42238ae274630e99abb18202a75a5509a20b869b0a701"
+    },
+    "experiments/geographic_scope_draft/evidence/national-test-command.json": {
+      "bytes": 342,
+      "sha256": "3705babdbb317eb553b3ffc588e89b6092b6adb1c9ecdba994f86784b05912fd"
+    },
+    "experiments/geographic_scope_draft/evidence/national-tests.log": {
+      "bytes": 2123,
+      "sha256": "e22a5a603dc6fde2debcf57df60908c6bf1d8a54f136e1fabef6c156ec0774a2"
+    },
+    "experiments/geographic_scope_draft/evidence/review-summary-city.json": {
+      "bytes": 623,
+      "sha256": "3b33f5e2e13977a573ad053deed88f6eebd8290ca0d732071593f00fac8c82e5"
+    },
+    "experiments/geographic_scope_draft/evidence/review-summary.md": {
+      "bytes": 780,
+      "sha256": "19a55d5fb36a6a30b34b18c9af4518efbeae1197cef23fff16be38082938e00a"
+    },
+    "experiments/geographic_scope_draft/evidence/scope-pending-card-drawer.png": {
+      "bytes": 138677,
+      "sha256": "3afbf3da659557367fb6e83fddd7335340ea130562730d15b0be1b285e99c6be"
+    },
+    "experiments/geographic_scope_draft/evidence/scope-resolved-card-drawer.png": {
+      "bytes": 115003,
+      "sha256": "ac950c7b553655d5fadc185d5352351afb6d930204e227064e256dfeaaf22c85"
+    },
+    "experiments/geographic_scope_draft/evidence/scope-service-national-pending.png": {
+      "bytes": 184999,
+      "sha256": "0e69df2cdd5e94b2c9e699bd01a2fbf33029bf3b7fb893ec81b66abba0977e3a"
+    },
+    "experiments/geographic_scope_draft/evidence/scope-service-national-resolved.png": {
+      "bytes": 170847,
+      "sha256": "d62f0e905b4323b2da7fa23d5929f1de758cde0ca138ae69690e70ed9f12b1c3"
+    },
+    "experiments/geographic_scope_draft/evidence/scope-service-pending.png": {
+      "bytes": 183484,
+      "sha256": "eaecd38cd9a63bd53ac484b10c758a6a3df87196da30ff1c9267a3aa7670f1aa"
+    },
+    "experiments/geographic_scope_draft/evidence/scope-service-resolved.png": {
+      "bytes": 169363,
+      "sha256": "cde13e37dbc6dbf922b2e87bd49ac01eb8b909a42e1bb4dab4037c6077a14fbc"
+    },
+    "experiments/geographic_scope_draft/evidence/service-flow-national.json": {
+      "bytes": 535640,
+      "sha256": "dcae3e98227ad7c1fc78959a859b21115cd162382decdefee521afd8c28512e8"
+    },
+    "experiments/geographic_scope_draft/evidence/service-flow.json": {
+      "bytes": 533850,
+      "sha256": "4a0859df08755c7493a9a91cedcbd509dda0b9d08ae7c40f5b4e78456eeb63ec"
+    },
+    "experiments/geographic_scope_draft/semantic_cases.json": {
+      "bytes": 5272,
+      "sha256": "667d9396477f903838db6178a4f0d0bc54b4be18983f55fe8c2412d79010c0da"
+    },
+    "scripts/build_geographic_catalog.py": {
+      "bytes": 6423,
+      "sha256": "2663a675d15757dcc35c579673bfd4b240fedc22c02fd11865e3aeb5907a3137"
+    },
+    "scripts/import_cn_division_catalog.py": {
+      "bytes": 4317,
+      "sha256": "05275095fe7606ca337f5f53005029a38199e79f3021fdaf940e0298d2edd92a"
+    },
+    "tests/test_cn_division_catalog_import.py": {
+      "bytes": 5767,
+      "sha256": "4878c54e6b3cef4f2f85276a2d9e7e4693d47a7d81608d24fb316bbce35e21c6"
+    },
+    "tests/test_geographic_draft_configuration.py": {
+      "bytes": 27242,
+      "sha256": "85cda124c79f65e5fb6c890ba21bbef9fd46c1cf7157e44cd29f3e980401ed52"
+    },
+    "tests/test_geographic_national_catalog.py": {
+      "bytes": 10619,
+      "sha256": "b4cc72ff880131d032bf02c3171bac6ee1ef5dde73db8f72d2489d023393b139"
+    },
+    "tests/test_geographic_scope_catalog.py": {
+      "bytes": 15533,
+      "sha256": "7889f9b6422a4902f282018c31e8c578ade2d1e58fae5fed265e858c7d66ed2f"
+    },
+    "tests/test_geographic_scope_intent.py": {
+      "bytes": 13135,
+      "sha256": "07f73a7c483feb5501d6278b84da9282ec2dac1bb19a005e28d25f0a521d9ef6"
+    }
+  }
+}

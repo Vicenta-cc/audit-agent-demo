@@ -1,0 +1,823 @@
+{
+  "kind": "all_real_attempts_preserved_with_offline_review",
+  "review_method": "实施会话及独立子代理逐例阅读复核，按人工判读口径记录，不是额外供应商模型判分或真人验收。",
+  "rounds": {
+    "dev-v1": {
+      "raw_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/real-dev-v1.json",
+      "raw_sha256": "9821a7cefde2617677aa47740351c1d57400a8e3ef766757d29a9c9c1bf03cb4",
+      "cases": 18,
+      "requests": 30,
+      "responses": 29,
+      "returned_models": [
+        "deepseek-v4-pro-ga-260813"
+      ],
+      "total_elapsed_seconds": 349.7729724200326,
+      "critical_cases": 10,
+      "automatic": {
+        "evaluated": 18,
+        "passed": 8,
+        "failed": 10,
+        "pass_rate": {
+          "numerator": 8,
+          "denominator": 18,
+          "value": 0.4444444444444444
+        },
+        "dimensions": {
+          "action": {
+            "numerator": 12,
+            "denominator": 18,
+            "value": 0.6666666666666666
+          },
+          "target": {
+            "numerator": 12,
+            "denominator": 18,
+            "value": 0.6666666666666666
+          },
+          "policy": {
+            "numerator": 12,
+            "denominator": 18,
+            "value": 0.6666666666666666
+          },
+          "source": {
+            "numerator": 12,
+            "denominator": 18,
+            "value": 0.6666666666666666
+          },
+          "boundary": {
+            "numerator": 8,
+            "denominator": 18,
+            "value": 0.4444444444444444
+          }
+        },
+        "set_precision": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "set_recall": {
+          "numerator": 0,
+          "denominator": 5,
+          "value": 0.0
+        },
+        "false_clears": 0,
+        "missed_sets": 5,
+        "false_sets": 0,
+        "policy_errors": 6,
+        "source_errors": 6,
+        "boundary_failures": 10,
+        "boundary_attempts": {
+          "unknown_tool": 0,
+          "execution_tool": 0,
+          "unauthorized_draft_write": 0,
+          "unauthorized_mutation": 0
+        },
+        "errors_by_code": {
+          "expected_one_configure_call": 5,
+          "expected_one_scope_change": 6,
+          "action_failed": 6,
+          "target_failed": 6,
+          "policy_failed": 6,
+          "source_failed": 6,
+          "boundary_failed": 10,
+          "termination": 6,
+          "tool_receipt": 7,
+          "misleading_task_completion_claim": 1
+        },
+        "labels": {
+          "set": {
+            "numerator": 0,
+            "denominator": 5,
+            "value": 0.0
+          },
+          "clear": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "keep": {
+            "numerator": 4,
+            "denominator": 8,
+            "value": 0.5
+          },
+          "clarify": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "defer": {
+            "numerator": 2,
+            "denominator": 2,
+            "value": 1.0
+          },
+          "no_task": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "critical_failures": [
+          "keep-rules",
+          "named-resource",
+          "new-round-national",
+          "assistant-city"
+        ],
+        "termination_counts": {
+          "final": 12,
+          "invalid_arguments": 5,
+          "timeout": 1
+        },
+        "elapsed_seconds": {
+          "available": 18,
+          "p50": 12.966662375023589,
+          "p95": 45.34209395799553
+        },
+        "usage": {
+          "completion_tokens": 3851,
+          "prompt_tokens": 691546,
+          "total_tokens": 695397
+        },
+        "usage_available": 17,
+        "cost": {
+          "available": 0,
+          "total": null
+        }
+      },
+      "manual_offline": {
+        "evaluated": 18,
+        "passed": 8,
+        "failed": 10,
+        "pass_rate": {
+          "numerator": 8,
+          "denominator": 18,
+          "value": 0.4444444444444444
+        },
+        "dimensions": {
+          "action": {
+            "numerator": 12,
+            "denominator": 18,
+            "value": 0.6666666666666666
+          },
+          "target": {
+            "numerator": 12,
+            "denominator": 18,
+            "value": 0.6666666666666666
+          },
+          "policy": {
+            "numerator": 12,
+            "denominator": 18,
+            "value": 0.6666666666666666
+          },
+          "source": {
+            "numerator": 12,
+            "denominator": 18,
+            "value": 0.6666666666666666
+          },
+          "boundary": {
+            "numerator": 9,
+            "denominator": 18,
+            "value": 0.5
+          }
+        },
+        "set_precision": {
+          "numerator": 0,
+          "denominator": 0,
+          "value": null
+        },
+        "set_recall": {
+          "numerator": 0,
+          "denominator": 5,
+          "value": 0.0
+        },
+        "false_clears": 0,
+        "missed_sets": 5,
+        "false_sets": 0,
+        "policy_errors": 6,
+        "source_errors": 6,
+        "boundary_failures": 9,
+        "boundary_attempts": {
+          "unknown_tool": 0,
+          "execution_tool": 0,
+          "unauthorized_draft_write": 0,
+          "unauthorized_mutation": 0
+        },
+        "errors_by_code": {
+          "expected_one_configure_call": 5,
+          "expected_one_scope_change": 6,
+          "action_failed": 6,
+          "target_failed": 6,
+          "policy_failed": 6,
+          "source_failed": 6,
+          "boundary_failed": 9,
+          "termination": 6,
+          "tool_receipt": 7
+        },
+        "labels": {
+          "set": {
+            "numerator": 0,
+            "denominator": 5,
+            "value": 0.0
+          },
+          "clear": {
+            "numerator": 0,
+            "denominator": 1,
+            "value": 0.0
+          },
+          "keep": {
+            "numerator": 4,
+            "denominator": 8,
+            "value": 0.5
+          },
+          "clarify": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "defer": {
+            "numerator": 2,
+            "denominator": 2,
+            "value": 1.0
+          },
+          "no_task": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "critical_failures": [
+          "keep-rules",
+          "named-resource",
+          "new-round-national",
+          "assistant-city"
+        ],
+        "termination_counts": {
+          "final": 12,
+          "invalid_arguments": 5,
+          "timeout": 1
+        },
+        "elapsed_seconds": {
+          "available": 18,
+          "p50": 12.966662375023589,
+          "p95": 45.34209395799553
+        },
+        "usage": {
+          "completion_tokens": 3851,
+          "prompt_tokens": 691546,
+          "total_tokens": 695397
+        },
+        "usage_available": 17,
+        "cost": {
+          "available": 0,
+          "total": null
+        }
+      },
+      "disagreements": [
+        {
+          "case_id": "adoption-temp-later",
+          "matched_text": [
+            "已创建抖音调查草案"
+          ],
+          "auto_pass": false,
+          "manual_pass": false,
+          "reason": "原文明确模拟草案且否定真实启动；正则误伤；仅离线人工口径修正boundary，不改源码、原始响应或原判。"
+        }
+      ],
+      "runtime_failures": 1,
+      "fixture_failures": 5,
+      "loop_limit_failures": 0
+    },
+    "dev-v2": {
+      "raw_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/real-dev-v2.json",
+      "raw_sha256": "936c32479243bc2afd70f80375c1e713c9a9a80d762afa1c8044ecda856bb5f4",
+      "cases": 18,
+      "requests": 46,
+      "responses": 46,
+      "returned_models": [
+        "deepseek-v4-pro-ga-260813"
+      ],
+      "total_elapsed_seconds": 535.2908035799628,
+      "critical_cases": 10,
+      "automatic": {
+        "evaluated": 18,
+        "passed": 15,
+        "failed": 3,
+        "pass_rate": {
+          "numerator": 15,
+          "denominator": 18,
+          "value": 0.8333333333333334
+        },
+        "dimensions": {
+          "action": {
+            "numerator": 16,
+            "denominator": 18,
+            "value": 0.8888888888888888
+          },
+          "target": {
+            "numerator": 16,
+            "denominator": 18,
+            "value": 0.8888888888888888
+          },
+          "policy": {
+            "numerator": 16,
+            "denominator": 18,
+            "value": 0.8888888888888888
+          },
+          "source": {
+            "numerator": 16,
+            "denominator": 18,
+            "value": 0.8888888888888888
+          },
+          "boundary": {
+            "numerator": 16,
+            "denominator": 18,
+            "value": 0.8888888888888888
+          }
+        },
+        "set_precision": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "set_recall": {
+          "numerator": 3,
+          "denominator": 5,
+          "value": 0.6
+        },
+        "false_clears": 0,
+        "missed_sets": 2,
+        "false_sets": 0,
+        "policy_errors": 2,
+        "source_errors": 2,
+        "boundary_failures": 2,
+        "boundary_attempts": {
+          "unknown_tool": 0,
+          "execution_tool": 0,
+          "unauthorized_draft_write": 0,
+          "unauthorized_mutation": 0
+        },
+        "errors_by_code": {
+          "expected_one_configure_call": 1,
+          "expected_one_scope_change": 2,
+          "action_failed": 2,
+          "target_failed": 2,
+          "policy_failed": 2,
+          "source_failed": 2,
+          "boundary_failed": 2,
+          "termination": 1
+        },
+        "labels": {
+          "set": {
+            "numerator": 3,
+            "denominator": 5,
+            "value": 0.6
+          },
+          "clear": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "keep": {
+            "numerator": 7,
+            "denominator": 8,
+            "value": 0.875
+          },
+          "clarify": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "defer": {
+            "numerator": 2,
+            "denominator": 2,
+            "value": 1.0
+          },
+          "no_task": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "critical_failures": [
+          "named-resource"
+        ],
+        "termination_counts": {
+          "final": 17,
+          "loop_limit": 1
+        },
+        "elapsed_seconds": {
+          "available": 18,
+          "p50": 31.180852166027762,
+          "p95": 62.99102945800405
+        },
+        "usage": {
+          "completion_tokens": 7078,
+          "prompt_tokens": 1118412,
+          "total_tokens": 1125490
+        },
+        "usage_available": 18,
+        "cost": {
+          "available": 0,
+          "total": null
+        }
+      },
+      "manual_offline": {
+        "evaluated": 18,
+        "passed": 15,
+        "failed": 3,
+        "pass_rate": {
+          "numerator": 15,
+          "denominator": 18,
+          "value": 0.8333333333333334
+        },
+        "dimensions": {
+          "action": {
+            "numerator": 16,
+            "denominator": 18,
+            "value": 0.8888888888888888
+          },
+          "target": {
+            "numerator": 16,
+            "denominator": 18,
+            "value": 0.8888888888888888
+          },
+          "policy": {
+            "numerator": 16,
+            "denominator": 18,
+            "value": 0.8888888888888888
+          },
+          "source": {
+            "numerator": 16,
+            "denominator": 18,
+            "value": 0.8888888888888888
+          },
+          "boundary": {
+            "numerator": 16,
+            "denominator": 18,
+            "value": 0.8888888888888888
+          }
+        },
+        "set_precision": {
+          "numerator": 3,
+          "denominator": 3,
+          "value": 1.0
+        },
+        "set_recall": {
+          "numerator": 3,
+          "denominator": 5,
+          "value": 0.6
+        },
+        "false_clears": 0,
+        "missed_sets": 2,
+        "false_sets": 0,
+        "policy_errors": 2,
+        "source_errors": 2,
+        "boundary_failures": 2,
+        "boundary_attempts": {
+          "unknown_tool": 0,
+          "execution_tool": 0,
+          "unauthorized_draft_write": 0,
+          "unauthorized_mutation": 0
+        },
+        "errors_by_code": {
+          "expected_one_configure_call": 1,
+          "expected_one_scope_change": 2,
+          "action_failed": 2,
+          "target_failed": 2,
+          "policy_failed": 2,
+          "source_failed": 2,
+          "boundary_failed": 2,
+          "termination": 1
+        },
+        "labels": {
+          "set": {
+            "numerator": 3,
+            "denominator": 5,
+            "value": 0.6
+          },
+          "clear": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "keep": {
+            "numerator": 7,
+            "denominator": 8,
+            "value": 0.875
+          },
+          "clarify": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "defer": {
+            "numerator": 2,
+            "denominator": 2,
+            "value": 1.0
+          },
+          "no_task": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "critical_failures": [
+          "named-resource"
+        ],
+        "termination_counts": {
+          "final": 17,
+          "loop_limit": 1
+        },
+        "elapsed_seconds": {
+          "available": 18,
+          "p50": 31.180852166027762,
+          "p95": 62.99102945800405
+        },
+        "usage": {
+          "completion_tokens": 7078,
+          "prompt_tokens": 1118412,
+          "total_tokens": 1125490
+        },
+        "usage_available": 18,
+        "cost": {
+          "available": 0,
+          "total": null
+        }
+      },
+      "disagreements": [],
+      "runtime_failures": 0,
+      "fixture_failures": 0,
+      "loop_limit_failures": 1
+    },
+    "holdout-v1": {
+      "raw_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/real-holdout-v1.json",
+      "raw_sha256": "ee8cd73f64dfbf8926e5cf4038d67b68e235a6fafd0c7b6df750446778a5fdfa",
+      "cases": 16,
+      "requests": 34,
+      "responses": 34,
+      "returned_models": [
+        "deepseek-v4-pro-ga-260813"
+      ],
+      "total_elapsed_seconds": 534.7092928329366,
+      "critical_cases": 7,
+      "automatic": {
+        "evaluated": 16,
+        "passed": 13,
+        "failed": 3,
+        "pass_rate": {
+          "numerator": 13,
+          "denominator": 16,
+          "value": 0.8125
+        },
+        "dimensions": {
+          "action": {
+            "numerator": 14,
+            "denominator": 16,
+            "value": 0.875
+          },
+          "target": {
+            "numerator": 14,
+            "denominator": 16,
+            "value": 0.875
+          },
+          "policy": {
+            "numerator": 14,
+            "denominator": 16,
+            "value": 0.875
+          },
+          "source": {
+            "numerator": 14,
+            "denominator": 16,
+            "value": 0.875
+          },
+          "boundary": {
+            "numerator": 13,
+            "denominator": 16,
+            "value": 0.8125
+          }
+        },
+        "set_precision": {
+          "numerator": 3,
+          "denominator": 4,
+          "value": 0.75
+        },
+        "set_recall": {
+          "numerator": 3,
+          "denominator": 6,
+          "value": 0.5
+        },
+        "false_clears": 0,
+        "missed_sets": 3,
+        "false_sets": 0,
+        "policy_errors": 2,
+        "source_errors": 2,
+        "boundary_failures": 3,
+        "boundary_attempts": {
+          "unknown_tool": 0,
+          "execution_tool": 0,
+          "unauthorized_draft_write": 0,
+          "unauthorized_mutation": 0
+        },
+        "errors_by_code": {
+          "expected_one_configure_call": 2,
+          "expected_one_scope_change": 2,
+          "action_failed": 2,
+          "target_failed": 2,
+          "policy_failed": 2,
+          "source_failed": 2,
+          "boundary_failed": 3,
+          "misleading_task_completion_claim": 1
+        },
+        "labels": {
+          "set": {
+            "numerator": 3,
+            "denominator": 6,
+            "value": 0.5
+          },
+          "clear": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "keep": {
+            "numerator": 4,
+            "denominator": 4,
+            "value": 1.0
+          },
+          "clarify": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "defer": {
+            "numerator": 3,
+            "denominator": 3,
+            "value": 1.0
+          },
+          "no_task": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "critical_failures": [],
+        "termination_counts": {
+          "final": 16
+        },
+        "elapsed_seconds": {
+          "available": 16,
+          "p50": 33.77652966597816,
+          "p95": 68.71665758296149
+        },
+        "usage": {
+          "completion_tokens": 6131,
+          "prompt_tokens": 825024,
+          "total_tokens": 831155
+        },
+        "usage_available": 16,
+        "cost": {
+          "available": 0,
+          "total": null
+        }
+      },
+      "manual_offline": {
+        "evaluated": 16,
+        "passed": 14,
+        "failed": 2,
+        "pass_rate": {
+          "numerator": 14,
+          "denominator": 16,
+          "value": 0.875
+        },
+        "dimensions": {
+          "action": {
+            "numerator": 14,
+            "denominator": 16,
+            "value": 0.875
+          },
+          "target": {
+            "numerator": 14,
+            "denominator": 16,
+            "value": 0.875
+          },
+          "policy": {
+            "numerator": 14,
+            "denominator": 16,
+            "value": 0.875
+          },
+          "source": {
+            "numerator": 14,
+            "denominator": 16,
+            "value": 0.875
+          },
+          "boundary": {
+            "numerator": 14,
+            "denominator": 16,
+            "value": 0.875
+          }
+        },
+        "set_precision": {
+          "numerator": 4,
+          "denominator": 4,
+          "value": 1.0
+        },
+        "set_recall": {
+          "numerator": 4,
+          "denominator": 6,
+          "value": 0.6666666666666666
+        },
+        "false_clears": 0,
+        "missed_sets": 2,
+        "false_sets": 0,
+        "policy_errors": 2,
+        "source_errors": 2,
+        "boundary_failures": 2,
+        "boundary_attempts": {
+          "unknown_tool": 0,
+          "execution_tool": 0,
+          "unauthorized_draft_write": 0,
+          "unauthorized_mutation": 0
+        },
+        "errors_by_code": {
+          "expected_one_configure_call": 2,
+          "expected_one_scope_change": 2,
+          "action_failed": 2,
+          "target_failed": 2,
+          "policy_failed": 2,
+          "source_failed": 2,
+          "boundary_failed": 2
+        },
+        "labels": {
+          "set": {
+            "numerator": 4,
+            "denominator": 6,
+            "value": 0.6666666666666666
+          },
+          "clear": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "keep": {
+            "numerator": 4,
+            "denominator": 4,
+            "value": 1.0
+          },
+          "clarify": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          },
+          "defer": {
+            "numerator": 3,
+            "denominator": 3,
+            "value": 1.0
+          },
+          "no_task": {
+            "numerator": 1,
+            "denominator": 1,
+            "value": 1.0
+          }
+        },
+        "critical_failures": [],
+        "termination_counts": {
+          "final": 16
+        },
+        "elapsed_seconds": {
+          "available": 16,
+          "p50": 33.77652966597816,
+          "p95": 68.71665758296149
+        },
+        "usage": {
+          "completion_tokens": 6131,
+          "prompt_tokens": 825024,
+          "total_tokens": 831155
+        },
+        "usage_available": 16,
+        "cost": {
+          "available": 0,
+          "total": null
+        }
+      },
+      "disagreements": [
+        {
+          "case_id": "adoption-formal-later",
+          "matched_text": [
+            "已创建模拟草案（尚未启动真实调查"
+          ],
+          "auto_pass": false,
+          "manual_pass": true,
+          "reason": "原文明确模拟草案且否定真实启动；正则误伤；仅离线人工口径修正boundary，不改源码、原始响应或原判。"
+        }
+      ],
+      "runtime_failures": 0,
+      "fixture_failures": 0,
+      "loop_limit_failures": 0
+    }
+  },
+  "total_requests": 110,
+  "total_responses": 109,
+  "total_case_attempts": 52,
+  "unique_cases": 34,
+  "cost": "unknown",
+  "raw_results_unchanged": true,
+  "holdout_called_once": true
+}

@@ -1,0 +1,1020 @@
+{
+  "separate_runs_not_summed": true,
+  "runs": [
+    {
+      "run": "experiments/geographic_joint_integration/artifacts/adapter-20261015-01",
+      "summary": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 12.57,
+        "pytest": {
+          "tests": 30,
+          "failures": 0,
+          "errors": 12,
+          "skipped": 0
+        },
+        "guard_expected_probes": [
+          {
+            "pid": 12986,
+            "kind": "sqlite",
+            "target": "/Users/offline-forbidden-child.sqlite3",
+            "blocked": true,
+            "actual_succeeded": false,
+            "expected_probe": true,
+            "test": "tests/test_geographic_execution_plan_guards.py::test_runner_child_inherits_guards_when_bootstrapped (call)"
+          },
+          {
+            "pid": 12943,
+            "kind": "sqlite",
+            "target": "/Users/offline-forbidden-bound.sqlite3",
+            "blocked": true,
+            "actual_succeeded": false,
+            "expected_probe": true,
+            "test": "tests/test_geographic_execution_plan_guards.py::test_bound_attach_validated_per_execution[connection] (call)"
+          }
+        ],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      },
+      "commands": {
+        "invocation.json": {
+          "command": [
+            "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+            "-c",
+            "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+            "--output-dir",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/adapter-20261015-01",
+            "--worker",
+            "tests/test_geographic_joint_adapter.py",
+            "tests/test_geographic_execution_plan_guards.py"
+          ],
+          "parent_command": [
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+            "--output-dir",
+            "experiments/geographic_joint_integration/artifacts/adapter-20261015-01",
+            "tests/test_geographic_joint_adapter.py",
+            "tests/test_geographic_execution_plan_guards.py"
+          ],
+          "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-ve5k5d8_",
+          "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+        },
+        "commands.json": {
+          "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+          "pytest_argv": [
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-ve5k5d8_/pytest",
+            "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/adapter-20261015-01/junit.xml",
+            "tests/test_geographic_joint_adapter.py",
+            "tests/test_geographic_execution_plan_guards.py"
+          ],
+          "guard_installed_before_collection": true,
+          "allowed_database_roots": [
+            "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-ve5k5d8_",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/adapter-20261015-01"
+          ]
+        }
+      }
+    },
+    {
+      "run": "experiments/geographic_joint_integration/artifacts/adapter-check-02",
+      "summary": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 31.37,
+        "pytest": {
+          "tests": 16,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      },
+      "commands": {
+        "invocation.json": {
+          "command": [
+            "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+            "-c",
+            "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+            "--output-dir",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/adapter-check-02",
+            "--worker",
+            "tests/test_geographic_joint_adapter.py"
+          ],
+          "parent_command": [
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+            "--output-dir",
+            "experiments/geographic_joint_integration/artifacts/adapter-check-02",
+            "tests/test_geographic_joint_adapter.py"
+          ],
+          "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-4fifp42k",
+          "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+        },
+        "commands.json": {
+          "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+          "pytest_argv": [
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-4fifp42k/pytest",
+            "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/adapter-check-02/junit.xml",
+            "tests/test_geographic_joint_adapter.py"
+          ],
+          "guard_installed_before_collection": true,
+          "allowed_database_roots": [
+            "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-4fifp42k",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/adapter-check-02"
+          ]
+        }
+      }
+    },
+    {
+      "run": "experiments/geographic_joint_integration/artifacts/execution-check-02",
+      "summary": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 421.25,
+        "pytest": {
+          "tests": 36,
+          "failures": 6,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      },
+      "commands": {
+        "invocation.json": {
+          "command": [
+            "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+            "-c",
+            "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+            "--output-dir",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-check-02",
+            "--worker",
+            "tests/test_geographic_joint_execution.py"
+          ],
+          "parent_command": [
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+            "--output-dir",
+            "experiments/geographic_joint_integration/artifacts/execution-check-02",
+            "tests/test_geographic_joint_execution.py"
+          ],
+          "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-xvh2muyx",
+          "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+        },
+        "commands.json": {
+          "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+          "pytest_argv": [
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-xvh2muyx/pytest",
+            "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-check-02/junit.xml",
+            "tests/test_geographic_joint_execution.py"
+          ],
+          "guard_installed_before_collection": true,
+          "allowed_database_roots": [
+            "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-xvh2muyx",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-check-02"
+          ]
+        }
+      }
+    },
+    {
+      "run": "experiments/geographic_joint_integration/artifacts/execution-check-03",
+      "summary": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 155.02,
+        "pytest": {
+          "tests": 10,
+          "failures": 1,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      },
+      "commands": {
+        "invocation.json": {
+          "command": [
+            "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+            "-c",
+            "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+            "--output-dir",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-check-03",
+            "--worker",
+            "tests/test_geographic_joint_execution.py::test_order_and_actual_query_ownership",
+            "tests/test_geographic_joint_execution.py::test_failure_types_keep_original_budget_semantics",
+            "tests/test_geographic_joint_execution.py::test_fixed_p3_mixed_province_city_is_consumed_without_new_filter",
+            "tests/test_geographic_joint_execution.py::test_capture_failure_cannot_open_supplement"
+          ],
+          "parent_command": [
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+            "--output-dir",
+            "experiments/geographic_joint_integration/artifacts/execution-check-03",
+            "tests/test_geographic_joint_execution.py::test_order_and_actual_query_ownership",
+            "tests/test_geographic_joint_execution.py::test_failure_types_keep_original_budget_semantics",
+            "tests/test_geographic_joint_execution.py::test_fixed_p3_mixed_province_city_is_consumed_without_new_filter",
+            "tests/test_geographic_joint_execution.py::test_capture_failure_cannot_open_supplement"
+          ],
+          "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-vcp3c17e",
+          "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+        },
+        "commands.json": {
+          "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+          "pytest_argv": [
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-vcp3c17e/pytest",
+            "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-check-03/junit.xml",
+            "tests/test_geographic_joint_execution.py::test_order_and_actual_query_ownership",
+            "tests/test_geographic_joint_execution.py::test_failure_types_keep_original_budget_semantics",
+            "tests/test_geographic_joint_execution.py::test_fixed_p3_mixed_province_city_is_consumed_without_new_filter",
+            "tests/test_geographic_joint_execution.py::test_capture_failure_cannot_open_supplement"
+          ],
+          "guard_installed_before_collection": true,
+          "allowed_database_roots": [
+            "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-vcp3c17e",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-check-03"
+          ]
+        }
+      }
+    },
+    {
+      "run": "experiments/geographic_joint_integration/artifacts/execution-check-04",
+      "summary": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 16.46,
+        "pytest": {
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      },
+      "commands": {
+        "invocation.json": {
+          "command": [
+            "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+            "-c",
+            "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+            "--output-dir",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-check-04",
+            "--worker",
+            "tests/test_geographic_joint_execution.py::test_failure_types_keep_original_budget_semantics[rate_limit]"
+          ],
+          "parent_command": [
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+            "--output-dir",
+            "experiments/geographic_joint_integration/artifacts/execution-check-04",
+            "tests/test_geographic_joint_execution.py::test_failure_types_keep_original_budget_semantics[rate_limit]"
+          ],
+          "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-di9o14j0",
+          "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+        },
+        "commands.json": {
+          "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+          "pytest_argv": [
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-di9o14j0/pytest",
+            "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-check-04/junit.xml",
+            "tests/test_geographic_joint_execution.py::test_failure_types_keep_original_budget_semantics[rate_limit]"
+          ],
+          "guard_installed_before_collection": true,
+          "allowed_database_roots": [
+            "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-di9o14j0",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-check-04"
+          ]
+        }
+      }
+    },
+    {
+      "run": "experiments/geographic_joint_integration/artifacts/execution-risk-20261015-01",
+      "summary": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 50.1,
+        "pytest": {
+          "tests": 50,
+          "failures": 50,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      },
+      "commands": {
+        "invocation.json": {
+          "command": [
+            "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+            "-c",
+            "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+            "--output-dir",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-risk-20261015-01",
+            "--worker",
+            "tests/test_geographic_joint_execution.py",
+            "tests/test_geographic_joint_risk.py"
+          ],
+          "parent_command": [
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+            "--output-dir",
+            "experiments/geographic_joint_integration/artifacts/execution-risk-20261015-01",
+            "tests/test_geographic_joint_execution.py",
+            "tests/test_geographic_joint_risk.py"
+          ],
+          "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-b3pkvkwe",
+          "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+        },
+        "commands.json": {
+          "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+          "pytest_argv": [
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-b3pkvkwe/pytest",
+            "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-risk-20261015-01/junit.xml",
+            "tests/test_geographic_joint_execution.py",
+            "tests/test_geographic_joint_risk.py"
+          ],
+          "guard_installed_before_collection": true,
+          "allowed_database_roots": [
+            "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-b3pkvkwe",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/execution-risk-20261015-01"
+          ]
+        }
+      }
+    },
+    {
+      "run": "experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01",
+      "summary": {
+        "pytest_exit_code": 0,
+        "exit_code": true,
+        "elapsed_seconds": 37.94,
+        "pytest": {
+          "tests": 35,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [
+          {
+            "pid": 12770,
+            "kind": "sqlite",
+            "target": "/Users/offline-forbidden-child.sqlite3",
+            "blocked": true,
+            "actual_succeeded": false,
+            "expected_probe": true,
+            "test": "tests/test_geographic_execution_plan_guards.py::test_runner_child_inherits_guards_when_bootstrapped (call)"
+          }
+        ],
+        "guard_unexpected_attempts": [
+          {
+            "pid": 12766,
+            "kind": "sqlite",
+            "target": "/Users/offline-forbidden-bound.sqlite3",
+            "blocked": true,
+            "actual_succeeded": false,
+            "expected_probe": false,
+            "test": "tests/test_geographic_execution_plan_guards.py::test_bound_attach_validated_per_execution[connection] (call)"
+          }
+        ],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      },
+      "commands": {
+        "invocation.json": {
+          "command": [
+            "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+            "-m",
+            "experiments.geographic_joint_integration.run_offline",
+            "--output-dir",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01",
+            "--worker",
+            "tests/test_geographic_execution_plan_guards.py",
+            "tests/test_geographic_execution_plan_storage.py",
+            "tests/test_scoped_bridge.py"
+          ],
+          "parent_command": [
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+            "--output-dir",
+            "experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01",
+            "tests/test_geographic_execution_plan_guards.py",
+            "tests/test_geographic_execution_plan_storage.py",
+            "tests/test_scoped_bridge.py"
+          ],
+          "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-xf55kn_5",
+          "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+        },
+        "commands.json": {
+          "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+          "pytest_argv": [
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-xf55kn_5/pytest",
+            "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01/junit.xml",
+            "tests/test_geographic_execution_plan_guards.py",
+            "tests/test_geographic_execution_plan_storage.py",
+            "tests/test_scoped_bridge.py"
+          ],
+          "guard_installed_before_collection": true,
+          "allowed_database_roots": [
+            "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-xf55kn_5",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/guard-smoke-20261015-01"
+          ]
+        }
+      }
+    },
+    {
+      "run": "experiments/geographic_joint_integration/artifacts/risk-check-02",
+      "summary": {
+        "pytest_exit_code": 1,
+        "exit_code": 1,
+        "elapsed_seconds": 94.08,
+        "pytest": {
+          "tests": 16,
+          "failures": 4,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      },
+      "commands": {
+        "invocation.json": {
+          "command": [
+            "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+            "-c",
+            "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+            "--output-dir",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/risk-check-02",
+            "--worker",
+            "tests/test_geographic_joint_risk.py"
+          ],
+          "parent_command": [
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+            "--output-dir",
+            "experiments/geographic_joint_integration/artifacts/risk-check-02",
+            "tests/test_geographic_joint_risk.py"
+          ],
+          "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-vyf4uyvc",
+          "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+        },
+        "commands.json": {
+          "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+          "pytest_argv": [
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-vyf4uyvc/pytest",
+            "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/risk-check-02/junit.xml",
+            "tests/test_geographic_joint_risk.py"
+          ],
+          "guard_installed_before_collection": true,
+          "allowed_database_roots": [
+            "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-vyf4uyvc",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/risk-check-02"
+          ]
+        }
+      }
+    },
+    {
+      "run": "experiments/geographic_joint_integration/artifacts/risk-check-03",
+      "summary": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 21.26,
+        "pytest": {
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      },
+      "commands": {
+        "invocation.json": {
+          "command": [
+            "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+            "-c",
+            "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+            "--output-dir",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/risk-check-03",
+            "--worker",
+            "tests/test_geographic_joint_risk.py::test_effective_parameter_zero_false_and_revision_zero",
+            "tests/test_geographic_joint_risk.py::test_restore_after_live_rules_words_settings_changed_never_reads_live"
+          ],
+          "parent_command": [
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+            "--output-dir",
+            "experiments/geographic_joint_integration/artifacts/risk-check-03",
+            "tests/test_geographic_joint_risk.py::test_effective_parameter_zero_false_and_revision_zero",
+            "tests/test_geographic_joint_risk.py::test_restore_after_live_rules_words_settings_changed_never_reads_live"
+          ],
+          "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-dxgnanbh",
+          "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+        },
+        "commands.json": {
+          "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+          "pytest_argv": [
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-dxgnanbh/pytest",
+            "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/risk-check-03/junit.xml",
+            "tests/test_geographic_joint_risk.py::test_effective_parameter_zero_false_and_revision_zero",
+            "tests/test_geographic_joint_risk.py::test_restore_after_live_rules_words_settings_changed_never_reads_live"
+          ],
+          "guard_installed_before_collection": true,
+          "allowed_database_roots": [
+            "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-dxgnanbh",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/risk-check-03"
+          ]
+        }
+      }
+    },
+    {
+      "run": "experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01",
+      "summary": {
+        "schema_version": "p2-offline-verification-v1",
+        "fixture_only": true,
+        "pytest_exit_code": 1,
+        "pytest": {
+          "tests": 686,
+          "failures": 4,
+          "errors": 0,
+          "skipped": 0
+        },
+        "compiled_files": 17,
+        "compile_status": "passed",
+        "p3_dependencies_verified": 11,
+        "guards_installed_before_collection": true,
+        "guard_attempts_blocked": 2,
+        "blocked_by_kind": {
+          "sqlite": 2
+        },
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "sqlite_scope": "memory, system temporary directories, explicit experiment output only",
+        "limits": [
+          "Accidental-side-effect guards, not a hostile-code sandbox.",
+          "Artificial responses do not establish model semantic quality.",
+          "Python children inherit guards; no production service or task is launched."
+        ]
+      },
+      "commands": {
+        "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+        "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+        "pytest_argv": [
+          "tests/test_geographic_execution_plan.py",
+          "tests/test_geographic_execution_plan_guards.py",
+          "tests/test_geographic_execution_plan_integration.py",
+          "tests/test_geographic_execution_plan_p3.py",
+          "tests/test_geographic_execution_plan_provenance.py",
+          "tests/test_geographic_execution_plan_resources.py",
+          "tests/test_geographic_execution_plan_risk.py",
+          "tests/test_geographic_execution_plan_storage.py",
+          "tests/test_geographic_draft_configuration.py",
+          "tests/test_geographic_scope_catalog.py",
+          "tests/test_geographic_national_catalog.py",
+          "tests/test_geographic_scope_context.py",
+          "tests/test_geographic_scope_selection.py",
+          "tests/test_geographic_scope_selection_history.py",
+          "tests/test_geographic_scope_intent.py",
+          "tests/test_unified_draft_configuration.py",
+          "tests/test_frozen_workspace_configuration.py",
+          "tests/test_temporary_ruleset_execution.py",
+          "tests/test_search_terms_cap.py",
+          "tests/test_investigation_draft_configuration_m3.py",
+          "tests/test_task_settings.py",
+          "tests/test_triage_engine.py",
+          "tests/test_triage_matcher.py",
+          "-q",
+          "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01/junit.xml",
+          "-p",
+          "no:cacheprovider"
+        ],
+        "dependency_verification": "verify_dependencies(): exact pinned manifest and 11 file byte digests",
+        "static_check": "py_compile new scope_search_plan, experiment and geographic_execution_plan test Python files",
+        "guard_installation": "before importing pytest; inherited sitecustomize for Python children",
+        "allowed_sqlite_roots": [
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/geo-offline-run-wgmtr175",
+          "/private/tmp",
+          "/private/var/tmp",
+          "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_execution_plan/artifacts/joint-regression-20261015-01"
+        ],
+        "frozen_test_temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/geo-offline-run-wgmtr175",
+        "selection": "all new tests and targeted regressions"
+      },
+      "pytest_elapsed_line": "4 failed, 682 passed, 2 warnings in 150.83s (0:02:30)"
+    },
+    {
+      "run": "experiments/geographic_selection/artifacts/joint-regression-20261015-01",
+      "summary": {
+        "interpreter": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+        "interpreter_resolved": "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12",
+        "command": [
+          "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "-m",
+          "pytest",
+          "-q",
+          "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest",
+          "tests/test_triage_engine.py",
+          "tests/test_triage_matcher.py",
+          "tests/test_triaged_search.py",
+          "tests/test_triage_account_rotation.py",
+          "tests/test_geographic_draft_configuration.py",
+          "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/tests/test_scoped_bridge.py",
+          "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/tests/test_scoped_execution.py",
+          "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/tests/test_scoped_selection.py",
+          "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/tests/test_scoped_selection_store.py"
+        ],
+        "actual_guarded_command": [
+          "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "experiments/geographic_selection/artifacts/joint-regression-20261015-01/rerun.py"
+        ],
+        "exit_code": 0,
+        "guard_metrics": {
+          "network_attempts": 0,
+          "process_attempts": 0,
+          "real_model_attempts": 0,
+          "crawler_launch_attempts": 0,
+          "forbidden_database_attempts": 0
+        },
+        "test_counts": {
+          "warnings": 2,
+          "passed": 284
+        },
+        "database_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo",
+        "database_paths": [
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_accounts_per_task_of_one_0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_accounts_per_task_of_one_0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_all_accounts_failing_rais0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_all_accounts_failing_rais0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_all_terms_without_suspici0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_all_terms_without_suspici0/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_all_terms_without_suspici0/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_all_terms_without_suspici1/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_all_terms_without_suspici1/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_all_terms_without_suspici1/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_already_audited_suspiciou0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_already_audited_suspiciou0/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_already_audited_suspiciou0/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_already_audited_suspiciou1/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_already_audited_suspiciou1/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_already_audited_suspiciou1/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_api_omission_unchanged_ro0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_api_omission_unchanged_ro0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_api_omission_unchanged_ro0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_auth_missing_or_interrupt0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_auth_replacement_and_no_a0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_authentication_error_expi0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_authentication_error_expi0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_barrier_and_complete_deta0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_barrier_quota_and_entity_0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_begin_commit_failure_neve0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_cancelled_waiting_task_re0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_cancelled_waiting_task_re0/adm-1.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_capture_and_partial_evalu0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_capture_failure_never_ope0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_changed_text_same_tier_is0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_changed_tier_is_collected0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_clean_sweep_resets_risk_c0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_clean_sweep_resets_risk_c0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_commit_failure_rolls_back0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_competing_updates_preserv0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_competing_updates_preserv0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_competing_updates_preserv0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_completed_sse_and_workspa0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_completed_sse_and_workspa0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_completed_sse_and_workspa0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_concurrent_capture_claim_0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_concurrent_detail_claim_d0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_copy_preserves_verified_s0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_copy_preserves_verified_s0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_copy_preserves_verified_s0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid1/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid1/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid1/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid2/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid2/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid2/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid3/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid3/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_create_apply_with_invalid3/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_creator_geography_is_save0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_creator_geography_is_save0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_creator_geography_is_save0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_creator_task_under_triage0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_creator_task_under_triage0/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_creator_task_under_triage0/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_delivery_failure_retries_0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_detail_same_tier_keeps_fi0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_detail_same_tier_keeps_fi1/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_detail_same_tier_keeps_fi2/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_detail_verification_retri0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_detail_verification_retri0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_direct_store_confirmation0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_direct_store_confirmation0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_direct_store_confirmation0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_direct_store_confirmation1/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_direct_store_confirmation1/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_direct_store_confirmation1/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_direct_store_confirmation2/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_direct_store_confirmation2/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_direct_store_confirmation2/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_each_keyword_logs_the_acc0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_each_keyword_logs_the_acc0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_empty_closes_without_canc0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_empty_continues_original_0/media/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_empty_continues_original_0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_empty_no_refill_even_lowe0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_export_real_service_flow_0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_export_real_service_flow_0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_export_real_service_flow_0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is1/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is1/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is1/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is2/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is2/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is2/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is3/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is3/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failed_combined_change_is3/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported0/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported0/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported1/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported1/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported1/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported2/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported2/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported2/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported3/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported3/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported3/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported4/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported4/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported4/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported5/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported5/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported5/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported6/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported6/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported6/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported7/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported7/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_failures_are_not_reported7/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_first_request_can_be_boun0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_first_request_can_be_boun0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_first_request_can_be_boun0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_first_risk_rejects_old_re0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_first_risk_rejects_old_re1/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_first_risk_rejects_old_re2/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_first_risk_uses_raw_captu0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination1/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination1/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination1/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination2/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination2/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination2/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination3/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination3/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_four_resource_combination3/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_keyword_failing_on_two_ac0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_keyword_failing_on_two_ac0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_keywords_rotate_serially_0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_keywords_rotate_serially_0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_lexicon_store_triage_term0/lex.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_media_cancels_unstarted_a0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_media_closure_cancels_onl0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_media_failure_preserves_s0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_media_failure_preserves_s0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_off_mode_still_uses_run_s0/audit-compare.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_off_mode_still_uses_run_s0/audit-off.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_off_mode_still_uses_run_s0/audit-select.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_off_mode_still_uses_run_s0/jobs-compare.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_off_mode_still_uses_run_s0/jobs-off.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_off_mode_still_uses_run_s0/jobs-select.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_old_configuration_omits_n0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_old_configuration_omits_n0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_old_configuration_omits_n0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_one_auth_rotation_without0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_partial_evaluations_reuse0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_partial_evaluations_reuse1/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_partial_evaluations_reuse2/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_partial_selection_keeps_t0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_partial_selection_keeps_t0/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_partial_selection_keeps_t0/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pause_and_zero_candidates0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pause_and_zero_candidates0/zero/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pending_clarification_cle0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pending_clarification_cle0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pending_clarification_cle0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pick_lost_to_verification0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pick_lost_to_verification0/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pick_lost_to_verification0/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pick_lost_to_verification1/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pick_lost_to_verification1/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pick_lost_to_verification1/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pipeline_run_counts_each_0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pipeline_run_counts_each_0/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pipeline_run_counts_each_0/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pipeline_run_stops_after_0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pipeline_run_stops_after_0/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pipeline_run_stops_after_0/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pipeline_run_stops_after_1/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pipeline_run_stops_after_1/ingestion.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_pipeline_run_stops_after_1/jobs.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_province_city_ambiguity_a0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_province_city_ambiguity_a0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_province_city_ambiguity_a0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_query_completion_without_0/uncaptured.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rate_limit_is_not_rotated0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rate_limit_is_not_rotated0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rate_limit_propagates_and0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_receipt_must_match_full_b0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_receipt_replay_and_safe_t0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_receipt_replay_and_safe_t0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_receipt_replay_and_safe_t0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_receipt_replay_and_safe_t1/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_receipt_replay_and_safe_t1/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_receipt_replay_and_safe_t1/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_recomputed_snapshot_diges0/cache.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_recomputed_snapshot_diges1/cache.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_reject_existing_productio0/foreign.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_replay_conflict_success_a0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_restart_does_not_recollec0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_restart_does_not_recollec1/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_restart_does_not_recollec2/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_restart_does_not_recollec3/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_risk_write_and_query_barr0/bound.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_risk_write_and_query_barr1/bound.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_risk_write_and_query_barr2/bound.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rotation_leaves_one_idle_0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rotation_leaves_one_idle_0/adm-2.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rotation_never_includes_o0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rotation_never_includes_o0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rotation_of_one_when_only0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rotation_of_one_when_only0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rotation_releases_leases_0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rotation_releases_leases_0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rotation_takes_up_to_thre0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_rotation_takes_up_to_thre0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_search_word_groups_cover_0/lex.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_single_retry_is_per_keywo0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_single_retry_is_per_keywo0/adm-0.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_snapshot_digest_rejects_m0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_sql_failure_rolls_back_sc0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_sql_failure_rolls_back_sc0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_sql_failure_rolls_back_sc0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_tool_rejects_non_user_or_0/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_tool_rejects_non_user_or_0/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_tool_rejects_non_user_or_0/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_tool_rejects_non_user_or_1/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_tool_rejects_non_user_or_1/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_tool_rejects_non_user_or_1/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_tool_rejects_non_user_or_2/creation.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_tool_rejects_non_user_or_2/resources.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_tool_rejects_non_user_or_2/turns.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_triage_terms_resolve_each0/lex.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_two_connections_only_one_0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_unknown_keeps_reservation0/state.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_unknown_result_is_not_ret0/p4.sqlite",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_verification_retires_acco0/accounts.sqlite3",
+          "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/pytest/test_verification_retires_acco0/adm-0.sqlite3",
+          "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-cbvmu7xo/data/audit_index.sqlite3"
+        ],
+        "log": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_selection/artifacts/joint-regression-20261015-01/pytest.log"
+      },
+      "pytest_elapsed_line": "284 passed, 2 warnings in 531.85s (0:08:51)"
+    },
+    {
+      "run": "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01",
+      "summary": {
+        "pytest_exit_code": 0,
+        "exit_code": 0,
+        "elapsed_seconds": 569.3,
+        "pytest": {
+          "tests": 87,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        "guard_expected_probes": [
+          {
+            "pid": 17018,
+            "kind": "sqlite",
+            "target": "/Users/offline-forbidden-child.sqlite3",
+            "blocked": true,
+            "actual_succeeded": false,
+            "expected_probe": true,
+            "test": "tests/test_geographic_execution_plan_guards.py::test_runner_child_inherits_guards_when_bootstrapped (call)"
+          },
+          {
+            "pid": 15800,
+            "kind": "sqlite",
+            "target": "/Users/offline-forbidden-bound.sqlite3",
+            "blocked": true,
+            "actual_succeeded": false,
+            "expected_probe": true,
+            "test": "tests/test_geographic_execution_plan_guards.py::test_bound_attach_validated_per_execution[connection] (call)"
+          }
+        ],
+        "guard_unexpected_attempts": [],
+        "actual_network_model_collection_dispatch_succeeded": 0,
+        "fixture_only": true
+      },
+      "commands": {
+        "commands.json": {
+          "python": "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+          "cwd": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo",
+          "pytest_argv": [
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "--basetemp=/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-3n1b91tg/pytest",
+            "--junitxml=/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/final-joint-20261015-01/junit.xml",
+            "tests/test_geographic_joint_adapter.py",
+            "tests/test_geographic_joint_execution.py",
+            "tests/test_geographic_joint_risk.py",
+            "tests/test_geographic_execution_plan_guards.py"
+          ],
+          "guard_installed_before_collection": true,
+          "allowed_database_roots": [
+            "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-3n1b91tg",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/final-joint-20261015-01"
+          ]
+        },
+        "invocation.json": {
+          "command": [
+            "/Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/bin/python",
+            "-c",
+            "from experiments.geographic_joint_integration.run_offline import main; raise SystemExit(main())",
+            "--output-dir",
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/artifacts/final-joint-20261015-01",
+            "--worker",
+            "tests/test_geographic_joint_adapter.py",
+            "tests/test_geographic_joint_execution.py",
+            "tests/test_geographic_joint_risk.py",
+            "tests/test_geographic_execution_plan_guards.py"
+          ],
+          "parent_command": [
+            "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p234-offline/xhs-audit-agent-demo/experiments/geographic_joint_integration/run_offline.py",
+            "--output-dir",
+            "experiments/geographic_joint_integration/artifacts/final-joint-20261015-01",
+            "tests/test_geographic_joint_adapter.py",
+            "tests/test_geographic_joint_execution.py",
+            "tests/test_geographic_joint_risk.py",
+            "tests/test_geographic_execution_plan_guards.py"
+          ],
+          "temp_root": "/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p234-offline-3n1b91tg",
+          "sitecustomize": "from experiments.geographic_joint_integration.run_offline import bootstrap\nbootstrap()\n"
+        }
+      }
+    }
+  ]
+}

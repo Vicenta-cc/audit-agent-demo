@@ -94,3 +94,28 @@ def test_lexicon_patch_returns_next_version_and_preserves_others(service):
     expected['entries'][1]['note'] = '只改备注'
     assert changed['content'] == expected
     assert changed['update_arguments'] == {'edit_id':old['edit_id'], 'expected_version':2}
+
+
+@pytest.mark.parametrize('kind', ['ruleset', 'lexicon'])
+def test_edit_read_arguments_are_read_only_and_exclude_update_version(service, edit, kind):
+    from backend.resource_management.contracts import GetEditInput
+    from test_resource_lifecycle import lexicon
+    result = edit if kind == 'ruleset' else service.create_lexicon(lexicon(), **CTX)
+    assert result['read_arguments'] == {'edit_id': result['edit_id']}
+    GetEditInput.model_validate(result['read_arguments'])
+    current = service.get_edit(**result['read_arguments'], **CTX)
+    assert current['content'] == result['content']
+    assert current['version'] == result['version']
+    assert current['update_arguments'] == result['update_arguments']
+    assert current['read_arguments'] == result['read_arguments']
+
+
+def test_generated_rule_view_also_supplies_exact_read_arguments(service, edit):
+    from backend.resource_management.ruleset_refs import proposal_view
+    proposal = service.app.get_ruleset_proposal(edit['edit_id'], session_id=CTX['session_id'])
+    view = proposal_view(service.app.store, proposal, principal=P, session_id=CTX['session_id'])
+    assert view['read_arguments'] == {'edit_id': proposal.proposal_id}
+    assert 'expected_version' not in view['read_arguments']
+    current = service.get_edit(**view['read_arguments'], **CTX)
+    assert current['version'] == proposal.version
+    assert current['content'] == proposal.content.model_dump(mode='json')

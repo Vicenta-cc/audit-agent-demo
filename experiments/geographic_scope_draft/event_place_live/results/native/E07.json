@@ -1,0 +1,632 @@
+{
+  "id": "E07",
+  "expectation": {
+    "decision": "apply",
+    "status": "resolved",
+    "target": "吉林市"
+  },
+  "sessions": [
+    "investigation-session:066247407ac84c20a71818b787d44739"
+  ],
+  "setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references",
+  "started_at": "2026-10-15T08:54:55.237637+00:00",
+  "snapshot": {
+    "session_id": "investigation-session:066247407ac84c20a71818b787d44739",
+    "draft": {
+      "id": "investigation-draft:c2c9f60e140a4e36bc0027bbbd4438f3",
+      "current_revision": 1,
+      "title": "吉林市火灾舆情调查",
+      "objective": "调查吉林市火灾相关舆情",
+      "configuration": {
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "enabled_main_terms": [
+              "舆情事件"
+            ],
+            "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+            "lexicon_id": "custom_f43c26f2445a4a0e",
+            "strategy": "existing_lexicon"
+          }
+        },
+        "judgement": {
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+          "expected_ruleset_version": 1,
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "strategy": "existing_ruleset"
+        },
+        "platform": "dy",
+        "relevance_scope": {
+          "content_unit": "parent_post_event",
+          "province": {
+            "aliases": [
+              "吉林"
+            ],
+            "name": "吉林省"
+          },
+          "schema_version": "geo-scope-v1",
+          "selection_policy": "local_first_with_supplement",
+          "target": {
+            "aliases": [
+              "吉林"
+            ],
+            "name": "吉林市"
+          },
+          "topic": null
+        },
+        "relevance_scope_state": {
+          "application_turn_id": "investigation-turn:16473aae016d4ba8819599f8c4d65cef",
+          "candidates": [
+            {
+              "kind": "地级市",
+              "level": "prefecture",
+              "name": "吉林市",
+              "province_name": "吉林省"
+            }
+          ],
+          "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+          "copied_from_draft_id": "",
+          "draft_id": "investigation-draft:c2c9f60e140a4e36bc0027bbbd4438f3",
+          "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+          "province": {
+            "aliases": [
+              "吉林"
+            ],
+            "name": "吉林省"
+          },
+          "province_code": "220000",
+          "reason": "",
+          "selection_policy": "local_first_with_supplement",
+          "session_id": "investigation-session:066247407ac84c20a71818b787d44739",
+          "source_quote": "调查吉林市火灾",
+          "source_sequence": 1,
+          "source_turn_id": "investigation-turn:a26b96c706e14ff28682a1adc0825a35",
+          "source_user_message_id": "investigation-message:92622b6a2c5549f4b816a6284d538e12",
+          "status": "resolved",
+          "target": {
+            "aliases": [
+              "吉林"
+            ],
+            "name": "吉林市"
+          },
+          "target_code": "220200",
+          "target_level": "prefecture",
+          "target_text": "吉林市",
+          "task_anchor_turn_id": "investigation-turn:a26b96c706e14ff28682a1adc0825a35"
+        },
+        "schema_version": "investigation-draft-config-v4"
+      }
+    },
+    "public_draft": {
+      "id": "investigation-draft:c2c9f60e140a4e36bc0027bbbd4438f3",
+      "status": "DRAFT",
+      "current_revision": 1,
+      "title": "吉林市火灾舆情调查",
+      "objective": "调查吉林市火灾相关舆情",
+      "configuration": {
+        "schema_version": "investigation-draft-config-v4",
+        "platform": "dy",
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "strategy": "existing_lexicon",
+            "lexicon_id": "custom_f43c26f2445a4a0e",
+            "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+            "enabled_main_terms": [
+              "舆情事件"
+            ]
+          }
+        },
+        "judgement": {
+          "strategy": "existing_ruleset",
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "expected_ruleset_version": 1,
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1"
+        },
+        "relevance_scope": {
+          "schema_version": "geo-scope-v1",
+          "target": {
+            "name": "吉林市",
+            "aliases": [
+              "吉林"
+            ]
+          },
+          "province": {
+            "name": "吉林省",
+            "aliases": [
+              "吉林"
+            ]
+          },
+          "topic": null,
+          "selection_policy": "local_first_with_supplement",
+          "content_unit": "parent_post_event"
+        },
+        "relevance_scope_state": {
+          "status": "resolved",
+          "target_text": "吉林市",
+          "selection_policy": "local_first_with_supplement",
+          "reason": "",
+          "candidates": [
+            {
+              "name": "吉林市",
+              "level": "prefecture",
+              "kind": "地级市",
+              "province_name": "吉林省"
+            }
+          ],
+          "target": {
+            "name": "吉林市",
+            "aliases": [
+              "吉林"
+            ]
+          },
+          "province": {
+            "name": "吉林省",
+            "aliases": [
+              "吉林"
+            ]
+          }
+        }
+      },
+      "created_at": "2026-10-15T08:56:12.136255+00:00",
+      "updated_at": "2026-10-15T08:56:12.136255+00:00",
+      "confirmed_revision": null,
+      "confirmed_at": ""
+    },
+    "preview": {
+      "relevance_scope": {
+        "schema_version": "geo-scope-v1",
+        "target": {
+          "name": "吉林市",
+          "aliases": [
+            "吉林"
+          ]
+        },
+        "province": {
+          "name": "吉林省",
+          "aliases": [
+            "吉林"
+          ]
+        },
+        "topic": null,
+        "selection_policy": "local_first_with_supplement",
+        "content_unit": "parent_post_event"
+      },
+      "relevance_scope_state": {
+        "status": "resolved",
+        "target_text": "吉林市",
+        "selection_policy": "local_first_with_supplement",
+        "reason": "",
+        "candidates": [
+          {
+            "name": "吉林市",
+            "level": "prefecture",
+            "kind": "地级市",
+            "province_name": "吉林省"
+          }
+        ],
+        "target": {
+          "name": "吉林市",
+          "aliases": [
+            "吉林"
+          ]
+        },
+        "province": {
+          "name": "吉林省",
+          "aliases": [
+            "吉林"
+          ]
+        }
+      },
+      "max_post_limit": 10,
+      "task_settings_revision": 0,
+      "requested_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 1,
+        "analysis_batch_size": 5
+      },
+      "effective_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 10,
+        "analysis_batch_size": 5
+      },
+      "estimated_max_contents": 1,
+      "draft_id": "investigation-draft:c2c9f60e140a4e36bc0027bbbd4438f3",
+      "draft_revision": 1,
+      "title": "吉林市火灾舆情调查",
+      "objective": "调查吉林市火灾相关舆情",
+      "mode": "search",
+      "platform": "dy",
+      "resolved_search_terms": [
+        "舆情事件"
+      ],
+      "unused_search_terms": [],
+      "search_terms_notice": "",
+      "creator_url": "",
+      "recall_plan": {
+        "strategy": "existing_lexicon",
+        "lexicon_id": "custom_f43c26f2445a4a0e",
+        "lexicon_title": "独立测试通用舆情词库",
+        "runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+        "enabled_main_term_count": 1,
+        "enabled_main_terms": [
+          "舆情事件"
+        ],
+        "temporary_terms": [],
+        "source_lexicon_ids": [],
+        "lexicon_content": {
+          "title": "独立测试通用舆情词库",
+          "risk_label": "",
+          "description": "",
+          "entries": [
+            {
+              "id": "generic-topic",
+              "term": "舆情事件",
+              "kind": "main",
+              "parent_id": "",
+              "enabled": true,
+              "platform": "全平台",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": ""
+            }
+          ]
+        }
+      },
+      "ruleset_revision": {
+        "id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+        "ruleset_id": "ruleset.72b79ad82ad3",
+        "name": "独立测试通用舆情规则",
+        "domain": "public_opinion",
+        "version": 1,
+        "content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+        "enabled_rule_count": 1,
+        "available": true
+      },
+      "temporary_ruleset": null,
+      "max_notes": 1,
+      "max_posts_per_keyword": 1,
+      "max_comments_per_post": 300,
+      "get_sub_comment": false,
+      "blockers": [
+        {
+          "code": "collection_service_unavailable",
+          "message": "抖音采集服务当前不可用，请稍后重试。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        },
+        {
+          "code": "RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE",
+          "message": "地域执行能力尚未接通，当前不能启动。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        }
+      ],
+      "can_confirm": false
+    },
+    "receipts": [
+      {
+        "tool_name": "configure_investigation_draft",
+        "status": "SUCCEEDED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:066247407ac84c20a71818b787d44739:investigation-turn:16473aae016d4ba8819599f8c4d65cef:70b2bbfa"
+      }
+    ]
+  },
+  "evaluation": {
+    "pass": true,
+    "errors": [],
+    "observed_status": "resolved",
+    "observed_target": "吉林市",
+    "scope": {
+      "content_unit": "parent_post_event",
+      "province": {
+        "aliases": [
+          "吉林"
+        ],
+        "name": "吉林省"
+      },
+      "schema_version": "geo-scope-v1",
+      "selection_policy": "local_first_with_supplement",
+      "target": {
+        "aliases": [
+          "吉林"
+        ],
+        "name": "吉林市"
+      },
+      "topic": null
+    },
+    "scope_state": {
+      "application_turn_id": "investigation-turn:16473aae016d4ba8819599f8c4d65cef",
+      "candidates": [
+        {
+          "kind": "地级市",
+          "level": "prefecture",
+          "name": "吉林市",
+          "province_name": "吉林省"
+        }
+      ],
+      "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+      "copied_from_draft_id": "",
+      "draft_id": "investigation-draft:c2c9f60e140a4e36bc0027bbbd4438f3",
+      "principal": "e32db7d3-2b84-4d08-9b87-a0e9f5e0ef72",
+      "province": {
+        "aliases": [
+          "吉林"
+        ],
+        "name": "吉林省"
+      },
+      "province_code": "220000",
+      "reason": "",
+      "selection_policy": "local_first_with_supplement",
+      "session_id": "investigation-session:066247407ac84c20a71818b787d44739",
+      "source_quote": "调查吉林市火灾",
+      "source_sequence": 1,
+      "source_turn_id": "investigation-turn:a26b96c706e14ff28682a1adc0825a35",
+      "source_user_message_id": "investigation-message:92622b6a2c5549f4b816a6284d538e12",
+      "status": "resolved",
+      "target": {
+        "aliases": [
+          "吉林"
+        ],
+        "name": "吉林市"
+      },
+      "target_code": "220200",
+      "target_level": "prefecture",
+      "target_text": "吉林市",
+      "task_anchor_turn_id": "investigation-turn:a26b96c706e14ff28682a1adc0825a35"
+    }
+  },
+  "turns": [
+    {
+      "turn_id": "investigation-turn:a26b96c706e14ff28682a1adc0825a35",
+      "session_id": "investigation-session:066247407ac84c20a71818b787d44739",
+      "user": "调查吉林市火灾",
+      "status": "completed",
+      "answer": "我查了一下现有资源。当前系统里可用的审核规则只有两套：一套「独立测试通用舆情规则」，另一套「赌博博彩风险规则集」，都不针对火灾类事件。\n\n黑话库里也没有与火灾相关的词库，现有的都是暴恐、涉毒、诈骗、赌博、软色情等主题词库，和「吉林市火灾」这个议题对不上。\n\n所以要调查吉林市火灾，需要先补两块资源：\n\n1. **审核规则**——目前缺少一套针对火灾/公共安全事件的已发布规则。\n2. **搜索词库**——缺少能搜到吉林市火灾相关讨论的召回词库。\n\n你希望我怎么做？比如：\n\n- 由我帮你**生成一套临时的火灾审核规则和搜索词**（先展示内容，你确认后再用于创建调查）；\n- 或者你已有现成的规则/词库，告诉我具体内容或名称，我来引用。\n\n你想先处理哪一块？",
+      "safe_message": "",
+      "seconds": 34.79,
+      "accounting": {
+        "id": "investigation-turn:a26b96c706e14ff28682a1adc0825a35",
+        "status": "completed",
+        "input_tokens": 1841,
+        "output_tokens": 284,
+        "total_tokens": 15437,
+        "llm_call_count": 2,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "query_investigation_options"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 6758,
+            "output_tokens": 85,
+            "total_tokens": 6843,
+            "latency_seconds": 3.0
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 8395,
+            "output_tokens": 199,
+            "total_tokens": 8594,
+            "latency_seconds": 5.2
+          }
+        ],
+        "llm_call_count": 2,
+        "total_tokens": 15437,
+        "tool_lifecycle_and_exit": [
+          "tool query_investigation_options completed (0.03s, 3974 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=2/12 budget=2/12 tool_turns=1 last_msg_role=assistant response_len=328 session=investigation-session:066247407ac84c20a71818b787d44739"
+        ]
+      }
+    },
+    {
+      "turn_id": "investigation-turn:16473aae016d4ba8819599f8c4d65cef",
+      "session_id": "investigation-session:066247407ac84c20a71818b787d44739",
+      "user": "在抖音调查，使用现有“独立测试通用舆情规则”和“独立测试通用舆情词库”。这些测试资源按原样使用即可。请生成调查草案，不启动采集，不正式保存新资源。",
+      "status": "completed",
+      "answer": "调查草案已生成，未启动采集、未保存新资源。关键配置如下：\n\n**草案信息**\n- 标题：吉林市火灾舆情调查\n- 平台：抖音（搜索模式）\n- 调查地域：吉林市（吉林省），策略为「本地优先、补充全国讨论」\n\n**使用的资源（按原样）**\n- 审核规则：独立测试通用舆情规则（已发布 v1，1 条启用规则）\n- 词库：独立测试通用舆情词库，实际搜索词为「舆情事件」\n\n**当前状态**\n草案处于可编辑状态，尚未确认启动。系统提示两点：抖音采集服务当前不可用，且地域执行能力尚未接通，因此目前**无法启动**，也不影响你先行审阅配置。\n\n需要调整标题、目标或资源时告诉我即可；确认启动需等采集服务恢复后另行操作。",
+      "safe_message": "",
+      "seconds": 48.27,
+      "accounting": {
+        "id": "investigation-turn:16473aae016d4ba8819599f8c4d65cef",
+        "status": "completed",
+        "input_tokens": 6960,
+        "output_tokens": 1027,
+        "total_tokens": 65587,
+        "llm_call_count": 6,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "lexicon_ref": "resource-ref:249595165fe9479380e0cbce87898527",
+            "mode": "search",
+            "operation": "create",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:6afacaf1bfc74ecc827d1a3792cbc4cc",
+            "scope_decision": "apply",
+            "relevance_scope_change": {
+              "action": "set",
+              "selection_policy": "local_first_with_supplement",
+              "source_quote": "调查吉林市火灾",
+              "place": "吉林市"
+            },
+            "title": "吉林市火灾舆情调查",
+            "objective": "调查吉林市火灾相关舆情"
+          }
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "lexicon_ref": "resource-ref:249595165fe9479380e0cbce87898527",
+            "objective": "调查吉林市火灾相关舆情",
+            "operation": "create",
+            "platform": "dy",
+            "relevance_scope_change": {
+              "action": "set",
+              "selection_policy": "local_first_with_supplement",
+              "source_quote": "调查吉林市火灾",
+              "target_text": "吉林市"
+            },
+            "ruleset_ref": "resource-ref:6afacaf1bfc74ecc827d1a3792cbc4cc",
+            "scope_decision": "apply",
+            "title": "吉林市火灾舆情调查"
+          }
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [
+        "{\"name\": \"configure_investigation_draft\", \"description\": \"创建或局部更新调查草案的唯一配置入口。operation 明确为 create 或 update。create 提供标题、目标、平台、ruleset_ref，以及 lexicon_ref（关键词调查）或 creator_url（账号调查）。create 必须明确传 scope_decision：apply 同时传 relevance_scope_change.action=set；none 必须省略 relevance_scope_change。缺失或矛盾会在写入前拒绝。update 提供 draft_id/expected_revision，只传变化字段，省略的内容由后台原样保留；不传 null 或整份 configuration。update 不传 create 专用的 scope_decision；地域沿用省略保留、set 修改、clear 取消。正式和临时规则都填 ruleset_ref，正式和临时词库都填 lexicon_ref；引用从 read_resource/get_resource_edit 取得，不能猜测引用或抄写内容、hash、presentation_id。临时规则仍须先完整展示，等待后续用户明确采用；引用不是同意凭证。多个字段一起校验、一起提交。词库按其主词、变体与启用状态计算搜索词；改词条或启用状态先 update_resource_edit，再取新引用。本工具不修改资源正文、不保存资源、不启动任务；启动仍使用现有确认工具。版本冲突先读草案并核对，不强行替换版本重试。本次调查对象、议题或事件名称包含地域时默认采用该地域，无需用户另说某地的舆情或明确限定。例如调查克拉玛依大火、深圳楼市、新疆棉花争议，分别采用克拉玛依、深圳、新疆；议题与地域分别保存，不能只写入标题、目标或词库。设置或换地域时，relevance_scope_change传action=set、用户原始地名target_text、真实用户原话source_quote和selection_policy。同任务用户最新明确更换、取消或要求全国且不限制地域优先；关注全国网友讨论该事件不等于取消事件地域。资源齐备并获采用授权时，回看同任务真实用户历史中的调查对象和后续变更或取消；本轮只说采用资源不表示放弃此前地域，创建时引用原要求并一并配置，不要求用户重复。明确只要当地、不补充选local_only，其余有地域的调查选local_first_with_supplement，无需为默认策略重复确认。创建前明确取消地域时选scope_decision=none；已有草案取消时只传action=clear和source_quote；只改资源或标题时省略地域变化保留原地域，不能传null。不要从账号背景、资源名称、引用举例、否定、助手建议或仅修改标题推断地域；用户没提地名时不靠事件常识补地点；不填行政代码、身份或来源ID。调查目标支持单一省级地域或地级市（含直辖市）；地域简称直接传原文解析，解析成功直接报告。省市同名简称、下级地域、未知名或指代不明也传原文解析，仅按真实pending回执及候选提示澄清；区县同名不阻断明确城市别名，不自行猜测纠错或扩大范围。已有草案不能只口头澄清而保留可启动状态。条件齐备且用户已明确要求时直接修改草案，成功后报告，无需再问是否应用；资源展示和后续采用授权仍须满足。地域仅保存和展示，执行尚未接通，不能声称已经限定采集或可以启动地域调查。\", \"parameters\": {\"$defs\": {\"Platform\": {\"enum\": [\"xhs\", \"dy\", \"ks\"], \"title\": \"Platform\", \"type\": \"string\"}, \"RelevanceScopeChange\": {\"additionalProperties\": false, \"properties\": {\"action\": {\"enum\": [\"set\", \"clear\"], \"title\": \"Action\", \"type\": \"string\"}, \"source_quote\": {\"maxLength\": 4000, \"minLength\": 1, \"title\": \"Source Quote\", \"type\": \"string\"}, \"target_text\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Target Text\", \"default\": null}, \"selection_policy\": {\"enum\": [\"local_only\", \"local_first_with_supplement\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Selection Policy\", \"default\": null}}, \"required\": [\"action\", \"source_quote\"], \"title\": \"RelevanceScopeChange\", \"type\": \"object\"}}, \"additionalProperties\": false, \"properties\": {\"operation\": {\"enum\": [\"create\", \"update\"], \"title\": \"Operation\", \"type\": \"string\"}, \"draft_id\": {\"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Draft Id\", \"default\": null}, \"expected_revision\": {\"minimum\": 1, \"type\": \"integer\", \"nullable\": true, \"title\": \"Expected Revision\", \"default\": null}, \"title\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Title\", \"default\": null}, \"objective\": {\"maxLength\": 4000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Objective\", \"default\": null}, \"platform\": {\"$ref\": \"#/$defs/Platform\", \"nullable\": true}, \"ruleset_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Ruleset Ref\", \"default\": null}, \"lexicon_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Lexicon Ref\", \"default\": null}, \"creator_url\": {\"maxLength\": 2000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Creator Url\", \"default\": null}, \"scope_decision\": {\"enum\": [\"apply\", \"none\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Scope Decision\", \"description\": \"仅 create 必填：调查对象/事件名称包含地域选 apply 并传 set；无地域或已明确取消选 none 且不传 change。update 省略。\", \"default\": null}, \"relevance_scope_change\": {\"$ref\": \"#/$defs/RelevanceScopeChange\", \"nullable\": true}}, \"required\": [\"operation\"], \"title\": \"ConfigureDraftInput\", \"type\": \"object\"}}"
+      ],
+      "native_accounting": {
+        "source": "normal native agent.log, timestamps bounded by persisted turn",
+        "api_calls": [
+          {
+            "number": 1,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 8644,
+            "output_tokens": 164,
+            "total_tokens": 8808,
+            "latency_seconds": 3.7
+          },
+          {
+            "number": 2,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 9260,
+            "output_tokens": 164,
+            "total_tokens": 9424,
+            "latency_seconds": 3.8
+          },
+          {
+            "number": 3,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 10138,
+            "output_tokens": 228,
+            "total_tokens": 10366,
+            "latency_seconds": 4.6
+          },
+          {
+            "number": 4,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 10547,
+            "output_tokens": 57,
+            "total_tokens": 10604,
+            "latency_seconds": 2.7
+          },
+          {
+            "number": 5,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 12024,
+            "output_tokens": 233,
+            "total_tokens": 12257,
+            "latency_seconds": 4.5
+          },
+          {
+            "number": 6,
+            "model": "deepseek-v4-pro-ga-260813",
+            "provider": "alibaba",
+            "input_tokens": 13947,
+            "output_tokens": 181,
+            "total_tokens": 14128,
+            "latency_seconds": 4.8
+          }
+        ],
+        "llm_call_count": 6,
+        "total_tokens": 65587,
+        "tool_lifecycle_and_exit": [
+          "tool read_resource completed (0.01s, 1194 chars)",
+          "tool read_resource completed (0.01s, 624 chars)",
+          "tool tool_describe completed (0.00s, 3682 chars)",
+          "tool configure_investigation_draft completed (0.03s, 4631 chars)",
+          "reason=text_response(finish_reason=stop) model=deepseek-v4-pro-ga-260813 api_calls=6/12 budget=6/12 tool_turns=6 last_msg_role=assistant response_len=302 session=investigation-session:066247407ac84c20a71818b787d44739"
+        ]
+      }
+    }
+  ],
+  "ended_at": "2026-10-15T08:56:18.387246+00:00",
+  "session_tool_receipts": []
+}

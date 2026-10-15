@@ -1,0 +1,15 @@
+{
+  "schema_version": "p2-p1-baseline-verification-v1",
+  "baseline_commit": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "pytest_exit_code": 1,
+  "pytest": {
+    "tests": 4,
+    "failures": 4,
+    "errors": 0,
+    "skipped": 0
+  },
+  "guards_installed_before_collection": true,
+  "guard_attempts_blocked": 0,
+  "actual_network_model_collection_dispatch_succeeded": 0,
+  "note": "Expected failures remain failures; this run does not modify or xfail P1 tests."
+}

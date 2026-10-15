@@ -1,0 +1,254 @@
+{
+  "schema": "p4-offline-delivery-manifest-v1",
+  "worktree": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+  "branch": "codex/geographic-relevance-p4",
+  "application_base": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "p3_tag": "p3-post-only-names-v2-local-20261015",
+  "p3_commit": "2120c53379d1b79c45e3cb8232b9c9b96657b183",
+  "p2_validation_origin": "fixture",
+  "p2_schema": "p4-fixture-input-v1",
+  "scope": "Independent offline delivery; full P4 stage not accepted; geographic startup block retained.",
+  "exclusions": [
+    "This manifest itself",
+    "Ignored Python caches and test caches",
+    "Temporary fixture databases, deleted after execution"
+  ],
+  "authored_files": [
+    {
+      "path": "backend/audit_agent/scoped_execution.py",
+      "bytes": 17509,
+      "sha256": "da1af9dceb59bd97f9330868d4f3f2f7eabbf8805e23b88d15859c25eaff7d8a"
+    },
+    {
+      "path": "backend/audit_agent/scoped_selection.py",
+      "bytes": 17529,
+      "sha256": "65bad9ecce718f29038656acab5ac7279670e1d5f13e1873ea60ddc958a78912"
+    },
+    {
+      "path": "backend/audit_agent/scoped_selection_store.py",
+      "bytes": 22901,
+      "sha256": "c5ebdb4580db875cfee113c70864b13cbb5ee4706ddc9ec9ec413d907f8ca931"
+    },
+    {
+      "path": "experiments/geographic_selection/.gitignore",
+      "bytes": 64,
+      "sha256": "4a8b51ab9f1a25f1218a593cd5ef9fece520352b5d75ab0f011476d74a2100f7"
+    },
+    {
+      "path": "experiments/geographic_selection/INTERFACE_GAPS.md",
+      "bytes": 4144,
+      "sha256": "1bd3bc9d0f02ca0d94c0afeebcb6295ad41e0805f4a7d38b199e5ff7460c00b1"
+    },
+    {
+      "path": "experiments/geographic_selection/README.md",
+      "bytes": 2811,
+      "sha256": "23d25ca2235e2865c77967741b209ce592003deea55ff7f114963b2c7c08adc0"
+    },
+    {
+      "path": "experiments/geographic_selection/REPORT.md",
+      "bytes": 13634,
+      "sha256": "735a88b15a3ddc74480836166a7365490b91b8ee168c24e2fbe46065f530d7d8"
+    },
+    {
+      "path": "experiments/geographic_selection/bridge.py",
+      "bytes": 8513,
+      "sha256": "a3cbea769e9956de0fa8e6056bbf27fe6fba746c2bfe1f7091bdd336da3e392c"
+    },
+    {
+      "path": "experiments/geographic_selection/demo.py",
+      "bytes": 4410,
+      "sha256": "cece3c14e66324c0bcf2d052bf7c787442affc8a082fb4f34e16b134764eb38f"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/IMPORT_MANIFEST.json",
+      "bytes": 3153,
+      "sha256": "c7d17f75b673babc6d1a8cb2d8bd95a31a68e34bece311dd1765380f47889a57"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/__init__.py",
+      "bytes": 62,
+      "sha256": "95e5f45ce6e2204058e6067779882c3051cc8ced001963b1704926aa02d92bdc"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/__init__.py",
+      "bytes": 62,
+      "sha256": "95e5f45ce6e2204058e6067779882c3051cc8ced001963b1704926aa02d92bdc"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/__init__.py",
+      "bytes": 62,
+      "sha256": "95e5f45ce6e2204058e6067779882c3051cc8ced001963b1704926aa02d92bdc"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/__init__.py",
+      "bytes": 62,
+      "sha256": "95e5f45ce6e2204058e6067779882c3051cc8ced001963b1704926aa02d92bdc"
+    },
+    {
+      "path": "experiments/geographic_selection/fixtures.py",
+      "bytes": 3527,
+      "sha256": "5d70b3c496135ea35aa7fcfd3907f13ffba74195011afc9add674073648a5221"
+    },
+    {
+      "path": "experiments/geographic_selection/offline_guard.py",
+      "bytes": 2898,
+      "sha256": "6e601d4758e2111c64248bb7185ea981eeb7b9bb43216baad0b4cc410c61d4e1"
+    },
+    {
+      "path": "experiments/geographic_selection/preflight.json",
+      "bytes": 12395,
+      "sha256": "227e08ebcd24e2bae8247971e010525257b8e3aafacee39eb3a0b38d73104ee9"
+    },
+    {
+      "path": "experiments/geographic_selection/run_checks.py",
+      "bytes": 3250,
+      "sha256": "32f0692d775556660bc4bec134c6417bb594dddadd8805a6cb8a48b49d8920c6"
+    },
+    {
+      "path": "experiments/geographic_selection/verify_inputs.py",
+      "bytes": 2235,
+      "sha256": "e0f773c625e39bd09bd5ba550e8b8a9e3b4c2f5ce04b843f6e3165bb6d6f14cd"
+    },
+    {
+      "path": "tests/test_scoped_bridge.py",
+      "bytes": 8005,
+      "sha256": "a52b5ed5309421b120572c52a8e980d3174180b6ed458a4de702fe0d8b8d9ac8"
+    },
+    {
+      "path": "tests/test_scoped_execution.py",
+      "bytes": 13810,
+      "sha256": "be16b2b913fed832722c5820615585dfc99fa106e3997e5929f9d729c99158d9"
+    },
+    {
+      "path": "tests/test_scoped_selection.py",
+      "bytes": 11320,
+      "sha256": "db1d7ea298d95e35b2de871e56f6fc5826c12a66c3f66deb79629b175ef1409c"
+    },
+    {
+      "path": "tests/test_scoped_selection_store.py",
+      "bytes": 12054,
+      "sha256": "ca8ba9e59f6e86b13056d2a751b711692b6a95f41985bc2a27abe79f43fb15c4"
+    }
+  ],
+  "pinned_documents": [
+    {
+      "path": "experiments/geographic_selection/pinned_docs/geographic-relevance-implementation.md",
+      "bytes": 57576,
+      "sha256": "99058083b9119e32f2292a0d597f5955d5703289c930fe0bebf674071c73b70c"
+    },
+    {
+      "path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p2-pinned-inputs-v2.json",
+      "bytes": 8366,
+      "sha256": "29152dbfb0c27a96d046d491c45d846e3524395a6fb7412dd4ee1afde09bdd32"
+    },
+    {
+      "path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p2-start-v2.md",
+      "bytes": 39949,
+      "sha256": "c604bb4d4d01eb2f7ff9ce617f54619e0abb3acd4cd0c54d933923e6f3860868"
+    },
+    {
+      "path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p4-parallel-start.md",
+      "bytes": 34371,
+      "sha256": "3c65be88160f1cc847e56375352df9b183d08614de3e0f443b3f9310168a589b"
+    },
+    {
+      "path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p4-pinned-inputs-v1.json",
+      "bytes": 10562,
+      "sha256": "93fda5e57b2bf492bb759976443c252398aeb3684b40d1fa95dcad1959f42d72"
+    },
+    {
+      "path": "experiments/geographic_selection/pinned_docs/geographic-relevance-verification.md",
+      "bytes": 15519,
+      "sha256": "a8b50e63787f75b6a12cdfb9cf324dc02ed996994fd392084621d3662e4bb9f4"
+    }
+  ],
+  "imported_p3_files": [
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance.py",
+      "bytes": 63341,
+      "sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_ip.py",
+      "bytes": 9940,
+      "sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only.py",
+      "bytes": 14781,
+      "sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_names.py",
+      "bytes": 6354,
+      "sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_names_v2.py",
+      "bytes": 8739,
+      "sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_simple.py",
+      "bytes": 7558,
+      "sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_v2.py",
+      "bytes": 14006,
+      "sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_scope.py",
+      "bytes": 8625,
+      "sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/admin_catalog/SOURCE_MANIFEST.json",
+      "bytes": 3053,
+      "sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/admin_catalog/geographic_catalog.json",
+      "bytes": 677345,
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6"
+    },
+    {
+      "path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/location_catalog.json",
+      "bytes": 11323,
+      "sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d"
+    }
+  ],
+  "evidence_files": [
+    {
+      "path": "experiments/geographic_selection/artifacts/checks.json",
+      "bytes": 36643,
+      "sha256": "155d61258e3178207636b249a284a38a1defe2a7918286d9e777701c6dc5b809"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/example.json",
+      "bytes": 2461,
+      "sha256": "11e4b0ce8c48c58e93d93e10523125eef84a7cb14e08c294d949be8ad5ba48db"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/input-verification.json",
+      "bytes": 199,
+      "sha256": "6b2da6d55af494a7030b507b4a3d7e9b78be9f60fc8d8f72a38b8acaa5818236"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/pytest.log",
+      "bytes": 1281,
+      "sha256": "2a278d46eeb55e3e06a3b309910a12ee49264bef6d2429a48112dab7c10ff79e"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/readonly-final.json",
+      "bytes": 5741,
+      "sha256": "f4304ab9990f2f9e12aa8eeb00b4002d2fdd21001f41f2b9788a2b5ade79d0a4"
+    },
+    {
+      "path": "experiments/geographic_selection/artifacts/static-checks.json",
+      "bytes": 3043,
+      "sha256": "762be1806e9e151056cc7860ee25b8ed3289bedddbfde271bbfb7e63b2b806aa"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+from experiments.geographic_execution_plan.offline_guards import install_from_environment
+install_from_environment()

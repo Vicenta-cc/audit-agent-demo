@@ -1,0 +1,215 @@
+{
+  "kind": "original_bridge_retest_summary",
+  "version": "geo-intent-p0-original-bridge-retest-v1",
+  "freeze_sha256": "a27d201ec0a89d305c614dd2ec3b858d8a1fc082346ba24ade8775d68cc4e1d9",
+  "model": "deepseek-v4-pro-ga-260813",
+  "provider_host": "api.qhose.net",
+  "configuration_source": "/Users/ext.wanghongtao6/Documents/Codex/acceptance/unified-draft-frontend-20261012/environment.private.json",
+  "original_sources_unchanged": 31,
+  "first_requests_identical": 18,
+  "cases": 18,
+  "requests": 48,
+  "responses": 46,
+  "runtime_failures": 2,
+  "runtime_failure_cases": [
+    "adoption-temp-first",
+    "new-round-national"
+  ],
+  "automatic_retries": 0,
+  "unused_request_budget": 24,
+  "strict_intent": {
+    "numerator": 11,
+    "denominator": 18,
+    "value": 0.6111111111111112
+  },
+  "intent_set_precision": {
+    "numerator": 5,
+    "denominator": 5,
+    "value": 1.0
+  },
+  "intent_set_recall": {
+    "numerator": 5,
+    "denominator": 7,
+    "value": 0.7142857142857143
+  },
+  "missing_records": [
+    "keep-rules",
+    "defer-missing-all",
+    "adoption-temp-first",
+    "new-round-national",
+    "named-resource",
+    "creator-kelamayi"
+  ],
+  "observed_missing_set_record_without_runtime_failure": [
+    "defer-missing-all"
+  ],
+  "set_runtime_failure": [
+    "adoption-temp-first"
+  ],
+  "record_false_set": 0,
+  "record_false_clear": 1,
+  "record_false_clear_case": "assistant-city",
+  "actual_draft_false_set": 0,
+  "actual_draft_false_clear": 0,
+  "expected_set_policy_errors": 0,
+  "actual_source_quote_binding_errors_on_set": 0,
+  "auto_source_error_flags_including_missing": 7,
+  "auto_policy_error_flags_including_missing": 6,
+  "draft_set_precision": {
+    "numerator": 5,
+    "denominator": 5,
+    "value": 1.0
+  },
+  "draft_set_recall": {
+    "numerator": 5,
+    "denominator": 5,
+    "value": 1.0
+  },
+  "draft_clear_recall": {
+    "numerator": 0,
+    "denominator": 1,
+    "value": 0.0
+  },
+  "draft_actually_configured": {
+    "numerator": 8,
+    "denominator": 14,
+    "value": 0.5714285714285714
+  },
+  "existing_draft_no_op": [
+    "keep-rules"
+  ],
+  "ready_not_configured": [
+    "keep-rules",
+    "new-round-national",
+    "named-resource",
+    "creator-kelamayi",
+    "denied-city",
+    "clear-unlimited"
+  ],
+  "loop_limit_with_successful_configuration": [
+    "city-kelamayi",
+    "province-xinjiang"
+  ],
+  "raw_original_complete": {
+    "numerator": 11,
+    "denominator": 18,
+    "value": 0.6111111111111112
+  },
+  "offline_review_original_complete": {
+    "numerator": 13,
+    "denominator": 18,
+    "value": 0.7222222222222222
+  },
+  "original_complete_not_equal_actual_draft_success": true,
+  "natural_action_target_status_counts": {
+    "correct": 14,
+    "partial": 1,
+    "incorrect": 1,
+    "unobservable_runtime_failure": 2
+  },
+  "tool_requests": 36,
+  "actual_execution_tool_attempts": 0,
+  "actual_real_execution_claims": 0,
+  "simulated_scope_cancellation_claim_error": [
+    "assistant-city"
+  ],
+  "malformed_tool_json": 0,
+  "single_nonwhitespace_character_string_regression": 0,
+  "elapsed_seconds": 605.6212474170025,
+  "usage": {
+    "completion_tokens": 6373,
+    "prompt_tokens": 1152149,
+    "total_tokens": 1158522
+  },
+  "usage_available_cases": 17,
+  "cost": "unknown",
+  "local_validation": {
+    "restoration_targeted_tests_passed": 390,
+    "restoration_regression_tests_passed": 25,
+    "fresh_budget_runner_tests_passed": 9,
+    "new_business_code_changes": 0
+  },
+  "comparison": {
+    "old_original_b": {
+      "requests": 53,
+      "responses": 53,
+      "strict_intent": {
+        "numerator": 16,
+        "denominator": 18,
+        "value": 0.8888888888888888
+      },
+      "set_precision": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1.0
+      },
+      "set_recall": {
+        "numerator": 7,
+        "denominator": 7,
+        "value": 1.0
+      },
+      "draft_set_recall": {
+        "numerator": 4,
+        "denominator": 5,
+        "value": 0.8
+      },
+      "draft_clear_recall": {
+        "numerator": 1,
+        "denominator": 1,
+        "value": 1.0
+      },
+      "draft_actually_configured": {
+        "numerator": 11,
+        "denominator": 14,
+        "value": 0.7857142857142857
+      }
+    },
+    "repaired_b": {
+      "requests": 31,
+      "responses": 31,
+      "manual_strict_intent": {
+        "numerator": 7,
+        "denominator": 18,
+        "value": 0.3888888888888889
+      },
+      "set_precision": {
+        "numerator": 0,
+        "denominator": 8,
+        "value": 0.0
+      },
+      "set_recall": {
+        "numerator": 0,
+        "denominator": 7,
+        "value": 0.0
+      },
+      "draft_set_recall": {
+        "numerator": 0,
+        "denominator": 5,
+        "value": 0.0
+      },
+      "draft_clear_recall": {
+        "numerator": 0,
+        "denominator": 1,
+        "value": 0.0
+      },
+      "draft_actually_configured": {
+        "numerator": 4,
+        "denominator": 14,
+        "value": 0.2857142857142857
+      }
+    }
+  },
+  "cumulative_real_requests": 308,
+  "cumulative_real_responses": 305,
+  "cumulative_case_runs": 142,
+  "unique_synthetic_cases": 34,
+  "new_holdout_calls": 0,
+  "limitations": [
+    "Repeated synthetic18dev; not fresh independent holdout; single rerun and provider nondeterminism.",
+    "Two runtime failures retained in all18 and expected-set7 denominators.",
+    "No string degradation in restored protocol strengthens request-protocol compatibility hypothesis, does not isolate tool_choice versus prompt/tools or establish provider internal mechanism.",
+    "Independent-new-round key negative timed out; assistant-city incorrect clear record prevents claiming all fixed critical negatives passed.",
+    "No formal service, database, worker, crawler, commit/push/deploy or P1."
+  ],
+  "status": "P0真实模型复测已完成、待原会话验收；P0未整体通过"
+}

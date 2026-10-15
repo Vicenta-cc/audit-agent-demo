@@ -10,6 +10,7 @@ from backend.resource_management.contracts import CreateLexiconInput, LexiconCon
 from backend.resource_management.generation import ResourceGenerator, generation_messages
 from backend.resource_management.generation_contracts import ResourceGenerationRequest
 from backend.rulesets.contracts import RuleSetContent
+from backend.resource_management.ruleset_authoring import GeneratedRuleSet
 from backend.investigation_creation.tools import CreateRuleSetProposalInput, HermesToolExecutionIdentity
 from backend.investigation_creation.principal import Principal
 from test_investigation_creation_conversation import creation_stack, _draft_count, _run_count
@@ -164,7 +165,7 @@ def test_rules_are_schema_validated_and_count_preserved(content):
     gen, _, _ = generator(content)
     count = sum(len(c["rules"]) for c in content["categories"])
     result = gen.generate("ruleset", ResourceGenerationRequest(**REQUEST, requested_count=count))
-    assert result == RuleSetContent.model_validate(content)
+    assert result == GeneratedRuleSet.from_content(RuleSetContent.model_validate(content)).to_content()
     with pytest.raises(ResourceError):
         gen.generate("ruleset", ResourceGenerationRequest(**REQUEST, requested_count=count + 1))
 
@@ -205,3 +206,42 @@ def test_blocked_generation_leaves_no_edit_and_replayed_call_does_not_retry(crea
     assert client.chat.completions.create.call_count == 1
     with creation_stack["creation_store"]._connect() as db:
         assert db.execute("select count(*) from lexicon_edits").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize('error', [TimeoutError('private timeout'), ConnectionError('private connection')])
+def test_known_transport_failures_allow_caller_retry_without_automatic_author_call(error):
+    gen, client, factory = generator(error=error)
+    with pytest.raises(ResourceError) as caught:
+        gen.generate('lexicon', ResourceGenerationRequest(**REQUEST))
+    details = caught.value.details
+    assert details['retryable'] and details['generation_stage'] == 'generation'
+    assert not details['resource_created'] and not details['mutation_applied']
+    assert details['error_type'] == 'transport_error'
+    assert 'private' not in json.dumps(details)
+    assert client.chat.completions.create.call_count == 1
+    assert factory.call_args.kwargs['max_retries'] == 0
+
+
+@pytest.mark.parametrize('status,retryable', [(400, False), (401, False), (403, False),
+                                           (408, True), (429, True), (500, True), (503, True)])
+def test_provider_status_retryability_is_bounded_and_does_not_trigger_new_call(status, retryable):
+    error = RuntimeError('private provider body')
+    error.status_code = status
+    gen, client, _ = generator(error=error)
+    with pytest.raises(ResourceError) as caught:
+        gen.generate('lexicon', ResourceGenerationRequest(**REQUEST))
+    assert caught.value.details['retryable'] is retryable
+    assert caught.value.details['generation_stage'] == 'generation'
+    assert 'private' not in json.dumps(caught.value.details)
+    assert client.chat.completions.create.call_count == 1
+
+
+def test_invalid_generation_can_be_corrected_by_caller_but_never_self_regenerates():
+    gen, client, factory = generator({'title': '缺少主题'})
+    with pytest.raises(ResourceError) as caught:
+        gen.generate('lexicon', ResourceGenerationRequest(**REQUEST))
+    assert caught.value.details['generation_stage'] == 'validation'
+    assert caught.value.details['retryable']
+    assert not caught.value.details['resource_created']
+    assert client.chat.completions.create.call_count == 1
+    assert factory.call_args.kwargs['max_retries'] == 0

@@ -6,6 +6,9 @@ __pycache__/
 .venv-qwen3-asr/
 .venv-*/
 data/
+!backend/investigation_creation/data/
+backend/investigation_creation/data/*
+!backend/investigation_creation/data/geographic_catalog.json
 outputs/
 node_modules/
 local_models/

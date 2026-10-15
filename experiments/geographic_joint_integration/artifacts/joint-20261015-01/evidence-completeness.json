@@ -1,0 +1,15 @@
+{
+  "final_junit_groups": {
+    "tests.test_geographic_joint_adapter": 16,
+    "tests.test_geographic_joint_execution": 38,
+    "tests.test_geographic_joint_risk": 16,
+    "tests.test_geographic_execution_plan_guards": 17
+  },
+  "adapter_contract_cases": 16,
+  "risk_contract_cases": 16,
+  "execution_case_files": 39,
+  "execution_case_note": "38 tests plus independent child replay",
+  "unexpected_guard_attempts": 0,
+  "expected_outer_guard_events": 2,
+  "all_tested_source_hashes_match": true
+}

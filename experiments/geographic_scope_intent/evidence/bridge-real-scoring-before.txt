@@ -1,0 +1,16 @@
+
+==================================== ERRORS ====================================
+_____ ERROR collecting tests/test_geographic_scope_bridge_real_scoring.py ______
+ImportError while importing test module '/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/tests/test_geographic_scope_bridge_real_scoring.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_geographic_scope_bridge_real_scoring.py:6: in <module>
+    from experiments.geographic_scope_intent.bridge_real_scoring import score_bridge, aggregate_bridge
+E   ModuleNotFoundError: No module named 'experiments.geographic_scope_intent.bridge_real_scoring'
+=========================== short test summary info ============================
+ERROR tests/test_geographic_scope_bridge_real_scoring.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.08s

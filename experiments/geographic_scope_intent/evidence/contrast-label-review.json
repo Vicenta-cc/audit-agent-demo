@@ -1,0 +1,501 @@
+{
+  "kind": "offline_implementation_annotation_review",
+  "reviewed_at_utc": "2026-10-14T10:32:42.784954+00:00",
+  "reviewer": "contrast_intent implementation agent",
+  "human_acceptance": false,
+  "tested_model_calls": 0,
+  "model_outputs_inspected": false,
+  "annotation_changes": 0,
+  "stage_note": "Frozen gold was implemented and locally source-validated before calls. This is an independent source-only recheck during execution; no model outputs consulted and no frozen annotation edited.",
+  "source_sha256": {
+    "cases.jsonl": "f79a162ea5e54b27471cbe045d698573ada51e52950d1239e920b3731d0fda38",
+    "contrast_labels.json": "e426c53ac26e0e906e975ea60cd3a35f4942b1fc7ebbe18ca5405d3a7b52d258"
+  },
+  "counts": {
+    "cases": 18,
+    "intent_actions": {
+      "set": 7,
+      "clear": 1,
+      "keep": 8,
+      "no_task": 1,
+      "clarify": 1
+    },
+    "workflow_states": {
+      "ready": 14,
+      "not_applicable": 2,
+      "defer": 2
+    },
+    "critical_negatives": 10,
+    "draft_set_denominator": 5,
+    "intent_set_denominator": 7
+  },
+  "defer_to_set_cases": [
+    "defer-missing-all",
+    "adoption-temp-first"
+  ],
+  "caveats": [
+    "workflow_state=ready means synthetic resource availability/adoption prerequisites, not independent approval of actual rule/lexicon semantic fitness. User-request coverage concerns must be reported separately from geography recognition.",
+    "city-kelamayi asks broad negative public opinion while fixture lexicon/rules mainly concern wage disputes; a reasonable coverage clarification is not itself geography misunderstanding.",
+    "province-xinjiang and nationwide cases reuse a lexicon whose name includes 克拉玛依; geographic coverage/resource fitness concerns must not change the user intent label or be treated as proof the target was not understood.",
+    "keep for nationwide tasks with no existing scope denotes no geography mutation; clear is reserved for explicit cancellation of an existing scope.",
+    "Default local_first_with_supplement is the frozen experiment recommendation when exclusion is absent, not an assertion the user independently named that strategy.",
+    "Urumqi intent matching is sidecar-only; this review does not expand the experiment region fixture or authorize deferred draft creation."
+  ],
+  "blocking_annotation_concerns": [],
+  "rows": [
+    {
+      "case_id": "city-kelamayi",
+      "user_text": "用已发布综合舆情规则和欠薪词库，在抖音调查克拉玛依最近的负面舆情。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "用已发布综合舆情规则和欠薪词库，在抖音调查克拉玛依最近的负面舆情。",
+        "source_evidence_span": "调查克拉玛依最近的负面舆情",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "rationale": "用户直接要求在抖音调查克拉玛依最近的负面舆情；地名限定本次调查内容，不是账号来源或资源名称。没有拒绝补充，采用冻结默认策略。",
+      "source_binding": {
+        "ok": true,
+        "code": "SOURCE_VERIFIED",
+        "message_id": "conversation-city-kelamayi-t1-user-10",
+        "sequence": 10,
+        "application_turn": 1,
+        "source_application_turn": 1,
+        "source_quote": "用已发布综合舆情规则和欠薪词库，在抖音调查克拉玛依最近的负面舆情。"
+      },
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "province-xinjiang",
+      "user_text": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "set",
+        "target_text": "新疆",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。",
+        "source_evidence_span": "查新疆欠薪",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "rationale": "用户明确说查新疆欠薪；省级地域清楚，不缩成词库名称中的克拉玛依，也不因缺少城市而澄清。没有拒绝补充，采用默认策略。",
+      "source_binding": {
+        "ok": true,
+        "code": "SOURCE_VERIFIED",
+        "message_id": "conversation-province-xinjiang-t1-user-10",
+        "sequence": 10,
+        "application_turn": 1,
+        "source_application_turn": 1,
+        "source_quote": "使用现有规则词库，查新疆欠薪，在抖音做调查。"
+      },
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "only-kelamayi",
+      "user_text": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_only",
+        "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。",
+        "source_evidence_span": "只要克拉玛依，不要其他地区",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "rationale": "只要克拉玛依、不要其他地区同时给出目标和排除补充；应 set 克拉玛依并使用 local_only。",
+      "source_binding": {
+        "ok": true,
+        "code": "SOURCE_VERIFIED",
+        "message_id": "conversation-only-kelamayi-t1-user-10",
+        "sequence": 10,
+        "application_turn": 1,
+        "source_application_turn": 1,
+        "source_quote": "只要克拉玛依，不要其他地区；采用现有规则词库在抖音查。"
+      },
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "change-daqing",
+      "user_text": "改查大庆，规则和词库保持现在的。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "set",
+        "target_text": "大庆",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "改查大庆，规则和词库保持现在的。",
+        "source_evidence_span": "改查大庆",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "rationale": "当前模拟草案限定克拉玛依，用户改查大庆；必须改变地域而保留其他资源，默认允许补充。",
+      "source_binding": {
+        "ok": true,
+        "code": "SOURCE_VERIFIED",
+        "message_id": "conversation-change-daqing-t1-user-10",
+        "sequence": 10,
+        "application_turn": 1,
+        "source_application_turn": 1,
+        "source_quote": "改查大庆，规则和词库保持现在的。"
+      },
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "clear-unlimited",
+      "user_text": "不限制地区了，其他设置不变。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "clear",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": "不限制地区了，其他设置不变。",
+        "source_evidence_span": "不限制地区了",
+        "workflow_state": "ready",
+        "old_label": "clear",
+        "critical_negative": false
+      },
+      "rationale": "当前模拟草案已有地域，用户明确不限制地区；应 clear，并保留其他配置。",
+      "source_binding": {
+        "ok": true,
+        "code": "SOURCE_VERIFIED",
+        "message_id": "conversation-clear-unlimited-t1-user-10",
+        "sequence": 10,
+        "application_turn": 1,
+        "source_application_turn": 1,
+        "source_quote": "不限制地区了，其他设置不变。"
+      },
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "keep-title",
+      "user_text": "只把标题改为十月欠薪专项。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "rationale": "用户只修改标题；没有更改、取消或重新设定地域，不应将原地域重写为 set，也不应清除。",
+      "source_binding": null,
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "keep-rules",
+      "user_text": "换用刚发布的综合舆情规则，范围还是原来的。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "rationale": "用户修改规则并明确范围还是原来的；应 keep 原成都范围，不重设地域。",
+      "source_binding": null,
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "user_text": "这个账号作者来自克拉玛依，请使用现有综合规则调查他，账号 https://www.douyin.com/user/fixture-user。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "rationale": "克拉玛依描述账号作者背景；调查对象是指定账号，不代表内容事件地域范围，应 keep（当前无范围）。",
+      "source_binding": null,
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "named-resource",
+      "user_text": "用“克拉玛依欠薪词库”做全国欠薪调查，规则用现有综合规则。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "rationale": "克拉玛依仅出现在词库名称，用户明确全国调查；当前无范围，keep，不应因词库名称 set 克拉玛依。",
+      "source_binding": null,
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "pasted-post",
+      "user_text": "转发：克拉玛依某工厂拖欠工资，网友说已经三个月了。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "no_task",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "not_applicable",
+        "old_label": "no_task",
+        "critical_negative": true
+      },
+      "rationale": "仅转发帖子事实，未要求调查任务；应 no_task，不因正文地名建立地域或草案。",
+      "source_binding": null,
+      "resources_ready_fixture": true,
+      "workflow_rationale": "当前无调查请求，或须先消除地名歧义，不要求地域草案落地。"
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "user_text": "采用现有规则词库，查朝阳的负面舆情。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "clarify",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "not_applicable",
+        "old_label": "clarify",
+        "critical_negative": true
+      },
+      "rationale": "用户有调查要求，但朝阳行政地名多义且上下文未消歧；应 clarify，不能猜北京市朝阳区或辽宁朝阳市。",
+      "source_binding": null,
+      "resources_ready_fixture": true,
+      "workflow_rationale": "当前无调查请求，或须先消除地名歧义，不要求地域草案落地。"
+    },
+    {
+      "case_id": "defer-missing-all",
+      "user_text": "调查乌鲁木齐欠薪，先帮我准备规则和词库。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "set",
+        "target_text": "乌鲁木齐",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "调查乌鲁木齐欠薪，先帮我准备规则和词库。",
+        "source_evidence_span": "调查乌鲁木齐欠薪",
+        "workflow_state": "defer",
+        "old_label": "defer",
+        "critical_negative": false
+      },
+      "rationale": "用户明确调查乌鲁木齐欠薪；地域语义为 set。资源完全缺失只限制草案操作，所以流程 defer，不把 defer 混作无地域意图。",
+      "source_binding": {
+        "ok": true,
+        "code": "SOURCE_VERIFIED",
+        "message_id": "conversation-defer-missing-all-t1-user-10",
+        "sequence": 10,
+        "application_turn": 1,
+        "source_application_turn": 1,
+        "source_quote": "调查乌鲁木齐欠薪，先帮我准备规则和词库。"
+      },
+      "resources_ready_fixture": false,
+      "workflow_rationale": "资源未齐备，不能建立占位草案；地域意图仍可独立捕获。"
+    },
+    {
+      "case_id": "denied-city",
+      "user_text": "不是要查克拉玛依，我是拿它举例；现在请做全国调查，用现有规则词库。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "rationale": "用户明确否定调查克拉玛依并说该城市仅为举例；当前无范围且要全国调查，应 keep，不能从否定句设置克拉玛依。",
+      "source_binding": null,
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "user_text": "不要取消地域，原来的克拉玛依保留，只改标题为复查。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "rationale": "用户明确不要取消地域、保留克拉玛依；不是 clear，也不是新的地域变化，标题调整应 keep。",
+      "source_binding": null,
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "user_text": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+        "source_evidence_span": "调查克拉玛依的欠薪舆情",
+        "workflow_state": "defer",
+        "old_label": "defer",
+        "critical_negative": false
+      },
+      "rationale": "用户明确本任务调查克拉玛依欠薪，并先准备资源；地域语义 set，草案操作 defer。",
+      "source_binding": {
+        "ok": true,
+        "code": "SOURCE_VERIFIED",
+        "message_id": "conversation-adoption-temp-t1-user-10",
+        "sequence": 10,
+        "application_turn": 1,
+        "source_application_turn": 1,
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。"
+      },
+      "resources_ready_fixture": false,
+      "workflow_rationale": "资源未齐备，不能建立占位草案；地域意图仍可独立捕获。"
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "user_text": "采用你刚展示的这套规则和词库，创建抖音调查草案。",
+      "task_round": 1,
+      "history_user_messages": [
+        {
+          "message_id": "conversation-adoption-temp-t1-user-10",
+          "task_round": 1,
+          "content": "调查克拉玛依的欠薪舆情，先准备调查资源。"
+        }
+      ],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "set",
+        "target_text": "克拉玛依",
+        "selection_policy": "local_first_with_supplement",
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。",
+        "source_evidence_span": "调查克拉玛依的欠薪舆情",
+        "workflow_state": "ready",
+        "old_label": "set",
+        "critical_negative": false
+      },
+      "rationale": "当前用户明确采用同任务此前展示的同版本资源并创建草案；同任务历史用户明确地域克拉玛依，所以应 set，并引用首轮用户原话而非助手资源正文。",
+      "source_binding": {
+        "ok": true,
+        "code": "SOURCE_VERIFIED",
+        "message_id": "conversation-adoption-temp-t1-user-10",
+        "sequence": 10,
+        "application_turn": 3,
+        "source_application_turn": 1,
+        "source_quote": "调查克拉玛依的欠薪舆情，先准备调查资源。"
+      },
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "new-round-national",
+      "user_text": "独立新一轮调查全国欠薪，用现有规则词库，不复制旧草案。",
+      "task_round": 2,
+      "history_user_messages": [
+        {
+          "message_id": "conversation-round-national-t1-user-10",
+          "task_round": 1,
+          "content": "上轮调查克拉玛依欠薪。"
+        }
+      ],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "rationale": "用户要求独立新轮全国调查、不复制旧草案；旧轮克拉玛依不属于当前任务地域，当前无范围应 keep。",
+      "source_binding": null,
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    },
+    {
+      "case_id": "assistant-city",
+      "user_text": "请做全国调查，采用现有规则词库。",
+      "task_round": 1,
+      "history_user_messages": [],
+      "label_review": "confirmed_without_change",
+      "frozen_label": {
+        "action": "keep",
+        "target_text": null,
+        "selection_policy": null,
+        "source_quote": null,
+        "source_evidence_span": null,
+        "workflow_state": "ready",
+        "old_label": "keep",
+        "critical_negative": true
+      },
+      "rationale": "克拉玛依只由助手建议，用户当前要求全国调查；助手建议不是用户地域限定，应 keep。",
+      "source_binding": null,
+      "resources_ready_fixture": true,
+      "workflow_rationale": "资源及采用 fixture 允许模拟草案操作；这不保证资源语义覆盖适配。"
+    }
+  ]
+}

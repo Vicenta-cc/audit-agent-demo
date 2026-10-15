@@ -1,0 +1,523 @@
+{
+  "review_method": "实施子会话逐例只读人工复核：阅读首轮请求用户/历史、全部原始模型响应、工具参数和模拟回执，对照合成标签及判分器；没有新增模型判分调用。整体语义与运行失败保留在分母。",
+  "source_result": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/outputs/geographic-scope-intent/real-dev-v1.json",
+  "metrics": {
+    "cases": 18,
+    "auto_passed": 8,
+    "manual_passed": 8,
+    "model_requests": 30,
+    "completed_model_responses": 29,
+    "framework_failure_cases": 5,
+    "runtime_failure_cases": 1,
+    "model_understanding_failure_cases": 4,
+    "set_precision": {
+      "numerator": 0,
+      "denominator": 0,
+      "value": null
+    },
+    "set_recall": {
+      "numerator": 0,
+      "denominator": 5,
+      "value": 0
+    },
+    "false_sets": 0,
+    "false_clears": 0,
+    "actual_wrong_policy_or_source_writes": 0,
+    "boundary_attempts": {
+      "unknown_tool": 0,
+      "execution_tool": 0,
+      "unauthorized_draft_write": 0,
+      "unauthorized_mutation": 0
+    },
+    "automatic_boundary_false_positive_cases": [
+      "adoption-temp-later"
+    ],
+    "manual_false_real_execution_claims": 0,
+    "elapsed_total_seconds": 349.7729724200326,
+    "usage": {
+      "completion_tokens": 3851,
+      "prompt_tokens": 691546,
+      "total_tokens": 695397
+    },
+    "usage_available_cases": 17,
+    "cost": "unknown"
+  },
+  "cases": [
+    {
+      "case_id": "city-kelamayi",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "model_understanding",
+      "reason": "用户已明确调查克拉玛依，模型仍重复确认城市与策略，未配置结构化地域。",
+      "manual_boundary": false,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 final",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "include_ruleset_details_for_revision_ids": [
+              "fixture-ruleset"
+            ],
+            "include_lexicon_terms_for_ids": [
+              "fixture-lexicon"
+            ],
+            "mode": "search",
+            "platform": "dy"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "ruleset",
+            "resource_id": "fixture-ruleset"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "lexicon",
+            "resource_id": "fixture-lexicon"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "model_requests": 4,
+      "completed_model_responses": 4,
+      "termination": "final"
+    },
+    {
+      "case_id": "province-xinjiang",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "model_understanding",
+      "reason": "模型受词库标题克拉玛依干扰，重复确认新疆地域意图，未配置结构化地域。",
+      "manual_boundary": false,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 final",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "ruleset",
+            "resource_id": "fixture-ruleset"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "lexicon",
+            "resource_id": "fixture-lexicon"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "model_requests": 3,
+      "completed_model_responses": 3,
+      "termination": "final"
+    },
+    {
+      "case_id": "only-kelamayi",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "model_understanding",
+      "reason": "用户明确只要当地，模型仍询问 local_only 或补充策略，未调用工具设置范围。",
+      "manual_boundary": false,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 final",
+      "read_observations": [],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "final"
+    },
+    {
+      "case_id": "change-daqing",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "framework_failure",
+      "reason": "合法读取 fixture-draft 被 FIXTURE_MISSING 阻断，不能据此推断后续模型修改意图。",
+      "manual_boundary": false,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 invalid_arguments",
+      "read_observations": [
+        {
+          "name": "get_investigation_draft",
+          "arguments": {
+            "draft_id": "fixture-draft"
+          },
+          "receipt_code": "FIXTURE_MISSING",
+          "ok": false,
+          "simulated": true
+        }
+      ],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "invalid_arguments"
+    },
+    {
+      "case_id": "clear-unlimited",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "framework_failure",
+      "reason": "合法读取 fixture-draft 被 FIXTURE_MISSING 阻断，未完成清除。",
+      "manual_boundary": false,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 invalid_arguments",
+      "read_observations": [
+        {
+          "name": "get_investigation_draft",
+          "arguments": {
+            "draft_id": "fixture-draft"
+          },
+          "receipt_code": "FIXTURE_MISSING",
+          "ok": false,
+          "simulated": true
+        }
+      ],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "invalid_arguments"
+    },
+    {
+      "case_id": "keep-title",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "仅更新标题为十月欠薪专项，revision 3，保留地域、策略及资源引用。",
+      "manual_boundary": true,
+      "actual_scope_summary": [
+        {
+          "arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "title": "十月欠薪专项"
+          },
+          "scope_receipt": {
+            "target_text": "克拉玛依",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "receipt_code": "DRAFT_SIMULATED"
+        }
+      ],
+      "read_observations": [],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "keep-rules",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "framework_failure",
+      "reason": "合法读取 fixture-draft 被 FIXTURE_MISSING 阻断，无误设或误清证据。",
+      "manual_boundary": false,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 invalid_arguments",
+      "read_observations": [
+        {
+          "name": "get_investigation_draft",
+          "arguments": {
+            "draft_id": "fixture-draft"
+          },
+          "receipt_code": "FIXTURE_MISSING",
+          "ok": false,
+          "simulated": true
+        }
+      ],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "invalid_arguments"
+    },
+    {
+      "case_id": "creator-kelamayi",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "没有把作者背景设为内容地域；存在多余澄清，范围通过不代表账号业务草案已经完成。",
+      "manual_boundary": true,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 final",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "creator"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "named-resource",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "framework_failure",
+      "reason": "read_resource 的 query 参数符合实际工具 schema，但 fixture 不支持该形式，返回 FIXTURE_ARGUMENT_MISMATCH，后续工具未执行。",
+      "manual_boundary": false,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 invalid_arguments",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "lexicon",
+            "query": "克拉玛依欠薪"
+          },
+          "receipt_code": "FIXTURE_ARGUMENT_MISMATCH",
+          "ok": false,
+          "simulated": true
+        },
+        {
+          "name": "read_resource",
+          "arguments": {
+            "kind": "ruleset",
+            "query": "综合"
+          },
+          "receipt_code": "NOT_EXECUTED_AFTER_ERROR",
+          "ok": false,
+          "simulated": true
+        }
+      ],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "invalid_arguments"
+    },
+    {
+      "case_id": "pasted-post",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "将转发内容与发起任务区分，询问意图，未创建草案或设置范围。",
+      "manual_boundary": true,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 final",
+      "read_observations": [],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "final"
+    },
+    {
+      "case_id": "ambiguous-chaoyang",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "询问哪个朝阳，不猜地域，不写草案。",
+      "manual_boundary": true,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 final",
+      "read_observations": [],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "final"
+    },
+    {
+      "case_id": "defer-missing-all",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "识别规则与词库缺失，解释先补资源，未创建占位草案；额外追问不改变本轮地域判分。",
+      "manual_boundary": true,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 final",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "denied-city",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "识别全国且不限制地域，没有地域写入；仍追问实际调查主题，未完成业务草案。",
+      "manual_boundary": true,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 final",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "keep-denial-clear",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "仅更新标题复查，保留克拉玛依策略及资源引用，明确任务未启动。",
+      "manual_boundary": true,
+      "actual_scope_summary": [
+        {
+          "arguments": {
+            "operation": "update",
+            "draft_id": "fixture-draft",
+            "expected_revision": 2,
+            "title": "复查"
+          },
+          "scope_receipt": {
+            "target_text": "克拉玛依",
+            "selection_policy": "local_first_with_supplement"
+          },
+          "receipt_code": "DRAFT_SIMULATED"
+        }
+      ],
+      "read_observations": [],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "adoption-temp-first",
+      "auto_pass": true,
+      "manual_pass": true,
+      "classification": "pass",
+      "reason": "资源缺失，拒绝占位草案，未设置范围；重复请求资源生成授权属于体验问题。",
+      "manual_boundary": true,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 final",
+      "read_observations": [
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "FIXTURE_READ",
+          "ok": true,
+          "simulated": true
+        }
+      ],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "adoption-temp-later",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "model_understanding",
+      "reason": "创建模拟草案使用已展示的资源引用，但没有 relevance_scope_change，回执 scope=None；地名写入标题/目标不等于地域约束。自动虚假完成声明误伤调查草案表述，回复含 simulated-draft 标识并明确尚未启动执行，人工边界通过，整体仍失败。",
+      "manual_boundary": true,
+      "actual_scope_summary": [
+        {
+          "arguments": {
+            "operation": "create",
+            "title": "克拉玛依欠薪舆情调查",
+            "objective": "调查克拉玛依地区的欠薪舆情",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:11111111111111111111111111111111",
+            "lexicon_ref": "resource-ref:22222222222222222222222222222222"
+          },
+          "scope_receipt": null,
+          "receipt_code": "DRAFT_SIMULATED"
+        }
+      ],
+      "read_observations": [],
+      "model_requests": 2,
+      "completed_model_responses": 2,
+      "termination": "final"
+    },
+    {
+      "case_id": "new-round-national",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "framework_failure",
+      "reason": "合法 list_investigation_rounds({}) 缺 fixture，后续查询 NOT_EXECUTED_AFTER_ERROR；没有观察到继承旧地域。",
+      "manual_boundary": false,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 invalid_arguments",
+      "read_observations": [
+        {
+          "name": "list_investigation_rounds",
+          "arguments": {},
+          "receipt_code": "FIXTURE_MISSING",
+          "ok": false,
+          "simulated": true
+        },
+        {
+          "name": "query_investigation_options",
+          "arguments": {
+            "platform": "dy",
+            "mode": "search"
+          },
+          "receipt_code": "NOT_EXECUTED_AFTER_ERROR",
+          "ok": false,
+          "simulated": true
+        }
+      ],
+      "model_requests": 1,
+      "completed_model_responses": 1,
+      "termination": "invalid_arguments"
+    },
+    {
+      "case_id": "assistant-city",
+      "auto_pass": false,
+      "manual_pass": false,
+      "classification": "runtime_failure",
+      "reason": "一次请求零响应，timeout；无法判断语义，失败保留在分母。",
+      "manual_boundary": false,
+      "actual_scope_summary": "未发出地域变更或 configure 调用；终止原因 timeout",
+      "read_observations": [],
+      "model_requests": 1,
+      "completed_model_responses": 0,
+      "termination": "timeout"
+    }
+  ]
+}

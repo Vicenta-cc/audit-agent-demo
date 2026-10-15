@@ -1,0 +1,473 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="4" time="3.477" timestamp="2026-10-15T21:14:31.898245+08:00" hostname="ZBMac-M59XV50W0H"><testcase classname="tests.test_geographic_execution_plan_risk" name="test_actual_resolver_capture_sqlite_restore_preserves_risk[False-False]" time="0.617"><failure message="AssertionError: {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}&#10;assert False&#10; +  where False = all(dict_values([False, True, False, True, False, True, True]))&#10; +    where dict_values([False, True, False, True, False, True, True]) = &lt;built-in method values of dict object at 0x10fe7a4c0&gt;()&#10; +      where &lt;built-in method values of dict object at 0x10fe7a4c0&gt; = {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}.values">creation_stack = {'principals': &lt;test_investigation_creation_conversation.MutablePrincipalProvider object at 0x10e291be0&gt;, 'resource_db...2ba0&gt;, 'app_service': &lt;backend.investigation_creation.service.InvestigationCreationService object at 0x10e290560&gt;, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p2-captured-risk-abfvvenj/pytest-of-ext.wanghongtao6/pytest-0/test_actual_resolver_capture_s0')
+formal_rules = False, formal_lexicon = False
+
+    @pytest.mark.parametrize("formal_rules", [False, True])
+    @pytest.mark.parametrize("formal_lexicon", [False, True])
+    def test_actual_resolver_capture_sqlite_restore_preserves_risk(
+            creation_stack, content, tmp_path, formal_rules, formal_lexicon):
+        """The actual P1 resolver, not a hand-authored rules fixture, is the oracle.
+    
+        In particular rule_snapshot is a rule identity, whereas the running P1
+        pipeline passes prompt_profile_snapshot to TriageEngine.score(). Artificial
+        model responses cannot conceal a different request because complete request
+        strings and kwargs are compared independently of the resulting scores.
+        """
+        from backend.audit_agent.config import settings
+        from experiments.geographic_execution_plan.storage import save_plan, load_plan
+        from test_geographic_execution_plan import make_authority, build, expected
+        from test_geographic_draft_configuration import no_effects
+        from test_unified_draft_configuration import P
+    
+        stack = creation_stack
+        authority = make_authority(stack, content, formal_rules=formal_rules,
+            formal_lexicon=formal_lexicon)
+        app = stack["app_service"]
+        draft = app.get_draft(authority["identity"]["draft_id"], principal=P)
+        with app.resource_service.confirmation_fence() as conn:
+            resolution = app.resource_service.resolve_confirmation(draft, principal=P,
+                resource_connection=conn)
+        execution = resolution.execution
+        # Mirror _run_triaged_search's real category and rules selection. No frozen
+        # adapter is involved in the baseline's terms_for() or group association.
+        library_ids = [str(value).strip() for value in execution.library_ids if str(value).strip()]
+        category = str(execution.lexicon_category or "").strip()
+        categories = library_ids or ([category] if category else [])
+        rules = dict(execution.prompt_profile_snapshot)
+        assert rules["audit_goal"]
+        assert "审核目标：" in triage.TriageEngine._rules_text(rules)
+        baseline_client = ManualClient()
+        baseline = triage.TriageEngine(app.resource_service.lexicon_store, baseline_client,
+            model=settings.triage_model, max_comments=settings.triage_candidate_comments,
+            request_timeout=settings.triage_request_timeout,
+            max_followers_personal_verified=settings.triage_max_followers_personal_verified,
+            max_followers_unverified=settings.triage_max_followers_unverified,
+            official_verify_patterns=settings.triage_official_verify_patterns,
+            **{name: getattr(settings, "triage_" + name) for name in
+                ("rule_score_high", "rule_score_medium", "rule_score_low", "rule_score_cap")})
+        terms = baseline.terms_for(categories)
+        assert bool(terms) is formal_lexicon
+        if not formal_lexicon:
+            assert execution.library_ids == categories == [] and terms == []
+        queries = list(resolution.resolved_search_terms)
+        assert queries
+        title = "克拉玛依市 维吾尔族文化 维族文化 文化讨论 包过 欠薪"
+        contexts = [dict(content_key="dy:same", rank=rank, search_keyword=queries[0],
+            item={"title": title, "source_keyword": queries[0]}, comments=comments)
+            for rank, comments in [(1, [{"comment_id":"a", "content":"维吾尔族文化 文化讨论"}]),
+                (9, [{"comment_id":"a", "content":"维吾尔族文化 文化讨论"}]), (7, [])]]
+        for key, extra in [("official", {"enterprise_verify_reason":"公安官方"}),
+                ("followers", {"follower_count": settings.triage_max_followers_unverified + 1}),
+                ("personal", {"custom_verify":"认证", "follower_count": settings.triage_max_followers_personal_verified + 1})]:
+            contexts.append(dict(content_key=key, rank=len(contexts)+1, search_keyword=queries[0],
+                item={"title":title, "source_keyword":queries[0], **extra}, comments=[]))
+    
+        def evaluate(engine, selected_rules):
+            selected_terms = engine.terms_for(categories)
+            scores = [engine.score(row["content_key"], row["rank"], row["item"], row["comments"],
+                selected_terms, search_keyword=row["search_keyword"], rules=selected_rules) for row in contexts]
+            return dict(terms=[asdict(term) for term in selected_terms],
+                search_groups=engine._search_groups_for(selected_terms),
+                results=[asdict(score) for score in scores],
+                risk_order=[asdict(score) for score in triage.rank_candidates(scores)])
+    
+        original = evaluate(baseline, rules)
+        plan = build(authority)
+        plan_digest = save_plan(tmp_path / "captured-risk.sqlite3", plan)
+        restored = load_plan(tmp_path / "captured-risk.sqlite3", expected_identity=expected(authority),
+            expected_digest=plan_digest)
+        restored_risk = restored.inputs.risk_inputs
+        restored_client = ManualClient()
+        after = evaluate(build_frozen_engine(restored_risk, restored_client), restored_risk["rules"])
+        checks = dict(identical_rules=restored_risk["rules"] == rules,
+            identical_queries=[q.query for q in restored.execution_queries] == queries,
+            identical_complete_requests=restored_client.calls == baseline_client.calls,
+            original_audit_goal_in_every_request=all(rules["audit_goal"] in call[0] for call in baseline_client.calls),
+            restored_audit_goal_in_every_request=all(rules["audit_goal"] in call[0] for call in restored_client.calls),
+            identical_terms_and_groups=after["terms"] == original["terms"] and after["search_groups"] == original["search_groups"],
+            identical_results_and_order=after == original)
+        case = ("formal" if formal_rules else "temporary") + "-rules_" + ("formal" if formal_lexicon else "temporary") + "-lexicon"
+        if output := os.environ.get("GEO_OFFLINE_OUTPUT"):
+            evidence_path = Path(output) / "captured-risk-comparison.json"
+            evidence = json.loads(evidence_path.read_text()) if evidence_path.exists() else dict(
+                schema_version="p2-captured-risk-comparison-v1", fixture_only=True,
+                model_semantic_quality_evidence=False, cases={})
+            evidence["cases"][case] = dict(expected_identity=expected(authority), plan_digest=plan_digest,
+                baseline_rules_source="actual resolution.execution.prompt_profile_snapshot",
+                baseline_lexicon_source="actual resource_service.lexicon_store via TriageEngine.terms_for",
+                queries=queries, categories=categories, contexts=contexts, original_rules=rules,
+                frozen_risk_inputs=restored_risk,
+                before=dict(**original, requests=baseline_client.calls, manual_responses=baseline_client.responses),
+                after=dict(**after, requests=restored_client.calls, manual_responses=restored_client.responses),
+                assertions=checks)
+            evidence_path.write_text(json.dumps(evidence, ensure_ascii=False, sort_keys=True,
+                indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        no_effects(stack)
+        assert len(baseline_client.calls) == len(restored_client.calls) == 3
+        assert [row["band"] for row in original["results"][-3:]] == ["discard"] * 3
+        if formal_lexicon:
+            assert any("不计分" in row["reason"] for row in original["results"][:3])
+            assert any(row["hits"] for row in original["results"][:3])
+&gt;       assert all(checks.values()), checks
+E       AssertionError: {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}
+E       assert False
+E        +  where False = all(dict_values([False, True, False, True, False, True, True]))
+E        +    where dict_values([False, True, False, True, False, True, True]) = &lt;built-in method values of dict object at 0x10fe7a4c0&gt;()
+E        +      where &lt;built-in method values of dict object at 0x10fe7a4c0&gt; = {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}.values
+
+tests/test_geographic_execution_plan_risk.py:291: AssertionError</failure></testcase><testcase classname="tests.test_geographic_execution_plan_risk" name="test_actual_resolver_capture_sqlite_restore_preserves_risk[False-True]" time="0.640"><failure message="AssertionError: {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}&#10;assert False&#10; +  where False = all(dict_values([False, True, False, True, False, True, True]))&#10; +    where dict_values([False, True, False, True, False, True, True]) = &lt;built-in method values of dict object at 0x10e220480&gt;()&#10; +      where &lt;built-in method values of dict object at 0x10e220480&gt; = {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}.values">creation_stack = {'principals': &lt;test_investigation_creation_conversation.MutablePrincipalProvider object at 0x10e420830&gt;, 'resource_db...ba70&gt;, 'app_service': &lt;backend.investigation_creation.service.InvestigationCreationService object at 0x10e419160&gt;, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p2-captured-risk-abfvvenj/pytest-of-ext.wanghongtao6/pytest-0/test_actual_resolver_capture_s1')
+formal_rules = True, formal_lexicon = False
+
+    @pytest.mark.parametrize("formal_rules", [False, True])
+    @pytest.mark.parametrize("formal_lexicon", [False, True])
+    def test_actual_resolver_capture_sqlite_restore_preserves_risk(
+            creation_stack, content, tmp_path, formal_rules, formal_lexicon):
+        """The actual P1 resolver, not a hand-authored rules fixture, is the oracle.
+    
+        In particular rule_snapshot is a rule identity, whereas the running P1
+        pipeline passes prompt_profile_snapshot to TriageEngine.score(). Artificial
+        model responses cannot conceal a different request because complete request
+        strings and kwargs are compared independently of the resulting scores.
+        """
+        from backend.audit_agent.config import settings
+        from experiments.geographic_execution_plan.storage import save_plan, load_plan
+        from test_geographic_execution_plan import make_authority, build, expected
+        from test_geographic_draft_configuration import no_effects
+        from test_unified_draft_configuration import P
+    
+        stack = creation_stack
+        authority = make_authority(stack, content, formal_rules=formal_rules,
+            formal_lexicon=formal_lexicon)
+        app = stack["app_service"]
+        draft = app.get_draft(authority["identity"]["draft_id"], principal=P)
+        with app.resource_service.confirmation_fence() as conn:
+            resolution = app.resource_service.resolve_confirmation(draft, principal=P,
+                resource_connection=conn)
+        execution = resolution.execution
+        # Mirror _run_triaged_search's real category and rules selection. No frozen
+        # adapter is involved in the baseline's terms_for() or group association.
+        library_ids = [str(value).strip() for value in execution.library_ids if str(value).strip()]
+        category = str(execution.lexicon_category or "").strip()
+        categories = library_ids or ([category] if category else [])
+        rules = dict(execution.prompt_profile_snapshot)
+        assert rules["audit_goal"]
+        assert "审核目标：" in triage.TriageEngine._rules_text(rules)
+        baseline_client = ManualClient()
+        baseline = triage.TriageEngine(app.resource_service.lexicon_store, baseline_client,
+            model=settings.triage_model, max_comments=settings.triage_candidate_comments,
+            request_timeout=settings.triage_request_timeout,
+            max_followers_personal_verified=settings.triage_max_followers_personal_verified,
+            max_followers_unverified=settings.triage_max_followers_unverified,
+            official_verify_patterns=settings.triage_official_verify_patterns,
+            **{name: getattr(settings, "triage_" + name) for name in
+                ("rule_score_high", "rule_score_medium", "rule_score_low", "rule_score_cap")})
+        terms = baseline.terms_for(categories)
+        assert bool(terms) is formal_lexicon
+        if not formal_lexicon:
+            assert execution.library_ids == categories == [] and terms == []
+        queries = list(resolution.resolved_search_terms)
+        assert queries
+        title = "克拉玛依市 维吾尔族文化 维族文化 文化讨论 包过 欠薪"
+        contexts = [dict(content_key="dy:same", rank=rank, search_keyword=queries[0],
+            item={"title": title, "source_keyword": queries[0]}, comments=comments)
+            for rank, comments in [(1, [{"comment_id":"a", "content":"维吾尔族文化 文化讨论"}]),
+                (9, [{"comment_id":"a", "content":"维吾尔族文化 文化讨论"}]), (7, [])]]
+        for key, extra in [("official", {"enterprise_verify_reason":"公安官方"}),
+                ("followers", {"follower_count": settings.triage_max_followers_unverified + 1}),
+                ("personal", {"custom_verify":"认证", "follower_count": settings.triage_max_followers_personal_verified + 1})]:
+            contexts.append(dict(content_key=key, rank=len(contexts)+1, search_keyword=queries[0],
+                item={"title":title, "source_keyword":queries[0], **extra}, comments=[]))
+    
+        def evaluate(engine, selected_rules):
+            selected_terms = engine.terms_for(categories)
+            scores = [engine.score(row["content_key"], row["rank"], row["item"], row["comments"],
+                selected_terms, search_keyword=row["search_keyword"], rules=selected_rules) for row in contexts]
+            return dict(terms=[asdict(term) for term in selected_terms],
+                search_groups=engine._search_groups_for(selected_terms),
+                results=[asdict(score) for score in scores],
+                risk_order=[asdict(score) for score in triage.rank_candidates(scores)])
+    
+        original = evaluate(baseline, rules)
+        plan = build(authority)
+        plan_digest = save_plan(tmp_path / "captured-risk.sqlite3", plan)
+        restored = load_plan(tmp_path / "captured-risk.sqlite3", expected_identity=expected(authority),
+            expected_digest=plan_digest)
+        restored_risk = restored.inputs.risk_inputs
+        restored_client = ManualClient()
+        after = evaluate(build_frozen_engine(restored_risk, restored_client), restored_risk["rules"])
+        checks = dict(identical_rules=restored_risk["rules"] == rules,
+            identical_queries=[q.query for q in restored.execution_queries] == queries,
+            identical_complete_requests=restored_client.calls == baseline_client.calls,
+            original_audit_goal_in_every_request=all(rules["audit_goal"] in call[0] for call in baseline_client.calls),
+            restored_audit_goal_in_every_request=all(rules["audit_goal"] in call[0] for call in restored_client.calls),
+            identical_terms_and_groups=after["terms"] == original["terms"] and after["search_groups"] == original["search_groups"],
+            identical_results_and_order=after == original)
+        case = ("formal" if formal_rules else "temporary") + "-rules_" + ("formal" if formal_lexicon else "temporary") + "-lexicon"
+        if output := os.environ.get("GEO_OFFLINE_OUTPUT"):
+            evidence_path = Path(output) / "captured-risk-comparison.json"
+            evidence = json.loads(evidence_path.read_text()) if evidence_path.exists() else dict(
+                schema_version="p2-captured-risk-comparison-v1", fixture_only=True,
+                model_semantic_quality_evidence=False, cases={})
+            evidence["cases"][case] = dict(expected_identity=expected(authority), plan_digest=plan_digest,
+                baseline_rules_source="actual resolution.execution.prompt_profile_snapshot",
+                baseline_lexicon_source="actual resource_service.lexicon_store via TriageEngine.terms_for",
+                queries=queries, categories=categories, contexts=contexts, original_rules=rules,
+                frozen_risk_inputs=restored_risk,
+                before=dict(**original, requests=baseline_client.calls, manual_responses=baseline_client.responses),
+                after=dict(**after, requests=restored_client.calls, manual_responses=restored_client.responses),
+                assertions=checks)
+            evidence_path.write_text(json.dumps(evidence, ensure_ascii=False, sort_keys=True,
+                indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        no_effects(stack)
+        assert len(baseline_client.calls) == len(restored_client.calls) == 3
+        assert [row["band"] for row in original["results"][-3:]] == ["discard"] * 3
+        if formal_lexicon:
+            assert any("不计分" in row["reason"] for row in original["results"][:3])
+            assert any(row["hits"] for row in original["results"][:3])
+&gt;       assert all(checks.values()), checks
+E       AssertionError: {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}
+E       assert False
+E        +  where False = all(dict_values([False, True, False, True, False, True, True]))
+E        +    where dict_values([False, True, False, True, False, True, True]) = &lt;built-in method values of dict object at 0x10e220480&gt;()
+E        +      where &lt;built-in method values of dict object at 0x10e220480&gt; = {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}.values
+
+tests/test_geographic_execution_plan_risk.py:291: AssertionError</failure></testcase><testcase classname="tests.test_geographic_execution_plan_risk" name="test_actual_resolver_capture_sqlite_restore_preserves_risk[True-False]" time="0.663"><failure message="AssertionError: {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}&#10;assert False&#10; +  where False = all(dict_values([False, True, False, True, False, True, True]))&#10; +    where dict_values([False, True, False, True, False, True, True]) = &lt;built-in method values of dict object at 0x10e48b1c0&gt;()&#10; +      where &lt;built-in method values of dict object at 0x10e48b1c0&gt; = {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}.values">creation_stack = {'principals': &lt;test_investigation_creation_conversation.MutablePrincipalProvider object at 0x10fbeb200&gt;, 'resource_db...cc50&gt;, 'app_service': &lt;backend.investigation_creation.service.InvestigationCreationService object at 0x10e36ddf0&gt;, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p2-captured-risk-abfvvenj/pytest-of-ext.wanghongtao6/pytest-0/test_actual_resolver_capture_s2')
+formal_rules = False, formal_lexicon = True
+
+    @pytest.mark.parametrize("formal_rules", [False, True])
+    @pytest.mark.parametrize("formal_lexicon", [False, True])
+    def test_actual_resolver_capture_sqlite_restore_preserves_risk(
+            creation_stack, content, tmp_path, formal_rules, formal_lexicon):
+        """The actual P1 resolver, not a hand-authored rules fixture, is the oracle.
+    
+        In particular rule_snapshot is a rule identity, whereas the running P1
+        pipeline passes prompt_profile_snapshot to TriageEngine.score(). Artificial
+        model responses cannot conceal a different request because complete request
+        strings and kwargs are compared independently of the resulting scores.
+        """
+        from backend.audit_agent.config import settings
+        from experiments.geographic_execution_plan.storage import save_plan, load_plan
+        from test_geographic_execution_plan import make_authority, build, expected
+        from test_geographic_draft_configuration import no_effects
+        from test_unified_draft_configuration import P
+    
+        stack = creation_stack
+        authority = make_authority(stack, content, formal_rules=formal_rules,
+            formal_lexicon=formal_lexicon)
+        app = stack["app_service"]
+        draft = app.get_draft(authority["identity"]["draft_id"], principal=P)
+        with app.resource_service.confirmation_fence() as conn:
+            resolution = app.resource_service.resolve_confirmation(draft, principal=P,
+                resource_connection=conn)
+        execution = resolution.execution
+        # Mirror _run_triaged_search's real category and rules selection. No frozen
+        # adapter is involved in the baseline's terms_for() or group association.
+        library_ids = [str(value).strip() for value in execution.library_ids if str(value).strip()]
+        category = str(execution.lexicon_category or "").strip()
+        categories = library_ids or ([category] if category else [])
+        rules = dict(execution.prompt_profile_snapshot)
+        assert rules["audit_goal"]
+        assert "审核目标：" in triage.TriageEngine._rules_text(rules)
+        baseline_client = ManualClient()
+        baseline = triage.TriageEngine(app.resource_service.lexicon_store, baseline_client,
+            model=settings.triage_model, max_comments=settings.triage_candidate_comments,
+            request_timeout=settings.triage_request_timeout,
+            max_followers_personal_verified=settings.triage_max_followers_personal_verified,
+            max_followers_unverified=settings.triage_max_followers_unverified,
+            official_verify_patterns=settings.triage_official_verify_patterns,
+            **{name: getattr(settings, "triage_" + name) for name in
+                ("rule_score_high", "rule_score_medium", "rule_score_low", "rule_score_cap")})
+        terms = baseline.terms_for(categories)
+        assert bool(terms) is formal_lexicon
+        if not formal_lexicon:
+            assert execution.library_ids == categories == [] and terms == []
+        queries = list(resolution.resolved_search_terms)
+        assert queries
+        title = "克拉玛依市 维吾尔族文化 维族文化 文化讨论 包过 欠薪"
+        contexts = [dict(content_key="dy:same", rank=rank, search_keyword=queries[0],
+            item={"title": title, "source_keyword": queries[0]}, comments=comments)
+            for rank, comments in [(1, [{"comment_id":"a", "content":"维吾尔族文化 文化讨论"}]),
+                (9, [{"comment_id":"a", "content":"维吾尔族文化 文化讨论"}]), (7, [])]]
+        for key, extra in [("official", {"enterprise_verify_reason":"公安官方"}),
+                ("followers", {"follower_count": settings.triage_max_followers_unverified + 1}),
+                ("personal", {"custom_verify":"认证", "follower_count": settings.triage_max_followers_personal_verified + 1})]:
+            contexts.append(dict(content_key=key, rank=len(contexts)+1, search_keyword=queries[0],
+                item={"title":title, "source_keyword":queries[0], **extra}, comments=[]))
+    
+        def evaluate(engine, selected_rules):
+            selected_terms = engine.terms_for(categories)
+            scores = [engine.score(row["content_key"], row["rank"], row["item"], row["comments"],
+                selected_terms, search_keyword=row["search_keyword"], rules=selected_rules) for row in contexts]
+            return dict(terms=[asdict(term) for term in selected_terms],
+                search_groups=engine._search_groups_for(selected_terms),
+                results=[asdict(score) for score in scores],
+                risk_order=[asdict(score) for score in triage.rank_candidates(scores)])
+    
+        original = evaluate(baseline, rules)
+        plan = build(authority)
+        plan_digest = save_plan(tmp_path / "captured-risk.sqlite3", plan)
+        restored = load_plan(tmp_path / "captured-risk.sqlite3", expected_identity=expected(authority),
+            expected_digest=plan_digest)
+        restored_risk = restored.inputs.risk_inputs
+        restored_client = ManualClient()
+        after = evaluate(build_frozen_engine(restored_risk, restored_client), restored_risk["rules"])
+        checks = dict(identical_rules=restored_risk["rules"] == rules,
+            identical_queries=[q.query for q in restored.execution_queries] == queries,
+            identical_complete_requests=restored_client.calls == baseline_client.calls,
+            original_audit_goal_in_every_request=all(rules["audit_goal"] in call[0] for call in baseline_client.calls),
+            restored_audit_goal_in_every_request=all(rules["audit_goal"] in call[0] for call in restored_client.calls),
+            identical_terms_and_groups=after["terms"] == original["terms"] and after["search_groups"] == original["search_groups"],
+            identical_results_and_order=after == original)
+        case = ("formal" if formal_rules else "temporary") + "-rules_" + ("formal" if formal_lexicon else "temporary") + "-lexicon"
+        if output := os.environ.get("GEO_OFFLINE_OUTPUT"):
+            evidence_path = Path(output) / "captured-risk-comparison.json"
+            evidence = json.loads(evidence_path.read_text()) if evidence_path.exists() else dict(
+                schema_version="p2-captured-risk-comparison-v1", fixture_only=True,
+                model_semantic_quality_evidence=False, cases={})
+            evidence["cases"][case] = dict(expected_identity=expected(authority), plan_digest=plan_digest,
+                baseline_rules_source="actual resolution.execution.prompt_profile_snapshot",
+                baseline_lexicon_source="actual resource_service.lexicon_store via TriageEngine.terms_for",
+                queries=queries, categories=categories, contexts=contexts, original_rules=rules,
+                frozen_risk_inputs=restored_risk,
+                before=dict(**original, requests=baseline_client.calls, manual_responses=baseline_client.responses),
+                after=dict(**after, requests=restored_client.calls, manual_responses=restored_client.responses),
+                assertions=checks)
+            evidence_path.write_text(json.dumps(evidence, ensure_ascii=False, sort_keys=True,
+                indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        no_effects(stack)
+        assert len(baseline_client.calls) == len(restored_client.calls) == 3
+        assert [row["band"] for row in original["results"][-3:]] == ["discard"] * 3
+        if formal_lexicon:
+            assert any("不计分" in row["reason"] for row in original["results"][:3])
+            assert any(row["hits"] for row in original["results"][:3])
+&gt;       assert all(checks.values()), checks
+E       AssertionError: {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}
+E       assert False
+E        +  where False = all(dict_values([False, True, False, True, False, True, True]))
+E        +    where dict_values([False, True, False, True, False, True, True]) = &lt;built-in method values of dict object at 0x10e48b1c0&gt;()
+E        +      where &lt;built-in method values of dict object at 0x10e48b1c0&gt; = {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}.values
+
+tests/test_geographic_execution_plan_risk.py:291: AssertionError</failure></testcase><testcase classname="tests.test_geographic_execution_plan_risk" name="test_actual_resolver_capture_sqlite_restore_preserves_risk[True-True]" time="0.638"><failure message="AssertionError: {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}&#10;assert False&#10; +  where False = all(dict_values([False, True, False, True, False, True, True]))&#10; +    where dict_values([False, True, False, True, False, True, True]) = &lt;built-in method values of dict object at 0x10fe19c40&gt;()&#10; +      where &lt;built-in method values of dict object at 0x10fe19c40&gt; = {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}.values">creation_stack = {'principals': &lt;test_investigation_creation_conversation.MutablePrincipalProvider object at 0x10f6f5b50&gt;, 'resource_db...0620&gt;, 'app_service': &lt;backend.investigation_creation.service.InvestigationCreationService object at 0x10f797950&gt;, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p2-captured-risk-abfvvenj/pytest-of-ext.wanghongtao6/pytest-0/test_actual_resolver_capture_s3')
+formal_rules = True, formal_lexicon = True
+
+    @pytest.mark.parametrize("formal_rules", [False, True])
+    @pytest.mark.parametrize("formal_lexicon", [False, True])
+    def test_actual_resolver_capture_sqlite_restore_preserves_risk(
+            creation_stack, content, tmp_path, formal_rules, formal_lexicon):
+        """The actual P1 resolver, not a hand-authored rules fixture, is the oracle.
+    
+        In particular rule_snapshot is a rule identity, whereas the running P1
+        pipeline passes prompt_profile_snapshot to TriageEngine.score(). Artificial
+        model responses cannot conceal a different request because complete request
+        strings and kwargs are compared independently of the resulting scores.
+        """
+        from backend.audit_agent.config import settings
+        from experiments.geographic_execution_plan.storage import save_plan, load_plan
+        from test_geographic_execution_plan import make_authority, build, expected
+        from test_geographic_draft_configuration import no_effects
+        from test_unified_draft_configuration import P
+    
+        stack = creation_stack
+        authority = make_authority(stack, content, formal_rules=formal_rules,
+            formal_lexicon=formal_lexicon)
+        app = stack["app_service"]
+        draft = app.get_draft(authority["identity"]["draft_id"], principal=P)
+        with app.resource_service.confirmation_fence() as conn:
+            resolution = app.resource_service.resolve_confirmation(draft, principal=P,
+                resource_connection=conn)
+        execution = resolution.execution
+        # Mirror _run_triaged_search's real category and rules selection. No frozen
+        # adapter is involved in the baseline's terms_for() or group association.
+        library_ids = [str(value).strip() for value in execution.library_ids if str(value).strip()]
+        category = str(execution.lexicon_category or "").strip()
+        categories = library_ids or ([category] if category else [])
+        rules = dict(execution.prompt_profile_snapshot)
+        assert rules["audit_goal"]
+        assert "审核目标：" in triage.TriageEngine._rules_text(rules)
+        baseline_client = ManualClient()
+        baseline = triage.TriageEngine(app.resource_service.lexicon_store, baseline_client,
+            model=settings.triage_model, max_comments=settings.triage_candidate_comments,
+            request_timeout=settings.triage_request_timeout,
+            max_followers_personal_verified=settings.triage_max_followers_personal_verified,
+            max_followers_unverified=settings.triage_max_followers_unverified,
+            official_verify_patterns=settings.triage_official_verify_patterns,
+            **{name: getattr(settings, "triage_" + name) for name in
+                ("rule_score_high", "rule_score_medium", "rule_score_low", "rule_score_cap")})
+        terms = baseline.terms_for(categories)
+        assert bool(terms) is formal_lexicon
+        if not formal_lexicon:
+            assert execution.library_ids == categories == [] and terms == []
+        queries = list(resolution.resolved_search_terms)
+        assert queries
+        title = "克拉玛依市 维吾尔族文化 维族文化 文化讨论 包过 欠薪"
+        contexts = [dict(content_key="dy:same", rank=rank, search_keyword=queries[0],
+            item={"title": title, "source_keyword": queries[0]}, comments=comments)
+            for rank, comments in [(1, [{"comment_id":"a", "content":"维吾尔族文化 文化讨论"}]),
+                (9, [{"comment_id":"a", "content":"维吾尔族文化 文化讨论"}]), (7, [])]]
+        for key, extra in [("official", {"enterprise_verify_reason":"公安官方"}),
+                ("followers", {"follower_count": settings.triage_max_followers_unverified + 1}),
+                ("personal", {"custom_verify":"认证", "follower_count": settings.triage_max_followers_personal_verified + 1})]:
+            contexts.append(dict(content_key=key, rank=len(contexts)+1, search_keyword=queries[0],
+                item={"title":title, "source_keyword":queries[0], **extra}, comments=[]))
+    
+        def evaluate(engine, selected_rules):
+            selected_terms = engine.terms_for(categories)
+            scores = [engine.score(row["content_key"], row["rank"], row["item"], row["comments"],
+                selected_terms, search_keyword=row["search_keyword"], rules=selected_rules) for row in contexts]
+            return dict(terms=[asdict(term) for term in selected_terms],
+                search_groups=engine._search_groups_for(selected_terms),
+                results=[asdict(score) for score in scores],
+                risk_order=[asdict(score) for score in triage.rank_candidates(scores)])
+    
+        original = evaluate(baseline, rules)
+        plan = build(authority)
+        plan_digest = save_plan(tmp_path / "captured-risk.sqlite3", plan)
+        restored = load_plan(tmp_path / "captured-risk.sqlite3", expected_identity=expected(authority),
+            expected_digest=plan_digest)
+        restored_risk = restored.inputs.risk_inputs
+        restored_client = ManualClient()
+        after = evaluate(build_frozen_engine(restored_risk, restored_client), restored_risk["rules"])
+        checks = dict(identical_rules=restored_risk["rules"] == rules,
+            identical_queries=[q.query for q in restored.execution_queries] == queries,
+            identical_complete_requests=restored_client.calls == baseline_client.calls,
+            original_audit_goal_in_every_request=all(rules["audit_goal"] in call[0] for call in baseline_client.calls),
+            restored_audit_goal_in_every_request=all(rules["audit_goal"] in call[0] for call in restored_client.calls),
+            identical_terms_and_groups=after["terms"] == original["terms"] and after["search_groups"] == original["search_groups"],
+            identical_results_and_order=after == original)
+        case = ("formal" if formal_rules else "temporary") + "-rules_" + ("formal" if formal_lexicon else "temporary") + "-lexicon"
+        if output := os.environ.get("GEO_OFFLINE_OUTPUT"):
+            evidence_path = Path(output) / "captured-risk-comparison.json"
+            evidence = json.loads(evidence_path.read_text()) if evidence_path.exists() else dict(
+                schema_version="p2-captured-risk-comparison-v1", fixture_only=True,
+                model_semantic_quality_evidence=False, cases={})
+            evidence["cases"][case] = dict(expected_identity=expected(authority), plan_digest=plan_digest,
+                baseline_rules_source="actual resolution.execution.prompt_profile_snapshot",
+                baseline_lexicon_source="actual resource_service.lexicon_store via TriageEngine.terms_for",
+                queries=queries, categories=categories, contexts=contexts, original_rules=rules,
+                frozen_risk_inputs=restored_risk,
+                before=dict(**original, requests=baseline_client.calls, manual_responses=baseline_client.responses),
+                after=dict(**after, requests=restored_client.calls, manual_responses=restored_client.responses),
+                assertions=checks)
+            evidence_path.write_text(json.dumps(evidence, ensure_ascii=False, sort_keys=True,
+                indent=2, allow_nan=False) + "\n", encoding="utf-8")
+        no_effects(stack)
+        assert len(baseline_client.calls) == len(restored_client.calls) == 3
+        assert [row["band"] for row in original["results"][-3:]] == ["discard"] * 3
+        if formal_lexicon:
+            assert any("不计分" in row["reason"] for row in original["results"][:3])
+            assert any(row["hits"] for row in original["results"][:3])
+&gt;       assert all(checks.values()), checks
+E       AssertionError: {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}
+E       assert False
+E        +  where False = all(dict_values([False, True, False, True, False, True, True]))
+E        +    where dict_values([False, True, False, True, False, True, True]) = &lt;built-in method values of dict object at 0x10fe19c40&gt;()
+E        +      where &lt;built-in method values of dict object at 0x10fe19c40&gt; = {'identical_rules': False, 'identical_queries': True, 'identical_complete_requests': False, 'original_audit_goal_in_every_request': True, ...}.values
+
+tests/test_geographic_execution_plan_risk.py:291: AssertionError</failure></testcase></testsuite></testsuites>

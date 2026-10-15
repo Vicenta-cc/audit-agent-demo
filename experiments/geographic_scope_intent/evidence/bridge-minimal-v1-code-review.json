@@ -1,0 +1,22 @@
+{
+  "kind": "independent_read_only_candidate_and_wrapper_review",
+  "reviewer": "/root/minimal_bridge_review",
+  "issues_found": 2,
+  "issues_closed": 2,
+  "closed_regressions": [
+    "existing same set plus title-only update -> not_applied",
+    "explicit clear then title update -> applied"
+  ],
+  "final_required_changes": 0,
+  "original_frozen_files_unchanged": 31,
+  "new_candidate_tests": 45,
+  "targeted_total": 435,
+  "regression_total": 25,
+  "real_calls_by_reviewer": 0,
+  "source_and_wrapper_compile": true,
+  "gate_default_blocks_real": true,
+  "no_tool_choice_or_scope_injection": true,
+  "wrapper_per_group_request_limit": 72,
+  "four_group_limit": 288,
+  "semantic_improvement_not_proved_by_code_review": true
+}

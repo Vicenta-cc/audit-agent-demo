@@ -1,0 +1,25 @@
+usage: build_geographic_catalog.py [-h] --manifest MANIFEST --report REPORT
+                                   [--output OUTPUT]
+
+Build a catalog offline from an explicitly reviewed full official JSON
+publication. Manifest: {version, source, benchmark?}. Each source names
+separate raw_file / raw_sha256 and normalized_file / normalized_sha256,
+official url, data_date, retrieved_date, version, full_table_evidence_url,
+coverage_review, and transform {id, version, implementation_sha256}. Supported
+built-ins preserve all records: identity_records_json accepts {records};
+extract_records_json extracts records from a JSON object with publication
+metadata. The SHA pins the backend transform implementation. No scripts are
+executed; HTML/PDF/XML remain unsupported. The source must be reviewed as a
+complete national table. A second source is optional and, when supplied, its
+exact province/prefecture identities are checked. A matching city count alone
+never proves a source complete. coverage_review must also document cross-level
+alias conflict review against the full official county table or other cited
+disambiguation evidence; a city-only list cannot establish global alias
+uniqueness. Synthetic fixtures only test this protocol and must never be
+supplied as official publications.
+
+options:
+  -h, --help           show this help message and exit
+  --manifest MANIFEST
+  --report REPORT
+  --output OUTPUT

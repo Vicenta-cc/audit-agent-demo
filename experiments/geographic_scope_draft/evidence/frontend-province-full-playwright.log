@@ -1,0 +1,532 @@
+
+> xhs-audit-agent-frontend-v2@0.1.0 test
+> playwright test --config=playwright.config.ts
+
+[WebServer] (node:359) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+
+Running 233 tests using 1 worker
+
+(node:364) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[1/233] tests/authBoundary.spec.ts:47:1 › login errors, successful login, logout clear data and password
+[2/233] tests/authBoundary.spec.ts:65:1 › expiry and revoked server session remove the mounted workspace
+[3/233] tests/authBoundary.spec.ts:74:1 › disabled by admin is detected on focus
+[4/233] tests/authBoundary.spec.ts:81:1 › login in another tab hides previous user's data; another browser context stays independent
+[5/233] tests/authBoundary.spec.ts:94:1 › ordinary user cannot render admin controls or load admin data
+[6/233] tests/authBoundary.spec.ts:103:1 › admin logout replaces the protected URL before showing login
+[7/233] tests/authBoundary.spec.ts:112:1 › ordinary login from an admin URL enters the investigation workspace
+[8/233] tests/authBoundary.spec.ts:120:1 › admin manages app accounts without crawler sharing controls
+[9/233] tests/authBoundary.spec.ts:147:1 › quota explains resource waiting and finds the exact workspace by run ID
+[10/233] tests/authBoundary.spec.ts:156:1 › unavailable config fails closed; explicit disabled mode retains legacy workspace
+[11/233] tests/authBoundary.spec.ts:164:1 › stream authentication loss closes the stream and gates the workspace immediately
+[12/233] tests/authBoundary.spec.ts:185:1 › production app gates all workspace reads until login and keeps the existing workspace shell
+[13/233] tests/authBoundary.spec.ts:203:1 › authenticated empty or failed workspace reads never fall back to built-in demo sessions
+[14/233] tests/authBoundary.spec.ts:216:1 › administrator stays signed in without an account deadline
+[15/233] tests/authBoundary.spec.ts:236:1 › admin quota is unlimited and retains active task navigation
+[16/233] tests/authBoundary.spec.ts:246:1 › fresh login from an unavailable workspace returns home without a deletion warning
+[17/233] tests/authBoundary.spec.ts:260:3 › fresh login preserves the requested workspace on status 200
+[18/233] tests/authBoundary.spec.ts:260:3 › fresh login preserves the requested workspace on status 503
+[19/233] tests/authState.spec.ts:31:1 › first authenticated user and account switches clear user-owned caches
+[20/233] tests/authState.spec.ts:54:1 › logout or authentication expiry clears CSRF and user caches
+[21/233] tests/authState.spec.ts:66:1 › duplicate task submissions share an intent and network retry reuses it
+[22/233] tests/authState.spec.ts:95:1 › late response bodies cannot restore a previous user's data or clear a new login
+[23/233] tests/blockedCollection.spec.ts:5:1 › blocked collection offers resume or explicit partial report, never cancellation
+[24/233] tests/blockedCollection.spec.ts:28:1 › no account blocks collection, but not report from existing results
+[25/233] tests/blockedCollection.spec.ts:37:1 › finish command keeps polling; stopped collection does not hide report generation
+[26/233] tests/crawlerAccounts.spec.ts:64:1 › maps exactly two real API accounts
+[27/233] tests/crawlerAccounts.spec.ts:75:1 › maps public pool summary without exposing account details through the summary
+[28/233] tests/crawlerAccounts.spec.ts:109:1 › admin public account creation sends the explicit access scope
+[29/233] tests/crawlerAccounts.spec.ts:133:1 › an empty API list remains empty and authoritative sources contain no account fallback
+[30/233] tests/crawlerAccounts.spec.ts:149:1 › list failures remain explicit for API errors and network errors
+[31/233] tests/crawlerAccounts.spec.ts:160:1 › create update and delete failures cannot mutate a local fallback
+[32/233] tests/crawlerAccounts.spec.ts:180:1 › login failures return no fabricated QR and cancellation failures stay explicit
+[33/233] tests/crawlerAccounts.spec.ts:190:1 › QR and every login status come only from API responses
+[34/233] tests/crawlerAccountsPage.spec.ts:27:1 › interactive login keeps owner token, scales pointer input, accepts text and cancels
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[35/233] tests/crawlerAccountsPage.spec.ts:88:1 › desktop page renders exactly two authoritative accounts and restores the Draft link
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:23 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[36/233] tests/crawlerAccountsPage.spec.ts:121:1 › ordinary user sees only private accounts plus shared pool capacity
+[WebServer] 4:10:24 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:24 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:24 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:24 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:24 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+  1) tests/crawlerAccountsPage.spec.ts:121:1 › ordinary user sees only private accounts plus shared pool capacity 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Alice 私有账号', { exact: true })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('Alice 私有账号', { exact: true })
+
+
+      139 |
+      140 |   await expect(page.getByRole("button", { name: "添加私有账号" })).toBeVisible();
+    > 141 |   await expect(page.getByText("Alice 私有账号", { exact: true })).toBeVisible();
+          |                                                               ^
+      142 |   await expect(page.getByLabel("公共账号池概况")).toContainText("公共账号总数3");
+      143 |   await expect(page.getByLabel("公共账号池概况")).toContainText("当前空闲1");
+      144 |   await expect(page.getByLabel("公共账号池概况")).toContainText("正在使用1");
+        at /Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/Audit_assistant/tests/crawlerAccountsPage.spec.ts:141:63
+
+    Error Context: ../../../../../../../tmp/xhs-m3-authoritative-playwright-results/crawlerAccountsPage-ordina-9a217-s-plus-shared-pool-capacity/error-context.md
+
+
+(node:746) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[37/233] tests/crawlerAccountsPage.spec.ts:149:1 › administrator switches between clearly separated public and private pools
+[WebServer] 4:10:30 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:30 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:30 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:30 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:30 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[38/233] tests/crawlerAccountsPage.spec.ts:174:1 › administrator can create a public pool account with explicit scope
+[WebServer] 4:10:31 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:31 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:31 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:31 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:31 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:32 PM [vite] http proxy error: /api/crawler-accounts/public-new/login-sessions
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[39/233] tests/crawlerAccountsPage.spec.ts:214:1 › empty response remains a real empty state
+[WebServer] 4:10:32 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:32 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:32 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:32 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:32 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[40/233] tests/crawlerAccountsPage.spec.ts:223:1 › API failure is explicit and retry reloads the authoritative list
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[41/233] tests/crawlerAccountsPage.spec.ts:244:1 › refresh failure clears the previously displayed accounts
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[42/233] tests/crawlerAccountsPage.spec.ts:266:1 › terminal login session in browser storage is never resumed
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:33 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[43/233] tests/crawlerAccountsPage.spec.ts:328:1 › scanned login session remains visible and continues polling
+[WebServer] 4:10:34 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:10:34 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:34 PM [vite] http proxy error: /api/historical-report-workspaces
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:34 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+[WebServer] 4:10:34 PM [vite] http proxy error: /api/investigation-workspaces?limit=50&offset=0
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[44/233] tests/deleteSessionDialog.spec.ts:3:1 › delete confirmation follows the blue workspace visual system
+[45/233] tests/evidenceTime.spec.ts:4:1 › frame positions preserve zero, numeric strings and hours
+[46/233] tests/evidenceTime.spec.ts:11:1 › missing frame time falls back to evidence or OCR context time
+[47/233] tests/evidenceTime.spec.ts:20:1 › invalid or absent times never become invented zero seconds
+[48/233] tests/evidenceTime.spec.ts:30:1 › content detail renders OCR timestamps and honest legacy fallback
+[49/233] tests/evidenceTime.spec.ts:86:1 › OCR playback button seeks the video; missing times have no button
+[50/233] tests/geographicScopeDisplay.spec.ts:74:1 › scope display handles canonical province, city, municipality, policies and omitted legacy fields
+[51/233] tests/geographicScopeDisplay.spec.ts:96:1 › pending latest requirement hides previously resolved target and server blockers remain readable
+[52/233] tests/geographicScopeDisplay.spec.ts:110:1 › workspace recovery retains pending and resolved projections without freezing blocked draft or polluting old snapshots
+[53/233] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render resolved scope read-only
+[54/233] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render province scope read-only
+[55/233] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render pending scope read-only
+[56/233] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render ambiguous scope read-only
+[57/233] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render local_only scope read-only
+[58/233] tests/geographicScopeDisplay.spec.ts:131:3 › original card and drawer render legacy scope read-only
+[59/233] tests/geographicScopeDisplay.spec.ts:210:3 › real service fixture resolved workspace restores into original card and drawer
+[60/233] tests/geographicScopeDisplay.spec.ts:210:3 › real service fixture pending workspace restores into original card and drawer
+[61/233] tests/geographicScopeDisplay.spec.ts:210:3 › real service national resolved workspace restores into original card and drawer
+[62/233] tests/geographicScopeDisplay.spec.ts:210:3 › real service national pending workspace restores into original card and drawer
+[63/233] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: resolved geography
+[64/233] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: pending geography
+[65/233] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: unsupported geographic mode
+[66/233] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: missing rule resource
+[67/233] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: missing recall resource
+[68/233] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: missing crawler account
+[69/233] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: unknown blocker
+[70/233] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: geographic code without geographic state
+[71/233] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: historical read-only card
+[72/233] tests/geographicScopeDisplay.spec.ts:289:3 › suggestion preview allows only geographic readiness blockers: missing platform
+[73/233] tests/historicalReportDemo.spec.ts:105:1 › historical report API uses only workspace-scoped public routes
+[74/233] tests/historicalReportDemo.spec.ts:143:1 › Display Timeline remains separate from the real report conversation
+[75/233] tests/historicalReportDemo.spec.ts:166:1 › both historical workspaces keep isolated real Assistant answer rendering
+[76/233] tests/historicalReportDemo.spec.ts:200:1 › refresh recovery marks the pending Turn without expanding storage
+[77/233] tests/historicalReportDemo.spec.ts:241:1 › sessionStorage persists exactly the three pending-turn recovery fields
+[78/233] tests/historicalReportPresentation.spec.tsx:15:1 › GFM tables render semantic table sections instead of pipe text
+[79/233] tests/historicalReportPresentation.spec.tsx:33:1 › headings, lists, quotes and code render safely without executing HTML
+[80/233] tests/historicalReportPresentation.spec.tsx:63:1 › display terminology is localized without mutating the underlying answer
+[81/233] tests/historicalReportPresentation.spec.tsx:98:1 › pending stages have stable Chinese live-region copy
+[82/233] tests/historicalReportPresentation.spec.tsx:114:1 › completed and error states do not retain the pending region
+[83/233] tests/historicalReportPresentation.spec.tsx:121:1 › manual images have bounded preview controls and report links retain their targets
+[84/233] tests/historicalReportPresentation.spec.tsx:136:1 › bold account bare URL before Chinese explanation preserves target and emphasis
+[85/233] tests/historicalReportPresentation.spec.tsx:147:1 › bold URL keeps Chinese query data while separating following explanation
+[86/233] tests/historicalReportPresentation.spec.tsx:154:1 › bare URL query and fragment retain legal Chinese punctuation and parameters
+[87/233] tests/historicalReportPresentation.spec.tsx:166:1 › explicit links, literal stars, and normal Chinese prose retain their boundaries
+[88/233] tests/investigationActivity.spec.tsx:34:1 › activity updates replace the matching public step without reordering it
+[89/233] tests/investigationActivity.spec.tsx:52:1 › a successful retry replaces an older failed card for the same public step
+[90/233] tests/investigationActivity.spec.tsx:82:1 › separately named option queries remain separate public steps
+[91/233] tests/investigationActivity.spec.tsx:102:1 › legacy duplicated option copy is clarified during workspace recovery
+[92/233] tests/investigationActivity.spec.tsx:123:1 › completed activity timeline is inserted immediately before the answer
+[93/233] tests/investigationActivity.spec.tsx:143:1 › activity timeline summary distinguishes active, successful and incomplete steps
+[94/233] tests/investigationActivity.spec.tsx:159:1 › answer deltas merge idempotently and a newer revision replaces the draft
+[95/233] tests/investigationActivity.spec.tsx:200:1 › active activity timeline is expanded, live and collapsible in the browser
+[96/233] tests/investigationActivity.spec.tsx:251:1 › creation pending labels stay neutral for greetings and ordinary questions
+[97/233] tests/investigationActivity.spec.tsx:265:1 › creation activity and answer draft grow in the same pending assistant card
+[98/233] tests/investigationCreation.spec.tsx:160:1 › temporary approval survives recovery and blocks execution
+[99/233] tests/investigationCreation.spec.tsx:177:1 › authoritative Proposal survives conversation recovery without prose sanitization
+[100/233] tests/investigationCreation.spec.tsx:196:3 › mixed Proposal preserves suggestion message identity and Draft behavior
+[101/233] tests/investigationCreation.spec.tsx:196:3 › mixed Proposal preserves confirmation message identity and Draft behavior
+[102/233] tests/investigationCreation.spec.tsx:312:1 › renders real Draft and ConfirmationPreview fields
+[103/233] tests/investigationCreation.spec.tsx:327:1 › reads the durable creation workspace and public messages
+[104/233] tests/investigationCreation.spec.tsx:364:1 › new investigation uses the backend workspace identity as the route identity
+[105/233] tests/investigationCreation.spec.tsx:382:1 › restores the real suggestion card from structured artifact without parsing assistant text
+[106/233] tests/investigationCreation.spec.tsx:405:1 › binds a recovered current public artifact to the last assistant message
+[107/233] tests/investigationCreation.spec.tsx:423:1 › replaces a legacy suggestion-null message artifact with the current projection
+[108/233] tests/investigationCreation.spec.tsx:450:1 › real analysis-plan drawer projects public resources without mock rule details
+[109/233] tests/investigationCreation.spec.tsx:463:1 › restores the final confirmation card and selected platform after refresh
+[110/233] tests/investigationCreation.spec.tsx:499:1 › restores both recovered suggestion and persisted confirmation artifacts
+[111/233] tests/investigationCreation.spec.tsx:540:1 › suggestion platform buttons are single-select and contain no Weibo candidate
+[112/233] tests/investigationCreation.spec.tsx:547:1 › restores a pending Turn without inventing a Draft or a replacement Turn
+[113/233] tests/investigationCreation.spec.tsx:579:1 › restores the same confirmed Run and published report version in one workspace
+[114/233] tests/investigationCreation.spec.tsx:595:1 › restores an audit-completed Run without claiming a generated report
+[115/233] tests/investigationCreation.spec.tsx:611:1 › restores report messages and a pending report Turn in the same workspace
+[116/233] tests/investigationCreation.spec.tsx:660:1 › restores only the latest running creation answer draft
+[117/233] tests/investigationCreation.spec.tsx:690:1 › workspace state API failures stay explicit and never produce a demo fallback
+[118/233] tests/investigationCreation.spec.tsx:705:1 › blockers disable confirmation and expose the management URL
+[119/233] tests/investigationCreation.spec.tsx:740:1 › creation diagnostics fail closed into user-facing copy
+[120/233] tests/investigationCreation.spec.tsx:754:1 › creator workspace recovery preserves the homepage URL and carries no search terms
+[121/233] tests/investigationCreation.spec.tsx:817:1 › Draft edits use expected_revision and preserve structured 409 errors
+[122/233] tests/investigationCreation.spec.tsx:839:1 › generate task configuration persists a real workspace confirmation-preview Turn
+[123/233] tests/investigationCreation.spec.tsx:881:1 › confirmation is explicit and reuses the caller's idempotency key
+[124/233] tests/investigationCreation.spec.tsx:900:1 › maps only real Run projection states, including parallel crawl and analysis
+[125/233] tests/investigationCreation.spec.tsx:938:1 › maps one real report post and its five-category Evidence without invented task output ids
+[126/233] tests/investigationCreation.spec.tsx:994:1 › analysis progress counts come only from Run task statistics
+[127/233] tests/investigationCreation.spec.tsx:1007:1 › analysis progress uses the planned post count until collection finishes
+[128/233] tests/investigationCreation.spec.tsx:1031:1 › analysis progress keeps the planned denominator while collection can still resume
+[129/233] tests/investigationCreation.spec.tsx:1066:1 › analysis progress on a cancelled run counts ingested posts but is never complete
+[130/233] tests/investigationCreation.spec.tsx:1074:1 › analysis progress shows the planned count before the job exists
+[131/233] tests/investigationCreation.spec.tsx:1081:1 › streamed audit results keep the planned denominator while collection runs
+[132/233] tests/investigationCreation.spec.tsx:1101:1 › run progress exposes only curated business counts and sanitizes provider failures
+[133/233] tests/investigationCreation.spec.tsx:1123:1 › empty crawl stays failed on workspace recovery and explains that no audit or report ran
+[134/233] tests/investigationCreation.spec.tsx:1134:1 › RUNNING records come directly from the current Job projection
+[135/233] tests/investigationCreation.spec.tsx:1134:1 › AUDIT_COMPLETED records come directly from the current Job projection
+[136/233] tests/investigationCreation.spec.tsx:1134:1 › INTERRUPTED records come directly from the current Job projection
+[137/233] tests/investigationCreation.spec.tsx:1181:1 › published M3 records fail closed when the ReportVersion has no structured report
+[138/233] tests/investigationCreation.spec.tsx:1196:1 › authoritative M3 progress is server-backed and reduced motion remains static
+[139/233] tests/investigationCreation.spec.tsx:1218:1 › published report questions use the workspace/run handoff without report_session_id
+[140/233] tests/investigationCreation.spec.tsx:1245:1 › published M3 report detail uses the Principal-scoped workspace/run route
+[141/233] tests/investigationCreation.spec.tsx:1278:1 › continuous workspace restores post-report resource turns after the report
+[142/233] tests/investigationCreation.spec.tsx:1294:3 › published workspace sends chat through report-only endpoint
+[143/233] tests/investigationCreation.spec.tsx:1294:3 › published workspace sends chat through continuous endpoint
+[144/233] tests/investigationCreation.spec.tsx:1328:1 › multi-round recovery keeps both runs, report targets and frozen draft cards in chronology
+[145/233] tests/investigationCreation.spec.tsx:1359:1 › new round run updates preserve older cards and an unsubmitted later draft
+[146/233] tests/investigationPresentation.spec.ts:43:1 › media download interruption explains recovery without blaming account login
+[147/233] tests/investigationPresentation.spec.ts:50:1 › creation presentation hides internal diagnostics and keeps real management navigation
+  2) tests/investigationPresentation.spec.ts:50:1 › creation presentation hides internal diagnostics and keeps real management navigation 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "当前配置暂时无法继续，请调整相关设置后重试。"
+    Received: "internal"
+
+      58 |   // Obsolete/unknown codes must keep internal diagnostics out of user-visible copy.
+      59 |   expect(formatConfirmationBlockerMessage("NO_PUBLISHED_AUDIT_POLICY", "internal"))
+    > 60 |     .toBe("当前配置暂时无法继续，请调整相关设置后重试。");
+         |      ^
+      61 |   expect(presentCreationAssistantContent(
+      62 |     "| 项目 | 内容 |\n|---|---|\n| Draft ID | investigation-draft:secret |"
+      63 |   )).toBe("当前操作暂时无法完成，请稍后重试。");
+        at /Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/Audit_assistant/tests/investigationPresentation.spec.ts:60:6
+
+    Error Context: ../../../../../../../tmp/xhs-m3-authoritative-playwright-results/investigationPresentation--b2666--real-management-navigation/error-context.md
+
+
+(node:1470) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+
+[148/233] tests/investigationPresentation.spec.ts:68:1 › run presentation exposes curated counts and sanitizes provider failures
+[149/233] tests/investigationPresentation.spec.ts:91:1 › M3 source provenance exposes the stored original post without accepting unsafe links
+[150/233] tests/investigationPresentation.spec.ts:116:1 › failed posts are separate from queued posts, including old payloads
+[151/233] tests/investigationPresentation.spec.ts:125:1 › browser initialization failure keeps the keyword pending without blaming login
+[152/233] tests/investigationStreamingLogic.spec.ts:4:1 › public stream events are accepted only for the requested Turn
+[153/233] tests/investigationTurnLifetime.spec.ts:35:1 › 240-second completion is delivered automatically with the existing status polling
+[154/233] tests/investigationTurnLifetime.spec.ts:55:1 › completion can still arrive over SSE after 180 seconds
+[155/233] tests/investigationTurnLifetime.spec.ts:70:1 › connection loss and temporary 503 recover the original receipt using GET only
+[156/233] tests/investigationTurnLifetime.spec.ts:93:3 › backend error terminates waiting after its own execution deadline
+[157/233] tests/investigationTurnLifetime.spec.ts:93:3 › backend interrupted terminates waiting after its own execution deadline
+[158/233] tests/investigationTurnLifetime.spec.ts:109:1 › leaving only stops observation; re-entering reads the original completed result
+[159/233] tests/investigationTurnLifetime.spec.ts:139:1 › native EventSource reconnects with the last event ID and delivers the original completion
+[160/233] tests/lexiconSearchSemantics.spec.ts:13:3 › lexicon selection: no_variants
+[161/233] tests/lexiconSearchSemantics.spec.ts:13:3 › lexicon selection: all_variants_disabled
+[162/233] tests/lexiconSearchSemantics.spec.ts:13:3 › lexicon selection: some_variants_enabled
+[163/233] tests/lexiconSearchSemantics.spec.ts:13:3 › lexicon selection: enabled_variants
+[164/233] tests/lexiconSearchSemantics.spec.ts:13:3 › lexicon selection: disabled_main
+[165/233] tests/lexiconSearchSemantics.spec.ts:13:3 › lexicon selection: no_enabled_groups
+[166/233] tests/lexiconSearchSemantics.spec.ts:25:1 › fallback does not accept blank terms or orphan variants
+[167/233] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding suggestion remains editable and cannot execute at 1280px
+[168/233] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding confirmation remains editable and cannot execute at 1280px
+[169/233] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding suggestion remains editable and cannot execute at 390px
+[170/233] tests/mixedProposalPresentation.spec.ts:61:5 › temporary binding confirmation remains editable and cannot execute at 390px
+[171/233] tests/mixedProposalPresentation.spec.ts:90:5 › Draft-only suggestion: first render, refresh and actions
+[172/233] tests/mixedProposalPresentation.spec.ts:90:5 › mixed suggestion: first render, refresh and actions
+[173/233] tests/mixedProposalPresentation.spec.ts:90:5 › Draft-only confirmation: first render, refresh and actions
+[174/233] tests/mixedProposalPresentation.spec.ts:90:5 › mixed confirmation: first render, refresh and actions
+[175/233] tests/mixedProposalPresentation.spec.ts:129:3 › binding failure fallback remains visible after recovery at 1280px
+[176/233] tests/mixedProposalPresentation.spec.ts:129:3 › binding failure fallback remains visible after recovery at 390px
+[177/233] tests/mixedProposalPresentation.spec.ts:143:3 › T5 ready temporary Confirm survives refresh at 390px
+[178/233] tests/mixedProposalPresentation.spec.ts:143:3 › T5 ready temporary Confirm survives refresh at 1440px
+[179/233] tests/partialAudit.spec.ts:4:1 › an incomplete post is not counted as no risk
+[180/233] tests/partialAudit.spec.ts:11:1 › audit page shows skipped ranges and retains comment warnings
+[181/233] tests/proposalPresentation.spec.ts:4:3 › Legacy proposal renders readable Markdown at 1280px
+[WebServer] 4:11:07 PM [vite] http proxy error: /api/auth/config
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:11:07 PM [vite] http proxy error: /api/auth/config
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:11:07 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[182/233] tests/proposalPresentation.spec.ts:4:3 › Legacy proposal renders readable Markdown at 390px
+[WebServer] 4:11:07 PM [vite] http proxy error: /api/auth/config
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:11:07 PM [vite] http proxy error: /api/auth/config
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[WebServer] 4:11:07 PM [vite] http proxy error: /api/me/task-quota
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[183/233] tests/reportCardMetrics.spec.ts:21:1 › decision metrics are colored by audit decision
+[184/233] tests/reportCardMetrics.spec.ts:30:1 › reports published with the older risk labels keep their colors
+[185/233] tests/resourceConversationPresentation.spec.ts:5:1 › resource availability tables preserve the generation consent question
+[186/233] tests/resourceConversationPresentation.spec.ts:10:1 › successful resource answers keep their content when metadata rows are present
+[187/233] tests/resourceConversationPresentation.spec.ts:19:1 › provider content rejection is distinguished from a storage failure
+[188/233] tests/resourceConversationPresentation.spec.ts:25:1 › resource read and save tables remain readable while internal diagnostics stay hidden
+[189/233] tests/resourceConversationPresentation.spec.ts:34:1 › internal runtime branding is never shown as the assistant identity
+[190/233] tests/resourceLibraryRoundtrip.spec.ts:22:1 › untouched editor roundtrip preserves every stored field
+[191/233] tests/resourceLibraryRoundtrip.spec.ts:26:1 › rename changes only name, retaining ordering, stages and source mappings
+[192/233] tests/resourceLibraryRoundtrip.spec.ts:30:1 › editing a rule and general exemption preserves their provenance
+[193/233] tests/resourceLibraryRoundtrip.spec.ts:39:1 › adding a rule leaves existing order values intact
+[194/233] tests/resourceLibraryRoundtrip.spec.ts:49:1 › intentional rule reorder survives saving and reload
+[195/233] tests/resourceLibraryRoundtrip.spec.ts:57:1 › new rule with empty optional editor notes uses its condition
+[196/233] tests/resourceLibraryRoundtrip.spec.ts:63:1 › deleting a rule preserves remaining stored order and metadata
+[197/233] tests/resourceLibraryRoundtrip.spec.ts:71:1 › opening a published rule and clicking save sends no mutation
+[198/233] tests/resourceMarkdownRendering.spec.tsx:7:1 › the reported save receipt keeps both resources and versions in a semantic table
+[199/233] tests/resourceMarkdownRendering.spec.tsx:26:1 › resource explanations retain conflict choices and remove implementation labels
+[200/233] tests/resourceMarkdownRendering.spec.tsx:45:1 › ordinary search term code blocks and escaped pipes survive metadata projection
+[201/233] tests/resourceMarkdownRendering.spec.tsx:54:1 › tables without outer pipes retain both rows and numeric alignment
+[202/233] tests/resourceMarkdownRendering.spec.tsx:63:1 › comment items separate author, audit label, verbatim text and source time
+[203/233] tests/resourceMarkdownRendering.spec.tsx:84:1 › published rule recommendation with a domain label remains visible
+[204/233] tests/resourceMarkdownRendering.spec.tsx:98:1 › readable answers retain source and detail links with exact destinations
+[205/233] tests/runtimeBoundary.spec.ts:4:1 › M3 proxy target rejects the legacy 8000 backend
+[206/233] tests/sessionResourceSelection.spec.ts:40:1 › explicit edit B and view A restore separately after reload; historical B cannot be edited
+[207/233] tests/sessionResourceSelection.spec.ts:60:1 › lost reply retry keeps the event and version; reads never resubmit
+[208/233] tests/sessionResourceSelection.spec.ts:73:1 › stale tab is not automatically retried or reported as selected
+[209/233] tests/sessionResourceSelection.spec.ts:82:1 › read failure is not an empty resource list and offers no mutation
+[210/233] tests/sessionResourceSelection.spec.ts:90:1 › clear is explicit and carries the latest slot event
+[211/233] tests/structuredReport.spec.ts:25:1 › an explicit stable ReportVersion resolves without creating report state
+[212/233] tests/structuredReport.spec.ts:38:1 › presentation details and appendix use only encoded stable refs
+[213/233] tests/structuredReport.spec.ts:77:1 › appendix header uses one compact count instead of duplicate statistics
+[214/233] tests/structuredReport.spec.ts:88:1 › formal report frontend keeps the revised public contract
+[215/233] tests/structuredReport.spec.ts:153:1 › published report renders pass, review and reject as separate server counts
+[216/233] tests/structuredReport.spec.ts:177:1 › current report shows five commenters and opens the full paged commenter drawer
+[217/233] tests/structuredReportVisual.spec.ts:60:1 › published R3.1 account overview keeps server tables and unified Drawer state
+[218/233] tests/structuredReportVisual.spec.ts:351:1 › published R3.1 report excludes dynamic commenters from print
+[219/233] tests/taskConfirmationCardLimits.spec.ts:5:3 › confirmation card limit wording for search tasks
+[220/233] tests/taskConfirmationCardLimits.spec.ts:5:3 › confirmation card limit wording for creator tasks
+[221/233] tests/taskLifecycle.spec.ts:5:1 › ending is distinct from paused and ended
+[222/233] tests/taskLifecycle.spec.ts:16:3 › queued without job task confirms end and waits for backend stop
+[223/233] tests/taskLifecycle.spec.ts:16:3 › paused task confirms end and waits for backend stop
+[224/233] tests/taskLifecycle.spec.ts:44:1 › paused task keeps polling after end, and stops only on settled terminal response
+[225/233] tests/taskLifecycle.spec.ts:53:1 › quota rejection does not masquerade as a changed draft
+[226/233] tests/taskLifecycle.spec.ts:62:1 › natural outcomes and user stops have distinct colors and controls
+[227/233] tests/taskLifecycle.spec.ts:97:1 › all-skipped triage run says no suspicious content instead of a pending report
+[228/233] tests/taskSettingsSearchSort.spec.ts:3:1 › task settings exposes and saves Douyin search sorting
+[WebServer] 4:11:14 PM [vite] http proxy error: /api/auth/config
+[WebServer] Error: connect ECONNREFUSED 127.0.0.1:8010
+[WebServer]     at TCPConnectWrap.afterConnect [as oncomplete] (node:net:2021:16)
+
+[229/233] tests/taskSuggestionKeywordEditing.spec.ts:3:1 › suggestion Draft opens the structured keyword drawer instead of editing inline
+[230/233] tests/taskSuggestionKeywordEditing.spec.ts:65:1 › started task explains that its search terms are frozen
+[231/233] tests/taskSuggestionKeywordEditing.spec.ts:121:1 › final Draft delegates keyword editing to the structured drawer
+[232/233] tests/taskSuggestionKeywordEditing.spec.ts:184:1 › structured keyword drawer prefers enabled variants and falls back to enabled main
+[233/233] tests/workspaceListIsolation.spec.ts:3:1 › broken workspace stays visible while other sessions open; refresh recovers after repair
+  2 failed
+    tests/crawlerAccountsPage.spec.ts:121:1 › ordinary user sees only private accounts plus shared pool capacity 
+    tests/investigationPresentation.spec.ts:50:1 › creation presentation hides internal diagnostics and keeps real management navigation 
+  2 skipped
+  229 passed (1.1m)

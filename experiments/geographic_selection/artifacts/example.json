@@ -1,0 +1,132 @@
+{
+  "validation_origin": "fixture",
+  "plan_digest": "c51f0792c2b3186f72455cbc4a794dae1790621a952c5090efee28edef13e18e",
+  "input_summary": [
+    {
+      "query_id": "A",
+      "band": "strong",
+      "score": 500,
+      "rank": 1,
+      "geo_tier": "province_unknown"
+    },
+    {
+      "query_id": "B",
+      "band": "weak",
+      "score": 400,
+      "rank": 1,
+      "geo_tier": "local"
+    },
+    {
+      "query_id": "C",
+      "band": "strong",
+      "score": 500,
+      "rank": 1,
+      "geo_tier": "local"
+    }
+  ],
+  "trace": [
+    {
+      "stage": "capture",
+      "query_id": "A"
+    },
+    {
+      "stage": "capture",
+      "query_id": "B"
+    },
+    {
+      "stage": "capture",
+      "query_id": "C"
+    },
+    {
+      "stage": "detail",
+      "query_id": "B",
+      "content_key": "b",
+      "tier": "local"
+    },
+    {
+      "stage": "deliver",
+      "query_id": "B",
+      "content_key": "b"
+    },
+    {
+      "stage": "detail",
+      "query_id": "C",
+      "content_key": "c",
+      "tier": "local"
+    },
+    {
+      "stage": "deliver",
+      "query_id": "C",
+      "content_key": "c"
+    }
+  ],
+  "result": {
+    "execution_id": "execution-fixture",
+    "plan_digest": "c51f0792c2b3186f72455cbc4a794dae1790621a952c5090efee28edef13e18e",
+    "validation_origin": "fixture",
+    "candidate_occurrences": 3,
+    "excluded_occurrences": 0,
+    "ineligible_occurrences": 0,
+    "geographic_pending_or_conflict": 0,
+    "reserved": 0,
+    "collected": 2,
+    "handed_off": 2,
+    "collected_not_delivered": 0,
+    "unfinished_queries": [],
+    "reasons": [
+      "task_success_limit"
+    ]
+  },
+  "database_path": "/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-demo-vapqx7_h/selection.sqlite",
+  "database_retained": false,
+  "event_revisions": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28
+  ],
+  "account_mapping": [
+    {
+      "query_id": "B",
+      "capture_account": "capture-fixture",
+      "detail_account": "detail-fixture"
+    },
+    {
+      "query_id": "C",
+      "capture_account": "capture-fixture",
+      "detail_account": "detail-fixture"
+    }
+  ],
+  "guard_metrics": {
+    "network_attempts": 0,
+    "process_attempts": 0,
+    "real_model_attempts": 0,
+    "crawler_launch_attempts": 0,
+    "forbidden_database_attempts": 0
+  }
+}

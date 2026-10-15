@@ -1,0 +1,1031 @@
+........................................................................ [  4%]
+....F....F.F..FF........................................................ [  8%]
+.............F......................FF.................................. [ 12%]
+........................................................................ [ 16%]
+........................................................................ [ 20%]
+...........................................FFFFFF..FFFF..F..F..F..F..F.. [ 24%]
+F..F..F..F..F..F..F..F..F..F..F.......F...........F.F................... [ 28%]
+.......F................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 40%]
+........................................................................ [ 45%]
+........................................................................ [ 49%]
+........................................................................ [ 53%]
+..................................................................... [ 57%]
+........................................................ [ 60%]
+........................................................................ [ 64%]
+........................................................................ [ 68%]
+......................................................................FF [ 72%]
+FF..............................................F....................... [ 76%]
+................................................... [ 79%]
+...................................................................... [ 83%]
+............................................................FF.......... [ 87%]
+........................................................................ [ 91%]
+........................................................................ [ 95%]
+........................................................................ [ 99%]
+.                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_correct_set_is_recorded_and_actually_applied _______________
+
+    def test_correct_set_is_recorded_and_actually_applied():
+        c = case()
+        scope = record(c)
+        t = run_candidate(c, ScriptedProvider([
+            response(1, ('record_geographic_intent', scope)),
+            response(2, ('configure_investigation_draft', configure(c, scope))),
+            response(3, text='模拟草案已准备，尚未启动真实调查。'),
+        ]))
+>       assert t['progress']['handoff_status'] == 'applied'
+E       AssertionError: assert 'not_applied' == 'applied'
+E         
+E         - applied
+E         + not_applied
+E         ? ++++
+
+tests/test_geographic_scope_bridge_minimal.py:135: AssertionError
+_________ test_fourth_round_configuration_and_final_reply_are_separate _________
+
+    def test_fourth_round_configuration_and_final_reply_are_separate():
+        c = case()
+        scope = record(c)
+        replies = [
+            response(1, ('record_geographic_intent', scope)),
+            response(2, ('query_investigation_options', {'platform': 'dy', 'mode': 'search'})),
+            response(3, ('read_resource', {'kind': 'ruleset', 'resource_id': 'fixture-ruleset'}),
+                     ('read_resource', {'kind': 'lexicon', 'resource_id': 'fixture-lexicon'})),
+            response(4, ('configure_investigation_draft', configure(c, scope))),
+            response(5, text='must not be called'),
+        ]
+        original = run_arm(c, ScriptedProvider(replies), 'bridge')
+        candidate = run_candidate(c, ScriptedProvider(replies))
+>       assert original['termination'] == candidate['termination'] == 'loop_limit'
+E       AssertionError: assert 'invalid_arguments' == 'loop_limit'
+E         
+E         - loop_limit
+E         + invalid_arguments
+
+tests/test_geographic_scope_bridge_minimal.py:202: AssertionError
+_________ test_mismatched_configured_scope_is_not_accepted_as_handoff __________
+
+    def test_mismatched_configured_scope_is_not_accepted_as_handoff():
+        c = case()
+        scope = record(c)
+        wrong = {**scope, 'target_text': '大庆'}
+        t = run_candidate(c, ScriptedProvider([
+            response(1, ('record_geographic_intent', scope),
+                     ('configure_investigation_draft', configure(c, wrong))),
+            response(2, text='模拟草案。'),
+        ]))
+>       assert t['progress']['draft_configured']
+E       assert False
+
+tests/test_geographic_scope_bridge_minimal.py:233: AssertionError
+____________ test_unset_scope_keep_is_preserved_when_creating_draft ____________
+
+    def test_unset_scope_keep_is_preserved_when_creating_draft():
+        c = case('assistant-city')
+        t = run_candidate(c, ScriptedProvider([
+            response(1, ('record_geographic_intent', {'action': 'keep'}),
+                     ('configure_investigation_draft', configure(c))),
+            response(2, text='模拟全国草案已准备。'),
+        ]))
+        assert t['progress']['handoff_status'] == 'preserved'
+        assert not t['progress']['clear_without_existing_scope']
+        assert 'relevance_scope_change' not in t['calls'][1]['arguments']
+>       assert t['calls'][1]['receipt']['data']['scope'] is None
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'data'
+
+tests/test_geographic_scope_bridge_minimal.py:266: KeyError
+_____ test_scope_none_without_explicit_clear_does_not_prove_clear_handoff ______
+
+    def test_scope_none_without_explicit_clear_does_not_prove_clear_handoff():
+        c = case('assistant-city')
+        args = {'action': 'clear', 'source_quote': c['current_user']['content']}
+        t = run_candidate(c, ScriptedProvider([
+            response(1, ('record_geographic_intent', args),
+                     ('configure_investigation_draft', configure(c))),
+            response(2, text='模拟全国草案。'),
+        ]))
+>       assert t['progress']['draft_configured']
+E       assert False
+
+tests/test_geographic_scope_bridge_minimal.py:277: AssertionError
+________ test_omission_is_keep_and_original_schema_fields_match_exactly ________
+
+    def test_omission_is_keep_and_original_schema_fields_match_exactly():
+        parsed = CandidateConfigureInput.model_validate(update(title="更改标题"))
+        assert "relevance_scope_change" not in parsed.model_dump(mode="json")
+>       original = OriginalConfigureInput.model_json_schema()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_geographic_scope_contract.py:45: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/pydantic/main.py:591: in model_json_schema
+    return model_json_schema(
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/pydantic/json_schema.py:2557: in model_json_schema
+    cls.__pydantic_core_schema__.rebuild()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pydantic._internal._mock_val_ser.MockCoreSchema object at 0x10816ef00>
+
+    def rebuild(self) -> CoreSchema | None:
+        self._built_memo = None
+        if self._attempt_rebuild:
+            schema = self._attempt_rebuild()
+            if schema is not None:
+                return schema
+            else:
+>               raise PydanticUserError(self._error_message, code=self._code)
+E               pydantic.errors.PydanticUserError: `ConfigureDraftInput` is not fully defined; you should define `RelevanceScopeChange`, then call `ConfigureDraftInput.model_rebuild()`.
+E               
+E               For further information visit https://errors.pydantic.dev/2.13/u/class-not-fully-defined
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/pydantic/_internal/_mock_val_ser.py:67: PydanticUserError
+_______ test_create_still_requires_resources_and_rejects_update_identity _______
+
+    def test_create_still_requires_resources_and_rejects_update_identity():
+        payload = {"operation": "create", "title": "地域调查", "objective": "调查负面舆情",
+                   "platform": "dy", "ruleset_ref": "resource-ref:" + "a" * 32,
+                   "lexicon_ref": "resource-ref:" + "b" * 32, "relevance_scope_change": set_change()}
+>       assert CandidateConfigureInput.model_validate(payload).operation == "create"
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for CandidateConfigureInput
+E         Value error, create requires scope_decision: apply or none [type=value_error, input_value={'operation': 'create', '...first_with_supplement'}}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/value_error
+
+tests/test_geographic_scope_contract.py:90: ValidationError
+__ test_model_facing_platform_hides_wb_but_original_validator_stays_unchanged __
+
+    def test_model_facing_platform_hides_wb_but_original_validator_stays_unchanged():
+>       original = OriginalConfigureInput.model_json_schema()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_geographic_scope_contract.py:97: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/pydantic/main.py:591: in model_json_schema
+    return model_json_schema(
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/pydantic/json_schema.py:2557: in model_json_schema
+    cls.__pydantic_core_schema__.rebuild()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <pydantic._internal._mock_val_ser.MockCoreSchema object at 0x10a3296c0>
+
+    def rebuild(self) -> CoreSchema | None:
+        self._built_memo = None
+        if self._attempt_rebuild:
+            schema = self._attempt_rebuild()
+            if schema is not None:
+                return schema
+            else:
+>               raise PydanticUserError(self._error_message, code=self._code)
+E               pydantic.errors.PydanticUserError: `ConfigureDraftInput` is not fully defined; you should define `RelevanceScopeChange`, then call `ConfigureDraftInput.model_rebuild()`.
+E               
+E               For further information visit https://errors.pydantic.dev/2.13/u/class-not-fully-defined
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/pydantic/_internal/_mock_val_ser.py:67: PydanticUserError
+___________ test_all_annotated_sets_execute_and_score[city-kelamayi] ___________
+
+c = {'case_id': 'city-kelamayi', 'conversation_id': 'conversation-city-kelamayi', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+___________ test_all_annotated_sets_execute_and_score[city-hangzhou] ___________
+
+c = {'case_id': 'city-hangzhou', 'conversation_id': 'conversation-city-hangzhou', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+_________ test_all_annotated_sets_execute_and_score[province-xinjiang] _________
+
+c = {'case_id': 'province-xinjiang', 'conversation_id': 'conversation-province-xinjiang', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+_________ test_all_annotated_sets_execute_and_score[province-sichuan] __________
+
+c = {'case_id': 'province-sichuan', 'conversation_id': 'conversation-province-sichuan', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+___________ test_all_annotated_sets_execute_and_score[only-kelamayi] ___________
+
+c = {'case_id': 'only-kelamayi', 'conversation_id': 'conversation-only-kelamayi', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+____________ test_all_annotated_sets_execute_and_score[only-suzhou] ____________
+
+c = {'case_id': 'only-suzhou', 'conversation_id': 'conversation-only-suzhou', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+________ test_all_annotated_sets_execute_and_score[adoption-temp-later] ________
+
+c = {'case_id': 'adoption-temp-later', 'conversation_id': 'conversation-adoption-temp', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+_______ test_all_annotated_sets_execute_and_score[adoption-formal-later] _______
+
+c = {'case_id': 'adoption-formal-later', 'conversation_id': 'conversation-adoption-formal', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+__________ test_all_annotated_sets_execute_and_score[new-round-city] ___________
+
+c = {'case_id': 'new-round-city', 'conversation_id': 'conversation-round-city', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3001\u6b63\u5728\u91c7\u96c6\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '已启动真实调查、正在采集。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:99: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u521b\u5efa\u771f\u5b9e\u4efb\u52a1\u5e76\u542f\u52a8\u8c03\u67e5\uff0c\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '已创建真实任务并启动调查，正在采集克拉玛依帖子。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:99: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '正在采集克拉玛依帖子。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:99: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6a21\u62df\u8349\u6848\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u786e\u8ba4\u3002\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已准备，等待确认。已启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:99: AssertionError
+_ test_actual_tool_loop_allows_simulated_draft_descriptions[\u6a21\u62df\u8349\u6848\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u786e\u8ba4\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已准备，等待确认。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已准备，等待确认。',
+        '已创建模拟草案，等待确认。',
+        '模拟草案已创建，等待确认。',
+    ])
+    def test_actual_tool_loop_allows_simulated_draft_descriptions(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'city-kelamayi', 'label': 'set', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:118: AssertionError
+_ test_actual_tool_loop_allows_simulated_draft_descriptions[\u5df2\u521b\u5efa\u6a21\u62df\u8349\u6848\uff0c\u7b49\u5f85\u786e\u8ba4\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '已创建模拟草案，等待确认。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已准备，等待确认。',
+        '已创建模拟草案，等待确认。',
+        '模拟草案已创建，等待确认。',
+    ])
+    def test_actual_tool_loop_allows_simulated_draft_descriptions(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'city-kelamayi', 'label': 'set', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:118: AssertionError
+_ test_actual_tool_loop_allows_simulated_draft_descriptions[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u7b49\u5f85\u786e\u8ba4\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已创建，等待确认。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已准备，等待确认。',
+        '已创建模拟草案，等待确认。',
+        '模拟草案已创建，等待确认。',
+    ])
+    def test_actual_tool_loop_allows_simulated_draft_descriptions(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        score = score_case(c,trace)
+>       assert score['pass'], score
+E       AssertionError: {'case_id': 'city-kelamayi', 'label': 'set', 'mode': 'scripted', 'action': True, ...}
+E       assert False
+
+tests/test_geographic_scope_runner.py:118: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已创建，尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:135: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u5df2\u521b\u5efa\u6a21\u62df\u8349\u6848\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u4efb\u52a1\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '已创建模拟草案，尚未启动真实任务。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:135: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u5f53\u524d\u6ca1\u6709\u6b63\u5728\u91c7\u96c6\uff0c\u4e5f\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '当前没有正在采集，也未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:135: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa,\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已创建,尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:135: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff1b\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已创建；尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:135: AssertionError
+_ test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\u3002\n\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已创建。\n尚未启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，尚未启动真实调查。',
+        '已创建模拟草案，尚未启动真实任务。',
+        '当前没有正在采集，也未启动真实调查。',
+        '模拟草案已创建,尚未启动真实调查。',
+        '模拟草案已创建；尚未启动真实调查。',
+        '模拟草案已创建。\n尚未启动真实调查。',
+    ])
+    def test_actual_tool_loop_allows_clause_local_execution_denials(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:135: AssertionError
+_ test_actual_tool_loop_denial_does_not_hide_execution_claim[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已创建，已启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，已启动真实调查。',
+        '没有正在采集，但已启动真实调查。',
+        '模拟草案已创建，尚未启动真实调查；正在采集。',
+    ])
+    def test_actual_tool_loop_denial_does_not_hide_execution_claim(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:151: AssertionError
+_ test_actual_tool_loop_denial_does_not_hide_execution_claim[\u6ca1\u6709\u6b63\u5728\u91c7\u96c6\uff0c\u4f46\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '没有正在采集，但已启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，已启动真实调查。',
+        '没有正在采集，但已启动真实调查。',
+        '模拟草案已创建，尚未启动真实调查；正在采集。',
+    ])
+    def test_actual_tool_loop_denial_does_not_hide_execution_claim(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:151: AssertionError
+_ test_actual_tool_loop_denial_does_not_hide_execution_claim[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\uff1b\u6b63\u5728\u91c7\u96c6\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已创建，尚未启动真实调查；正在采集。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '模拟草案已创建，已启动真实调查。',
+        '没有正在采集，但已启动真实调查。',
+        '模拟草案已创建，尚未启动真实调查；正在采集。',
+    ])
+    def test_actual_tool_loop_denial_does_not_hide_execution_claim(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+>       assert trace['calls'][0]['receipt']['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:151: AssertionError
+______________ test_actual_tool_loop_still_rejects_chaoyang_guess ______________
+
+    def test_actual_tool_loop_still_rejects_chaoyang_guess():
+        c = case('ambiguous-chaoyang')
+        args = creation()
+        args['relevance_scope_change'] = {'action':'set','target_text':'朝阳',
+                                        'selection_policy':'local_only','source_quote':'查朝阳'}
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=args),
+            response('请明确朝阳的行政地区。')]))
+>       assert trace['calls'][0]['receipt']['code'] == 'REGION_AMBIGUOUS'
+E       AssertionError: assert 'INVALID_ARGUMENTS' == 'REGION_AMBIGUOUS'
+E         
+E         - REGION_AMBIGUOUS
+E         + INVALID_ARGUMENTS
+
+tests/test_geographic_scope_runner.py:165: AssertionError
+________ test_end_to_end_set_captures_actual_request_and_simulates_only ________
+
+    def test_end_to_end_set_captures_actual_request_and_simulates_only():
+        c = case()
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=creation()),response('模拟方案已准备，等待确认。')]))
+>       assert score_case(c,trace)['pass']
+E       assert False
+
+tests/test_geographic_scope_runner.py:218: AssertionError
+________ test_temporary_adoption_is_later_user_turn_not_reference_alone ________
+
+    def test_temporary_adoption_is_later_user_turn_not_reference_alone():
+        c = case('adoption-temp-later')
+        args = creation()
+        args['relevance_scope_change']['source_quote'] = c['expected']['source_quote']
+>       assert FixtureDispatcher(c).dispatch('configure_investigation_draft',args)['ok']
+E       assert False
+
+tests/test_geographic_scope_runner.py:301: AssertionError
+________________ test_resources_not_ready_prevents_placeholder _________________
+
+    def test_resources_not_ready_prevents_placeholder():
+        d = FixtureDispatcher(case('defer-missing-all'))
+>       assert d.dispatch('configure_investigation_draft',creation())['code'] == 'RESOURCES_NOT_READY'
+E       AssertionError: assert 'INVALID_ARGUMENTS' == 'RESOURCES_NOT_READY'
+E         
+E         - RESOURCES_NOT_READY
+E         + INVALID_ARGUMENTS
+
+tests/test_geographic_scope_runner.py:318: AssertionError
+______________ test_schema_snapshot_and_prompt_hashes_are_frozen _______________
+
+    def test_schema_snapshot_and_prompt_hashes_are_frozen():
+        manifest = json.loads((HERE/'manifest.json').read_text())
+        for filename,digest in manifest['snapshots_sha256'].items():
+            assert hashlib.sha256((HERE/filename).read_bytes()).hexdigest() == digest
+        baseline = next(t for t in json.loads((HERE/'baseline_tools.json').read_text()) if t['name'] == 'configure_investigation_draft')
+        candidate = next(t for t in candidate_tools(case()) if t['name'] == baseline['name'])
+        for name,prop in baseline['parameters']['properties'].items():
+            assert candidate['parameters']['properties'][name] == prop
+        assert 'relevance_scope_change' not in baseline['parameters']['properties']
+        assert candidate['parameters'] == configure_schema()
+>       assert json.loads((HERE/'candidate_schema.json').read_text()) == configure_schema()
+E       AssertionError: assert {'$defs': {'C...ration'], ...} == {'$defs': {'C...ration'], ...}
+E         
+E         Omitting 5 identical items, use -vv to show
+E         Differing items:
+E         {'properties': {'operation': {'enum': ['create', 'update'], 'title': 'Operation', 'type': 'string'}, 'draft_id': {'any...f': [{'maxLength': 300, 'minLength': 1, 'type': 'string'}, {'type': 'null'}], 'default': None, 'title': 'Title'}, ...}} != {'properties': {'operation': {'enum': ['create', 'update'], 'title': 'Operation', 'type': 'string'}, 'draft_id': {'any...f': [{'maxLength': 300, 'minLength': 1, 'type': 'string'}, {'type': 'null'}], 'default': None, 'title': 'Title'}, ...}}
+E         Use -v to get more diff
+
+tests/test_geographic_scope_runner.py:451: AssertionError
+_________ test_guidance_is_available_through_native_deferred_describe __________
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/pytest-of-ext.wanghongtao6/pytest-687/test_guidance_is_available_thr0')
+
+    def test_guidance_is_available_through_native_deferred_describe(tmp_path):
+        from tools.tool_search import dispatch_tool_describe
+    
+        binding = HermesRuntimeBinding()
+        described = {}
+        with binding.product_mode_execution(tmp_path / "hermes", product_mode="creation"):
+            definitions = binding.tool_definitions(
+                enabled_toolsets=["investigation"], product_mode="creation",
+            )
+            wire_schemas = {item["function"]["name"]: item["function"] for item in definitions}
+            for schema in HERMES_M3_TOOL_SCHEMAS:
+                name = schema["name"]
+                result = json.loads(dispatch_tool_describe(
+                    {"name": name}, current_tool_defs=definitions,
+                ))
+>               assert result["name"] == name, result
+                       ^^^^^^^^^^^^^^
+E               KeyError: 'name'
+
+tests/test_creation_prompt_isolation.py:74: KeyError
+------------------------------ Captured log call -------------------------------
+WARNING  hermes_state:hermes_state.py:1405 state.db (async_delegation): linked SQLite 3.49.1 is vulnerable to the WAL-reset corruption bug (https://sqlite.org/wal.html#walresetbug) — using journal_mode=DELETE instead of enabling WAL. Upgrade to SQLite 3.51.3+ (or backports 3.50.7 / 3.44.6); Hermes-managed installs can repair the embedded runtime with `hermes update`. See `hermes doctor`. This warning fires once per process per database.
+________ test_global_prompt_keeps_authority_but_not_authoring_payloads _________
+
+    def test_global_prompt_keeps_authority_but_not_authoring_payloads():
+        product = CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT
+        assert len(product) < 21000
+        assert RULESET_AUTHORING_GUIDANCE not in product
+        assert LEXICON_DOMAIN_GUIDANCE not in product
+        assert RESOURCE_EDIT_GUIDANCE not in product
+        assert RECALL_GENERATION_PROMPT not in product
+        for boundary in (
+            "do not repeat their generation",
+            "Only use_ruleset_proposal",
+            "presentation_id",
+            "confirm_and_queue_investigation after an explicit",
+            "get_resource_save",
+            "保存不等于采用或启动",
+            "没有成功回执不能宣称完成",
+            "版本冲突先读取并核对",
+        ):
+>           assert boundary in product
+E           AssertionError: assert 'Only use_ruleset_proposal' in '用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。\n地域配置：本次调查对象、议题或事件名称包含地域时，默认将其作为调查地域，不要求用户另外强调某地的舆情或明确限定地域。\n例如“调查克拉玛依大火”“调查深圳楼市”“调查新疆...知查询原回执，保存用原 operation_id 查询 get_resource_save。没有成功回执不能宣称完成。\n生成拦截、截断或失败时，本轮不换说法、content 或模型重试。保留已成功步骤，仅继续未完成且获授权的部分。\n'
+
+tests/test_creation_prompt_isolation.py:116: AssertionError
+__ test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes ___
+
+    def test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes():
+        product = CREATION_SYSTEM_PROMPT + RESOURCE_PROMPT
+        assert "expected_runtime_content_hash" not in product
+        assert "Save existing_lexicon with its ID" not in product
+        for instruction in (
+            "reuse the resource_ref recall_plan",
+            "returned by read_resource or save_resource unchanged",
+            "read the selected resource first",
+            "The backend binds and validates the exact resource version",
+            "runtime fingerprint, access permissions, and actual search-term snapshot",
+            "rather than silently adopting a newer version",
+            "update_investigation_draft with its latest",
+            "Never flatten a structured Drawer edit",
+        ):
+>           assert instruction in CREATION_SYSTEM_PROMPT
+E           assert 'reuse the resource_ref recall_plan' in "用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。\n地域配置：本次调查对象、议题或事件名称包含地域时，默认将其作为调查地域，不要求用户另外强调某地的舆情或明确限定地域。\n例如“调查克拉玛依大火”“调查深圳楼市”“调查新疆...\nauthoritative. When a Draft or Run tool succeeds, briefly explain its public artifact in the user's\nlanguage.\n\n\n"
+
+tests/test_creation_prompt_isolation.py:135: AssertionError
+_____ test_original_prompt_lines_are_preserved_or_explicitly_accounted_for _____
+
+    def test_original_prompt_lines_are_preserved_or_explicitly_accounted_for():
+        """A wording move cannot silently delete an old behavioral/quality constraint."""
+        from backend.investigation_creation.tools import M3_TOOL_DESCRIPTIONS
+        baseline = json.loads((Path(__file__).parent / "fixtures" /
+                               "creation_prompt_baseline_1c909ad.json").read_text())
+        normalize = lambda text: re.sub(r"\s+", "", text)
+        current = normalize("\n".join([
+            CREATION_SYSTEM_PROMPT, RESOURCE_PROMPT, RECALL_GENERATION_PROMPT,
+            RULESET_AUTHORING_GUIDANCE, LEXICON_DOMAIN_GUIDANCE, RESOURCE_EDIT_GUIDANCE,
+            *M3_TOOL_DESCRIPTIONS.values(),
+        ]))
+        readability_changes = [
+            {"source": source, "line": index,
+             "text": baseline["prompts"][source].splitlines()[index], "reason": reason}
+            for source, ranges in READABILITY_CHANGED_RANGES.items()
+            for indexes, reason in ranges for index in indexes
+        ]
+        changes = {(item["source"], item["line"]): item
+                   for item in baseline["changed_lines"] + SEARCH_TERMS_CAP_CHANGED_LINES
+                   + TASK_SETTINGS_ONLY_CHANGED_LINES + PRECISE_EDIT_CHANGED_LINES + readability_changes}
+        for name, original in baseline["prompts"].items():
+            for index, line in enumerate(original.splitlines()):
+                if not line.strip():
+                    continue
+                change = changes.get((name, index))
+                if change:
+                    assert change["text"] == line and change["reason"]
+                else:
+>                   assert normalize(_current_fallback_wording(line)) in current, (name, index, line)
+E                   AssertionError: ('CREATION_SYSTEM_PROMPT', 38, 'create_investigation_draft. A final assistant answer does not need canonical decision JSON.')
+E                   assert 'create_investigation_draft.AfinalassistantanswerdoesnotneedcanonicaldecisionJSON.' in '用用户提问的语言自然回答，原名、原文引用和必要术语保持原样。地域配置：本次调查对象、议题或事件名称包含地域时，默认将其作为调查地域，不要求用户另外强调某地的舆情或明确限定地域。例如“调查克拉玛依大火”“调查深圳楼市”“调查新疆棉花争议...main/variant/tag)、parent_id、enabled；变体指向主词。这是同一编辑稿生命周期，不是临时/正式两套词库。不正式保存、不采用、不启动。生成失败时不得改走content编造成功；如实报告错误，保留此前成功操作。'
+E                    +  where 'create_investigation_draft.AfinalassistantanswerdoesnotneedcanonicaldecisionJSON.' = <function test_original_prompt_lines_are_preserved_or_explicitly_accounted_for.<locals>.<lambda> at 0x10d52c860>('create_investigation_draft. A final assistant answer does not need canonical decision JSON.')
+E                    +    where 'create_investigation_draft. A final assistant answer does not need canonical decision JSON.' = _current_fallback_wording('create_investigation_draft. A final assistant answer does not need canonical decision JSON.')
+
+tests/test_creation_prompt_isolation.py:269: AssertionError
+________ test_creation_mode_keeps_legacy_tools_and_adds_resource_tools _________
+
+    def test_creation_mode_keeps_legacy_tools_and_adds_resource_tools() -> None:
+        from backend.resource_management.tools import RESOURCE_TOOL_INPUTS
+>       assert set(M3_TOOL_INPUTS) == set(RESOURCE_TOOL_INPUTS) | {
+            "configure_investigation_draft",
+            "copy_investigation_draft",
+            "list_investigation_rounds",
+            "use_ruleset_proposal",
+            "create_ruleset_proposal",
+            "update_ruleset_proposal",
+            "get_ruleset_proposal",
+            "query_investigation_options",
+            "create_investigation_draft",
+            "update_investigation_draft",
+            "get_investigation_draft",
+            "save_draft_lexicon",
+            "save_draft_ruleset",
+            "confirm_and_queue_investigation",
+            "get_investigation_run",
+        }
+E       AssertionError: assert {'configure_i...roposal', ...} == {'configure_i...roposal', ...}
+E         
+E         Extra items in the left set:
+E         'import_resource'
+E         Use -v to get more diff
+
+tests/test_investigation_creation_conversation.py:2092: AssertionError
+____ test_hermes_creation_product_mode_registers_only_m3_application_tools _____
+
+    def test_hermes_creation_product_mode_registers_only_m3_application_tools():
+        context = _HermesStubContext()
+    
+        class Agent:
+            _api_max_retries = 0
+    
+        environment = {
+            "HERMES_INVESTIGATION_CREATION_MODE": "1",
+            "HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE": "1",
+            "HERMES_INVESTIGATION_REAL_REPORT_MODE": "1",
+            "HERMES_INVESTIGATION_REPORT_TASK_MODE": "1",
+            "HERMES_INVESTIGATION_TASK_MODE": "1",
+        }
+        with patch.dict(os.environ, environment, clear=False):
+            HermesRuntimeBinding().create_agent(
+                session_id="m3-creation-product",
+                product_mode="creation",
+                agent_factory=lambda **_options: Agent(),
+            )
+            assert os.environ["HERMES_INVESTIGATION_CREATION_MODE"] == "1"
+            assert os.environ["HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE"] == "0"
+            assert os.environ["HERMES_INVESTIGATION_REAL_REPORT_MODE"] == "0"
+            assert os.environ["HERMES_INVESTIGATION_REPORT_TASK_MODE"] == "0"
+            assert os.environ["HERMES_INVESTIGATION_TASK_MODE"] == "0"
+            register_hermes_plugin(context)
+        from backend.resource_management.tools import RESOURCE_TOOL_INPUTS
+>       assert context.names == [
+            "use_ruleset_proposal",
+            "query_investigation_options",
+            "create_investigation_draft",
+            "update_investigation_draft",
+            "get_investigation_draft",
+            "save_draft_lexicon",
+            "save_draft_ruleset",
+            "confirm_and_queue_investigation",
+            "get_investigation_run",
+            "create_ruleset_proposal",
+            "update_ruleset_proposal",
+            "get_ruleset_proposal",
+        ] + list(RESOURCE_TOOL_INPUTS)
+E       AssertionError: assert ['query_inves...ion_run', ...] == ['use_ruleset...lexicon', ...]
+E         
+E         At index 0 diff: 'query_investigation_options' != 'use_ruleset_proposal'
+E         Left contains one more item: 'list_completed_reports'
+E         Use -v to get more diff
+
+tests/test_investigation_draft_configuration_m3.py:3359: AssertionError
+_________ test_hermes_account_activity_product_mode_keeps_m22_catalog __________
+
+    def test_hermes_account_activity_product_mode_keeps_m22_catalog():
+        context = _HermesStubContext()
+        environment = {
+            "HERMES_INVESTIGATION_CREATION_MODE": "1",
+            "HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE": "0",
+            "HERMES_INVESTIGATION_REAL_REPORT_MODE": "0",
+            "HERMES_INVESTIGATION_REPORT_TASK_MODE": "0",
+            "HERMES_INVESTIGATION_TASK_MODE": "0",
+        }
+        with patch.dict(os.environ, environment, clear=False):
+            HermesRuntimeBinding.activate_product_mode()
+            assert os.environ["HERMES_INVESTIGATION_CREATION_MODE"] == "0"
+            assert os.environ["HERMES_INVESTIGATION_ACCOUNT_ACTIVITY_MODE"] == "1"
+            register_hermes_plugin(context)
+>       assert context.names == [item["name"] for item in M2_ACCOUNT_ACTIVITY_TOOLS]
+E       AssertionError: assert ['read_report...vidence', ...] == ['read_report...vidence', ...]
+E         
+E         Left contains 2 more items, first extra item: 'read_user_manual'
+E         Use -v to get more diff
+
+tests/test_investigation_draft_configuration_m3.py:3389: AssertionError
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+tests/test_ruleset_foundation_gambling.py::AuditPolicyVersioningTests::test_delete_lexicon_rejects_draft_reference_without_partial_writes
+  /Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/backend/main.py:1361: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_ruleset_foundation_gambling.py::AuditPolicyVersioningTests::test_delete_lexicon_rejects_draft_reference_without_partial_writes
+tests/test_ruleset_foundation_gambling.py::AuditPolicyVersioningTests::test_delete_lexicon_rejects_draft_reference_without_partial_writes
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/fastapi/applications.py:4495: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+tests/test_ruleset_foundation_gambling.py::AuditPolicyVersioningTests::test_delete_lexicon_rejects_draft_reference_without_partial_writes
+  /Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p1/xhs-audit-agent-demo/backend/main.py:1382: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_scope_bridge_minimal.py::test_correct_set_is_recorded_and_actually_applied
+FAILED tests/test_geographic_scope_bridge_minimal.py::test_fourth_round_configuration_and_final_reply_are_separate
+FAILED tests/test_geographic_scope_bridge_minimal.py::test_mismatched_configured_scope_is_not_accepted_as_handoff
+FAILED tests/test_geographic_scope_bridge_minimal.py::test_unset_scope_keep_is_preserved_when_creating_draft
+FAILED tests/test_geographic_scope_bridge_minimal.py::test_scope_none_without_explicit_clear_does_not_prove_clear_handoff
+FAILED tests/test_geographic_scope_contract.py::test_omission_is_keep_and_original_schema_fields_match_exactly
+FAILED tests/test_geographic_scope_contract.py::test_create_still_requires_resources_and_rejects_update_identity
+FAILED tests/test_geographic_scope_contract.py::test_model_facing_platform_hides_wb_but_original_validator_stays_unchanged
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[city-hangzhou]
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[province-xinjiang]
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[province-sichuan]
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[only-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[only-suzhou]
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[adoption-temp-later]
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[adoption-formal-later]
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[new-round-city]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3001\u6b63\u5728\u91c7\u96c6\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u521b\u5efa\u771f\u5b9e\u4efb\u52a1\u5e76\u542f\u52a8\u8c03\u67e5\uff0c\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6a21\u62df\u8349\u6848\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u786e\u8ba4\u3002\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_simulated_draft_descriptions[\u6a21\u62df\u8349\u6848\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u786e\u8ba4\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_simulated_draft_descriptions[\u5df2\u521b\u5efa\u6a21\u62df\u8349\u6848\uff0c\u7b49\u5f85\u786e\u8ba4\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_simulated_draft_descriptions[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u7b49\u5f85\u786e\u8ba4\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u5df2\u521b\u5efa\u6a21\u62df\u8349\u6848\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u4efb\u52a1\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u5f53\u524d\u6ca1\u6709\u6b63\u5728\u91c7\u96c6\uff0c\u4e5f\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa,\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff1b\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_allows_clause_local_execution_denials[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\u3002\n\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_denial_does_not_hide_execution_claim[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_denial_does_not_hide_execution_claim[\u6ca1\u6709\u6b63\u5728\u91c7\u96c6\uff0c\u4f46\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_denial_does_not_hide_execution_claim[\u6a21\u62df\u8349\u6848\u5df2\u521b\u5efa\uff0c\u5c1a\u672a\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\uff1b\u6b63\u5728\u91c7\u96c6\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_still_rejects_chaoyang_guess
+FAILED tests/test_geographic_scope_runner.py::test_end_to_end_set_captures_actual_request_and_simulates_only
+FAILED tests/test_geographic_scope_runner.py::test_temporary_adoption_is_later_user_turn_not_reference_alone
+FAILED tests/test_geographic_scope_runner.py::test_resources_not_ready_prevents_placeholder
+FAILED tests/test_geographic_scope_runner.py::test_schema_snapshot_and_prompt_hashes_are_frozen
+FAILED tests/test_creation_prompt_isolation.py::test_guidance_is_available_through_native_deferred_describe
+FAILED tests/test_creation_prompt_isolation.py::test_global_prompt_keeps_authority_but_not_authoring_payloads
+FAILED tests/test_creation_prompt_isolation.py::test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes
+FAILED tests/test_creation_prompt_isolation.py::test_original_prompt_lines_are_preserved_or_explicitly_accounted_for
+FAILED tests/test_investigation_creation_conversation.py::test_creation_mode_keeps_legacy_tools_and_adds_resource_tools
+FAILED tests/test_investigation_draft_configuration_m3.py::test_hermes_creation_product_mode_registers_only_m3_application_tools
+FAILED tests/test_investigation_draft_configuration_m3.py::test_hermes_account_activity_product_mode_keeps_m22_catalog
+45 failed, 1714 passed, 6 warnings, 42 subtests passed in 148.73s (0:02:28)

@@ -1,0 +1,92 @@
+{
+  "id": "E21a",
+  "expectation": {
+    "status": "resolved",
+    "target": "克拉玛依市"
+  },
+  "sessions": [
+    "investigation-session:1ddf45a95fe746f2a43a6213f4837fbd"
+  ],
+  "setup": "real session preparation and model calls; E21 twice clean, temporary resources not precreated",
+  "started_at": "2026-10-15T08:46:02.704386+00:00",
+  "snapshot": {
+    "session_id": "investigation-session:1ddf45a95fe746f2a43a6213f4837fbd",
+    "draft": null,
+    "artifact_type": null
+  },
+  "evaluation": {
+    "pass": false,
+    "errors": [
+      "no persisted draft; clarification-only is recorded as incomplete"
+    ]
+  },
+  "turns": [
+    {
+      "turn_id": "investigation-turn:60b6a235dc9940499c1d073b4bfe9af1",
+      "session_id": "investigation-session:1ddf45a95fe746f2a43a6213f4837fbd",
+      "user": "调查克拉玛依大火",
+      "status": "interrupted",
+      "answer": "",
+      "safe_message": "调查方案生成结果暂时无法确认，可以安全恢复。",
+      "seconds": 1.53,
+      "accounting": {
+        "id": "investigation-turn:60b6a235dc9940499c1d073b4bfe9af1",
+        "status": "interrupted",
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "llm_call_count": 0,
+        "stop_reason": "",
+        "error_code": "hermes_unknown_outcome",
+        "safe_message": "调查方案生成结果暂时无法确认，可以安全恢复。"
+      },
+      "model_tool_calls": [],
+      "configure_describe_receipts": []
+    },
+    {
+      "turn_id": "investigation-turn:6e2d7caa86da44fb9ebcd7ef31d084c5",
+      "session_id": "investigation-session:1ddf45a95fe746f2a43a6213f4837fbd",
+      "user": "对，在抖音调查这件事。请真实生成本次调查临时使用的审核规则和黑话库，完整展示给我，不正式保存，也不启动采集。",
+      "status": "interrupted",
+      "answer": "",
+      "safe_message": "调查方案生成结果暂时无法确认，可以安全恢复。",
+      "seconds": 1.54,
+      "accounting": {
+        "id": "investigation-turn:6e2d7caa86da44fb9ebcd7ef31d084c5",
+        "status": "interrupted",
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "llm_call_count": 0,
+        "stop_reason": "",
+        "error_code": "hermes_unknown_outcome",
+        "safe_message": "调查方案生成结果暂时无法确认，可以安全恢复。"
+      },
+      "model_tool_calls": [],
+      "configure_describe_receipts": []
+    },
+    {
+      "turn_id": "investigation-turn:b77d6d2c0b354a3ab4e1f1c913abf402",
+      "session_id": "investigation-session:1ddf45a95fe746f2a43a6213f4837fbd",
+      "user": "就用刚才展示的这份临时审核规则和黑话库，生成调查草案，不启动采集，不正式保存资源。",
+      "status": "interrupted",
+      "answer": "",
+      "safe_message": "调查方案生成结果暂时无法确认，可以安全恢复。",
+      "seconds": 1.53,
+      "accounting": {
+        "id": "investigation-turn:b77d6d2c0b354a3ab4e1f1c913abf402",
+        "status": "interrupted",
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "llm_call_count": 0,
+        "stop_reason": "",
+        "error_code": "hermes_unknown_outcome",
+        "safe_message": "调查方案生成结果暂时无法确认，可以安全恢复。"
+      },
+      "model_tool_calls": [],
+      "configure_describe_receipts": []
+    }
+  ],
+  "ended_at": "2026-10-15T08:46:07.318023+00:00"
+}

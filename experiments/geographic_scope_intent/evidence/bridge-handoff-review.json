@@ -1,0 +1,16 @@
+{
+  "kind": "read_only_local_review",
+  "reviewer": "Codex native executor subagent, not original acceptance session",
+  "scope": "new bridge dispatcher, request projection, offline prepare/replay and added tests",
+  "blocking_findings": 0,
+  "reviewed_new_tests": 47,
+  "description_projection_regression_added_by_root": 1,
+  "notes": [
+    "Original configure description + new handoff guidance replaces stale manual-scope description only in new request projection.",
+    "Fresh round keep yields scope=None; resource/budget pending returns scope_applied=False.",
+    "Strict record gate, four-response/twelve-tool caps, source and fixture contracts intact.",
+    "Batch configure unique and last, before dispatch; no additional model HTTP.",
+    "No semantic correctness claim; historical misses remain."
+  ],
+  "new_real_calls": 0
+}

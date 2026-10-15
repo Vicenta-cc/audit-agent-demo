@@ -1,0 +1,111 @@
+..FFF                                                                    [100%]
+=================================== FAILURES ===================================
+__________ test_search_cap_preserves_p1_supported_configuration[101] ___________
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x126bed5e0>, 'resource_db...d400>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x126bed0d0>, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x126bed970>
+limit = 101
+
+    @pytest.mark.parametrize('limit', [10, 100, 101, 200])
+    def test_search_cap_preserves_p1_supported_configuration(creation_stack, content, monkeypatch, limit):
+        from backend.audit_agent.config import settings
+        from backend.investigation_creation.scope_search_plan import serialize_scope_search_plan, parse_scope_search_plan
+        monkeypatch.setattr(settings, 'search_terms_max', limit)
+        authority = make_authority(creation_stack, content)
+>       plan = build(authority)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_geographic_execution_plan_integration.py:60: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_geographic_execution_plan.py:34: in build
+    return build_scope_search_plan(authority, expected_identity=expected(authority))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+authority = {'identity': {'owner': 'principal-a', 'session_id': 'investigation-session:deb9b3e284654987914d23f023ab9dea', 'draft_i...posal_version': 1, 'content_hash': 'ff7cec3922e2b173b669c7dd366d1008f8a5a8fc974d74ecc9f211da1d187861', ...}, ...}, ...}
+expected_identity = {'owner': 'principal-a', 'session_id': 'investigation-session:deb9b3e284654987914d23f023ab9dea', 'draft_id': 'investigation-draft:6a9000d85eef4aa1bc064d7756171178', 'revision': 2}
+
+    def build_scope_search_plan(authority, *, expected_identity):
+        """Build from independently verified fixture authority, never from a client plan."""
+        raw=authority.model_dump(mode='json') if isinstance(authority,PlanInputs) else authority
+        canonical(raw)  # Reject nonfinite numbers even in nested opaque snapshots.
+>       inputs=PlanInputs.model_validate(raw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for PlanInputs
+E       settings.limits.search_terms_max
+E         Input should be less than or equal to 100 [type=less_than_equal, input_value=101, input_type=int]
+E           For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal
+
+backend/investigation_creation/scope_search_plan.py:573: ValidationError
+__________ test_search_cap_preserves_p1_supported_configuration[200] ___________
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x126b8d190>, 'resource_db...7170>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x126b34890>, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x126b8da00>
+limit = 200
+
+    @pytest.mark.parametrize('limit', [10, 100, 101, 200])
+    def test_search_cap_preserves_p1_supported_configuration(creation_stack, content, monkeypatch, limit):
+        from backend.audit_agent.config import settings
+        from backend.investigation_creation.scope_search_plan import serialize_scope_search_plan, parse_scope_search_plan
+        monkeypatch.setattr(settings, 'search_terms_max', limit)
+        authority = make_authority(creation_stack, content)
+>       plan = build(authority)
+               ^^^^^^^^^^^^^^^^
+
+tests/test_geographic_execution_plan_integration.py:60: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_geographic_execution_plan.py:34: in build
+    return build_scope_search_plan(authority, expected_identity=expected(authority))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+authority = {'identity': {'owner': 'principal-a', 'session_id': 'investigation-session:b889808cd7d3469f80be2689e6bc927f', 'draft_i...posal_version': 1, 'content_hash': 'ff7cec3922e2b173b669c7dd366d1008f8a5a8fc974d74ecc9f211da1d187861', ...}, ...}, ...}
+expected_identity = {'owner': 'principal-a', 'session_id': 'investigation-session:b889808cd7d3469f80be2689e6bc927f', 'draft_id': 'investigation-draft:43d50161a2a6456c98f6a1f8e749dd38', 'revision': 2}
+
+    def build_scope_search_plan(authority, *, expected_identity):
+        """Build from independently verified fixture authority, never from a client plan."""
+        raw=authority.model_dump(mode='json') if isinstance(authority,PlanInputs) else authority
+        canonical(raw)  # Reject nonfinite numbers even in nested opaque snapshots.
+>       inputs=PlanInputs.model_validate(raw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       pydantic_core._pydantic_core.ValidationError: 1 validation error for PlanInputs
+E       settings.limits.search_terms_max
+E         Input should be less than or equal to 100 [type=less_than_equal, input_value=200, input_type=int]
+E           For further information visit https://errors.pydantic.dev/2.13/v/less_than_equal
+
+backend/investigation_creation/scope_search_plan.py:573: ValidationError
+______ test_structured_rule_snapshot_cannot_replace_triage_prompt_profile ______
+
+creation_stack = {'principals': <test_investigation_creation_conversation.MutablePrincipalProvider object at 0x127128110>, 'resource_db...a060>, 'app_service': <backend.investigation_creation.service.InvestigationCreationService object at 0x127128da0>, ...}
+content = {'name': 'Recruitment Fraud', 'domain': 'recruitment_fraud', 'audit_goal': 'Assess recruitment advance fees and fabric...ducation', 'name': 'Education', 'condition': 'Educational reporting without soliciting applicants or payments.'}], ...}
+
+    def test_structured_rule_snapshot_cannot_replace_triage_prompt_profile(creation_stack, content):
+        from backend.investigation_creation.scope_search_plan import digest
+        authority = make_authority(creation_stack, content)
+        assert authority['resolution']['execution']['prompt_profile_snapshot']['audit_goal']
+        wrong = deepcopy(authority)
+        risk = wrong['risk_inputs']
+        risk['rules'] = deepcopy(wrong['resolution']['execution']['rule_snapshot'])
+        risk['digest'] = digest({k: v for k, v in risk.items() if k != 'digest'})
+>       with pytest.raises(ValueError, match='risk rules differ'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_geographic_execution_plan_integration.py:77: Failed
+=============================== warnings summary ===============================
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+../../../../Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41
+  /Users/ext.wanghongtao6/Documents/Codex/projects/audit-agent-demo/.venv/lib/python3.12/site-packages/starlette/testclient.py:41: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_geographic_execution_plan_integration.py::test_search_cap_preserves_p1_supported_configuration[101]
+FAILED tests/test_geographic_execution_plan_integration.py::test_search_cap_preserves_p1_supported_configuration[200]
+FAILED tests/test_geographic_execution_plan_integration.py::test_structured_rule_snapshot_cannot_replace_triage_prompt_profile
+3 failed, 2 passed, 20 deselected, 2 warnings in 3.25s

@@ -1,0 +1,1897 @@
+{
+  "schema": "p234-offline-input-manifest-v1",
+  "created_at": "2026-10-15T13:53:00.308247+00:00",
+  "application_base": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+  "p3_tag": "p3-post-only-names-v2-local-20261015",
+  "p3_commit": "2120c53379d1b79c45e3cb8232b9c9b96657b183",
+  "p2_fix_review": "APPROVE/CLEAR; 682 passed and 4 exact P1 baseline failures",
+  "p4_original_session_reacceptance": "pending; NOT claimed approved",
+  "start_condition_override": {
+    "source": "direct user message in current chat",
+    "text": "为啥不联调，你刚刚不是修改过p4代码了吗 直接链条 我求你了",
+    "scope": "Proceed with offline integration using digest-verified repaired P4; does not approve P4 or formal activation"
+  },
+  "files": [
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "backend/investigation_creation/scope_search_plan.py",
+      "target_path": "backend/investigation_creation/scope_search_plan.py",
+      "bytes": 36720,
+      "sha256": "6931b64f4ce432c3b07b5caf1a7560f5b54dd0bf31be16468564f54b9d294878",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/ACCEPTANCE-20261015.md",
+      "target_path": "experiments/geographic_execution_plan/ACCEPTANCE-20261015.md",
+      "bytes": 9837,
+      "sha256": "daf6de32b4af2b668734e6c9a16f770a2221e7ac720b812b3a78581bbf8cb135",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/FIX-REVIEW-20261015.md",
+      "target_path": "experiments/geographic_execution_plan/FIX-REVIEW-20261015.md",
+      "bytes": 3769,
+      "sha256": "513c481a0d70ed33a913ac29ef37c0ba288e2cc86aeff8f818cea12de4af2c58",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/README.md",
+      "target_path": "experiments/geographic_execution_plan/README.md",
+      "bytes": 5178,
+      "sha256": "055afb0187dbe04957ff2244bd8d7c57e8d66aa5a825a5aa166300397d5c0bc0",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/REPORT.md",
+      "target_path": "experiments/geographic_execution_plan/REPORT.md",
+      "bytes": 22455,
+      "sha256": "ec116ee1638a0842a8d14d855eb67c3ff96b43f7eec165a34533a2f447f4a5ab",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/bootstrap/sitecustomize.py",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/bootstrap/sitecustomize.py",
+      "bytes": 117,
+      "sha256": "09596c4f831c63a30010eaa66ea32d0d95321cd524094217b497d31a1f2b5043",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/commands.json",
+      "bytes": 2389,
+      "sha256": "f61ede67b4263c5bfe865cb117c174b381adb245f7fa45fd95420961be6d3040",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/example-fixture-plan.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/example-fixture-plan.json",
+      "bytes": 512529,
+      "sha256": "87907ce8d73d9da68a929c317093938ca97447436d7d4d4fc40137f38b7e20eb",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/junit.xml",
+      "bytes": 111910,
+      "sha256": "883cc2eb33912906828a99b8f121d9fbb424f997dd5699408675dc4b556471f8",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/p3-manual-replay.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/p3-manual-replay.json",
+      "bytes": 843997,
+      "sha256": "816559d8479f6f60184b2981cf202688107d4aca2a59100a5ec76c1bebe467df",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/pytest.log",
+      "bytes": 12778,
+      "sha256": "15ddf22a442c5c8147c8ab190abcc026b0120731263d8f735757adc1ca7e3e96",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/replay-cli.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/replay-cli.json",
+      "bytes": 231,
+      "sha256": "a8b8cec909bc8ee7585f83e644701ecfef7e57095b7b5baa8a8a72cdf5d2115d",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/risk-comparison.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/risk-comparison.json",
+      "bytes": 67339,
+      "sha256": "ae41026c165dcff58dfeeda19201071a39c0197541ea8eecc053afef0b981b00",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/summary.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-full-20261015-01/summary.json",
+      "bytes": 786,
+      "sha256": "8d91e812e2d372f109abaff10ab8380799848aec7bbd0f8e0b9ba8a8f8461078",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-input-audit-20261015-01.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-input-audit-20261015-01.json",
+      "bytes": 8136,
+      "sha256": "3c9b74cf495bcd954514e8e2a04526f4d37f4ee660d573b7d974e40bf4f7eb0c",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-p1-baseline-20261015-01/bootstrap/sitecustomize.py",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-p1-baseline-20261015-01/bootstrap/sitecustomize.py",
+      "bytes": 117,
+      "sha256": "09596c4f831c63a30010eaa66ea32d0d95321cd524094217b497d31a1f2b5043",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-p1-baseline-20261015-01/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-p1-baseline-20261015-01/commands.json",
+      "bytes": 1533,
+      "sha256": "acc5ebc82ccd486c08d58d37f4aa6452b22ec099365bfb35300a84e570e84317",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-p1-baseline-20261015-01/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-p1-baseline-20261015-01/junit.xml",
+      "bytes": 12677,
+      "sha256": "10028cb1d3df8926d043fbd24065804eb1d181f1c051534d2a6ff5963bb6fdab",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-p1-baseline-20261015-01/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-p1-baseline-20261015-01/pytest.log",
+      "bytes": 12098,
+      "sha256": "21df2fed06889c70464ec21a254d6724f2eee1ec82afe97cab155b3b4158af77",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-p1-baseline-20261015-01/summary.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-p1-baseline-20261015-01/summary.json",
+      "bytes": 463,
+      "sha256": "0321719215a12f607da99acf6ae36968481d0226c40b3c241041956edabd7252",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-risk-request-mismatch-20261015-01.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-risk-request-mismatch-20261015-01.json",
+      "bytes": 4992,
+      "sha256": "7716ed351413f76d85a6c7c7cc0f98c3f46b536c59b341c310ce3db894994d20",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-source-audit-20261015-01.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-source-audit-20261015-01.json",
+      "bytes": 8225,
+      "sha256": "12dd1629ddf7490bcbe3af6888d54bc73ed80eb4d38935eb1a6b91965ee28a7e",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-source-audit-final-20261015-01.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-source-audit-final-20261015-01.json",
+      "bytes": 8467,
+      "sha256": "917b0fb82b4d755b27558c5b2ad33b18ce4953df16ef039924c386b924196f46",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/acceptance-test-comparison-20261015-01.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/acceptance-test-comparison-20261015-01.json",
+      "bytes": 3877,
+      "sha256": "ba360bd96dfb7720ff9cf49dd1cc3ac7a7e952c85dc49a262d719fa8a8ced649",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/baseline-files.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/baseline-files.json",
+      "bytes": 195363,
+      "sha256": "177ddfa3502922861b450b09eacbfa42afa0636c7d1cc5741e4b047cc13d7af2",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/core-first.txt",
+      "target_path": "experiments/geographic_execution_plan/artifacts/core-first.txt",
+      "bytes": 2369,
+      "sha256": "271b0a1651ce675943be0811732ba44ea74fa14c1843760e5c4e2bda54f6f797",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/core-red.txt",
+      "target_path": "experiments/geographic_execution_plan/artifacts/core-red.txt",
+      "bytes": 3404,
+      "sha256": "d41806efb92dec38db53d10227cf5e981402f197cea5b202201433545a0f97ac",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/core-second.txt",
+      "target_path": "experiments/geographic_execution_plan/artifacts/core-second.txt",
+      "bytes": 1029,
+      "sha256": "bc81f987e1be8b6be9305314d6eeda973c6a02f47b5e7e2f7d9ec1bf90f6917d",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-contract-green-20261015-01/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-contract-green-20261015-01/commands.json",
+      "bytes": 626,
+      "sha256": "e61eedce01cf993b0fd6e7bc1e6423ff84b624613121dc3af3297a3b1a32dcc5",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-contract-green-20261015-01/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-contract-green-20261015-01/junit.xml",
+      "bytes": 1015,
+      "sha256": "a716bba8231160f42c55df3ee21da47ab9b77a5651e13fd6c4484750841d25c3",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-contract-green-20261015-01/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-contract-green-20261015-01/pytest.log",
+      "bytes": 1042,
+      "sha256": "8c7bbc8e57f344c2eef56fa1ef80d1b6bb88b35dc9141d77a7f0acebfa43eef3",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-contract-red-20261015-01/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-contract-red-20261015-01/commands.json",
+      "bytes": 624,
+      "sha256": "bcfe462e2f7ba66e30669b5b3d1c7cf9dede22ee28f690b0af4732ccc33d31cb",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-contract-red-20261015-01/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-contract-red-20261015-01/junit.xml",
+      "bytes": 8885,
+      "sha256": "a13a463b0c990b480a0b5d27b2fcf400972a67c1ad2c5993d49f07726b7365b1",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-contract-red-20261015-01/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-contract-red-20261015-01/pytest.log",
+      "bytes": 8857,
+      "sha256": "f15a684213b4f9403a0a231aa8631248bf37547bbc88432f6df3cea15df44bb5",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/bootstrap/sitecustomize.py",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/bootstrap/sitecustomize.py",
+      "bytes": 117,
+      "sha256": "09596c4f831c63a30010eaa66ea32d0d95321cd524094217b497d31a1f2b5043",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/captured-risk-comparison.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/captured-risk-comparison.json",
+      "bytes": 354194,
+      "sha256": "0cbc39b707f96ba0f0dbaac981f81f1f073089c20cd8cf1f14edc99e1202b943",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/commands.json",
+      "bytes": 2375,
+      "sha256": "1d6bf437598279e6121f9fc37c137b99b0d71809622b15fd47b61f0ff362801a",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/example-fixture-plan.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/example-fixture-plan.json",
+      "bytes": 521848,
+      "sha256": "e492e21004acfbb77459fce7d3d4db34d0e33ffffc38b09659a18ebb595634f9",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/junit.xml",
+      "bytes": 113301,
+      "sha256": "5e6d33c8ec20ab622740900ea1e82f5c7178c847c7da98c57b784bc23867d36c",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/p3-manual-replay.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/p3-manual-replay.json",
+      "bytes": 843997,
+      "sha256": "532891f6656b2dad996cd52bf63868ce7e487ce80b85438b46a576a40b033634",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/pytest.log",
+      "bytes": 12778,
+      "sha256": "b8fbb23092e8289d6f61f2f92895783a481953553eb33966529c79480d57a1ef",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/replay-cli.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/replay-cli.json",
+      "bytes": 231,
+      "sha256": "4fc7c271b41458d63b38dd29f7b822e6a62d0c46f9abda022f53afc5dd4ef2ff",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/risk-comparison.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/risk-comparison.json",
+      "bytes": 67339,
+      "sha256": "ae41026c165dcff58dfeeda19201071a39c0197541ea8eecc053afef0b981b00",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/summary.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-full-20261015-01/summary.json",
+      "bytes": 786,
+      "sha256": "58b21fdff162ca3762c9fc917a21f90ea1540ca6a72c59ad2b7bc5609e0e1124",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-source-audit-20261015-01.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-source-audit-20261015-01.json",
+      "bytes": 8709,
+      "sha256": "9a2f12342fa6728115a4e8edacb3b44320526f8acb87d1279b3804c4478c53e0",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/fix-test-comparison-20261015-01.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/fix-test-comparison-20261015-01.json",
+      "bytes": 4309,
+      "sha256": "044fb0f3800936c07502644a943ef392ecfa20d2bbed12a95d60bffbb6e7e8e9",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/bootstrap/sitecustomize.py",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/bootstrap/sitecustomize.py",
+      "bytes": 117,
+      "sha256": "09596c4f831c63a30010eaa66ea32d0d95321cd524094217b497d31a1f2b5043",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/commands.json",
+      "bytes": 1898,
+      "sha256": "23743d1c2d186af9939be1380acaaf9302c07301e79d32b68276af412c6250ee",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/junit.xml",
+      "bytes": 286184,
+      "sha256": "620229e72d54dd71e1f1e399d870bd1b81f525b61e584adae8b29257edea9219",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/pytest.log",
+      "bytes": 199265,
+      "sha256": "b3de321ef1e683372228bbfe0b2d1609e9207d89689386281c2d123769ee17b8",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/risk-comparison.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/risk-comparison.json",
+      "bytes": 67339,
+      "sha256": "ae41026c165dcff58dfeeda19201071a39c0197541ea8eecc053afef0b981b00",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/summary.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-01/summary.json",
+      "bytes": 744,
+      "sha256": "6642c93a40d6e955e95c24513726388720c214427e454c8622e9ed10beeaa189",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/bootstrap/sitecustomize.py",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/bootstrap/sitecustomize.py",
+      "bytes": 117,
+      "sha256": "09596c4f831c63a30010eaa66ea32d0d95321cd524094217b497d31a1f2b5043",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/commands.json",
+      "bytes": 2187,
+      "sha256": "81262c31b4288f6527bcbfa255ed5202043b5155cfdd1b2302ec65551a39e84f",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/junit.xml",
+      "bytes": 1124132,
+      "sha256": "509eb42a69376f12386b51aaa163703a9247fac0570e7b0dc971e3d75d5de02d",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/pytest.log",
+      "bytes": 1086919,
+      "sha256": "9d290b2442e43551f76309550c9d8e9ece36973f8041f316a2b2064c18c867dd",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/risk-comparison.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/risk-comparison.json",
+      "bytes": 67339,
+      "sha256": "ae41026c165dcff58dfeeda19201071a39c0197541ea8eecc053afef0b981b00",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/summary.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-02/summary.json",
+      "bytes": 788,
+      "sha256": "ddb863af50c33edc5cdaf93af09586a490e38785dbbe8eb3bd07494c6cd87cbf",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/bootstrap/sitecustomize.py",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/bootstrap/sitecustomize.py",
+      "bytes": 117,
+      "sha256": "09596c4f831c63a30010eaa66ea32d0d95321cd524094217b497d31a1f2b5043",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/commands.json",
+      "bytes": 2187,
+      "sha256": "b354300e311d2eecd9491fb8b1652f050c72339b25d1ad1d037e73233ded9382",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/example-fixture-plan.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/example-fixture-plan.json",
+      "bytes": 512529,
+      "sha256": "06e19369599f78da5efb0735b96d59bdfffb8116984c7da85c26c73584fa66f0",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/junit.xml",
+      "bytes": 128856,
+      "sha256": "27dedb5f51378401a61470cbb9ea0b4c4f8b253727b53b86236b2333315394a2",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/p3-manual-replay.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/p3-manual-replay.json",
+      "bytes": 843997,
+      "sha256": "5caef25cc054c1ba7f4ec61e7be39149fed9c678b1aaa31269d879dc4d2a48b6",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/pytest.log",
+      "bytes": 28560,
+      "sha256": "6a1b33d33dc5bd38a5ce24baa0ff19859cbd4a38be6ea78941a53279c96b4f8f",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/replay-cli.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/replay-cli.json",
+      "bytes": 231,
+      "sha256": "1af655878f15622fa83451df1b21af5eeb89ebde57105992e6b1d17e6e3451d9",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/risk-comparison.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/risk-comparison.json",
+      "bytes": 67339,
+      "sha256": "ae41026c165dcff58dfeeda19201071a39c0197541ea8eecc053afef0b981b00",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/summary.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-20261015-03/summary.json",
+      "bytes": 786,
+      "sha256": "d3b0992bdfc1a85b87ae779f45937e2cd97df9474b526912f0f0f6f2d565a995",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/bootstrap/sitecustomize.py",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/bootstrap/sitecustomize.py",
+      "bytes": 117,
+      "sha256": "09596c4f831c63a30010eaa66ea32d0d95321cd524094217b497d31a1f2b5043",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/commands.json",
+      "bytes": 1847,
+      "sha256": "ef9bf1b36c89ee4cba99fff2bb6ffde147779cd63b9dc649913e79091df629a6",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/example-fixture-plan.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/example-fixture-plan.json",
+      "bytes": 512529,
+      "sha256": "f30c33b47de98c29f94a225d1502172ba7ef067fdb2b41c56ea5a0a68463c8cc",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/junit.xml",
+      "bytes": 21349,
+      "sha256": "66cbbe78808d2b0432850c63d61c7e54a309672b3dfef94bbb517f6a040c1c32",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/p3-manual-replay.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/p3-manual-replay.json",
+      "bytes": 843997,
+      "sha256": "148f3564d9f13db56b818e27e0336b0777e9cf30d5e8112f32a679e88206a5f3",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/pytest.log",
+      "bytes": 1216,
+      "sha256": "446128b6b7c1dfa3c17d2ec5ec584de8863b96db0062bf239f862bebf811de04",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/replay-cli.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/replay-cli.json",
+      "bytes": 231,
+      "sha256": "875abc8789fcf29c2d2db1c7168b0e4ddcddef00b6de81fe9f637878990d4b54",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/risk-comparison.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/risk-comparison.json",
+      "bytes": 67339,
+      "sha256": "ae41026c165dcff58dfeeda19201071a39c0197541ea8eecc053afef0b981b00",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/summary.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/offline-new-tests-temp-root-20261015/summary.json",
+      "bytes": 786,
+      "sha256": "f7980173a9de72b8022d5f49438371deca98e71df2ed6dc7d110f5656d0bac61",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/bootstrap/sitecustomize.py",
+      "target_path": "experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/bootstrap/sitecustomize.py",
+      "bytes": 117,
+      "sha256": "09596c4f831c63a30010eaa66ea32d0d95321cd524094217b497d31a1f2b5043",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/commands.json",
+      "bytes": 1530,
+      "sha256": "d30a4b6f24af9860cdab1bdab4030fd2c9ee4f68d64c0cad89f1e4cb0e5995d7",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/junit.xml",
+      "bytes": 13737,
+      "sha256": "bddd4a4c9923fae9efb6c4142779cd86e9beb72c5787f054b8165d7c71d78465",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/pytest.log",
+      "bytes": 13447,
+      "sha256": "5988e010d02281fbff1d2317cc32017737d242dd8bf94e8b5efbf31cd83c41c3",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/summary.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/p1-baseline-search-cap-20261015/summary.json",
+      "bytes": 463,
+      "sha256": "0321719215a12f607da99acf6ae36968481d0226c40b3c241041956edabd7252",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/pinned-inputs-v2.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/pinned-inputs-v2.json",
+      "bytes": 8366,
+      "sha256": "29152dbfb0c27a96d046d491c45d846e3524395a6fb7412dd4ee1afde09bdd32",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/pre-fix-report-20261015.md",
+      "target_path": "experiments/geographic_execution_plan/artifacts/pre-fix-report-20261015.md",
+      "bytes": 18767,
+      "sha256": "2807ad0e42c36d6821a4fe4d8ec1fc41664427b7eb97108b76c9cfd52e29a529",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/preflight.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/preflight.json",
+      "bytes": 10152,
+      "sha256": "a0f30cfa5644a243de685d921829328127d8e88b5e11a9e7a5d09cf80980d0aa",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-green-20261015-01/captured-risk-comparison.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-green-20261015-01/captured-risk-comparison.json",
+      "bytes": 354194,
+      "sha256": "27694bcdc5365cc71d84af300a87d04cd121b5e0968dea5e4cc815caf1b480d2",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-green-20261015-01/command.txt",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-green-20261015-01/command.txt",
+      "bytes": 368,
+      "sha256": "f7632f7ae4d7e88cec9bd56f9e71cb7bd5adb58c7801efcb1bc7b9c927806577",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-green-20261015-01/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-green-20261015-01/junit.xml",
+      "bytes": 880,
+      "sha256": "a7af9952a1ea475ef0574a6b41839d9c34cd5cd0b5786ca9d43562257dde3f56",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-green-20261015-01/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-green-20261015-01/pytest.log",
+      "bytes": 1041,
+      "sha256": "e1397b6e81b3f52a835b2262557bb312ca2cd67f4a9599596c43080e87c231a7",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/bootstrap/sitecustomize.py",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/bootstrap/sitecustomize.py",
+      "bytes": 117,
+      "sha256": "09596c4f831c63a30010eaa66ea32d0d95321cd524094217b497d31a1f2b5043",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/commands.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/commands.json",
+      "bytes": 1825,
+      "sha256": "a8f40396d27d7395fcfda0a35177b076e7d35289ce38170ac2d9e4f5035e9752",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/example-fixture-plan.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/example-fixture-plan.json",
+      "bytes": 512529,
+      "sha256": "c8e614ef48ab36632f05c6589c827e6ea47a147f6dfdf01ad3f63cd9485b28c9",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/junit.xml",
+      "bytes": 36064,
+      "sha256": "2c999885e255083b84963bcfc4d90013219b203d8c8e9a3ff9c673a0a14a7253",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/p3-manual-replay.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/p3-manual-replay.json",
+      "bytes": 843997,
+      "sha256": "648a65595c660c5a52c4c1c5df6825eafbd39b180b80fc1e77e3061f1501afe8",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/pytest.log",
+      "bytes": 15329,
+      "sha256": "0dc31ef9f73390afa44d1a2735b1e3773b0678593b20228acea2e3d49cc7ae6e",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/replay-cli.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/replay-cli.json",
+      "bytes": 231,
+      "sha256": "cc48b500a28e2a3d97ce26b0b476190e44e2c3b65a615ebb88e3581bd678066e",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/risk-comparison.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/risk-comparison.json",
+      "bytes": 67339,
+      "sha256": "ae41026c165dcff58dfeeda19201071a39c0197541ea8eecc053afef0b981b00",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/summary.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015/summary.json",
+      "bytes": 786,
+      "sha256": "8132751065e69070e217fe13405a4037cced0f208b2a8b98ab2c2e78043e7fd1",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015-02/captured-risk-comparison.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015-02/captured-risk-comparison.json",
+      "bytes": 201084,
+      "sha256": "0745bcb7bb457dc18c1439da9c5d55754867b2a47736202ef8094d5dbacd3c46",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015-02/command.txt",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015-02/command.txt",
+      "bytes": 366,
+      "sha256": "468614dbe43bc73b1da0b87fc8c6d8d3d1ba4d2861919b9c9c63c9bf6aed57c6",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015-02/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015-02/junit.xml",
+      "bytes": 40100,
+      "sha256": "2ba8a301499b3ea7f4b2e729785250e468156d2850edfec5a48384f42467c6da",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015-02/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/risk-capture-red-20261015-02/pytest.log",
+      "bytes": 38447,
+      "sha256": "07e9549c3d0e86e92e3ebe177bd40f6aed258a499c2606c2d7fc9fe98f4430b2",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/source-audit.json",
+      "target_path": "experiments/geographic_execution_plan/artifacts/source-audit.json",
+      "bytes": 8225,
+      "sha256": "12dd1629ddf7490bcbe3af6888d54bc73ed80eb4d38935eb1a6b91965ee28a7e",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/storage-order-diagnostic-20261015/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/storage-order-diagnostic-20261015/junit.xml",
+      "bytes": 3326,
+      "sha256": "102f8576b466b1a559f878f4ebeb78fc26e853f0e1f0d5d7421a3ed701e289d4",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/storage-order-diagnostic-20261015/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/storage-order-diagnostic-20261015/pytest.log",
+      "bytes": 3068,
+      "sha256": "21b8310dc8363eba10b7df799a45d5b4da3584e2677a3166af713cfd7a502256",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/storage-targeted-20261015-01/junit.xml",
+      "target_path": "experiments/geographic_execution_plan/artifacts/storage-targeted-20261015-01/junit.xml",
+      "bytes": 3493,
+      "sha256": "4bf580f3195eac2fc16860fff491aa370f52d12aef25ae5a7b812054e922ee61",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/artifacts/storage-targeted-20261015-01/pytest.log",
+      "target_path": "experiments/geographic_execution_plan/artifacts/storage-targeted-20261015-01/pytest.log",
+      "bytes": 1028,
+      "sha256": "2aec1f99d30ac684ba98217c4181a6218ed90fbabc36e6b97944c4b70ef9fbb4",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/authority.py",
+      "target_path": "experiments/geographic_execution_plan/authority.py",
+      "bytes": 15823,
+      "sha256": "0717d854b12bf8aa39079d5ef3dac2ca17fb2a88be8e9b4533d515d350a67465",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/admin_catalog/SOURCE_MANIFEST.json",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/admin_catalog/SOURCE_MANIFEST.json",
+      "bytes": 3053,
+      "sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/admin_catalog/geographic_catalog.json",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/admin_catalog/geographic_catalog.json",
+      "bytes": 677345,
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/import_manifest.json",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/import_manifest.json",
+      "bytes": 3974,
+      "sha256": "cb3a75f3255f4fc126880940ccfc717898536d2b236fc7a2f7b7020a487d6d18",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/location_catalog.json",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/location_catalog.json",
+      "bytes": 11323,
+      "sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/relevance.py",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/relevance.py",
+      "bytes": 63341,
+      "sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_ip.py",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_ip.py",
+      "bytes": 9940,
+      "sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only.py",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only.py",
+      "bytes": 14781,
+      "sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_names.py",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_names.py",
+      "bytes": 6354,
+      "sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_names_v2.py",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_names_v2.py",
+      "bytes": 8739,
+      "sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_simple.py",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_simple.py",
+      "bytes": 7558,
+      "sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_v2.py",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_post_only_v2.py",
+      "bytes": 14006,
+      "sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_scope.py",
+      "target_path": "experiments/geographic_execution_plan/dependencies/p3/relevance_scope.py",
+      "bytes": 8625,
+      "sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/frozen_risk.py",
+      "target_path": "experiments/geographic_execution_plan/frozen_risk.py",
+      "bytes": 7278,
+      "sha256": "dec86f5f877ccbd16d7fac2201e2168f4090d0619dfa608e2d3fbd0631df2244",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/offline_guards.py",
+      "target_path": "experiments/geographic_execution_plan/offline_guards.py",
+      "bytes": 9685,
+      "sha256": "0b09f7eb951a0647da64d8bbd8e93db4414246365a4d2d1f0c5ccdc9242d3492",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/p3_bridge.py",
+      "target_path": "experiments/geographic_execution_plan/p3_bridge.py",
+      "bytes": 7754,
+      "sha256": "5ed8fbebdeb17e652d502ae862e36a22fe5549555c7539f1718a82ced93a21c5",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/replay.py",
+      "target_path": "experiments/geographic_execution_plan/replay.py",
+      "bytes": 2495,
+      "sha256": "461799c3e6fc7e3ba4ccc59168be70ae7cfe81593c9ff2a5344807d1609c3af4",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/run_offline.py",
+      "target_path": "experiments/geographic_execution_plan/run_offline.py",
+      "bytes": 10814,
+      "sha256": "8bc690c606ab0dac837c9023deae6f172862801a54ea7a873bbe397496490283",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/storage.py",
+      "target_path": "experiments/geographic_execution_plan/storage.py",
+      "bytes": 4588,
+      "sha256": "d25e8722775a8f3c33c215d8df924ddfd3b50b959230fdd22097b06910f44d0e",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_execution_plan/verify_sources.py",
+      "target_path": "experiments/geographic_execution_plan/verify_sources.py",
+      "bytes": 4885,
+      "sha256": "6897cc1b416baff015974ae1b92b025a7aea7b884c1e7c395a3411389421ee21",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "tests/test_geographic_execution_plan.py",
+      "target_path": "tests/test_geographic_execution_plan.py",
+      "bytes": 7580,
+      "sha256": "201f31f0c7bc31bd9487887225e57ddac3b9ff0d7c5d6230b3adce88b1ce8a28",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "tests/test_geographic_execution_plan_guards.py",
+      "target_path": "tests/test_geographic_execution_plan_guards.py",
+      "bytes": 5651,
+      "sha256": "57573e63d175c08f35139a712c7494c4b9bce2f18e69f0389afd35371a7f80a5",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "tests/test_geographic_execution_plan_integration.py",
+      "target_path": "tests/test_geographic_execution_plan_integration.py",
+      "bytes": 10422,
+      "sha256": "34a7aa33f830c4d69dcb1ee3329c3079da48ad800dda0455c8601a02094b59cb",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "tests/test_geographic_execution_plan_p3.py",
+      "target_path": "tests/test_geographic_execution_plan_p3.py",
+      "bytes": 12091,
+      "sha256": "ddf0c8aeaf4b38ea51e72bd400d093680ab56c418df7a42f1cb31d7e35d019f1",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "tests/test_geographic_execution_plan_provenance.py",
+      "target_path": "tests/test_geographic_execution_plan_provenance.py",
+      "bytes": 4708,
+      "sha256": "4ea4a56b289c1d9e10bca2b3c4e4e217dea2dc7b377f1c7c0ea387b52c2d1ae7",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "tests/test_geographic_execution_plan_resources.py",
+      "target_path": "tests/test_geographic_execution_plan_resources.py",
+      "bytes": 9957,
+      "sha256": "3b1aeaf69d9432fd0f4485a1d05ff09fba401b8d8db1d8a725b40a37383a35dc",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "tests/test_geographic_execution_plan_risk.py",
+      "target_path": "tests/test_geographic_execution_plan_risk.py",
+      "bytes": 19184,
+      "sha256": "2da5af3bbe9cebeedffe5e66f76859ba4bdb68da67fb1bec1dad0196e6c3610d",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p2",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p2/xhs-audit-agent-demo",
+      "source_path": "tests/test_geographic_execution_plan_storage.py",
+      "target_path": "tests/test_geographic_execution_plan_storage.py",
+      "bytes": 7534,
+      "sha256": "bd3668f3dd39f1d94d421e9405f706f6627ef86f084cebf8beff065d5fad77f4",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "backend/audit_agent/scoped_execution.py",
+      "target_path": "backend/audit_agent/scoped_execution.py",
+      "bytes": 17549,
+      "sha256": "4d4d998c6b2f24833280d41bdda22df4d48b04a208662df03f68b7640cd1b5e0",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "backend/audit_agent/scoped_selection.py",
+      "target_path": "backend/audit_agent/scoped_selection.py",
+      "bytes": 19792,
+      "sha256": "9449f1828bcf493f2b604a11b99fe8cb3f67647605cf8f720b44a67cb02f36ac",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "backend/audit_agent/scoped_selection_store.py",
+      "target_path": "backend/audit_agent/scoped_selection_store.py",
+      "bytes": 25499,
+      "sha256": "317b9c77309a4189db37b32ca1fcaffef1967e7d03455f18ae26a9ccc9cadf7f",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/.gitignore",
+      "target_path": "experiments/geographic_selection/.gitignore",
+      "bytes": 64,
+      "sha256": "4a8b51ab9f1a25f1218a593cd5ef9fece520352b5d75ab0f011476d74a2100f7",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/ACCEPTANCE-20261015.md",
+      "target_path": "experiments/geographic_selection/ACCEPTANCE-20261015.md",
+      "bytes": 6764,
+      "sha256": "2f60b52710a3002fad0880fc7d6318b713350442df21d85dd4f5acbb655722fd",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/INTERFACE_GAPS.md",
+      "target_path": "experiments/geographic_selection/INTERFACE_GAPS.md",
+      "bytes": 4144,
+      "sha256": "1bd3bc9d0f02ca0d94c0afeebcb6295ad41e0805f4a7d38b199e5ff7460c00b1",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/README.md",
+      "target_path": "experiments/geographic_selection/README.md",
+      "bytes": 2811,
+      "sha256": "23d25ca2235e2865c77967741b209ce592003deea55ff7f114963b2c7c08adc0",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/REPORT.md",
+      "target_path": "experiments/geographic_selection/REPORT.md",
+      "bytes": 21257,
+      "sha256": "4b778a0ac09465e83eb03f4fc281923476f4b08016adde2a22dc22afea89d602",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/DELIVERY_MANIFEST.json",
+      "target_path": "experiments/geographic_selection/artifacts/DELIVERY_MANIFEST.json",
+      "bytes": 10042,
+      "sha256": "c08ad9d6998b1bcdc9c04de36ee8b082b5911170110d8ffedcc5477315019931",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/checks.json",
+      "target_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/checks.json",
+      "bytes": 36666,
+      "sha256": "1ab9be23a98d84454d357b0803325991029955502cc8d909e8bb6f5f5724a981",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/independent-review.md",
+      "target_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/independent-review.md",
+      "bytes": 3353,
+      "sha256": "f92eedd221f811f25066940c6e0efb5d466b7625cc246a1b3a503dbd67fae8a1",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/input-audit.json",
+      "target_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/input-audit.json",
+      "bytes": 270,
+      "sha256": "6a6cd916625e139ff8871b00a83c839236e89fdd8797133eec243e0518abfe1d",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/pytest.log",
+      "target_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/pytest.log",
+      "bytes": 1281,
+      "sha256": "5fbee40a76c68e662ad4862a52414320fb654c2414a39a0887034f368be60046",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/reproduce_review_findings.json",
+      "target_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/reproduce_review_findings.json",
+      "bytes": 1439,
+      "sha256": "867ab303db9a23e06548b3b2d4e023ff43d792faf4b4c0b223ed42d32e5fc8c0",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/reproduce_review_findings.py",
+      "target_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/reproduce_review_findings.py",
+      "bytes": 3343,
+      "sha256": "d1adf477ed9f3f251254d8c2088f0420c666f20f29b155e0903f4eaa280ccf3d",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/rerun.py",
+      "target_path": "experiments/geographic_selection/artifacts/acceptance-20261015-01/rerun.py",
+      "bytes": 443,
+      "sha256": "f903b4c3954bec43ea379ac91fe7071ddc53a75be408416afaa03051ce95e77d",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/checks.json",
+      "target_path": "experiments/geographic_selection/artifacts/checks.json",
+      "bytes": 36643,
+      "sha256": "155d61258e3178207636b249a284a38a1defe2a7918286d9e777701c6dc5b809",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/example.json",
+      "target_path": "experiments/geographic_selection/artifacts/example.json",
+      "bytes": 2461,
+      "sha256": "11e4b0ce8c48c58e93d93e10523125eef84a7cb14e08c294d949be8ad5ba48db",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/input-verification.json",
+      "target_path": "experiments/geographic_selection/artifacts/input-verification.json",
+      "bytes": 199,
+      "sha256": "6b2da6d55af494a7030b507b4a3d7e9b78be9f60fc8d8f72a38b8acaa5818236",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/pytest.log",
+      "target_path": "experiments/geographic_selection/artifacts/pytest.log",
+      "bytes": 1281,
+      "sha256": "2a278d46eeb55e3e06a3b309910a12ee49264bef6d2429a48112dab7c10ff79e",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/readonly-final.json",
+      "target_path": "experiments/geographic_selection/artifacts/readonly-final.json",
+      "bytes": 5741,
+      "sha256": "f4304ab9990f2f9e12aa8eeb00b4002d2fdd21001f41f2b9788a2b5ade79d0a4",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/REPAIR_MANIFEST.json",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/REPAIR_MANIFEST.json",
+      "bytes": 10399,
+      "sha256": "d00972fe6b41a77df776031a9f6788494c75317c0f0791d11820c5700d5f0f8a",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/REPORT-before-repair.md",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/REPORT-before-repair.md",
+      "bytes": 13634,
+      "sha256": "735a88b15a3ddc74480836166a7365490b91b8ee168c24e2fbe46065f530d7d8",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/checks.json",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/checks.json",
+      "bytes": 8356,
+      "sha256": "7eeaa553bc8428bd63d010d221e6c504b9877f5a880d89047f8633ca15f115fd",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/focused-final/checks.json",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/focused-final/checks.json",
+      "bytes": 3931,
+      "sha256": "8db9955a39ff98cd75320cd7bc87af5e8340a35d19838985e484bb287bbe5346",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/focused-final/pytest.log",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/focused-final/pytest.log",
+      "bytes": 126,
+      "sha256": "c7c1f51126bca5bf9253a04c9463d1c8c801ae67e5101f751a03a82317d5ab93",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/focused-final/rerun.py",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/focused-final/rerun.py",
+      "bytes": 593,
+      "sha256": "c1d0b5fb46cb8290b89eba4b409a4bf2e499c7838d6daa564c0505eb48553e80",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/full-regression/checks.json",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/full-regression/checks.json",
+      "bytes": 38632,
+      "sha256": "549b7e0bd13de283f1ca451cb7c19f69b70190f8caeb608b242ea5edc94f6d28",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/full-regression/pytest.log",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/full-regression/pytest.log",
+      "bytes": 1281,
+      "sha256": "1277d291c84e30f34959bd6b62a928239c5b2cf8dc0995bca9717581654fc3b2",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/full-regression/rerun.py",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/full-regression/rerun.py",
+      "bytes": 593,
+      "sha256": "c1d0b5fb46cb8290b89eba4b409a4bf2e499c7838d6daa564c0505eb48553e80",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/full-regression/tested-source-sha256.json",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/full-regression/tested-source-sha256.json",
+      "bytes": 1897,
+      "sha256": "9039e631b326f2e45f1733b241e1527e16b16b2767d35b42621016fb09167584",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/independent-repair-review.md",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/independent-repair-review.md",
+      "bytes": 1206,
+      "sha256": "2403bc52d9e679c4d4e10ed10edfdc7b4b95f3be1aec7ae50a5cf0cb317134af",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/pytest.log",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/pytest.log",
+      "bytes": 192,
+      "sha256": "7c3ad40ad5f4c544cbe05c5cea227b7c47c554244d17d09cf22cf879060ade22",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/red-before-fix/checks.json",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/red-before-fix/checks.json",
+      "bytes": 2610,
+      "sha256": "350cb76f5b8824c0251c9cec98369b5d0167df19370b487a6532c4930d0ba6b8",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/red-before-fix/pytest.log",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/red-before-fix/pytest.log",
+      "bytes": 13346,
+      "sha256": "d5a8799f42797458c80376135eddd07525c1c779d5c47f27435d2964bce7cb59",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/red-before-fix/rerun.py",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/red-before-fix/rerun.py",
+      "bytes": 593,
+      "sha256": "c1d0b5fb46cb8290b89eba4b409a4bf2e499c7838d6daa564c0505eb48553e80",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/repair-baseline.json",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/repair-baseline.json",
+      "bytes": 2252,
+      "sha256": "47f48a128b2e272e84f420fdafa7c4462cbe4ea00ecf92329fabf93b95faf01a",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/reproduce_fixed.json",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/reproduce_fixed.json",
+      "bytes": 1616,
+      "sha256": "5e73d5b1844ca206736f62811a6991b9001b8829e37f82c68e1ff2da55b3ecaf",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/reproduce_fixed.py",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/reproduce_fixed.py",
+      "bytes": 4196,
+      "sha256": "efbcb7eb130b35e31ef388d79e8f9be2d5bd7a23873fa427cf2641455aa0807c",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/rerun.py",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/rerun.py",
+      "bytes": 593,
+      "sha256": "58bffc31d02f0aa1c1ebf488470d5029e17bcbccc4fd89c1cb4f6a892913b5bc",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/static-and-boundary-checks.json",
+      "target_path": "experiments/geographic_selection/artifacts/risk-binding-repair-20261015-01/static-and-boundary-checks.json",
+      "bytes": 5338,
+      "sha256": "9a090a3f7485c557c3c7470ceef369f978a1f071f8a465218205472ff0a84063",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/artifacts/static-checks.json",
+      "target_path": "experiments/geographic_selection/artifacts/static-checks.json",
+      "bytes": 3043,
+      "sha256": "762be1806e9e151056cc7860ee25b8ed3289bedddbfde271bbfb7e63b2b806aa",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/bridge.py",
+      "target_path": "experiments/geographic_selection/bridge.py",
+      "bytes": 8513,
+      "sha256": "a3cbea769e9956de0fa8e6056bbf27fe6fba746c2bfe1f7091bdd336da3e392c",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/demo.py",
+      "target_path": "experiments/geographic_selection/demo.py",
+      "bytes": 4410,
+      "sha256": "cece3c14e66324c0bcf2d052bf7c787442affc8a082fb4f34e16b134764eb38f",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/IMPORT_MANIFEST.json",
+      "target_path": "experiments/geographic_selection/dependencies/IMPORT_MANIFEST.json",
+      "bytes": 3153,
+      "sha256": "c7d17f75b673babc6d1a8cb2d8bd95a31a68e34bece311dd1765380f47889a57",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/__init__.py",
+      "target_path": "experiments/geographic_selection/dependencies/__init__.py",
+      "bytes": 62,
+      "sha256": "95e5f45ce6e2204058e6067779882c3051cc8ced001963b1704926aa02d92bdc",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/__init__.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/__init__.py",
+      "bytes": 62,
+      "sha256": "95e5f45ce6e2204058e6067779882c3051cc8ced001963b1704926aa02d92bdc",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/backend/__init__.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/backend/__init__.py",
+      "bytes": 62,
+      "sha256": "95e5f45ce6e2204058e6067779882c3051cc8ced001963b1704926aa02d92bdc",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/__init__.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/__init__.py",
+      "bytes": 62,
+      "sha256": "95e5f45ce6e2204058e6067779882c3051cc8ced001963b1704926aa02d92bdc",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance.py",
+      "bytes": 63341,
+      "sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_ip.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_ip.py",
+      "bytes": 9940,
+      "sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only.py",
+      "bytes": 14781,
+      "sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_names.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_names.py",
+      "bytes": 6354,
+      "sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_names_v2.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_names_v2.py",
+      "bytes": 8739,
+      "sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_simple.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_simple.py",
+      "bytes": 7558,
+      "sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_v2.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_post_only_v2.py",
+      "bytes": 14006,
+      "sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_scope.py",
+      "target_path": "experiments/geographic_selection/dependencies/p3/backend/audit_agent/relevance_scope.py",
+      "bytes": 8625,
+      "sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/admin_catalog/SOURCE_MANIFEST.json",
+      "target_path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/admin_catalog/SOURCE_MANIFEST.json",
+      "bytes": 3053,
+      "sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/admin_catalog/geographic_catalog.json",
+      "target_path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/admin_catalog/geographic_catalog.json",
+      "bytes": 677345,
+      "sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/location_catalog.json",
+      "target_path": "experiments/geographic_selection/dependencies/p3/experiments/geographic_relevance/location_catalog.json",
+      "bytes": 11323,
+      "sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/fixtures.py",
+      "target_path": "experiments/geographic_selection/fixtures.py",
+      "bytes": 3527,
+      "sha256": "5d70b3c496135ea35aa7fcfd3907f13ffba74195011afc9add674073648a5221",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/offline_guard.py",
+      "target_path": "experiments/geographic_selection/offline_guard.py",
+      "bytes": 2898,
+      "sha256": "6e601d4758e2111c64248bb7185ea981eeb7b9bb43216baad0b4cc410c61d4e1",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-implementation.md",
+      "target_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-implementation.md",
+      "bytes": 57576,
+      "sha256": "99058083b9119e32f2292a0d597f5955d5703289c930fe0bebf674071c73b70c",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p2-pinned-inputs-v2.json",
+      "target_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p2-pinned-inputs-v2.json",
+      "bytes": 8366,
+      "sha256": "29152dbfb0c27a96d046d491c45d846e3524395a6fb7412dd4ee1afde09bdd32",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p2-start-v2.md",
+      "target_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p2-start-v2.md",
+      "bytes": 39949,
+      "sha256": "c604bb4d4d01eb2f7ff9ce617f54619e0abb3acd4cd0c54d933923e6f3860868",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p4-parallel-start.md",
+      "target_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p4-parallel-start.md",
+      "bytes": 34371,
+      "sha256": "3c65be88160f1cc847e56375352df9b183d08614de3e0f443b3f9310168a589b",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p4-pinned-inputs-v1.json",
+      "target_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-p4-pinned-inputs-v1.json",
+      "bytes": 10562,
+      "sha256": "93fda5e57b2bf492bb759976443c252398aeb3684b40d1fa95dcad1959f42d72",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-verification.md",
+      "target_path": "experiments/geographic_selection/pinned_docs/geographic-relevance-verification.md",
+      "bytes": 15519,
+      "sha256": "a8b50e63787f75b6a12cdfb9cf324dc02ed996994fd392084621d3662e4bb9f4",
+      "kind": "upstream_evidence"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/preflight.json",
+      "target_path": "experiments/geographic_selection/preflight.json",
+      "bytes": 12395,
+      "sha256": "227e08ebcd24e2bae8247971e010525257b8e3aafacee39eb3a0b38d73104ee9",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/run_checks.py",
+      "target_path": "experiments/geographic_selection/run_checks.py",
+      "bytes": 3250,
+      "sha256": "32f0692d775556660bc4bec134c6417bb594dddadd8805a6cb8a48b49d8920c6",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "experiments/geographic_selection/verify_inputs.py",
+      "target_path": "experiments/geographic_selection/verify_inputs.py",
+      "bytes": 2235,
+      "sha256": "e0f773c625e39bd09bd5ba550e8b8a9e3b4c2f5ce04b843f6e3165bb6d6f14cd",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "tests/test_scoped_bridge.py",
+      "target_path": "tests/test_scoped_bridge.py",
+      "bytes": 8005,
+      "sha256": "a52b5ed5309421b120572c52a8e980d3174180b6ed458a4de702fe0d8b8d9ac8",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "tests/test_scoped_execution.py",
+      "target_path": "tests/test_scoped_execution.py",
+      "bytes": 16999,
+      "sha256": "519d9da54991c89a25ebd0b21e83f4959553a1bc45ce5d9918efc087d63575bc",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "tests/test_scoped_selection.py",
+      "target_path": "tests/test_scoped_selection.py",
+      "bytes": 13384,
+      "sha256": "45ef427a90766220e43bb38cb497543ac9def462eb69dd0cbfb0180dd9680a99",
+      "kind": "upstream_source_or_dependency"
+    },
+    {
+      "phase": "p4",
+      "source_root": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p4/xhs-audit-agent-demo",
+      "source_path": "tests/test_scoped_selection_store.py",
+      "target_path": "tests/test_scoped_selection_store.py",
+      "bytes": 17404,
+      "sha256": "9a96895e9f48fbdcb404ac823813b1d6e9c384e7fb3f4f8593ebd8d3f1f769e9",
+      "kind": "upstream_source_or_dependency"
+    }
+  ]
+}

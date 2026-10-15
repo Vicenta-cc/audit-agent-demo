@@ -1,0 +1,60 @@
+{
+  "summary": "4 failed, 384 passed, 5 warnings, 23 subtests passed in 64.29s",
+  "failed_ids": [
+    "tests/test_creation_prompt_isolation.py::test_guidance_is_available_through_native_deferred_describe",
+    "tests/test_creation_prompt_isolation.py::test_global_prompt_keeps_authority_but_not_authoring_payloads",
+    "tests/test_creation_prompt_isolation.py::test_formal_lexicon_prompt_uses_backend_bound_references_not_model_hashes",
+    "tests/test_creation_prompt_isolation.py::test_original_prompt_lines_are_preserved_or_explicitly_accounted_for"
+  ],
+  "baseline_summary": "4 failed, 248 passed, 5 warnings, 23 subtests passed in 39.79s",
+  "failed_ids_identical_to_baseline": true,
+  "new_failures_vs_baseline": [],
+  "passed_delta_vs_original_eight_file_baseline": 136,
+  "full_regression_file_count": 13,
+  "name_verification": {
+    "validation": "all packaged supported canonical names and aliases resolved by backend; no model or collector",
+    "catalog_version": "cn-division-2026.0.1-reviewed-p1-v1",
+    "catalog_file_sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+    "all_administrative_records": 3218,
+    "supported_targets": 327,
+    "supported_levels": {
+      "province": 34,
+      "prefecture": 293
+    },
+    "municipalities_in_province_count": 4,
+    "canonical_names": 327,
+    "alias_occurrences": 327,
+    "unique_aliases": 326,
+    "unique_names_and_aliases": 653,
+    "resolution_counts": {
+      "resolved": 652,
+      "pending": 1
+    },
+    "ambiguous_supported_aliases": {
+      "吉林": [
+        "吉林省",
+        "吉林市"
+      ]
+    },
+    "model_requests": 0,
+    "collection_requests": 0,
+    "production_database_writes": 0
+  },
+  "artifacts": {
+    "service-flow-province-city.json": {
+      "sha256": "a0091a168e40951e7e8f39a6e93fdd209035f62b06619146ea3dbf54e56c1ce5",
+      "bytes": 534396
+    },
+    "service-flow-national-province-city.json": {
+      "sha256": "669325754896f8eafbf6ea755e18ae08b44c5c1a107e4f7ead79f45903c1af33",
+      "bytes": 536469
+    },
+    "province-city-name-verification.json": {
+      "sha256": "49e158b35d4df89023ac487d8765d2d368088680fdae31c532403b4a98ef1d67",
+      "bytes": 210196
+    }
+  },
+  "model_requests": 0,
+  "collection_requests": 0,
+  "production_database_writes": 0
+}

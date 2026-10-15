@@ -1,0 +1,26 @@
+{
+  "comparison_fields": [
+    "code",
+    "name",
+    "level",
+    "kind",
+    "province_code"
+  ],
+  "province_count": 34,
+  "prefecture_count": 333,
+  "prefecture_types": {
+    "地级市": 293,
+    "盟": 3,
+    "自治州": 30,
+    "地区": 7
+  },
+  "supported_identity_count": 297,
+  "target_policy": "single_prefecture_city_or_municipality",
+  "compared_identity_count": 367,
+  "missing": [],
+  "extra": [],
+  "mismatches": [],
+  "exact_identity_match": true,
+  "benchmark_basis": "2016 historical official full table plus independently verified Laiwu removal and Nagqu reclassification; corroborated by official 2024 aggregate counts; not a fresh 2026 official national full list",
+  "county_review": "Upstream county auxiliaries are not all independently checked against official sources; they never become supported P1 scope."
+}

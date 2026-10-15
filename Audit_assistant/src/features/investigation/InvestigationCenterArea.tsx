@@ -1,3 +1,4 @@
+import { RegionSelectionHistoryCard } from "./RegionSelectionHistoryCard";
 import { mapInvestigationRunState } from "./investigationRunState";
 import { InvestigationAccountTools } from "./InvestigationAccountTools";
 import { Fragment, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -41,6 +42,8 @@ import { platformOptionsList } from "../../mocks/investigationMocks";
 interface InvestigationCenterAreaProps {
   session: InvestigationSession;
   isSendingMessage: boolean;
+  onSaveRelevanceScope?: (targetText: string, operationId: string, clarificationTargetText?: string) => Promise<void>;
+  isSavingRelevanceScope?: boolean;
   sendingMessageStage?: InvestigationTurnStage;
   isSidebarCollapsed: boolean;
   onToggleSidebar: () => void;
@@ -126,6 +129,8 @@ function getEthnicRelationsFollowUpPlaceholder(session: InvestigationSession) {
 export function InvestigationCenterArea({
   session,
   isSendingMessage,
+  onSaveRelevanceScope,
+  isSavingRelevanceScope = false,
   sendingMessageStage,
   isSidebarCollapsed,
   onToggleSidebar,
@@ -239,7 +244,7 @@ export function InvestigationCenterArea({
   ]);
 
   const handleSend = () => {
-    if (!inputText.trim() || isSendingMessage) return;
+    if (!inputText.trim() || isSendingMessage || isSavingRelevanceScope) return;
     onSendMessage(inputText.trim());
     setInputText("");
   };
@@ -376,6 +381,10 @@ export function InvestigationCenterArea({
                 return null;
               }
 
+              if (msg.sender === "system" && msg.type === "region_selection" && msg.regionSelection) {
+                return <RegionSelectionHistoryCard key={msg.id} entry={msg.regionSelection} />;
+              }
+
               // Assistant message cases
               const withProposalPresentation = (card: ReactNode) => msg.authoritativeProposalPresentation ? (
                 <Fragment key={msg.id}>
@@ -389,6 +398,13 @@ export function InvestigationCenterArea({
               const messageDraft = msg.draftData || session.draft;
               const messagePreview = msg.confirmationPreview || session.creationBinding?.confirmationPreview;
               const historicalDraft = Boolean(msg.draftData);
+              const draftCards = session.messages.filter(message => message.type === "task_proposal" || message.type === "task_confirmation");
+              const latestCard = draftCards[draftCards.length - 1];
+              const geoEditable = Boolean(onSaveRelevanceScope && !historicalDraft && latestCard?.id === msg.id
+                && !messageDraft.confirmed && session.creationBinding?.draft?.status === "DRAFT"
+                && !session.creationBinding?.run);
+              const geoDisabled = isSendingMessage || isSavingRelevanceScope || Boolean(session.creationBinding?.pendingTurnId) || isConfirmingCreation;
+
               if (msg.type === "task_proposal") {
                 if (msg.proposalData?.interactionMode === "platform-selection") {
                   return (
@@ -421,6 +437,8 @@ export function InvestigationCenterArea({
                         : undefined}
                       onGenerateConfig={() => onGenerateTaskConfig(msg.id)}
                       onOpenAnalysisPlan={historicalDraft && onOpenDraftSnapshot ? () => onOpenDraftSnapshot(msg, "ruleset") : () => onOpenDrawer("ruleset")}
+                      onSaveRelevanceScope={geoEditable ? onSaveRelevanceScope : undefined}
+                      relevanceScopeDisabled={geoDisabled}
                       error={session.creationBinding?.error}
                     />
                   );
@@ -463,6 +481,8 @@ export function InvestigationCenterArea({
                     preview={messagePreview}
                     onOpenKeywordEditor={session.creationBinding ? () => onOpenDrawer("keyword_editor") : undefined}
                     isConfirming={isConfirmingCreation}
+                    onSaveRelevanceScope={geoEditable ? onSaveRelevanceScope : undefined}
+                    relevanceScopeDisabled={geoDisabled}
                     error={session.creationBinding?.error}
                   />
                 );
@@ -833,14 +853,14 @@ export function InvestigationCenterArea({
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={getPlaceholder()}
-            disabled={isSendingMessage || session.status === "读取异常"}
+            disabled={isSendingMessage || isSavingRelevanceScope || session.status === "读取异常"}
             aria-keyshortcuts={getSuggestedPrompt(getPlaceholder()) ? "Enter Shift+Enter Tab" : "Enter Shift+Enter"}
           />
           <button
             type="button"
             className="inv-send-btn"
             onClick={handleSend}
-            disabled={!inputText.trim() || isSendingMessage || session.status === "读取异常"}
+            disabled={!inputText.trim() || isSendingMessage || isSavingRelevanceScope || session.status === "读取异常"}
             title="发送消息"
           >
             <Send size={15} />

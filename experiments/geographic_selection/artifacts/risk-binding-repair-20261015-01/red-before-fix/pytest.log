@@ -1,0 +1,226 @@
+FFFFFFFFF                                                                [100%]
+=================================== FAILURES ===================================
+_ test_first_risk_rejects_old_record_for_same_identity_before_persistence[post] _
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_first_risk_rejects_old_re0')
+changed = 'post'
+
+    @pytest.mark.parametrize('changed', ['post', 'comments', 'identity'])
+    def test_first_risk_rejects_old_record_for_same_identity_before_persistence(tmp_path, changed):
+        h = Harness(tmp_path, rows={'A': [('x', '克拉玛依欠薪')], 'B': []}, task_limit=1)
+        old = deepcopy(h.items['A'][0])
+        changes = {'post': {'desc': '克拉玛依欠薪新原文'},
+                   'comments': {'comments': [{'comment_id': 'c', 'content': '新评论欠薪'}]},
+                   'identity': {'enterprise_verify_reason': '公安官方'}}
+        current = fixture_occurrence(h.plan, 'A', 'x', **changes[changed])
+        assert current['occurrence_id'] == old['occurrence_id']
+        if changed == 'identity':
+            assert current['risk']['score']['band'] == 'discard'
+            assert old['risk']['score']['band'] == 'weak'
+        h.items['A'] = [current]
+        h.risk = lambda p, q, o: deepcopy(old['risk'])
+>       with pytest.raises(ValueError, match='risk_capture_evidence_mismatch'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_scoped_execution.py:319: Failed
+_ test_first_risk_rejects_old_record_for_same_identity_before_persistence[comments] _
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_first_risk_rejects_old_re1')
+changed = 'comments'
+
+    @pytest.mark.parametrize('changed', ['post', 'comments', 'identity'])
+    def test_first_risk_rejects_old_record_for_same_identity_before_persistence(tmp_path, changed):
+        h = Harness(tmp_path, rows={'A': [('x', '克拉玛依欠薪')], 'B': []}, task_limit=1)
+        old = deepcopy(h.items['A'][0])
+        changes = {'post': {'desc': '克拉玛依欠薪新原文'},
+                   'comments': {'comments': [{'comment_id': 'c', 'content': '新评论欠薪'}]},
+                   'identity': {'enterprise_verify_reason': '公安官方'}}
+        current = fixture_occurrence(h.plan, 'A', 'x', **changes[changed])
+        assert current['occurrence_id'] == old['occurrence_id']
+        if changed == 'identity':
+            assert current['risk']['score']['band'] == 'discard'
+            assert old['risk']['score']['band'] == 'weak'
+        h.items['A'] = [current]
+        h.risk = lambda p, q, o: deepcopy(old['risk'])
+>       with pytest.raises(ValueError, match='risk_capture_evidence_mismatch'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_scoped_execution.py:319: Failed
+_ test_first_risk_rejects_old_record_for_same_identity_before_persistence[identity] _
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_first_risk_rejects_old_re2')
+changed = 'identity'
+
+    @pytest.mark.parametrize('changed', ['post', 'comments', 'identity'])
+    def test_first_risk_rejects_old_record_for_same_identity_before_persistence(tmp_path, changed):
+        h = Harness(tmp_path, rows={'A': [('x', '克拉玛依欠薪')], 'B': []}, task_limit=1)
+        old = deepcopy(h.items['A'][0])
+        changes = {'post': {'desc': '克拉玛依欠薪新原文'},
+                   'comments': {'comments': [{'comment_id': 'c', 'content': '新评论欠薪'}]},
+                   'identity': {'enterprise_verify_reason': '公安官方'}}
+        current = fixture_occurrence(h.plan, 'A', 'x', **changes[changed])
+        assert current['occurrence_id'] == old['occurrence_id']
+        if changed == 'identity':
+            assert current['risk']['score']['band'] == 'discard'
+            assert old['risk']['score']['band'] == 'weak'
+        h.items['A'] = [current]
+        h.risk = lambda p, q, o: deepcopy(old['risk'])
+>       with pytest.raises(ValueError, match='risk_capture_evidence_mismatch'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_scoped_execution.py:319: Failed
+________ test_risk_write_and_query_barrier_bind_immutable_capture[post] ________
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_risk_write_and_query_barr0')
+changed = 'post'
+
+    @pytest.mark.parametrize('changed', ['post', 'comments', 'identity'])
+    def test_risk_write_and_query_barrier_bind_immutable_capture(tmp_path, changed):
+        from copy import deepcopy
+        from experiments.geographic_selection.fixtures import fixture_plan, fixture_occurrence
+        p = fixture_plan(queries=('A',), task_limit=1)
+        old = fixture_occurrence(p, 'A', 'x')
+        changes = {'post': {'desc': '克拉玛依欠薪新原文'},
+                   'comments': {'comments': [{'comment_id': 'c', 'text': '新评论'}]},
+                   'identity': {'enterprise_verify_reason': '公安官方'}}
+        current = fixture_occurrence(p, 'A', 'x', **changes[changed])
+        s = Store(tmp_path/'bound.sqlite')
+        s.create(p)
+        s.record_query(p['execution_id'], 'A', 'capturing', [], 'start')
+        captured = {'account_id': 'capture', 'occurrences': [current]}
+        s.record_query(p['execution_id'], 'A', 'captured', [], 'capture', capture=captured)
+>       with pytest.raises(ValueError, match='risk_capture_evidence_mismatch'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_scoped_selection_store.py:252: Failed
+______ test_risk_write_and_query_barrier_bind_immutable_capture[comments] ______
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_risk_write_and_query_barr1')
+changed = 'comments'
+
+    @pytest.mark.parametrize('changed', ['post', 'comments', 'identity'])
+    def test_risk_write_and_query_barrier_bind_immutable_capture(tmp_path, changed):
+        from copy import deepcopy
+        from experiments.geographic_selection.fixtures import fixture_plan, fixture_occurrence
+        p = fixture_plan(queries=('A',), task_limit=1)
+        old = fixture_occurrence(p, 'A', 'x')
+        changes = {'post': {'desc': '克拉玛依欠薪新原文'},
+                   'comments': {'comments': [{'comment_id': 'c', 'text': '新评论'}]},
+                   'identity': {'enterprise_verify_reason': '公安官方'}}
+        current = fixture_occurrence(p, 'A', 'x', **changes[changed])
+        s = Store(tmp_path/'bound.sqlite')
+        s.create(p)
+        s.record_query(p['execution_id'], 'A', 'capturing', [], 'start')
+        captured = {'account_id': 'capture', 'occurrences': [current]}
+        s.record_query(p['execution_id'], 'A', 'captured', [], 'capture', capture=captured)
+>       with pytest.raises(ValueError, match='risk_capture_evidence_mismatch'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_scoped_selection_store.py:252: Failed
+______ test_risk_write_and_query_barrier_bind_immutable_capture[identity] ______
+
+tmp_path = PosixPath('/private/var/folders/nm/f4xs0fds35x7jw6v7wd_7nf40000gp/T/p4-offline-validation-rgp_ynvi/pytest/test_risk_write_and_query_barr2')
+changed = 'identity'
+
+    @pytest.mark.parametrize('changed', ['post', 'comments', 'identity'])
+    def test_risk_write_and_query_barrier_bind_immutable_capture(tmp_path, changed):
+        from copy import deepcopy
+        from experiments.geographic_selection.fixtures import fixture_plan, fixture_occurrence
+        p = fixture_plan(queries=('A',), task_limit=1)
+        old = fixture_occurrence(p, 'A', 'x')
+        changes = {'post': {'desc': '克拉玛依欠薪新原文'},
+                   'comments': {'comments': [{'comment_id': 'c', 'text': '新评论'}]},
+                   'identity': {'enterprise_verify_reason': '公安官方'}}
+        current = fixture_occurrence(p, 'A', 'x', **changes[changed])
+        s = Store(tmp_path/'bound.sqlite')
+        s.create(p)
+        s.record_query(p['execution_id'], 'A', 'capturing', [], 'start')
+        captured = {'account_id': 'capture', 'occurrences': [current]}
+        s.record_query(p['execution_id'], 'A', 'captured', [], 'capture', capture=captured)
+>       with pytest.raises(ValueError, match='risk_capture_evidence_mismatch'):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValueError
+
+tests/test_scoped_selection_store.py:252: Failed
+___ test_selector_rejects_self_consistent_risk_from_different_capture[post] ____
+
+changed = 'post'
+
+    @pytest.mark.parametrize('changed', ['post', 'comments', 'identity'])
+    def test_selector_rejects_self_consistent_risk_from_different_capture(changed):
+        from experiments.geographic_selection.fixtures import fixture_plan, fixture_occurrence
+        p = fixture_plan(queries=('A',), task_limit=1)
+        old = fixture_occurrence(p, 'A', 'x')
+        changes = {'post': {'desc': '克拉玛依欠薪新原文'},
+                   'comments': {'comments': [{'comment_id': 'c', 'text': '新评论'}]},
+                   'identity': {'enterprise_verify_reason': '公安官方'}}
+        current = fixture_occurrence(p, 'A', 'x', **changes[changed])
+        current['risk'] = copy.deepcopy(old['risk'])
+        result = select_next_batch(p, states(p, current), state())
+>       assert result['status'] == 'blocked'
+E       AssertionError: assert 'ready' == 'blocked'
+E         
+E         - blocked
+E         + ready
+
+tests/test_scoped_selection.py:197: AssertionError
+_ test_selector_rejects_self_consistent_risk_from_different_capture[comments] __
+
+changed = 'comments'
+
+    @pytest.mark.parametrize('changed', ['post', 'comments', 'identity'])
+    def test_selector_rejects_self_consistent_risk_from_different_capture(changed):
+        from experiments.geographic_selection.fixtures import fixture_plan, fixture_occurrence
+        p = fixture_plan(queries=('A',), task_limit=1)
+        old = fixture_occurrence(p, 'A', 'x')
+        changes = {'post': {'desc': '克拉玛依欠薪新原文'},
+                   'comments': {'comments': [{'comment_id': 'c', 'text': '新评论'}]},
+                   'identity': {'enterprise_verify_reason': '公安官方'}}
+        current = fixture_occurrence(p, 'A', 'x', **changes[changed])
+        current['risk'] = copy.deepcopy(old['risk'])
+        result = select_next_batch(p, states(p, current), state())
+>       assert result['status'] == 'blocked'
+E       AssertionError: assert 'ready' == 'blocked'
+E         
+E         - blocked
+E         + ready
+
+tests/test_scoped_selection.py:197: AssertionError
+_ test_selector_rejects_self_consistent_risk_from_different_capture[identity] __
+
+changed = 'identity'
+
+    @pytest.mark.parametrize('changed', ['post', 'comments', 'identity'])
+    def test_selector_rejects_self_consistent_risk_from_different_capture(changed):
+        from experiments.geographic_selection.fixtures import fixture_plan, fixture_occurrence
+        p = fixture_plan(queries=('A',), task_limit=1)
+        old = fixture_occurrence(p, 'A', 'x')
+        changes = {'post': {'desc': '克拉玛依欠薪新原文'},
+                   'comments': {'comments': [{'comment_id': 'c', 'text': '新评论'}]},
+                   'identity': {'enterprise_verify_reason': '公安官方'}}
+        current = fixture_occurrence(p, 'A', 'x', **changes[changed])
+        current['risk'] = copy.deepcopy(old['risk'])
+        result = select_next_batch(p, states(p, current), state())
+>       assert result['status'] == 'blocked'
+E       AssertionError: assert 'ready' == 'blocked'
+E         
+E         - blocked
+E         + ready
+
+tests/test_scoped_selection.py:197: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_scoped_execution.py::test_first_risk_rejects_old_record_for_same_identity_before_persistence[post]
+FAILED tests/test_scoped_execution.py::test_first_risk_rejects_old_record_for_same_identity_before_persistence[comments]
+FAILED tests/test_scoped_execution.py::test_first_risk_rejects_old_record_for_same_identity_before_persistence[identity]
+FAILED tests/test_scoped_selection_store.py::test_risk_write_and_query_barrier_bind_immutable_capture[post]
+FAILED tests/test_scoped_selection_store.py::test_risk_write_and_query_barrier_bind_immutable_capture[comments]
+FAILED tests/test_scoped_selection_store.py::test_risk_write_and_query_barrier_bind_immutable_capture[identity]
+FAILED tests/test_scoped_selection.py::test_selector_rejects_self_consistent_risk_from_different_capture[post]
+FAILED tests/test_scoped_selection.py::test_selector_rejects_self_consistent_risk_from_different_capture[comments]
+FAILED tests/test_scoped_selection.py::test_selector_rejects_self_consistent_risk_from_different_capture[identity]
+9 failed, 78 deselected in 51.62s

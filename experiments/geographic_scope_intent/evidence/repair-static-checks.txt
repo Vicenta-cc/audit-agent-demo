@@ -1,0 +1,13 @@
+AST/source compilation: 11 Python files passed
+sources_sha256: 8 hashes match frozen manifest
+snapshots_sha256: 4 hashes match frozen manifest
+ruff: unavailable; not run
+mypy: unavailable; not run
+flake8: unavailable; not run
+contract.py: SHA256 3a40cd3227922e3cee988c0f711e3db6624c22cf70109f9ab1484231f6b7a9d6
+scoring.py: SHA256 97ee7ebbe45c85ae2f2d4b76159051d0421103d3c26f3b95c4b73445d18e01c8
+cases.jsonl: SHA256 f79a162ea5e54b27471cbe045d698573ada51e52950d1239e920b3731d0fda38
+candidate_guidance.txt: SHA256 969363e55b6b30ca1bf0107487f402d67e8d23fa1fe8d71427728194e52fdf2c
+candidate_schema.json: SHA256 3342205e7451d5d582f4bf2194088a48c7ee2b6226bff8b42b12d46ed7e76028
+Tracked diff and 22 source/document/fixture/test files: whitespace checks passed
+Raw pytest failure log retained verbatim, including pytest-generated E-line whitespace; excluded from source whitespace check

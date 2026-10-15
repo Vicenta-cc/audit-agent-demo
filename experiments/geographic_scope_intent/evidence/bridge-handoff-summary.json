@@ -1,0 +1,57 @@
+{
+  "version": "geo-intent-p0-bridge-handoff-v1",
+  "status": "P0桥接本地修复完成、待原会话验收；新版本真实语义未评测",
+  "framework_tests": {
+    "new_passed": 48,
+    "all_targeted_passed": 438,
+    "existing_regression_passed": 25,
+    "targeted_seconds": 2.28,
+    "regression_seconds": 4.09
+  },
+  "freeze_path": "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/evidence/bridge-handoff-v1-freeze.json",
+  "freeze_sha256": "8e5eef3b33f04740742b0c0bc5cedbb6f928fa00f85ebdb6cb2e886b0bf354e9",
+  "frozen_files": 36,
+  "frozen_at_utc": "2026-10-14T11:20:56.239714+00:00",
+  "historical_contrast_freeze_preserved": true,
+  "historical_real_result_files_preserved": true,
+  "new_real_requests": 0,
+  "new_real_responses": 0,
+  "cumulative_real_requests": 229,
+  "cumulative_real_responses": 228,
+  "model_effect_for_new_version_evaluated": false,
+  "protocol_limits": {
+    "responses_total": 4,
+    "record_stage": 1,
+    "workflow_stage": 3,
+    "tool_calls_total": 12,
+    "auto_retries": 0
+  },
+  "offline_adapter_replay": {
+    "cases": 18,
+    "accepted_historical_records": 16,
+    "missing_record_ids": [
+      "keep-rules",
+      "ambiguous-chaoyang"
+    ],
+    "adapted_configurations_accepted": 10,
+    "source_sha256": "8387a70495d348e897db9d4bf43ccee2563ab690a4d57512e7dfd36202200738",
+    "is_new_model_evaluation": false,
+    "does_not_fix_historical_city_missing_configure": true
+  },
+  "scripted_protocol_scenarios": 9,
+  "scripted_existing_unique_cases": 8,
+  "new_dataset_cases": 0,
+  "implementation_files": [
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/bridge_handoff.py",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/bridge_handoff_guidance.txt",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/bridge_handoff_verify.py",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/experiments/geographic_scope_intent/BRIDGE_HANDOFF_PLAN.md",
+    "/Users/ext.wanghongtao6/.codex/worktrees/geographic-relevance-p0/xhs-audit-agent-demo/tests/test_geographic_scope_bridge_handoff.py"
+  ],
+  "remaining_limits": [
+    "Mandatory record prevents silent omission but does not force correct semantics.",
+    "Wrong author-background record can still propagate; controlled script proves this, no gold-based correction.",
+    "Three workflow responses may still be insufficient; exhausted budget keeps pending, never fabricates configuration or retries.",
+    "No production service, database, commit, cloud change or P1."
+  ]
+}

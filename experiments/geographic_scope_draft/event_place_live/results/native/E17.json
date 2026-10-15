@@ -1,0 +1,304 @@
+{
+  "id": "E17",
+  "expectation": {
+    "decision": "none",
+    "status": "absent",
+    "target": null
+  },
+  "sessions": [
+    "investigation-session:b08aa9a694564ccdb4b616a097251062"
+  ],
+  "setup": "published synthetic general rules/lexicon available before session; real model must discover and choose references",
+  "started_at": "2026-10-15T08:58:56.349404+00:00",
+  "snapshot": {
+    "session_id": "investigation-session:b08aa9a694564ccdb4b616a097251062",
+    "draft": {
+      "id": "investigation-draft:a549a0917eda486da3ccb7a8f366decc",
+      "current_revision": 1,
+      "title": "克拉玛依大火舆情调查",
+      "objective": "调查抖音平台上关于克拉玛依大火的舆情讨论，识别未经证实断言、煽动表达和违规信息，保留正常报道与讨论。",
+      "configuration": {
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "enabled_main_terms": [
+              "舆情事件"
+            ],
+            "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+            "lexicon_id": "custom_f43c26f2445a4a0e",
+            "strategy": "existing_lexicon"
+          }
+        },
+        "judgement": {
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+          "expected_ruleset_version": 1,
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "strategy": "existing_ruleset"
+        },
+        "platform": "dy",
+        "schema_version": "investigation-draft-config-v4"
+      }
+    },
+    "public_draft": {
+      "id": "investigation-draft:a549a0917eda486da3ccb7a8f366decc",
+      "status": "DRAFT",
+      "current_revision": 1,
+      "title": "克拉玛依大火舆情调查",
+      "objective": "调查抖音平台上关于克拉玛依大火的舆情讨论，识别未经证实断言、煽动表达和违规信息，保留正常报道与讨论。",
+      "configuration": {
+        "schema_version": "investigation-draft-config-v4",
+        "platform": "dy",
+        "investigation": {
+          "mode": "search",
+          "recall_plan": {
+            "strategy": "existing_lexicon",
+            "lexicon_id": "custom_f43c26f2445a4a0e",
+            "expected_runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+            "enabled_main_terms": [
+              "舆情事件"
+            ]
+          }
+        },
+        "judgement": {
+          "strategy": "existing_ruleset",
+          "ruleset_revision_id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+          "expected_ruleset_version": 1,
+          "expected_ruleset_content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1"
+        }
+      },
+      "created_at": "2026-10-15T08:59:30.406589+00:00",
+      "updated_at": "2026-10-15T08:59:30.406589+00:00",
+      "confirmed_revision": null,
+      "confirmed_at": ""
+    },
+    "preview": {
+      "max_post_limit": 10,
+      "task_settings_revision": 0,
+      "requested_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 1,
+        "analysis_batch_size": 5
+      },
+      "effective_parameters": {
+        "search_sort": "general",
+        "start_page": 1,
+        "max_notes": 1,
+        "max_total_notes": 10,
+        "max_comments": 300,
+        "collect_comments": true,
+        "get_sub_comment": false,
+        "collect_media": true,
+        "max_items_per_minute": 5,
+        "max_concurrency": 1,
+        "auto_analyze": true,
+        "analyze_limit": 10,
+        "analysis_batch_size": 5
+      },
+      "estimated_max_contents": 1,
+      "draft_id": "investigation-draft:a549a0917eda486da3ccb7a8f366decc",
+      "draft_revision": 1,
+      "title": "克拉玛依大火舆情调查",
+      "objective": "调查抖音平台上关于克拉玛依大火的舆情讨论，识别未经证实断言、煽动表达和违规信息，保留正常报道与讨论。",
+      "mode": "search",
+      "platform": "dy",
+      "resolved_search_terms": [
+        "舆情事件"
+      ],
+      "unused_search_terms": [],
+      "search_terms_notice": "",
+      "creator_url": "",
+      "recall_plan": {
+        "strategy": "existing_lexicon",
+        "lexicon_id": "custom_f43c26f2445a4a0e",
+        "lexicon_title": "独立测试通用舆情词库",
+        "runtime_content_hash": "20239579c61a2f7cc998528fa03d186d382791fa36c1b170d98ae7067a09b0f2",
+        "enabled_main_term_count": 1,
+        "enabled_main_terms": [
+          "舆情事件"
+        ],
+        "temporary_terms": [],
+        "source_lexicon_ids": [],
+        "lexicon_content": {
+          "title": "独立测试通用舆情词库",
+          "risk_label": "",
+          "description": "",
+          "entries": [
+            {
+              "id": "generic-topic",
+              "term": "舆情事件",
+              "kind": "main",
+              "parent_id": "",
+              "enabled": true,
+              "platform": "全平台",
+              "match_type": "黑话词",
+              "risk_level": "中",
+              "note": ""
+            }
+          ]
+        }
+      },
+      "ruleset_revision": {
+        "id": "ruleset-revision:ruleset.72b79ad82ad3:v1",
+        "ruleset_id": "ruleset.72b79ad82ad3",
+        "name": "独立测试通用舆情规则",
+        "domain": "public_opinion",
+        "version": 1,
+        "content_hash": "fbc71318200e48b8a5f3fedf3909270e265424a9ba754e8ce412278494a892f1",
+        "enabled_rule_count": 1,
+        "available": true
+      },
+      "temporary_ruleset": null,
+      "max_notes": 1,
+      "max_posts_per_keyword": 1,
+      "max_comments_per_post": 300,
+      "get_sub_comment": false,
+      "blockers": [
+        {
+          "code": "collection_service_unavailable",
+          "message": "抖音采集服务当前不可用，请稍后重试。",
+          "resource_type": "",
+          "resource_id": "",
+          "latest_safe_summary": {},
+          "management_url": ""
+        }
+      ],
+      "can_confirm": false
+    },
+    "receipts": [
+      {
+        "tool_name": "configure_investigation_draft",
+        "status": "SUCCEEDED",
+        "is_mutation": 1,
+        "turn_id": "investigation-session:b08aa9a694564ccdb4b616a097251062:investigation-turn:d7cbbdec5016466ba531a116caa10fcc:d71b37d1"
+      }
+    ]
+  },
+  "evaluation": {
+    "pass": true,
+    "errors": [],
+    "observed_status": "absent",
+    "observed_target": null,
+    "scope": null,
+    "scope_state": {}
+  },
+  "turns": [
+    {
+      "turn_id": "investigation-turn:30537225b5144ed1b9fad7a711e11eef",
+      "session_id": "investigation-session:b08aa9a694564ccdb4b616a097251062",
+      "user": "调查克拉玛依大火；本次取消地域限制",
+      "status": "completed",
+      "answer": "查询到的可用资源里没有直接匹配“克拉玛依大火/火灾事故”这个议题的审核规则和黑话库。现有资源情况：\n\n**审核规则**（已发布）\n- 独立测试通用舆情规则（v1，通用舆情领域，1 条启用规则）\n- 赌博博彩风险规则集（v2，赌博领域）\n\n**黑话库**里也没有针对火灾事故或克拉玛依相关事件的词库，现有词库覆盖的是暴恐、民族意识形态、涉毒、诈骗、赌博、软色情、违禁引流等风险领域。\n\n也就是说，目前缺少匹配“克拉玛依大火”这一议题的审核规则和召回词库，无法形成一个有实际召回能力的有效配置。\n\n请问你希望怎么处理：\n\n1. **规则方面**：是否要我为这次调查生成一套临时审核规则（针对火灾事故相关舆情）？\n2. **词库方面**：是否授权我为你生成这次调查的临时搜索词？\n\n（说明：你已明确取消地域限制，这一点我已记下，创建时会按无地域限制配置。）",
+      "safe_message": "",
+      "seconds": 15.09,
+      "accounting": {
+        "id": "investigation-turn:30537225b5144ed1b9fad7a711e11eef",
+        "status": "completed",
+        "input_tokens": 4661,
+        "output_tokens": 436,
+        "total_tokens": 26601,
+        "llm_call_count": 3,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "query_investigation_options"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [
+        "{\"name\": \"configure_investigation_draft\", \"description\": \"创建或局部更新调查草案的唯一配置入口。operation 明确为 create 或 update。create 提供标题、目标、平台、ruleset_ref，以及 lexicon_ref（关键词调查）或 creator_url（账号调查）。create 必须明确传 scope_decision：apply 同时传 relevance_scope_change.action=set；none 必须省略 relevance_scope_change。缺失或矛盾会在写入前拒绝。update 提供 draft_id/expected_revision，只传变化字段，省略的内容由后台原样保留；不传 null 或整份 configuration。update 不传 create 专用的 scope_decision；地域沿用省略保留、set 修改、clear 取消。正式和临时规则都填 ruleset_ref，正式和临时词库都填 lexicon_ref；引用从 read_resource/get_resource_edit 取得，不能猜测引用或抄写内容、hash、presentation_id。临时规则仍须先完整展示，等待后续用户明确采用；引用不是同意凭证。多个字段一起校验、一起提交。词库按其主词、变体与启用状态计算搜索词；改词条或启用状态先 update_resource_edit，再取新引用。本工具不修改资源正文、不保存资源、不启动任务；启动仍使用现有确认工具。版本冲突先读草案并核对，不强行替换版本重试。本次调查对象、议题或事件名称包含地域时默认采用该地域，无需用户另说某地的舆情或明确限定。例如调查克拉玛依大火、深圳楼市、新疆棉花争议，分别采用克拉玛依、深圳、新疆；议题与地域分别保存，不能只写入标题、目标或词库。设置或换地域时，relevance_scope_change传action=set、用户原始地名target_text、真实用户原话source_quote和selection_policy。同任务用户最新明确更换、取消或要求全国且不限制地域优先；关注全国网友讨论该事件不等于取消事件地域。资源齐备并获采用授权时，回看同任务真实用户历史中的调查对象和后续变更或取消；本轮只说采用资源不表示放弃此前地域，创建时引用原要求并一并配置，不要求用户重复。明确只要当地、不补充选local_only，其余有地域的调查选local_first_with_supplement，无需为默认策略重复确认。创建前明确取消地域时选scope_decision=none；已有草案取消时只传action=clear和source_quote；只改资源或标题时省略地域变化保留原地域，不能传null。不要从账号背景、资源名称、引用举例、否定、助手建议或仅修改标题推断地域；用户没提地名时不靠事件常识补地点；不填行政代码、身份或来源ID。调查目标支持单一省级地域或地级市（含直辖市）；地域简称直接传原文解析，解析成功直接报告。省市同名简称、下级地域、未知名或指代不明也传原文解析，仅按真实pending回执及候选提示澄清；区县同名不阻断明确城市别名，不自行猜测纠错或扩大范围。已有草案不能只口头澄清而保留可启动状态。条件齐备且用户已明确要求时直接修改草案，成功后报告，无需再问是否应用；资源展示和后续采用授权仍须满足。地域仅保存和展示，执行尚未接通，不能声称已经限定采集或可以启动地域调查。\", \"parameters\": {\"$defs\": {\"Platform\": {\"enum\": [\"xhs\", \"dy\", \"ks\"], \"title\": \"Platform\", \"type\": \"string\"}, \"RelevanceScopeChange\": {\"additionalProperties\": false, \"properties\": {\"action\": {\"enum\": [\"set\", \"clear\"], \"title\": \"Action\", \"type\": \"string\"}, \"source_quote\": {\"maxLength\": 4000, \"minLength\": 1, \"title\": \"Source Quote\", \"type\": \"string\"}, \"target_text\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Target Text\", \"default\": null}, \"selection_policy\": {\"enum\": [\"local_only\", \"local_first_with_supplement\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Selection Policy\", \"default\": null}}, \"required\": [\"action\", \"source_quote\"], \"title\": \"RelevanceScopeChange\", \"type\": \"object\"}}, \"additionalProperties\": false, \"properties\": {\"operation\": {\"enum\": [\"create\", \"update\"], \"title\": \"Operation\", \"type\": \"string\"}, \"draft_id\": {\"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Draft Id\", \"default\": null}, \"expected_revision\": {\"minimum\": 1, \"type\": \"integer\", \"nullable\": true, \"title\": \"Expected Revision\", \"default\": null}, \"title\": {\"maxLength\": 300, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Title\", \"default\": null}, \"objective\": {\"maxLength\": 4000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Objective\", \"default\": null}, \"platform\": {\"$ref\": \"#/$defs/Platform\", \"nullable\": true}, \"ruleset_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Ruleset Ref\", \"default\": null}, \"lexicon_ref\": {\"pattern\": \"^resource-ref:[0-9a-f]{32}$\", \"type\": \"string\", \"nullable\": true, \"title\": \"Lexicon Ref\", \"default\": null}, \"creator_url\": {\"maxLength\": 2000, \"minLength\": 1, \"type\": \"string\", \"nullable\": true, \"title\": \"Creator Url\", \"default\": null}, \"scope_decision\": {\"enum\": [\"apply\", \"none\"], \"type\": \"string\", \"nullable\": true, \"title\": \"Scope Decision\", \"description\": \"仅 create 必填：调查对象/事件名称包含地域选 apply 并传 set；无地域或已明确取消选 none 且不传 change。update 省略。\", \"default\": null}, \"relevance_scope_change\": {\"$ref\": \"#/$defs/RelevanceScopeChange\", \"nullable\": true}}, \"required\": [\"operation\"], \"title\": \"ConfigureDraftInput\", \"type\": \"object\"}}"
+      ]
+    },
+    {
+      "turn_id": "investigation-turn:d7cbbdec5016466ba531a116caa10fcc",
+      "session_id": "investigation-session:b08aa9a694564ccdb4b616a097251062",
+      "user": "在抖音调查，使用现有“独立测试通用舆情规则”和“独立测试通用舆情词库”。这些测试资源按原样使用即可。请生成调查草案，不启动采集，不正式保存新资源。",
+      "status": "completed",
+      "answer": "调查草案已生成，未启动采集，也未保存新资源。\n\n**草案概况**\n- 标题：克拉玛依大火舆情调查\n- 平台：抖音\n- 审核规则：独立测试通用舆情规则（v1）\n- 黑话库：独立测试通用舆情词库（实际搜索词为「舆情事件」）\n- 地域：已按你的要求取消地域限制\n- 状态：草稿（DRAFT，可预览编辑，未确认启动）\n\n**需要提醒的一点**：当前抖音采集服务暂不可用（`collection_service_unavailable`），所以这个草案目前**不能确认启动**。这不影响你继续查看或编辑草案，只是暂时无法开始采集。\n\n如需调整标题、搜索词或规则，我可以继续帮你改；等采集服务恢复后再确认启动即可。",
+      "safe_message": "",
+      "seconds": 24.15,
+      "accounting": {
+        "id": "investigation-turn:d7cbbdec5016466ba531a116caa10fcc",
+        "status": "completed",
+        "input_tokens": 6331,
+        "output_tokens": 767,
+        "total_tokens": 67258,
+        "llm_call_count": 5,
+        "stop_reason": "text_response(finish_reason=stop)",
+        "error_code": "",
+        "safe_message": ""
+      },
+      "model_tool_calls": [
+        {
+          "name": "query_investigation_options"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "read_resource"
+        },
+        {
+          "name": "configure_investigation_draft",
+          "arguments": {
+            "operation": "create",
+            "title": "克拉玛依大火舆情调查",
+            "objective": "调查抖音平台上关于克拉玛依大火的舆情讨论，识别未经证实断言、煽动表达和违规信息，保留正常报道与讨论。",
+            "platform": "dy",
+            "ruleset_ref": "resource-ref:6afacaf1bfc74ecc827d1a3792cbc4cc",
+            "lexicon_ref": "resource-ref:249595165fe9479380e0cbce87898527",
+            "scope_decision": "none"
+          }
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_describe"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        },
+        {
+          "name": "tool_call"
+        }
+      ],
+      "configure_describe_receipts": [
+        "{\"name\": \"read_resource\", \"description\": \"查询或读取后台正式规则 ruleset 或词库 lexicon。resource_id 为空时按 query 分页检索；指定真实 ID 时返回完整内容和版本。有已发布版本的正式规则和正式词库返回 resource_ref，分别用于 configure_investigation_draft 的 ruleset_ref/lexicon_ref，引用绑定当前用户读取的精确版本，由后端校验，不需要填写 hash。规则 resource_ref 为空表示当前正文尚无相同的已发布版本，应打开编辑副本并按展示采用流程处理，不能猜引用。引用过期时先重新读取并核对差异，不直接采用新版。只读，不创建编辑副本、任务或保存。任务资源选择仍可用 query_investigation_options。 规则返回 published_versions：各正式版本附可直接传入 open_resource_edit 的 open_arguments；顶层 open_arguments 读取当前内容，不代表历史版本。\", \"parameters\": {\"additionalProperties\": false, \"properties\": {\"kind\": {\"enum\": [\"ruleset\", \"lexicon\"], \"title\": \"Kind\", \"type\": \"string\"}, \"resource_id\": {\"default\": \"\", \"title\": \"Resource Id\", \"type\": \"string\"}, \"query\": {\"default\": \"\", \"title\": \"Query\", \"type\": \"string\"}, \"offset\": {\"default\": 0, \"minimum\": 0, \"title\": \"Offset\", \"type\": \"integer\"}, \"limit\": {\"default\": 20, \"maximum\": 100, \"minimum\": 1, \"title\": \"Limit\", \"type\": \"integer\"}}, \"required\": [\"kind\"], \"title\": \"ReadResourceInput\", \"type\": \"object\"}}"
+      ]
+    }
+  ],
+  "ended_at": "2026-10-15T08:59:35.667718+00:00"
+}

@@ -1,0 +1,334 @@
+.......F.FFFFFFFFFFFFFF..........                                        [100%]
+=================================== FAILURES ===================================
+__________ test_all_annotated_sets_execute_and_score[change-province] __________
+
+c = {'case_id': 'change-province', 'conversation_id': 'conversation-change-province', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+_______ test_all_annotated_sets_execute_and_score[adoption-formal-later] _______
+
+c = {'case_id': 'adoption-formal-later', 'conversation_id': 'conversation-adoption-formal', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+__________ test_all_annotated_sets_execute_and_score[new-round-city] ___________
+
+c = {'case_id': 'new-round-city', 'conversation_id': 'conversation-round-city', 'principal_id': 'fixture-user', 'synthetic': True, ...}
+
+    @pytest.mark.parametrize('c', [c for c in load_cases() if c['expected']['label'] == 'set'],
+                             ids=lambda c: c['case_id'])
+    def test_all_annotated_sets_execute_and_score(c):
+        trace = run_case(c, ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response('模拟草案已准备，等待确认。')]))
+>       assert trace['termination'] == 'final'
+E       AssertionError: assert 'invalid_arguments' == 'final'
+E         
+E         - final
+E         + invalid_arguments
+
+tests/test_geographic_scope_runner.py:79: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3001\u6b63\u5728\u91c7\u96c6\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '已启动真实调查、正在采集。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3001\u6b63\u5728\u91c7\u96c6\u3002-clear-unlimited] _
+
+identity = 'clear-unlimited', text = '已启动真实调查、正在采集。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3001\u6b63\u5728\u91c7\u96c6\u3002-keep-title] _
+
+identity = 'keep-title', text = '已启动真实调查、正在采集。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u521b\u5efa\u771f\u5b9e\u4efb\u52a1\u5e76\u542f\u52a8\u8c03\u67e5\uff0c\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '已创建真实任务并启动调查，正在采集克拉玛依帖子。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u521b\u5efa\u771f\u5b9e\u4efb\u52a1\u5e76\u542f\u52a8\u8c03\u67e5\uff0c\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-clear-unlimited] _
+
+identity = 'clear-unlimited', text = '已创建真实任务并启动调查，正在采集克拉玛依帖子。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u521b\u5efa\u771f\u5b9e\u4efb\u52a1\u5e76\u542f\u52a8\u8c03\u67e5\uff0c\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-keep-title] _
+
+identity = 'keep-title', text = '已创建真实任务并启动调查，正在采集克拉玛依帖子。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '正在采集克拉玛依帖子。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-clear-unlimited] _
+
+identity = 'clear-unlimited', text = '正在采集克拉玛依帖子。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-keep-title] _
+
+identity = 'keep-title', text = '正在采集克拉玛依帖子。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6a21\u62df\u8349\u6848\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u786e\u8ba4\u3002\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi] _
+
+identity = 'city-kelamayi', text = '模拟草案已准备，等待确认。已启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6a21\u62df\u8349\u6848\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u786e\u8ba4\u3002\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-clear-unlimited] _
+
+identity = 'clear-unlimited', text = '模拟草案已准备，等待确认。已启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+_ test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6a21\u62df\u8349\u6848\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u786e\u8ba4\u3002\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-keep-title] _
+
+identity = 'keep-title', text = '模拟草案已准备，等待确认。已启动真实调查。'
+
+    @pytest.mark.parametrize('identity', ['city-kelamayi','clear-unlimited','keep-title'])
+    @pytest.mark.parametrize('text', [
+        '已启动真实调查、正在采集。',
+        '已创建真实任务并启动调查，正在采集克拉玛依帖子。',
+        '正在采集克拉玛依帖子。',
+        '模拟草案已准备，等待确认。已启动真实调查。',
+    ])
+    def test_actual_tool_loop_rejects_execution_claims_for_mutation_labels(identity,text):
+        c = case(identity)
+        trace = run_case(c,ScriptedProvider([
+            response(name='configure_investigation_draft',arguments=annotated_configuration(c)),
+            response(text)]))
+        assert trace['calls'][0]['receipt']['ok']
+        score = score_case(c,trace)
+>       assert not score['pass']
+E       assert not True
+
+tests/test_geographic_scope_runner.py:101: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[change-province]
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[adoption-formal-later]
+FAILED tests/test_geographic_scope_runner.py::test_all_annotated_sets_execute_and_score[new-round-city]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3001\u6b63\u5728\u91c7\u96c6\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3001\u6b63\u5728\u91c7\u96c6\u3002-clear-unlimited]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3001\u6b63\u5728\u91c7\u96c6\u3002-keep-title]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u521b\u5efa\u771f\u5b9e\u4efb\u52a1\u5e76\u542f\u52a8\u8c03\u67e5\uff0c\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u521b\u5efa\u771f\u5b9e\u4efb\u52a1\u5e76\u542f\u52a8\u8c03\u67e5\uff0c\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-clear-unlimited]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u5df2\u521b\u5efa\u771f\u5b9e\u4efb\u52a1\u5e76\u542f\u52a8\u8c03\u67e5\uff0c\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-keep-title]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-clear-unlimited]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6b63\u5728\u91c7\u96c6\u514b\u62c9\u739b\u4f9d\u5e16\u5b50\u3002-keep-title]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6a21\u62df\u8349\u6848\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u786e\u8ba4\u3002\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-city-kelamayi]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6a21\u62df\u8349\u6848\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u786e\u8ba4\u3002\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-clear-unlimited]
+FAILED tests/test_geographic_scope_runner.py::test_actual_tool_loop_rejects_execution_claims_for_mutation_labels[\u6a21\u62df\u8349\u6848\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u786e\u8ba4\u3002\u5df2\u542f\u52a8\u771f\u5b9e\u8c03\u67e5\u3002-keep-title]
+15 failed, 18 passed, 44 deselected in 0.57s

@@ -1,0 +1,18 @@
+{
+  "EVIDENCE.md": "86726b4848c6b9fc3516a4f8b36866a291a0cda77acdb57ee3edef056fd0ecf1",
+  "comparison_report.json": "8fb8aca9870bcbf709d316840c15a5bd5184b10060168c79f089a3849e228cb3",
+  "counts_2024_web_extract.json": "8221b68934a8f8e457d9d65f506414afefc9c569ca369e9658a43eadcab5fd4d",
+  "laiwu_change_web_extract.json": "f90fc4586a1845b7350a9f4af7c42bae15c9acb1964df7948f227aae6b8ffb29",
+  "locpg_web_extract.json": "052d674f93e452047c868f252302566bb1e361b293ffe4cdc62e226b9c186581",
+  "nagqu_2026_web_extract.json": "9ae4f626bb1074000ad53b7266e9c74841d9a62865ddf8d0a5bca114dad314df",
+  "official_changes_search_extract.json": "1aebd657d46e8d2694e8b60018cebe8dae106cc78470cacdea62c74136f23660",
+  "province_34_benchmark.json": "9dedd9934da96db9543f7ac4da6faf0424a97b27ef263c35a76dfc165a701ed5",
+  "province_prefecture_benchmark.json": "5129649547d8c8284c7c20ea7e9fa00afa438fd918d40b3ff42345f35c73fd1a",
+  "province_supplements.json": "b57cea6867e922ec48bd6932e472df960f65031d58c6166bd697c5abd9e5b395",
+  "recent_change_search_extract.json": "639488152c26ac52c58de98d520f803e8b7ae28cfacae018139830d3de709790",
+  "reproduce_verification.py": "17f084d33003ce35800596f87e5a8d105426b9a611c556ab089fdadd2d12cb3b",
+  "urls.json": "e702e5ff1686997c25c1fccff3c2f07b94dfded1f63e66369d9cf26c83c60ea2",
+  "wuhu_2016_extracted_codes.json": "82bd526a1ce99b08ffc8da28e6c3da9402e5750184d30b207538e27afb8edde0",
+  "wuhu_2016_web_extract.json": "bdb0eb5a61fae5b09dc241b6a51d7f63fa034c91ef85d37f87918b07a39167dd",
+  "wuhu_2016_web_full_extract.json": "7c017525ce2355ff469ac45db75b35dab51f77bdbc484aac56fe628f9425c7cc"
+}

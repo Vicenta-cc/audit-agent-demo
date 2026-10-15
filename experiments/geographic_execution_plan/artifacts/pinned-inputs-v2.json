@@ -1,0 +1,209 @@
+{
+  "schema_version": "p2-pinned-inputs-v2",
+  "observed_date": "2026-10-15",
+  "authority_note": "Pins existing local Git snapshots and exact file bytes. Not a production authorization, semantic acceptance or execution checkpoint. P3 report is evidence only, not a runtime dependency.",
+  "p1": {
+    "tag": "checkpoint/geographic-relevance-p0p1-final-20261015",
+    "commit": "031e0cd26379ee44c2372c9a28536c377ab3d4b9",
+    "tree": "5c1d90492ac7fa69716e9e8c1f1f5ec06a027254",
+    "files": [
+      {
+        "path": "backend/investigation_creation/scope_intent.py",
+        "bytes": 13165,
+        "file_bytes_sha256": "48957e3ac18428b3505890582f7415d2a7c5afd691e10211f324743c1afe2d6f"
+      },
+      {
+        "path": "backend/investigation_creation/scope_selection.py",
+        "bytes": 11134,
+        "file_bytes_sha256": "fcded0f2d72ada12d952cababa1666046ca8a9beaccc5575b6221c4c37f53240"
+      },
+      {
+        "path": "backend/investigation_creation/geographic_catalog.py",
+        "bytes": 19381,
+        "file_bytes_sha256": "8b8b3efef9cec6fedd2b17afda9d358c8fc8713b19a3f9a07fde144206b4f6a9"
+      },
+      {
+        "path": "backend/investigation_creation/data/geographic_catalog.json",
+        "bytes": 677345,
+        "file_bytes_sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6"
+      },
+      {
+        "path": "backend/investigation_creation/configure.py",
+        "bytes": 10741,
+        "file_bytes_sha256": "6071841e23aa71d9f173e095707234ab3048e4c4f48af2e8c5addad6d36dff86"
+      },
+      {
+        "path": "backend/investigation_creation/contracts.py",
+        "bytes": 46142,
+        "file_bytes_sha256": "007976d1c96187e0d9b6fe32c2e623267711cc399f0753a3592e6e002228c583"
+      },
+      {
+        "path": "backend/investigation_creation/resources.py",
+        "bytes": 53160,
+        "file_bytes_sha256": "e7b0b27ece555ec757f147ade764eca2aeab9f5a2524b9303c4d84a6da060599"
+      },
+      {
+        "path": "backend/investigation_creation/service.py",
+        "bytes": 36918,
+        "file_bytes_sha256": "15c2a1f1c9612d71bd386e905bab7cf9f0718f9df68ff4f46eda806d462ea96a"
+      },
+      {
+        "path": "backend/investigation_creation/store.py",
+        "bytes": 112845,
+        "file_bytes_sha256": "6f57cab3593bd86f56fc04fa59852c0b7a341b94e5df66ce543327ecac0843c9"
+      },
+      {
+        "path": "backend/investigation_creation/adapters.py",
+        "bytes": 51654,
+        "file_bytes_sha256": "a50d39de0d11c2a3de5e36122f38488e66472f41242bae1ae723daf956f6a403"
+      },
+      {
+        "path": "backend/investigation_creation/frozen.py",
+        "bytes": 6332,
+        "file_bytes_sha256": "663159bce6f30cfd05eb4b0d35e4f56cb0a7996b1b99208367df97cde1d844a0"
+      },
+      {
+        "path": "backend/investigation_creation/frozen_preview.py",
+        "bytes": 3203,
+        "file_bytes_sha256": "a8e0a072d1e60c2ef477baffe310ad232664ac062d7cd5ec020c7270fd8d822f"
+      },
+      {
+        "path": "backend/investigation_creation/conversation.py",
+        "bytes": 121266,
+        "file_bytes_sha256": "65f5965c571087c89515ed052391d234ec4bf180272b8296d550468918b062cb"
+      },
+      {
+        "path": "backend/investigation_creation/tools.py",
+        "bytes": 63431,
+        "file_bytes_sha256": "6ed0e96d51045c5f38b4f52e7f44657dc0f8b3d5574372237305a4cb7034be31"
+      },
+      {
+        "path": "backend/investigation_creation/generation_attempts.py",
+        "bytes": 3100,
+        "file_bytes_sha256": "22f18a87a522f37b9db8497b989771e70161411f1b9622a85904d41f0be4f17f"
+      },
+      {
+        "path": "backend/audit_agent/triage.py",
+        "bytes": 21679,
+        "file_bytes_sha256": "3a6cb0906064b458ef99ba0bb97fb1c3b57c0f4fb0ee69dfd25efb0160b7e2a3"
+      },
+      {
+        "path": "backend/audit_agent/triage_matcher.py",
+        "bytes": 2787,
+        "file_bytes_sha256": "aa8c3d2bbfa46caea7220a34baa13b9db7a6dd132d06130a60af4fd28a265724"
+      },
+      {
+        "path": "backend/audit_agent/task_settings.py",
+        "bytes": 4463,
+        "file_bytes_sha256": "6f46cc8de5dfb91c0f39a06997a0f24c547b794cd949de794af0bcdc2182d0c2"
+      },
+      {
+        "path": "backend/audit_agent/job_store.py",
+        "bytes": 66548,
+        "file_bytes_sha256": "dc5a4f20fc67257ea8b2a9272d359d00b10b7b2d1f2e955a843c731bd41b7776"
+      },
+      {
+        "path": "backend/audit_agent/pipeline.py",
+        "bytes": 489727,
+        "file_bytes_sha256": "58de3d3dfff2c17e269a1700f9626957129227764eca7595fef5f65ba5107f4e"
+      },
+      {
+        "path": "backend/resource_management/ruleset_refs.py",
+        "bytes": 5290,
+        "file_bytes_sha256": "0fbc9806a2aee4d950df65512f677c4d872e006d2bb548bca1a9e9d097365452"
+      },
+      {
+        "path": "backend/resource_management/tool_facades.py",
+        "bytes": 4137,
+        "file_bytes_sha256": "fb09ce48255affd098a2b7aff395ede0468ee6660dd0fc7bed619b1260deacfa"
+      },
+      {
+        "path": "docs/geographic-p0p1-final-20261015.md",
+        "bytes": 6365,
+        "file_bytes_sha256": "97b188d4b4cc2200bd2882647eb8eadb15b28b821dc6b2419af227eb47a1a4b9"
+      }
+    ]
+  },
+  "p3": {
+    "tag": "p3-post-only-names-v2-local-20261015",
+    "commit": "2120c53379d1b79c45e3cb8232b9c9b96657b183",
+    "tree": "adbab42cf9b1df7a1cc7c53b57798b75599ececf",
+    "files": [
+      {
+        "path": "backend/audit_agent/relevance.py",
+        "bytes": 63341,
+        "file_bytes_sha256": "6be6a45edf64f4896be3dbe28ab8b9115e3eea1148225076c10c3d617a52df1e"
+      },
+      {
+        "path": "backend/audit_agent/relevance_ip.py",
+        "bytes": 9940,
+        "file_bytes_sha256": "e8aceda603ac94d45146c49756d5b81a09f110f5ff28023b44ee2a426a1f1efb"
+      },
+      {
+        "path": "backend/audit_agent/relevance_scope.py",
+        "bytes": 8625,
+        "file_bytes_sha256": "6980b5ecdb00bbbbba68c0dcc1aafc007b2f88fd3b8674e405ff1e9703c82eff"
+      },
+      {
+        "path": "backend/audit_agent/relevance_post_only.py",
+        "bytes": 14781,
+        "file_bytes_sha256": "84e9c5a992f87e73fe4cd271b0b634cd75bc87e2e7dad089522208b430abcfe5"
+      },
+      {
+        "path": "backend/audit_agent/relevance_post_only_v2.py",
+        "bytes": 14006,
+        "file_bytes_sha256": "b38510d1eda2f0957b0d87a6e6f8be394af136390855748bf662c8f831f89607"
+      },
+      {
+        "path": "backend/audit_agent/relevance_post_only_simple.py",
+        "bytes": 7558,
+        "file_bytes_sha256": "899d052bf85616f44f2ff82a4e61986f5340be4fc962290b00d688bff5e515a9"
+      },
+      {
+        "path": "backend/audit_agent/relevance_post_only_names.py",
+        "bytes": 6354,
+        "file_bytes_sha256": "a5a7a5c66d32e78e872fc879ab4e199be9715d4df25a58f06e1f3e90b46d327e"
+      },
+      {
+        "path": "backend/audit_agent/relevance_post_only_names_v2.py",
+        "bytes": 8739,
+        "file_bytes_sha256": "1ecc04aa18af97ed9fef0c00a5ebbd95b4f9ed8b5e23b27dbcd7b4d373fe4907"
+      },
+      {
+        "path": "backend/audit_agent/relevance_store.py",
+        "bytes": 9373,
+        "file_bytes_sha256": "7d312109e5756f20a1ef6d19f5ad22403d7b7a0f9b6a3a2eaed3c6001d507fac"
+      },
+      {
+        "path": "experiments/geographic_relevance/admin_catalog/geographic_catalog.json",
+        "bytes": 677345,
+        "file_bytes_sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6"
+      },
+      {
+        "path": "experiments/geographic_relevance/admin_catalog/SOURCE_MANIFEST.json",
+        "bytes": 3053,
+        "file_bytes_sha256": "c6e87ce3ec8a57e2b50bf2914fd2b8883ba88cf9bc9c6bac3cca6d8ba1ee4af9"
+      },
+      {
+        "path": "experiments/geographic_relevance/location_catalog.json",
+        "bytes": 11323,
+        "file_bytes_sha256": "5853d9666e1c8187f29f6c41831d59cb9d78e7a03ae69941f6e4afdf75b16f5d"
+      },
+      {
+        "path": "experiments/geographic_relevance/P3_CODE_TAG_20261015.md",
+        "bytes": 1521,
+        "file_bytes_sha256": "dbdbd17d6f2dae978b8cde4006d7c5e6877608854f60cdee0e68892d4c4bf855"
+      },
+      {
+        "path": "experiments/geographic_relevance/artifacts/real-model-names-v2-diagnostic-20261015-01/REPORT.md",
+        "bytes": 5735,
+        "file_bytes_sha256": "b60f3c75cd811c78e25d4f9cdef93f46252564e1eb7839a79131fc495143bdd6"
+      }
+    ]
+  },
+  "catalog_comparison": {
+    "same_file_bytes": true,
+    "file_bytes_sha256": "716c35d358e030b8d499979884fce462d4a2d6293b76fb0bfaad8f59062f01a6",
+    "records": 3218
+  }
+}

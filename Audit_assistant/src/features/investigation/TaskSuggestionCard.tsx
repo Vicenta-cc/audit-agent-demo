@@ -1,3 +1,4 @@
+import { RelevanceScopeEditor } from "./RelevanceScopeEditor";
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Bot, Check, Edit3, ExternalLink } from "lucide-react";
 import type { PlatformCode, TaskDraft } from "../../types/investigation";
@@ -5,6 +6,7 @@ import type { RuleSetProposalPresentation } from "../../types/investigationCreat
 import { GeneratedRulesMessage } from "./GeneratedRulesMessage";
 import type { ConfirmationPreview } from "../../types/investigationCreation";
 import {
+  buildRelevanceScopeView,
   formatConfirmationBlockerMessage,
   formatCreationErrorMessage
 } from "./confirmationView";
@@ -43,6 +45,8 @@ interface TaskSuggestionCardProps {
   onOpenKeywordEditor?: () => void;
   onGenerateConfig: () => void;
   onOpenAnalysisPlan: () => void;
+  onSaveRelevanceScope?: (targetText: string, operationId: string, clarificationTargetText?: string) => Promise<void>;
+  relevanceScopeDisabled?: boolean;
   error?: string;
 }
 
@@ -61,6 +65,8 @@ export function TaskSuggestionCard({
   onOpenKeywordEditor,
   onGenerateConfig,
   onOpenAnalysisPlan,
+  onSaveRelevanceScope,
+  relevanceScopeDisabled,
   error = ""
 }: TaskSuggestionCardProps) {
   const [isKeywordsExpanded, setIsKeywordsExpanded] = useState(false);
@@ -68,6 +74,17 @@ export function TaskSuggestionCard({
   const keywordsRef = useRef<HTMLParagraphElement>(null);
   const keywordsText = draft.keywords.join("、");
   const blockerLink = buildSuggestionBlockerLink(preview);
+  const relevanceScope = buildRelevanceScopeView(preview);
+  const hasGeographicState = preview?.relevance_scope_state?.status === "resolved"
+    || preview?.relevance_scope_state?.status === "pending";
+  const hasPreviewBlocker = relevanceScope?.pending || preview?.blockers.some((blocker) => (
+    blocker.code !== "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE"
+    && !(hasGeographicState && [
+      "RELEVANCE_SCOPE_PENDING",
+      "RELEVANCE_SCOPE_EXECUTION_UNAVAILABLE",
+      "RELEVANCE_SCOPE_MODE_UNSUPPORTED"
+    ].includes(blocker.code))
+  ));
   const hasAnalysisPlan = preview
     ? Boolean(preview.ruleset_revision || preview.temporary_ruleset)
     : Boolean(draft.analysisPlanName || draft.matchedRuleSet);
@@ -120,6 +137,8 @@ export function TaskSuggestionCard({
           onComplete={onStreamingComplete}
         />}
       </div>
+
+      {showSuggestionCard && relevanceScope?.pending ? <RelevanceScopeEditor preview={preview} onSave={onSaveRelevanceScope} disabled={relevanceScopeDisabled} /> : null}
 
       {showSuggestionCard && draft.historicalConfiguration?.length ? (
         <section className="task-suggestion-card is-read-only" aria-label="历史报告配置">
@@ -193,6 +212,8 @@ export function TaskSuggestionCard({
               ) : null}
             </div>
           </section>
+
+          {!relevanceScope?.pending ? <RelevanceScopeEditor preview={preview} onSave={onSaveRelevanceScope} disabled={relevanceScopeDisabled} /> : null}
 
           <section className="task-suggestion-section task-suggestion-plan-section">
             <div className="task-suggestion-label">推荐审核规则</div>
@@ -274,9 +295,7 @@ export function TaskSuggestionCard({
           <button
             type="button"
             className="mt-button mt-button-primary"
-            disabled={isReadOnly || draft.platforms.length === 0 || Boolean(preview?.blockers.some(
-              (blocker) => blocker.code !== "TEMPORARY_RULESET_EXECUTION_UNAVAILABLE"
-            ))}
+            disabled={isReadOnly || draft.platforms.length === 0 || Boolean(hasPreviewBlocker)}
             onClick={onGenerateConfig}
           >
             生成任务配置
